@@ -5,6 +5,51 @@ argument-hint: [max-iterations] [optional focus, e.g. "health scan" or "offer le
 
 You are orchestrating the build loop for **placedon.com — AI for HR**.
 
+```
+                    ┌──────────────────────────────────────┐
+                    │  RESEARCH_LOG.md   (evidence, tagged) │
+                    └───────────────┬──────────────────────┘
+                                    │  guard: this track has evidence?
+                          no ───────┴─────── yes
+                           │                  │
+                    ┌──────▼──────┐           │
+                    │  STOP →     │           │
+                    │  /research  │           │
+                    └─────────────┘           │
+                                              ▼
+   ┌───────────────────────────────────────────────────────────────────┐
+   │                                                                   │
+   │   1 PLAN ────────► product-planner        (track + DoD + evidence) │
+   │        │                                                          │
+   │   2 SELECT ──────► one task, ≤4h, unblocked                       │
+   │        │                                                          │
+   │        ├── ops? ──► 3 SOURCE ──► hr-ops-researcher                │
+   │        │                         (corpus exists? else BLOCK)      │
+   │        │                                                          │
+   │   4 DESIGN ──────► ux-designer            (user-facing only)      │
+   │        │                                                          │
+   │   5 BUDGET ──────► cost-governor          (adds an LLM call only) │
+   │        │                                                          │
+   │   6 BUILD ───────► developer                                      │
+   │        │           └─ compliance? legal-verifier reviews FIRST    │
+   │        │                                                          │
+   │   7 BOUNDARY ────► trust-boundary-reviewer   ◄── before QA        │
+   │        │           (legal grammar? provenance? track declared?)   │
+   │        │                                                          │
+   │   8 VERIFY ──────► qa-reviewer                                    │
+   │        │           (hallucinated numbers = 0, citations, PII)     │
+   │        │                                                          │
+   │   9 REPORT ──────► id · track · outcome · agents                  │
+   │        │                                                          │
+   └────────┴──── continue? ──┬── backlog empty ──────► STOP           │
+                              ├── max iterations ─────► STOP           │
+                              └── 3 blocked in a row ─► STOP           │
+                                  (needs a human decision, not a loop)
+```
+
+Every arrow that leaves the loop leaves it on purpose. Three consecutive blocks means a business,
+legal, or sourcing decision is outstanding — looping harder will not produce it.
+
 The product has two tracks with different trust contracts. Compliance answers are cited, verified,
 and abstain when uncertain. Operations answers are sourced, editable, and never wear legal grammar.
 `docs/05_HR_OPERATIONS_TRACK.md` §2 is the contract; you enforce it through agent sequencing.
@@ -73,14 +118,34 @@ Invoke `ux-designer`. Require the states that carry the trust contract, not just
   `review_required` fields rendered highlighted
 - mixed surfaces (Health Scan, Monday Brief) → the visible seam between tracks
 
-### 5. Build
+### 5. Budget (tasks that add or change a runtime LLM call)
+Invoke `cost-governor` **before** the developer writes the call, not after.
+
+The API budget is **₹3,500/month ≈ $36.75** — that is the product's serving spend, and it is the
+binding constraint on this company. (Claude Code subagents running this loop bill against the
+founder's *subscription*, not that budget; don't conflate them.)
+
+It blocks on:
+- an LLM call where the deterministic engine plus a template already produces the output — ₹0 is
+  the target for anything `applicability.py` can answer
+- a call with no measured token count and rupee cost (use `count_tokens`, never an estimate)
+- a repeated prefix with no prompt caching, or caching that silently isn't landing
+- a non-user-facing workload not routed through the Batch API (50% off)
+- a retired model ID — the founder's source plan names `claude-3-5-sonnet`, **retired 28 Oct
+  2025**, which 404s
+
+Model choice on this product is a **cost lever, not a correctness lever** — the LLM never decides
+applicability and every number is verified verbatim afterward, so the safety property holds
+independently of model strength. Escalate to a stronger model only on a measured gate failure.
+
+### 6. Build
 Invoke `developer`.
 - **Compliance tasks:** `legal-verifier` reviews the rule extraction **before** the developer
   serves it. Not after.
 - **Operations tasks:** the developer consumes corpus artifacts as-is, preserving provenance
   through to render. Provenance that is dropped in the pipeline cannot be recovered at the UI.
 
-### 6. Boundary check — every task producing user-facing text
+### 7. Boundary check — every task producing user-facing text
 Invoke `trust-boundary-reviewer`. It runs on **both** tracks, and it runs *before* `qa-reviewer`,
 because a routing error makes the rest of the verification moot.
 
@@ -95,7 +160,7 @@ It blocks on:
 When it blocks, read the finding carefully: **the fix is usually a re-route, not a reword.**
 Changing `must` to `should` while keeping an unverified legal claim makes the output less honest.
 
-### 7. Verify
+### 8. Verify
 Invoke `qa-reviewer`. Hard gates that block regardless of anything else:
 - Hallucinated-number rate exactly 0
 - Every citation resolves
@@ -105,10 +170,10 @@ Invoke `qa-reviewer`. Hard gates that block regardless of anything else:
 
 Max 2 retry rounds per task per iteration; then `## Blocked` and flag it.
 
-### 8. Report
+### 9. Report
 One status line per resolved task: id, track, outcome, agents involved.
 
-### 9. Continue or stop
+### 10. Continue or stop
 - Backlog empty after a planning pass → stop, report loop complete.
 - Max iterations reached → stop, list what remains.
 - 3 consecutive tasks blocked → stop early and summarise. This usually means a business, legal, or
