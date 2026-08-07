@@ -41,6 +41,18 @@ async def app(scope: Scope, receive: Receive, send: Send) -> None:
         scope["path"] = original if original.startswith("/") else "/" + original
         rest = [(k, v) for k, v in pairs if k != "__p"]
         scope["query_string"] = urlencode(rest).encode("latin-1")
+
+    # Belt and braces: if the rewrite didn't supply __p (the bare "/" rule proved
+    # unreliable), strip the function's own mount point so the root still resolves.
+    path = scope.get("path") or "/"
+    for prefix in ("/api/index", "/api"):
+        if path == prefix:
+            path = "/"
+            break
+        if path.startswith(prefix + "/"):
+            path = path[len(prefix):] or "/"
+            break
+    scope["path"] = path or "/"
     scope["root_path"] = ""
 
     if scope["path"].rstrip("/").endswith("__whoami"):
