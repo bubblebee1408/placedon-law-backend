@@ -3,9 +3,10 @@ __pycache__/
 .env
 .env.local
 .venv/
+.vercel
 *.pdf
 *.pyc
+corpus/.budget.json
 corpus/raw/*.pdf
 node_modules/
 venv/
-.vercel
