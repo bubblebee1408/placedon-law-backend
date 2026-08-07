@@ -76,6 +76,32 @@ class Scoped:
     district_scoped: bool = False
     evidence: str | None = None
 
+    def __post_init__(self) -> None:
+        # `district_scoped` asserts that the law delegates this obligation to the District
+        # Officer. That is itself a legal claim, and it is the sentence a user sees when we
+        # abstain — so it cannot be recorded without its source. Fail at data-entry time
+        # rather than three layers away when someone tries to explain the abstention.
+        if self.district_scoped and not self.evidence:
+            raise ValueError(
+                f"district_scoped record {self.jurisdiction!r} has no evidence — "
+                "the provision that delegates it to the District Officer must be cited"
+            )
+
+
+# Phrases that make a claim about what the law does, rather than about what we hold.
+# Any `reason` containing one of these is compliance-track text and must carry a citation —
+# an abstention is user-facing, so it sits under the same contract as an answer. An abstention
+# that asserts what the law requires, uncited, is that contract violated in its politest form.
+_LEGAL_CLAIM_MARKERS = (
+    "set per district", "obligation", "must", "required", "shall",
+    "statutory", "under the act", "the law",
+)
+
+
+def states_a_legal_claim(text: str) -> bool:
+    low = text.lower()
+    return any(m in low for m in _LEGAL_CLAIM_MARKERS)
+
 
 @dataclass(frozen=True)
 class Resolved:
@@ -83,10 +109,19 @@ class Resolved:
     record: Scoped | None
     reason: str
     considered: list[str] = field(default_factory=list)
+    citation: str | None = None
 
     @property
     def is_answerable(self) -> bool:
         return self.status is Resolution.RESOLVED
+
+    def __post_init__(self) -> None:
+        # Enforced here rather than left to review: the failure is silent otherwise, and it
+        # reaches a user as a confident-sounding sentence with nothing behind it.
+        if states_a_legal_claim(self.reason) and not self.citation:
+            raise ValueError(
+                f"resolution reason states a legal claim with no citation: {self.reason!r}"
+            )
 
 
 def resolve(records: list[Scoped], state: str, districts: list[str] | None = None) -> Resolved:
@@ -121,9 +156,13 @@ def resolve(records: list[Scoped], state: str, districts: list[str] | None = Non
                     + (f" Districts we do hold: {known}." if known else "")
                 ),
                 scope,
+                citation=hit.evidence,
             )
-        return Resolved(Resolution.RESOLVED, hit, f"matched at {code}", scope)
+        return Resolved(
+            Resolution.RESOLVED, hit, f"matched at {code}", scope, citation=hit.evidence
+        )
 
+    # A statement about our own coverage, not about the law — no citation owed.
     return Resolved(
         Resolution.NO_RECORD, None, f"no record for any of {scope}", scope
     )
@@ -139,7 +178,8 @@ if __name__ == "__main__":
         Scoped("IN", "no single national date — set by the District Officer",
                district_scoped=True,
                evidence="s.21/22 PoSH Act; deadline fixed by District Officer"),
-        Scoped("IN-HR", "state background record", district_scoped=True),
+        Scoped("IN-HR", "state background record", district_scoped=True,
+               evidence="s.21/22 PoSH Act; deadline fixed by District Officer"),
         Scoped("IN-HR-GGN", "28 February", district_scoped=True,
                evidence="Gurugram District Officer notification"),
     ]
@@ -201,6 +241,32 @@ if __name__ == "__main__":
           "district-scoped deadline resolves differently from a state-wide one")
     failures += (not district_differs)
 
+    # ── C-1a: no user-facing legal claim without a citation ──────────────
+    every_claim_cited = True
+    for _, got, _, _ in cases:
+        if states_a_legal_claim(got.reason) and not got.citation:
+            every_claim_cited = False
+            print(f"       UNCITED CLAIM: {got.reason!r}")
+    print(f"[{'PASS' if every_claim_cited else 'FAIL'}] "
+          "no resolution states a legal claim without a citation")
+    failures += (not every_claim_cited)
+
+    # The abstention a Bengaluru company actually sees must carry its source.
+    blr_cited = bool(blr.citation)
+    print(f"[{'PASS' if blr_cited else 'FAIL'}] "
+          f"Bengaluru abstention carries its citation ({blr.citation!r})")
+    failures += (not blr_cited)
+
+    # A district_scoped record cannot be recorded without the provision that delegates it.
+    try:
+        Scoped("IN-KA", "whatever", district_scoped=True)
+        uncited_rejected = False
+    except ValueError:
+        uncited_rejected = True
+    print(f"[{'PASS' if uncited_rejected else 'FAIL'}] "
+          "district_scoped record without evidence is rejected at construction")
+    failures += (not uncited_rejected)
+
     # A Karnataka company must never even *consider* a Haryana district code.
     foreign = resolve(POSH_RETURN, "IN-KA", ["IN-HR-GGN"])
     scope_clean = "IN-HR-GGN" not in foreign.considered
@@ -208,6 +274,6 @@ if __name__ == "__main__":
           f"foreign district dropped from scope (considered: {foreign.considered})")
     failures += (not scope_clean)
 
-    total = len(cases) + 2
+    total = len(cases) + 5
     print(f"\n{total - failures}/{total} passed")
     raise SystemExit(1 if failures else 0)
