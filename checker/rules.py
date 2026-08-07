@@ -39,22 +39,45 @@ class Finding:
 
 
 # ── The applicability trigger ────────────────────────────────────────────────
-# s.4(1): "Every employer ... shall ... constitute a Committee ... where 10 or more
-# employees are employed." Boundary is >= 10, not > 10. An off-by-one here is a
-# customer's ₹50,000.
+# READ THIS BEFORE CHANGING THE NUMBER.
+#
+# s.4(1) contains NO threshold. Verbatim, from the ingested corpus:
+#
+#     "Every employer of a workplace shall, by an order in writing, constitute a
+#      Committee to be known as the 'Internal Complaints Committee'"
+#
+# "Ten" appears nowhere in section 4. The ten-worker language lives in two other places:
+#   s.2    — defining "unorganised sector": "...the number of such workers is less than ten"
+#   s.6(1) — the Local Committee receives complaints "from establishments where the
+#            Internal Committee has not been constituted due to having less than ten
+#            workers or if the complaint is against the employer himself"
+#
+# So the universally-repeated "PoSH applies at 10+" is an INFERENCE from s.6 — the Act
+# provides a Local Committee for establishments under ten, which implies those employers
+# are not expected to constitute an IC. That is a reasonable reading. It is not what s.4
+# says, and whether the s.4 duty attaches below ten is a question of interpretation.
+#
+# We therefore ship >= 10 as an UNVERIFIED INTERPRETATION, cited to its real source, and
+# the report says so. Do not "fix" this by citing s.4(1) for the number — that citation
+# does not support the claim, and an earlier version of this file made exactly that error.
 IC_APPLIES = {"op": "gte", "field": "employee_count", "value": 10}
 
 IC_THRESHOLD = 10
-IC_TENURE_YEARS = 3          # s.4(2)(c) — "not exceeding three years"
-PENALTY_INR = 50_000         # s.26 — "fine which may extend to fifty thousand rupees"
+IC_TENURE_YEARS = 3          # s.4(2)(c)
+PENALTY_INR = 50_000         # s.26 — "fine which may extend to fifty thousand rupees" (verified)
 
 CITE_S4 = "s.4(1), PoSH Act 2013"
 CITE_S4_TENURE = "s.4(2)(c), PoSH Act 2013"
+CITE_S6 = "s.6(1), PoSH Act 2013"
 CITE_S19 = "s.19, PoSH Act 2013"
 CITE_S21 = "s.21/22, PoSH Act 2013"
 CITE_S26 = "s.26, PoSH Act 2013"
 
+# The threshold is an inference, and must be labelled as one wherever it is used.
+CITE_THRESHOLD = f"{CITE_S6} (inferred — s.4 states no threshold)"
+
 SRC_SECONDARY = "secondary sources; NOT lawyer-verified"
+SRC_CORPUS = "ingested from India Code PDF; NOT lawyer-verified"
 
 
 # ── The annual-return deadline, jurisdiction-scoped ──────────────────────────

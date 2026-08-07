@@ -17,7 +17,8 @@ from jurisdiction import Resolution, resolve  # noqa: E402
 
 from .rules import (  # noqa: E402
     ANNUAL_RETURN_DEADLINE, CITE_S4, CITE_S4_TENURE, CITE_S19, CITE_S21, CITE_S26,
-    IC_APPLIES, IC_TENURE_YEARS, IC_THRESHOLD, PENALTY_INR, SRC_SECONDARY, Finding,
+    CITE_THRESHOLD, IC_APPLIES, IC_TENURE_YEARS, IC_THRESHOLD, PENALTY_INR,
+    SRC_CORPUS, SRC_SECONDARY, Finding,
 )
 
 _ORDER = {"critical": 0, "unknown": 1, "warning": 2, "good": 3}
@@ -39,16 +40,24 @@ def assess(
     if applies is Result.DOES_NOT_APPLY:
         short_by = IC_THRESHOLD - profile.employee_count
         findings.append(Finding(
-            title="PoSH does not require an Internal Committee yet",
-            severity="good",
+            title="Below ten employees — but read this before relaxing",
+            severity="unknown",
             detail=(
-                f"You have {profile.employee_count} employees. The Internal Committee duty "
-                f"starts at {IC_THRESHOLD}. You are {short_by} "
-                f"{'hire' if short_by == 1 else 'hires'} away — the duty attaches as soon as "
-                f"you cross it, not at the end of a financial year."
+                f"You have {profile.employee_count} employees, and the widely-repeated rule is "
+                f"that PoSH's Internal Committee duty starts at {IC_THRESHOLD}. We need to be "
+                f"straight with you about where that number comes from. Section 4 does not "
+                f"contain it. It says “Every employer of a workplace shall … constitute "
+                f"a Committee”, with no threshold at all. The ten-worker figure is inferred "
+                f"from section 6, which provides a Local Committee for establishments that have "
+                f"not constituted an IC “due to having less than ten workers”. That is a "
+                f"reasonable reading and it is the common one — but it is a reading, not a "
+                f"sentence in the Act, and we have not had it checked by a lawyer. You are "
+                f"{short_by} {'hire' if short_by == 1 else 'hires'} from the point where nobody "
+                f"disputes it."
             ),
-            citation=CITE_S4,
-            source=SRC_SECONDARY,
+            citation=CITE_THRESHOLD,
+            source=SRC_CORPUS,
+            action="Worth one question to a lawyer if you are close to ten.",
         ))
         if profile.contractor_count:
             findings.append(Finding(
@@ -72,12 +81,14 @@ def assess(
             title="No Internal Committee",
             severity="critical",
             detail=(
-                f"You have {profile.employee_count} employees, so an Internal Committee is "
-                f"required. Not having one is punishable by a fine of up to "
-                f"₹{PENALTY_INR:,}, and repeat default can put your business licence at risk."
+                f"Section 4 requires every employer of a workplace to constitute an Internal "
+                f"Committee by an order in writing — it states no headcount threshold, and at "
+                f"{profile.employee_count} employees you are above the ten-worker figure that "
+                f"is commonly read into it anyway. Failing to constitute one is punishable by a "
+                f"fine which may extend to ₹{PENALTY_INR:,}."
             ),
             citation=f"{CITE_S4}; penalty {CITE_S26}",
-            source=SRC_SECONDARY,
+            source=SRC_CORPUS,
             action="This is the one to fix first.",
         ))
     else:
