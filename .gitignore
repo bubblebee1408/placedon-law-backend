@@ -8,3 +8,4 @@ __pycache__/
 corpus/raw/*.pdf
 node_modules/
 venv/
+.vercel
