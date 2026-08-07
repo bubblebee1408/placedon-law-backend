@@ -25,10 +25,20 @@ Read, in this order: `docs/03_MARKET_RESEARCH_BUSINESS_PLAN.md`,
 Determine the track of the work this invocation would do (from the focus argument, or from the top
 of `## Ready`).
 
-- **No `RESEARCH_LOG.md`, or zero entries → STOP.** Tell the founder to run `/research` first.
-  Building on unvalidated assumptions is the most expensive mistake available here.
-- **Entries exist, but none tagged `[TRACK: <the track you're about to build>]` → STOP for that
-  track.** Report which track *does* have evidence and offer to build there instead.
+**Read tags only from the section below the `## Findings` heading.** The preamble of
+`RESEARCH_LOG.md` contains a legend and two entry templates that mention track names as
+documentation. Counting those as evidence would falsely unlock every track on an empty log — the
+exact failure this guard exists to prevent. Scope the read, e.g.
+`sed -n '/^## Findings/,$p' RESEARCH_LOG.md`, and never grep the whole file.
+
+- **No `RESEARCH_LOG.md`, or no entries below `## Findings` → STOP.** Tell the founder to run
+  `/research` first. Building on unvalidated assumptions is the most expensive mistake available
+  here.
+- **Entries exist, but none below `## Findings` tagged `[TRACK: <the track you're about to
+  build>]` → STOP for that track.** Report which track *does* have evidence and offer to build
+  there instead.
+- **An entry whose Verdict is INCONCLUSIVE does not count as evidence for its track.** A logged
+  failed search is honest record-keeping, not permission to build.
 
 This is deliberately stricter than a global check. A week of compliance research does not
 authorise shipping a job-description generator, and vice versa. Say so plainly rather than
