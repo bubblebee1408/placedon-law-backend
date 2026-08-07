@@ -119,9 +119,45 @@ def evaluate(expr: dict, profile: CompanyProfile) -> tuple[Result, Trace]:
         )
 
     if op == "in":
+        # 'in' compares a scalar field against a set of allowed values. Applied to a
+        # list-valued field (districts) it silently evaluates False — a wrong answer with no
+        # error. Refuse the mis-encoding instead of serving it.
+        if isinstance(actual, (list, tuple, set)):
+            raise ValueError(
+                f"'in' applied to list-valued field {field_name!r}; "
+                f"use 'contains' (list holds a value) or 'intersects' (lists overlap)"
+            )
         ok = actual in expr["value"]
         res = Result.APPLIES if ok else Result.DOES_NOT_APPLY
         return res, Trace(field_name, res, f"{field_name} ({actual}) in {expr['value']}")
+
+    if op == "contains":
+        # List-valued field holds this specific value. e.g. districts contains 'IN-KA-BLR'.
+        if not isinstance(actual, (list, tuple, set)):
+            raise ValueError(f"'contains' applied to non-list field {field_name!r}")
+        if not actual:
+            # Empty means "we never asked", not "none". Ask; don't decide.
+            return Result.INSUFFICIENT_DATA, Trace(
+                field_name, Result.INSUFFICIENT_DATA,
+                f"'{field_name}' is empty — we have not asked which district(s) they operate in",
+            )
+        ok = expr["value"] in actual
+        res = Result.APPLIES if ok else Result.DOES_NOT_APPLY
+        return res, Trace(
+            field_name, res, f"{field_name} ({list(actual)}) contains {expr['value']!r}"
+        )
+
+    if op == "intersects":
+        # List-valued field overlaps a set of values — the district-scoped obligation case.
+        if not isinstance(actual, (list, tuple, set)):
+            raise ValueError(f"'intersects' applied to non-list field {field_name!r}")
+        overlap = sorted(set(actual) & set(expr["value"]))
+        res = Result.APPLIES if overlap else Result.DOES_NOT_APPLY
+        return res, Trace(
+            field_name, res,
+            f"{field_name} ({list(actual)}) intersects {expr['value']}"
+            + (f" → {overlap}" if overlap else " → no overlap"),
+        )
 
     if op == "between":
         lo, hi = expr["value"]
@@ -146,7 +182,13 @@ def missing_fields(expr: dict, profile: CompanyProfile) -> list[str]:
                 walk(a)
         else:
             f = e.get("field")
-            if f and profile.get(f) is None:
+            if not f:
+                return
+            v = profile.get(f)
+            # None means unset. An empty list also means unset — we never asked which
+            # districts they operate in — and must drive the same follow-up question,
+            # or INSUFFICIENT_DATA reports no field to ask for.
+            if v is None or (isinstance(v, (list, tuple, set)) and not v):
                 out.append(f)
 
     walk(expr)
@@ -172,6 +214,16 @@ if __name__ == "__main__":
         ],
     }
 
+    # Gurugram's District Officer notified 28 February for the PoSH annual return.
+    # The deadline is district-set, so the condition must be too — see jurisdiction.py.
+    GGN_DEADLINE = {
+        "op": "and",
+        "args": [
+            {"op": "gte", "field": "employee_count", "value": 10},
+            {"op": "contains", "field": "districts", "value": "IN-HR-GGN"},
+        ],
+    }
+
     base = dict(
         state="IN-KA",
         establishment_type="it_ites",
@@ -194,6 +246,26 @@ if __name__ == "__main__":
         ("ESI, 42 employees, 0 below ceiling",
          ESI, CompanyProfile(employee_count=42, employees_below_wage_ceiling=0, **base),
          Result.DOES_NOT_APPLY),
+
+        # ── district-scoped conditions (C-1) ──────────────────────────────
+        # Gurugram's PoSH annual return is 28 Feb, not the widely-repeated 31 Jan.
+        # These encode "does the Gurugram notification apply to you".
+        ("District matches → applies",
+         GGN_DEADLINE,
+         CompanyProfile(employee_count=42, districts=["IN-HR-GGN"], **base),
+         Result.APPLIES),
+        ("Different district → does not apply (no silent fallback)",
+         GGN_DEADLINE,
+         CompanyProfile(employee_count=42, districts=["IN-KA-BLR"], **base),
+         Result.DOES_NOT_APPLY),
+        ("District never asked → INSUFFICIENT_DATA, not a guess",
+         GGN_DEADLINE,
+         CompanyProfile(employee_count=42, **base),
+         Result.INSUFFICIENT_DATA),
+        ("Multi-district company, one matches → applies",
+         GGN_DEADLINE,
+         CompanyProfile(employee_count=42, districts=["IN-KA-BLR", "IN-HR-GGN"], **base),
+         Result.APPLIES),
     ]
 
     failures = 0
