@@ -12,7 +12,7 @@
     "source_bytes": 236208,
     "source_pages": 14,
     "source_version_note": "PDF carries 'Last updated: 31-8-2021'",
-    "fetched_at": "2026-08-07T16:27:16+00:00",
+    "fetched_at": "2026-08-07T21:41:00+00:00",
     "fetch_method": "curl, browser UA (WebFetch client is 403'd; the site is not)",
     "ingested_by": "scripts/ingest_posh.py",
     "verified_by": null

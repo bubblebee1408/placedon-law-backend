@@ -12,6 +12,9 @@ user asked for. `GET /` happened to work; `POST /check` normalised to `/` and ca
 So `vercel.json` passes the original path through the query string as `__p`, and this wrapper
 restores it before handing off. Local runs have no `__p` and use the real path, so the same code
 serves correctly in both places.
+
+(A `/__whoami` diagnostic lived here while that was being worked out. It has been removed — it
+reported the route table, which is not something a public compliance product should hand out.)
 """
 from __future__ import annotations
 
@@ -21,7 +24,6 @@ from urllib.parse import parse_qsl, urlencode
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from starlette.responses import JSONResponse  # noqa: E402
 from starlette.types import Receive, Scope, Send  # noqa: E402
 
 from checker.app import app as _checker  # noqa: E402
@@ -55,13 +57,5 @@ async def app(scope: Scope, receive: Receive, send: Send) -> None:
     scope["path"] = path or "/"
     scope["root_path"] = ""
 
-    if scope["path"].rstrip("/").endswith("__whoami"):
-        await JSONResponse({
-            "resolved_path": scope["path"],
-            "had_p_param": bool(original),
-            "method": scope.get("method"),
-            "routes": sorted(r.path for r in _checker.routes if getattr(r, "path", None)),
-        })(scope, receive, send)
-        return
 
     await _checker(scope, receive, send)

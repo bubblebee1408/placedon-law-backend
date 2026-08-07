@@ -21,7 +21,10 @@ from applicability import CompanyProfile
 from .assess import assess
 from .rules import DISTRICTS, INDUSTRIES, STATES, Finding
 
-app = FastAPI(title="placedon — PoSH checker")
+# docs/redoc/openapi disabled: this is a public prototype, not an API product, and the
+# auto-generated schema pages are surface area with no user.
+app = FastAPI(title="placedon — PoSH checker", docs_url=None, redoc_url=None,
+              openapi_url=None)
 
 CSS = """
 :root{
