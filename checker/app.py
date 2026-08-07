@@ -14,7 +14,9 @@ from __future__ import annotations
 from datetime import date, datetime
 
 from fastapi import FastAPI, Form
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
+from pydantic import BaseModel, Field
 
 from applicability import CompanyProfile
 
@@ -25,6 +27,50 @@ from .rules import DISTRICTS, INDUSTRIES, STATES, Finding
 # auto-generated schema pages are surface area with no user.
 app = FastAPI(title="placedon — PoSH checker", docs_url=None, redoc_url=None,
               openapi_url=None)
+
+# The Next.js frontend calls /api/diagnose. Same origin in production; localhost for dev.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "https://placedon-hr.vercel.app"],
+    allow_methods=["POST"], allow_headers=["*"],
+)
+
+
+class DiagnoseRequest(BaseModel):
+    """
+    State codes are ISO 3166-2 (`IN-KA`), not bare `KA`. This is load-bearing, not style:
+    `jurisdiction.scope_for()` derives the national tier by splitting on the first hyphen, so
+    a bare `KA` yields ['KA-BLR', 'KA', 'KA'] and every national provision stops matching.
+    """
+    employees: int = Field(ge=0, le=5000)
+    contractors: int = Field(default=0, ge=0, le=5000)
+    state: str = Field(pattern=r"^IN-[A-Z]{2}$|^IN-OTHER$")
+    district: str = ""          # required to answer the annual-return question at all
+    industry: str = "it_ites"
+    has_policy: str = "unsure"
+    has_ic: str = "no"
+    ic_date: str = ""
+    filed_return: str = "unsure"
+
+
+@app.post("/api/diagnose")
+def diagnose(req: DiagnoseRequest) -> dict:
+    """JSON twin of POST /check. Same engine, same findings — only the rendering differs."""
+    findings, headline, profile = _run(
+        req.employees, req.contractors, req.state, req.district, req.industry,
+        req.has_policy, req.has_ic, req.ic_date, req.filed_return)
+    return {
+        "headline": headline,
+        "as_of": profile.as_of.isoformat(),
+        "state": dict(STATES).get(req.state, req.state),
+        "employee_count": profile.employee_count,
+        "verified": False,   # nothing is lawyer-verified yet; the UI must not claim otherwise
+        "findings": [
+            {"title": f.title, "severity": f.severity, "detail": f.detail,
+             "citation": f.citation, "source": f.source, "action": f.action}
+            for f in findings
+        ],
+    }
 
 CSS = """
 :root{
@@ -175,18 +221,9 @@ def _tri(v: str) -> bool | None:
     return {"yes": True, "no": False}.get(v)
 
 
-@app.post("/check", response_class=HTMLResponse)
-def check(
-    employees: int = Form(...),
-    contractors: int = Form(0),
-    state: str = Form("IN-KA"),
-    district: str = Form(""),
-    industry: str = Form("it_ites"),
-    has_policy: str = Form("unsure"),
-    has_ic: str = Form("no"),
-    ic_date: str = Form(""),
-    filed_return: str = Form("unsure"),
-) -> str:
+def _run(employees: int, contractors: int, state: str, district: str, industry: str,
+         has_policy: str, has_ic: str, ic_date: str, filed_return: str):
+    """One assessment path. The HTML form and the JSON API both come through here."""
     today = date.today()
     constituted = None
     if ic_date:
@@ -204,7 +241,6 @@ def check(
         as_of=today,
         districts=[district] if district else [],
     )
-
     findings, headline = assess(
         profile,
         has_ic=_tri(has_ic),
@@ -212,7 +248,24 @@ def check(
         has_policy=_tri(has_policy),
         filed_return=_tri(filed_return),
     )
+    return findings, headline, profile
 
+
+@app.post("/check", response_class=HTMLResponse)
+def check(
+    employees: int = Form(...),
+    contractors: int = Form(0),
+    state: str = Form("IN-KA"),
+    district: str = Form(""),
+    industry: str = Form("it_ites"),
+    has_policy: str = Form("unsure"),
+    has_ic: str = Form("no"),
+    ic_date: str = Form(""),
+    filed_return: str = Form("unsure"),
+) -> str:
+    findings, headline, profile = _run(employees, contractors, state, district, industry,
+                                       has_policy, has_ic, ic_date, filed_return)
+    today = profile.as_of
     state_name = dict(STATES).get(state, state)
     cards = "".join(_card(f) for f in findings)
 
