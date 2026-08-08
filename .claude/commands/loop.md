@@ -192,3 +192,16 @@ One status line per resolved task: id, track, outcome, agents involved.
 7. If a task's DoD is ambiguous, route back to `product-planner` rather than interpreting it.
 
 Begin: check `RESEARCH_LOG.md` and its track tags, then `BACKLOG.md`, then proceed.
+
+## Verify before you claim anything is done
+
+Run `python3 scripts/verify.py` and paste the GO/NO-GO line. It is not a formality: on its first
+run it caught two miscalibrated checks, and it holds a permanent regression test for every bug
+that has ever escaped a green suite (see `.claude/memory/LESSONS.md`).
+
+**If a bug gets through, add a check to `scripts/verify.py` with its story in `because=` before
+fixing anything else.** That is the ratchet — a bug gets paid for once. Adding a check costs a
+few lines; skipping it costs the bug coming back on a day when you have less context.
+
+Then add the lesson to `.claude/memory/LESSONS.md`, but only if it cost something. Predicted
+lessons are slogans.
