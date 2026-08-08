@@ -46,7 +46,7 @@ GENERATED = {".claude/index.json", "corpus/.budget.json"}
 #
 # It has to scale with the mode: --fast skips the per-module suites and tsc, so the expected
 # total is the registry alone. Hard-coding one number broke --fast the moment it was added.
-MIN_REGISTRY_CHECKS = 17
+MIN_REGISTRY_CHECKS = 18
 
 SUITES = [
     "applicability.py", "jurisdiction.py", "backend/budget.py",
@@ -540,6 +540,32 @@ def _output_guards():
         if got != want_abstain:
             return False, (f"{label}: {'abstained' if got else 'passed'}, expected "
                            f"{'abstain' if want_abstain else 'pass'}")
+    return True, ""
+
+
+@check("no Rule is secretly an Act section",
+       because="The reproduction carries the Act and the Rules, both numbered 'N. Heading.-'. "
+               "The first ingest ran over the whole document and produced 'Rule 4' byte-identical "
+               "to Act s.4 — the retriever would have cited 'Rule 4, PoSH Rules 2013' for text "
+               "that is Section 4 of the Act. Nothing looked wrong; it was caught only by "
+               "noticing two character counts exactly matched the Act's.")
+def _rules_are_not_the_act():
+    rules_path = ROOT / "corpus/provisions/posh_rules_2013.json"
+    if not rules_path.exists():
+        return True, ""
+    act = json.loads(POSH.read_text())["provisions"]
+    by_hash = {p["text_sha256"]: p["citation"] for p in act}
+    by_norm = {" ".join(p["text_display"].split()): p["citation"] for p in act}
+    rules = json.loads(rules_path.read_text())["provisions"]
+    if not rules:
+        return False, "the Rules corpus is empty"
+    for r in rules:
+        norm = " ".join(r["text_display"].split())
+        clash = by_hash.get(r["text_sha256"]) or by_norm.get(norm)
+        if clash:
+            return False, f"{r['citation']} is the same text as {clash}"
+    if len(rules) != 14:
+        return False, f"{len(rules)} rules ingested; the PoSH Rules 2013 have exactly 14"
     return True, ""
 
 
