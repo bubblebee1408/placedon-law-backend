@@ -254,3 +254,33 @@ hard-coding one number broke `--fast` immediately, which is its own small versio
 lesson.
 
 Never trust a green run you have not seen fail.
+
+---
+
+## L-14 — A guard tested only against strings you wrote is not tested
+
+**Incident.** The LLM path had never executed. Not once — the corpus is 0/30 verified, so
+`should_abstain` closes the gate pre-flight and the call is never reached. Every test of the
+Source Prison prompt, the citation enforcer and the number-checker used strings **I wrote by
+hand**, including the "grounded answer" in `test_unlock.py` that I wrote specifically to pass.
+
+Running the pipeline against a local llama3 (₹0, no lawyer needed) took about six minutes and
+found three holes on the first attempt:
+
+| Real model output | What we did |
+|---|---|
+| *"Action: **You should** constitute an Internal Complaints Committee"* | passed — advice, forbidden by our own system prompt |
+| *"[Citation: None, as this is a general statement]"* | passed — an answer citing nothing reached the user |
+| `s.26(9)(z)`, `s.4(99)` | passed — only the base section was validated, so any fabricated sub-clause resolved |
+
+**What went right is as informative.** Both deliberate traps held. Asked *"how many employees
+before the Act applies?"* the model did **not** say "10 or more" — the fabrication every
+secondary source in India repeats. Asked when the annual return is due it said *"I don't have
+verified information on this."* The prompt does its job; the output checks were the weak half.
+
+**Apply.** Any guard whose input is model-generated must be exercised against a real model before
+it is trusted. A local model makes that free and removes every excuse — no key, no budget, no
+waiting on verification. `scripts/exercise_llm.py` does it in one command, and the three cases it
+found are now permanent checks.
+
+Corollary: a fixture you wrote to pass will pass. That is all it proves.

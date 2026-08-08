@@ -46,7 +46,7 @@ GENERATED = {".claude/index.json", "corpus/.budget.json"}
 #
 # It has to scale with the mode: --fast skips the per-module suites and tsc, so the expected
 # total is the registry alone. Hard-coding one number broke --fast the moment it was added.
-MIN_REGISTRY_CHECKS = 16
+MIN_REGISTRY_CHECKS = 17
 
 SUITES = [
     "applicability.py", "jurisdiction.py", "backend/budget.py",
@@ -510,6 +510,36 @@ def _edge_cases_abstain():
         if got != want_abstain:
             return False, (f"{q!r} → {'abstain' if got else 'answer'}, expected "
                            f"{'abstain' if want_abstain else 'answer'}")
+    return True, ""
+
+
+@check("output guards hold against real model text, not hand-written examples",
+       because="The LLM path had never executed. Running it against a local llama3 for the first "
+               "time produced three passes that should have been blocks: 'Action: You should "
+               "constitute an Internal Complaints Committee' (advice, forbidden by our own "
+               "prompt), an answer citing nothing, and fabricated sub-clauses like s.26(9)(z) "
+               "which resolved because only the base section was validated. Every prior test "
+               "used strings I wrote to pass.")
+def _output_guards():
+    sys.path.insert(0, str(ROOT))
+    from checker import verifier                          # noqa: PLC0415
+    prov = {p["section_number"]: {**p, "verified_by": "check"}
+            for p in json.loads(POSH.read_text())["provisions"]}
+    packet = [prov[4], prov[26]]
+    cases = [
+        ("The fine may extend to fifty thousand rupees [s.26(1)(a)].", False, "real sub-clause"),
+        ("The fine may extend to fifty thousand rupees [s.26(9)(z)].", True, "fake sub-clause"),
+        ("Every employer shall constitute a Committee [s.4(99)].", True, "fake sub-clause"),
+        ("Every employer shall constitute a Committee [s.4]. You should constitute one.",
+         True, "advice language"),
+        ("The Act applies regardless of the number of employees.", True, "no citation"),
+        ("I don't have verified information on this.", False, "honest refusal"),
+    ]
+    for answer, want_abstain, label in cases:
+        got = verifier.should_abstain("q", packet, answer).abstained
+        if got != want_abstain:
+            return False, (f"{label}: {'abstained' if got else 'passed'}, expected "
+                           f"{'abstain' if want_abstain else 'pass'}")
     return True, ""
 
 

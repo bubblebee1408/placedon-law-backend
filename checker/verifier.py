@@ -25,6 +25,24 @@ SUPPORTED_STATES = {"IN-KA", "IN-MH", "IN-DL", "IN-TG", "IN-TN", "IN-HR"}
 # Weak signal, kept from the spec. Not the gate.
 HEDGES = ("i believe", "i think", "probably", "might be", "i'd guess", "presumably")
 
+# Second-person prescription. The system prompt forbids it and the model did it anyway on the
+# very first real generation: "Action: You should constitute an Internal Complaints Committee."
+#
+# The distinction being drawn is not politeness. Relaying "section 4 requires every employer to
+# constitute a Committee [s.4]" is reporting. Telling a specific company what it should do is
+# advice, and this product's entire liability position is that it does not advise. A model will
+# drift into it because being helpful is what it was trained for.
+ADVICE = ("you should", "you must", "you need to", "you are required to", "you have to",
+          "i recommend", "we recommend", "i advise", "we advise", "my advice", "our advice",
+          "i suggest", "we suggest")
+
+# An answer that asserts something must say where it came from. "No citation, no answer" is the
+# spec's rule and it is right — but a model REFUSING has nothing to cite, and that refusal is
+# the most valuable output this product produces. So refusals are exempt.
+REFUSALS = ("i don't have verified information", "i do not have verified information",
+            "not in the provided text", "the legal text does not", "cannot answer",
+            "i don't know", "i do not know")
+
 # Out of scope by design — arithmetic is where a wrong answer is instantly expensive,
 # and `docs/03` puts the calculation agent last for exactly this reason.
 CALCULATION = ("calculate", "how much pf", "gratuity amount", "salary breakup",
@@ -107,14 +125,41 @@ def check_hallucination(answer: str, provisions: list[dict]) -> list[str]:
 
 
 def verify_citations(answer: str, provisions: list[dict]) -> list[str]:
-    """Citations in the answer that do not resolve to a retrieved provision."""
-    have = {p.get("citation", "").lower().replace(" ", "") for p in provisions}
+    """
+    Citations in the answer that do not resolve to a retrieved provision.
+
+    Sub-clauses are checked against the provision's own text, not just the section number. The
+    first version stopped at the base — so `s.26(9)(z)` and `s.4(99)`, sub-clauses that do not
+    exist, resolved cleanly because s.26 and s.4 were in the packet. A fabricated sub-clause is
+    exactly as misleading as a fabricated section, and harder to notice.
+    """
+    # base -> (parts the provision's own citation already covers, its verbatim text)
+    held: dict[str, tuple[set[str], str]] = {}
+    for p in provisions:
+        cite = (p.get("citation") or "").lower().replace(" ", "")
+        base = cite.split("(")[0]
+        if not base:
+            continue
+        own = set(re.findall(r"\(([^)]+)\)", cite))
+        body = " ".join((p.get("text_display") or p.get("text", "")).split()).lower()
+        held[base] = (own, body)
+
     unresolved: list[str] = []
     for c in _CITE.findall(answer):
         norm = c.lower().replace(" ", "")
         base = norm.split("(")[0]
-        if not any(h.startswith(base) for h in have if h):
+        match = next((b for b in held if b.startswith(base) or base.startswith(b)), None)
+        if match is None:
             unresolved.append(c)
+            continue
+        own, body = held[match]
+        # Only parts the answer adds BEYOND the provision's own citation need proving. When the
+        # provision IS s.4(1), citing s.4(1) adds nothing and requiring "(1)" inside its own
+        # text would reject a correct citation.
+        for part in set(re.findall(r"\(([^)]+)\)", norm)) - own:
+            if f"({part})" not in body:
+                unresolved.append(c)
+                break
     return sorted(set(unresolved))
 
 
@@ -170,9 +215,24 @@ def should_abstain(question: str, provisions: list[dict], answer: str | None,
                        "Our own check rejected the drafted answer before you saw it.",
                        bad_nums, bad_cites)
 
-    if any(h in answer.lower() for h in HEDGES):
+    low = answer.lower()
+
+    if any(h in low for h in HEDGES):
         return Verdict("abstain",
                        "The drafted answer hedged, which means it wasn't grounded in the text.",
+                       [], [])
+
+    if any(a in low for a in ADVICE):
+        return Verdict("abstain",
+                       "The drafted answer told you what to do rather than what the law says. "
+                       "We relay cited text; we do not advise. Rejected before you saw it.",
+                       [], [])
+
+    # No citation, no answer — unless the model is refusing, which needs none.
+    if not _CITE.search(answer) and not any(r in low for r in REFUSALS):
+        return Verdict("abstain",
+                       "The drafted answer cited nothing. Every claim we pass on names the "
+                       "section it came from, so an uncited one is discarded.",
                        [], [])
 
     return Verdict("answer", "verified against source", [], [])
@@ -207,6 +267,16 @@ if __name__ == "__main__":
         ("unresolvable citation → abstain",
          should_abstain("do I need an IC?", verified,
                         "You must display the notice [s.19].").abstained, True),
+        ("advice language → abstain (a live model wrote 'Action: You should…')",
+         should_abstain("do I need an IC?", verified,
+                        "Every employer shall constitute a Committee [s.4(1)]. "
+                        "Action: You should constitute one.").abstained, True),
+        ("uncited answer → abstain",
+         should_abstain("how many employees?", verified,
+                        "The Act applies regardless of headcount.").abstained, True),
+        ("honest refusal needs no citation",
+         should_abstain("when is it due?", verified,
+                        "I don't have verified information on this.").abstained, False),
         ("edge case: interns → abstain even when verified",
          should_abstain("do interns count toward the ten?", verified, None).abstained, True),
         ("edge case: multi-state → abstain",
