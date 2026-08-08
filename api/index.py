@@ -58,8 +58,15 @@ async def app(scope: Scope, receive: Receive, send: Send) -> None:
         # ONLY the function's own mount point, never a bare "/api". The app serves real routes
         # under /api (diagnose, ask, generate), so stripping that prefix turns a valid request
         # into a 404 — which is the second half of the same bug.
+        # EXACT mount points only. "/api" and "/api/index" are where this function is invoked
+        # when the rewrite does not supply __p — production showed the bare "/" rule failing
+        # and the request arriving as "/api". They map to the app root.
+        #
+        # What must NOT happen is stripping "/api" as a PREFIX: the app serves real routes
+        # under it (/api/diagnose, /api/ask, /api/generate/...), and treating it as a mount
+        # prefix turns each of those into a 404. Both halves of this were live bugs.
         path = scope.get("path") or "/"
-        if path == "/api/index":
+        if path in ("/api", "/api/index"):
             path = "/"
         elif path.startswith("/api/index/"):
             path = path[len("/api/index"):] or "/"
