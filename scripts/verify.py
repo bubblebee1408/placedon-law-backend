@@ -34,6 +34,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 POSH = ROOT / "corpus/provisions/posh_act_2013.json"
 
+# Generated artefacts. Scanning them finds only what they copied out of real source — the badge
+# check failed on .claude/index.json, which stores a summary of every file including the ones
+# explaining why we refused the badge. Scanning derived files reports the same fact twice and
+# blames the wrong one.
+GENERATED = {".claude/index.json", "backend/.budget.json"}
+
 SUITES = [
     "applicability.py", "jurisdiction.py", "backend/budget.py",
     "checker/ic_order.py", "checker/verifier.py", "checker/test_unlock.py",
@@ -174,7 +180,8 @@ def _no_false_badge():
             if p.is_file() and p.suffix in {".py", ".ts", ".tsx", ".html", ".md", ".json"}
             and ".git" not in p.parts and "node_modules" not in p.parts
             and bad.search(_uncommented(p.read_text(encoding="utf-8", errors="replace")))
-            and p.name != "verify.py" and p.suffix != ".md"]
+            and p.name != "verify.py" and p.suffix != ".md"
+            and str(p.relative_to(ROOT)) not in GENERATED]
     return (not hits), f"false verification claim in: {hits}"
 
 
@@ -235,6 +242,44 @@ def _mca_provenance():
     return True, ""
 
 
+@check("agent search ranks the implementation above the documentation",
+       because="'how did we implement rate limiting' returned scripts/search_memory.py, whose "
+               "docstring quotes that phrase as an example, above checker/ratelimit.py which "
+               "implements it. A document ABOUT a query beat the document ANSWERING it. Fixed "
+               "by BM25F with identity (path + symbols) weighted 6x over prose.")
+def _search_ranks_implementation():
+    idx_path = ROOT / ".claude/index.json"
+    if not idx_path.exists():
+        return True, ""                       # setup.sh builds it; not a source defect
+    sys.path.insert(0, str(ROOT))
+    from scripts.search_memory import search  # noqa: PLC0415
+    idx = json.loads(idx_path.read_text())
+    for query, want in (("how did we implement rate limiting", "checker/ratelimit.py"),
+                        ("board report three numbers", "checker/board_report.py"),
+                        ("budget daily cap monthly", "backend/budget.py")):
+        hits = search(query, idx, top_k=1)
+        if not hits or hits[0][1]["path"] != want:
+            got = hits[0][1]["path"] if hits else "(nothing)"
+            return False, f"{query!r} ranked {got}, expected {want}"
+    return True, ""
+
+
+@check("the search index does not index itself",
+       because="index.json contains every symbol in the repo, so it ranked first for 'who "
+               "validates the internal committee'. A search tool returning its own index is "
+               "noise that grows on every rebuild.")
+def _index_excludes_itself():
+    src = _read("scripts/index_codebase.py")
+    if "SKIP_FILES" not in src or ".claude/index.json" not in src:
+        return False, "index_codebase.py no longer excludes its own output"
+    idx_path = ROOT / ".claude/index.json"
+    if idx_path.exists():
+        paths = {d["path"] for d in json.loads(idx_path.read_text())["docs"]}
+        if ".claude/index.json" in paths:
+            return False, "the index contains itself — rebuild it"
+    return True, ""
+
+
 @check("no secrets committed",
        because="Standing rule, never yet violated. Cheap to keep.")
 def _no_secrets():
@@ -244,7 +289,7 @@ def _no_secrets():
             if p.is_file() and p.suffix in {".py", ".ts", ".tsx", ".json", ".md", ".env"}
             and ".git" not in p.parts and "node_modules" not in p.parts
             and pat.search(p.read_text(encoding="utf-8", errors="replace"))
-            and p.name != "verify.py"]
+            and p.name != "verify.py" and str(p.relative_to(ROOT)) not in GENERATED]
     return (not hits), f"possible secret in: {hits}"
 
 

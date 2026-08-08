@@ -1,4 +1,5 @@
 __pycache__/
+.claude/index.json
 .DS_Store
 .env
 .env.local
