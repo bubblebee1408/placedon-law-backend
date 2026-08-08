@@ -246,13 +246,31 @@ def _no_s4_threshold():
                              contractor_count=0, districts=["IN-KA-BLR"])
     findings, _ = assess(profile, has_ic=False, ic_constituted_on=None,
                          has_policy=False, filed_return=False)
+    # Match the CLAIM, not one phrasing of it. The first version required the word "threshold"
+    # in the text, so the sentence a later spec proposed verbatim —
+    #   "Section 4(1) of the PoSH Act, 2013 requires an Internal Committee at workplaces with
+    #    10 or more employees"
+    # — sailed straight through, cited to s.4, in user-facing prose. That IS the L-1 fabrication.
+    # Any finding that pairs a headcount with an s.4 citation is the thing to catch.
+    headcount = re.compile(r"\b(?:ten|10)\b[^.]{0,60}\b(?:employee|worker|person|people|staff)",
+                           re.I)
     for f in findings:
-        blob = f"{f.title} {f.detail}".lower()
-        if ("ten" in blob or "10 " in blob) and "threshold" in blob:
-            cite = f.citation.lower()
-            if cite.startswith("s.4") and "inferred" not in cite:
-                return False, (f"the ten-worker threshold is cited to {f.citation!r} — s.4 does "
-                               f"not contain it; this is the original incident")
+        blob = f"{f.title} {f.detail}"
+        cite = f.citation.lower().replace(" ", "")
+        if not headcount.search(blob):
+            continue
+        if cite.startswith("s.4") and "inferred" not in cite:
+            return False, (f"a headcount claim is cited to {f.citation!r}. Section 4 contains no "
+                           f"number — this is the fabrication in LESSONS L-1, in prose a user "
+                           f"reads. Cite s.6 and label it inferred.")
+
+    # Also scan the source, because assess() only exercises the branches one profile reaches.
+    # A fabricated sentence sitting in a branch this profile does not hit is still shipped.
+    for f in ("checker/assess.py", "checker/rules.py"):
+        for line in _uncommented(_read(f)).splitlines():
+            if headcount.search(line) and re.search(r"section\s*4|s\.4", line, re.I):
+                return False, (f"{f}: a headcount and an s.4 reference share a line — "
+                               f"{line.strip()[:90]!r}. Section 4 states no number.")
     return True, ""
 
 
