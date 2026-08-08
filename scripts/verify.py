@@ -38,7 +38,7 @@ POSH = ROOT / "corpus/provisions/posh_act_2013.json"
 # check failed on .claude/index.json, which stores a summary of every file including the ones
 # explaining why we refused the badge. Scanning derived files reports the same fact twice and
 # blames the wrong one.
-GENERATED = {".claude/index.json", "backend/.budget.json"}
+GENERATED = {".claude/index.json", "corpus/.budget.json"}
 
 SUITES = [
     "applicability.py", "jurisdiction.py", "backend/budget.py",
@@ -63,6 +63,22 @@ def check(name: str, *, because: str):
 
 def _read(p: str) -> str:
     return (ROOT / p).read_text(encoding="utf-8", errors="replace")
+
+
+def _index(force: bool = False) -> dict:
+    """
+    The built index, building it if needed.
+
+    Never skip a check because its input is missing. `.claude/index.json` is gitignored, so
+    "return True if absent" meant the two index checks asserted nothing on a fresh clone or in
+    CI — and printed PASS while doing it.
+    """
+    sys.path.insert(0, str(ROOT))
+    from scripts.index_codebase import build  # noqa: PLC0415
+    idx_path = ROOT / ".claude/index.json"
+    if force or not idx_path.exists():
+        return build()
+    return json.loads(idx_path.read_text())
 
 
 def _uncommented(text: str) -> str:
@@ -108,11 +124,26 @@ def _budget_derived():
                "to let JS read it, so cross-origin dev silently reported zero blocking issues "
                "and the unlawful-committee banner never fired. Unit tests could not see it.")
 def _cors_expose():
-    src = _read("checker/app.py")
-    if "expose_headers" not in src:
-        return False, "no expose_headers on CORSMiddleware"
-    missing = [h for h in ("X-Blocking-Issues", "Content-Disposition") if h not in src]
-    return (not missing), f"not exposed: {missing}"
+    # Reads the ACTUAL middleware options, not the file text. The first version searched all of
+    # app.py for "X-Blocking-Issues" — which also appears at the response-header site, so
+    # deleting it from expose_headers left the string present and the check green. A reviewer
+    # proved that bypass; string presence is not a proxy for configuration.
+    sys.path.insert(0, str(ROOT))
+    from starlette.middleware.cors import CORSMiddleware  # noqa: PLC0415
+
+    from checker.app import app                            # noqa: PLC0415
+    for mw in app.user_middleware:
+        if mw.cls is CORSMiddleware:
+            exposed = {h.lower() for h in (mw.kwargs.get("expose_headers") or [])}
+            missing = [h for h in ("x-blocking-issues", "content-disposition")
+                       if h not in exposed]
+            if missing:
+                return False, f"CORSMiddleware does not expose: {missing}"
+            allowed = {m.upper() for m in (mw.kwargs.get("allow_methods") or [])}
+            if not {"GET", "POST"} <= allowed and "*" not in allowed:
+                return False, f"allow_methods missing GET/POST: {sorted(allowed)}"
+            return True, ""
+    return False, "no CORSMiddleware on the app"
 
 
 @check("the IC-order warning sits above the signature and prints",
@@ -190,13 +221,38 @@ def _no_false_badge():
                "in the PoSH Act. It appeared in the master spec, two scaffold files, and our own "
                "shipped rules.py comment. Only the verbatim corpus ever caught it.")
 def _no_s4_threshold():
+    # Runs assess() and reads the citation it actually emits. The first version only grepped
+    # rules.py and the corpus, and never touched checker/assess.py — the sole place the
+    # threshold finding is cited. Flipping CITE_THRESHOLD to CITE_S4 there, which IS the
+    # original incident, left this check green. A reviewer proved it.
     src = _read("checker/rules.py")
     if "s.4 states no threshold" not in src:
         return False, "rules.py no longer records that s.4 contains no threshold"
+
     body = json.loads(POSH.read_text())["provisions"]
     s4 = next(p for p in body if p["section_number"] == 4)
     if re.search(r"\bten\b|\b10\b", s4["text_display"], re.I):
         return False, "s.4 text now contains a ten — re-read it, the corpus may have changed"
+
+    sys.path.insert(0, str(ROOT))
+    from datetime import date                 # noqa: PLC0415
+
+    from applicability import CompanyProfile   # noqa: PLC0415
+
+    from checker.assess import assess          # noqa: PLC0415
+    # 8 workers: below the inferred threshold, so the threshold finding fires.
+    profile = CompanyProfile(state="IN-KA", employee_count=8, establishment_type="it_ites",
+                             entity_type="pvt_ltd", as_of=date(2026, 8, 8),
+                             contractor_count=0, districts=["IN-KA-BLR"])
+    findings, _ = assess(profile, has_ic=False, ic_constituted_on=None,
+                         has_policy=False, filed_return=False)
+    for f in findings:
+        blob = f"{f.title} {f.detail}".lower()
+        if ("ten" in blob or "10 " in blob) and "threshold" in blob:
+            cite = f.citation.lower()
+            if cite.startswith("s.4") and "inferred" not in cite:
+                return False, (f"the ten-worker threshold is cited to {f.citation!r} — s.4 does "
+                               f"not contain it; this is the original incident")
     return True, ""
 
 
@@ -248,12 +304,11 @@ def _mca_provenance():
                "implements it. A document ABOUT a query beat the document ANSWERING it. Fixed "
                "by BM25F with identity (path + symbols) weighted 6x over prose.")
 def _search_ranks_implementation():
-    idx_path = ROOT / ".claude/index.json"
-    if not idx_path.exists():
-        return True, ""                       # setup.sh builds it; not a source defect
-    sys.path.insert(0, str(ROOT))
-    from scripts.search_memory import search  # noqa: PLC0415
-    idx = json.loads(idx_path.read_text())
+    # BUILD it if absent rather than skipping. .claude/index.json is gitignored, so on any
+    # fresh clone the old `return True` fired and this check asserted nothing at all — while
+    # still printing PASS for the incident it is named after. Proven by a reviewer.
+    from scripts.search_memory import search   # noqa: PLC0415
+    idx = _index()
     for query, want in (("how did we implement rate limiting", "checker/ratelimit.py"),
                         ("board report three numbers", "checker/board_report.py"),
                         ("budget daily cap monthly", "backend/budget.py")):
@@ -269,14 +324,15 @@ def _search_ranks_implementation():
                "validates the internal committee'. A search tool returning its own index is "
                "noise that grows on every rebuild.")
 def _index_excludes_itself():
-    src = _read("scripts/index_codebase.py")
-    if "SKIP_FILES" not in src or ".claude/index.json" not in src:
-        return False, "index_codebase.py no longer excludes its own output"
-    idx_path = ROOT / ".claude/index.json"
-    if idx_path.exists():
-        paths = {d["path"] for d in json.loads(idx_path.read_text())["docs"]}
-        if ".claude/index.json" in paths:
-            return False, "the index contains itself — rebuild it"
+    # Rebuilds from current source rather than inspecting a stale artifact, and asserts on the
+    # result rather than on the presence of a substring. Deleting the `rel in SKIP_FILES` clause
+    # while leaving the SKIP_FILES definition in place defeated the old string check.
+    paths = {d["path"] for d in _index(force=True)["docs"]}
+    if ".claude/index.json" in paths:
+        return False, "the freshly built index contains itself"
+    for leaked in ("node_modules", "corpus/provisions/"):
+        if any(leaked in p for p in paths):
+            return False, f"index includes {leaked!r}, which SKIP logic should exclude"
     return True, ""
 
 

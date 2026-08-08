@@ -17,19 +17,15 @@ if sys.version_info < (3, 10):
 print(f"  python {sys.version.split()[0]}")
 PY
 
-missing=$(python3 - <<'PY'
-import importlib.util
-need = {"fastapi": "fastapi", "pydantic": "pydantic", "jinja2": "Jinja2",
-        "pdfplumber": "pdfplumber", "uvicorn": "uvicorn", "httpx": "httpx"}
-print(" ".join(pkg for mod, pkg in need.items()
-                if not importlib.util.find_spec(mod)))
-PY
-)
-if [ -n "$missing" ]; then
-  echo "  installing: $missing"
-  python3 -m pip install --quiet $missing
-else
+# Install from requirements.txt, not a hand-kept list. The hardcoded list had already drifted:
+# it omitted python-multipart (which IS pinned) and named three packages that are pinned nowhere,
+# so a fresh environment could silently get versions nobody had tested.
+if python3 scripts/check_deps.py >/dev/null 2>&1; then
   echo "  python deps present"
+else
+  echo "  installing from requirements.txt"
+  python3 -m pip install --quiet -r requirements.txt
+  [ -f requirements-dev.txt ] && python3 -m pip install --quiet -r requirements-dev.txt
 fi
 
 mkdir -p .claude/{today,memory,loops,commands}

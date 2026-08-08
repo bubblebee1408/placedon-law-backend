@@ -167,3 +167,30 @@ The aliases were never needed: a case-insensitive filesystem already resolves `/
 Before any `ln -sf`, `mv`, or `rm` over existing files, check what is there — and commit first,
 because git was the entire recovery path here. `scripts/verify.py` now checks that every command
 file is readable and non-empty.
+
+---
+
+## L-11 — A check that skips when its input is missing reports PASS for a bug it never looked at
+
+**Incident.** An adversarial review of `scripts/verify.py` — the file whose entire job is to be
+trusted — found three checks that could pass while the bug they were named for was live.
+
+- Two index checks began `if not idx_path.exists(): return True`. `.claude/index.json` is
+  gitignored, so on **every fresh clone and in CI** they asserted nothing and printed PASS.
+- `_cors_expose` searched all of `app.py` for `"X-Blocking-Issues"`. That string also appears
+  where the response header is set, so deleting it from `expose_headers` — the original
+  incident — left the check green.
+- `_no_s4_threshold` grepped `rules.py` and the corpus but never touched `checker/assess.py`,
+  the only file that emits the citation. Flipping `CITE_THRESHOLD` to `CITE_S4` there passed.
+
+Each was proven with a working bypass, not argued.
+
+**Apply.** Two rules, both now enforced in `verify.py`:
+
+1. **Never skip a check because its input is missing.** Build the input, or fail. A skipped
+   check that prints PASS is worse than no check, because it is trusted.
+2. **String presence is not a proxy for behaviour.** Read the actual configuration
+   (`app.user_middleware`), run the actual function (`assess()`), rebuild the actual artifact.
+   A grep passes for reasons that have nothing to do with what you meant.
+
+And the meta-lesson: **the ratchet needs its own adversary.** It found none of this itself.
