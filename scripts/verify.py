@@ -46,7 +46,7 @@ GENERATED = {".claude/index.json", "corpus/.budget.json"}
 #
 # It has to scale with the mode: --fast skips the per-module suites and tsc, so the expected
 # total is the registry alone. Hard-coding one number broke --fast the moment it was added.
-MIN_REGISTRY_CHECKS = 19
+MIN_REGISTRY_CHECKS = 21
 
 SUITES = [
     "applicability.py", "jurisdiction.py", "backend/budget.py",
@@ -590,6 +590,56 @@ def _pack_dependency_closed():
         return False, (f"sections {leaks} are depended upon but not in the pack — verifying "
                        f"Tier 1 would still leave claims resting on them")
     return True, ""
+
+
+@check("belief maths: ambiguity shrinks evidence toward uninformative, not toward false",
+       because="The proposed engine computed `lr = lr * (1 - ambiguity)`. That drives the "
+               "likelihood ratio to 0, which is certainty AGAINST the proposition. On its own "
+               "numbers, raising ambiguity 0.0 -> 0.8 moved the posterior from 0.130 to 0.029: "
+               "more doubt producing more confidence. Correct is `lr ** (1 - ambiguity)`, which "
+               "converges on the prior.")
+def _belief_maths():
+    sys.path.insert(0, str(ROOT))
+    from checker.belief_engine import Belief, Evidence      # noqa: PLC0415
+
+    b = Belief("t")
+    b.update(Evidence("x", 1, 10.0, "test"))
+    if round(b.posterior, 3) != 0.909:
+        return False, f"prior 0.5 + LR 10 gave {b.posterior:.3f}, expected 0.909"
+
+    conflict = Belief("t")
+    conflict.update(Evidence("a", 1, 10.0, "test"))
+    conflict.update(Evidence("b", 1, 0.1, "test"))
+    if round(conflict.posterior, 3) != 0.5:
+        return False, f"opposing evidence gave {conflict.posterior:.3f}, expected 0.5"
+
+    for lr in (0.1, 0.3, 3.0, 10.0):
+        clear, murky = Belief("a"), Belief("b")
+        clear.update(Evidence("x", 1, lr, "t", ambiguity=0.0))
+        murky.update(Evidence("x", 1, lr, "t", ambiguity=0.8))
+        if abs(murky.posterior - 0.5) >= abs(clear.posterior - 0.5):
+            return False, (f"LR {lr}: ambiguity moved the posterior AWAY from the prior "
+                           f"({clear.posterior:.3f} -> {murky.posterior:.3f})")
+    return True, ""
+
+
+@check("no belief number is ever shown to a user",
+       because="A number used for ranking needs no calibration; a number displayed as '94% "
+               "confident' needs a labelled validation set we do not have (0 labelled "
+               "scenarios). The engine orders findings and triggers abstention. The moment a "
+               "posterior reaches a template it becomes an unfalsifiable claim.")
+def _belief_not_displayed():
+    import re                                               # noqa: PLC0415
+    leaks = []
+    for d in ("checker/templates", "frontend/app", "frontend/components"):
+        p = ROOT / d
+        if not p.is_dir():
+            continue
+        for f in list(p.rglob("*.html")) + list(p.rglob("*.tsx")):
+            body = _uncommented(f.read_text(encoding="utf-8", errors="replace"))
+            if re.search(r"posterior|belief_state|confidence_tier|entropy", body):
+                leaks.append(str(f.relative_to(ROOT)))
+    return (not leaks), f"belief internals surfaced in: {leaks}"
 
 
 @check("no secrets committed",
