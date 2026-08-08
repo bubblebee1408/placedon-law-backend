@@ -11,6 +11,7 @@ corpus/.budget.json
 corpus/.checks.jsonl
 corpus/raw/*.pdf
 corpus/review_pack.html
+corpus/review_response.json
 corpus/sample_*.html
 frontend/.env.local
 node_modules/

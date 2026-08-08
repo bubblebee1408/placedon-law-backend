@@ -5,10 +5,17 @@ BACKLOG H-2 has been sitting as "find an employment lawyer, ~15-25 hours". That 
 and vague asks do not get done. This narrows it to something a junior employment lawyer or a
 final-year NLU student can finish in an evening, by observing something checkable:
 
-**The product cites six sections.** s.2, s.4, s.6, s.19, s.21, s.26. Every claim the checker,
-the IC-order generator, and the Q&A engine currently make rests on those. The remaining 24
-sections are ingested but nothing depends on them yet — verifying them is real work with no
-current payoff.
+**Tier 1 is computed, not chosen.** An earlier version of this file hard-coded six sections —
+s.2, s.4, s.6, s.19, s.21, s.26 — as "the sections the product relies on". Rehearsing the
+verification end-to-end disproved that: with all six verified, the flagship question *"Do I need
+an Internal Committee?"* still abstained, because retrieval routes it to s.4, s.6 **and s.7**,
+and `verifier.should_abstain` blocks a packet if *any* provision in it is unverified. Six
+verified sections bought an answer to one question out of twelve.
+
+So Tier 1 is now derived: run every question the product is actually built to answer through
+`retrieval.retrieve()` and take the closure. That comes to 12 sections. The number moves on its
+own if KEYWORD_MAP changes, which is the point — a hand-maintained list drifts silently and
+this one cannot.
 
 So the pack is tiered. Tier 1 unlocks the product. Tier 2 is what retrieval can route to.
 Tier 3 is everything else, and is explicitly marked as *not needed yet*.
@@ -103,15 +110,45 @@ code{font-family:ui-monospace,monospace;font-size:.9em;background:#f0ede6;paddin
 """
 
 
+# The questions the product is actually built to answer. Tier 1 is whatever retrieval needs to
+# answer these — not a list anyone maintains by hand.
+CORE_QUESTIONS = [
+    "Do I need an Internal Committee?",
+    "Who can be on the IC?",
+    "What is the tenure of IC members?",
+    "What is the penalty for not having an IC?",
+    "Do I need a PoSH policy?",
+    "What must the employer display?",
+    "When is the annual return due?",
+    "What is a workplace under the Act?",
+    "What if we have fewer than ten employees?",
+    "Who is the district officer?",
+    "How do I file a complaint?",
+    "What happens after a complaint is filed?",
+]
+
+
+def required_sections() -> set[int]:
+    """
+    Every section that must be verified before the product stops abstaining.
+
+    `verifier.should_abstain` rejects a packet if ANY provision in it is unverified, so the unit
+    of verification is the retrieved packet, not the cited section. Verifying s.4 alone does not
+    answer "do I need an IC?" — that packet also carries s.6 and s.7.
+    """
+    from checker.retrieval import retrieve  # noqa: PLC0415
+    return {p["section_number"] for q in CORE_QUESTIONS for p in retrieve(q)[0]}
+
+
 def main() -> int:
     data = json.loads(CORPUS.read_text())
     provisions = {p["section_number"]: p for p in data["provisions"]}
     inst = data["instrument"]
 
-    tier1 = sorted(CLAIMS)
+    tier1 = sorted(required_sections())
     from checker.retrieval import KEYWORD_MAP  # noqa: PLC0415
     routed = sorted({n for v in KEYWORD_MAP.values() for n in v})
-    tier2 = [n for n in routed if n not in CLAIMS]
+    tier2 = [n for n in routed if n not in tier1]
     tier3 = [n for n in sorted(provisions) if n not in routed]
 
     out: list[str] = [
@@ -124,8 +161,10 @@ def main() -> int:
         f"stamped &ldquo;{html.escape(inst['source_version_note'])}&rdquo;.</p>",
 
         "<div class=tier><b>What we are asking for.</b> Not a full reading of the Act. "
-        f"The product currently cites <strong>{len(tier1)} sections</strong>. Verifying those "
-        "unlocks everything it claims; until then it declines every question and says why. "
+        f"<strong>{len(tier1)} sections.</strong> That is every section retrieval must produce "
+        f"to answer the {len(CORE_QUESTIONS)} questions the product is built for — verified as a "
+        "set, because one unverified section in a packet makes the whole answer abstain. Until "
+        "then it declines every question and says why. "
         "Each entry below shows the verbatim text beside the specific reading we derived from "
         "it — so this is checking a reading, not reading a statute cold.</div>",
 
@@ -135,12 +174,28 @@ def main() -> int:
     for i, (q, detail) in enumerate(QUESTIONS, 1):
         out.append(f"<div class=q><b>{i}. {html.escape(q)}</b>{detail}</div>")
 
-    out.append(f"<h2>Tier 1 — the {len(tier1)} sections the product relies on</h2>")
-    out.append("<p class=lede>Everything the checker, the IC-order generator, and the Q&amp;A "
-               "engine assert rests on these. This is the work that unlocks the product.</p>")
+    out.append(f"<h2>Tier 1 — the {len(tier1)} sections that unlock the product</h2>")
+    out.append(f"<p class=lede>Derived by running each of the {len(CORE_QUESTIONS)} questions "
+               "above through our retrieval and taking the union. "
+               f"<strong>{len(CLAIMS)}</strong> carry a reading we need checked; the other "
+               f"<strong>{len(tier1) - len(CLAIMS)}</strong> we merely quote, and need only "
+               "confirmed as in force.</p><p class=lede>The questions: "
+               + "; ".join(html.escape(q) for q in CORE_QUESTIONS) + "</p>")
 
     for n in tier1:
         p = provisions[n]
+        if n not in CLAIMS:
+            out.append(f"<h3>{html.escape(p['citation'])} — {html.escape(p['heading'])}</h3>")
+            out.append("<p><strong>We assert nothing from this section.</strong> Retrieval pulls "
+                       "it in as supporting context for the questions listed above, so its text "
+                       "gets quoted back to a user. We only need to know: <em>is this the text "
+                       "currently in force, and is quoting it alongside the others misleading in "
+                       "any way?</em></p>")
+            out.append(f"<div class=text>{html.escape(p['text_display'])}</div>")
+            out.append("<div class=signoff>In force and not misleading / problem noted (circle "
+                       "one). Note:<span></span><br>Reviewer:<span></span> "
+                       "Date:<span></span></div>")
+            continue
         out.append(f"<h3>{html.escape(p['citation'])} — {html.escape(p['heading'])}</h3>")
         if p["amendment_markers"]:
             out.append(f"<p><em>Carries amendment markers {p['amendment_markers']} — please "
