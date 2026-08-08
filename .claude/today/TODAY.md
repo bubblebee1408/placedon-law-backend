@@ -1,19 +1,23 @@
-# TODAY: 2026-08-08
+# TODAY: 2026-08-09
 
-## The one number
+## The one number moved
 
 ```
-placedon.com/diagnose   →   404
+https://placedon-hr.vercel.app   →   200        LIVE
 ```
 
-Nobody outside this laptop has used the product. Everything else on this page is downstream of
-that.
+The free PoSH checker is public. Form, report, citations, abstention — all of it, working on a
+phone. Four deploy bugs found and fixed getting there; see `.claude/loops/VERIFY_deploy.md`.
+
+**Nobody has used it yet.** That is now a distribution problem, not a code problem.
 
 ## This week — three tracks, one is code
 
-- [ ] **A. Deploy.** `/diagnose` returns 200 on a public URL. Mine, ~2 hours, needs your Vercel
-      account. Blocked on nothing else. See `docs/PLAN.md` for the two topology options —
-      recommendation is both on Vercel, one origin, no cold start.
+- [x] **A. Deploy — DONE.** https://placedon-hr.vercel.app · `GET /` 200 · `POST /check` 200 ·
+      `POST /api/diagnose` 200 · `GET /api/generate/templates` 200. Verified in a browser at
+      390×844, no overflow, no JS errors. The Next frontend (`/diagnose`, `/generate`) is a
+      separate project and is **not** deployed — what is public is the server-rendered checker,
+      which is the whole free journey and needs no JavaScript.
 - [ ] **B. Lawyer.** `python3 scripts/review_pack.py` and `apply_verification.py --template`,
       then send both. 12 sections, one evening, ₹2,000–3,000. `docs/LAWYER_BRIEF.md` has the
       email. **Yours.**
@@ -24,7 +28,8 @@ that.
 
 | | |
 |---|---|
-| `scripts/verify.py` | GO, 22 checks |
+| `scripts/verify.py` | GO, 24 checks |
+| Public URL | **https://placedon-hr.vercel.app** |
 | Corpus | 30 PoSH sections, **0 verified** · 4 MCA provisions, secondary source |
 | Documents live | `ic_order`, `posh_policy`, `board_report` |
 | LLM spend, all time | ₹0.00 |
