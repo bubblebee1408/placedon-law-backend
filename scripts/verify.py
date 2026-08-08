@@ -378,6 +378,52 @@ def _commands_readable():
     return (not broken), f"unreadable: {broken}"
 
 
+@check("the Vercel wrapper routes every API path in production",
+       because="api/index.py restored the real path from __p and then the mount-prefix fallback "
+               "stripped it AGAIN: /api/diagnose became /diagnose, which is not a route. Every "
+               "JSON endpoint 404'd in production for a day while GET / and POST /check worked, "
+               "because those have no /api prefix to lose. Local uvicorn never touches this "
+               "wrapper, so no test could see it.")
+def _vercel_wrapper_routes():
+    import asyncio                                   # noqa: PLC0415
+    sys.path.insert(0, str(ROOT))
+    from api.index import app                        # noqa: PLC0415
+
+    payload = json.dumps({"employees": 14, "contractors": 0, "state": "IN-KA",
+                          "district": "IN-KA-BLR", "industry": "it_ites", "has_policy": "no",
+                          "has_ic": "no", "filed_return": "no"}).encode()
+
+    async def call(path, qs=b"", method="GET", body=b""):
+        scope = {"type": "http", "method": method, "path": path, "query_string": qs,
+                 "headers": [(b"content-type", b"application/json")], "root_path": "",
+                 "scheme": "https", "server": ("x", 443), "client": ("1.2.3.4", 1),
+                 "http_version": "1.1", "asgi": {"version": "3.0"}}
+        sent = []
+
+        async def receive():
+            return {"type": "http.request", "body": body, "more_body": False}
+
+        async def send(m):
+            sent.append(m)
+
+        await app(scope, receive, send)
+        return next((m["status"] for m in sent if m["type"] == "http.response.start"), None)
+
+    cases = [
+        ("/api/index", b"__p=%2Fapi%2Fdiagnose", "POST", payload, "rewritten /api/diagnose"),
+        ("/api/index", b"__p=%2Fapi%2Fgenerate%2Ftemplates", "GET", b"", "rewritten templates"),
+        ("/api/index", b"__p=%2F", "GET", b"", "rewritten root"),
+        ("/api/index", b"", "GET", b"", "bare mount point"),
+        ("/api/diagnose", b"", "POST", payload, "direct, no __p"),
+        ("/", b"", "GET", b"", "bare root"),
+    ]
+    for path, qs, method, body, label in cases:
+        got = asyncio.run(call(path, qs, method, body))
+        if got != 200:
+            return False, f"{label}: {method} {path} returned {got}, expected 200"
+    return True, ""
+
+
 @check("no secrets committed",
        because="Standing rule, never yet violated. Cheap to keep.")
 def _no_secrets():
