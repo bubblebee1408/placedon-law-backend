@@ -18,6 +18,7 @@ reported the route table, which is not something a public compliance product sho
 """
 from __future__ import annotations
 
+import logging
 import sys
 from pathlib import Path
 from urllib.parse import parse_qsl, urlencode
@@ -35,6 +36,7 @@ async def app(scope: Scope, receive: Receive, send: Send) -> None:
         return
 
     scope = dict(scope)
+    _raw_path = scope.get("path")
     qs = (scope.get("query_string") or b"").decode("latin-1")
     pairs = parse_qsl(qs, keep_blank_values=True)
 
@@ -73,6 +75,12 @@ async def app(scope: Scope, receive: Receive, send: Send) -> None:
         scope["path"] = path or "/"
 
     scope["root_path"] = ""
+
+    # TEMPORARY: production 404s on GET / while every other route works. Two guesses have been
+    # wrong, so log what actually arrives instead of guessing a third time. Logs are
+    # server-side only; nothing is exposed to a caller. Remove once diagnosed.
+    logging.info("vercel.route raw_path=%r raw_qs=%r __p=%r final=%r method=%r",
+                 _raw_path, qs, original, scope["path"], scope.get("method"))
 
 
     await _checker(scope, receive, send)
