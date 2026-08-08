@@ -10,6 +10,8 @@ corpus/.asks.jsonl
 corpus/.budget.json
 corpus/.checks.jsonl
 corpus/raw/*.pdf
+corpus/review_pack.html
+corpus/sample_*.html
 frontend/.env.local
 node_modules/
 venv/

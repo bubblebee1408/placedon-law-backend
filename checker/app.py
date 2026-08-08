@@ -19,12 +19,14 @@ from pathlib import Path
 
 from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel, Field
 
 from applicability import CompanyProfile
 
-from . import ratelimit, retrieval, verifier
+from jinja2 import TemplateNotFound
+
+from . import documents, ratelimit, retrieval, verifier
 from .assess import assess
 from .rules import DISTRICTS, INDUSTRIES, STATES, Finding
 
@@ -475,3 +477,51 @@ def _log_ask(req: AskRequest, payload: dict) -> None:
             }) + "\n")
     except Exception:                                    # noqa: BLE001
         logging.warning("ask.log_failed", exc_info=True)
+
+
+@app.get("/api/generate/templates")
+def list_templates() -> dict:
+    """Free tier, no auth. Unavailable templates are listed WITH the reason, not hidden."""
+    return {"templates": documents.list_available_templates()}
+
+
+class GenerateRequest(BaseModel):
+    company: dict = Field(default_factory=dict)
+    inputs: dict = Field(default_factory=dict)
+
+
+@app.post("/api/generate/{template_type}")
+def generate(template_type: str, req: GenerateRequest, request: Request) -> Response:
+    """
+    Returns print-ready HTML, not a PDF blob.
+
+    weasyprint needs cairo/pango — a system install locally and unavailable on Vercel
+    serverless, so it breaks in both places we deploy. The document carries @page rules and
+    a print stylesheet; the browser's own print-to-PDF produces a proper A4 file with no
+    dependency at all.
+    """
+    client_ip = (request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+                 or (request.client.host if request.client else "unknown"))
+    allowed, retry_after = ratelimit.check(client_ip, limit=5)
+    if not allowed:
+        raise HTTPException(429, "Too many documents in one minute.",
+                            headers={"Retry-After": str(retry_after)})
+
+    try:
+        doc = documents.generate_document(template_type, req.company, req.inputs)
+    except TemplateNotFound:
+        raise HTTPException(404, f"No template called {template_type!r}.") from None
+    except ValueError as e:
+        raise HTTPException(422, str(e)) from None
+    except Exception:                                    # noqa: BLE001
+        logging.exception("generate.failed type=%s", template_type)
+        raise HTTPException(500, "Could not generate that document. Please try again.") from None
+
+    return Response(
+        content=doc.html,
+        media_type="text/html; charset=utf-8",
+        headers={
+            "Content-Disposition": f'inline; filename="{doc.filename}"',
+            "X-Blocking-Issues": str(sum(1 for i in doc.issues if i.severity == "blocking")),
+        },
+    )
