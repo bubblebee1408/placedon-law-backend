@@ -592,42 +592,44 @@ def _pack_dependency_closed():
     return True, ""
 
 
-@check("belief maths: ambiguity shrinks evidence toward uninformative, not toward false",
-       because="The proposed engine computed `lr = lr * (1 - ambiguity)`. That drives the "
-               "likelihood ratio to 0, which is certainty AGAINST the proposition. On its own "
-               "numbers, raising ambiguity 0.0 -> 0.8 moved the posterior from 0.130 to 0.029: "
-               "more doubt producing more confidence. Correct is `lr ** (1 - ambiguity)`, which "
-               "converges on the prior.")
-def _belief_maths():
+@check("epistemic status is ordinal — no probability anywhere in the engine",
+       because="An adversarial audit of the nine papers behind the proposed design found the "
+               "calibration citation unusable twice over: an LLM writing '0.94' has no logits to "
+               "scale, and at n=20 the observable resolution IS 0.05, so an ECE<0.05 target sits "
+               "below the instrument. The noise floor for a PERFECTLY calibrated model at p=0.9 "
+               "is 0.0535 — it fails by construction. Distinguishing 0.94 from 0.93 needs ~2,256 "
+               "labels per provision. We had built a correct Bayesian version anyway; correct "
+               "maths on invented weights is still invented. Replaced by a weakest-link lattice.")
+def _status_is_ordinal():
     sys.path.insert(0, str(ROOT))
-    from checker.belief_engine import Belief, Evidence      # noqa: PLC0415
+    from checker.epistemic_status import Claim, Ground, Status   # noqa: PLC0415
 
-    b = Belief("t")
-    b.update(Evidence("x", 1, 10.0, "test"))
-    if round(b.posterior, 3) != 0.909:
-        return False, f"prior 0.5 + LR 10 gave {b.posterior:.3f}, expected 0.909"
+    if not (Status.SILENT < Status.UNSUPPORTED < Status.UNCHECKED < Status.SECONDARY
+            < Status.INFERRED < Status.VERIFIED < Status.QUOTED):
+        return False, "the lattice is no longer totally ordered"
+    if [s.name for s in Status if s.answerable] != ["VERIFIED", "QUOTED"]:
+        return False, "the answerable threshold moved below VERIFIED"
 
-    conflict = Belief("t")
-    conflict.update(Evidence("a", 1, 10.0, "test"))
-    conflict.update(Evidence("b", 1, 0.1, "test"))
-    if round(conflict.posterior, 3) != 0.5:
-        return False, f"opposing evidence gave {conflict.posterior:.3f}, expected 0.5"
+    mixed = Claim("x", [Ground(Status.QUOTED, "strong", "t"),
+                        Ground(Status.UNCHECKED, "weak", "t")])
+    if mixed.status is not Status.UNCHECKED:
+        return False, f"weakest link not enforced: got {mixed.status.name}"
 
-    for lr in (0.1, 0.3, 3.0, 10.0):
-        clear, murky = Belief("a"), Belief("b")
-        clear.update(Evidence("x", 1, lr, "t", ambiguity=0.0))
-        murky.update(Evidence("x", 1, lr, "t", ambiguity=0.8))
-        if abs(murky.posterior - 0.5) >= abs(clear.posterior - 0.5):
-            return False, (f"LR {lr}: ambiguity moved the posterior AWAY from the prior "
-                           f"({clear.posterior:.3f} -> {murky.posterior:.3f})")
+    # No probability may creep back in. Floats in the engine mean invented weights returned.
+    body = _uncommented((ROOT / "checker/epistemic_status.py").read_text())
+    body = re.sub(r'""".*?"""', "", body, flags=re.S)
+    floats = re.findall(r"\b\d+\.\d+\b", body)
+    if floats:
+        return False, f"numeric weights reappeared in the engine: {floats[:5]}"
     return True, ""
 
 
-@check("no belief number is ever shown to a user",
-       because="A number used for ranking needs no calibration; a number displayed as '94% "
-               "confident' needs a labelled validation set we do not have (0 labelled "
-               "scenarios). The engine orders findings and triggers abstention. The moment a "
-               "posterior reaches a template it becomes an unfalsifiable claim.")
+@check("no confidence number is ever shown to a user",
+       because="Displaying '94% confident' needs a labelled validation set; we have zero "
+               "scenarios, and the frontier on the nearest published task (Indian statute "
+               "identification) is 64.58 macro-F1. Dahl et al., Journal of Legal Analysis 2024, "
+               "measured 58-88% legal hallucination and found LLM confidence ANTI-correlated "
+               "with reliability. A number here would be worse than no number.")
 def _belief_not_displayed():
     import re                                               # noqa: PLC0415
     leaks = []

@@ -284,3 +284,31 @@ waiting on verification. `scripts/exercise_llm.py` does it in one command, and t
 found are now permanent checks.
 
 Corollary: a fixture you wrote to pass will pass. That is all it proves.
+
+---
+
+## L-15 — Correct arithmetic over invented weights is still invented
+
+**Incident.** Built a Bayesian belief engine. Did it properly: found and fixed a real sign error
+in the source spec (`lr * (1-ambiguity)` drives the likelihood ratio to 0, meaning *certainty
+against*; correct is `lr ** (1-ambiguity)`, converging on the prior). Verified the spec's own
+tests failed 2/4 against its own code. Replaced its unsourced 0.6 prior with 0.5. Kept the number
+away from users. Wrote a check that fails the build if a posterior reaches a template.
+
+All of that was right, and the module still had to go.
+
+An adversarial audit of the nine underlying papers established that calibration is unreachable
+here — no logits to scale, and at n=20 the observable resolution *is* 0.05, so an ECE<0.05 target
+sits below the instrument, with a perfect model's noise floor at p=0.9 already 0.0535. The whole
+published literature on Bayesian statutory applicability stipulates its parameters and says so
+(*"simply to propose a toy model"*; *"full numerical validation is forthcoming"*).
+
+And my own `LR_LAWYER_VERIFIED = 12.0` had exactly as much grounding as the `prior = 0.6` I had
+rejected. I fixed the arithmetic and kept the fabrication.
+
+**Apply.** When rejecting a number as unsourced, check the replacement by the same standard.
+Rigour applied to the mechanism does not launder an ungrounded input — it disguises it, because
+the working is now checkable and the premise still is not. Where the inputs are categorical facts
+(`verified_by` set or null), the honest structure is an **ordinal lattice with weakest-link
+composition**, not a probability: it composes, it orders, it explains, and it cannot be misread
+as a measurement.
