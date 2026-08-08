@@ -13,6 +13,7 @@ corpus/raw/*.pdf
 corpus/review_pack.html
 corpus/review_response.json
 corpus/sample_*.html
+corpus/sample_board_report.html
 frontend/.env.local
 node_modules/
 venv/

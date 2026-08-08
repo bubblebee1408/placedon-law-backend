@@ -1,0 +1,73 @@
+{
+  "instrument": {
+    "short_name": "Companies (Accounts) Rules 2014",
+    "official_title": "The Companies (Accounts) Rules, 2014, as amended by the Companies (Accounts) Second Amendment Rules, 2025",
+    "kind": "rules",
+    "jurisdiction": "IN",
+    "year": 2014,
+    "gazette_ref": "G.S.R. 357(E) (amending notification, 30 May 2025)",
+    "published_at": "2025-05-30",
+    "commenced_at": "2025-07-14",
+    "source_url": "https://ibclaw.in/companies-accounts-second-amendment-rules-2025/",
+    "source_sha256": null,
+    "source_pages": null,
+    "fetched_at": "2026-08-08",
+
+    "PROVENANCE_WARNING": "THIS IS NOT THE SAME QUALITY OF SOURCE AS THE PoSH CORPUS. The PoSH Act was ingested from the India Code PDF, byte-for-byte, with a sha256 over the file. These provisions were read off a SECONDARY REPRODUCTION of the notification on a legal-news site, cross-checked for consistency against three other secondary sources. Nobody here has seen the Gazette. There is no file hash because there is no file. Treat every string below as a quotation of a quotation until BACKLOG C-4 replaces it with the gazette PDF.",
+
+    "why_it_exists_anyway": "The amended Rule 8(5)(x) is the reason a company secretary will care about us in September 2026, and refusing to record it until the gazette arrives would mean carrying it only in a human's head, which is worse. Recording it with its weakness stated is the honest middle.",
+
+    "corroborating_sources": [
+      "https://ssrana.in/posh-law/news-event/news/mca-new-notification-on-posh-act-compliance/",
+      "https://taxguru.in/company-law/companies-accounts-second-amendment-rules-2025.html",
+      "https://www.teamleaseregtech.com/updates/article/43286/companies-accounts-second-amendment-rules-2025/",
+      "https://indiankanoon.org/doc/194190064/"
+    ]
+  },
+  "provisions": [
+    {
+      "section_number": 8,
+      "clause": "5(x)",
+      "citation": "Rule 8(5)(x), Companies (Accounts) Rules 2014",
+      "heading": "Matters to be included in Board's Report — sexual harassment",
+      "text_display": "a statement that the company has complied with provisions relating to the constitution of Internal Complaints Committee under the Sexual Harassment of Women at Workplace (Prevention, Prohibition and Redressal) Act, 2013",
+      "amended_text_display": "(a) number of complaints of sexual harassment received in the year; (b) number of complaints disposed off during the year; and (c) number of cases pending for more than ninety days.",
+      "amendment_note": "Sub-clauses (a) to (c) inserted by the Companies (Accounts) Second Amendment Rules, 2025, in force 14 July 2025. FY 2025-26 is the first financial year they touch.",
+      "source_quality": "secondary_reproduction",
+      "verified_by": null,
+      "verified_at": null
+    },
+    {
+      "section_number": 8,
+      "clause": "6",
+      "citation": "Rule 8(6), Companies (Accounts) Rules 2014",
+      "heading": "Non-applicability to One Person Company and Small Company",
+      "text_display": "This rule shall not apply to One Person Company or Small Company.",
+      "source_quality": "secondary_reproduction",
+      "verified_by": null,
+      "verified_at": null
+    },
+    {
+      "section_number": 134,
+      "clause": "8",
+      "citation": "s.134(8), Companies Act 2013",
+      "heading": "Penalty for contravention of section 134",
+      "text_display": "the company shall be liable to a penalty of three lakh rupees and every officer of the company who is in default shall be liable to a penalty of fifty thousand rupees",
+      "source_quality": "secondary_reproduction_paraphrase",
+      "text_caveat": "Reported consistently across sources but NOT obtained from a full reproduction of the sub-section. The amounts are corroborated; the exact wording is not guaranteed verbatim.",
+      "verified_by": null,
+      "verified_at": null
+    },
+    {
+      "section_number": 8,
+      "clause": "A",
+      "citation": "Rule 8A, Companies (Accounts) Rules 2014",
+      "heading": "Abridged Board's Report for OPC and Small Company",
+      "text_display": "Clauses (a) to (j). The full text obtained contains NO clause requiring a statement on the Internal Complaints Committee or the Sexual Harassment of Women at Workplace Act 2013.",
+      "source_quality": "DISPUTED",
+      "text_caveat": "Two secondary sources assert that Rule 8A DOES require an IC statement from small companies and OPCs. The full reproduction of the Rules on Indian Kanoon shows no such clause. This has the same shape as the s.4 threshold error — universally repeated, absent from the provision — and is unresolved. It is Question 6 in the lawyer pack. Nothing may be asserted to a small company until it is answered.",
+      "verified_by": null,
+      "verified_at": null
+    }
+  ]
+}

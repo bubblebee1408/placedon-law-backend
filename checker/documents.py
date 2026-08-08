@@ -34,6 +34,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined, TemplateNotFound  # noqa: E402
 
+from checker import board_report  # noqa: E402
 from checker.ic_order import MAX_TERM_YEARS, Member, validate  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -79,6 +80,16 @@ TEMPLATE_INFO: dict[str, dict] = {
                        "before drafting it.",
         "track": "compliance",
         "required": ["company_name", "members"],
+    },
+    "board_report": {
+        "name": "PoSH extract for the Board's Report",
+        "description": "Rule 8(5)(x) of the Companies (Accounts) Rules has required three "
+                       "numbers since 14 July 2025 — complaints received, disposed, and pending "
+                       "beyond ninety days. FY 2025-26 is the first year they are due, at AGMs "
+                       "by 30 September 2026. We check them against each other and against your "
+                       "committee before writing the statement.",
+        "track": "compliance",
+        "required": ["company_name", "members", "counts"],
     },
     "posh_policy": {
         "name": "PoSH policy for display",
@@ -143,6 +154,57 @@ def list_available_templates() -> list[dict]:
     return out
 
 
+def company_name_of(company: dict, user_inputs: dict) -> str:
+    name = str(company.get("name") or user_inputs.get("company_name") or "").strip()
+    if not name:
+        raise ValueError("Company name is required.")
+    return name
+
+
+def _board_report(company_name: str, members: list[Member], user_inputs: dict) -> Document:
+    """
+    Rule 8(5)(x). Separate from the IC documents because its inputs are counts rather than
+    people, and because it can refuse for a reason the others cannot — Rule 8(6) exempts a
+    One Person Company and a Small Company, and we abstain rather than guess at Rule 8A.
+    """
+    raw = user_inputs.get("counts") or {}
+    try:
+        counts = board_report.Counts(
+            opening_pending=int(raw.get("opening_pending", 0)),
+            received=int(raw.get("received", 0)),
+            disposed=int(raw.get("disposed", 0)),
+            pending_over_90=int(raw.get("pending_over_90", 0)),
+        )
+    except (TypeError, ValueError):
+        raise ValueError("The four complaint counts must all be whole numbers.") from None
+
+    try:
+        extract = board_report.build(
+            members, counts,
+            is_small_company=bool(user_inputs.get("is_small_company")),
+            is_opc=bool(user_inputs.get("is_opc")),
+        )
+    except board_report.Exempt as e:
+        raise ValueError(str(e)) from None
+
+    fy = str(user_inputs.get("financial_year", "")).strip() or "2025-26"
+    html = _env().get_template("board_report.html").render(
+        css=CSS,
+        company_name=company_name,
+        financial_year=fy,
+        place=str(user_inputs.get("place", "")).strip(),
+        counts=extract.counts,
+        issues=extract.issues,
+        committee_issues=extract.committee_issues,
+        may_state_compliance=extract.may_state_compliance,
+        corpus_sha=_corpus_sha(),
+        verification_line=_verification_line(),
+    )
+    slug = "".join(c if c.isalnum() else "_" for c in company_name.lower())[:40].strip("_")
+    return Document(html, f"placedon_board_report_{fy}_{slug}.html", extract.issues,
+                    "board_report")
+
+
 def generate_document(template_type: str, company: dict, user_inputs: dict) -> Document:
     if template_type in BLOCKED:
         raise ValueError(BLOCKED[template_type])
@@ -167,6 +229,9 @@ def generate_document(template_type: str, company: dict, user_inputs: dict) -> D
     if any(not m.name for m in members):
         raise ValueError("Every member needs a name.")
 
+    if template_type == "board_report":
+        return _board_report(company_name_of(company, user_inputs), members, user_inputs)
+
     on = date.today()
     if raw_date := user_inputs.get("date"):
         try:
@@ -184,9 +249,7 @@ def generate_document(template_type: str, company: dict, user_inputs: dict) -> D
             return "Presiding Officer"
         return "Member (external)" if m.source == "external_ngo" else "Member"
 
-    company_name = str(company.get("name") or user_inputs.get("company_name") or "").strip()
-    if not company_name:
-        raise ValueError("Company name is required.")
+    company_name = company_name_of(company, user_inputs)
 
     html = _env().get_template(f"{template_type}.html").render(
         css=CSS,
@@ -257,9 +320,45 @@ if __name__ == "__main__":
     except TemplateNotFound:
         check("unknown template raises", True, True)
 
+    br = generate_document("board_report", company,
+                           {"members": lawful, "financial_year": "2025-26",
+                            "counts": {"opening_pending": 1, "received": 4, "disposed": 3,
+                                       "pending_over_90": 2}})
+    check("board_report renders", "sexual harassment disclosure" in br.html, True)
+    check("  states the compliance sentence for a lawful committee",
+          "The Company has complied with provisions relating to the constitution" in br.html, True)
+    check("  carries all three numbers", ("<td>4</td>" in br.html and "<td>3</td>" in br.html
+                                          and "<td>2</td>" in br.html), True)
+    check("  derives the closing balance", "Pending at year end: 2" in br.html, True)
+    check("  names box (c) as s.11(4) breaches",
+          "shall be completed within a period of ninety days" in br.html, True)
+    check("  admits the MCA sources are weaker than the PoSH ones",
+          "quotation of a quotation" in br.html, True)
+    check("  states the s.16 position on complaint contents", "Section 16" in br.html, True)
+
+    bad_ic_br = generate_document("board_report", company,
+                                  {"members": lawful[:2],
+                                   "counts": {"received": 0, "disposed": 0,
+                                              "pending_over_90": 0}})
+    check("defective committee → compliance statement withheld",
+          "We have not drafted the compliance statement" in bad_ic_br.html, True)
+    check("  ...and the true sentence is absent",
+          "The Company has complied with provisions" in bad_ic_br.html, False)
+
+    for flag, label in (("is_small_company", "small company"), ("is_opc", "OPC")):
+        try:
+            generate_document("board_report", company,
+                              {"members": lawful, flag: True, "counts": {}})
+            check(f"{label} abstains", False, True)
+        except ValueError as e:
+            check(f"{label} abstains citing Rule 8(6)",
+                  "This rule shall not apply" in str(e), True)
+
     avail = list_available_templates()
-    check("4 templates listed, 2 available",
-          (len(avail), sum(1 for t in avail if t["available"])), (4, 2))
+    check("5 templates listed, 3 available",
+          (len(avail), sum(1 for t in avail if t["available"])), (5, 3))
+
+    (ROOT / "corpus/sample_board_report.html").write_text(br.html, encoding="utf-8")
 
     out = ROOT / "corpus/sample_ic_order.html"
     out.write_text(doc.html, encoding="utf-8")
