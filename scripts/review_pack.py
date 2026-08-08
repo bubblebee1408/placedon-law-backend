@@ -84,6 +84,16 @@ QUESTIONS = [
      "The proviso sits under clause (c), after (a) names the Presiding Officer separately. We "
      "take the stricter reading — counting everyone — and say so in the generated order. A "
      "narrower reading counting only (b) and (c) is arguable."),
+    ("Does Rule 8A require an IC statement from small companies and OPCs?",
+     "Rule 8(5)(x) of the Companies (Accounts) Rules requires a Board's Report statement on IC "
+     "constitution — and since G.S.R. 357(E) (14 July 2025) also the count of complaints "
+     "received, disposed, and pending over ninety days. Rule 8(6) says Rule 8 does not apply to "
+     "a One Person Company or a Small Company. The full text of Rule 8A we found lists clauses "
+     "(a) to (j) with <strong>no IC clause</strong>, but two secondary sources state that small "
+     "companies must give the statement anyway. <strong>This decides whether we can say anything "
+     "at all to a small company about its Board's Report</strong>, and it has the same shape as "
+     "the s.4 threshold problem in Question 1 — everyone repeats it, and we cannot find it in "
+     "the provision."),
     ("May we reproduce this statutory text verbatim in a commercial product?",
      "We store the sections verbatim from India Code and show them to users with citations. "
      "Crown copyright under the Copyright Act 1957, and GODL-India, both apply somewhere in "
