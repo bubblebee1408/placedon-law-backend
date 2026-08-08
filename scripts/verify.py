@@ -424,6 +424,56 @@ def _vercel_wrapper_routes():
     return True, ""
 
 
+@check("every third-party import in shipped code is pinned in requirements.txt",
+       because="jinja2 was imported by checker/app.py and absent from requirements.txt. It was "
+               "installed locally so every test passed, setup.sh reported 'deps present', and "
+               "the FIRST production deploy returned 500 on every route: ModuleNotFoundError. "
+               "A dependency that exists only on the author's laptop is an outage.")
+def _imports_pinned():
+    import ast                                       # noqa: PLC0415
+    stdlib = set(sys.stdlib_module_names)
+    local = {"checker", "backend", "applicability", "jurisdiction", "scripts", "api", "shared"}
+    # Distribution name -> import name, where they differ.
+    alias = {"python-multipart": "multipart", "jinja2": "jinja2"}
+
+    pinned = set()
+    for f in ("requirements.txt", "requirements-dev.txt"):
+        p = ROOT / f
+        if not p.exists():
+            continue
+        for line in p.read_text().splitlines():
+            line = line.strip()
+            if line and not line.startswith(("#", "-")):
+                name = re.split(r"[=<>~!\[;]", line, maxsplit=1)[0].strip().lower()
+                pinned.add(alias.get(name, name).lower())
+    # starlette and pydantic arrive with fastapi; treat them as satisfied by it.
+    if "fastapi" in pinned:
+        pinned |= {"starlette", "pydantic"}
+
+    missing: dict[str, str] = {}
+    for py in ROOT.rglob("*.py"):
+        if any(x in py.parts for x in (".git", "node_modules", "__pycache__", ".next", ".venv")):
+            continue
+        if py.parts[len(ROOT.parts)] == "scripts":      # tooling, not shipped
+            continue
+        try:
+            tree = ast.parse(py.read_text(encoding="utf-8", errors="replace"))
+        except SyntaxError:
+            continue
+        for node in ast.walk(tree):
+            mods = []
+            if isinstance(node, ast.Import):
+                mods = [a.name.split(".")[0] for a in node.names]
+            elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+                mods = [node.module.split(".")[0]]
+            for m in mods:
+                if m and m not in stdlib and m not in local and m.lower() not in pinned:
+                    missing.setdefault(m, str(py.relative_to(ROOT)))
+    if missing:
+        return False, "; ".join(f"{m} (imported by {f})" for m, f in sorted(missing.items()))
+    return True, ""
+
+
 @check("no secrets committed",
        because="Standing rule, never yet violated. Cheap to keep.")
 def _no_secrets():
