@@ -46,7 +46,7 @@ GENERATED = {".claude/index.json", "corpus/.budget.json"}
 #
 # It has to scale with the mode: --fast skips the per-module suites and tsc, so the expected
 # total is the registry alone. Hard-coding one number broke --fast the moment it was added.
-MIN_REGISTRY_CHECKS = 18
+MIN_REGISTRY_CHECKS = 19
 
 SUITES = [
     "applicability.py", "jurisdiction.py", "backend/budget.py",
@@ -566,6 +566,29 @@ def _rules_are_not_the_act():
             return False, f"{r['citation']} is the same text as {clash}"
     if len(rules) != 14:
         return False, f"{len(rules)} rules ingested; the PoSH Rules 2013 have exactly 14"
+    return True, ""
+
+
+@check("the lawyer pack is dependency-closed",
+       because="Tier 1 was the retrieval closure only — 12 sections. Seven of them still rested "
+               "on s.13, s.15 and s.16, which the pack never asked anyone to look at. A verified "
+               "s.26 over an unverified s.4 leaves the penalty claim on unverified ground, and "
+               "nothing tracked that until provision_graph extracted the statute's own "
+               "cross-references.")
+def _pack_dependency_closed():
+    sys.path.insert(0, str(ROOT))
+    from checker.provision_graph import ProvisionGraph      # noqa: PLC0415
+    from scripts.review_pack import required_sections       # noqa: PLC0415
+
+    need = required_sections()
+    provisions = json.loads(POSH.read_text())["provisions"]
+    simulated = [{**p, "verified_by": "pending" if p["section_number"] in need else None}
+                 for p in provisions]
+    graph = ProvisionGraph(simulated)
+    leaks = sorted({b for n in need for b in graph.blocked_by(n)} - need)
+    if leaks:
+        return False, (f"sections {leaks} are depended upon but not in the pack — verifying "
+                       f"Tier 1 would still leave claims resting on them")
     return True, ""
 
 

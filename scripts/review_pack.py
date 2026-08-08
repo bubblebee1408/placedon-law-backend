@@ -142,12 +142,40 @@ def required_sections() -> set[int]:
     """
     Every section that must be verified before the product stops abstaining.
 
-    `verifier.should_abstain` rejects a packet if ANY provision in it is unverified, so the unit
-    of verification is the retrieved packet, not the cited section. Verifying s.4 alone does not
-    answer "do I need an IC?" — that packet also carries s.6 and s.7.
+    Two closures, applied in order.
+
+    **Retrieval closure.** `verifier.should_abstain` rejects a packet if ANY provision in it is
+    unverified, so the unit of verification is the retrieved packet, not the cited section.
+    Verifying s.4 alone does not answer "do I need an IC?" — that packet also carries s.6 and
+    s.7. This is what took the pack from a hand-written 6 to 12.
+
+    **Dependency closure.** Sections rest on one another, and the statute says so in its own
+    words: s.26's penalty attaches to failing the duty "under sub-section (1) of section 4", so
+    a verified s.26 over an unverified s.4 still leaves the penalty claim on unverified ground.
+    `provision_graph` extracts those edges from the text. Taking the fixed point adds s.13, s.15
+    and s.16 — 12 becomes 15.
+
+    **This over-approximates, deliberately.** The graph finds every cross-reference, and not
+    every one is load-bearing for what we actually assert: s.4 mentions s.16 only to say a
+    Presiding Officer who contravenes it shall be removed, and we make no claim about removal.
+    Over-approximating costs the reviewer three more sections in one sitting. Under-approximating
+    costs a customer an answer resting on ground nobody checked. The asymmetry decides it.
     """
-    from checker.retrieval import retrieve  # noqa: PLC0415
-    return {p["section_number"] for q in CORE_QUESTIONS for p in retrieve(q)[0]}
+    from checker.provision_graph import ProvisionGraph  # noqa: PLC0415
+    from checker.retrieval import retrieve              # noqa: PLC0415
+
+    need = {p["section_number"] for q in CORE_QUESTIONS for p in retrieve(q)[0]}
+
+    provisions = json.loads(CORPUS.read_text())["provisions"]
+    for _ in range(8):                                   # fixed point; converges in 2 today
+        simulated = [{**p, "verified_by": "pending" if p["section_number"] in need else None}
+                     for p in provisions]
+        graph = ProvisionGraph(simulated)
+        extra = {b for n in need for b in graph.blocked_by(n)} - need
+        if not extra:
+            break
+        need |= extra
+    return need
 
 
 def main() -> int:
