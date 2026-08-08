@@ -1,0 +1,229 @@
+{
+  "source": {
+    "name": "SHe-Box District Officer directory",
+    "publisher": "Ministry of Women & Child Development, Government of India",
+    "url": "https://shebox.wcd.gov.in/doDetailsLists",
+    "fetched_at": "2026-08-09",
+    "tier": 2,
+    "NOT_STATUTORY_TEXT": "A government directory of contact details. It is never cited as law and never enters the provisions corpus. Its purpose is to make an abstention actionable: s.21/22 leave the annual-return date to the District Officer, so when we decline to state a date we can at least name who holds it."
+  },
+  "officers": [
+    {
+      "state": "Karnataka",
+      "district": "Bagalkot",
+      "officer": "Sri. Sangappa, IAS",
+      "email": "deo.bagalkot@gmail.com",
+      "email_as_published": "deo[dot]bagalkot[at]gmail[dot]com"
+    },
+    {
+      "state": "Karnataka",
+      "district": "Ballari",
+      "officer": "Sri Prashant Kumar Mishra, IAS",
+      "email": "dcbellary@gmail.com",
+      "email_as_published": "dcbellary[at]gmail[dot]com"
+    },
+    {
+      "state": "Karnataka",
+      "district": "Belagavi",
+      "officer": "Sri. Mohammed Roshan  IAS",
+      "email": "deo.belagavi@gmail.com",
+      "email_as_published": "deo[dot]belagavi[at]gmail[dot]com"
+    },
+    {
+      "state": "Karnataka",
+      "district": "Bengaluru Rural",
+      "officer": "Sri. Basavraj A B",
+      "email": "deo.bangalorer3@gmail.com",
+      "email_as_published": "deo[dot]bangalorer3[at]gmail[dot]com"
+    },
+    {
+      "state": "Karnataka",
+      "district": "Bengaluru Urban",
+      "officer": "Shri. JAGADEESHA G, IAS",
+      "email": "dcurban@kar.nic.in",
+      "email_as_published": "dcurban[at]kar[dot]nic[dot]in"
+    },
+    {
+      "state": "Karnataka",
+      "district": "Bidar",
+      "officer": "SMT Shilpa Sharma, I.A.S.",
+      "email": "deo.bidar@gmail.com",
+      "email_as_published": "deo[dot]bidar[at]gmail[dot]com"
+    },
+    {
+      "state": "Karnataka",
+      "district": "Chamarajanagar",
+      "officer": "Smt. Sreeroopa, IAS",
+      "email": "dcchnagar.ka@gmail.com",
+      "email_as_published": "dcchnagar[dot]ka[at]gmail[dot]com"
+    },
+    {
+      "state": "Karnataka",
+      "district": "Chikballapur",
+      "officer": "Sri P N Ravindra",
+      "email": "deo.ckbpur@gmail.com",
+      "email_as_published": "deo[dot]ckbpur[at]gmail[dot]com"
+    },
+    {
+      "state": "Karnataka",
+      "district": "Chikkamagaluru",
+      "officer": "Meena Nagaraj C N",
+      "email": "deo.cmagalur@gmail.com",
+      "email_as_published": "deo[dot]cmagalur[at]gmail[dot]com"
+    },
+    {
+      "state": "Karnataka",
+      "district": "Chitradurga",
+      "officer": "Sri VENKATESH T.",
+      "email": "deo.chitradurga1@gmail.com",
+      "email_as_published": "deo[dot]chitradurga1[at]gmail[dot]com"
+    },
+    {
+      "state": "Karnataka",
+      "district": "Dakshin Kannad",
+      "officer": "Sri. Darshan H V.  IAS",
+      "email": "dc.mnglr@gmail.com",
+      "email_as_published": "dc[dot]mnglr[at]gmail[dot]com"
+    },
+    {
+      "state": "Karnataka",
+      "district": "Davangere",
+      "officer": "Sri G M Gangadharaswamy I A S",
+      "email": "deo.davanagere@gmail.com",
+      "email_as_published": "deo[dot]davanagere[at]gmail[dot]com"
+    },
+    {
+      "state": "Karnataka",
+      "district": "Dharwad",
+      "officer": "Smt. Divya Prabhu G R J",
+      "email": "deo.dharwad@gmail.com",
+      "email_as_published": "deo[dot]dharwad[at]gmail[dot]com"
+    },
+    {
+      "state": "Karnataka",
+      "district": "Gadag",
+      "officer": "Sri. C. N. Sreedhara",
+      "email": "deo.gadag@gmail.com",
+      "email_as_published": "deo[dot]gadag[at]gmail[dot]com"
+    },
+    {
+      "state": "Karnataka",
+      "district": "Hassan",
+      "officer": "Smt. Latha Kumari K S.  IAS",
+      "email": "deo.hassan@gmail.com",
+      "email_as_published": "deo[dot]hassan[at]gmail[dot]com"
+    },
+    {
+      "state": "Karnataka",
+      "district": "Haveri",
+      "officer": "Dr.Vijayamahantesh B Danammanavar",
+      "email": "deo.haveri@gmail.com",
+      "email_as_published": "deo[dot]haveri[at]gmail[dot]com"
+    },
+    {
+      "state": "Karnataka",
+      "district": "Kalaburagi",
+      "officer": "SMT FOUZIYA TARANNUM B",
+      "email": "deo.gulbarga@gmail.com",
+      "email_as_published": "deo[dot]gulbarga[at]gmail[dot]com"
+    },
+    {
+      "state": "Karnataka",
+      "district": "Kodagu",
+      "officer": "Sri VENKATRAJA",
+      "email": "deo.kodagu@gmail.com",
+      "email_as_published": "deo[dot]kodagu[at]gmail[dot]com"
+    },
+    {
+      "state": "Karnataka",
+      "district": "Kolar",
+      "officer": "Dr. M. R. Ravi  I.A.S",
+      "email": "deo.kolar@gmail.com",
+      "email_as_published": "deo[dot]kolar[at]gmail[dot]com"
+    },
+    {
+      "state": "Karnataka",
+      "district": "Koppal",
+      "officer": "Sri. Suresh B Itnal,  IAS",
+      "email": "deo.koppal@gmail.com",
+      "email_as_published": "deo[dot]koppal[at]gmail[dot]com"
+    },
+    {
+      "state": "Karnataka",
+      "district": "Mandya",
+      "officer": "Dr.KUMARA",
+      "email": "dcmandya09@gmail.com",
+      "email_as_published": "dcmandya09[at]gmail[dot]com"
+    },
+    {
+      "state": "Karnataka",
+      "district": "Mysuru",
+      "officer": "LAKSHMIKANTH REDDY G",
+      "email": "dcmys-ka@nic.in",
+      "email_as_published": "dcmys-ka[at]nic[dot]in"
+    },
+    {
+      "state": "Karnataka",
+      "district": "Raichur",
+      "officer": "Sri. Nithish K, IAS",
+      "email": "dcrevrcr@gmail.com",
+      "email_as_published": "dcrevrcr[at]gmail[dot]com"
+    },
+    {
+      "state": "Karnataka",
+      "district": "Ramanagara",
+      "officer": "Shri. Yeshwanth V.Gurukar, IAS",
+      "email": "deo.ramanagara@gmail.com",
+      "email_as_published": "deo[dot]ramanagara[at]gmail[dot]com"
+    },
+    {
+      "state": "Karnataka",
+      "district": "Shivamogga",
+      "officer": "Shri Gurudatta Hegade, I.A.S",
+      "email": "deo.shimoga@gmail.com",
+      "email_as_published": "deo[dot]shimoga[at]gmail[dot]com"
+    },
+    {
+      "state": "Karnataka",
+      "district": "Tumakuru",
+      "officer": "Smt. Subha kalyan",
+      "email": "deo.tumkur@gmail.com",
+      "email_as_published": "deo[dot]tumkur[at]gmail[dot]com"
+    },
+    {
+      "state": "Karnataka",
+      "district": "Udupi",
+      "officer": "Smt. Swaroopa T K.  IAS",
+      "email": "deo.udupi@gmail.com",
+      "email_as_published": "deo[dot]udupi[at]gmail[dot]com"
+    },
+    {
+      "state": "Karnataka",
+      "district": "Uttar Kannad",
+      "officer": "Smt K Lakshmi Priya",
+      "email": "dckarwar@gmail.com",
+      "email_as_published": "dckarwar[at]gmail[dot]com"
+    },
+    {
+      "state": "Karnataka",
+      "district": "Vijayanagar",
+      "officer": "Sri M S Divakara",
+      "email": "vijayanagaradc@gmail.com",
+      "email_as_published": "vijayanagaradc[at]gmail[dot]com"
+    },
+    {
+      "state": "Karnataka",
+      "district": "Vijayapura",
+      "officer": "Mr. T.Bhoobalan",
+      "email": "deo.bijapur@gmail.com",
+      "email_as_published": "deo[dot]bijapur[at]gmail[dot]com"
+    },
+    {
+      "state": "Karnataka",
+      "district": "Yadgir",
+      "officer": "Dr. Susheela B, I.A.S",
+      "email": "dcydg123@gmail.com",
+      "email_as_published": "dcydg123[at]gmail[dot]com"
+    }
+  ]
+}

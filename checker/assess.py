@@ -6,8 +6,10 @@ the free checker costs ₹0 to run (DECISIONS D-3) — the whole path is determi
 """
 from __future__ import annotations
 
+import json
 import sys
 from datetime import date
+from functools import lru_cache
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -22,6 +24,35 @@ from .rules import (  # noqa: E402
 )
 
 _ORDER = {"critical": 0, "unknown": 1, "warning": 2, "good": 3}
+
+
+DO_DIRECTORY = Path(__file__).resolve().parent.parent / "corpus/reference/district_officers.json"
+
+
+@lru_cache(maxsize=1)
+def _district_officers() -> dict[str, dict]:
+    """
+    District Officer contacts, keyed by upper-case district name.
+
+    Tier 2 reference data, never statutory text and never cited as law. It exists so the
+    annual-return abstention can name the official who actually holds the date, instead of
+    leaving the user at "we will not guess".
+    """
+    try:
+        rows = json.loads(DO_DIRECTORY.read_text())["officers"]
+    except (OSError, KeyError, json.JSONDecodeError):
+        return {}
+    return {r["district"].upper(): r for r in rows if r.get("email")}
+
+
+def district_officer(districts: list[str]) -> dict | None:
+    """Match an ISO district code like IN-KA-BLR to the directory. None rather than a guess."""
+    alias = {"IN-KA-BLR": "BENGALURU URBAN", "IN-HR-GGN": "GURUGRAM"}
+    for code in districts or []:
+        name = alias.get(code.upper())
+        if name and name in _district_officers():
+            return _district_officers()[name]
+    return None
 
 
 def assess(
@@ -171,6 +202,14 @@ def _annual_return(profile: CompanyProfile, filed_return: bool | None) -> Findin
             source=SRC_SECONDARY,
         )
 
+    # The abstention now names the person who holds the answer. "We will not guess" was honest
+    # and dead-ended: the user was told no and left there. MWCD publishes every District
+    # Officer, so the refusal can end in an email address instead of a shrug — and every user
+    # who asks and reports back closes a gap we cannot close from a laptop.
+    officer = district_officer(profile.districts)
+    who = (f" For {officer['district'].title()} that is {officer['officer']} — "
+           f"{officer['email']}." if officer else "")
+
     return Finding(
         title="Annual return — we will not guess your deadline",
         severity="unknown",
@@ -181,10 +220,13 @@ def _annual_return(profile: CompanyProfile, filed_return: bool | None) -> Findin
             "to tell you a date. Most tools will confidently say 31 January. That is a "
             "generalisation, not a rule, and acting on it is how you miss a deadline you "
             "thought you had met."
+            + who
         ),
         citation=res.citation or CITE_S21,
         source=SRC_SECONDARY,
-        action="Ask your District Officer, and tell us what they say — we will add it.",
+        action=(f"Email {officer['email']} and ask for the notified date, then tell us what "
+                f"they say — we will add it." if officer
+                else "Ask your District Officer, and tell us what they say — we will add it."),
     )
 
 
