@@ -40,6 +40,14 @@ POSH = ROOT / "corpus/provisions/posh_act_2013.json"
 # blames the wrong one.
 GENERATED = {".claude/index.json", "corpus/.budget.json"}
 
+# A floor, not just a "> 0" guard. An empty run is the obvious failure; the subtle one is a
+# check quietly deleted or commented out during a refactor, leaving 24 green checks where 25
+# belong. Raise this whenever a check is added on purpose.
+#
+# It has to scale with the mode: --fast skips the per-module suites and tsc, so the expected
+# total is the registry alone. Hard-coding one number broke --fast the moment it was added.
+MIN_REGISTRY_CHECKS = 16
+
 SUITES = [
     "applicability.py", "jurisdiction.py", "backend/budget.py",
     "checker/ic_order.py", "checker/verifier.py", "checker/test_unlock.py",
@@ -540,6 +548,23 @@ def main() -> int:
     if not args.fast:
         run_suites()
         run_tsc()
+
+    # Vacuous-pass guard. Idea taken from a proposed rewrite of this file — which, ironically,
+    # could never have run a test at all: its @test decorator returned the wrapper without ever
+    # calling it, so a live `assert 1 + 1 == 3` still reported "0 passed, 0 failed".
+    #
+    # A suite that reports success while testing nothing is worse than no suite, because it is
+    # trusted. This is the last thing checked and the first thing that should fail.
+    if not results:
+        print("\nNO-GO — no checks ran at all. Something removed or broke the check registry; "
+              "this is a vacuous pass and it is a bug in the verifier itself.")
+        return 1
+    expected = MIN_REGISTRY_CHECKS + (0 if args.fast else len(SUITES) + 1)
+    if len(results) < expected:
+        print(f"\nNO-GO — only {len(results)} checks ran, expected at least {expected}. "
+              f"A check was deleted or silently skipped. Verify the registry before trusting "
+              f"a green run, then raise MIN_CHECKS if the removal was deliberate.")
+        return 1
 
     width = max(len(n) for _, n, _ in results)
     failed = 0

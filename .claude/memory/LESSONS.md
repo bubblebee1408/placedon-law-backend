@@ -219,3 +219,38 @@ contains "intern"**, so *"Do I need an Internal Committee?"* abstained. Word bou
 simulates verification for the happy path; that simulation is now also where refusals get
 checked. And match on word boundaries, never substrings, when the trigger words are common
 fragments of legitimate terms.
+
+---
+
+## L-13 — The anti-vacuous-pass script was itself vacuous
+
+**Incident.** `pytest tests/ --verbose` was run against this repo. There is no `tests/`
+directory — tests live in the module they test — so it collected **0 items and exited 0**. Wired
+into CI as written, that reports green forever while testing nothing.
+
+A replacement `verify.py` was then proposed, explicitly to prevent exactly that. Its decorator:
+
+```python
+def test(name):
+    def decorator(func):
+        def wrapper():
+            ...
+        return wrapper        # returns the wrapper, never calls it
+    return decorator
+```
+
+Nothing invokes `wrapper`. Run it with a live `assert 1 + 1 == 3` in the file and you get
+`0 passed, 0 failed` — **the failing test does not run either.** It would print "VACUOUS PASS"
+forever, including after the code under test existed, and the accompanying note described that
+output as proof the script worked.
+
+Two tools written to catch vacuous passes, both vacuous. The failure mode is genuinely hard to
+see, because the output of a suite that runs nothing looks calm.
+
+**Apply.** A suite must assert on **its own size**. `scripts/verify.py` now refuses to report GO
+if zero checks ran, and refuses if fewer than `MIN_REGISTRY_CHECKS` ran — a floor catches a check
+quietly deleted in a refactor, which `> 0` never would. The floor scales with the run mode;
+hard-coding one number broke `--fast` immediately, which is its own small version of the same
+lesson.
+
+Never trust a green run you have not seen fail.
