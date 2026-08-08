@@ -18,7 +18,6 @@ reported the route table, which is not something a public compliance product sho
 """
 from __future__ import annotations
 
-import logging
 import sys
 from pathlib import Path
 from urllib.parse import parse_qsl, urlencode
@@ -36,11 +35,21 @@ async def app(scope: Scope, receive: Receive, send: Send) -> None:
         return
 
     scope = dict(scope)
-    _raw_path = scope.get("path")
     qs = (scope.get("query_string") or b"").decode("latin-1")
     pairs = parse_qsl(qs, keep_blank_values=True)
 
     original = next((v for k, v in pairs if k == "__p"), None)
+
+    # Vercel CHAINS rewrite rules. With a bare "/" rule and a "/(.*)" rule both present, a
+    # request for "/" was rewritten to "/api/index?__p=/" and then matched by "/(.*)" AGAIN,
+    # arriving with __p="/api/index" — the function's own mount point instead of the user's
+    # path. Logging the live scope is what showed this; two guesses before it were wrong.
+    #
+    # vercel.json now carries a single rule, which removes the chaining. This normalisation
+    # stays as the belt: if __p is ever the mount point, it means root.
+    if original in ("/api/index", "/api"):
+        original = "/"
+
     if original:
         # __p is authoritative. It already IS the path the user asked for, including any /api
         # prefix, so it must not be touched further.
@@ -76,11 +85,6 @@ async def app(scope: Scope, receive: Receive, send: Send) -> None:
 
     scope["root_path"] = ""
 
-    # TEMPORARY: production 404s on GET / while every other route works. Two guesses have been
-    # wrong, so log what actually arrives instead of guessing a third time. Logs are
-    # server-side only; nothing is exposed to a caller. Remove once diagnosed.
-    logging.info("vercel.route raw_path=%r raw_qs=%r __p=%r final=%r method=%r",
-                 _raw_path, qs, original, scope["path"], scope.get("method"))
 
 
     await _checker(scope, receive, send)

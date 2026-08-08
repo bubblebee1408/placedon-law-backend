@@ -414,7 +414,8 @@ def _vercel_wrapper_routes():
         ("/api/index", b"__p=%2Fapi%2Fgenerate%2Ftemplates", "GET", b"", "rewritten templates"),
         ("/api/index", b"__p=%2F", "GET", b"", "rewritten root"),
         ("/api/index", b"", "GET", b"", "bare mount point"),
-        ("/api", b"", "GET", b"", "bare /api mount point (the production case)"),
+        ("/api", b"", "GET", b"", "bare /api mount point"),
+        ("/api/index", b"__p=%2Fapi%2Findex", "GET", b"", "chained rewrite: __p is the mount point"),
         ("/api/diagnose", b"", "POST", payload, "direct, no __p"),
         ("/", b"", "GET", b"", "bare root"),
     ]
