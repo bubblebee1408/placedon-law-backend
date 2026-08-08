@@ -13,7 +13,7 @@
     "source_pages": null,
     "fetched_at": "2026-08-08",
 
-    "PROVENANCE_WARNING": "THIS IS NOT THE SAME QUALITY OF SOURCE AS THE PoSH CORPUS. The PoSH Act was ingested from the India Code PDF, byte-for-byte, with a sha256 over the file. These provisions were read off a SECONDARY REPRODUCTION of the notification on a legal-news site, cross-checked for consistency against three other secondary sources. Nobody here has seen the Gazette. There is no file hash because there is no file. Treat every string below as a quotation of a quotation until BACKLOG C-4 replaces it with the gazette PDF.",
+    "PROVENANCE_WARNING": "THIS IS NOT THE SAME QUALITY OF SOURCE AS THE PoSH CORPUS. The PoSH Act was ingested from the India Code PDF, byte-for-byte, with a sha256 over the file. These provisions were read off a SECONDARY REPRODUCTION of the notification on a legal-news site, cross-checked for consistency against three other secondary sources. Nobody here has seen the Gazette. There is no file hash because there is no file. Treat every string below as a quotation of a quotation until BACKLOG M-4 replaces it with the gazette PDF.",
 
     "why_it_exists_anyway": "The amended Rule 8(5)(x) is the reason a company secretary will care about us in September 2026, and refusing to record it until the gazette arrives would mean carrying it only in a human's head, which is worse. Recording it with its weakness stated is the honest middle.",
 
