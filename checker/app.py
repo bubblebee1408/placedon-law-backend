@@ -24,7 +24,7 @@ from pydantic import BaseModel, Field
 
 from applicability import CompanyProfile
 
-from . import ratelimit
+from . import ratelimit, retrieval, verifier
 from .assess import assess
 from .rules import DISTRICTS, INDUSTRIES, STATES, Finding
 
@@ -380,3 +380,98 @@ def _card(f: Finding) -> str:
         f"<div class=tag>{SEV_LABEL[f.severity]}</div>"
         f"<h3>{f.title}</h3><p>{f.detail}</p>{act}{cite}</section>"
     )
+
+
+class AskRequest(BaseModel):
+    question: str = Field(min_length=3, max_length=500)
+    state: str = Field(default="IN-KA", pattern=r"^IN-[A-Z]{2}$|^IN-OTHER$")
+    employees: int = Field(default=0, ge=0, le=5000)
+
+
+@app.post("/api/ask")
+def ask(req: AskRequest, request: Request) -> dict:
+    """
+    Cited Q&A. The LLM never decides anything — it explains a packet the engine assembled and
+    the verifier cleared, and every number it writes is checked against source afterward.
+
+    Right now the verifier abstains on everything, because all 30 provisions carry
+    `verified_by: null`. That is the correct behaviour and it is why this endpoint currently
+    costs ₹0: the gate runs *before* the call, so no request is ever made.
+    """
+    client_ip = (request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+                 or (request.client.host if request.client else "unknown"))
+    allowed, retry_after = ratelimit.check(client_ip, limit=10)
+    if not allowed:
+        raise HTTPException(status_code=429, detail="Too many questions in one minute.",
+                            headers={"Retry-After": str(retry_after)})
+
+    try:
+        provisions, stage = retrieval.retrieve(req.question)
+    except Exception:                                    # noqa: BLE001
+        logging.exception("ask.retrieval_failed")
+        raise HTTPException(500, "Unable to answer right now. Please try again.") from None
+
+    pre = verifier.should_abstain(req.question, provisions, None, state=req.state)
+
+    if pre.abstained:
+        payload = {
+            "abstained": True,
+            "answer": pre.reason,
+            "confidence": "abstain",
+            "retrieval_stage": stage,
+            "cost_inr": 0.0,
+            "citations": [
+                {"citation": p["citation"], "heading": p["heading"],
+                 "verified_by": p.get("verified_by")}
+                for p in provisions
+            ],
+        }
+        _log_ask(req, payload)
+        return payload
+
+    # Unreachable until a lawyer sets verified_by. Left wired so the day that changes is a
+    # data change, not a code change.
+    from backend.services.llm import BudgetExceededError, explain_provisions
+    try:
+        result = explain_provisions(req.question, provisions,
+                                    {"employee_count": req.employees, "state": req.state})
+    except BudgetExceededError as e:
+        payload = {"abstained": True, "answer": f"We've hit our monthly budget. {e}",
+                   "confidence": "abstain", "retrieval_stage": stage, "cost_inr": 0.0,
+                   "citations": []}
+        _log_ask(req, payload)
+        return payload
+
+    post = verifier.should_abstain(req.question, provisions, result.text, state=req.state)
+    payload = {
+        "abstained": post.abstained,
+        "answer": post.reason if post.abstained else result.text,
+        "confidence": post.confidence,
+        "retrieval_stage": stage,
+        "cost_inr": result.cost_inr,
+        "unsupported_numbers": post.unsupported_numbers,
+        "citations": [
+            {"citation": p["citation"], "heading": p["heading"],
+             "verified_by": p.get("verified_by")}
+            for p in provisions
+        ],
+    }
+    _log_ask(req, payload)
+    return payload
+
+
+def _log_ask(req: AskRequest, payload: dict) -> None:
+    """Abstentions are the roadmap — every unanswered question ranks the next instrument."""
+    try:
+        path = Path(os.getenv("ASK_LOG", "corpus/.asks.jsonl"))
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a") as fh:
+            fh.write(json.dumps({
+                "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                "question": req.question, "state": req.state,
+                "abstained": payload["abstained"], "stage": payload["retrieval_stage"],
+                "cost_inr": payload["cost_inr"],
+                "cited": [c["citation"] for c in payload["citations"]],
+            }) + "\n")
+    except Exception:                                    # noqa: BLE001
+        logging.warning("ask.log_failed", exc_info=True)

@@ -6,6 +6,7 @@ __pycache__/
 .vercel
 *.pdf
 *.pyc
+corpus/.asks.jsonl
 corpus/.budget.json
 corpus/.checks.jsonl
 corpus/raw/*.pdf
