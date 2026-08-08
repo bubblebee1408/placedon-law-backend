@@ -1,55 +1,41 @@
 # TODAY: 2026-08-08
 
-## Goal
-
-Agent system complete. Loop running its first real pass on **T-7** (report passed in the URL
-query string; breaks at ~10 findings).
-
-## The two numbers that outrank every feature
+## The one number
 
 ```
-PoSH sections lawyer-verified : 0 / 30      → H-2, one evening, unlocks all 12 core questions
-customer conversations        : 0           → H-1, ten calls, decides who the buyer is
+placedon.com/diagnose   →   404
 ```
 
-Neither is a code problem. `/start` prints them every session so no amount of tooling can quietly
-route around them.
+Nobody outside this laptop has used the product. Everything else on this page is downstream of
+that.
+
+## This week — three tracks, one is code
+
+- [ ] **A. Deploy.** `/diagnose` returns 200 on a public URL. Mine, ~2 hours, needs your Vercel
+      account. Blocked on nothing else. See `docs/PLAN.md` for the two topology options —
+      recommendation is both on Vercel, one origin, no cold start.
+- [ ] **B. Lawyer.** `python3 scripts/review_pack.py` and `apply_verification.py --template`,
+      then send both. 12 sections, one evening, ₹2,000–3,000. `docs/LAWYER_BRIEF.md` has the
+      email. **Yours.**
+- [ ] **C. Ten calls.** Two questions, in `docs/PLAN.md`. **Yours.** Log every one in
+      `RESEARCH_LOG.md` under `[TRACK: market]`, including the bad ones.
 
 ## State
 
 | | |
 |---|---|
-| `scripts/verify.py` | **GO — 22 checks** |
+| `scripts/verify.py` | GO, 22 checks |
+| Corpus | 30 PoSH sections, **0 verified** · 4 MCA provisions, secondary source |
 | Documents live | `ic_order`, `posh_policy`, `board_report` |
-| Agent index | 89 files, 13,823 lines, 0.05 ms mean query |
-| LLM spend, all time | **₹0.00** |
-| Git remotes | **0** ← T-8 |
+| LLM spend, all time | ₹0.00 |
+| Remote | private, pushed |
 
-## Done this session
+## Not this week
 
-- [x] Verification ratchet — 22 checks, each carrying the incident that bought it
-- [x] `LESSONS.md` — 10 lessons, each with its incident
-- [x] Agent index + search (BM25F, measured against the specified embedding stack)
-- [x] `CODING_CONVENTIONS`, `TECH_DEBT` (8 items with payoff triggers), `FEATURES`
-- [x] `/start` `/build` `/fix` `/research` `/loop`, delegating to the 12 existing agents
-- [x] `.claude/INDEX.md` — records the 8 departures from the v1.0 spec and why
-- [x] `setup.sh` — idempotent, ends on a verify run
+The 8 verticals, DPDP, EPF, the risk score, Stripe. All behind the same gate: verify one law,
+talk to ten people. Reasons in `docs/PLAN.md`.
 
-## In flight
+## Gate — 2026-09-05
 
-- [ ] T-7 research (agent) — three options for getting the report out of the query string
-- [ ] Independent review of the ratchet (agent) — hunting for checks that pass **vacuously**
-
-## Next, in order
-
-1. **T-8 — a git remote.** No trigger, no excuse. An `ln -sf` destroyed four command files today
-   and git was the *entire* recovery path. It is one laptop deep. See LESSONS L-10.
-2. **H-2 — the lawyer.** 12 sections, one evening, rehearsed end to end.
-3. **H-1 — ten calls.** One question: *"Your Board's Report this year needs three numbers about
-   sexual harassment complaints — do you know which three?"*
-4. T-7, once the research lands.
-
-## Constraints
-
-One feature per session. No new paid dependency without asking. Nothing that raises the ₹3,500
-serving cap. No claim of verification that has not happened.
+Public URL · one lawyer sign-off · ten conversations · one person who says they would pay.
+Miss the third and stop building until it happens.
