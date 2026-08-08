@@ -39,7 +39,11 @@ app = FastAPI(title="placedon — PoSH checker", docs_url=None, redoc_url=None,
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000", "https://placedon-hr.vercel.app"],
-    allow_methods=["POST"], allow_headers=["*"],
+    allow_methods=["GET", "POST"], allow_headers=["*"],
+    # Without this the browser RECEIVES both headers and then refuses to let JS read them —
+    # a same-origin deploy works, cross-origin dev silently reports zero blocking issues, and
+    # the unlawful-committee warning never fires. Response headers are opt-in across origins.
+    expose_headers=["X-Blocking-Issues", "Content-Disposition"],
 )
 
 
