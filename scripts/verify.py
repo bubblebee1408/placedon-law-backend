@@ -280,6 +280,30 @@ def _index_excludes_itself():
     return True, ""
 
 
+@check("command files are real files, not self-referential symlinks",
+       because="Creating uppercase aliases with `ln -sf start.md START.md` DESTROYED all four "
+               "command files. macOS APFS is case-insensitive, so START.md and start.md are the "
+               "same path and each link pointed at itself — 'too many levels of symbolic "
+               "links'. Recovered from git. Aliases were never needed: a case-insensitive "
+               "filesystem already resolves /START to start.md.")
+def _commands_readable():
+    d = ROOT / ".claude/commands"
+    if not d.is_dir():
+        return False, ".claude/commands is missing"
+    broken = []
+    for f in sorted(d.glob("*.md")):
+        try:
+            if not f.read_text(encoding="utf-8").strip():
+                broken.append(f"{f.name} (empty)")
+        except OSError as e:
+            broken.append(f"{f.name} ({e.strerror})")
+    required = {"start.md", "build.md", "fix.md", "research.md", "loop.md"}
+    missing = sorted(required - {f.name for f in d.glob("*.md")})
+    if missing:
+        return False, f"missing commands: {missing}"
+    return (not broken), f"unreadable: {broken}"
+
+
 @check("no secrets committed",
        because="Standing rule, never yet violated. Cheap to keep.")
 def _no_secrets():

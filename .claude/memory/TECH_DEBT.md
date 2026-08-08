@@ -15,4 +15,6 @@ merely *suspected* belongs in `BACKLOG.md`; this file is only for things chosen 
 | T-8 | No git remote | Everything is on one laptop | **Now.** This is not a shortcut, it is an unbacked-up asset |
 
 **T-8 is the one to fix today.** Every other row has a real trigger. That one just has a
-disk that has not failed yet.
+disk that has not failed yet — and on 8 Aug an `ln -sf` destroyed four command files that were
+recoverable *only* because they had been committed. Git was the whole recovery path, and it is
+currently one laptop deep. See LESSONS L-10.

@@ -149,3 +149,21 @@ because the corpus is unverified.
 **Apply.** Before adopting any system that makes building faster, check whether building is what
 is blocked. Here it never has been. Both real gates — an evening with a lawyer (H-2), ten phone
 calls (H-1) — are human, and no amount of tooling moves either.
+
+---
+
+## L-10 — A case-insensitive filesystem turns `ln -sf` into a file shredder
+
+**Incident.** To make the spec's uppercase command names resolve, I ran
+`ln -sf start.md .claude/commands/START.md` for four files. macOS APFS is case-insensitive, so
+`START.md` **is** `start.md` — each link pointed at itself. All four command files, written
+minutes earlier, became `too many levels of symbolic links`. They were recoverable only because
+they had been committed.
+
+The aliases were never needed: a case-insensitive filesystem already resolves `/START` to
+`start.md`. The work destroyed the files it was trying to make more accessible.
+
+**Apply.** On macOS, never create a symlink whose name differs from its target only by case.
+Before any `ln -sf`, `mv`, or `rm` over existing files, check what is there — and commit first,
+because git was the entire recovery path here. `scripts/verify.py` now checks that every command
+file is readable and non-empty.
