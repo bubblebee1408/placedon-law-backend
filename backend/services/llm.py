@@ -37,6 +37,23 @@ MAX_OUTPUT_TOKENS = 800
 MAX_PROVISION_CHARS = 1_000
 
 
+# Which backend generates the explanation. The prompt, the citation enforcer and the
+# number-checker are identical either way — that is the point. Swapping the model must not
+# change what is allowed through, only how often something gets through at all.
+#
+#   anthropic  production. Haiku 4.5, measured ₹0.97/answer, budget-gated before the call.
+#   ollama     local, ₹0, DEV ONLY. Ollama is a persistent daemon needing GBs of RAM; it cannot
+#              run on Vercel serverless, so it must never become the deployed default.
+#
+# It exists because the LLM path had never executed even once — the corpus is unverified, so the
+# gate closes before any call. That left the Source Prison prompt and both output checks tested
+# only against strings written by hand. A local model exercises the whole pipeline for nothing,
+# today, without waiting on a lawyer.
+PROVIDER = os.getenv("LLM_PROVIDER", "anthropic").strip().lower()
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3")
+OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434")
+
+
 class BudgetExceededError(RuntimeError):
     """Raised before a call that would breach the cap. Callers degrade; they do not retry."""
 
@@ -71,6 +88,46 @@ class LLMResult:
     degraded: bool = False
 
 
+def _call_ollama(prompt: str, *, model: str, timeout: float = 180.0) -> LLMResult:
+    """
+    Local generation. No key, no cost, no budget gate — there is nothing to meter.
+
+    Deliberately stdlib-only (urllib, not httpx or the ollama package): adding a dependency for a
+    dev-only path would put it in requirements.txt and therefore into the production function,
+    which is how jinja2 took the site down.
+    """
+    import json as _json                                   # noqa: PLC0415
+    import urllib.error                                    # noqa: PLC0415
+    import urllib.request                                  # noqa: PLC0415
+
+    body = _json.dumps({
+        "model": model,
+        "system": SYSTEM_PROMPT,
+        "prompt": prompt,
+        "stream": False,
+        # Low temperature reduces drift off the supplied text. It does not prevent it — that is
+        # what the enforcer downstream is for.
+        "options": {"temperature": 0.1, "num_predict": MAX_OUTPUT_TOKENS},
+    }).encode()
+    req = urllib.request.Request(f"{OLLAMA_HOST}/api/generate", data=body,
+                                 headers={"content-type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:   # noqa: S310 — localhost only
+            payload = _json.loads(r.read())
+    except (urllib.error.URLError, TimeoutError, OSError) as e:
+        log.exception("llm.ollama_failed model=%s", model)
+        return LLMResult(f"Local model unavailable ({e}). Is `ollama serve` running?",
+                         0, 0, 0.0, f"ollama/{model}", degraded=True)
+
+    return LLMResult(
+        payload.get("response", ""),
+        int(payload.get("prompt_eval_count") or 0),
+        int(payload.get("eval_count") or 0),
+        0.0,                                              # local inference is free
+        f"ollama/{model}",
+    )
+
+
 def _build_context(provisions: list[dict]) -> str:
     return "\n\n".join(
         f"[{p.get('citation', '?')}] {(p.get('text_display') or p.get('text', ''))[:MAX_PROVISION_CHARS]}"
@@ -94,6 +151,12 @@ def explain_provisions(question: str, provisions: list[dict], company: dict,
         f"{company.get('state', '?')}\n\n"
         f"Legal text:\n{context}\n\nQuestion: {question}\n\nAnswer:"
     )
+    if PROVIDER == "ollama":
+        # No budget gate: nothing is spent, so there is nothing to protect. Every other guard —
+        # the pre-flight abstention, the citation enforcer, the number-checker — still applies,
+        # because those are about correctness rather than cost.
+        return _call_ollama(prompt, model=OLLAMA_MODEL)
+
     est_in = len(SYSTEM_PROMPT + prompt) // 4          # ~4 chars/token, close enough to gate on
     verdict = tracker.can_make_call(model=model, input_tokens=est_in,
                                     output_tokens=MAX_OUTPUT_TOKENS)
