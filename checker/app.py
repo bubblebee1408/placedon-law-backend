@@ -11,15 +11,20 @@ defensible to a cautious buyer.
 """
 from __future__ import annotations
 
-from datetime import date, datetime
+import json
+import logging
+import os
+from datetime import date, datetime, timezone
+from pathlib import Path
 
-from fastapi import FastAPI, Form
+from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
 from applicability import CompanyProfile
 
+from . import ratelimit
 from .assess import assess
 from .rules import DISTRICTS, INDUSTRIES, STATES, Finding
 
@@ -53,24 +58,107 @@ class DiagnoseRequest(BaseModel):
     filed_return: str = "unsure"
 
 
+def _next_steps(findings: list[Finding]) -> list[str]:
+    """Ordered actions. Criticals first, then the things we could not answer — because an
+    unanswered question is a task for the user, not a gap to hide."""
+    steps: list[str] = []
+    for f in findings:
+        if f.severity == "critical" and f.action:
+            steps.append(f"{f.title} — {f.action}")
+    for f in findings:
+        if f.severity == "unknown" and f.action:
+            steps.append(f"{f.title} — {f.action}")
+    for f in findings:
+        if f.severity == "warning":
+            steps.append(f.title)
+    return steps
+
+
 @app.post("/api/diagnose")
-def diagnose(req: DiagnoseRequest) -> dict:
-    """JSON twin of POST /check. Same engine, same findings — only the rendering differs."""
-    findings, headline, profile = _run(
-        req.employees, req.contractors, req.state, req.district, req.industry,
-        req.has_policy, req.has_ic, req.ic_date, req.filed_return)
-    return {
+def diagnose(req: DiagnoseRequest, request: Request) -> dict:
+    """
+    JSON twin of POST /check. Same engine, same findings — only the rendering differs.
+    No LLM on this path, so it is deterministic and costs ₹0.
+    """
+    client_ip = (request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+                 or (request.client.host if request.client else "unknown"))
+    allowed, retry_after = ratelimit.check(client_ip)
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail="That's a lot of checks in one minute. Give it a moment and try again.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
+    try:
+        findings, headline, profile = _run(
+            req.employees, req.contractors, req.state, req.district, req.industry,
+            req.has_policy, req.has_ic, req.ic_date, req.filed_return)
+    except Exception:                                    # noqa: BLE001 — deliberate boundary
+        logging.exception("diagnose.engine_failed state=%s employees=%s",
+                          req.state, req.employees)
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to generate report. Please try again.",
+        ) from None
+
+    payload = {
         "headline": headline,
         "as_of": profile.as_of.isoformat(),
-        "state": dict(STATES).get(req.state, req.state),
-        "employee_count": profile.employee_count,
-        "verified": False,   # nothing is lawyer-verified yet; the UI must not claim otherwise
+        "verified": False,  # nothing is lawyer-verified yet; the UI must not claim otherwise
+        "company_profile": {
+            "state": dict(STATES).get(req.state, req.state),
+            "state_code": req.state,
+            "district": req.district,
+            "industry": dict(INDUSTRIES).get(req.industry, req.industry),
+            "employee_count": profile.employee_count,
+            "contractor_count": profile.contractor_count,
+            "has_ic": req.has_ic == "yes",
+            "has_policy": req.has_policy == "yes",
+            "has_return_filed": req.filed_return == "yes",
+        },
+        "summary": {
+            "critical": sum(1 for f in findings if f.severity == "critical"),
+            "warning": sum(1 for f in findings if f.severity == "warning"),
+            "good": sum(1 for f in findings if f.severity == "good"),
+            "unknown": sum(1 for f in findings if f.severity == "unknown"),
+        },
+        "next_steps": _next_steps(findings),
         "findings": [
             {"title": f.title, "severity": f.severity, "detail": f.detail,
              "citation": f.citation, "source": f.source, "action": f.action}
             for f in findings
         ],
     }
+
+    _log_check(req, payload)
+    return payload
+
+
+def _log_check(req: DiagnoseRequest, payload: dict) -> None:
+    """
+    Best effort, never fails the request.
+
+    Aggregate only — headcount, state, district, type. No names, no IDs, no IP. What makes this
+    worth keeping is the abstention count: every question we could not answer is a ranked vote
+    for which instrument to ingest next (`docs/06` §3).
+    """
+    try:
+        line = json.dumps({
+            "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "state": req.state, "district": req.district,
+            "employees": req.employees, "contractors": req.contractors,
+            "industry": req.industry,
+            "summary": payload["summary"],
+            "abstained_on": [f["title"] for f in payload["findings"]
+                             if f["severity"] == "unknown"],
+        })
+        path = Path(os.getenv("CHECK_LOG", "corpus/.checks.jsonl"))
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a") as fh:
+            fh.write(line + "\n")
+    except Exception:                                    # noqa: BLE001
+        logging.warning("diagnose.log_failed", exc_info=True)
 
 CSS = """
 :root{
