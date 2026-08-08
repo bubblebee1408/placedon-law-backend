@@ -476,6 +476,35 @@ def _imports_pinned():
     return True, ""
 
 
+@check("edge-case questions abstain even on a verified corpus",
+       because="Testing the POST-verification state found the product would confidently answer "
+               "'do interns count toward the ten?' the moment a lawyer signed off — from s.2(f), "
+               "a definition that never mentions interns. The gate opening is exactly when that "
+               "fires: the day the product becomes useful is the day it starts answering the "
+               "questions it must refuse. The first fix used substring matching and broke the "
+               "flagship question, because 'Internal Committee' contains 'intern'.")
+def _edge_cases_abstain():
+    sys.path.insert(0, str(ROOT))
+    from checker import retrieval, verifier            # noqa: PLC0415
+    corpus = {p["section_number"]: {**p, "verified_by": "check"}
+              for p in json.loads(POSH.read_text())["provisions"]}
+    cases = [
+        ("do interns count toward the ten?", True),
+        ("do contractors count toward the threshold?", True),
+        ("we operate in three states, which rules apply?", True),
+        ("are remote employees covered?", True),
+        ("do I need an Internal Committee?", False),      # must NOT trip on "intern"
+        ("what is the penalty for not having an IC?", False),
+    ]
+    for q, want_abstain in cases:
+        pkt = [corpus[n] for n in (retrieval.keyword_route(q) or ()) if n in corpus]
+        got = verifier.should_abstain(q, pkt, None, state="IN-KA").abstained
+        if got != want_abstain:
+            return False, (f"{q!r} → {'abstain' if got else 'answer'}, expected "
+                           f"{'abstain' if want_abstain else 'answer'}")
+    return True, ""
+
+
 @check("no secrets committed",
        because="Standing rule, never yet violated. Cheap to keep.")
 def _no_secrets():

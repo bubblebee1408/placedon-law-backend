@@ -30,6 +30,42 @@ HEDGES = ("i believe", "i think", "probably", "might be", "i'd guess", "presumab
 CALCULATION = ("calculate", "how much pf", "gratuity amount", "salary breakup",
                "ctc breakup", "how much will i pay", "compute")
 
+# Questions the statute does not settle, which must abstain EVEN ON A VERIFIED CORPUS.
+#
+# This gate exists because of a hole found by testing the post-verification state. Today every
+# one of these abstains, but only incidentally — nothing is verified, so everything abstains.
+# Simulate the corpus a lawyer has signed off and the product cheerfully answers "do interns
+# count toward the ten?" from s.2(f), a definition that does not mention interns at all.
+#
+# The gate opening is precisely when this fires. That is the worst possible timing: the day the
+# product becomes useful is the day it starts answering the questions it should refuse.
+#
+# Every entry is a question a practising lawyer would want to see the facts for. s.2(f) defines
+# "employee" broadly — "whether for remuneration or not... whether the terms of employment are
+# express or implied" — which is exactly the kind of breadth that makes confident answers about
+# specific worker categories unsafe rather than easy.
+# Patterns, anchored on word boundaries. Substring matching was the first implementation and it
+# broke the flagship question: "Do I need an Internal Committee?" contains "intern", so the most
+# important question the product answers would have abstained forever.
+EDGE_CASES: tuple[tuple[str, str], ...] = (
+    (r"\binterns?\b", "whether interns count toward the threshold"),
+    (r"\btrainees?\b", "whether trainees count toward the threshold"),
+    (r"\bapprentices?\b", "whether apprentices count — the Apprentices Act may govern instead"),
+    (r"\bprobation(?:er|ers|ary)?\b", "how probationers are counted"),
+    (r"\bpart[- ]time\b", "how part-time staff are counted"),
+    (r"\bcontract(?:or|ors|\s+workers?|\s+staff)\b",
+     "whether contract workers count toward the threshold"),
+    (r"\bconsultants?\b", "whether consultants on contract count"),
+    (r"\bfreelancers?\b", "whether freelancers count"),
+    (r"\bgig\b", "whether gig workers count"),
+    (r"\b(?:two|three|four|five|several|multiple|different|many|\d+)\s+states?\b",
+     "which state's rules govern an employer operating in more than one state"),
+    (r"\bmulti[- ]state\b",
+     "which state's rules govern an employer operating in more than one state"),
+    (r"\bremote(?:ly)?\b", "which workplace a remote employee attaches to"),
+    (r"\bwork(?:ing)? from home\b", "whether a home counts as a workplace under s.2(o)"),
+)
+
 _NUM = re.compile(r"\d[\d,]*(?:\.\d+)?")
 _CITE = re.compile(r"\bs\.\s?\d+[A-Za-z0-9()\/]*", re.I)
 # Years and small ordinals appear in prose ("the 2013 Act", "three years") without being
@@ -91,6 +127,15 @@ def should_abstain(question: str, provisions: list[dict], answer: str | None,
     which is why the engine currently spends nothing at all.
     """
     q = question.lower()
+
+    for pattern, subject in EDGE_CASES:
+        if re.search(pattern, q):
+            return Verdict("abstain",
+                           f"We will not answer {subject}. The Act does not settle it, our "
+                           f"reading of the definitions would be a guess, and this is the exact "
+                           f"kind of question where a confident wrong answer costs you money. "
+                           f"Ask your District Officer or a labour lawyer — and tell us what "
+                           f"they say, because we will add it.", [], [])
 
     if any(k in q for k in CALCULATION):
         return Verdict("abstain",
@@ -162,6 +207,13 @@ if __name__ == "__main__":
         ("unresolvable citation → abstain",
          should_abstain("do I need an IC?", verified,
                         "You must display the notice [s.19].").abstained, True),
+        ("edge case: interns → abstain even when verified",
+         should_abstain("do interns count toward the ten?", verified, None).abstained, True),
+        ("edge case: multi-state → abstain",
+         should_abstain("we operate in three states, which rules apply?",
+                        verified, None).abstained, True),
+        ("'Internal Committee' does NOT trip the intern rule",
+         should_abstain("do I need an Internal Committee?", verified, None).abstained, False),
         ("hedging → abstain",
          should_abstain("do I need an IC?", verified,
                         "I think you probably need a Committee [s.4(1)].").abstained, True),

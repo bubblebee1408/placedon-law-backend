@@ -194,3 +194,28 @@ Each was proven with a working bypass, not argued.
    A grep passes for reasons that have nothing to do with what you meant.
 
 And the meta-lesson: **the ratchet needs its own adversary.** It found none of this itself.
+
+---
+
+## L-12 — Test the state the product will be in, not the state it is in
+
+**Incident.** A build plan proposed an edge-case abstention list — *"intern, contractor,
+multi-state always abstain."* Checked against the live product, every one of those questions
+already abstained, so the gate looked redundant.
+
+It was not. They abstained **incidentally**, because 0 of 30 sections are verified and therefore
+*everything* abstains. Simulating the corpus a lawyer has signed off — the state the product is
+one evening away from — showed it answering *"do interns count toward the ten?"* from s.2(f), a
+definition that never mentions interns.
+
+**The gate opening is exactly when the hole appears.** The day the product becomes useful is the
+day it starts answering the questions it must refuse. Every test we had was run against a state
+that hid the bug.
+
+Then the first fix broke the flagship question: substring matching meant **"Internal Committee"
+contains "intern"**, so *"Do I need an Internal Committee?"* abstained. Word boundaries fixed it.
+
+**Apply.** When a system has a gate, test both sides of it. `checker/test_unlock.py` already
+simulates verification for the happy path; that simulation is now also where refusals get
+checked. And match on word boundaries, never substrings, when the trigger words are common
+fragments of legitimate terms.
