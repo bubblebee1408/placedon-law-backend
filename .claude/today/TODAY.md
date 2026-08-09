@@ -11,6 +11,16 @@ https://placedon-hr.vercel.app        GET /  200
 
 `scripts/verify.py` — **GO, 38 checks.** Inference spend, all time: **₹0.00**.
 
+## The gap worth knowing about
+
+**Three working document generators are reachable by nobody.** `ic_order`, `posh_policy` and
+`board_report` are built, tested 25/25, and deployed as API endpoints — but `/generate` returns
+**404**, because the Next frontend was never deployed. Only `curl` can reach them.
+
+That matters this month: the Board's Report extract exists for a filing due at AGMs by
+**30 September**, and a person cannot open it. Deploying the frontend is ~2 hours and it is mine.
+See `docs/PLAN.md` §2.
+
 ## What is finished
 
 Everything I can finish alone. The pipeline is wired end to end and deployed: routing,
