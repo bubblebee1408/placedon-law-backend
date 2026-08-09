@@ -556,5 +556,103 @@
       "verified_at": null,
       "text_statutory": "30. Power to remove difficulties.— (1) If any difficulty arises in giving effect to the provisions of this Act, the Central Government may, by order published in the Official Gazette, make such provisions, not inconsistent with the provisions of this Act, as may appear to it to be necessary for removing the difficulty: Provided that no such order shall be made under this section after the expiry of a period of two years from the commencement of this Act. (2) Every order made under this section shall be laid, as soon as may be after it is made, before each House of Parliament. 14"
     }
+  ],
+  "subsections": [
+    {
+      "id": "posh_s2_f",
+      "section_number": 2,
+      "clause": "f",
+      "citation": "s.2(f), PoSH Act 2013",
+      "parent_citation": "s.2",
+      "text_statutory": "(f) “employee” means a person employed at a workplace for any work on regular, temporary, ad hoc or daily wage basis, either directly or through an agent, including a contractor, with or, without the knowledge of the principal employer, whether for remuneration or not, or working on a voluntary basis or otherwise, whether the terms of employment are express or implied and includes a co-worker, a contract worker, probationer, trainee, apprentice or called by any other such name;",
+      "text_sha256": "1da3f4cec5f027ed6ecd1a283d65ee9fff7df5ebb4e84031d7560182deb92582",
+      "char_count": 482,
+      "derived_from": {
+        "parent_sha256": "65c06cca9fe51ffa62c043911195b72343b9b6515a9c11fad7f9d031533fd422",
+        "method": "verbatim slice of the parent's statutory text at its clause marker"
+      },
+      "verified_by": null,
+      "verified_at": null
+    },
+    {
+      "id": "posh_s2_g",
+      "section_number": 2,
+      "clause": "g",
+      "citation": "s.2(g), PoSH Act 2013",
+      "parent_citation": "s.2",
+      "text_statutory": "(g) “employer” means— (i) in relation to any department, organisation, undertaking, establishment, enterprise, institution, office, branch or unit of the appropriate Government or a local authority, the head of that department, organisation, undertaking, establishment, enterprise, institution, office, branch or unit or such other officer as the appropriate Government or the local authority, as the case may be, may by an order specify in this behalf; (ii) in any workplace not covered under sub-clause (i), any person responsible for the management, supervision and control of the workplace. Explanation. —For the purposes of this sub-clause “management” includes the person or board or committee responsible for formulation and administration of polices for such organisation; (iii) in relation to workplace covered under sub-clauses (i) and (ii), the person discharging contractual obligations with respect to his or her employees;",
+      "text_sha256": "dcf0e3868a6681cc8483c95b5eba534a6a4e8b34759c5f654df16aeac2e33b96",
+      "char_count": 936,
+      "derived_from": {
+        "parent_sha256": "65c06cca9fe51ffa62c043911195b72343b9b6515a9c11fad7f9d031533fd422",
+        "method": "verbatim slice of the parent's statutory text at its clause marker"
+      },
+      "verified_by": null,
+      "verified_at": null
+    },
+    {
+      "id": "posh_s2_o",
+      "section_number": 2,
+      "clause": "o",
+      "citation": "s.2(o), PoSH Act 2013",
+      "parent_citation": "s.2",
+      "text_statutory": "(o) “workplace” includes— (i) any department, organisation, undertaking, establishment, enterprise, institution, office, branch or unit which is established, owned, controlled or wholly or substantially financed by funds provided directly or indirectly by the appropriate Government or the local authority or a Government company or a corporation or a co-operative society; (ii) any private sector organisation or a private venture, undertaking, enterprise, institution, establishment, society, trust, non-governmental organisation, unit or service provider carrying on commercial, professional, vocational, educational, entertainmental, industrial, health services or financial activities including production, supply, sale, distribution or service; (iii) hospitals or nursing homes; (iv) any sports institute, stadium, sports complex or competition or games venue, whether residential or not used for training, sports or other activities relating thereto; (v) any place visited by the employee arising out of or during the course of employment including transportation by the employer for undertaking such journey;",
+      "text_sha256": "25743fed93a046c37768d5ba86da0a79a86e2a1df064979b303a8f98b597b020",
+      "char_count": 1116,
+      "derived_from": {
+        "parent_sha256": "65c06cca9fe51ffa62c043911195b72343b9b6515a9c11fad7f9d031533fd422",
+        "method": "verbatim slice of the parent's statutory text at its clause marker"
+      },
+      "verified_by": null,
+      "verified_at": null
+    },
+    {
+      "id": "posh_s2_p",
+      "section_number": 2,
+      "clause": "p",
+      "citation": "s.2(p), PoSH Act 2013",
+      "parent_citation": "s.2",
+      "text_statutory": "(p) “unorganised sector” in relation to a workplace means an enterprise owned by individuals or self-employed workers and engaged in the production or sale of goods or providing service of any kind whatsoever, and where the enterprise employs workers, the number of such workers is less than ten.",
+      "text_sha256": "5ed799e0cd0657661e9d938a2282876e08dd3f4f33581f3e25b79c98932179a1",
+      "char_count": 296,
+      "derived_from": {
+        "parent_sha256": "65c06cca9fe51ffa62c043911195b72343b9b6515a9c11fad7f9d031533fd422",
+        "method": "verbatim slice of the parent's statutory text at its clause marker"
+      },
+      "verified_by": null,
+      "verified_at": null
+    },
+    {
+      "id": "posh_s4_1",
+      "section_number": 4,
+      "clause": "1",
+      "citation": "s.4(1), PoSH Act 2013",
+      "parent_citation": "s.4",
+      "text_statutory": "(1) Every employer of a workplace shall, by an order in writing, constitute a Committee to be known as the “Internal Complaints Committee”: 5 Provided that where the offices or administrative units of the workplace are located at different places or divisional or sub-divisional level, the Internal Committee shall be constituted at all administrative units or offices.",
+      "text_sha256": "a107e2809551df094e1ab84e87bfd1a0f246d7154aca06bf1dee05d7bff1a536",
+      "char_count": 369,
+      "derived_from": {
+        "parent_sha256": "bfb2fad45e44bf284018859f4d9a0788a8bb38308dcdd8296725f6188acbc8a3",
+        "method": "verbatim slice of the parent's statutory text at its clause marker"
+      },
+      "verified_by": null,
+      "verified_at": null
+    },
+    {
+      "id": "posh_s4_2",
+      "section_number": 4,
+      "clause": "2",
+      "citation": "s.4(2), PoSH Act 2013",
+      "parent_citation": "s.4",
+      "text_statutory": "(2) The Internal Committees shall consist of the following members to be nominated by the employer, namely: — (a) a Presiding Officer who shall be a woman employed at a senior level at workplace from amongst the employees: Provided that in case a senior level woman employee is not available, the Presiding Officer shall be nominated from other offices or administrative units of the workplace referred to in sub-section(1): Provided further that in case the other offices or administrative units of the workplace do not have a senior level woman employee, the Presiding Officer shall be nominated from any other workplace of the same employer or other department or organisation; (b) not less than two Members from amongst employees preferably committed to the cause of women or who have had experience in social work or have legal knowledge; (c) one member from amongst non-governmental organisations or associations committed to the cause of women or a person familiar with the issues relating to sexual harassment: Provided that at least one-half of the total Members so nominated shall be women.",
+      "text_sha256": "1e8a6295341fc19ef01286ca70868522267238b6135dad4f194519b06f46fe68",
+      "char_count": 1100,
+      "derived_from": {
+        "parent_sha256": "bfb2fad45e44bf284018859f4d9a0788a8bb38308dcdd8296725f6188acbc8a3",
+        "method": "verbatim slice of the parent's statutory text at its clause marker"
+      },
+      "verified_by": null,
+      "verified_at": null
+    }
   ]
 }

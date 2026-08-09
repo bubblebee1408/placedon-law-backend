@@ -73,9 +73,18 @@ QUESTIONS = [
      "Committee for establishments with fewer than ten workers). Every secondary source we "
      "checked states it as though s.4 contained it. <strong>This is the question that decides "
      "what we tell a nine-person company.</strong>"),
-    ("Do contract workers count toward that figure?",
-     "We currently decline to answer this and say so. If there is a settled position we will "
-     "encode it; if there is not, we would rather keep declining."),
+    ("Do contract workers count toward the ten? The Act appears to answer this and we think it "
+     "does not.",
+     "<strong>s.2(f)</strong> defines \"employee\" to expressly include &ldquo;a co-worker, a "
+     "<strong>contract worker</strong>, probationer, trainee, apprentice or called by any other "
+     "such name&rdquo;. Read alone, that settles it. But the ten-person figure does not come "
+     "from s.2(f). It comes from <strong>s.2(p)</strong>, which defines the unorganised sector "
+     "as one where &ldquo;the number of such <strong>workers</strong> is less than ten&rdquo; — "
+     "and <em>&ldquo;worker&rdquo; is not a defined term anywhere in this Act</em>. So the "
+     "question is whether the s.2(f) set and the s.2(p) set are the same. We decline to answer "
+     "it and say so on the page. <strong>If they are the same, our abstention is unnecessarily "
+     "cautious and we should drop it. If they are not, most tools in this market are giving "
+     "wrong answers.</strong>"),
     ("Is the annual-return deadline genuinely district-set?",
      "Gurugram's District Officer notified 28 February. Most sources say 31 January as though "
      "it were national. We abstain for districts whose notification we do not hold — including "

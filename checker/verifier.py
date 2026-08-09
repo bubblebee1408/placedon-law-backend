@@ -196,12 +196,22 @@ def should_abstain(question: str, provisions: list[dict], answer: str | None,
 
     for pattern, subject in EDGE_CASES:
         if re.search(pattern, q):
+            # Show the tension rather than only refusing. s.2(f) expressly includes contract
+            # workers, probationers, trainees and apprentices in "employee" — so a user who
+            # reads the Act will think this is settled. It is not, because the ten-figure does
+            # not come from s.2(f): it comes from s.2(p), which counts "WORKERS", a word the Act
+            # never defines. Whether those two sets coincide is the whole question, and naming
+            # it is more useful than a flat no.
             return Verdict("abstain",
-                           f"We will not answer {subject}. The Act does not settle it, our "
-                           f"reading of the definitions would be a guess, and this is the exact "
-                           f"kind of question where a confident wrong answer costs you money. "
-                           f"Ask your District Officer or a labour lawyer — and tell us what "
-                           f"they say, because we will add it.", [], [])
+                           f"We will not answer {subject}, and here is exactly why. Section 2(f) "
+                           f"defines \"employee\" very widely — it expressly includes \"a "
+                           f"co-worker, a contract worker, probationer, trainee, apprentice or "
+                           f"called by any other such name\". But the ten-person figure does not "
+                           f"come from that definition. It comes from section 2(p), which counts "
+                           f"\"workers\" — a word this Act never defines. Whether those two sets "
+                           f"are the same is the question, and we are not going to decide it for "
+                           f"you. Ask your District Officer or a labour lawyer, and tell us what "
+                           f"they say — we will add it.", [], [])
 
     if any(k in q for k in CALCULATION):
         return Verdict("abstain",
