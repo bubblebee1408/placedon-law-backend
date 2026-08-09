@@ -46,12 +46,13 @@ GENERATED = {".claude/index.json", "corpus/.budget.json"}
 #
 # It has to scale with the mode: --fast skips the per-module suites and tsc, so the expected
 # total is the registry alone. Hard-coding one number broke --fast the moment it was added.
-MIN_REGISTRY_CHECKS = 21
+MIN_REGISTRY_CHECKS = 24
 
 SUITES = [
     "applicability.py", "jurisdiction.py", "backend/budget.py",
     "checker/ic_order.py", "checker/verifier.py", "checker/test_unlock.py",
     "checker/board_report.py", "checker/documents.py",
+    "checker/provision_graph.py", "checker/epistemic_status.py", "checker/ask_engine.py",
 ]
 
 results: list[tuple[bool, str, str]] = []
@@ -642,6 +643,74 @@ def _belief_not_displayed():
             if re.search(r"posterior|belief_state|confidence_tier|entropy", body):
                 leaks.append(str(f.relative_to(ROOT)))
     return (not leaks), f"belief internals surfaced in: {leaks}"
+
+
+@check("citations resolve by section NUMBER, never by string prefix",
+       because="verify_citations matched with `base.startswith(b)`, so \"s.27\".startswith(\"s.2\") "
+               "was True. With s.2 in the packet, EVERY fabricated citation resolved cleanly — "
+               "s.21, s.22, s.26, s.27, even s.199. The citation enforcer, the component this "
+               "product's trustworthiness rests on, failed open on every case it exists to catch.")
+def _citations_by_number():
+    sys.path.insert(0, str(ROOT))
+    from checker import verifier                             # noqa: PLC0415
+    prov = {p["section_number"]: p for p in json.loads(POSH.read_text())["provisions"]}
+    packet = [prov[2], prov[19]]
+    for cite, want_caught in (("[s.27]", True), ("[s.21]", True), ("[s.26]", True),
+                              ("[s.199]", True), ("[s.2]", False), ("[s.19]", False),
+                              ("[s.19(b)]", False)):
+        caught = bool(verifier.verify_citations(f"text {cite}", packet))
+        if caught != want_caught:
+            return False, (f"{cite} {'was caught' if caught else 'passed'}, expected "
+                           f"{'caught' if want_caught else 'passed'}")
+    return True, ""
+
+
+@check("off-topic questions retrieve nothing rather than weak matches",
+       because="The term-overlap scan returned three sections for 'What is the GST rate on "
+               "chocolate?'. Measured across the corpus, off-topic questions top out at score 1 "
+               "— one common word — while on-topic score 2 to 8. Three weakly-matched sections "
+               "are worse than none, because a model would then explain them. Also 'file' alone "
+               "routed 'how do I file income tax?' to the PoSH annual return.")
+def _offtopic_retrieves_nothing():
+    sys.path.insert(0, str(ROOT))
+    from checker import retrieval                            # noqa: PLC0415
+    for q in ("What is the GST rate on chocolate?", "How do I renew my passport?",
+              "What is the capital of France?", "How do I file income tax?"):
+        hits, _ = retrieval.retrieve(q)
+        if hits:
+            return False, f"{q!r} retrieved {[h['citation'] for h in hits]}"
+    for q in ("What must the employer display at the workplace?",
+              "What is the penalty for non-compliance?", "Who can be on the Internal Committee?",
+              "When is the annual return due?"):
+        if not retrieval.retrieve(q)[0]:
+            return False, f"on-topic question retrieved nothing: {q!r}"
+    return True, ""
+
+
+@check("a deduction never reaches the language model",
+       because="'Do I need an Internal Committee?' is computed from the Act and the company's "
+               "own headcount. Routing it to a model asks a probabilistic system to redo settled "
+               "arithmetic, which is how a wrong answer gets a confident voice.")
+def _deductions_routed_to_code():
+    sys.path.insert(0, str(ROOT))
+    from checker.ask_engine import AskEngine                 # noqa: PLC0415
+    called = []
+
+    class R:
+        text, cost_inr, degraded = "should not run", 0.0, False
+
+    prov = [{**p, "verified_by": "check"} for p in json.loads(POSH.read_text())["provisions"]]
+    eng = AskEngine(provisions=prov,
+                    generate=lambda q, p, c: (called.append(q), R())[1])
+    for q in ("Do I need an Internal Committee?", "Does PoSH apply to us?",
+              "Are we required to have a policy?", "Is it mandatory for a 12-person company?"):
+        if eng.ask(q).route != "deterministic":
+            return False, f"{q!r} was not routed to the rules engine"
+    if called:
+        return False, f"the model was called for a deduction: {called}"
+    if eng.ask("What does section 19 require?").route != "corpus":
+        return False, "an exposition question was wrongly routed away from the corpus"
+    return True, ""
 
 
 @check("no secrets committed",

@@ -27,7 +27,9 @@ KEYWORD_MAP: dict[str, tuple[int, ...]] = {
     "presiding officer": (4,), "constitute": (4,), "who can be": (4,),
     "members": (4, 7), "tenure": (4,), "three years": (4,),
     "local committee": (6, 7), "district officer": (5, 6, 20, 21),
-    "annual return": (21, 22), "annual report": (21, 22), "file": (21, 22),
+    "annual return": (21, 22), "annual report": (21, 22),
+    # "file" alone routed "how do I file income tax?" here. Needs its object.
+    "file the return": (21, 22), "file the report": (21, 22), "filing deadline": (21, 22),
     "policy": (19,), "display": (19,), "duties of employer": (19,), "employer must": (19,),
     "training": (19,), "awareness": (19,),
     "penalty": (26,), "fine": (26,), "punishment": (14, 26), "non-compliance": (26,),
@@ -64,6 +66,14 @@ def _score(question: str, provision: dict) -> int:
     return sum(3 for t in terms if t in heading) + sum(1 for t in terms if t in body)
 
 
+# A single term overlapping is one common word, not relevance. Measured on this corpus:
+# off-topic questions ("GST rate on chocolate", "capital of France", "renew my passport") all
+# top out at exactly 1, while on-topic questions score 2-8. Below the floor we return nothing,
+# which is a better answer than three weakly-matched sections a model would then explain.
+# Applies to the scan fallback only; a keyword route is an explicit mapping and stands.
+SCAN_FLOOR = 2
+
+
 def retrieve(question: str, *, top_k: int = 3) -> tuple[list[dict], str]:
     """Returns (provisions, which_stage). Never more than top_k — context is cost."""
     sections = keyword_route(question)
@@ -77,5 +87,5 @@ def retrieve(question: str, *, top_k: int = 3) -> tuple[list[dict], str]:
         ((_score(question, p), p) for p in _corpus()),
         key=lambda pair: pair[0], reverse=True,
     )
-    hits = [p for s, p in scored[:top_k] if s > 0]
+    hits = [p for s, p in scored[:top_k] if s >= SCAN_FLOOR]
     return hits, "scan" if hits else "none"

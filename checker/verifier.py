@@ -134,24 +134,35 @@ def verify_citations(answer: str, provisions: list[dict]) -> list[str]:
     exactly as misleading as a fabricated section, and harder to notice.
     """
     # base -> (parts the provision's own citation already covers, its verbatim text)
-    held: dict[str, tuple[set[str], str]] = {}
+    # Keyed by the SECTION NUMBER as an integer, never by string prefix.
+    #
+    # Prefix matching failed open, catastrophically. `"s.27".startswith("s.2")` is True, so with
+    # s.2 in the packet every one of s.21, s.22, s.26, s.27 and even s.199 resolved cleanly.
+    # The citation enforcer — the component this product's trustworthiness rests on — passed
+    # every fabricated section it was shown.
+    def _section_of(cite: str) -> int | None:
+        m = re.match(r"s\.?\s*(\d{1,3})", cite.strip().lower())
+        return int(m.group(1)) if m else None
+
+    held: dict[int, tuple[set[str], str]] = {}
     for p in provisions:
         cite = (p.get("citation") or "").lower().replace(" ", "")
-        base = cite.split("(")[0]
-        if not base:
+        num = _section_of(cite)
+        if num is None:
             continue
         own = set(re.findall(r"\(([^)]+)\)", cite))
         body = " ".join((p.get("text_display") or p.get("text", "")).split()).lower()
-        held[base] = (own, body)
+        prev_own, prev_body = held.get(num, (set(), ""))
+        held[num] = (own | prev_own, body or prev_body)
 
     unresolved: list[str] = []
     for c in _CITE.findall(answer):
         norm = c.lower().replace(" ", "")
-        base = norm.split("(")[0]
-        match = next((b for b in held if b.startswith(base) or base.startswith(b)), None)
-        if match is None:
+        num = _section_of(norm)
+        if num is None or num not in held:
             unresolved.append(c)
             continue
+        match = num
         own, body = held[match]
         # Only parts the answer adds BEYOND the provision's own citation need proving. When the
         # provision IS s.4(1), citing s.4(1) adds nothing and requiring "(1)" inside its own
