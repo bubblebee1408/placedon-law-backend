@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import logging
+from functools import lru_cache
 import os
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -27,6 +28,7 @@ from applicability import CompanyProfile
 from jinja2 import TemplateNotFound
 
 from . import documents, ratelimit, retrieval, verifier
+from .ask_engine import AskEngine
 from .assess import assess
 from .rules import DISTRICTS, INDUSTRIES, STATES, Finding
 
@@ -394,15 +396,29 @@ class AskRequest(BaseModel):
     employees: int = Field(default=0, ge=0, le=5000)
 
 
+@lru_cache(maxsize=1)
+def _ask_engine() -> AskEngine:
+    """One instance. Building it parses the corpus and derives the provision graph."""
+    return AskEngine()
+
+
 @app.post("/api/ask")
 def ask(req: AskRequest, request: Request) -> dict:
     """
-    Cited Q&A. The LLM never decides anything — it explains a packet the engine assembled and
-    the verifier cleared, and every number it writes is checked against source afterward.
+    Cited Q&A, routed through `checker.ask_engine`.
 
-    Right now the verifier abstains on everything, because all 30 provisions carry
-    `verified_by: null`. That is the correct behaviour and it is why this endpoint currently
-    costs ₹0: the gate runs *before* the call, so no request is ever made.
+    The endpoint used to inline the pipeline. It now delegates, which buys three things the
+    inline version could not have:
+
+      * **Deductions never reach a model.** "Do I need an IC?" is computed by the rules engine
+        from the Act and the company's own headcount. The old path would have sent it to be
+        explained; the engine routes it to code before retrieval.
+      * **The epistemic chain is exposed.** Abstention names the weakest link — "s.4 rests on
+        unverified s.16" — instead of restating that nothing is verified.
+      * **One pipeline, one set of tests.** ask_engine carries 24 of its own; the inline version
+        had none.
+
+    Still ₹0. Every provision carries `verified_by: null`, so the gate closes before any call.
     """
     client_ip = (request.headers.get("x-forwarded-for", "").split(",")[0].strip()
                  or (request.client.host if request.client else "unknown"))
@@ -412,55 +428,29 @@ def ask(req: AskRequest, request: Request) -> dict:
                             headers={"Retry-After": str(retry_after)})
 
     try:
-        provisions, stage = retrieval.retrieve(req.question)
+        result = _ask_engine().ask(req.question,
+                                   {"employee_count": req.employees, "state": req.state})
     except Exception:                                    # noqa: BLE001
-        logging.exception("ask.retrieval_failed")
+        logging.exception("ask.failed")
         raise HTTPException(500, "Unable to answer right now. Please try again.") from None
 
-    pre = verifier.should_abstain(req.question, provisions, None, state=req.state)
-
-    if pre.abstained:
-        payload = {
-            "abstained": True,
-            "answer": pre.reason,
-            "confidence": "abstain",
-            "retrieval_stage": stage,
-            "cost_inr": 0.0,
-            "citations": [
-                {"citation": p["citation"], "heading": p["heading"],
-                 "verified_by": p.get("verified_by")}
-                for p in provisions
-            ],
-        }
-        _log_ask(req, payload)
-        return payload
-
-    # Unreachable until a lawyer sets verified_by. Left wired so the day that changes is a
-    # data change, not a code change.
-    from backend.services.llm import BudgetExceededError, explain_provisions
-    try:
-        result = explain_provisions(req.question, provisions,
-                                    {"employee_count": req.employees, "state": req.state})
-    except BudgetExceededError as e:
-        payload = {"abstained": True, "answer": f"We've hit our monthly budget. {e}",
-                   "confidence": "abstain", "retrieval_stage": stage, "cost_inr": 0.0,
-                   "citations": []}
-        _log_ask(req, payload)
-        return payload
-
-    post = verifier.should_abstain(req.question, provisions, result.text, state=req.state)
     payload = {
-        "abstained": post.abstained,
-        "answer": post.reason if post.abstained else result.text,
-        "confidence": post.confidence,
-        "retrieval_stage": stage,
+        "abstained": result.abstained,
+        "answer": result.reason if result.abstained else result.answer,
+        # The ordinal epistemic status, not a confidence tier. Calibrating a tier needs a
+        # labelled validation set we do not have; this is a fact about the corpus.
+        "status": result.status,
+        "route": result.route,
+        "epistemic_chain": result.epistemic_chain,
         "cost_inr": result.cost_inr,
-        "unsupported_numbers": post.unsupported_numbers,
         "citations": [
-            {"citation": p["citation"], "heading": p["heading"],
-             "verified_by": p.get("verified_by")}
-            for p in provisions
+            {"citation": src["section"], "heading": src["heading"],
+             "verified_by": src["verified_by"]}
+            for src in result.sources
         ],
+        # Kept so existing clients do not break on a renamed field.
+        "confidence": "abstain" if result.abstained else "answer",
+        "retrieval_stage": result.route,
     }
     _log_ask(req, payload)
     return payload
