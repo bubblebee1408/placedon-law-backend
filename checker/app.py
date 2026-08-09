@@ -182,7 +182,7 @@ def _log_check(req: DiagnoseRequest, payload: dict) -> None:
 CSS = """
 :root{
   --paper:#faf8f4; --ink:#16150f; --muted:#6a675c; --rule:#e0dbd0;
-  --crit:#8c2f1d; --warn:#8a6410; --good:#2f5d3a; --unknown:#3d4c66;
+  --rule-strong:#c9c2b0; --crit:#8c2f1d; --warn:#8a6410; --good:#2f5d3a; --unknown:#3d4c66;
   --crit-bg:#f7ece8; --warn-bg:#f8f2e4; --good-bg:#edf3ed; --unknown-bg:#eceff5;
   --serif:Georgia,"Iowan Old Style",'Times New Roman',serif;
   --sans:ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif;
@@ -233,6 +233,88 @@ button:hover{background:#000}
 .stamp{font-size:.8rem;color:var(--muted);font-variant-numeric:tabular-nums;margin-top:2.5rem}
 a{color:var(--ink)}
 footer{margin-top:3rem;font-size:.85rem;color:var(--muted)}
+
+/* ── Epistemic status badge ──────────────────────────────────────────────
+   The ordinal lattice, made visible. It has existed in code for two days and
+   no user could see it. The dot carries the state; the word carries the
+   meaning; neither alone is enough at 390px in sunlight. */
+/* The seven states are an ORDER, not a palette.
+   Hue-coding them green/amber/red — which this first did — collapses an ordinal ladder into
+   three categories and implies "compliant/at-risk" buckets the corpus cannot support. The
+   ancestor here is Bluebook's introductory signals (see / see also / cf. / but see): a graded
+   scale of how strongly an authority supports a proposition, and it is typeset as a sequence.
+   So the ramp is carried by BORDER STYLE and FILL, not colour: dashed -> dotted -> solid
+   outline -> solid fill -> sealed. Pencil draft, then ink, then notarised. Adjacent states
+   differ by exactly one property, so the order is legible before the label is read.
+   Colour is spent once, on QUOTED, so that when it appears it means something. */
+.status{display:inline-flex;align-items:center;gap:.3em;padding:.18em .55em;border-radius:2px;
+  font-family:ui-monospace,Menlo,monospace;font-size:.68rem;font-weight:600;letter-spacing:.04em;
+  white-space:nowrap;background:transparent;color:var(--muted)}
+.status.silent{border:1px dashed var(--rule-strong)}
+.status.unsupported{border:1px dashed var(--rule-strong);text-decoration:line-through;
+  text-decoration-color:var(--rule-strong)}
+.status.unchecked{border:1px dotted var(--muted)}
+.status.secondary{border:1px solid var(--muted);color:var(--ink)}
+.status.inferred{border:1.5px solid var(--ink);color:var(--ink)}
+/* The dagger is borrowed from critical-edition sigla, where it marks a reading restored or
+   doubtful. It says "this is our reading" in one character. */
+/* The dagger literally, not as a CSS hex escape. `content:"\2020 "` looks right but
+   the CSS constant is a plain Python string, so Python read \202 as an OCTAL escape
+   and the browser received U+0082 followed by "0" — the badge rendered a zero. The
+   character costs two bytes and cannot be misparsed by anything in the chain. */
+.status.inferred::after{content:"†";margin-left:.15em;opacity:.7}
+.status.verified{border:1.5px solid var(--ink);background:var(--ink);color:var(--paper)}
+.status.quoted{border:1px solid var(--crit);border-left-width:3px;background:var(--crit-bg);
+  color:var(--ink);font-family:var(--serif);font-style:italic;font-weight:400}
+
+/* ── Citation pin ────────────────────────────────────────────────────────
+   Every claim names its source. Making that a pin rather than a trailing line
+   means the eye can find it without reading the sentence, which is what a
+   sceptical reader does first. Monospace because a citation is an address. */
+.pin{display:inline-block;padding:.05em .4em;border:1px solid var(--rule);
+  border-radius:2px;background:#fff;font-family:ui-monospace,Menlo,monospace;
+  font-size:.78em;color:var(--muted);text-decoration:none;white-space:nowrap}
+a.pin:hover,a.pin:focus-visible{color:var(--ink);border-color:var(--ink)}
+
+/* ── Cascade block ───────────────────────────────────────────────────────
+   The dependency chain, rendered as a chain. This is the one output nothing
+   else in this market produces, and it was being flattened into a comma list:
+   "s.2 rests on unverified s.4, s.5, s.6, s.7, s.9, s.16."
+   Indentation carries the derivation; the rule down the left carries the fact
+   that these are steps rather than bullets. */
+.cascade{margin:1rem 0 0;padding:.1rem 0 .1rem 1.1rem;border-left:2px solid var(--rule);
+  list-style:none;font-size:.9rem}
+.cascade li{position:relative;margin:0 0 .7rem;color:var(--muted)}
+.cascade li:last-child{margin-bottom:0}
+.cascade li::before{content:"↳";position:absolute;left:-1.55rem;color:var(--rule)}
+.cascade .ground{color:var(--ink)}
+.note{color:var(--muted);font-size:.82rem;font-style:italic}
+
+/* ── Motion ──────────────────────────────────────────────────────────────
+   One curve, a pure decelerate with no overshoot: a stamp coming down and
+   staying, not a card popping in. Bounce reads as playful and this is a legal
+   instrument.
+
+   Nothing here is a LOADING state. No spinner, no shimmer, no pulse — because
+   UNCHECKED is a permanent fact about the corpus, not a value in flight, and
+   animating it as "loading" would promise it resolves on its own. It does not.
+
+   The cascade staggers so it reads as tracing an argument rather than a list
+   rendering. Only the nodes move; the spine is static, so attention stays on
+   the content. */
+@keyframes settle{to{opacity:1;transform:none}}
+.finding.critical,.finding.unknown{opacity:0;transform:translateY(6px);
+  animation:settle 420ms cubic-bezier(.16,1,.3,1) forwards}
+.finding.critical{animation-delay:60ms}
+.cascade li{opacity:0;transform:translateY(4px);
+  animation:settle 280ms cubic-bezier(.16,1,.3,1) forwards}
+.cascade li:nth-child(1){animation-delay:120ms}
+.cascade li:nth-child(2){animation-delay:210ms}
+.cascade li:nth-child(3){animation-delay:300ms}
+@media (prefers-reduced-motion:reduce){
+  .finding.critical,.finding.unknown,.cascade li{animation:none;opacity:1;transform:none}
+}
+
 """
 
 SEV_LABEL = {"critical": "Fix first", "warning": "Needs attention",
@@ -391,13 +473,88 @@ def check(
     """)
 
 
+# Where a citation points. The Act is the only instrument we hold at primary grade, so it is
+# the only one we deep-link; sending someone to a page we have not verified would be worse than
+# sending them nowhere.
+INDIA_CODE = "https://www.indiacode.nic.in/handle/123456789/2104"
+
+
+def _pins(citation: str) -> str:
+    """
+    Citations as pins rather than a trailing grey line.
+
+    A sceptical reader looks for the source before reading the claim, and a comma-separated
+    sentence makes them read to find it. Each section becomes its own pin so the eye can count
+    them. Only PoSH Act citations link out — we hold that text at primary grade.
+    """
+    import re as _re                                          # noqa: PLC0415
+
+    out, seen = [], set()
+    # Pull the section references out wherever they sit. Splitting on punctuation produced
+    # "penalty s.26, PoSH Act 2013" as one pin, which is a sentence, not an address.
+    for m in _re.finditer(r"s\.\s?(\d+(?:\(\w+\))?(?:/\d+)?)", citation):
+        ref = m.group(1)
+        if ref in seen:
+            continue
+        seen.add(ref)
+        out.append(f'<a class=pin href="{INDIA_CODE}" target=_blank rel=noopener>'
+                   f'§&nbsp;{ref}</a>')
+    # Anything that is not a section reference is a qualification, and it matters — "deadline
+    # fixed by the District Officer" is the whole point of that finding. Kept as plain text.
+    rest = _re.sub(r"s\.\s?\d+(?:\(\w+\))?(?:/\d+)?", "", citation)
+    rest = _re.sub(r"PoSH Act 2013", "", rest)
+    rest = " ".join(w for w in _re.split(r"[;,·]", rest) if w.strip())
+    if rest.strip():
+        out.append(f'<span class=note>{rest.strip()}</span>')
+    return " ".join(out)
+
+
+def _cascade(f: Finding) -> str:
+    """
+    The dependency chain, rendered as a chain.
+
+    `epistemic_status` computes which provisions a claim rests on and which of those nobody has
+    verified, each with the corpus field that established it. That was being flattened into one
+    sentence — "s.2 rests on unverified s.4, s.5, s.6, s.7, s.9, s.16" — which reads as an error
+    string rather than as a derivation. It is the one output nothing else in this market
+    produces, so it gets the space.
+    """
+    try:
+        from checker.epistemic_status import EpistemicState   # noqa: PLC0415
+        import re as _re                                      # noqa: PLC0415
+        nums = [int(n) for n in _re.findall(r"s\.(\d+)", f.citation)]
+        if not nums:
+            return ""
+        claim = EpistemicState().assess(f.title, sections=nums, citation=f.citation)
+    except Exception:                                         # noqa: BLE001
+        return ""
+
+    grounds = sorted(claim.grounds, key=lambda g: g.status)[:3]
+    if not grounds:
+        return ""
+    # No `g.source` here. It reads "provision_graph.blocked_by" and "provision.verified_by is
+    # null" — the corpus fields that produced the status. That is exactly right in the JSON API,
+    # where a developer or a reviewer wants the provenance, and exactly wrong on a page read by
+    # an HR generalist at 11pm who is worried about a fine. The status badge already carries the
+    # claim; the field name only carries our implementation.
+    items = "".join(
+        f"<li><span class='status {g.status.name.lower()}'>{g.status.name}</span> "
+        f"<span class=ground>{g.reason}</span></li>"
+        for g in grounds
+    )
+    return f"<ul class=cascade>{items}</ul>"
+
+
 def _card(f: Finding) -> str:
-    cite = f"<p class=cite>{f.citation}" + (f" · {f.source}" if f.source else "") + "</p>"
+    cite = f"<p class=cite>{_pins(f.citation)}</p>"
     act = f"<p class=act>{f.action}</p>" if f.action else ""
+    # The chain is shown where it changes the reading: on a refusal, and on the finding we tell
+    # people to fix first. Everywhere else it is noise.
+    chain = _cascade(f) if f.severity in ("unknown", "critical") else ""
     return (
         f"<section class='finding {f.severity}'>"
         f"<div class=tag>{SEV_LABEL[f.severity]}</div>"
-        f"<h3>{f.title}</h3><p>{f.detail}</p>{act}{cite}</section>"
+        f"<h3>{f.title}</h3><p>{f.detail}</p>{act}{chain}{cite}</section>"
     )
 
 

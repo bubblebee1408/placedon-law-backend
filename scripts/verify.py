@@ -46,7 +46,7 @@ GENERATED = {".claude/index.json", "corpus/.budget.json"}
 #
 # It has to scale with the mode: --fast skips the per-module suites and tsc, so the expected
 # total is the registry alone. Hard-coding one number broke --fast the moment it was added.
-MIN_REGISTRY_CHECKS = 28
+MIN_REGISTRY_CHECKS = 29
 
 SUITES = [
     "applicability.py", "jurisdiction.py", "backend/budget.py",
@@ -826,6 +826,71 @@ def _pack_uses_subsections():
     missing = [s["citation"] for s in subs if s["citation"] not in pack.read_text()]
     if missing:
         return False, f"clauses held but not shown in the pack: {missing}"
+    return True, ""
+
+
+@check("the epistemic ramp is legible without colour",
+       because="The seven lattice states were first shipped hue-coded — green for VERIFIED, amber "
+               "for INFERRED, red for UNSUPPORTED. That collapses a seven-state ORDER into three "
+               "CATEGORIES: a reader can see 'bad' but not that SECONDARY outranks UNCHECKED, and "
+               "the ordering is the entire point of the lattice. It also fails for the ~8% of "
+               "men with red-green deficiency, and it competes with the severity hues, which are "
+               "a different axis on the same page. The ramp now runs on border weight and fill. "
+               "This check refuses a return to hue: at most one chromatic family may appear "
+               "across all seven, and stripping colour entirely must still leave seven distinct "
+               "states.")
+def _ramp_not_hue_coded():
+    import sys                                                 # noqa: PLC0415
+    sys.path.insert(0, str(ROOT))
+    from checker.app import CSS                                # noqa: PLC0415
+    from checker.epistemic_status import Status                # noqa: PLC0415
+
+    root = re.search(r":root\{(.*?)\}", CSS, re.S)
+    if not root:
+        return False, "no :root palette block in the stylesheet"
+    palette = dict(re.findall(r"(--[\w-]+):\s*(#[0-9a-fA-F]{6})\s*;", root.group(1)))
+
+    # Chromatic by measurement, not by a hardcoded list, so a palette addition is classified
+    # automatically. The tints (--crit-bg and friends) are pale enough to measure as neutral,
+    # so a token inherits its base family's verdict: --good-bg is green even at 6% spread.
+    def spread(hex_: str) -> int:
+        r, g, b = (int(hex_[i:i + 2], 16) for i in (1, 3, 5))
+        return max(r, g, b) - min(r, g, b)
+
+    # The warm paper neutrals top out at 25; the severity hues start at 41.
+    families = {k[2:].removesuffix("-bg") for k, v in palette.items() if spread(v) > 35}
+
+    rules = {}
+    for state in Status:
+        name = state.name.lower()
+        found = re.findall(rf"\.status\.{name}(?:::[a-z]+)?\{{(.*?)\}}", CSS, re.S)
+        if not found:
+            return False, (f"Status.{state.name} has no .status.{name} rule. An unstyled state "
+                           f"renders as unmarked prose and drops out of the order.")
+        rules[state.name] = " ".join(found)
+
+    used = {f for f in families
+            for body in rules.values() if f"--{f}" in body}
+    if len(used) > 1:
+        return False, (f"the ramp draws on {len(used)} chromatic families ({sorted(used)}). More "
+                       f"than one means hue is carrying the ordering again.")
+
+    # Strip every colour channel and the seven must still be seven.
+    stripped = {}
+    for name, body in rules.items():
+        decls = [d for d in body.split(";")
+                 if d.strip() and d.split(":")[0].strip() not in
+                 {"color", "background", "background-color", "border-color",
+                  "text-decoration-color"}]
+        flat = re.sub(r"var\(--[\w-]+\)|#[0-9a-fA-F]{3,6}", "", ";".join(decls))
+        stripped[name] = " ".join(flat.split())
+
+    seen = {}
+    for name, sig in stripped.items():
+        if sig in seen:
+            return False, (f"{seen[sig]} and {name} are indistinguishable once colour is removed. "
+                           f"Two rungs of an ordinal ladder that differ only in hue are one rung.")
+        seen[sig] = name
     return True, ""
 
 
