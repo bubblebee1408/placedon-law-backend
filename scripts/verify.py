@@ -46,7 +46,7 @@ GENERATED = {".claude/index.json", "corpus/.budget.json"}
 #
 # It has to scale with the mode: --fast skips the per-module suites and tsc, so the expected
 # total is the registry alone. Hard-coding one number broke --fast the moment it was added.
-MIN_REGISTRY_CHECKS = 24
+MIN_REGISTRY_CHECKS = 25
 
 SUITES = [
     "applicability.py", "jurisdiction.py", "backend/budget.py",
@@ -711,6 +711,28 @@ def _deductions_routed_to_code():
     if eng.ask("What does section 19 require?").route != "corpus":
         return False, "an exposition question was wrongly routed away from the corpus"
     return True, ""
+
+
+@check("corpus text is unaltered — raw hash recomputes and display text re-derives",
+       because="text_sha256 hashes `text`, the raw pdfplumber extraction. But `text_display` is "
+               "what we quote, cite, and print into documents a company signs, and NOTHING "
+               "covered it. A corrupted display string — a dropped 'not', a changed figure — "
+               "would have passed every check while the raw hash stayed valid. Found by "
+               "verifying the PDF by hand and noticing the per-provision hash would not "
+               "recompute over the field we actually show.")
+def _corpus_text_unaltered():
+    sys.path.insert(0, str(ROOT))
+    import hashlib                                          # noqa: PLC0415
+
+    from scripts.ingest_posh import join_wraps              # noqa: PLC0415
+    bad: list[str] = []
+    for p in json.loads(POSH.read_text())["provisions"]:
+        cite = p.get("citation", "?")
+        if hashlib.sha256(p["text"].encode()).hexdigest() != p["text_sha256"]:
+            bad.append(f"{cite}: raw hash does not recompute")
+        if join_wraps(p["text"]) != p["text_display"]:
+            bad.append(f"{cite}: text_display is not derivable from text")
+    return (not bad), "; ".join(bad[:4])
 
 
 @check("no secrets committed",

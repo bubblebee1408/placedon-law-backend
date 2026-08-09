@@ -184,6 +184,16 @@ def main() -> int:
     inst = data["instrument"]
 
     tier1 = sorted(required_sections())
+
+    # Three reasons a section is in Tier 1, and a reviewer's evening is better spent if the pack
+    # says which. Verifying the PDF by hand showed s.16 is pulled in only by s.4(5) — removal of
+    # a member who breaches confidentiality — and we make no claim about removal. The dependency
+    # is real; it is simply not load-bearing for anything we assert.
+    from checker.provision_graph import ProvisionGraph  # noqa: PLC0415
+    from checker.retrieval import retrieve as _retrieve  # noqa: PLC0415
+    graph = ProvisionGraph()
+    retrieved = {p["section_number"] for q in CORE_QUESTIONS for p in _retrieve(q)[0]}
+    dependency_only = sorted(set(tier1) - retrieved)
     from checker.retrieval import KEYWORD_MAP  # noqa: PLC0415
     routed = sorted({n for v in KEYWORD_MAP.values() for n in v})
     tier2 = [n for n in routed if n not in tier1]
@@ -213,15 +223,43 @@ def main() -> int:
         out.append(f"<div class=q><b>{i}. {html.escape(q)}</b>{detail}</div>")
 
     out.append(f"<h2>Tier 1 — the {len(tier1)} sections that unlock the product</h2>")
-    out.append(f"<p class=lede>Derived by running each of the {len(CORE_QUESTIONS)} questions "
-               "above through our retrieval and taking the union. "
-               f"<strong>{len(CLAIMS)}</strong> carry a reading we need checked; the other "
-               f"<strong>{len(tier1) - len(CLAIMS)}</strong> we merely quote, and need only "
-               "confirmed as in force.</p><p class=lede>The questions: "
+    out.append(f"<p class=lede>Derived, not chosen — by running each of the "
+               f"{len(CORE_QUESTIONS)} questions above through our retrieval, then closing over "
+               "the dependencies the statute declares in its own cross-references.</p>")
+    out.append("<div class=tier><b>Not all of these need equal attention.</b><br>"
+               f"<strong>{len(CLAIMS)} sections</strong> carry a specific reading of ours, "
+               "printed beside the text. Those are the work.<br>"
+               f"<strong>{len(tier1) - len(CLAIMS) - len(dependency_only)} sections</strong> we "
+               "only quote back to users — we need to know they are in force and that quoting "
+               "them is not misleading.<br>"
+               f"<strong>{len(dependency_only)} sections</strong> are here purely because "
+               "sections we rely on cross-refer to them. Lowest priority; in at least one case "
+               "the reference is in a sub-clause we make no claim about."
+               "</div><p class=lede>The questions: "
                + "; ".join(html.escape(q) for q in CORE_QUESTIONS) + "</p>")
 
     for n in tier1:
         p = provisions[n]
+        if n in dependency_only:
+            pullers = sorted(x for x in retrieved if n in graph.dependencies(x))
+            out.append(f"<h3>{html.escape(p['citation'])} — {html.escape(p['heading'])}</h3>")
+            out.append("<p><strong>Lowest priority — check this last, or not at all.</strong> "
+                       "We assert nothing from this section and retrieval never returns it. It "
+                       "is here only because sections we DO rely on cross-refer to it, so a "
+                       "claim citing them technically rests on it: "
+                       f"{', '.join(html.escape(provisions[x]['citation']) for x in pullers)}. "
+                       "In at least one case the reference sits in a sub-clause we make no claim "
+                       "about — s.4(5), removal of a member who contravenes s.16. "
+                       "<em>Is it enough that this section is in force?</em></p>")
+            for x in pullers[:2]:
+                q = graph.evidence_for(n, x)
+                if q:
+                    out.append(f"<p class=lede>Pulled in by {html.escape(provisions[x]['citation'])}: "
+                               f"&ldquo;&hellip;{html.escape(q[-120:])}&hellip;&rdquo;</p>")
+            out.append(f"<div class=text>{html.escape(p['text_display'])}</div>")
+            out.append("<div class=signoff>In force / problem noted (circle one). "
+                       "Note:<span></span><br>Reviewer:<span></span> Date:<span></span></div>")
+            continue
         if n not in CLAIMS:
             out.append(f"<h3>{html.escape(p['citation'])} — {html.escape(p['heading'])}</h3>")
             out.append("<p><strong>We assert nothing from this section.</strong> Retrieval pulls "
