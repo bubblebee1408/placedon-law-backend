@@ -104,8 +104,18 @@ class Verdict:
 
 
 def _source_text(provisions: list[dict]) -> str:
+    """
+    What a claim is checked against: statute only, not the editorial apparatus around it.
+
+    `text_statutory` strips the PDF's footnotes — a section spanning a page break swallows the
+    footnotes printed at the foot of that page. Leaving them in widened what counted as sourced:
+    a model writing "6-5-2016" or "2016" against s.8 was ACCEPTED, because those digits sit in
+    "Subs. by Act 23 of 2016 … (w.e.f. 6-5-2016)". That is a citation of an amendment, not a
+    statement of law, and no answer should be able to lean on it.
+    """
     return " ".join(
-        (p.get("text_display") or p.get("text", "")) for p in provisions
+        (p.get("text_statutory") or p.get("text_display") or p.get("text", ""))
+        for p in provisions
     )
 
 

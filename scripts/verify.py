@@ -46,7 +46,7 @@ GENERATED = {".claude/index.json", "corpus/.budget.json"}
 #
 # It has to scale with the mode: --fast skips the per-module suites and tsc, so the expected
 # total is the registry alone. Hard-coding one number broke --fast the moment it was added.
-MIN_REGISTRY_CHECKS = 25
+MIN_REGISTRY_CHECKS = 26
 
 SUITES = [
     "applicability.py", "jurisdiction.py", "backend/budget.py",
@@ -733,6 +733,37 @@ def _corpus_text_unaltered():
         if join_wraps(p["text"]) != p["text_display"]:
             bad.append(f"{cite}: text_display is not derivable from text")
     return (not bad), "; ".join(bad[:4])
+
+
+@check("footnote apparatus is never treated as statutory text",
+       because="A section spanning a page break swallows the footnotes printed at the foot of "
+               "that page. Three provisions carried them inside text_display — the field the "
+               "number-checker compares model output against — so a model writing '6-5-2016' or "
+               "'2016' against s.8 was ACCEPTED, leaning on 'Subs. by Act 23 of 2016 … (w.e.f. "
+               "6-5-2016)'. That is a citation of an amendment, not a statement of law.")
+def _no_apparatus_in_source():
+    sys.path.insert(0, str(ROOT))
+    from checker import verifier                              # noqa: PLC0415
+    prov = {p["section_number"]: p for p in json.loads(POSH.read_text())["provisions"]}
+
+    missing = [p["citation"] for p in prov.values() if not p.get("text_statutory")]
+    if missing:
+        return False, f"text_statutory absent on: {missing[:4]}"
+
+    fn = re.compile(r"\d+\.\s*(?:Subs|Ins|Omitted|Cl)\.\s*by", re.I)
+    dirty = [p["citation"] for p in prov.values() if fn.search(p["text_statutory"])]
+    if dirty:
+        return False, f"apparatus still present in text_statutory: {dirty}"
+
+    # Footnote-only figures must not be citable.
+    for probe in ("6-5-2016", "2016", "23"):
+        if not verifier.check_hallucination(f"The figure is {probe}.", [prov[8]]):
+            return False, f"a model could still cite {probe!r} from s.8's footnote"
+    # Real statutory words must still pass.
+    for n, probe in ((26, "fifty"), (11, "ninety"), (4, "three")):
+        if verifier.check_hallucination(f"The text says {probe}.", [prov[n]]):
+            return False, f"a genuine figure was rejected: {probe!r} in s.{n}"
+    return True, ""
 
 
 @check("no secrets committed",

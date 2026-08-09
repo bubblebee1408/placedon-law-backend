@@ -64,6 +64,33 @@ def sha256(b: bytes) -> str:
     return hashlib.sha256(b).hexdigest()
 
 
+# Footnote apparatus interleaved with the statute by the PDF's page furniture. The Act's
+# footnotes sit at the foot of each page, and a section spanning a page break swallows them.
+#
+# This matters more than tidiness. `text_display` is what the number-checker compares a model's
+# output against, so a footnote inside it WIDENS what counts as sourced: a model writing
+# "6-5-2016" or "2016" against s.8 was accepted, because those digits appear in
+# "Subs. by Act 23 of 2016 ... (w.e.f. 6-5-2016)" — editorial apparatus, not statute.
+APPARATUS = re.compile(
+    r"\s*\d+\.\s*(?:Subs|Ins|Omitted|Cl)\.\s+by\b.*?\(w\.e\.f\.[^)]*\)\s*\.?",
+    re.I | re.S)
+PAGE_NUM = re.compile(r"(?<=\.)\s+\d{1,2}\s+(?=[A-Z])")
+
+
+def strip_apparatus(text: str) -> str:
+    """
+    Statutory text with footnotes and stray page numbers removed.
+
+    Deliberately conservative: it removes only the recognised footnote form — a numbered
+    "Subs./Ins./Omitted by ... (w.e.f. DATE)" — and page numbers stranded between sentences.
+    Anything it does not recognise it leaves alone, because dropping statute is far worse than
+    keeping apparatus. `text` retains everything; nothing is lost.
+    """
+    out = APPARATUS.sub(" ", text)
+    out = PAGE_NUM.sub(" ", out)
+    return " ".join(out.split())
+
+
 def join_wraps(text: str) -> str:
     """Undo PDF line wrapping for display only. Never hashed, never verified against."""
     out = re.sub(r"-\n(?=[a-z])", "", text)          # de-hyphenate across a break
@@ -161,6 +188,8 @@ def parse_body(pages: list[str]) -> list[dict]:
             "text": raw,
             "text_sha256": sha256(raw.encode("utf-8")),
             "text_display": join_wraps(raw),
+            # What a claim is checked against. See strip_apparatus.
+            "text_statutory": strip_apparatus(join_wraps(raw)),
             "page_from": page_of(start),
             "page_to": page_of(end - 1),
             "ordinal": i,
