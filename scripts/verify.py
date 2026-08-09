@@ -46,7 +46,7 @@ GENERATED = {".claude/index.json", "corpus/.budget.json"}
 #
 # It has to scale with the mode: --fast skips the per-module suites and tsc, so the expected
 # total is the registry alone. Hard-coding one number broke --fast the moment it was added.
-MIN_REGISTRY_CHECKS = 26
+MIN_REGISTRY_CHECKS = 28
 
 SUITES = [
     "applicability.py", "jurisdiction.py", "backend/budget.py",
@@ -763,6 +763,62 @@ def _no_apparatus_in_source():
     for n, probe in ((26, "fifty"), (11, "ninety"), (4, "three")):
         if verifier.check_hallucination(f"The text says {probe}.", [prov[n]]):
             return False, f"a genuine figure was rejected: {probe!r} in s.{n}"
+    return True, ""
+
+
+@check("every sub-section reproduces verbatim from its parent",
+       because="Sub-sections are verbatim slices of already-verified text. If one drifts from "
+               "its parent — a re-split against changed text, a hand edit — the pack would show "
+               "a lawyer a clause that is not in the Act, and its hash would still look fine "
+               "because it hashes itself.")
+def _subsections_reproduce():
+    doc = json.loads(POSH.read_text())
+    subs = doc.get("subsections", [])
+    if not subs:
+        return True, ""                       # optional data; absent is not a failure
+    import hashlib                            # noqa: PLC0415
+    parents = {p["section_number"]: " ".join(p["text_statutory"].split())
+               for p in doc["provisions"]}
+    for s in subs:
+        body = parents.get(s["section_number"])
+        if body is None:
+            return False, f"{s['citation']}: parent s.{s['section_number']} is not in the corpus"
+        text = " ".join(s["text_statutory"].split())
+        if text not in body:
+            return False, f"{s['citation']}: does not reproduce from its parent"
+        if hashlib.sha256(s["text_statutory"].encode()).hexdigest() != s["text_sha256"]:
+            return False, f"{s['citation']}: hash does not recompute"
+        if s.get("verified_by") is not None:
+            return False, (f"{s['citation']}: verified_by is set. Splitting a transcription is "
+                           f"not a legal opinion; only a lawyer moves this field.")
+    return True, ""
+
+
+@check("the pack shows clauses where we have them, not whole-section blobs",
+       because="Sub-sections were added to the corpus and NOTHING read them — the pack still "
+               "printed the full 5,570-character s.2. The reduction was real in the data and "
+               "absent from the artifact a lawyer actually receives, which is the only place it "
+               "counts. Dead data is the same mistake as an unwired lattice.")
+def _pack_uses_subsections():
+    pack = ROOT / "corpus/review_pack.html"
+    if not pack.exists():
+        return True, ""                       # generated on demand
+    doc = json.loads(POSH.read_text())
+    subs = doc.get("subsections", [])
+    if not subs:
+        return True, ""
+    body = " ".join(pack.read_text().split())
+    parents = {s["section_number"] for s in subs}
+    for p in doc["provisions"]:
+        if p["section_number"] not in parents:
+            continue
+        blob = " ".join(p["text_display"].split())[:80]
+        if blob in body:
+            return False, (f"{p['citation']}: the pack still prints the whole section although "
+                           f"we hold its clauses")
+    missing = [s["citation"] for s in subs if s["citation"] not in pack.read_text()]
+    if missing:
+        return False, f"clauses held but not shown in the pack: {missing}"
     return True, ""
 
 

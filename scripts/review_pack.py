@@ -190,6 +190,14 @@ def required_sections() -> set[int]:
 def main() -> int:
     data = json.loads(CORPUS.read_text())
     provisions = {p["section_number"]: p for p in data["provisions"]}
+
+    # Clauses we rely on, grouped by parent. Where these exist the pack prints THEM rather than
+    # the whole section — s.2 is 5,570 characters of every definition in the Act, and four
+    # clauses of it are load-bearing. Printing the blob was asking a reviewer to find the
+    # relevant paragraphs themselves, which is work we can do for them.
+    subs_by_section: dict[int, list[dict]] = {}
+    for sub in data.get("subsections", []):
+        subs_by_section.setdefault(sub["section_number"], []).append(sub)
     inst = data["instrument"]
 
     tier1 = sorted(required_sections())
@@ -265,7 +273,15 @@ def main() -> int:
                 if q:
                     out.append(f"<p class=lede>Pulled in by {html.escape(provisions[x]['citation'])}: "
                                f"&ldquo;&hellip;{html.escape(q[-120:])}&hellip;&rdquo;</p>")
-            out.append(f"<div class=text>{html.escape(p['text_display'])}</div>")
+            # Opening words only. Printing 3,600 characters of text while telling the reviewer
+            # to skip it was contradictory, and it was the largest remaining block in the pack.
+            # The full text is in the corpus if they want it; what they need here is enough to
+            # identify the section and decide it is in force.
+            opening = " ".join(p["text_statutory"].split())[:340]
+            out.append(f"<div class=text>{html.escape(opening)}…</div>")
+            out.append(f"<p class=lede>Opening words only — the full section runs "
+                       f"{len(' '.join(p['text_statutory'].split())):,} characters and is in "
+                       f"<code>corpus/provisions/posh_act_2013.json</code> if you want it.</p>")
             out.append("<div class=signoff>In force / problem noted (circle one). "
                        "Note:<span></span><br>Reviewer:<span></span> Date:<span></span></div>")
             continue
@@ -288,8 +304,21 @@ def main() -> int:
         out.append("<p><strong>What we assert from it:</strong></p><ul>")
         out += [f"<li class=claim>{c}</li>" for c in CLAIMS[n]]
         out.append("</ul>")
-        out.append(f"<p><strong>Verbatim text</strong> (page {p['page_from']}–{p['page_to']}):</p>")
-        out.append(f"<div class=text>{html.escape(p['text_display'])}</div>")
+        clauses = subs_by_section.get(n)
+        if clauses:
+            full = len(" ".join(p["text_statutory"].split()))
+            shown = sum(c["char_count"] for c in clauses)
+            out.append(f"<p><strong>Verbatim text — the {len(clauses)} clauses we rely on</strong> "
+                       f"(page {p['page_from']}–{p['page_to']}). The full section runs "
+                       f"{full:,} characters; these are the {shown:,} that carry our claims. "
+                       f"Each is a verbatim slice, confirmed against the India Code PDF.</p>")
+            for c in clauses:
+                out.append(f"<p class=lede><strong>{html.escape(c['citation'])}</strong></p>")
+                out.append(f"<div class=text>{html.escape(c['text_statutory'])}</div>")
+        else:
+            out.append(f"<p><strong>Verbatim text</strong> "
+                       f"(page {p['page_from']}–{p['page_to']}):</p>")
+            out.append(f"<div class=text>{html.escape(p['text_display'])}</div>")
         out.append("<div class=signoff>Reading accepted / corrected (circle one). "
                    "Correction:<span></span><br>Reviewer:<span></span> Date:<span></span></div>")
 
