@@ -46,7 +46,7 @@ GENERATED = {".claude/index.json", "corpus/.budget.json"}
 #
 # It has to scale with the mode: --fast skips the per-module suites and tsc, so the expected
 # total is the registry alone. Hard-coding one number broke --fast the moment it was added.
-MIN_REGISTRY_CHECKS = 29
+MIN_REGISTRY_CHECKS = 30
 
 SUITES = [
     "applicability.py", "jurisdiction.py", "backend/budget.py",
@@ -891,6 +891,108 @@ def _ramp_not_hue_coded():
             return False, (f"{seen[sig]} and {name} are indistinguishable once colour is removed. "
                            f"Two rungs of an ordinal ladder that differ only in hue are one rung.")
         seen[sig] = name
+    return True, ""
+
+
+@check("one button, ranked without colour, and nothing routes around it",
+       because="Six one-off class strings and eight unstyled <button>s had accumulated across "
+               "the frontend: two primaries (bg-indigo-600 in four places, bg-slate-900 in a "
+               "fifth), two radii, three paddings, two disabled opacities, focus rings on some. "
+               "indigo-600 is stock Tailwind and is not in this product's palette — which was "
+               "already defined in tailwind.config.ts and simply unused. Drift like that is not "
+               "caught by review because each individual button looks fine; it is only visible "
+               "when you list them all. The first migrated specimen then reproduced the ramp's "
+               "own bug — a dashed 'Add member' was indistinguishable from a dashed disabled "
+               "commit — so the ranks are checked for collision the same way the lattice is.")
+def _buttons_ranked_without_colour():
+    ui = ROOT / "frontend/components/ui/button.tsx"
+    if not ui.exists():
+        return False, "frontend/components/ui/button.tsx is gone; the ranks live nowhere"
+    src = ui.read_text()
+
+    tsx = [p for p in (ROOT / "frontend").rglob("*.tsx")
+           if "node_modules" not in p.parts and p != ui]
+
+    # Nothing may route around the primitive. A raw <button> is how all six variants got in.
+    raw = [f"{p.relative_to(ROOT)}:{i}"
+           for p in tsx
+           for i, line in enumerate(p.read_text().splitlines(), 1)
+           if "<button" in line]
+    if raw:
+        return False, (f"raw <button> outside the primitive: {raw[:4]}. Use <Button rank=…> so "
+                       f"the ranks stay in one place.")
+
+    # Stock Tailwind palettes are the tell that a call site invented its own paint.
+    STOCK = ("indigo-", "slate-", "gray-", "zinc-", "sky-", "emerald-")
+    # Both docstrings name indigo-600 in order to condemn it, so comments are stripped first —
+    # scanning the raw file made this check fail on its own explanation.
+    body = re.sub(r"/\*.*?\*/|//[^\n]*", "", src, flags=re.S)
+    stock = sorted({c for c in STOCK if c in body})
+    if stock:
+        return False, f"the button primitive uses stock Tailwind colours {stock}, not the palette"
+
+    # The three ranks must read as an order with every colour channel removed.
+    ranks = dict(re.findall(
+        r"\n  (commit|proceed|quiet):\s*\n?(.*?)(?=,\n  (?:commit|proceed|quiet):|,\n\};)",
+        src, re.S))
+    if len(ranks) != 3:
+        return False, f"expected three ranks, parsed {sorted(ranks)}"
+
+    def bare(block: str) -> str:
+        """Resting appearance, colour removed. Interaction variants are not resting state."""
+        out = []
+        for c in " ".join(re.findall(r'"([^"]*)"', block)).split():
+            if ":" in c and not c.startswith("["):
+                continue                          # hover, active, focus-visible, motion-reduce
+            if re.match(r"(bg|text|border|outline|ring|shadow)-(?!\[)[a-z]+(-\d+)?$", c) \
+                    and not re.match(r"(border|text)-(dashed|dotted|solid|double|none|xs|sm|"
+                                     r"base|lg|xl)$", c):
+                continue
+            out.append(c)
+        return " ".join(sorted(set(out)))
+
+    seen = {}
+    for name, block in ranks.items():
+        sig = bare(block)
+        if sig in seen:
+            return False, (f"{seen[sig]} and {name} are indistinguishable once colour is "
+                           f"removed. Two ranks that differ only in hue are one rank.")
+        seen[sig] = name
+
+    # Dashed is the reserved mark for "unavailable". Comparing the OFF block against a rank
+    # directly does not work — what renders is BASE + rank + OFF, so OFF's dashed border and a
+    # rank's solid one never collide as strings even though they collide on screen. Reserving
+    # the mark is the property that actually holds, and it is the one that was violated: a
+    # dashed `proceed` on the add-a-row button was unreadable against a disabled commit.
+    off = re.search(r"const OFF =\s*(.*?);\n", src, re.S)
+    if not off:
+        return False, "no OFF (disabled) block; the disabled state has no defined appearance"
+    if "border-dashed" not in off.group(1):
+        return False, "the disabled state no longer carries the dashed border it reserves"
+    for name, block in ranks.items():
+        if "border-dashed" in block:
+            return False, (f"rank {name!r} uses border-dashed, which is reserved for disabled. "
+                           f"An available control that looks unavailable is worse than an "
+                           f"ugly one.")
+
+    # And call sites must not repaint. This is how the dashed collision was introduced, so the
+    # rank table alone could never have caught it. The tag is NOT matched with [^>]* — a
+    # `() => …` handler contains a `>` and truncates the attribute list; the region from a tag
+    # open to the next `<` is used instead, which is where attributes live.
+    PAINT = re.compile(r"border-(dashed|dotted|double)|\b(bg|text)-[a-z]+-\d")
+    for f in tsx:
+        text = f.read_text()
+        for m in re.finditer(r"<([A-Za-z][\w.]*)", text):
+            if m.group(1) != "Button":
+                continue
+            attrs = text[m.end(): text.find("<", m.end()) if text.find("<", m.end()) > 0
+                         else len(text)]
+            for cn in re.findall(r'className=(?:"([^"]*)"|\{`([^`]*)`\})', attrs):
+                val = cn[0] or cn[1]
+                if PAINT.search(val):
+                    return False, (f"{f.relative_to(ROOT)} repaints a Button via className="
+                                   f"{val!r}. Layout there is fine; border style and colour "
+                                   f"belong to the rank, or the rank means nothing.")
     return True, ""
 
 
