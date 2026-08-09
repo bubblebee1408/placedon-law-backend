@@ -40,8 +40,19 @@ app = FastAPI(title="placedon — PoSH checker", docs_url=None, redoc_url=None,
 # The Next.js frontend calls /api/diagnose. Same origin in production; localhost for dev.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "https://placedon-hr.vercel.app"],
-    allow_methods=["GET", "POST"], allow_headers=["*"],
+    # The frontend is a SEPARATE Vercel project, so every browser call to this API is
+    # cross-origin and an omitted origin is a silent, total failure of the paid features.
+    # It failed exactly that way once: the /generate grid loaded fine — it is a server
+    # component, so its fetch never leaves the server and CORS does not apply — while every
+    # document POST from the same page was blocked. A page that half-works is harder to
+    # diagnose than one that does not load.
+    #
+    # Preview deployments get their own hostname per build, so the regex covers them; the
+    # explicit list stays for the stable aliases.
+    allow_origins=["http://localhost:3000", "https://placedon-hr.vercel.app",
+                   "https://placedon-hr-app.vercel.app"],
+    allow_origin_regex=r"https://placedon-hr-app-[a-z0-9]+-placeon\.vercel\.app",
+    allow_methods=["GET", "POST", "OPTIONS"], allow_headers=["*"],
     # Without this the browser RECEIVES both headers and then refuses to let JS read them —
     # a same-origin deploy works, cross-origin dev silently reports zero blocking issues, and
     # the unlawful-committee warning never fires. Response headers are opt-in across origins.

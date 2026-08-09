@@ -148,6 +148,13 @@ def _cors_expose():
                        if h not in exposed]
             if missing:
                 return False, f"CORSMiddleware does not expose: {missing}"
+            # The frontend is a separate project; an omitted origin silently kills every
+            # document POST while the server-rendered grid keeps loading.
+            origins = set(mw.kwargs.get("allow_origins") or [])
+            for required in ("http://localhost:3000",
+                             "https://placedon-hr-app.vercel.app"):
+                if required not in origins:
+                    return False, f"allow_origins is missing the frontend origin {required}"
             allowed = {m.upper() for m in (mw.kwargs.get("allow_methods") or [])}
             if not {"GET", "POST"} <= allowed and "*" not in allowed:
                 return False, f"allow_methods missing GET/POST: {sorted(allowed)}"
