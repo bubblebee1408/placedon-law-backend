@@ -47,13 +47,34 @@ def _corpus() -> list[dict]:
 
 
 def keyword_route(question: str) -> tuple[int, ...] | None:
-    """Stage 1. Free, sub-millisecond, and it resolves most real questions."""
-    q = question.lower()
-    hits: set[int] = set()
+    """
+    Stage 1. Free, sub-millisecond, and it resolves most real questions.
+
+    Ordered by **specificity, not section number**. This mattered more than it looks.
+
+    "Does the committee have to file an annual report?" matches two keys: 'committee' -> (4, 6, 7)
+    and 'annual report' -> (21, 22). The union sorted numerically is (4, 6, 7, 21, 22), and
+    top_k=3 then hands back 4, 6, 7 — the generic key crowds out the specific one purely because
+    4 < 21. s.21 was in the route and got truncated off the end of it.
+
+    That is the annual-report section: the one the entire notified-date register turns on. Found
+    by scripts/bench_retrieval.py, which is the only reason it was found at all — the section was
+    present in the route, so nothing looked wrong.
+
+    Specificity = length of the matched phrase divided by how many sections it points at. A long
+    phrase naming few sections is a precise signal; a short phrase naming many is background.
+    """
+    q = " ".join(question.lower().split())
+    weight: dict[int, float] = {}
     for phrase, sections in KEYWORD_MAP.items():
         if phrase in q:
-            hits.update(sections)
-    return tuple(sorted(hits)) or None
+            w = len(phrase) / len(sections)
+            for s in sections:
+                weight[s] = max(weight.get(s, 0.0), w)
+    if not weight:
+        return None
+    # Section number only breaks ties, so equally-specific routes stay in statute order.
+    return tuple(sorted(weight, key=lambda s: (-weight[s], s)))
 
 
 def _score(question: str, provision: dict) -> int:
