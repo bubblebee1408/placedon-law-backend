@@ -51,13 +51,13 @@ GENERATED = {".claude/index.json", "corpus/.budget.json"}
 #
 # It has to scale with the mode: --fast skips the per-module suites and tsc, so the expected
 # total is the registry alone. Hard-coding one number broke --fast the moment it was added.
-MIN_REGISTRY_CHECKS = 35
+MIN_REGISTRY_CHECKS = 36
 
 SUITES = [
     "applicability.py", "jurisdiction.py", "backend/budget.py",
     "checker/ic_order.py", "checker/verifier.py", "checker/test_unlock.py",
     "checker/board_report.py", "checker/documents.py",
-    "checker/provision_graph.py", "checker/epistemic_status.py", "checker/ask_engine.py", "checker/register.py", "checker/path_validity.py",
+    "checker/provision_graph.py", "checker/epistemic_status.py", "checker/ask_engine.py", "checker/register.py", "checker/path_validity.py", "checker/distress.py",
 ]
 
 results: list[tuple[bool, str, str]] = []
@@ -1212,6 +1212,52 @@ def _no_dead_modules():
     if dead:
         return False, (f"no caller imports: {dead}. Tests on unreachable code report a "
                        f"capability the product does not have. Wire it in or delete it.")
+    return True, ""
+
+
+@check("a person describing harm is routed to a human, free, before anything else runs",
+       because="This product is a compliance tool for employers, but the Act it implements is "
+               "about harassment, and 'do I need an IC?' and 'what if they sack me for "
+               "complaining?' are the same search box. When the person asking is the person it "
+               "happened to, a better citation is the wrong output. The research on survivor-"
+               "facing systems is consistent — every credible deployment escalates to a human "
+               "early, because a chatbot is indifferent to its output and a person in crisis is "
+               "not. Three invariants, and each would be easy to break by accident: the route "
+               "must run BEFORE retrieval and the gate (so it works while verified_by is null), "
+               "it must cost nothing (a paywall in front of someone asking whether she can be "
+               "sacked for complaining is the worst thing this product could do), and it must "
+               "not divert the employer questions that are the actual customers.")
+def _distress_routes_free_and_first():
+    sys.path.insert(0, str(ROOT))
+    from checker import distress                              # noqa: PLC0415
+    from checker.ask_engine import AskEngine                  # noqa: PLC0415
+
+    engine = AskEngine()
+    ctx = {"state": "IN-KA", "employees": 40, "districts": ["IN-KA-BLR"]}
+
+    for q in distress.DISTRESS:
+        a = engine.ask(q, ctx)
+        if a.route != "referral":
+            return False, f"not routed: {q!r} -> route={a.route!r}"
+        if a.cost_inr != 0.0:
+            return False, f"PRICED a distress query: {q!r} cost={a.cost_inr}"
+        if not any(c.get("kind") == "portal" for c in a.sources):
+            return False, f"referral without SHe-Box: {q!r}"
+        if "not a person" not in a.reason:
+            return False, f"referral does not say it is not a person: {q!r}"
+
+    for q in distress.ROUTINE:
+        a = engine.ask(q, ctx)
+        if a.route == "referral":
+            return False, (f"diverted an employer question: {q!r}. These are the customers; "
+                           f"over-routing them breaks the product.")
+
+    # It must not depend on verification — it has to work today.
+    if any(p.get("verified_by") for p in json.loads(POSH.read_text())["provisions"]):
+        return True, ""                      # corpus verified; the ordering claim is moot
+    a = engine.ask(distress.DISTRESS[0], ctx)
+    if a.route != "referral":
+        return False, "the route does not fire while the corpus is unverified"
     return True, ""
 
 

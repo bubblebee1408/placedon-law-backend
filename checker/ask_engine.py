@@ -47,7 +47,7 @@ from typing import Any, Callable
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from checker import retrieval, verifier                      # noqa: E402
-from checker import register  # noqa: E402
+from checker import distress, register  # noqa: E402
 from checker.path_validity import PathTracer  # noqa: E402
 from checker.epistemic_status import EpistemicState, Status  # noqa: E402
 
@@ -141,6 +141,25 @@ class AskEngine:
 
         if not question or len(question.strip()) < 8:
             return Answer(reason="That question was too short for us to work with.", route="none")
+
+        # BEFORE routing, retrieval, the epistemic gate and any model call.
+        #
+        # If the person asking is the person it happened to, a better citation is the wrong
+        # output. This hands over to s.6, her District Officer by name, and SHe-Box — and it
+        # runs while verified_by is null, so it works today when everything else abstains.
+        # Nothing in it is generated: every sentence is statutory text or a directory entry.
+        ref = distress.route(question, (context.get("districts") or [None])[0])
+        if ref.triggered:
+            sources = [{"section": ref.statutory_route["citation"],
+                        "heading": "Constitution and jurisdiction of Local Committee",
+                        "text": ref.statutory_route["quote"], "verified_by": None}] \
+                if ref.statutory_route else []
+            return Answer(
+                abstained=True, route="referral", status=Status.QUOTED.name,
+                reason=ref.message, sources=[*sources, *ref.contacts], cost_inr=0.0,
+                epistemic_chain=[{"ground": "routed to a human, not answered",
+                                  "status": "REFERRAL", "source": ref.matched}],
+            )
 
         # 1. Route. A deduction must not reach a model.
         if is_applicability_question(question):
