@@ -54,6 +54,21 @@ OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3")
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434")
 
 
+class UnverifiedProvisionError(RuntimeError):
+    """
+    Raised when asked to explain a provision no lawyer has verified.
+
+    The abstention gate lived in `ask_engine` alone — one `if` in one caller. That is a
+    convention, not a property: a second caller (the RAG pipeline every planning document
+    proposes) would reach this function directly and explain unverified law to a user, fluently
+    and with a real citation, while the documentation went on describing the system as
+    abstaining.
+
+    So the module that spends the money and produces the prose refuses on its own account. The
+    gate in `ask_engine` stays — two independent guards, and the failure of either is survivable.
+    """
+
+
 class BudgetExceededError(RuntimeError):
     """Raised before a call that would breach the cap. Callers degrade; they do not retry."""
 
@@ -141,8 +156,19 @@ def explain_provisions(question: str, provisions: list[dict], company: dict,
     """
     Explain a pre-verified evidence packet. Never asked to decide applicability.
 
+    Raises UnverifiedProvisionError if ANY provision lacks `verified_by` — checked before the
+    budget, because an answer we must not give is not made acceptable by being affordable.
+
     Raises BudgetExceededError *before* spending if the cap would be breached.
     """
+    unverified = [p.get("citation") or f"s.{p.get('section_number')}"
+                  for p in provisions if not p.get("verified_by")]
+    if unverified:
+        raise UnverifiedProvisionError(
+            f"refusing to explain {unverified}: no lawyer has verified our reading. "
+            f"`verified_by` is the gate, and it is not this module's to open."
+        )
+
     tracker = tracker or BudgetTracker()
 
     context = _build_context(provisions)

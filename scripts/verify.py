@@ -51,7 +51,7 @@ GENERATED = {".claude/index.json", "corpus/.budget.json"}
 #
 # It has to scale with the mode: --fast skips the per-module suites and tsc, so the expected
 # total is the registry alone. Hard-coding one number broke --fast the moment it was added.
-MIN_REGISTRY_CHECKS = 32
+MIN_REGISTRY_CHECKS = 33
 
 SUITES = [
     "applicability.py", "jurisdiction.py", "backend/budget.py",
@@ -1095,6 +1095,38 @@ def _retrieval_recall():
         return False, (f"recall@3 is {rate:.2f}, below the {FLOOR} floor. {miss} of {n} failed: "
                        f"{failed[:3]}")
     return True, ""
+
+
+@check("the paid explanation path refuses unverified provisions itself",
+       because="The LLM path is 'dark until a lawyer verifies' — but that was held by a single "
+               "`if not claim.status.answerable` in ask_engine, and nothing inside "
+               "explain_provisions(). Any second caller bypasses it: the RAG pipeline every "
+               "planning document proposes would call the client directly and explain unverified "
+               "law to a user, fluently, with a real citation, while every planning document "
+               "described the system as abstaining. A safety property that lives in one caller "
+               "is a convention. Defence in depth means the module that spends money and "
+               "produces prose refuses on its own account.")
+def _llm_refuses_unverified():
+    sys.path.insert(0, str(ROOT))
+    from backend.services import llm                           # noqa: PLC0415
+
+    unverified = [{"section_number": 4, "citation": "s.4", "heading": "IC",
+                   "text_display": "Every employer shall constitute a Committee.",
+                   "verified_by": None}]
+    try:
+        # tracker is keyword-only. Passing it positionally raised TypeError with AND without
+        # the guard, so the check reported "caught" either way — asserting nothing.
+        res = llm.explain_provisions("Do I need an IC?", unverified, {"name": "X"},
+                                     tracker=None)
+    except llm.UnverifiedProvisionError:
+        return True, ""
+    except Exception as exc:                                   # noqa: BLE001
+        return False, (f"raised {type(exc).__name__} rather than refusing explicitly — an "
+                       f"incidental failure is not a guarantee")
+    if getattr(res, "degraded", False):
+        return True, ""
+    return False, ("explain_provisions() accepted a provision with verified_by=None. The dark "
+                   "path is dark only by convention, and the next caller will not know.")
 
 
 @check("no secrets committed",
