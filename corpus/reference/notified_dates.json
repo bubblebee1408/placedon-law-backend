@@ -69,8 +69,8 @@
       "district": "Bengaluru Urban",
       "officer": "Shri. JAGADEESHA G, IAS",
       "email": "dcurban@kar.nic.in",
-      "status": "ASKED",
-      "asked_on": "2026-08-12",
+      "status": "UNASKED",
+      "asked_on": null,
       "replied_on": null,
       "notified_date": null,
       "reply_verbatim": null

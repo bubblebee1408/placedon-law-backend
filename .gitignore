@@ -18,3 +18,6 @@ corpus/sample_board_report.html
 frontend/.env.local
 node_modules/
 venv/
+
+# Rendered letters. Regenerate with scripts/draft_letters.py; do not track output.
+outbox/
