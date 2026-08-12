@@ -156,7 +156,11 @@ class AskEngine:
                 if ref.statutory_route else []
             return Answer(
                 abstained=True, route="referral", status=Status.QUOTED.name,
-                reason=ref.message, sources=[*sources, *ref.contacts], cost_inr=0.0,
+                # Contacts first, statute second. The module orders its own contacts so a human
+                # comes before a form; that ordering was being silently undone here by putting
+                # the s.6 quote at the top. For a compliance answer the citation leads. For a
+                # referral the citation is the justification, and the phone number is the answer.
+                reason=ref.message, sources=[*ref.contacts, *sources], cost_inr=0.0,
                 epistemic_chain=[{"ground": "routed to a human, not answered",
                                   "status": "REFERRAL", "source": ref.matched}],
             )

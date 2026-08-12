@@ -36,13 +36,20 @@ MONTHLY_CAP_INR = 3_500.0
 DAILY_CAP_INR = round(MONTHLY_CAP_INR / 30, 2)      # ₹116.67 — derived, not asserted
 USD_INR = 95.23                                      # 2026-08-06
 
-# Anthropic pricing, USD per million tokens.
+# Anthropic pricing, USD per million tokens. LIST price, deliberately — see below.
 PRICING: dict[str, tuple[float, float]] = {
     "claude-haiku-4-5": (1.00, 5.00),
     "claude-sonnet-5":  (3.00, 15.00),
     "claude-opus-5":    (5.00, 25.00),
 }
-DEFAULT_MODEL = "claude-haiku-4-5"
+
+# Sonnet 5 carries introductory pricing of $2.00/$10.00 through 2026-08-31 — today it actually
+# costs ₹1.94/answer, not the ₹2.91 this table computes. The list price is kept anyway, on the
+# rule that **a budget guard must only ever be wrong in the expensive direction**. Encoding the
+# discount would make every estimate too low, and on 2026-09-01 the cap would silently start
+# admitting calls it should refuse. Over-estimating costs us headroom; under-estimating costs us
+# the guarantee. So the ₹1.94 is a discount we receive without spending against it.
+DEFAULT_MODEL = "claude-sonnet-5"
 
 Mode = Literal["normal", "budget", "offline"]
 

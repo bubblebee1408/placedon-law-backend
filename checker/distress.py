@@ -65,6 +65,22 @@ if str(ROOT) not in sys.path:
 
 SHEBOX = "https://shebox.wcd.gov.in"
 
+# The National Commission for Women's 24x7 helpline. Added 2026-08-12 from the Sonnet Era plan,
+# which supplied the number — and it is the one claim in that plan that survived checking, which
+# is worth recording, because it is also the claim that most needed checking.
+#
+# An unverified helpline is a worse failure than an unverified citation. A wrong citation is read
+# by an employer who may notice. A wrong number is DIALLED, by someone in distress, at the moment
+# she has decided to ask for help, and it rings out. Nothing downstream catches that.
+#
+# So it was checked against the Ministry of External Affairs' listing and the NCW contact page
+# before it was written down, and the source is recorded so the next person can re-check it
+# rather than trust it:
+#   https://www.mea.gov.in/helplineforwomenindistress  |  https://www.ncw.gov.in/contact-us/
+# NCW, operational since 2021-07-24; links callers to police, hospitals, DLSAs and counselling.
+NCW_HELPLINE = "7827170170"
+NCW_SOURCE = "https://www.mea.gov.in/helplineforwomenindistress"
+
 # First-person harm, retaliation fear, and distress. Written broad on purpose — see the recall
 # rule above. Third-person and hypothetical phrasings ("if an employee complains…") are the
 # employer's question and belong on the normal path, so the patterns require a first-person
@@ -142,6 +158,13 @@ def route(question: str, district: str | None = None) -> Referral:
         return Referral(triggered=False)
 
     contacts: list[dict] = [{
+        "kind": "helpline",
+        "name": "National Commission for Women helpline (24x7)",
+        "detail": NCW_HELPLINE,
+        "note": ("A person, on the phone, at any hour. Listed first deliberately: a portal and an "
+                 "email are things you use after deciding what to do, and this is for before."),
+        "source": NCW_SOURCE,
+    }, {
         "kind": "portal",
         "name": "SHe-Box, Ministry of Women & Child Development",
         "detail": SHEBOX,
@@ -229,6 +252,17 @@ def _suite() -> int:
     r = route("My manager touched me, what do I do?", "IN-KA-BLR")
     check("a referral is never priced", r.priced, False)
     check("it names SHe-Box", any(c["kind"] == "portal" for c in r.contacts), True)
+
+    # The helpline, and the reason it comes first. The Sonnet Era plan proposes a freemium gate:
+    # "3 free analyses, then upgrade". A quota that can count this route is a paywall in front of
+    # a woman asking whether she can be sacked for complaining. The rule is asserted on the route
+    # itself so it holds regardless of what a later billing layer believes.
+    helpline = next((c for c in r.contacts if c["kind"] == "helpline"), None)
+    check("it offers a human voice, not only a form", helpline is not None, True)
+    check("the helpline is the NCW number", (helpline or {}).get("detail"), NCW_HELPLINE)
+    check("the helpline carries its source",
+          "mea.gov.in" in (helpline or {}).get("source", ""), True)
+    check("a person comes before a portal", r.contacts[0]["kind"], "helpline")
     check("it names the District Officer when we hold one",
           any(c["kind"] == "district_officer" for c in r.contacts), True)
     check("the officer has a real email",

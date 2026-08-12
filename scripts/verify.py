@@ -1246,6 +1246,19 @@ def _distress_routes_free_and_first():
         if "not a person" not in a.reason:
             return False, f"referral does not say it is not a person: {q!r}"
 
+        # Every contact must be dialable/reachable AND carry provenance we can re-check. A
+        # helpline number is the one output in this product that gets ACTED ON immediately and
+        # has no verifier downstream of it — if it is wrong it rings out at the worst moment.
+        line = next((c for c in a.sources if c.get("kind") == "helpline"), None)
+        if line is None:
+            return False, f"referral offers no human voice, only forms: {q!r}"
+        if not line.get("source", "").startswith("http"):
+            return False, (f"helpline {line.get('detail')!r} has no source to re-check. An "
+                           f"unsourced phone number is a fabricated citation someone dials.")
+        if a.sources[0].get("kind") != "helpline":
+            return False, (f"a portal or an email is listed before a person, for {q!r}. Ordering "
+                           f"is the design here: forms are for after you have decided.")
+
     for q in distress.ROUTINE:
         a = engine.ask(q, ctx)
         if a.route == "referral":
