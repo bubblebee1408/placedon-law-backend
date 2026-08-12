@@ -51,7 +51,7 @@ GENERATED = {".claude/index.json", "corpus/.budget.json"}
 #
 # It has to scale with the mode: --fast skips the per-module suites and tsc, so the expected
 # total is the registry alone. Hard-coding one number broke --fast the moment it was added.
-MIN_REGISTRY_CHECKS = 34
+MIN_REGISTRY_CHECKS = 35
 
 SUITES = [
     "applicability.py", "jurisdiction.py", "backend/budget.py",
@@ -1160,6 +1160,58 @@ def _safety_catches_known_fabrications():
     if caught < FLOOR:
         return False, (f"catches {caught}/{len(fabs)} known fabrications, below the {FLOOR} "
                        f"floor. Missed: {missed}")
+    return True, ""
+
+
+@check("no module in checker/ is dead — every one has a caller",
+       because="I built checker/path_validity.py with 15 passing tests and imported it from "
+               "nothing. Green suite, real coverage, zero effect on any answer a user sees. This "
+               "repository has caught the same shape before — sub-sections were added to the "
+               "corpus and nothing read them, so the lawyer pack still printed the full 5,570 "
+               "character s.2 while the commit message claimed a 28% reduction. Passing tests on "
+               "unreachable code are worse than no tests, because the suite reports capability "
+               "the product does not have.")
+def _no_dead_modules():
+    import ast                                                # noqa: PLC0415
+
+    pkg = ROOT / "checker"
+    # test_* modules are harnesses: verify.py runs them as subprocesses via SUITES, so being
+    # imported by nothing is their correct state. Libraries are different — a library nothing
+    # calls is a claim the product cannot cash.
+    modules = {f.stem for f in pkg.glob("*.py")
+               if f.stem not in {"__init__", "templates"} and not f.stem.startswith("test_")}
+    # Where a caller could live: anywhere but the module itself and the verifier.
+    sources = [f for f in [*ROOT.glob("*.py"), *pkg.glob("*.py"),
+                           *(ROOT / "backend").rglob("*.py"), *(ROOT / "api").rglob("*.py")]
+               if f.name != "verify.py"]
+
+    imported: set[str] = set()
+    for f in sources:
+        try:
+            tree = ast.parse(f.read_text(encoding="utf-8"))
+        except SyntaxError:
+            continue
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom):
+                # `from checker import x, y` and `from . import x, y`
+                if (node.module or "").endswith("checker") or node.level:
+                    for a in node.names:
+                        if a.name in modules and f.stem != a.name:
+                            imported.add(a.name)
+                # `from checker.x import ...` / `from .x import ...`
+                tail = (node.module or "").split(".")[-1]
+                if tail in modules and f.stem != tail:
+                    imported.add(tail)
+            elif isinstance(node, ast.Import):
+                for a in node.names:
+                    tail = a.name.split(".")[-1]
+                    if tail in modules and f.stem != tail:
+                        imported.add(tail)
+
+    dead = sorted(modules - imported)
+    if dead:
+        return False, (f"no caller imports: {dead}. Tests on unreachable code report a "
+                       f"capability the product does not have. Wire it in or delete it.")
     return True, ""
 
 

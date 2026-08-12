@@ -48,6 +48,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from checker import retrieval, verifier                      # noqa: E402
 from checker import register  # noqa: E402
+from checker.path_validity import PathTracer  # noqa: E402
 from checker.epistemic_status import EpistemicState, Status  # noqa: E402
 
 # Questions that are deductions, not requests for exposition. These must never reach a model:
@@ -108,6 +109,7 @@ class AskEngine:
         self._top_k = top_k
         self._generate = generate
         self._state = EpistemicState(provisions)
+        self._tracer = PathTracer(provisions)
 
     # ── the pipeline ─────────────────────────────────────────────────────
 
@@ -168,6 +170,21 @@ class AskEngine:
                     "heading": p.get("heading", ""),
                     "text": " ".join((p.get("text_display") or "").split())[:600],
                     "verified_by": p.get("verified_by")} for p in provisions]
+
+        # Two tests the lattice cannot perform, both from Falkor-IRAC (arXiv 2605.14665).
+        #
+        # The lattice composes weakest-link across a SET of grounds — it asks whether each one is
+        # verified. It cannot ask whether the retrieved sections actually REACH the provision the
+        # claim rests on, and it cannot notice two of them contradicting each other, because
+        # weakest-link is monotone and a contradiction just resolves to the weaker.
+        #
+        # A conflict is reported even when the answer would otherwise be given. s.9 grants three
+        # months to complain and its proviso extends that to six; an answer quoting one without
+        # the other is wrong in the direction that costs a complainant her remedy.
+        found = self._tracer.conflicts(sections)
+        if found:
+            chain = [*chain, *({"ground": c.detail, "status": "CONFLICT",
+                                "source": f"s.{c.sections[0]}"} for c in found)]
 
         if not claim.status.answerable:
             weakest = claim.weakest
