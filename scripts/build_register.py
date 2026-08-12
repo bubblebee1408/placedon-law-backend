@@ -172,7 +172,8 @@ def report(doc: dict) -> None:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--mark-asked", metavar="CODE", help="record that we wrote to this district")
+    ap.add_argument("--mark-asked", metavar="CODE", nargs="+",
+                    help="record that we wrote to these districts")
     ap.add_argument("--record", metavar="CODE", help="record a reply from this district")
     ap.add_argument("--date", help="the notified date, verbatim as the officer wrote it")
     ap.add_argument("--none-notified", action="store_true",
@@ -184,10 +185,15 @@ def main() -> int:
     doc = _load()
 
     if args.mark_asked:
-        r = _row(doc, args.mark_asked)
-        r["status"], r["asked_on"] = "ASKED", args.on
+        # Resolve every code before writing any of them. A half-applied batch would leave the
+        # register claiming we wrote to districts we did not, which is the one thing it must
+        # never do — and a typo in the sixth code should not silently commit the first five.
+        rows_ = [_row(doc, c) for c in args.mark_asked]
+        for r in rows_:
+            r["status"], r["asked_on"] = "ASKED", args.on
         _save(doc)
-        print(f"  {r['district']}: asked on {args.on}")
+        for r in rows_:
+            print(f"  {r['district']}: asked on {args.on}")
         return 0
 
     if args.record:

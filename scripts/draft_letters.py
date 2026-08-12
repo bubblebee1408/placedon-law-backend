@@ -110,9 +110,25 @@ def main() -> int:
     ap.add_argument("--write", action="store_true", help="write .eml files to outbox/")
     ap.add_argument("--print", dest="show", action="store_true", help="print the letter")
     ap.add_argument("--only", metavar="CODE", help="one district only")
+    ap.add_argument("--batch", type=int, metavar="N", default=None,
+                    help="the Nth batch of --size unasked districts (1-based)")
+    ap.add_argument("--size", type=int, default=6, help="districts per batch (default 6)")
     args = ap.parse_args()
 
     rs = rows(args.only)
+
+    # Batching exists for one reason: 29 of the 30 remaining addresses are @gmail.com, and 29
+    # near-identical mails from one Gmail account in a single burst is a spam-filter shape. Six
+    # a day over a working week keeps the pattern human and gets more of them read. Batches are
+    # cut from the UNASKED rows in district order, so re-running after marking a batch asked
+    # yields the next six rather than the same six.
+    if args.batch is not None:
+        unasked = [r for r in rs if r["status"] == "UNASKED"]
+        lo = (args.batch - 1) * args.size
+        rs = unasked[lo: lo + args.size]
+        if not rs:
+            raise SystemExit(f"REFUSED: batch {args.batch} is empty — "
+                             f"{len(unasked)} district(s) still unasked.")
 
     if args.show:
         for r in rs:
@@ -138,9 +154,17 @@ def main() -> int:
     print(f"  {len(rs)} districts with an email address on file:\n")
     for r in rs:
         print(f"    {r['jurisdiction']:<12} {r['district']:<22} {r['email']:<32} {r['status']}")
-    missing = len(json.loads(REGISTER.read_text())["districts"]) - len(rs)
-    if missing and not args.only:
+    # Counted against the whole register, not against `rs` — `rs` may be a batch or a single
+    # district, and subtracting a filtered view from the total reported "25 have no email on
+    # file" for a register in which every district has one.
+    all_rows = json.loads(REGISTER.read_text())["districts"]
+    missing = sum(1 for r in all_rows if not r.get("email"))
+    if missing:
         print(f"\n  {missing} district(s) have no email on file and cannot be written to.")
+    unasked = sum(1 for r in all_rows if r["status"] == "UNASKED")
+    if args.batch is not None:
+        print(f"\n  Batch {args.batch} of {-(-unasked // args.size)} remaining "
+              f"({unasked} district(s) still unasked).")
     print("\n  --write to render them. Nothing is sent by this script.")
     return 0
 
