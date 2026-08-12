@@ -37,6 +37,7 @@ Run: python3 checker/ask_engine.py
 """
 from __future__ import annotations
 
+import logging
 import re
 import sys
 from dataclasses import dataclass, field
@@ -46,6 +47,7 @@ from typing import Any, Callable
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from checker import retrieval, verifier                      # noqa: E402
+from checker import register  # noqa: E402
 from checker.epistemic_status import EpistemicState, Status  # noqa: E402
 
 # Questions that are deductions, not requests for exposition. These must never reach a model:
@@ -109,6 +111,29 @@ class AskEngine:
 
     # ── the pipeline ─────────────────────────────────────────────────────
 
+    # Questions the register can speak to. Deliberately narrow: the register knows one thing,
+    # and applying it to a question it does not govern would be its own kind of fabrication.
+    _RETURN_Q = re.compile(r"annual (?:return|report)|file the (?:return|report)|"
+                           r"filing deadline|when is .*(?:return|report) due", re.I)
+
+    def _register_note(self, question: str, context: dict) -> tuple[str, dict | None]:
+        """District-specific provenance for the annual-return question, or nothing at all."""
+        if not self._RETURN_Q.search(question):
+            return "", None
+        districts = context.get("districts") or []
+        if not districts:
+            return ("No date is prescribed in the PoSH Rules — the District Officer sets it for "
+                    "each district. Tell us your district and we will tell you what yours has "
+                    "said, or that we are still waiting."), None
+        try:
+            sentence, source = register.describe(districts[0])
+        except (register.UnknownDistrict, ValueError):
+            # Loud in the log, silent to the user: a district we do not hold is not a licence to
+            # invent one, and it is not the user's problem to solve.
+            logging.warning("register.describe failed for %r", districts[0], exc_info=True)
+            return "", None
+        return sentence, ({"kind": "district_officer_reply", **source} if source else None)
+
     def ask(self, question: str, context: dict | None = None) -> Answer:
         context = context or {}
 
@@ -146,11 +171,21 @@ class AskEngine:
 
         if not claim.status.answerable:
             weakest = claim.weakest
+            reason = (f"We will not answer this yet. {weakest.reason}."
+                      if weakest else "We will not answer this yet.")
+            # An abstention that shows its work beats one that does not. For the annual-return
+            # question specifically, the reason we cannot answer is not our own ignorance — it is
+            # that no date is prescribed nationally and the District Officer sets it. Saying that,
+            # and saying whether we have asked, is more useful than a bare status and is the one
+            # thing no competitor can currently say.
+            note, source = self._register_note(question, context)
+            if note:
+                reason = f"{reason} {note}"
+                if source:
+                    sources = [*sources, source]
             return Answer(
                 abstained=True, route="corpus", status=claim.status.name,
-                sources=sources, epistemic_chain=chain,
-                reason=(f"We will not answer this yet. {weakest.reason}."
-                        if weakest else "We will not answer this yet."),
+                sources=sources, epistemic_chain=chain, reason=reason,
             )
 
         # 4. Generate. Only reachable once the chain is verified.
