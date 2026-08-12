@@ -312,6 +312,17 @@ def _suite() -> int:
     check("and names both sections",
           next(c.sections for c in c2 if c.kind == "numeric_tension"), (100, 101))
 
+    # ---- the wiring TASK 1 asks for: an abstention that names the route to its blocker
+    from checker.ask_engine import AskEngine                   # noqa: PLC0415
+
+    a = AskEngine().ask("What is the penalty for not complying?",
+                        {"state": "IN-KA", "employees": 40})
+    paths = [c for c in a.epistemic_chain if c.get("status") == "PATH"]
+    check("an abstention carries the path to what blocks it", bool(paths), True)
+    if paths:
+        check("and the path quotes the statute's own linking words",
+              any("section 4" in (p.get("ground") or "").lower() for p in paths), True)
+
     print(f"\n  {_pass} passed, {_fail} failed")
     return 1 if _fail else 0
 

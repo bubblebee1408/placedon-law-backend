@@ -186,6 +186,24 @@ class AskEngine:
             chain = [*chain, *({"ground": c.detail, "status": "CONFLICT",
                                 "source": f"s.{c.sections[0]}"} for c in found)]
 
+        # An abstention that names its blocker is better than one that names a status; an
+        # abstention that shows the ROUTE to its blocker is better still, because the reader can
+        # check it. "We cannot state the penalty" is an assertion. "We cannot state the penalty
+        # because s.26(1)(a) attaches it to failing the s.4 duty, and nobody has verified s.4" is
+        # a chain of authority, which is how a lawyer would have to justify the same refusal.
+        for blocker in self._state.graph.blocked_by(sections[0]) if hasattr(
+                self._state, "graph") else self._tracer.graph.blocked_by(sections[0]):
+            if blocker in sections:
+                continue                          # retrieved already; the chain covers it
+            path = self._tracer.trace(sections, blocker)
+            if path.reached and path.hops:
+                hop = path.hops[-1]
+                quote = " ".join((hop.evidence or "").split())[:150]
+                chain = [*chain, {
+                    "ground": (f"rests on s.{blocker}, reached from s.{hop.frm} via the Act's own "
+                               f"words: “{quote}”"),
+                    "status": "PATH", "source": f"s.{blocker}"}]
+
         if not claim.status.answerable:
             weakest = claim.weakest
             reason = (f"We will not answer this yet. {weakest.reason}."
