@@ -51,7 +51,7 @@ GENERATED = {".claude/index.json", "corpus/.budget.json"}
 #
 # It has to scale with the mode: --fast skips the per-module suites and tsc, so the expected
 # total is the registry alone. Hard-coding one number broke --fast the moment it was added.
-MIN_REGISTRY_CHECKS = 33
+MIN_REGISTRY_CHECKS = 34
 
 SUITES = [
     "applicability.py", "jurisdiction.py", "backend/budget.py",
@@ -1127,6 +1127,40 @@ def _llm_refuses_unverified():
         return True, ""
     return False, ("explain_provisions() accepted a provision with verified_by=None. The dark "
                    "path is dark only by convention, and the next caller will not know.")
+
+
+@check("the safety layer blocks every fabrication this project has actually produced",
+       because="A guard is only worth having if it catches what already fooled us. Measured "
+               "against twelve cases — eight fabrications really emitted in this project, four "
+               "statements quoting the Act verbatim — the proposed embedding-similarity guard "
+               "caught 6/8 but flagged 2 of the 4 CORRECT answers as fabrications, because "
+               "quoting the statute exactly is not the same as resembling it. It also let "
+               "'31 January' through, which is the fabrication this whole product exists to "
+               "refuse. Exact checks caught the same 6 with zero false alarms. This pins the "
+               "floor so a future 'improvement' to the safety layer cannot quietly lower it.")
+def _safety_catches_known_fabrications():
+    sys.path.insert(0, str(ROOT))
+    from scripts.bench_safety import CASES, corpus, verifier_guard   # noqa: PLC0415
+
+    text = corpus()
+    fabs = [c for c in CASES if c.fabricated]
+    trues = [c for c in CASES if not c.fabricated]
+    if not fabs or not trues:
+        return False, "the fabrication set is empty; this check would assert nothing"
+
+    missed = [c.sentence[:60] for c in fabs if not verifier_guard(c.sentence, c.retrieved, text)]
+    alarms = [c.sentence[:60] for c in trues if verifier_guard(c.sentence, c.retrieved, text)]
+
+    # False alarms are the harder constraint. A guard that blocks correct answers gets switched
+    # off by whoever is on call, and then nothing is guarding anything.
+    if alarms:
+        return False, f"blocks {len(alarms)}/{len(trues)} verbatim-correct statements: {alarms}"
+    FLOOR = 6                          # measured; raise when it improves, never lower
+    caught = len(fabs) - len(missed)
+    if caught < FLOOR:
+        return False, (f"catches {caught}/{len(fabs)} known fabrications, below the {FLOOR} "
+                       f"floor. Missed: {missed}")
+    return True, ""
 
 
 @check("no secrets committed",

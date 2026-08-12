@@ -119,8 +119,28 @@ def _source_text(provisions: list[dict]) -> str:
     )
 
 
+# Consequences a reader would act on, which the Act may or may not actually provide. Asserting
+# one that is absent from the source is the same class of error as inventing a figure, and until
+# now nothing checked it: "Section 26 provides for imprisonment of the employer" passed clean
+# through both the citation check (s.26 was retrieved) and the number check (no numbers), while
+# "imprisonment" appears nowhere in the Act. Found by scripts/bench_safety.py.
+_CONSEQUENCE = (
+    "imprisonment", "imprisoned", "arrest", "arrested", "prosecution", "prosecuted",
+    "criminal liability", "cancellation", "cancelled", "revoked", "revocation",
+    "suspension", "suspended", "blacklist", "debarred", "injunction",
+)
+
+
 def check_hallucination(answer: str, provisions: list[dict]) -> list[str]:
-    """Numbers asserted in the answer that do not appear in the source. Empty is the only pass."""
+    """
+    Assertions in the answer the source does not support. Empty is the only pass.
+
+    Two families, both exact: figures the source does not contain, and legal consequences the
+    source does not provide. Neither uses similarity. A measured comparison against an
+    embedding-similarity guard on twelve real cases is in scripts/bench_safety.py — the
+    embedding guard flagged two verbatim-correct statements as fabrications, because quoting
+    the statute exactly is not the same as resembling it.
+    """
     src = _source_text(provisions)
     src_nums = {n.replace(",", "") for n in _NUM.findall(src)}
     out: list[str] = []
@@ -131,6 +151,11 @@ def check_hallucination(answer: str, provisions: list[dict]) -> list[str]:
         # "fifty thousand" in the source, "50,000" in the answer is a real mismatch to surface —
         # we cannot confirm it from the text, so it does not get a free pass.
         out.append(raw)
+
+    low_src, low_ans = src.lower(), answer.lower()
+    for word in _CONSEQUENCE:
+        if word in low_ans and word not in low_src:
+            out.append(f"consequence not in source: {word!r}")
     return sorted(set(out))
 
 
