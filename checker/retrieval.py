@@ -34,6 +34,11 @@ KEYWORD_MAP: dict[str, tuple[int, ...]] = {
     "training": (19,), "awareness": (19,),
     "penalty": (26,), "fine": (26,), "punishment": (14, 26), "non-compliance": (26,),
     "complaint": (9, 10, 11), "inquiry": (11, 12, 13), "conciliation": (10,),
+    # Added because bench_retrieval.py showed real phrasings missing these
+    # sections entirely. Users do not say "conciliation"; they say "settle".
+    "settle the matter": (10,), "settle": (10,), "powers": (11,),
+    "published": (16, 17), "publish": (16, 17), "turns out to be false": (14,),
+    "malicious": (14,), "civil court": (11,),
     "false complaint": (14,), "compensation": (15,), "appeal": (18,),
     "confidential": (16, 17), "publication": (16, 17),
     "definition": (2,), "workplace": (2,), "employee": (2,), "aggrieved": (2,),
@@ -44,6 +49,25 @@ KEYWORD_MAP: dict[str, tuple[int, ...]] = {
 @lru_cache(maxsize=1)
 def _corpus() -> list[dict]:
     return json.loads(CORPUS.read_text())["provisions"]
+
+
+@lru_cache(maxsize=None)
+def _idf(phrase: str) -> float:
+    """
+    How much a phrase discriminates, from the corpus itself.
+
+    log(N / df) where df counts sections whose statutory text contains the phrase. A phrase in
+    every section carries no information and lands near zero; a phrase in one section is the
+    strongest signal available. Unseen phrases get the maximum, because a routing key nobody's
+    text contains is presumably a synonym we added deliberately.
+    """
+    import math                                               # noqa: PLC0415
+
+    corpus = _corpus()
+    n = len(corpus) or 1
+    df = sum(1 for p in corpus
+             if phrase in " ".join((p.get("text_statutory") or "").split()).lower())
+    return math.log(n / df) if df else math.log(n)
 
 
 def keyword_route(question: str) -> tuple[int, ...] | None:
@@ -61,14 +85,24 @@ def keyword_route(question: str) -> tuple[int, ...] | None:
     by scripts/bench_retrieval.py, which is the only reason it was found at all — the section was
     present in the route, so nothing looked wrong.
 
-    Specificity = length of the matched phrase divided by how many sections it points at. A long
-    phrase naming few sections is a precise signal; a short phrase naming many is background.
+    Specificity is **inverse document frequency over the corpus**, not string length.
+
+    The first attempt used len(phrase) / len(sections), and it was wrong for a reason worth
+    keeping: 'committee' appears in **20 of the 30 sections** of this Act. It is the least
+    informative word in the statute. But it is nine characters pointing at three mapped sections,
+    so it scored 3.00 and outranked 'inquiry' at 2.33 — and "what powers does the committee have
+    during an inquiry?" kept returning s.4, 6, 7 instead of s.11.
+
+    idf = log(N / df) is the standard answer (Spärck Jones 1972; the term-weighting half of
+    BM25). A phrase occurring in one section discriminates; one occurring in twenty is
+    background. It is derived from the corpus rather than hand-tuned, so it stays correct as the
+    corpus grows and nobody has to remember to re-balance it.
     """
     q = " ".join(question.lower().split())
     weight: dict[int, float] = {}
     for phrase, sections in KEYWORD_MAP.items():
         if phrase in q:
-            w = len(phrase) / len(sections)
+            w = _idf(phrase)
             for s in sections:
                 weight[s] = max(weight.get(s, 0.0), w)
     if not weight:

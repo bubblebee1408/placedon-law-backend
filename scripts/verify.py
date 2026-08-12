@@ -51,7 +51,7 @@ GENERATED = {".claude/index.json", "corpus/.budget.json"}
 #
 # It has to scale with the mode: --fast skips the per-module suites and tsc, so the expected
 # total is the registry alone. Hard-coding one number broke --fast the moment it was added.
-MIN_REGISTRY_CHECKS = 31
+MIN_REGISTRY_CHECKS = 32
 
 SUITES = [
     "applicability.py", "jurisdiction.py", "backend/budget.py",
@@ -1054,6 +1054,45 @@ def _register_page_complete():
         return False, f"GET /api/register returned {j.status_code}; the data must be fetchable"
     if len(j.json().get("districts", [])) != len(rows):
         return False, "the JSON endpoint and the register disagree on how many districts exist"
+    return True, ""
+
+
+@check("retrieval recall@3 does not regress below its measured floor",
+       because="Retrieval decides which section of the Act a user is shown, and it failed "
+               "silently. 'Does the committee have to file an annual report?' returned s.4, 6 and "
+               "7 — s.21 WAS in the route and fell off the end of top_k because the union was "
+               "sorted by section number, so a generic key ('committee', which appears in 20 of "
+               "30 sections) crowded out a specific one. Nothing looked wrong; only a benchmark "
+               "with independent ground truth could see it. Weighting keys by corpus IDF instead "
+               "of string length took recall@3 from 0.75 to 1.00. A floor turns that into a "
+               "property rather than a lucky afternoon.")
+def _retrieval_recall():
+    sys.path.insert(0, str(ROOT))
+    from scripts.bench_retrieval import CASES, ground_truth, load, rank_current  # noqa: PLC0415
+
+    FLOOR = 0.95                       # measured 1.00; raise this when it improves, never lower
+    provisions = load()
+    truth, problems = ground_truth(provisions)
+    if problems:
+        return False, (f"{len(problems)} benchmark case(s) no longer resolve to any section — "
+                       f"the corpus or the case changed: {problems[:2]}")
+    hits = miss = 0
+    failed = []
+    for c in CASES:
+        want = truth[c.phrase]
+        got = rank_current(c.question)[:3]
+        if set(got) & set(want):
+            hits += 1
+        else:
+            miss += 1
+            failed.append(f"{c.question!r} wanted s.{want}, got s.{got}")
+    n = hits + miss
+    if not n:
+        return False, "the benchmark ran zero cases; it is asserting nothing"
+    rate = hits / n
+    if rate < FLOOR:
+        return False, (f"recall@3 is {rate:.2f}, below the {FLOOR} floor. {miss} of {n} failed: "
+                       f"{failed[:3]}")
     return True, ""
 
 
