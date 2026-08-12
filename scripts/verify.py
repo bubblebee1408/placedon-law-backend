@@ -51,7 +51,7 @@ GENERATED = {".claude/index.json", "corpus/.budget.json"}
 #
 # It has to scale with the mode: --fast skips the per-module suites and tsc, so the expected
 # total is the registry alone. Hard-coding one number broke --fast the moment it was added.
-MIN_REGISTRY_CHECKS = 30
+MIN_REGISTRY_CHECKS = 31
 
 SUITES = [
     "applicability.py", "jurisdiction.py", "backend/budget.py",
@@ -1008,6 +1008,52 @@ def _district_lists_agree():
             return False, (f"{state} has no 'Elsewhere in the state' option. Without it a user "
                            f"from an unasked district must pick a district we did ask, and the "
                            f"answer becomes wrong rather than absent.")
+    return True, ""
+
+
+@check("the public register page shows every district and never a bare date",
+       because="The register's whole commercial value is as a citable public artifact — the page "
+               "a competitor has to link to. That only works if it is complete and if every date "
+               "on it carries the officer's words. Two failure modes, both quiet: filtering to "
+               "'interesting' rows would hide the non-answers, which ARE the evidence that we "
+               "asked rather than guessed; and rendering a date without its quote turns the page "
+               "into the same unsourced folklore every other site publishes, except with our "
+               "name and an official's district attached to it.")
+def _register_page_complete():
+    sys.path.insert(0, str(ROOT))
+    from fastapi.testclient import TestClient                 # noqa: PLC0415
+
+    from checker.app import app                               # noqa: PLC0415
+    from checker import register                              # noqa: PLC0415
+
+    client = TestClient(app)
+    r = client.get("/register")
+    if r.status_code != 200:
+        return False, f"GET /register returned {r.status_code}; the public page must exist"
+    html = r.text
+
+    rows = register._rows().values()
+    if not rows:
+        return False, "register is empty; the page cannot be verified against it"
+
+    missing = [x.district for x in rows if x.district not in html]
+    if missing:
+        return False, (f"page omits {len(missing)} district(s), e.g. {missing[:3]}. Every row "
+                       f"must appear — the ones with no reply are the evidence that we asked.")
+
+    for x in rows:
+        if x.notified_date and x.notified_date in html:
+            quote = (x.reply_verbatim or "").strip()
+            if not quote or quote[:40] not in html:
+                return False, (f"{x.district}: the page shows {x.notified_date!r} without the "
+                               f"officer's words. A date with no source is what everyone else "
+                               f"publishes.")
+
+    j = client.get("/api/register")
+    if j.status_code != 200:
+        return False, f"GET /api/register returned {j.status_code}; the data must be fetchable"
+    if len(j.json().get("districts", [])) != len(rows):
+        return False, "the JSON endpoint and the register disagree on how many districts exist"
     return True, ""
 
 

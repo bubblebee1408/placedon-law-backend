@@ -11,6 +11,7 @@ defensible to a cautious buyer.
 """
 from __future__ import annotations
 
+import html
 import json
 import logging
 from functools import lru_cache
@@ -247,6 +248,27 @@ footer{margin-top:3rem;font-size:.85rem;color:var(--muted)}
    outline -> solid fill -> sealed. Pencil draft, then ink, then notarised. Adjacent states
    differ by exactly one property, so the order is legible before the label is read.
    Colour is spent once, on QUOTED, so that when it appears it means something. */
+/* The public register. Rows with no reply must read as prominently as rows with one — they are
+   the evidence that we asked rather than guessed, so they get the same weight and the same rule. */
+.tally{font-family:var(--mono);font-size:.82rem;color:var(--muted);
+       border-top:2px solid var(--ink);border-bottom:1px solid var(--rule-strong);
+       padding:.7rem 0;margin:1.4rem 0 0}
+.reg{border-collapse:collapse;width:100%;margin:1.6rem 0;font-size:.94rem}
+.reg th{text-align:left;font-family:var(--mono);font-size:.64rem;letter-spacing:.09em;
+        text-transform:uppercase;color:var(--muted);font-weight:600;
+        border-bottom:1px solid var(--ink);padding:0 .8rem .45rem 0}
+.reg td{padding:.6rem .8rem .6rem 0;border-bottom:1px solid var(--rule);vertical-align:baseline}
+.reg td.date,.reg td.when{font-family:var(--mono);font-size:.84rem;font-variant-numeric:tabular-nums;
+        white-space:nowrap}
+.reg td.when{color:var(--muted)}
+.reg tr.q td{border-bottom:1px solid var(--rule);padding-top:0}
+.reg blockquote{margin:0 0 .3rem;padding:.15rem 0 .15rem .9rem;border-left:3px solid var(--crit);
+        font-family:var(--serif);font-style:italic;color:var(--ink);max-width:44rem}
+.reg blockquote cite{display:block;margin-top:.35rem;font-style:normal;font-family:var(--mono);
+        font-size:.7rem;color:var(--muted)}
+.note{font-size:.9rem;color:var(--muted);max-width:var(--measure);margin:1.2rem 0}
+.note b{color:var(--ink)}
+
 .status{display:inline-flex;align-items:center;gap:.3em;padding:.18em .55em;border-radius:2px;
   font-family:ui-monospace,Menlo,monospace;font-size:.68rem;font-weight:600;letter-spacing:.04em;
   white-space:nowrap;background:transparent;color:var(--muted)}
@@ -639,6 +661,91 @@ def _log_ask(req: AskRequest, payload: dict) -> None:
             }) + "\n")
     except Exception:                                    # noqa: BLE001
         logging.warning("ask.log_failed", exc_info=True)
+
+
+@app.get("/api/register")
+def register_json() -> dict:
+    """The whole register, unauthenticated. Meant to be cited, scraped and disagreed with."""
+    rows = sorted(register._rows().values(), key=lambda x: x.district)
+    return {
+        "what_this_is": ("What each District Officer told us, in their own words, about the date "
+                         "for submitting the annual report under s.21 of the PoSH Act."),
+        "what_this_is_not": ("Not a national deadline. There is none: s.21 delegates timing to "
+                             "what 'may be prescribed' and the PoSH Rules prescribe no date."),
+        "districts": [{"code": r.jurisdiction, "district": r.district, "status": r.status,
+                       "asked_on": r.asked_on, "replied_on": r.replied_on,
+                       "notified_date": r.notified_date, "reply": r.reply_verbatim}
+                      for r in rows],
+        "count": len(rows),
+    }
+
+
+@app.get("/register", response_class=HTMLResponse)
+def register_page() -> str:
+    """
+    The register, in public.
+
+    Every district appears, including — especially — the ones nobody has answered. Filtering to
+    the 'interesting' rows would hide the non-answers, and the non-answers are the evidence that
+    we asked rather than guessed. They are also the only part of this nobody else has.
+
+    A date never appears without the officer's words beneath it. That rule is enforced in three
+    places now: the CLI refuses to record one, register.py refuses to describe one, and
+    verify.py refuses to let this page render one.
+    """
+    rows = sorted(register._rows().values(), key=lambda x: x.district)
+    asked = sum(1 for r in rows if r.status != "UNASKED")
+    answered = sum(1 for r in rows if r.has_answer)
+
+    LABEL = {"DATE_NOTIFIED": "notified", "NONE_NOTIFIED": "none notified",
+             "NO_REPLY": "no reply", "ASKED": "asked", "UNASKED": "not yet asked"}
+
+    items = []
+    for r in rows:
+        cls = "verified" if r.status == "DATE_NOTIFIED" else (
+              "secondary" if r.status == "NONE_NOTIFIED" else
+              "unchecked" if r.status in {"ASKED", "NO_REPLY"} else "silent")
+        date = f"<td class=date>{html.escape(r.notified_date)}</td>" if r.notified_date \
+               else "<td class=date>&mdash;</td>"
+        when = r.replied_on or r.asked_on or ""
+        quote = ""
+        if r.reply_verbatim:
+            quote = (f"<tr class=q><td></td><td colspan=3><blockquote>"
+                     f"{html.escape(r.reply_verbatim)}"
+                     f"<cite>— District Officer, {html.escape(r.district)}"
+                     f"{', ' + html.escape(r.replied_on) if r.replied_on else ''}</cite>"
+                     f"</blockquote></td></tr>")
+        items.append(
+            f"<tr><td>{html.escape(r.district)}</td>"
+            f"<td><span class='status {cls}'>{LABEL[r.status]}</span></td>"
+            f"{date}<td class=when>{html.escape(when)}</td></tr>{quote}")
+
+    body = f"""
+<h1>Notified dates for the PoSH annual report</h1>
+<p class=lede>Section 21 of the PoSH Act says the Committee shall prepare an annual report
+&ldquo;in such form and <b>at such time as may be prescribed</b>&rdquo;. The Rules prescribe no
+time. The District Officer sets it, and every guide we can find tells you to go and ask yours.</p>
+<p class=lede>So we asked. This is what came back, verbatim, including the districts that have
+not replied.</p>
+
+<p class=tally><b>{len(rows)}</b> districts &middot; <b>{asked}</b> asked &middot;
+<b>{answered}</b> answered</p>
+
+<table class=reg>
+<tr><th>District</th><th>Status</th><th>Notified date</th><th>Asked / replied</th></tr>
+{''.join(items)}
+</table>
+
+<p class=note><b>What this is not.</b> It is not a national deadline, because there is no national
+deadline. &ldquo;31 January&rdquo; is widely published and appears nowhere in the fourteen PoSH
+Rules; at least one District Officer elsewhere in India has notified 28 February. Where a row says
+we have had no reply, that is the honest state of that district and we will not fill it with a
+plausible date.</p>
+<p class=note>Machine-readable: <a href="/api/register">/api/register</a>. Corrections welcome —
+if you are a District Officer and a row here is wrong, tell us and we will publish your words
+instead.</p>
+"""
+    return _page("Notified PoSH annual-return dates, by district", body)
 
 
 @app.get("/api/districts")
