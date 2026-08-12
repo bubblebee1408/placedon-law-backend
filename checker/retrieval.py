@@ -94,9 +94,19 @@ def keyword_route(question: str) -> tuple[int, ...] | None:
     during an inquiry?" kept returning s.4, 6, 7 instead of s.11.
 
     idf = log(N / df) is the standard answer (Spärck Jones 1972; the term-weighting half of
-    BM25). A phrase occurring in one section discriminates; one occurring in twenty is
-    background. It is derived from the corpus rather than hand-tuned, so it stays correct as the
-    corpus grows and nobody has to remember to re-balance it.
+    BM25). A phrase occurring in one section discriminates; one occurring in twenty is background.
+
+    **Measured honestly**, on scripts/bench_retrieval.py's 20 cases:
+
+        weight = _idf(phrase)                recall@3 = 1.00
+        weight = len(phrase)/len(sections)   recall@3 = 1.00
+        weight = 1.0  (i.e. section order)   recall@3 = 0.80
+
+    So *weighting* is load-bearing and this set cannot tell idf from the length heuristic. idf is
+    kept on principle rather than on evidence: it is derived from the corpus, so it stays correct
+    as the corpus grows, whereas len/count is a coincidence that happens to rank 'conciliation'
+    above 'committee' on twenty questions and carries no reason to keep doing so at 500 sections.
+    If a future case set separates them, that is the measurement to trust over this paragraph.
     """
     q = " ".join(question.lower().split())
     weight: dict[int, float] = {}

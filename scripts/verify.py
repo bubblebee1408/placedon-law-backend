@@ -1063,9 +1063,10 @@ def _register_page_complete():
                "7 — s.21 WAS in the route and fell off the end of top_k because the union was "
                "sorted by section number, so a generic key ('committee', which appears in 20 of "
                "30 sections) crowded out a specific one. Nothing looked wrong; only a benchmark "
-               "with independent ground truth could see it. Weighting keys by corpus IDF instead "
-               "of string length took recall@3 from 0.75 to 1.00. A floor turns that into a "
-               "property rather than a lucky afternoon.")
+               "with independent ground truth could see it. Weighting the keys at all took "
+               "recall@3 from 0.80 to 1.00 — measured; IDF and a length heuristic are "
+               "indistinguishable on this set, so this floor protects weighting in general and "
+               "not one formula. A floor turns a lucky afternoon into a property.")
 def _retrieval_recall():
     sys.path.insert(0, str(ROOT))
     from scripts.bench_retrieval import CASES, ground_truth, load, rank_current  # noqa: PLC0415
