@@ -21,3 +21,8 @@ venv/
 
 # Rendered letters. Regenerate with scripts/draft_letters.py; do not track output.
 outbox/
+
+# Never. Credentials live in ~/.placedon/, outside the repo.
+.placedon/
+*gmail_credentials*.json
+*gmail_token*.json
