@@ -157,10 +157,17 @@ def report(doc: dict) -> None:
         if st in counts:
             print(f"    {st:<15} {counts[st]:>3}")
     answered = counts.get("DATE_NOTIFIED", 0) + counts.get("NONE_NOTIFIED", 0)
-    print(f"\n  {answered} of {len(doc['districts'])} districts answered.")
-    if answered == 0:
+    asked = sum(counts.get(k, 0) for k in ("ASKED", "NO_REPLY", "DATE_NOTIFIED", "NONE_NOTIFIED"))
+    total = len(doc["districts"])
+    print(f"\n  {asked} of {total} districts asked · {answered} answered.")
+    # Three states, three different truths. Conflating "not asked" with "asked, awaiting reply"
+    # would put a false sentence in the one script whose subject is not saying false things.
+    if asked == 0:
         print("  Nothing has been asked yet. The register is honest and empty, which is correct;\n"
               "  it becomes valuable one reply at a time and not one moment sooner.")
+    elif answered == 0:
+        print("  Letters are out and nothing has come back yet. That is a finding about these\n"
+              "  districts, not a gap in the register, and it is publishable as it stands.")
 
 
 def main() -> int:
