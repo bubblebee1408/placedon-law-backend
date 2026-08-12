@@ -57,7 +57,7 @@ SUITES = [
     "applicability.py", "jurisdiction.py", "backend/budget.py",
     "checker/ic_order.py", "checker/verifier.py", "checker/test_unlock.py",
     "checker/board_report.py", "checker/documents.py",
-    "checker/provision_graph.py", "checker/epistemic_status.py", "checker/ask_engine.py", "checker/register.py",
+    "checker/provision_graph.py", "checker/epistemic_status.py", "checker/ask_engine.py", "checker/register.py", "checker/path_validity.py",
 ]
 
 results: list[tuple[bool, str, str]] = []

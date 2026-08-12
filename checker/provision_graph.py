@@ -51,7 +51,12 @@ CORPUS = Path(__file__).resolve().parent.parent / "corpus/provisions/posh_act_20
 # edges, and an invented edge is worse than a missing one because it looks derived.
 XREF = re.compile(
     r"(?:sub-section\s*\(\d+\)\s*of\s*)?"        # "sub-section (1) of "
-    r"section\s+(\d{1,2})\b",                     # "section 4"
+    # {1,3}, not {1,2}. The PoSH Act stops at 30 so two digits sufficed and nobody noticed the
+    # ceiling. But we already hold Companies Act s.134, the AGM section is s.96, and the labour
+    # codes run well past 100 — every cross-reference to a three-digit section would have been
+    # silently invisible to the graph, which means blocked_by() would report a claim unblocked
+    # when its dependency was simply never seen. Found by a test fixture using s.100.
+    r"section\s+(\d{1,3})\b",                    # "section 4", "section 134"
     re.I,
 )
 
