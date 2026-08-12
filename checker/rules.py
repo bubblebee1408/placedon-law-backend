@@ -111,10 +111,35 @@ STATES = [
     ("IN-OTHER", "Somewhere else"),
 ]
 
-DISTRICTS = {
-    "IN-KA": [("IN-KA-BLR", "Bengaluru Urban"), ("", "Elsewhere in the state")],
-    "IN-HR": [("IN-HR-GGN", "Gurugram"), ("", "Elsewhere in the state")],
-}
+def _districts() -> dict[str, list[tuple[str, str]]]:
+    """
+    The district options, derived from the notified-date register.
+
+    This used to be a hand-written pair — Bengaluru Urban and Gurugram — and the frontend carried
+    its own copy of the same two. Both drifted the moment the register existed. Gurugram was the
+    tell: the register has never held a Haryana district, so offering it produced a lookup that
+    raised, was caught, and degraded silently to no district note. A picker that offers a district
+    we cannot speak to is worse than a shorter picker.
+
+    Deriving costs one read and removes a whole class of drift. "Elsewhere in the state" stays,
+    and stays last: it is the honest option for a district we have not asked, and jurisdiction.py
+    is built so that selecting it abstains rather than falling back to a state-level answer.
+    """
+    from . import register                                    # noqa: PLC0415  (avoids a cycle)
+
+    by_state: dict[str, list[tuple[str, str]]] = {}
+    for r in sorted(register._rows().values(), key=lambda x: x.district):
+        state = "-".join(r.jurisdiction.split("-")[:2])
+        by_state.setdefault(state, []).append((r.jurisdiction, r.district))
+    for opts in by_state.values():
+        opts.append(("", "Elsewhere in the state"))
+    # States we hold no district for still need the honest option.
+    for state in ("IN-KA", "IN-MH", "IN-DL", "IN-TG", "IN-TN", "IN-HR"):
+        by_state.setdefault(state, [("", "Elsewhere in the state")])
+    return by_state
+
+
+DISTRICTS = _districts()
 
 INDUSTRIES = [
     ("it_ites", "IT / SaaS"),

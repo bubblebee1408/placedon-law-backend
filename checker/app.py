@@ -27,7 +27,7 @@ from applicability import CompanyProfile
 
 from jinja2 import TemplateNotFound
 
-from . import documents, ratelimit, retrieval, verifier
+from . import documents, ratelimit, register, retrieval, verifier
 from .ask_engine import AskEngine
 from .assess import assess
 from .rules import DISTRICTS, INDUSTRIES, STATES, Finding
@@ -639,6 +639,35 @@ def _log_ask(req: AskRequest, payload: dict) -> None:
             }) + "\n")
     except Exception:                                    # noqa: BLE001
         logging.warning("ask.log_failed", exc_info=True)
+
+
+@app.get("/api/districts")
+def list_districts(state: str | None = None) -> dict:
+    """
+    The districts we can say anything about, and what we currently know for each.
+
+    Served rather than hard-coded in the frontend. The frontend used to carry its own list of
+    two — with a comment claiming they were "districts whose annual-return notification we
+    actually hold", which was true when written and false the moment the register existed. One
+    of the two was Gurugram, which the register has never held at all: picking it produced a
+    lookup that raised, was caught, and silently degraded to no district note. A list that drifts
+    from the register is how a user gets shown a district we cannot speak to.
+
+    `note` is the same sentence ask_engine uses, from the same function. There is no second
+    wording to keep in step.
+    """
+    out = []
+    for r in sorted(register._rows().values(), key=lambda x: x.district):
+        if state and not r.jurisdiction.startswith(f"IN-{state.upper()}-"):
+            continue
+        note, source = register.describe(r.jurisdiction)
+        out.append({
+            "code": r.jurisdiction, "district": r.district, "status": r.status,
+            "note": note, "asked_on": r.asked_on,
+            # Only ever present alongside a date, because describe() cannot produce one without it.
+            "source": source,
+        })
+    return {"districts": out, "count": len(out)}
 
 
 @app.get("/api/generate/templates")

@@ -51,7 +51,7 @@ GENERATED = {".claude/index.json", "corpus/.budget.json"}
 #
 # It has to scale with the mode: --fast skips the per-module suites and tsc, so the expected
 # total is the registry alone. Hard-coding one number broke --fast the moment it was added.
-MIN_REGISTRY_CHECKS = 29
+MIN_REGISTRY_CHECKS = 30
 
 SUITES = [
     "applicability.py", "jurisdiction.py", "backend/budget.py",
@@ -972,6 +972,42 @@ def _register_dates_have_sources():
             return False, (f"{d}: jurisdiction {j!r} is not district-level. The register is "
                            f"district-scoped by construction -- a state or national row would be a "
                            f"default, and defaulting is the bug.")
+    return True, ""
+
+
+@check("no hand-maintained district list may disagree with the register",
+       because="There were three lists: checker/rules.py, the frontend's checker-form.tsx, and "
+               "the register itself. The first two each held the same hand-written pair and each "
+               "carried a comment saying they were the districts we could speak to -- true when "
+               "written, false the moment the register existed. One of the pair was Gurugram, "
+               "which the register has never held, so selecting it produced a lookup that raised, "
+               "was caught, and degraded silently to no district note at all. A picker that "
+               "offers a district we cannot speak to is worse than a short picker, and this is "
+               "invisible in review because each list looks reasonable on its own.")
+def _district_lists_agree():
+    sys.path.insert(0, str(ROOT))
+    from checker import register                              # noqa: PLC0415
+    from checker.rules import DISTRICTS                       # noqa: PLC0415
+
+    known = set(register._rows())
+    offered = {code for opts in DISTRICTS.values() for code, _ in opts if code}
+    stray = sorted(offered - known)
+    if stray:
+        return False, (f"the form offers districts the register does not hold: {stray}. Either "
+                       f"add them to the register or stop offering them.")
+    if not known:
+        return True, ""
+    ka = {c for c, _ in DISTRICTS.get("IN-KA", []) if c}
+    missing = sorted({c for c in known if c.startswith("IN-KA-")} - ka)
+    if missing:
+        return False, f"register holds Karnataka districts the form does not offer: {missing[:5]}"
+    # The refusable fallback must survive. Removing it turns "a district we have not asked" into
+    # a state-level answer, which jurisdiction.py exists to prevent.
+    for state, opts in DISTRICTS.items():
+        if not any(code == "" for code, _ in opts):
+            return False, (f"{state} has no 'Elsewhere in the state' option. Without it a user "
+                           f"from an unasked district must pick a district we did ask, and the "
+                           f"answer becomes wrong rather than absent.")
     return True, ""
 
 
