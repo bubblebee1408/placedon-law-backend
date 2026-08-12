@@ -284,5 +284,46 @@ making about this product.
 | 5 | [*Aspect-Based Causal Abstention*](https://arxiv.org/pdf/2511.17170) | Abstention as a measurable capability. |
 | 6 | Lewis et al., *RAG* (2020) | Foundational. Read to know what we are *not* doing and why. |
 
+### Added 2026-08-12 — the convergence
+
+Searching for Indian legal NLP work turned up something worth recording carefully.
+
+**[Falkor-IRAC: Graph-Constrained Generation for Verified Legal Reasoning in Indian Judicial AI](https://arxiv.org/abs/2605.14665)**
+(arXiv 2605.14665, May 2026) independently arrives at this repository's architecture. Its claims,
+against ours:
+
+| Falkor-IRAC | Here |
+|---|---|
+| Answers accepted only if a valid supporting path traces through a knowledge graph | `provision_graph.py` — `blocked_by()` over the statute's own cross-references |
+| A *"falsifiability oracle"* Verifier Agent that rejects fabricated citations | `verifier.py` — rejects any citation or figure absent from source |
+| Graph-native metrics: citation grounding accuracy, **path validity rate**, hallucinated precedent rate | the three numbers in Phase 3 |
+| Explicitly positions **against vector RAG for law** | `retrieval.py` — keyword route then scan, no vectors |
+
+We did not read this paper before building. That is worth more than agreement would be: two
+independent attempts at grounded Indian legal AI converged on graph-constrained generation with an
+external falsifiability check, and both rejected the vector-RAG pipeline every planning document in
+this project has proposed.
+
+**What to actually take from it**, since agreement is not a reason to change anything:
+
+1. **Path validity rate** as a metric. We measure whether a claim is *sourced*; they measure
+   whether a *reasoning path* is traceable end to end. Ours is the weaker check. Add it to Phase 3.
+2. **Conflict detection rate.** They detect provisions that contradict each other. Our lattice
+   composes weakest-link but does not flag conflict. A real gap.
+3. The companion note, *Why Vector RAG Fails in Law*, is the citable answer to "why not ChromaDB?"
+
+Also worth reading:
+
+| Paper | Why |
+|---|---|
+| [Citation Grounding via Legal Citation Graphs](https://arxiv.org/pdf/2606.00898) | Detecting and reducing citation hallucination using the citation graph. Directly extends `provision_graph.py`. |
+| [IL-TUR](https://aclanthology.org/2024.acl-long.618/) (ACL 2024) | Indian Legal Text Understanding and Reasoning benchmark — English, Hindi, 9 Indian languages. **The evaluation set we do not have.** Phase 3 should measure against it before inventing our own. |
+| [Domain-Partitioned Hybrid RAG for Legal Reasoning in India](https://arxiv.org/pdf/2602.23371) | Modular, explainable, India-specific. Read before any retrieval change. |
+
+**The correction this makes to our own plan:** Phase 3 says build a golden set from scratch with a
+lawyer. IL-TUR exists, is peer-reviewed, and is Indian. Measure against it first — a lawyer's
+evening is the scarcest resource here and should be spent on the six load-bearing clauses, not on
+re-deriving a benchmark that a research group already published.
+
 Not on this list: LoRA, Self-RAG, fine-tuning of any kind. They solve problems we do not have with
 resources we do not have, and the corpus solves the problem we do have for nothing.
