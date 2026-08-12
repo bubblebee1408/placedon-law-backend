@@ -51,7 +51,7 @@ GENERATED = {".claude/index.json", "corpus/.budget.json"}
 #
 # It has to scale with the mode: --fast skips the per-module suites and tsc, so the expected
 # total is the registry alone. Hard-coding one number broke --fast the moment it was added.
-MIN_REGISTRY_CHECKS = 28
+MIN_REGISTRY_CHECKS = 29
 
 SUITES = [
     "applicability.py", "jurisdiction.py", "backend/budget.py",
@@ -893,6 +893,85 @@ def _ramp_not_hue_coded():
             return False, (f"{seen[sig]} and {name} are indistinguishable once colour is removed. "
                            f"Two rungs of an ordinal ladder that differ only in hue are one rung.")
         seen[sig] = name
+    return True, ""
+
+
+# Codes in use across applicability.py, jurisdiction.py, frontend checker-form and
+# shared/types.ts. The first register build generated IN-KA-BENGA for Bengaluru Urban
+# because Bengaluru Rural sorts first and took the letters.
+_ESTABLISHED_CODES = {"Bengaluru Urban": "IN-KA-BLR"}
+
+
+@check("the notified-date register never holds a date without the reply it came from",
+       because="This register is the one asset no competitor has: what each District Officer "
+               "ACTUALLY notified as the PoSH annual-return date. Its entire value is that every "
+               "entry is backed by the officer's own words. The failure mode is obvious and fatal "
+               "-- somebody reads '31 January' on a compliance blog, types it into a district row "
+               "to fill a gap, and the register becomes the same folklore it exists to replace, "
+               "except now with our name on it. It would also be undetectable: a plausible date in "
+               "a plausible row. So the rule is the same one verified_by enforces on the corpus -- "
+               "a claim is recordable only with its source attached -- and 'we asked and got no "
+               "reply' is a first-class publishable value, not a gap to be filled.")
+def _register_dates_have_sources():
+    reg = ROOT / "corpus/reference/notified_dates.json"
+    if not reg.exists():
+        return False, ("corpus/reference/notified_dates.json is missing. This check does not skip "
+                       "when its input is absent -- that is how two index checks silently asserted "
+                       "nothing. Run scripts/build_register.py.")
+    doc = json.loads(reg.read_text())
+    rows = doc.get("districts", [])
+    if not rows:
+        return False, "register has no district rows"
+
+    officers = {o["district"] for o in
+                json.loads((ROOT / "corpus/reference/district_officers.json").read_text())["officers"]}
+    VALID = {"UNASKED", "ASKED", "DATE_NOTIFIED", "NONE_NOTIFIED", "NO_REPLY"}
+
+    for r in rows:
+        d = r.get("district", "?")
+        st = r.get("status")
+        if st not in VALID:
+            return False, f"{d}: status {st!r} is not one of {sorted(VALID)}"
+        if d not in officers:
+            return False, (f"{d}: not in the District Officer directory. Rows may only exist for "
+                           f"districts we actually hold an officer for.")
+
+        has_date  = bool(r.get("notified_date"))
+        has_reply = bool((r.get("reply_verbatim") or "").strip())
+
+        # The rule this check exists for.
+        if has_date and not has_reply:
+            return False, (f"{d}: notified_date={r['notified_date']!r} with no reply_verbatim. A "
+                           f"date without the words it came from is folklore. Delete it or attach "
+                           f"the reply.")
+        if has_date and not r.get("replied_on"):
+            return False, f"{d}: has a notified_date but no replied_on"
+        if has_date and st != "DATE_NOTIFIED":
+            return False, f"{d}: carries a date but status is {st!r}"
+        # "No date is notified here" is itself a finding, and it needs a source too.
+        if st == "NONE_NOTIFIED" and not has_reply:
+            return False, (f"{d}: status NONE_NOTIFIED asserts a fact about the district. It needs "
+                           f"the reply that says so.")
+        if st in {"ASKED", "NO_REPLY", "DATE_NOTIFIED", "NONE_NOTIFIED"} and not r.get("asked_on"):
+            return False, f"{d}: status {st} but no asked_on date"
+        if st == "NO_REPLY" and has_date:
+            return False, f"{d}: NO_REPLY cannot carry a date"
+
+        # No national or state default may hide in here. There IS no national date; that is the
+        # whole finding. A row at 'IN' or 'IN-KA' would reintroduce the 31 January fabrication
+        # through the back door.
+        # Codes must agree with the rest of the system, not merely be unique among themselves.
+        if r["district"] in _ESTABLISHED_CODES and r["jurisdiction"] != _ESTABLISHED_CODES[r["district"]]:
+            return False, (f"{d}: register uses {r['jurisdiction']!r} but applicability.py, "
+                           f"jurisdiction.py and the frontend use "
+                           f"{_ESTABLISHED_CODES[r['district']]!r}. A register nothing can query "
+                           f"is worse than no register, because it looks like it works.")
+
+        j = r.get("jurisdiction", "")
+        if len(j.split("-")) != 3:
+            return False, (f"{d}: jurisdiction {j!r} is not district-level. The register is "
+                           f"district-scoped by construction -- a state or national row would be a "
+                           f"default, and defaulting is the bug.")
     return True, ""
 
 
