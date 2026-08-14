@@ -108,6 +108,29 @@ premise is that every claim traces to source text.
 **Groq and Llama have no equivalent.** Neither does Gemini. Choosing Groq to save ₹0.97 per answer
 costs the mechanism that makes the product defensible.
 
+### Correction, 2026-08-15 — finer is not better
+
+The paragraph above argues for Citations *because* the attribution is sub-sentence. **That part of
+the reasoning is now contradicted by newer evidence and is withdrawn.**
+
+[Are Finer Citations Always Better? Rethinking Granularity for Attributed Generation](https://arxiv.org/abs/2604.01432)
+(Wang, Zhang, Van Durme, Khashabi, April 2026) measures the opposite: enforcing fine-grained
+citations **degrades attribution quality by 16–276%** against the best granularity, and
+**paragraph-level is the peak, not sentence-level**. Larger models are penalised *more*, because
+fine constraints fracture the semantic dependencies they use to compose an answer. Humans prefer
+finer citations; models attribute worse under them, which is a trap for anyone designing from
+intuition.
+
+**The decision does not change; the reason does.** Citations remains the right feature — it supplies
+machine-checkable provenance rather than a claim about provenance, and that is the property
+`verifier.py` needs. But we cite at **provision level**, which for this corpus is the natural unit
+anyway, and the precision requirement is met by the **deterministic engine**, not by slicing
+citations finer.
+
+The general lesson is the one already in §7: this project keeps finding that a plausible design
+instinct is wrong when someone measures it. That was true of the confidence float, of embeddings
+against keyword retrieval, and now of citation granularity.
+
 ---
 
 ## 6. Decision

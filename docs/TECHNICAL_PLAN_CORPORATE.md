@@ -204,6 +204,7 @@ Two changes, both **narrowing**:
 |---|---|---|
 | 1 | `deadlines.py` + `DerivedDate`, **tests first**, pure arithmetic against fixtures, **no corpus** | tests fail before they pass |
 | 2 | **Verifier `DerivedDate` rule + mutation test** — break the interval check, confirm failure, restore | `verify.py` GO |
+| **2b** | **Scope-laundering check** — the model's narration must be verified against what the engine **executed**, not only against source text. A well-cited sentence asserting an obligation the engine did not find must fail. | mutation-tested |
 | 3 | `ingest_companies_act.py`, six sections, byte-verified, `source_quality` set | `check_transcription.py` passes |
 | 4 | Wire rules to the corpus — every `interval_text` resolves or raises | GO |
 | 5 | `CompanyFacts` into `applicability.py`; s.2(85), s.2(62), s.135 thresholds | GO |
@@ -225,7 +226,109 @@ more densely cross-referenced than the PoSH Act — s.134 alone references a doz
 question reopens — with a measurement, which is the only way this repository has ever changed its
 mind.
 
-## 8. What this does not build
+## 8. Research grounding — added 2026-08-15
+
+A literature search was run against §0's design. Every paper below was verified by fetching its
+arXiv page; leads that could not be confirmed are excluded from this section.
+
+### The measurement that justifies the design
+
+**[LexKairos: Benchmarking Legal Temporal Capabilities in LLMs](https://arxiv.org/abs/2608.09106)**
+(Li, Feng, Huang, Ye, Xie — Aug 2026) is the only work found that isolates statutory deadline
+computation as a measurable task. Its result decomposition is the important part:
+
+| Sub-task | Frontier model accuracy |
+|---|---|
+| Temporal Distance Calculation — raw day arithmetic | **~98%** |
+| Action Limitation Reasoning — has the period expired? | **77–83%** |
+
+**The arithmetic is not where models fail. Selecting the right trigger event and the right statutory
+interval is.** That is precisely the boundary §0 draws: the deterministic engine owns interval
+selection and anchoring; the arithmetic is trivial either way. The design was reasoned from first
+principles and there is now a measurement behind it.
+
+Note the limit: LexKairos **exact-matches final dates**. It is a benchmark, not a verifier — it
+would reject our derivation-based approach as unmeasurable, which is the gap §0 fills.
+
+### The verification mechanism has precedent — in other domains
+
+**[FinGround](https://arxiv.org/abs/2604.23588)** (Apr 2026) is the closest structural analogue.
+It decomposes answers into atomic claims, then applies **type-routed verification**: computational
+claims are verified by **formula reconstruction** — identify the implied formula, retrieve operands
+from source, **recompute**, compare. It reports that existing detectors **miss 43% of computational
+errors** requiring arithmetic re-verification.
+
+Map directly onto `DerivedDate`: a deadline claim is routed to a date-arithmetic verifier checking
+*(trigger event, interval, source provision)* and recomputing — never string-matching the result.
+
+**[Don't Trust: Verify](https://arxiv.org/abs/2403.18120)** (Zhou et al., **ICLR 2024**) is the
+canonical statement of the move: validate the **derivation** for consistency with the source
+statement, not the numeric output.
+
+**[Blawx](https://ceur-ws.org/Vol-3193/paper4GDE.pdf)** (Morris) already loads date-calculation
+libraries into an s(CASP) reasoner, so date arithmetic is a first-class **symbolic** operation
+rather than something a model performs. Engineering precedent for "the engine computes the date."
+
+**Conclusion on novelty:** the mechanism is a **well-grounded transfer**, established independently
+in mathematics, finance and chemistry. The **legal-temporal instantiation appears novel** — no work
+was found formalising a deadline as a verifiable triple where the interval and trigger are checked
+against source text and only the computation is exempt from verbatim matching.
+
+### Why the graph-constrained approaches cannot do this
+
+**[Graph-constrained Reasoning](https://arxiv.org/abs/2410.13080)** (ICML 2025) achieves zero
+reasoning hallucination by constraining the decoder to valid graph paths. **[Falkor-IRAC](https://arxiv.org/abs/2605.14665)**
+applies reject-unless-traceable to Indian judgments.
+
+Both would **reject every correct computed deadline**, because a trie or graph can only admit values
+that already exist as nodes. This is the exact failure §0 identifies, now confirmed as a property of
+the method rather than a suspicion. Falkor-IRAC was checked specifically: it says nothing about
+deadlines, dates or computed values.
+
+### Two cautions that cut against instinct
+
+**Do not cite at sub-sentence granularity.**
+[Wang et al.](https://arxiv.org/abs/2604.01432) (Apr 2026) measure that fine-grained citation
+**degrades attribution by 16–276%**; paragraph-level is optimal. This **contradicts and withdraws**
+part of the reasoning in `PROVIDER_DECISION.md` §5, corrected there. Cite at provision level; meet
+the precision requirement in the engine.
+
+**Guard against scope laundering.**
+[Know Your Limits](https://arxiv.org/abs/2606.16118) (Jun 2026) names the failure where a model
+**reports a conclusion inconsistent with what the solver actually executed** — well-cited, plausible,
+and not what the engine decided. Since our model narrates `applicability.py`'s output, this is a
+live risk and needs its own check: **the narration must be verified against the execution, not
+merely against the source text.** Added to the build order as step 2b.
+
+### Supporting
+
+- **[Catala](https://arxiv.org/abs/2103.03198)** (ICFP 2021) — statutes as executable code on
+  default logic; found a bug in an official government implementation. Design precedent for the
+  deterministic engine.
+- **[Reasoners or Translators?](https://arxiv.org/abs/2605.16052)** (May 2026) — neuro-symbolic
+  pipelines do not beat LLM baselines on *correct* decisions but substantially **reduce errors by
+  abstaining when generated code fails verification**. That is this product's value proposition,
+  measured by someone else.
+- **[AbstentionBench](https://arxiv.org/abs/2506.09038)** (Jun 2025) — abstention is unsolved and
+  **scaling does not help**. Justifies abstention as a hard architectural gate rather than a
+  prompted behaviour.
+- **[Hallucination-Free?](https://arxiv.org/abs/2405.20362)** (Magesh et al., *JELS* 2025) —
+  the 17–33% figure, peer-reviewed, still the reference study.
+- **[Asking For An Old Friend](https://arxiv.org/abs/2605.23497)** (May 2026) — temporal *validity*
+  (which version of the law applies) is a second temporal axis we will need, since Indian statutes
+  amend constantly. Web search **worsens** this through recency bias.
+
+### The significant negative result
+
+**No Indian statutory-reasoning corpus exists.** Every Indian legal NLP resource located — IL-TUR,
+ILDC, InLegalBERT, NyayaAnumana — is built on **judgments**. No obligation- or deadline-annotated
+dataset over the Companies Act, Income-tax Act, GST or labour codes. No academic work on Indian
+statutory compliance rule engines.
+
+An evaluation set of Indian statutory deadlines would, as far as this search can establish, be the
+first. `bench_answers.py` at step 7 is that set.
+
+## 9. What this does not build
 
 **No drafting. No advice on structure. No document review. No filing submission to the MCA.**
 
