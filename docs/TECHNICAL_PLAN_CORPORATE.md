@@ -146,6 +146,70 @@ class CompanyFacts:
     number_of_members: int
 ```
 
+### Where the facts come from — verified 2026-08-16
+
+**Most of `CompanyFacts` can be fetched free, structured, from the Government.** Confirmed by direct
+API call, not by report:
+
+```
+GET api.data.gov.in/resource/4dbe5667-7b6b-41d7-82af-211562424d9a
+  status  ok        total  3,674,314 companies        updated  2026-07-22
+```
+
+Ministry of Corporate Affairs, published on the Open Government Data platform. Fields returned map
+almost exactly onto what the applicability engine needs:
+
+| `CompanyFacts` field | OGD field | Free? |
+|---|---|---|
+| `incorporated_on` | `CompanyRegistrationdate_date` | **yes** |
+| `paid_up_capital` | `PaidupCapital` | **yes** |
+| authorised capital | `AuthorizedCapital` | **yes** |
+| `is_public` | `CompanyClass` | **yes** |
+| OPC / small company category | `CompanyCategory`, `CompanySubCategory` | **yes** |
+| listed-company obligations | `Listingstatus` | **yes** |
+| active / struck off | `CompanyStatus` | **yes** |
+| jurisdiction | `CompanyROCcode`, `CompanyStateCode` | **yes** |
+| `turnover`, `net_worth`, `net_profit` | — | **user supplies** |
+| `last_agm`, `last_board_meeting` | — | **user supplies** |
+| **directors** | — | **the one real gap** |
+
+**A fetched government field is a citation.** It has provenance, an update date, and no inference
+step. An LLM-extracted figure is an assertion dressed as a citation. **Structured fetch is not a
+compromise on the architecture — it is the stricter reading of the rule this project already set:
+the model never decides a fact.**
+
+### And this is why document parsing is not built
+
+A proposed "document intelligence" pipeline would parse MOA/AOA and board minutes. Research
+established it is the wrong call on four independent grounds:
+
+1. **Cost.** MCA *View Public Documents* is **₹100 per company** for a 3-hour window. ₹5,000/month
+   buys **50 companies of raw PDF** and nothing else. The same companies' master data is **₹0**.
+2. **Accuracy ceiling.** [BuDDIE](https://arxiv.org/html/2404.04003v1) — the closest analogue,
+   corporate registration filings, **born-digital** — caps at **89.97% F1** with a purpose-built
+   model; **GPT-4 reaches 77.76%**. On real scans it is worse:
+   [Devanagari OCR](https://arxiv.org/abs/2606.29213) collapses from chrF++ 91–98 clean to a
+   **76-point spread** on real scans, and [Real5-OmniDocBench](https://arxiv.org/html/2603.04205v1)
+   shows structured pipelines falling from 84.68 to **37.98 under skew alone** — with **tables** the
+   most fragile element, which is the format of every capital and director schedule.
+3. **No prior art.** **No dataset, benchmark or published evaluation exists** for extraction from
+   Indian MOA/AOA, board minutes or MCA filings. Indian legal NLP is entirely court-judgment work.
+   We would ship compliance output with no way to know whether the extractor is at 60% or 90%.
+4. **It fails silently.** Stanford RegLab measured purpose-built commercial legal AI at **17–33%**
+   hallucination. The failure literature calls it *"locally plausible fabrication"* — confident,
+   well-formed, professionally credible, and wrong. **A compliance engine silently wrong one time in
+   ten manufactures false assurance**, which is worse than no engine.
+
+**Decision: fetch structured, do not parse.** Document parsing is reserved for genuinely
+unstructured residue (a specific MOA object clause), scoped narrowly, paid for deliberately, with a
+human in the loop, and **surfaced as unverified with its source page cited — never as a determined
+fact.**
+
+**Before depending on OGD:** spot-check against 10–20 CINs confirmed on the MCA V3 portal. The
+portal carried a maintenance banner and a *"sandbox environment… may be incomplete or inaccurate"*
+footer when checked, though the API returned real data with real timestamps. Free personal API key
+required; **rate limits are not published**, so test before making it a hard dependency.
+
 **Threshold-gated provisions**, all decided deterministically and never by the model:
 
 | Definition / gate | Provision |
@@ -177,6 +241,85 @@ documented instances of a typed version silently dropping a clause.
 **Phase 2 — Module A**: s.12, s.88, s.117, s.149, s.152, s.153, s.161, s.164, s.2(41), s.2(62).
 **Phase 3 — Module B**: s.129, s.135, s.138, s.139–147, s.73–76, s.77–87, s.179, s.180, s.185,
 s.186, s.188.
+
+## 3a. Amendment versioning — added 2026-08-16, and it is not optional
+
+Enforcement research (`../placedon-law-research/docs/ENFORCEMENT_FINDINGS.md` §6) establishes that
+**byte-verified text is not sufficient for this Act.** The operative text of the target provisions is
+the product of staggered amendments with *different* commencement dates:
+
+| Section | Current text is | Trap |
+|---|---|---|
+| s.92(5) | 2019 substitution **as modified by** 2020 word-substitutions | Base cut ₹50,000 → ₹10,000 |
+| s.137(3) | 2019 conversion, 2020 amounts | Company max ₹10,00,000 → ₹2,00,000 |
+| **s.12(8)** | **Original 2013 text, never amended** | Was never criminal, so never decriminalised |
+| **s.203(5)** | **2019 text — the 2020 Act did not touch it** | *"2020 reduced everything"* is **wrong here** |
+| s.134(8) | 2020 substitution | Flat, no daily accrual |
+
+The 2019 Act commenced **retrospectively** (deemed in force 2 Nov 2018). The 2020 Act commenced in
+**stages** — the penalty reductions and the s.454(3) proviso have different dates.
+
+This is the **temporal-validity** axis that the literature search independently identified
+([arXiv 2605.23497](https://arxiv.org/abs/2605.23497): *"reliable legal QA requires treating temporal
+validity as a hard constraint"*). Two independent research streams reached the same requirement.
+
+**Schema addition — every provision carries its amendment lineage:**
+
+```python
+@dataclass(frozen=True)
+class Amendment:
+    act: str              # "Companies (Amendment) Act, 2020"
+    clause: str           # "cl.20(a)"
+    effect: str           # "substitution" | "word-substitution" | "insertion"
+    in_force_from: date | None    # None => commencement NOT established
+    source_url: str       # the gazette PDF
+```
+
+**Rule:** a provision whose `in_force_from` is `None` for any amendment in its lineage is
+**`UNCHECKED`**, not `VERIFIED` — the text may be right but we cannot assert it is operative. That
+is exactly what the epistemic lattice is for, and this is the first case where the distinction is
+load-bearing rather than theoretical.
+
+### `SOURCE_BLOCKLIST` — enforced at ingest, with a `verify.py` check
+
+The research checked secondary sources against gazette text and found four serving **wrong statute as
+current**:
+
+| Blocked for statutory text | Why |
+|---|---|
+| `ca2013.com` | Current and pre-amendment text **transposed** for s.172 and s.90(10)/(11) |
+| `taxguru.in` | Serves **pre-2019** s.92(5)/s.137(3), with imprisonment, as current |
+| **`indiankanoon.org`** | Serves **original unamended s.134(8)** with **no amendment annotation** |
+
+**The Indian Kanoon entry is the one that matters.** It was under consideration as a judgments source
+at ₹0.20/document, and it remains fine for judgments. **It must never supply statutory text** — it
+serves superseded provisions without saying so, which is this product's own failure mode arriving
+through the front door.
+
+**Rule, enforced in code: statutory text comes from India Code or the Gazette. Nothing else, ever.**
+
+## 3b. Officer liability is a separate computation
+
+Enforcement orders show officer exposure **routinely exceeding company exposure** — GE Vernova
+₹13,94,000 vs ₹5,00,000; SRA Systems ₹19,77,000 vs ₹5,00,000; Hari Machines **100% on the MD and the
+Company Secretary** because the company was in liquidation.
+
+Two structural reasons, both deterministic and both computable:
+
+- **s.203(5)**: company side is **flat ₹5,00,000, no accrual**; each officer accrues **₹1,000/day to
+  ₹5,00,000**. Long defaults invert the ratio.
+- **s.12(8)**: the ₹1,00,000 cap is **per person**, so exposure scales with board size.
+
+**And exposure multiplies by year.** Orders are issued **per financial year** — Sahil Vincom drew
+four in one day, Moonlight five, Shree Nakoda **eight**. A tool reporting "you are in default"
+without computing *how many years* understates by an order of magnitude.
+
+**Requirement:** `applicability.py` returns company exposure and **per-officer exposure separately**,
+across **each year of default**, with the cap logic per provision. This is arithmetic over statutory
+text — the same `DerivedDate` discipline, applied to money rather than dates.
+
+**And the s.2(60) trap is a checkable condition:** category (iii) makes **all directors** officers in
+default **if the Board never designated one**. Deterministic, and exactly what the engine is for.
 
 ## 4. Verifier — `checker/verifier.py`
 
