@@ -205,10 +205,38 @@ unstructured residue (a specific MOA object clause), scoped narrowly, paid for d
 human in the loop, and **surfaced as unverified with its source page cited — never as a determined
 fact.**
 
-**Before depending on OGD:** spot-check against 10–20 CINs confirmed on the MCA V3 portal. The
-portal carried a maintenance banner and a *"sandbox environment… may be incomplete or inaccurate"*
-footer when checked, though the API returned real data with real timestamps. Free personal API key
-required; **rate limits are not published**, so test before making it a hard dependency.
+### Spot-check performed 2026-08-16 — results
+
+| Test | Result |
+|---|---|
+| Resource responds | **yes** — `status ok`, 3,674,314 records, updated 2026-07-22 |
+| Registration dates parseable | **10/10**, single ISO format `%Y-%m-%d`. No format zoo. |
+| **Lookup by CIN** — the production use case | **works**: `filters[CIN]=…` returns `count=1` |
+| `CompanyClass` gives the s.2(62) gate directly | **yes** — values include `One Person Company`, `Private` |
+| Capital fields numeric | 9/10; empties present |
+| Demo key throughput | **10 records regardless of `limit`** — a personal key is required |
+
+**Three rules for the fetcher, each from something the spot-check found:**
+
+1. **Filter on CIN validity at ingest.** The dataset **mixes companies and LLPs**. One sampled row
+   was `ABD-0345` / *"Titan Winners Fund Management LLP"* — a valid **LLPIN**, not a CIN. LLPs are
+   governed by the **LLP Act 2008**, not the Companies Act, so they are out of scope and their
+   company fields are empty. Regex the 21-character CIN form; reject anything else as
+   *out of scope*, not as *bad data*.
+
+2. **An empty field means abstain, never guess.** Records with blank `PaidupCapital`,
+   `CompanyClass` or `Listingstatus` exist. An applicability engine that treats blank as zero would
+   silently classify a company as small. **Blank is `UNCHECKED`** — the same rule as null
+   `verified_by`, and the lattice already expresses it.
+
+3. **Get a personal API key.** The shared demo key returns 10 records regardless of `limit`.
+   Personal-key rate limits are **not published**; measure them before this becomes a dependency.
+
+**Still outstanding:** cross-checking values against MCA V3 for 10–20 known CINs. `mca.gov.in`
+returns 403 to automated fetch, so this is a manual browser task — and it is the one check that
+would confirm the *values* are right rather than merely well-formed. The portal carried a
+*"sandbox environment… may be incomplete or inaccurate"* footer, so **do not treat OGD as
+authoritative for a filing decision until that cross-check is done.**
 
 **Threshold-gated provisions**, all decided deterministically and never by the model:
 
