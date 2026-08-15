@@ -198,11 +198,43 @@ Two changes, both **narrowing**:
 | **The check ratchet** | Every new check carries `because=` naming the incident that bought it, and must be **mutation-tested**: break what it guards, confirm it fails, restore |
 | **`distress.py`** | Stays in the codebase. Costs ₹0, calls no model, and is not contingent on commercial scope |
 
+## 5a. Reordering, 2026-08-15 — applicability before deadlines
+
+Market research changed the priority, and it did so with enforcement data rather than opinion.
+
+ROC adjudication orders, FY 2024-25 — roughly **1,150 orders, ~31% of all orders ever passed**:
+
+| Section | Subject | ~Orders | Question type |
+|---|---|---|---|
+| s.92 & s.137 | Annual return / financial statements | ~225 | filing |
+| **s.12** | Registered office | **~175** | **applicability** |
+| **s.90** | Significant beneficial owners | **~83** | **applicability** |
+| s.134 | Board's report | ~55 | filing |
+| s.172 | Director appointments | ~45 | applicability |
+| **s.203** | Key managerial personnel | **~40** | **applicability** |
+
+**Nobody is penalised for miscounting six months.** They are penalised for not knowing an obligation
+bound them — *does the SBO regime apply to this company? must this company appoint a KMP?*
+
+Meanwhile free ROC calendars are published by TaxGuru and ClearTax. **Due dates are commodity. What
+those calendars lack is a section column** — TaxGuru's even states its dates are *"tentative."*
+
+**Consequence for this plan.** §0's `DerivedDate` problem is real, the research in §8 confirms the
+design is sound, and it remains the harder engineering. **But it is no longer first.** A calendar
+competes with free; an applicability engine with a quoted section competes with nothing under the
+enterprise price wall.
+
+**s.203 and s.90 are added to Phase 1 of the corpus** — both are threshold-driven applicability
+questions, both are in the top six by enforcement volume, and neither needs any date arithmetic.
+
 ## 6. Build order
+
+**Reordered per §5a — applicability first, deadlines second.**
 
 | | Work | Gate |
 |---|---|---|
-| 1 | `deadlines.py` + `DerivedDate`, **tests first**, pure arithmetic against fixtures, **no corpus** | tests fail before they pass |
+| **1** | **`CompanyFacts` + threshold applicability for s.203 (KMP), s.90 (SBO), s.2(85), s.2(62)** — tests first, fixtures, no corpus. The top enforcement categories, and no date arithmetic needed. | tests fail before they pass |
+| 1b | `deadlines.py` + `DerivedDate`, **tests first**, pure arithmetic against fixtures, **no corpus** | tests fail before they pass |
 | 2 | **Verifier `DerivedDate` rule + mutation test** — break the interval check, confirm failure, restore | `verify.py` GO |
 | **2b** | **Scope-laundering check** — the model's narration must be verified against what the engine **executed**, not only against source text. A well-cited sentence asserting an obligation the engine did not find must fail. | mutation-tested |
 | 3 | `ingest_companies_act.py`, six sections, byte-verified, `source_quality` set | `check_transcription.py` passes |
