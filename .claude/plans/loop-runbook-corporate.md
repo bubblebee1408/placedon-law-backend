@@ -89,6 +89,41 @@ Three numbers as always: fabrication, coverage, wrong abstention. And the retrie
 500". This lands near 100 with far denser cross-referencing. **If recall@3 falls below 1.00, stop
 and report — do not silently switch to embeddings.**
 
+### 8 — Model router · added 2026-08-16
+
+From the pasted AI master plan. The idea is right: route to the cheapest model that suffices,
+*because the engine has already decided the answer*. The ₹ figures in that plan are wrong; the
+mechanism is not.
+
+- Route by task class, not by prompt length
+- **Use measured costs** — Haiku ₹0.97, Sonnet ₹2.91 on this workload, not the plan's ₹0.38/₹1.49
+- **Verify every model identifier against the registry before it enters code.** Six wrong
+  identifiers were found in the pasted plans; `PROVIDER_DECISION.md` §7 records three earlier ones.
+  This check is one command and it is the cheapest verification in the project.
+- **Do not add GPT-4o or DeepSeek.** Two more vendors and keys, for a document-parsing feature whose
+  feasibility is still being researched. Wait for that result.
+- Add a `verify.py` check: **every model name in the codebase must exist in `PRICING`**, so an
+  invented identifier cannot ship.
+
+### 9 — Prompt caching on the statutory context
+
+Largest single cost lever available and it is architectural: the 6,700-token context is **immutable
+statutory text**, and prompts repeat across users. Measure the saving with `bench_answers.py`; do
+not assert it.
+
+### 10 — Free tier as a capability boundary, not a usage cap
+
+Per `../placedon-law-research/docs/PLAN_AUDIT_2026_08_16.md` §4. Everything the deterministic engine
+does is **₹0 per call forever** — applicability, deadlines, section lookup, `trace()`, `conflicts()`,
+the register, the distress route. Those are free and uncapped. The model-calling paths — narration,
+document analysis, exported reports — are paid.
+
+**Do not implement a per-user query counter.** It is the wrong shape and it would gate work that
+costs nothing to serve.
+
+**Blocked on Gate 1**: today the engine abstains on everything, so a free tier would give away a
+refusal.
+
 ### Carried forward from the previous runbook
 
 **6 — CORS allow-list omits `placedon.com`.** `checker/app.py:53-55` lists `placedon-hr.vercel.app`
