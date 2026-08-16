@@ -308,6 +308,58 @@ class Amendment:
 is exactly what the epistemic lattice is for, and this is the first case where the distinction is
 load-bearing rather than theoretical.
 
+### The abstention rule, revised 2026-08-16 — date, don't just find
+
+Gazette research settled s.2(85) and, in doing so, produced a better rule than the one this
+repository has used since the beginning.
+
+**The verified chain:**
+
+| Instrument | Paid-up | Turnover | In force |
+|---|---|---|---|
+| Act as enacted 2013 | ₹50 lakh | ₹2 crore | 1 Apr 2014 |
+| **G.S.R. 92(E)** 1 Feb 2021 | ₹2 crore | ₹20 crore | **1 Apr 2021** — *inserted* cl.(t), deferred commencement |
+| **G.S.R. 700(E)** 15 Sep 2022 | ₹4 crore | ₹40 crore | 15 Sep 2022, on publication |
+| **G.S.R. 880(E)** 1 Dec 2025 | **₹10 crore** | **₹100 crore** | **1 Dec 2025 — current** |
+
+Also operative and easily missed: the test is **conjunctive** — "or" → **"and"** by S.O. 504(E)
+w.e.f. 13 Feb 2015 — and there are **four exclusions**: a public company is never a small company
+*at any size* (opening words, not a proviso), nor is a holding or subsidiary company, a s.8 company,
+or a company governed by a special Act. Turnover is measured *"as per profit and loss account for
+the immediately preceding financial year."*
+
+**Why this reframes the architecture.** The Act **still says "fifty lakh rupees."** A system could
+cite s.2(85), link to a genuine India Code page, quote it verbatim, pass every existing check in
+`verifier.py` — and be wrong by three amendments, because the operative figure lives in subordinate
+legislation that has moved three times.
+
+[Magesh et al.](https://arxiv.org/abs/2405.20362) name this **misgrounding**: an answer is
+hallucinated if it *"falsely asserts that a source supports a statement."* **A citation that resolves
+is not evidence of correctness.**
+
+> ## The rule: refuse when a provision cannot be **dated**, not merely when it cannot be **found**.
+
+Concretely, on top of §3a's `Amendment` lineage:
+
+```python
+# A provision is answerable only if we can say WHEN its text became operative.
+def answerable(p: Provision, on: date) -> bool:
+    if p.verified_by is None:            return False   # unchanged
+    if p.as_at is None:                  return False   # NEW — undated is unanswerable
+    if any(a.in_force_from is None for a in p.amendments): return False   # NEW
+    return True
+```
+
+And a **prescribed-figure trap** the s.2(85) case makes concrete: where a section says *"or such
+higher amount as may be prescribed"*, the operative number is **not in the Act**. The provision must
+carry a pointer to the prescribing instrument, and **a section with an unresolved `prescribed_by` is
+`UNCHECKED` however cleanly its own text verifies.**
+
+This rule is strictly better than "refuse when unverified": it is **narrower** (Ask Practical Law AI
+abstains 62% of the time and is the *worst* performer in the Stanford study — refusal is not
+self-justifying), **more defensible**, and it explains every blocklisted source below in one
+sentence — *they serve real text with no as-at date*.
+
 ### `SOURCE_BLOCKLIST` — enforced at ingest, with a `verify.py` check
 
 The research checked secondary sources against gazette text and found four serving **wrong statute as
