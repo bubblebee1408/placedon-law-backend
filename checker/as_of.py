@@ -79,7 +79,10 @@ def _find_span(html: str, marker: int) -> tuple[int, int, int] | None:
                 if depth == 0:
                     return m.start(), inner, i + 1
             i += 1
-        return m.start(), inner, len(html)
+        # Unbalanced markup in the source. Swallowing to end-of-document would let one rollback
+        # destroy every later span in the section (observed: 1323:m2 captured 8,777 chars and
+        # obliterated m4). Refuse instead.
+        return None
     return None
 
 
@@ -107,7 +110,12 @@ def section_as_of(record: dict, target: date) -> Reconstruction:
     for a in sorted(pending, key=lambda x: x.wef, reverse=True):
         span = _find_span(text, a.marker)
         if span is None:
-            continue  # marker has no span in the body; nothing to roll back
+            # The footnote records a change we cannot locate in the body - the source omits the
+            # bracket delimiters, mis-numbers the superscript, or the markup is unbalanced. We
+            # cannot roll it back and we must not pretend we did.
+            if a.marker not in unknown:
+                unknown.append(a.marker)
+            continue
         open_s, inner_s, close_e = span
         if a.operation == "inserted":
             text = text[:open_s] + text[close_e:]          # did not exist yet
@@ -124,7 +132,10 @@ def section_as_of(record: dict, target: date) -> Reconstruction:
     # applied nor rolled back. Ground-truth testing against the as-enacted print showed sections
     # in exactly this position were still claiming EXACT — a false claim of completeness, which is
     # the one thing this engine must never make. They are now PARTIAL, and the markers are named.
-    undated = [a for a in amendments if a.wef is None and not a.ibid]
+    # The "not a.ibid" carve-out let undated ibid amendments escape the downgrade entirely -
+    # 49349:m4 was neither rolled back nor named. That is the false-completeness failure this
+    # downgrade exists to prevent, surviving in the ibid branch.
+    undated = [a for a in amendments if a.wef is None]
     implausible = [a for a in amendments if a.wef_implausible]
     for a in undated + implausible:
         if _find_span(text, a.marker) is not None and a.marker not in unknown:

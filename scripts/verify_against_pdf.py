@@ -10,6 +10,12 @@ India Code publishes the Companies Act twice: as per-section JSON (what we inges
 instruments both appear verbatim in the PDF, ingestion and the footnote parser are corroborated by
 something we did not write.
 
+SCOPE CORRECTION: the PDF is the CURRENT CONSOLIDATION, not the as-enacted 2013 print - it lists
+sections 3A and 10A (inserted 2018/2019) and carries the full footnote apparatus. That does not
+weaken THIS test, which only asks whether ingested text and parsed instruments appear in an
+independently produced rendering of the same current Act. It does invalidate any use of this file
+as a pre-amendment reference. See verify_reconstruction.py.
+
 Normalisation strips all non-alphanumerics, which also neutralises the PDF's spurious intra-word
 spaces ("an d preserve", "sub -section") from Word justification.
 

@@ -34,7 +34,10 @@ _OPS = (
     (re.compile(r"\bomit\w*\b", re.I), "omitted"),
 )
 # "(w.e.f. 7-5-2018)" / "(w.e.f. 15-11-2016)"
-_WEF = re.compile(r"w\.e\.f\.\s*(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})", re.I)
+# India Code writes this inconsistently: "w.e.f. 7-5-2018", "w.e.f 9-2-2018" (no terminal dot),
+# and "w.e.f. 2-11- 2018" (space inside the date). Tolerate all three. An impossible date such as
+# "21-21-2020" still fails date() and stays undated - we do not repair a bad government source.
+_WEF = re.compile(r"w\.?\s*e\.?\s*f\.?\s*(\d{1,2})\s*[-/.]\s*(\d{1,2})\s*[-/.]\s*(\d{4})", re.I)
 # "dated 24th July, 2014"
 _MONTHS = {m: i for i, m in enumerate(
     ["january", "february", "march", "april", "may", "june", "july",

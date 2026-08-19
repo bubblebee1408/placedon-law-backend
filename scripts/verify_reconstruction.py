@@ -1,9 +1,22 @@
 """
 Ground-truth test for point-in-time reconstruction.
 
-Source: India Code's full-Act PDF is the **as-enacted 2013 print**, not a current consolidation.
-Evidence — of 43 substitutions whose footnote quotes the prior wording, the prior wording appears
-in the PDF 43 times, misses zero. It is a pre-amendment snapshot from a pipeline we did not write.
+RETRACTED CLAIM, recorded so it is not repeated: this script previously asserted that India Code's
+full-Act PDF is the as-enacted 2013 print, and used a 43/43 match on quoted prior wordings as
+evidence. Both were wrong.
+
+The PDF is the CURRENT CONSOLIDATION with its footnote apparatus included - its
+arrangement-of-sections lists 3A and 10A (inserted 2018/2019) and "11. [Omitted.]", and it carries
+562 occurrences of "w.e.f.". The 43/43 match was CIRCULAR: prior wordings appear in the file
+because the footnotes quoting them are in the file, not because the body text is pre-amendment.
+
+Consequence: Test B (rolled-back text vs "as-enacted" reference) was comparing a 2014
+reconstruction against the CURRENT text. It is disabled below rather than left reporting a
+meaningless pass rate. Point-in-time reconstruction remains UNVERIFIED against any external
+source, and obtaining a genuine as-enacted edition is an open task.
+
+Test A is unaffected - it never reads the reference file. It checks only that a substitution whose
+footnote quotes the prior wording has that wording restored after rollback.
 
 Two methodological corrections over the first version of this script, both real bugs in the TEST:
 
@@ -58,7 +71,7 @@ def main() -> None:
     files = [p for p in CORPUS.glob("*.json") if not p.name.startswith("_")]
 
     # --- Test A: the rollback restores the quoted prior wording ---------------
-    a_ok = a_bad = 0
+    a_ok = a_bad = a_declared = 0
     a_fail: list[str] = []
     for p in files:
         rec = json.loads(p.read_text())
@@ -66,6 +79,7 @@ def main() -> None:
         if r.text is None:
             continue
         rolled, current = norm(r.text), norm(rec["content"])
+        declared_unknown = set(r.unknown_spans)
         for a in parse_footnote(rec["footnote"]):
             if a.operation != "substituted":
                 continue
@@ -74,6 +88,12 @@ def main() -> None:
                 continue
             o = norm(old)
             if len(o) < MIN_PRIOR:
+                continue
+            if a.marker in declared_unknown:
+                # The engine said it could not reconstruct this marker. No claim was made, so
+                # there is nothing to score. Silent failure would be a defect; a declared one
+                # is the product working.
+                a_declared += 1
                 continue
             # the discriminating check: prior wording restored, and it was not there before
             if o in rolled and o not in current:
@@ -84,11 +104,12 @@ def main() -> None:
                 a_bad += 1
                 a_fail.append(f"{p.stem}:m{a.marker}")
 
-    # --- Test B: EXACT sections match the as-enacted print --------------------
+    # --- Test B: DISABLED. The reference is the current consolidation, not the as-enacted
+    # print, so this compares a 2014 reconstruction against 2026 text. Kept in source, not run.
     b_ok = b_bad = 0
     b_fail: list[str] = []
     partial = skipped = 0
-    for p in files:
+    for p in []:  # DISABLED - invalid oracle, see module docstring
         rec = json.loads(p.read_text())
         if not parse_footnote(rec["footnote"]):
             skipped += 1
@@ -113,13 +134,16 @@ def main() -> None:
     print(f"     {a_ok}/{tot_a} restored  ({a_ok / max(tot_a, 1) * 100:.1f}%)")
     if a_fail:
         print(f"     failures: {a_fail[:10]}")
-    print(f"\nB. sections claiming EXACT match the as-enacted print")
-    print(f"     {b_ok}/{tot_b} matched  ({b_ok / max(tot_b, 1) * 100:.1f}%)")
-    if b_fail:
-        print(f"     failures: {b_fail[:10]}")
-    print(f"\n   declared PARTIAL (no claim made): {partial}")
-    print(f"   skipped (unamended / too short) : {skipped}")
-    print("\nA failure in A or B is a real defect. A PARTIAL is not — the engine said so.")
+    print(f"     {a_declared} further markers were DECLARED unrecoverable by the engine and are")
+    print(f"     not scored - no claim was made, so there is nothing to be wrong about.")
+    print()
+    print("B. DISABLED. The reference file is India Code's CURRENT consolidation, not the")
+    print("   as-enacted print, so rolling back to 2014 and comparing against it is invalid.")
+    print("   Point-in-time reconstruction is UNVERIFIED against any external source.")
+    print("   Obtaining a genuine as-enacted edition is an open task.")
+    print()
+    print("A failure in A is a real defect. A declared PARTIAL or unknown marker is not -")
+    print("the engine said so, which is the product working as designed.")
 
 
 if __name__ == "__main__":
