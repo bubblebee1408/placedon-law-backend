@@ -120,15 +120,29 @@ def section_as_of(record: dict, target: date) -> Reconstruction:
         else:
             unknown.append(a.marker)
 
+    # An amendment with no effective date cannot be placed on a timeline, so it can neither be
+    # applied nor rolled back. Ground-truth testing against the as-enacted print showed sections
+    # in exactly this position were still claiming EXACT — a false claim of completeness, which is
+    # the one thing this engine must never make. They are now PARTIAL, and the markers are named.
     undated = [a for a in amendments if a.wef is None and not a.ibid]
+    implausible = [a for a in amendments if a.wef_implausible]
+    for a in undated + implausible:
+        if _find_span(text, a.marker) is not None and a.marker not in unknown:
+            unknown.append(a.marker)
+
     fidelity: Fidelity = "EXACT" if not unknown else "PARTIAL"
-    note = ""
+    notes: list[str] = []
     if unknown:
-        note = (f"Prior wording not recoverable from the source for marker(s) "
-                f"{sorted(unknown)}. The footnote records that a change occurred but does not "
-                f"quote the earlier text. Verify against the amending instrument.")
-    elif undated:
-        note = f"{len(undated)} amendment(s) carry no effective date in the source."
+        notes.append(
+            f"Cannot fully reconstruct: marker(s) {sorted(unknown)}. Either the footnote records a "
+            f"change without quoting the earlier text, or the amendment carries no usable effective "
+            f"date in the source. Verify against the amending instrument.")
+    if undated:
+        notes.append(f"{len(undated)} amendment(s) carry no effective date in the source.")
+    if implausible:
+        notes.append(f"{len(implausible)} amendment(s) carry an implausible date in the source "
+                     f"and were excluded from the timeline.")
+    note = " ".join(notes)
 
     return Reconstruction(sid, target, fidelity, text, in_force, pending, sorted(unknown), note)
 
@@ -173,7 +187,7 @@ def _test() -> None:
     check(all(a.wef <= date(2015, 6, 1) for a in d2015.in_force), "s.2: no future amendment in force")
     check(d2015.fidelity in ("EXACT", "PARTIAL"), "s.2: 2015 reconstruction produced")
     if d2015.fidelity == "PARTIAL":
-        check(bool(d2015.unknown_spans) and "not recoverable" in d2015.note,
+        check(bool(d2015.unknown_spans) and "Cannot fully reconstruct" in d2015.note,
               "s.2: PARTIAL names the unrecoverable markers rather than guessing")
 
     # the implausible source date must never enter the timeline
@@ -181,6 +195,15 @@ def _test() -> None:
     rb = section_as_of(bad, date(2018, 1, 1))
     check(all(not a.wef_implausible for a in rb.in_force + rb.not_yet_in_force),
           "implausible source date excluded from reconstruction")
+
+    # Regression: ground-truth testing found sections with UNDATED amendments still claiming
+    # EXACT. An undated amendment cannot be placed on a timeline, so completeness cannot be
+    # claimed. 49349 has one; it must now be PARTIAL.
+    undated_case = json.loads((d / "49349.json").read_text())
+    ru = section_as_of(undated_case, date(2016, 1, 1))
+    check(ru.fidelity == "PARTIAL", "section with an undated amendment cannot claim EXACT")
+    check(bool(ru.unknown_spans) and "Verify against the amending instrument" in ru.note,
+          "PARTIAL names the markers and tells the professional where to look")
 
     check(prior_wording(type("A", (), {"raw": 'Subs. by Act 33 of 2021, s. 28, for "Part XIV of Chapter VI"'})()) 
           == "Part XIV of Chapter VI", "prior wording extracted when the footnote quotes it")
