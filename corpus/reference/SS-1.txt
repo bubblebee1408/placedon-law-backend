@@ -1,0 +1,1148 @@
+
+SS-1
+SECRETARIAL STANDARD
+ON
+MEETINGS OF THE
+BOARD OF DIRECTORS
+Issued by
+The Institute of Company Secretaries of India
+and
+approved by the Central Government
+under Section 118(10) of the Companies Act, 2013
+(Revised version effective from 1st April, 2024)
+i
+First version: April 2015 (effective from 1st July, 2015)
+Second version (Revised): June 2017 (effective from 1st October, 2017)
+Third version (Revised): January 2024 (effective from 1st April, 2024)
+Price : Rs. 70/- (Excluding postage)
+Issued by :
+THE INSTITUTE OF COMPANY SECRETARIES OF INDIA
+ICSI House, 22, Institutional Area, Lodi Road,
+New Delhi 110 003
+Phones : 011-4534 1000
+E-mail info@icsi.edu • Website www.icsi.edu
+ii
+CONTENTS
+Page No.
+INTRODUCTION 1
+SCOPE 1
+DEFINITIONS 2
+SECRETARIAL STANDARD 4
+1. Convening a Meeting 4
+2. Frequency of Meetings 10
+3. Quorum 11
+4. Attendance at Meetings 13
+5. Chairman 15
+6. Passing of Resolution by Circulation 17
+7. Minutes 21
+8. Preservation of Minutes and other Records 30
+9. Disclosure 30
+EFFECTIVE DATE 30
+Annexure ‘A’ 31
+Illustrative list of items of business which shall not be passed by
+circulation and shall be placed before the Board at its Meeting
+Annexure ‘B’ 34
+Illustrative list of items of business for the Agenda for the First
+Meeting of the Board of the company
+iii
+iv
+SS-1 – SECRETARIAL STANDARD ON MEETINGS OF THE BOARD OF DIRECTORS 1
+SECRETARIAL STANDARD
+ON
+MEETINGS OF THE BOARD OF DIRECTORS
+The following is the text of the Secretarial Standard-1 (SS-1) on “Meetings
+of the Board of Directors”, issued by the Council of the Institute of
+Company Secretaries of India and approved by the Central Government.
+Adherence by a company to this Secretarial Standard is mandatory, as
+per the provisions of the Companies Act, 2013.
+(In this Secretarial Standard, the Standard portions have been
+set in bold type. These shall be read in the context of the
+background material which has been set in normal. Both the
+Standard portions and the background material have equal
+authority).
+INTRODUCTION
+This Standard prescribes a set of principles for convening and
+conducting Meetings of the Board of Directors and matters related
+thereto.
+SCOPE
+This Standard is applicable to the Meetings of Board of Directors of all
+companies incorporated under the Act except One Person Company
+(OPC) in which there is only one Director on its Board and a company
+registered under Section 8 of the Companies Act, 2013 or corresponding
+provisions of any previous enactment thereof.
+However, companies registered under Section 8 of the Companies Act,
+2013 need to comply with the applicable provisions of the Act relating
+to Board Meetings.
+2 SS-1 – SECRETARIAL STANDARD ON MEETINGS OF THE BOARD OF DIRECTORS
+The exemption to a company registered under Section 8 of the
+Companies Act, 2013 as referred above and the specific exemptions
+given to a private company in this Standard shall be available only if
+it has not committed any default in filing its Financial Statements or
+Annual Return with the Registrar of Companies.
+The principles enunciated in this Standard for Meetings of the Board of
+Directors are also applicable to Meetings of Committee(s) of the Board,
+unless otherwise stated herein or stipulated by any other applicable
+Guidelines, Rules or Regulations.
+This Standard is in conformity with the provisions of the Act. However,
+if, due to subsequent changes in the Act, a particular Standard or any
+part thereof becomes inconsistent with the Act, the provisions of the
+Act shall prevail.
+DEFINITIONS
+The following terms are used in this Standard with the meaning
+specified:
+“Act” means the Companies Act, 2013 (Act No. 18 of 2013) or any
+previous enactment thereof, or any statutory modification thereto or
+re-enactment thereof and includes any Rules and Regulations framed
+thereunder.
+“Articles” means the Articles of Association of a company, as originally
+framed or as altered from time to time or applied in pursuance of any
+previous company law or the Companies Act, 2013.
+“Calendar Year” means calendar year as per Gregorian calendar i.e.
+a period of one year which begins on 1st January and ends on 31st
+December.
+“Chairman” means the Chairman of the Board or its Committee, as
+the case may be, or the Chairman appointed or elected for a Meeting.
+“Committee” means a Committee of Directors mandatorily required to
+be constituted by the Board under the Act.
+“Electronic Mode” in relation to Meetings means Meetings through video
+conferencing or other audio-visual means. “Video conferencing or other
+SS-1 – SECRETARIAL STANDARD ON MEETINGS OF THE BOARD OF DIRECTORS 3
+audio-visual means” means audio-visual electronic communication
+facility employed which enables all the persons participating in a
+Meeting to communicate concurrently with each other without an
+intermediary and to participate effectively in the Meeting.
+“Invitee” means a person, other than a Director and Company Secretary,
+who attends a particular Meeting by invitation.
+“Maintenance” means keeping of registers and records either in
+physical or electronic form, as may be permitted under any law for
+the time being in force, and includes the making of appropriate entries
+therein, the authentication of such entries and the preservation of such
+physical or electronic records.
+“Meeting” means a duly convened, held and conducted Meeting of the
+Board or any Committee thereof.
+“Minutes” means a formal written record, in physical or electronic form,
+of the proceedings of a Meeting.
+“Minutes Book” means a Book maintained in physical or in electronic
+form for the purpose of recording of Minutes.
+“National Holiday” means Republic Day i.e. 26th January, Independence
+Day i.e. 15th August, Gandhi Jayanti i.e. 2nd October and such other day
+as may be declared as National Holiday by the Central Government.
+“Original Director” means a Director in whose place the Board has
+appointed any other individual as an Alternate Director.
+“Quorum” means the minimum number of Directors whose presence
+is necessary for holding of a Meeting.
+“Secretarial Auditor” means a Company Secretary in Practice or a firm
+of Company Secretary(ies) in Practice appointed in pursuance of the
+Act to conduct the secretarial audit of the company.
+“Secured Computer System” means computer hardware, software,
+and procedure that –
+(a) are reasonably secure from unauthorized access and misuse;
+4 SS-1 – SECRETARIAL STANDARD ON MEETINGS OF THE BOARD OF DIRECTORS
+(b) provide a reasonable level of reliability and correct operation;
+(c) are reasonably suited to performing the intended functions; and
+(d) adhere to generally accepted security procedures.
+“Timestamp” means the current time of an event that is recorded by
+a Secured Computer System and is used to describe the time that is
+printed to a file or other location to help keep track of when data is
+added, removed, sent or received.
+Words and expressions used and not defined herein shall have the
+meaning respectively assigned to them under the Act.
+SECRETARIAL STANDARD
+1. Convening a Meeting
+1.1 Authority
+1.1.1 Any Director of a company may, at any time,
+summon a Meeting of the Board, and the
+Company Secretary or where there is no Company
+Secretary, any person authorised by the Board in
+this behalf, on the requisition of a Director, shall
+convene a Meeting of the Board, in consultation
+with the Chairman or in his absence, the
+Managing Director or in his absence, the Whole-
+time Director, where there is any, unless otherwise
+provided in the Articles.
+1.1.2 The Chairman may, unless dissented to or
+objected by the majority of Directors present at
+a Meeting at which a Quorum is present, adjourn
+the Meeting for any reason, at any stage of the
+Meeting.
+1.2 Day, Time, Place, Mode and Serial Number of Meeting
+1.2.1 Every Meeting shall have a serial number.
+1.2.2 A Meeting may be convened at any time and
+place, on any day.
+SS-1 – SECRETARIAL STANDARD ON MEETINGS OF THE BOARD OF DIRECTORS 5
+Notice of the Meeting shall clearly mention a venue,
+whether registered office or otherwise, to be the venue
+of the Meeting and all the recordings of the proceedings
+of the Meeting, if conducted through Electronic Mode,
+shall be deemed to be made at such place.
+1.2.3 Any Director may participate through Electronic
+Mode in a Meeting unless the Act or any other law
+specifically prohibits such participation through
+Electronic Mode in respect of any item of business.
+Directors shall not participate through Electronic Mode in the discussion
+on restricted items unless there is a Quorum in a Meeting through
+physical presence of Directors.
+1.3 Notice
+1.3.1 Notice in writing of every Meeting shall be given
+to every Director by hand or by speed post or by
+registered post or by facsimile or by e-mail or by
+any other electronic means.
+The Notice shall be sent to the postal address or e-mail address,
+registered by the Director with the company or in the absence of such
+details or any change thereto, any of such addresses appearing in the
+Director Identification Number (DIN) registration of the Director.
+Where a Director specifies a particular means of delivery of Notice,
+the Notice shall be given to him by such means. However, in case of a
+Meeting conducted at a shorter Notice, the company may choose an
+expedient mode of sending Notice.
+Proof of sending Notice and its delivery shall be maintained by the
+company for such period as decided by the Board, which shall not be
+less than three years from the date of the Meeting.
+1.3.2 Notice shall be issued by the Company Secretary
+or where there is no Company Secretary, any
+Director or any other person authorised by the
+Board for the purpose.
+6 SS-1 – SECRETARIAL STANDARD ON MEETINGS OF THE BOARD OF DIRECTORS
+1.3.3 The Notice shall specify the serial number, day,
+date, time and full address of the venue of the
+Meeting.
+1.3.4 The Notice shall inform the Directors about the
+option available to them to participate through
+Electronic Mode and provide them all the
+necessary information.
+If a Director intends to participate through Electronic Mode, he shall give
+sufficient prior intimation to the Chairman or the Company Secretary to
+enable them to make suitable arrangements in this behalf.
+The Director may intimate his intention of participation through Electronic
+Mode at the beginning of the Calendar Year also, which shall be valid
+for such Calendar Year.
+Such intimation shall not debar him from participation in the Meeting
+in person provided he gives such intimation sufficiently in advance to
+the company.
+The Notice shall also contain the contact number or e-mail address(es)
+of the Chairman or the Company Secretary or any other person
+authorised by the Board, to whom the Director shall confirm in this
+regard. In the absence of an advance communication or confirmation
+from the Director as above, it shall be assumed that he will attend the
+Meeting physically.
+1.3.5 The Notice of a Meeting shall be given even if
+Meetings are held on pre-determined dates or at
+pre-determined intervals.
+1.3.6 Notice convening a Meeting shall be given at
+least seven days before the date of the Meeting,
+unless the Articles prescribe a longer period.
+In case the company sends the Notice by speed post or by registered
+post, an additional two days shall be added for the service of Notice.
+Notice of an adjourned Meeting shall be given to all Directors including
+those who did not attend the Meeting on the originally convened date
+SS-1 – SECRETARIAL STANDARD ON MEETINGS OF THE BOARD OF DIRECTORS 7
+and unless the date of adjourned Meeting is decided at the Meeting,
+Notice thereof shall also be given not less than seven days before the
+Meeting.
+1.3.7 The Agenda, setting out the business to be
+transacted at the Meeting, and Notes on Agenda
+shall be given to the Directors at least seven days
+before the date of the Meeting, unless the Articles
+prescribe a longer period.
+Agenda and Notes on Agenda shall be sent to all Directors by hand
+or by speed post or by registered post or by e-mail or by any other
+electronic means. These shall be sent to the postal address or e-mail
+address or any other electronic address registered by the Director with
+the company or in the absence of such details or any change thereto, to
+any of such addresses appearing in the Director Identification Number
+(DIN) registration of the Directors.
+In case the company sends the Agenda and Notes on Agenda by speed
+post or by registered post, an additional two days shall be added for
+the service of Agenda and Notes on Agenda.
+Where a Director specifies a particular means of delivery of Agenda
+and Notes on Agenda, these papers shall be sent to him by such
+means. However, in case of a Meeting conducted at a shorter Notice,
+the company may choose an expedient mode of sending Agenda and
+Notes on Agenda.
+Proof of sending Agenda and Notes on Agenda and their delivery shall
+be maintained by the company for such period as decided by the Board,
+which shall not be less than three years from the date of the Meeting.
+The Notice, Agenda and Notes on Agenda shall be sent to the Original
+Director also at the address registered with the company, even if these
+have been sent to the Alternate Director. However, the mode of sending
+Notice, Agenda and Notes on Agenda to the Original Director shall be
+decided by the company.
+Notes on items of business which are in the nature of Unpublished
+Price Sensitive Information may be given at a shorter period of time
+than stated above, with the consent of a majority of the Directors, which
+shall include at least one Independent Director, if any.
+8 SS-1 – SECRETARIAL STANDARD ON MEETINGS OF THE BOARD OF DIRECTORS
+For this purpose,
+“Unpublished Price Sensitive Information” means any information,
+relating to a company or its securities, directly or indirectly, that is
+not generally available, which upon becoming generally available, is
+likely to materially affect the price of the securities and shall, ordinarily
+including but not restricted to, information relating to the following: –
+(i) financial results;
+(ii) dividends;
+(iii) change in capital structure;
+(iv) mergers, de-mergers, acquisitions, delistings, disposals and
+expansion of business and such other transactions; and
+(v) changes in key managerial personnel*.
+General consent for giving Notes on items of Agenda which are in the
+nature of Unpublished Price Sensitive Information at a shorter Notice
+may be taken in the first Meeting of the Board held in each financial
+year and also whenever there is any change in Directors.
+Where general consent as above has not been taken, the requisite
+consent shall be taken before the concerned items are taken up for
+consideration at the Meeting. The fact of consent having been taken
+shall be recorded in the Minutes.
+Supplementary Notes on any of the Agenda Items may be circulated
+at or prior to the Meeting but shall be taken up with the permission
+of the Chairman and with the consent of a majority of the Directors
+present in the Meeting, which shall include at least one Independent
+Director, if any.
+1.3.8 Each item of business requiring approval at the
+Meeting shall be supported by a note setting
+out the details of the proposal, relevant material
+facts that enable the Directors to understand the
+meaning, scope and implications of the proposal
+* Definition under SEBI (Prohibition of Insider Trading) Regulations, 2015.
+SS-1 – SECRETARIAL STANDARD ON MEETINGS OF THE BOARD OF DIRECTORS 9
+and the nature of concern or interest, if any, of
+any Director in the proposal, which the Director
+had earlier disclosed.
+Where approval by means of a Resolution is required, the draft of such
+Resolution shall be either set out in the note or placed at the Meeting.
+However, any other decision taken at the Meeting may also be recorded
+in the Minutes in the form of Resolution.
+The items of business that are required by the Act or any other
+applicable law to be considered at a Meeting of the Board shall be
+placed before the Board at its Meeting. An illustrative list of such items
+is given at Annexure ‘A’.
+There are certain items which shall be placed before the Board at its
+first Meeting. An illustrative list thereof is given at Annexure ‘B’.
+1.3.9 Each item of business to be taken up at the
+Meeting shall be serially numbered.
+Numbering shall be in a manner which would enable ease of reference
+or cross-reference.
+1.3.10 Any item not included in the Agenda may be
+taken up for consideration with the permission of
+the Chairman and with the consent of a majority
+of the Directors present in the Meeting.
+The decision taken in respect of any other item shall be final only on its
+ratification by a majority of the Directors of the company, unless such
+item was approved at the Meeting itself by a majority of Directors of
+the company.
+1.3.11 To transact urgent business, the Notice, Agenda
+and Notes on Agenda may be given at shorter
+period of time than stated above, if at least one
+Independent Director, if any, shall be present at
+such Meeting.
+If no Independent Director is present, decisions taken at such a
+Meeting shall be circulated to all the Directors and shall be final only
+on ratification thereof by at least one Independent Director, if any.
+10 SS-1 – SECRETARIAL STANDARD ON MEETINGS OF THE BOARD OF DIRECTORS
+In case the company does not have an Independent Director, the
+decisions shall be final only on ratification thereof by a majority of the
+Directors of the company, unless such decisions were approved at the
+Meeting itself by a majority of Directors of the company.
+The fact that the Meeting is being held at a shorter Notice shall be
+stated in the Notice.
+2. Frequency of Meetings
+2.1 Meetings of the Board
+The company shall hold at least four Meetings of its
+Board in each Calendar Year with a maximum interval
+of one hundred and twenty days between any two
+consecutive Meetings.
+The company shall hold first Meeting of its Board within thirty days of
+the date of incorporation. It shall be sufficient if subsequent Meetings
+are held with a maximum interval of one hundred and twenty days
+between any two consecutive Meetings.
+Further, it shall be sufficient if a One Person Company, Small Company,
+Dormant Company or private company which is recognised as start-up
+holds one Meeting of the Board in each half of a Calendar Year and the
+gap between the two Meetings of the Board is not less than ninety days.
+An adjourned Meeting being a continuation of the original Meeting,
+the interval period in such a case, shall be counted from the date of
+the original Meeting.
+For the purposes of this Standard, the term “start-up” means a private
+company incorporated under the Act and recognised as start-up in
+accordance with the notification issued by the Department for Promotion
+of Industry and Internal Trade, Ministry of Commerce and Industry,
+Government of India.
+2.2 Meetings of Committees
+Committees shall meet as often as necessary subject to
+the minimum number and frequency prescribed by any
+law or any authority or as stipulated by the Board.
+SS-1 – SECRETARIAL STANDARD ON MEETINGS OF THE BOARD OF DIRECTORS 11
+2.3 Meeting of Independent Directors
+Where a company is required to appoint Independent
+Directors under the Act, such Independent Directors shall
+hold at least one Meeting in a financial year without
+attendance of Non-Independent Directors and members
+of management.
+The Meeting shall be held to review the performance of Non-
+Independent Directors and the Board as a whole; to review the
+performance of the Chairman and to assess the quality, quantity and
+timeliness of flow of information between the company management
+and the Board and its members that is necessary for the Board to
+effectively and reasonably perform their duties.
+The Company Secretary, wherever appointed, shall facilitate convening
+and holding of such Meeting, if so desired by the Independent Directors.
+3. Quorum
+3.1 Quorum shall be present throughout the Meeting.
+Quorum shall be present not only at the time of
+commencement of the Meeting but also while transacting
+business.
+3.2 A Director shall neither be reckoned for Quorum nor
+shall be entitled to participate in respect of an item
+of business in which he is interested. However, in case
+of a private company, a Director shall be reckoned for
+Quorum and entitled to participate in respect of such
+item after disclosure of his interest.
+For this purpose, a Director shall be treated as interested in a contract
+or arrangement entered into or proposed to be entered into by the
+company:
+(a) with any body corporate, if such Director, along with other
+Directors holds more than two percent of the paid-up share
+capital of that body corporate, or he is a promoter, or manager
+or chief executive officer of that body corporate; or
+12 SS-1 – SECRETARIAL STANDARD ON MEETINGS OF THE BOARD OF DIRECTORS
+(b) with a firm or other entity, if such Director is a partner, owner or
+Member, as the case may be, of that firm or other entity.
+If the item of business is a related party transaction, then he shall not
+be present at the Meeting, whether physically or through Electronic
+Mode, during discussions and voting on such item.
+3.3 Directors participating through Electronic Mode in a
+Meeting shall be counted for the purpose of Quorum,
+except for restricted items in which Quorum shall
+be ascertained on the basis of physical presence of
+Directors.
+3.4 Meetings of the Board
+3.4.1 The Quorum for a Meeting of the Board shall be
+one-third of the total strength of the Board, or
+two Directors, whichever is higher.
+Any fraction contained in the above one-third shall be rounded off to
+the next one.
+Where the Quorum requirement provided in the Articles is higher than
+one-third of the total strength, the company shall conform to such
+higher requirement.
+Total strength for this purpose, shall not include Directors whose places
+are vacant.
+If the number of Interested Directors exceeds or is equal to two-thirds
+of the total strength, the remaining Directors present at the Meeting,
+being not less than two, shall be the Quorum during such item.
+If a Meeting of the Board could not be held for want of Quorum, then,
+unless otherwise provided in the Articles, the Meeting shall automatically
+stand adjourned to the same day in the next week, at the same time
+and place or, if that day is a National Holiday, to the next succeeding
+day which is not a National Holiday, at the same time and place.
+If there is no Quorum at the adjourned Meeting also, the Meeting shall
+stand cancelled.
+SS-1 – SECRETARIAL STANDARD ON MEETINGS OF THE BOARD OF DIRECTORS 13
+3.4.2 Where the number of Directors is reduced below
+the minimum fixed by the Articles, no business
+shall be transacted unless the number is first
+made up by the remaining Director(s) or through
+a General Meeting.
+If the number of Directors is reduced below the Quorum fixed by the
+Act for a Meeting of the Board, the continuing Directors may act for
+the purpose of increasing the number of Directors to that fixed for the
+Quorum or of summoning a general meeting of the company, and for
+no other purpose.
+3.5 Meetings of Committees
+Unless otherwise stipulated in the Act or the Articles
+or under any other law, the Quorum for Meetings of
+any Committee constituted by the Board shall be as
+specified by the Board. If no such Quorum is specified,
+the presence of all the members of any such Committee
+is necessary to form the Quorum.
+Regulations framed under any other law may contain provisions for
+the Quorum of a Committee and such stipulations shall be followed.
+4. Attendance at Meetings
+4.1 Attendance register
+4.1.1 Every company shall maintain attendance register
+for the Meetings of the Board and Meetings of the
+Committee.
+The pages of the attendance register shall be serially numbered.
+If an attendance register is maintained in loose-leaf form, it shall be
+bound periodically, atleast once in every three years.
+4.1.2 The attendance register shall contain the
+following particulars: serial number and date
+of the Meeting; in case of a Committee Meeting
+name of the Committee; place of the Meeting;
+14 SS-1 – SECRETARIAL STANDARD ON MEETINGS OF THE BOARD OF DIRECTORS
+time of the Meeting; names and signatures of
+the Directors, the Company Secretary and also of
+persons attending the Meeting by invitation and
+their mode of presence, if participating through
+Electronic Mode.
+4.1.3 The attendance register shall be deemed to have
+been signed by the Directors participating through
+Electronic Mode, if their attendance is recorded
+in the attendance register and authenticated
+by the Company Secretary or where there is
+no Company Secretary, by the Chairman or by
+any other Director present at the Meeting, if so
+authorised by the Chairman and the fact of such
+participation is also recorded in the Minutes.
+In case of Directors participating through Electronic Mode, the Chairman
+shall confirm the attendance of such Directors. For this purpose, at the
+commencement of the Meeting, the Chairman shall take a roll call. The
+Chairman or Company Secretary shall request the Director participating
+through Electronic Mode to state his full name and location from where
+he is participating and shall record the same in the Minutes. The
+proceedings of such Meetings shall be recorded through any electronic
+recording mechanism and the details of the venue, date and time shall
+be mentioned.
+4.1.4 The attendance register shall be maintained at
+the Registered Office of the company or such
+other place as may be approved by the Board.
+The attendance register may be taken to any place where a Meeting
+of the Board or Committee is held.
+4.1.5 The attendance register is open for inspection
+by the Directors. Even after a person ceases to
+be a Director, he shall be entitled to inspect the
+attendance register of the Meetings held during
+the period of his Directorship.
+SS-1 – SECRETARIAL STANDARD ON MEETINGS OF THE BOARD OF DIRECTORS 15
+The Company Secretary in Practice appointed by the company or the
+Secretarial Auditor or the Statutory Auditor of the company can also
+inspect the attendance register as he may consider necessary for the
+performance of his duties.
+A Member of the company is not entitled to inspect the attendance
+register.
+4.1.6 The attendance register shall be preserved for
+a period of at least eight financial years from
+the date of last entry made therein and may be
+destroyed thereafter with the approval of the
+Board.
+4.1.7 The attendance register shall be in the custody of
+the Company Secretary.
+Where there is no Company Secretary, the attendance register shall
+be in the custody of any other person authorised by the Board for this
+purpose.
+4.2 Leave of absence shall be granted to a Director only
+when a request for such leave has been communicated
+to the Company Secretary or to the Chairman or to any
+other person authorised by the Board to issue Notice of
+the Meeting.
+The office of a Director shall become vacant in case the Director absents
+himself from all the Meetings of the Board held during a period of
+twelve months with or without seeking leave of absence of the Board.
+5. Chairman
+5.1 Meetings of the Board
+5.1.1 The Chairman of the company shall be the
+Chairman of the Board. If the company does not
+have a Chairman, the Directors may elect one of
+themselves to be the Chairman of the Board.
+5.1.2 The Chairman of the Board shall conduct the
+Meetings of the Board. If no such Chairman is
+elected or if the Chairman is unable to attend the
+16 SS-1 – SECRETARIAL STANDARD ON MEETINGS OF THE BOARD OF DIRECTORS
+Meeting, the Directors present at the Meeting shall
+elect one of themselves to chair and conduct the
+Meeting, unless otherwise provided in the Articles.
+It would be the duty of the Chairman to check, with the assistance of
+Company Secretary, that the Meeting is duly convened and constituted
+in accordance with the Act or any other applicable guidelines, Rules and
+Regulations before proceeding to transact business. The Chairman shall
+then conduct the Meeting. The Chairman shall encourage deliberations
+and debate and assess the sense of the Meeting.
+If the Chairman is interested in an item of business, he shall entrust
+the conduct of the proceedings in respect of such item to any Non-
+Interested Director, with the consent of the majority of Directors present,
+and resume the chair after that item of business has been transacted.
+However, in case of a private company, the Chairman may continue
+to chair, be reckoned for quorum and entitled to participate in respect
+of such item after disclosure of his interest.
+If the item of business is a related party transaction, the Chairman shall
+not be present at the Meeting, whether physically or through Electronic
+Mode, during discussions and voting on such item.
+In case some of the Directors participate through Electronic Mode, the
+Chairman and the Company Secretary shall take due and reasonable
+care to safeguard the integrity of the Meeting by ensuring sufficient
+security and identification procedures to record proceedings and safe
+keeping of the recordings. No person other than the Director concerned
+shall be allowed access to the proceedings of the Meeting where
+Director(s) participate through Electronic Mode, except a Director who
+is differently abled, provided such Director requests the Board to allow
+a person to accompany him and ensures that such person maintains
+confidentiality of the matters discussed at the Meeting.
+The Chairman shall ensure that the required Quorum is present
+throughout the Meeting and at the end of discussion on each agenda
+item the Chairman shall announce the summary of the decision taken
+thereon.
+Unless otherwise provided in the Articles, in case of an equality of votes,
+the Chairman shall have a second or casting vote.
+SS-1 – SECRETARIAL STANDARD ON MEETINGS OF THE BOARD OF DIRECTORS 17
+5.2 Meetings of Committees
+A member of the Committee appointed by the Board
+or elected by the Committee as Chairman of the
+Committee, in accordance with the Act or any other
+law or the Articles, shall conduct the Meetings of the
+Committee. If no Chairman has been so elected or if
+the elected Chairman is unable to attend the Meeting,
+the Committee shall elect one of its members present to
+chair and conduct the Meeting of the Committee, unless
+otherwise provided in the Articles.
+6. Passing of Resolution by Circulation
+The Act requires certain business to be approved only at Meetings of
+the Board. However, other business that requires urgent decisions can
+be approved by means of Resolutions passed by circulation. Resolutions
+passed by circulation are deemed to be passed at a duly convened
+Meeting of the Board and have equal authority.
+6.1 Authority
+6.1.1 The Chairman of the Board or in his absence,
+the Managing Director or in their absence, any
+Director other than an Interested Director, shall
+decide, before the draft Resolution is circulated
+to all the Directors, whether the approval of the
+Board for a particular business shall be obtained
+by means of a Resolution by circulation.
+An illustrative list of items which shall be placed before the Board at its
+Meeting and shall not be passed by circulation is given at Annexure ‘A’.
+6.1.2 Where not less than one-third of the total number
+of Directors for the time being require the
+Resolution under circulation to be decided at a
+Meeting, the Chairman shall put the Resolution
+for consideration at a Meeting of the Board.
+Interested Directors shall not be excluded for the purpose of determining
+the above one-third of the total number of Directors.
+18 SS-1 – SECRETARIAL STANDARD ON MEETINGS OF THE BOARD OF DIRECTORS
+6.2 Procedure
+6.2.1 A Resolution proposed to be passed by circulation
+shall be sent in draft, together with the necessary
+papers, to all the Directors including Interested
+Directors on the same day.
+6.2.2 The draft of the Resolution to be passed and the
+necessary papers shall be circulated amongst
+the Directors by hand, or by speed post or by
+registered post or by courier, or by e-mail or by
+any other recognised electronic means.
+The draft of the Resolution and the necessary papers shall be sent to
+the postal address or e-mail address registered by the Director with
+the company or in the absence of such details or any change thereto,
+any of the addresses appearing in the Director Identification Number
+(DIN) registration of the Director.
+Proof of sending and delivery of the draft of the Resolution and the
+necessary papers shall be maintained by the company for such period
+as decided by the Board, which shall not be less than three years from
+the date of circulation of such Resolution.
+6.2.3 Each business proposed to be passed by way of
+Resolution by circulation shall be explained by
+a note setting out the details of the proposal,
+relevant material facts that enable the Directors to
+understand the meaning, scope and implications
+of the proposal, the nature of concern or interest,
+if any, of any Director in the proposal, which the
+Director had earlier disclosed and the draft of the
+Resolution proposed. The note shall also indicate
+how a Director shall signify assent or dissent to
+the Resolution proposed and the date by which
+the Director shall respond.
+Each Resolution shall be separately explained.
+The decision of the Directors shall be sought for each Resolution
+separately.
+SS-1 – SECRETARIAL STANDARD ON MEETINGS OF THE BOARD OF DIRECTORS 19
+Not more than seven days from the date of circulation of the draft of
+the Resolution shall be given to the Directors to respond and the last
+date shall be computed accordingly.
+An additional two days shall be added for the service of the draft
+Resolution, in case the same has been sent by the company by speed
+post or by registered post or by courier.
+6.3 Approval
+6.3.1 The Resolution is passed when it is approved by
+a majority of the Directors entitled to vote on
+the Resolution, unless not less than one-third of
+the total number of Directors for the time being
+require the Resolution under circulation to be
+decided at a Meeting.
+Every such Resolution shall carry a serial number.
+If any special majority or the affirmative vote of any particular Director
+or Directors is specified in the Articles, the Resolution shall be passed
+only with the assent of such special majority or such affirmative vote.
+An Interested Director shall not be entitled to vote. For this purpose,
+a Director shall be treated as interested in a contract or arrangement
+entered or proposed to be entered into by the company:
+(a) with any body corporate, if such Director, along with other
+Directors holds more than two percent of the paid-up share
+capital of that body corporate, or he is a promoter, or manager
+or chief executive officer of that body corporate; or
+(b) with a firm or other entity, if such Director is a partner, owner or
+Member, as the case may be, of that firm or other entity.
+6.3.2 The Resolution, if passed, shall be deemed to
+have been passed on the earlier of:
+(a) the last date specified for signifying assent
+or dissent by the Directors, or
+(b) the date on which assent has been received
+from the required majority, provided that on
+20 SS-1 – SECRETARIAL STANDARD ON MEETINGS OF THE BOARD OF DIRECTORS
+that date the number of Directors, who have
+not yet responded on the resolution under
+circulation, along with the Directors who have
+expressed their desire that the resolution
+under circulation be decided at a Meeting of
+the Board, shall not be one third or more of
+the total number of Directors; and
+shall be effective from that date, if no other
+effective date is specified in such Resolution.
+Directors shall signify their assent or dissent by signing the Resolution
+to be passed by circulation or by e-mail or any other electronic means.
+Directors shall append the date on which they have signed the
+Resolution. In case a Director does not append a date, the date of
+receipt by the company of the signed Resolution shall be taken as the
+date of signing.
+In cases where the interest of a Director is yet to be communicated to
+the company, the concerned Director shall disclose his interest before
+the last date specified for the response and abstain from voting.
+In case not less than one-third of the Directors wish the matter to be
+discussed and decided at a Meeting, each of the concerned Directors
+shall communicate the same before the last date specified for the
+response.
+In case the Director does not respond on or before the last date specified
+for signifying assent or dissent, it shall be presumed that the Director
+has abstained from voting.
+If the approval of the majority of Directors entitled to vote is not received
+by the last date specified for receipt of such approval, the Resolution
+shall be considered as not passed.
+6.4 Recording
+Resolutions passed by circulation shall be noted at a
+subsequent Meeting of the Board and the text thereof
+with dissent or abstention, if any, shall be recorded in
+the Minutes of such Meeting.
+SS-1 – SECRETARIAL STANDARD ON MEETINGS OF THE BOARD OF DIRECTORS 21
+6.5 Validity
+Passing of Resolution by circulation shall be considered
+valid as if it had been passed at a duly convened Meeting
+of the Board.
+This shall not dispense with the requirement for the Board to meet at
+the specified frequency.
+7. Minutes
+Every company shall keep Minutes of all Board and Committee Meetings
+in a Minutes Book. Minutes kept in accordance with the provisions of
+the Act evidence the proceedings recorded therein. Minutes help in
+understanding the deliberations and decisions taken at the Meeting.
+7.1 Maintenance of Minutes
+7.1.1 Minutes shall be recorded in books maintained
+for that purpose.
+7.1.2 A distinct Minutes Book shall be maintained for
+Meetings of the Board and each of its Committees.
+7.1.3 A company may maintain its Minutes in physical
+or in electronic form.
+Minutes may be maintained in electronic form in such manner as
+prescribed under the Act and as may be decided by the Board. Minutes
+in electronic form shall be maintained with Timestamp.
+A company shall however follow a uniform and consistent form of
+maintaining the Minutes. Any deviation in such form of maintenance
+shall be authorised by the Board.
+7.1.4 The pages of the Minutes Books shall be
+consecutively numbered.
+This shall be followed irrespective of a break in the Book arising out of
+periodical binding in case the Minutes are maintained in physical form.
+This shall be equally applicable for maintenance of Minutes Book in
+electronic form with Timestamp.
+22 SS-1 – SECRETARIAL STANDARD ON MEETINGS OF THE BOARD OF DIRECTORS
+In the event any page or part thereof in the Minutes Book is left blank,
+it shall be scored out and initialled by the Chairman who signs the
+Minutes.
+7.1.5 Minutes shall not be pasted or attached to the
+Minutes Book, or tampered with in any manner.
+7.1.6 Minutes Books, if maintained in loose-leaf form,
+shall be bound periodically depending on the
+size and volume and coinciding with one or more
+financial years of the company.
+There shall be a proper locking device to ensure security and proper
+control to prevent removal or manipulation of the loose leaves.
+7.1.7 Minutes Books shall be kept at the Registered
+Office of the company or at such other place as
+may be approved by the Board.
+7.2 Contents of Minutes
+7.2.1 General Contents
+7.2.1.1 Minutes shall state, at the beginning the serial
+number and type of the Meeting, name of
+the company, day, date, venue and time of
+commencement of the Meeting.
+In respect of a Meeting adjourned for want of Quorum, a statement
+to that effect by the Chairman or in his absence, by any other Director
+present at the Meeting shall be recorded in the Minutes.
+7.2.1.2 Minutes shall record the names of the Directors
+present physically or through Electronic Mode, the
+Company Secretary who is in attendance at the
+Meeting and Invitees, if any, including Invitees for
+specific items.
+The names of the Directors shall be listed in alphabetical order or in
+any other logical manner, but in either case starting with the name of
+the person in the Chair.
+SS-1 – SECRETARIAL STANDARD ON MEETINGS OF THE BOARD OF DIRECTORS 23
+The capacity in which an Invitee attends the Meeting and where
+applicable, the name of the entity such Invitee represents and the
+relation, if any, of that entity to the company shall also be recorded.
+7.2.1.3 Minutes shall contain a record of all appointments
+made at the Meeting.
+Where the Minutes have been kept in accordance with the Act and all
+appointments have been recorded, then until the contrary is proved,
+all appointments of Directors, First Auditors, Key Managerial Personnel,
+Secretarial Auditors, Internal Auditors and Cost Auditors, shall be
+deemed to have been duly approved by the Board.
+7.2.2 Specific Contents
+7.2.2.1 Minutes shall inter-alia contain:
+(a) The name(s) of Directors present and their
+mode of attendance, if through Electronic
+Mode.
+(b) In case of a Director participating through
+Electronic Mode, his particulars, the location
+from where he participated and wherever
+required, his consent to sign the statutory
+registers placed at the Meeting.
+(c) The name of Company Secretary who is in
+attendance and Invitees, if any, for specific
+items and mode of their attendance if
+through Electronic Mode.
+(d) Record of election, if any, of the Chairman
+of the Meeting.
+(e) Record of presence of Quorum.
+(f) The names of Directors who sought and
+were granted leave of absence.
+(g) Noting of the Minutes of the preceding
+Meeting.
+24 SS-1 – SECRETARIAL STANDARD ON MEETINGS OF THE BOARD OF DIRECTORS
+(h) Noting the Minutes of the Meetings of the
+Committees.
+(i) The text of the Resolution(s) passed by
+circulation since the last Meeting, including
+dissent or abstention, if any.
+(j) The fact that an Interested Director did not
+participate in the discussions and did not
+vote on item of business in which he was
+interested and in case of a related party
+transaction such director was not present in
+the meeting during discussions and voting
+on such item.
+(k) The views of the Directors particularly the
+Independent Director, if specifically insisted
+upon by such Directors, provided these,
+in the opinion of the Chairman, are not
+defamatory of any person, not irrelevant
+or immaterial to the proceedings or not
+detrimental to the interests of the company.
+(l) If any Director has participated only for a
+part of the Meeting, the Agenda items in
+which he did not participate.
+(m) The fact of the dissent and the name of the
+Director who dissented from the Resolution
+or abstained from voting thereon.
+(n) Ratification by Independent Director or
+majority of Directors, as the case may be, in
+case of Meetings held at a shorter Notice.
+(o) Consideration of any item other than those
+included in the Agenda with the consent
+of majority of the Directors present at the
+Meeting and ratification of the decision
+taken in respect of such item by a majority
+of Directors of the company.
+SS-1 – SECRETARIAL STANDARD ON MEETINGS OF THE BOARD OF DIRECTORS 25
+(p) The time of commencement and conclusion
+of the Meeting.
+7.2.2.2 Apart from the Resolution or the decision,
+Minutes shall mention the brief background of
+all proposals and summarise the deliberations
+thereof. In case of major decisions, the rationale
+thereof shall also be mentioned.
+The decisions shall be recorded in the form of Resolutions, where it is
+statutorily or otherwise required. In other cases, the decisions can be
+recorded in a narrative form.
+Where a Resolution was passed pursuant to the Chairman of the
+Meeting exercising his second or casting vote, the Minutes shall record
+such fact.
+7.3 Recording of Minutes
+7.3.1 Minutes shall contain a fair and correct summary
+of the proceedings of the Meeting.
+The Company Secretary shall record the proceedings of the Meetings.
+Where there is no Company Secretary, any other person duly authorised
+by the Board or by the Chairman in this behalf shall record the
+proceedings.
+The Chairman shall ensure that the proceedings of the Meeting are
+correctly recorded.
+The Chairman has absolute discretion to exclude from the Minutes,
+matters which in his opinion are or could reasonably be regarded as
+defamatory of any person, irrelevant or immaterial to the proceedings
+or which are detrimental to the interests of the company.
+7.3.2 Minutes shall be written in clear, concise and
+plain language.
+Minutes shall be written in third person and past tense. Resolutions
+shall however be written in present tense.
+Minutes need not be an exact transcript of the proceedings at the
+Meeting.
+26 SS-1 – SECRETARIAL STANDARD ON MEETINGS OF THE BOARD OF DIRECTORS
+In case any Director requires his views or opinion on a particular item
+to be recorded verbatim in the Minutes, the decision of the Chairman
+whether or not to do so shall be final.
+7.3.3 Wherever the decision of the Board is based on
+any unsigned documents including reports or
+notes or presentations tabled or presented at
+the Meeting, which were not part of the Notes on
+Agenda and are referred to in the Minutes, shall
+be identified by initialling of such documents by
+the Company Secretary or the Chairman.
+7.3.4 Where any earlier Resolution(s) or decision is
+superseded or modified, Minutes shall contain
+a specific reference to such earlier Resolution(s)
+or decision or state that the Resolution is in
+supersession of all earlier Resolutions passed in
+that regard.
+7.3.5 Minutes of the preceding Meeting shall be noted
+at a Meeting of the Board held immediately
+following the date of entry of such Minutes in the
+Minutes Book.
+Minutes of the Meetings of any Committee shall be noted at a Meeting
+of the Board held immediately following the date of entry of such
+Minutes in the Minutes Book.
+7.4 Finalisation of Minutes
+Within fifteen days from the date of the conclusion of
+the Meeting of the Board or the Committee, the draft
+Minutes thereof shall be circulated by hand or by speed
+post or by registered post or by courier or by e-mail
+or by any other recognised electronic means to all the
+members of the Board or the Committee, as on the date
+of the Meeting, for their comments.
+Where a Director specifies a particular means of delivery of draft
+Minutes, these shall be sent to him by such means.
+SS-1 – SECRETARIAL STANDARD ON MEETINGS OF THE BOARD OF DIRECTORS 27
+Proof of sending draft Minutes and its delivery shall be maintained by
+the company for such period as decided by the Board, which shall not
+be less than three years from the date of the Meeting.
+The Directors, whether present at the Meeting or not, shall communicate
+their comments, if any, in writing on the draft Minutes within seven days
+from the date of circulation thereof, so that the Minutes are finalised
+and entered in the Minutes Book within the specified time limit of thirty
+days.
+If any Director communicates his comments after the expiry of the said
+period of seven days, the Chairman, if so authorised by the Board, shall
+have the discretion to consider such comments.
+In the event a Director does not comment on the draft Minutes, the draft
+Minutes shall be deemed to have been approved by such Director.
+A Director, who ceases to be a Director after a Meeting of the Board
+is entitled to receive the draft Minutes of that particular Meeting and
+to offer comments thereon, irrespective of whether he attended such
+Meeting or not.
+7.5 Entry in the Minutes Book
+7.5.1 Minutes shall be entered in the Minutes Book
+within thirty days from the date of conclusion of
+the Meeting.
+In case a Meeting is adjourned, the Minutes in respect of the original
+Meeting as well as the adjourned Meeting shall be entered in the
+Minutes Book within thirty days from the date of the respective Meetings.
+7.5.2 The date of entry of the Minutes in the Minutes
+Book shall be recorded by the Company Secretary.
+Where there is no Company Secretary, it shall be entered by any other
+person duly authorised by the Board or by the Chairman.
+7.5.3 Minutes, once entered in the Minutes Book, shall
+not be altered. Any alteration in the Minutes as
+entered shall be made only by way of express
+approval of the Board at its subsequent Meeting
+28 SS-1 – SECRETARIAL STANDARD ON MEETINGS OF THE BOARD OF DIRECTORS
+at which the Minutes are noted by the Board and
+the fact of such alteration shall be recorded in the
+Minutes of such subsequent Meeting.
+7.6 Signing and Dating of Minutes
+7.6.1 Minutes of the Meeting of the Board shall be
+signed and dated by the Chairman of the Meeting
+or by the Chairman of the next Meeting.
+Minutes of the previous Meeting may be signed either by the Chairman
+of such Meeting at any time before the next Meeting is held or by the
+Chairman of the next Meeting at the next Meeting.
+7.6.2 The Chairman shall initial each page of the
+Minutes, sign the last page and append to such
+signature the date on which and the place where
+he has signed the Minutes.
+Any blank space in a page between the conclusion of the Minutes and
+signature of the Chairman shall be scored out.
+If the Minutes are maintained in electronic form, the Chairman shall
+sign the Minutes digitally.
+7.6.3 Minutes, once signed by the Chairman, shall not
+be altered, save as mentioned in this Standard.
+7.6.4 Within fifteen days of signing of the Minutes, a
+copy of the said signed Minutes, certified by the
+Company Secretary or where there is no Company
+Secretary by any Director authorised by the Board,
+shall be circulated to all the Directors, as on the
+date of the Meeting and appointed thereafter,
+except to those Directors who have waived their
+right to receive the same either in writing or such
+waiver is recorded in the Minutes.
+Proof of sending signed Minutes and its delivery shall be
+maintained by the company for such period as decided
+by the Board, which shall not be less than three years
+from the date of the Meeting.
+SS-1 – SECRETARIAL STANDARD ON MEETINGS OF THE BOARD OF DIRECTORS 29
+7.7 Inspection and Extracts of Minutes
+7.7.1 The Minutes of Meetings of the Board and any
+Committee thereof can be inspected by the Directors.
+A Director is entitled to inspect the Minutes of a Meeting held before
+the period of his Directorship.
+A Director is entitled to inspect the Minutes of the Meetings held during
+the period of his Directorship, even after he ceases to be a Director.
+The Company Secretary in Practice appointed by the company, the
+Secretarial Auditor, the Statutory Auditor, the Cost Auditor or the Internal
+Auditor of the company can inspect the Minutes as he may consider
+necessary for the performance of his duties.
+Inspection of Minutes Book may be provided in physical or in electronic
+form.
+While providing inspection of Minutes Book, the Company Secretary
+or the official of the company authorised by the Company Secretary
+to facilitate inspection shall take all precautions to ensure that the
+Minutes Book is not mutilated or in any way tampered with by the
+person inspecting.
+A Member of the company is not entitled to inspect the Minutes of
+Meetings of the Board.
+7.7.2 Extracts of the Minutes shall be given only after
+the Minutes have been duly entered in the Minutes
+Book. However, certified copies of any Resolution
+passed at a Meeting may be issued even earlier,
+if the text of that Resolution had been placed at
+the Meeting.
+A Director is entitled to receive, a copy of the Minutes of a Meeting held
+before the period of his Directorship.
+A Director is entitled to receive a copy of the signed Minutes of a
+Meeting held during the period of his Directorship, even if he ceases
+to be a Director.
+Extracts of the duly signed Minutes may be provided in physical or
+electronic form.
+30 SS-1 – SECRETARIAL STANDARD ON MEETINGS OF THE BOARD OF DIRECTORS
+8. Preservation of Minutes and other Records
+8.1 Minutes of all Meetings shall be preserved permanently
+in physical or in electronic form with Timestamp.
+Where, under a scheme of arrangement, a company has been merged
+or amalgamated with another company, Minutes of all Meetings of the
+transferor company, as handed over to the transferee company, shall
+be preserved permanently by the transferee company, notwithstanding
+that the transferor company might have been dissolved.
+8.2 Office copies of Notices, Agenda, Notes on Agenda and
+other related papers shall be preserved in good order in
+physical or in electronic form for as long as they remain
+current or for eight financial years, whichever is later
+and may be destroyed thereafter with the approval of
+the Board.
+Office copies of Notices, Agenda, Notes on Agenda and other related
+papers of the transferor company, as handed over to the transferee
+company, shall be preserved in good order in physical or electronic form
+for as long as they remain current or for eight financial years, whichever
+is later and may be destroyed thereafter with the approval of the Board
+and permission of the Central Government, where applicable.
+8.3 Minutes Books shall be in the custody of the Company
+Secretary.
+Where there is no Company Secretary, Minutes Books shall be in the
+custody of any Director duly authorised for the purpose by the Board.
+9. Disclosure
+The Report of the Board of Directors shall include a statement on
+compliances of applicable Secretarial Standards.
+EFFECTIVE DATE
+This Standard shall come into effect from 1st April, 2024.
+SS-1 – SECRETARIAL STANDARD ON MEETINGS OF THE BOARD OF DIRECTORS 31
+Annexure ‘A’
+(Paragraph 1.3.8)
+Illustrative list of items of business which shall not be passed by
+circulation and shall be placed before the Board at its Meeting
+General Business Items
+l Noting Minutes of Meetings of Audit Committee and other
+Committees.
+l Approving financial statements and the Board’s Report.
+l Considering the Compliance Certificate to ensure compliance
+with the provisions of all the laws applicable to the company.
+l Specifying list of laws applicable specifically to the company.
+l Appointment of Secretarial Auditors and Internal Auditors.
+Specific Items
+l Borrowing money otherwise than by issue of debentures.
+l Investing the funds of the company.
+l Granting loans or giving guarantee or providing security in
+respect of loans.
+l Making political contributions.
+l Making calls on shareholders in respect of money unpaid on
+their shares.
+l Approving Remuneration of Managing Director, Whole-time
+Director and Manager.
+l Appointment or Removal of Key Managerial Personnel.
+l Appointment of a person as a Managing Director / Manager in
+more than one company.
+l Appointment of Director(s) in casual vacancy subject to the
+provisions in the Articles of the company. To be subsequently
+approved in the immediate next general meeting.
+32 SS-1 – SECRETARIAL STANDARD ON MEETINGS OF THE BOARD OF DIRECTORS
+l According sanction for related party transactions which are not
+in the ordinary course of business or which are not on arm’s
+length basis.
+l Sale of subsidiaries.
+l Purchase and Sale of material tangible/intangible assets not in
+the ordinary course of business.
+l Approve Payment to Director for loss of office.
+l Items arising out of separate Meeting of the Independent
+Directors if so decided by the Independent Directors.
+Corporate Actions
+l Authorise Buy Back of Securities.
+l Issue of securities, including debentures, whether in or outside
+India.
+l Approving amalgamation, merger or reconstruction.
+l Diversify the business.
+l Takeover another company or acquiring controlling or
+substantial stake in another company.
+Additional list of items in case of listed companies
+l Approving Annual operating plans and budgets.
+l Capital budgets and any updates.
+l Information on remuneration of Key Managerial Personnel.
+l Show cause, demand, prosecution notices and penalty notices
+which are materially important.
+l Fatal or serious accidents, dangerous occurrences, any
+material effluent or pollution problems.
+l Any material default in financial obligations to and by the
+company, or substantial non-payment for goods sold by the
+company.
+SS-1 – SECRETARIAL STANDARD ON MEETINGS OF THE BOARD OF DIRECTORS 33
+l Any issue, which involves possible public or product liability
+claims of substantial nature, including any judgement or
+order which, may have passed strictures on the conduct of
+the company or taken an adverse view regarding another
+enterprise that can have negative implications on the company.
+l Details of any joint venture or collaboration agreement.
+l Transactions that involve substantial payment towards
+goodwill, brand equity, or intellectual property.
+l Significant labour problems and their proposed solutions.
+Any significant development in Human Resources/ Industrial
+Relations front like signing of wage agreement, implementation
+of Voluntary Retirement Scheme etc.
+l Quarterly details of foreign exchange exposures and the steps
+taken by management to limit the risks of adverse exchange
+rate movement, if material.
+l Non-compliance of any regulatory, statutory or listing
+requirements and shareholder services such as non-payment
+of dividend, delay in share transfer etc.
+34 SS-1 – SECRETARIAL STANDARD ON MEETINGS OF THE BOARD OF DIRECTORS
+Annexure ‘B’
+(Paragraph 1.3.8)
+Illustrative list of items of business for the Agenda for the First
+Meeting of the Board of the company
+1. To appoint the Chairman of the Meeting.
+2. To note the Certificate of Incorporation of the company, issued
+by the Registrar of Companies.
+3. To take note of the Memorandum and Articles of Association of
+the company, as registered.
+4. To note the situation of the Registered Office of the company
+and ratify the registered document of the title of the premises of
+the registered office in the name of the company or a Notarised
+copy of lease / rent agreement in the name of the company.
+5. To note the first Directors of the company.
+6. To read and record the Notices of disclosure of interest given by
+the Directors.
+7. To consider appointment of Additional Directors.
+8. To consider appointment of the Chairman of the Board.
+9. To consider appointment of the first Auditors.
+10. To adopt the Common Seal of the company, if any.
+11. To appoint Bankers and to open bank accounts of the company.
+12. To authorise printing of share certificates and correspondence
+with the depositories, if any.
+13. To authorise the issue of share certificates to the subscribers to
+the Memorandum and Articles of Association of the company.
+14. To approve and ratify preliminary expenses and preliminary
+agreements.
+15. To approve the appointment of the Key Managerial Personnel,
+if applicable and other senior officers.
+SS-1 – SECRETARIAL STANDARD ON MEETINGS OF THE BOARD OF DIRECTORS 35
+NOTES
+36 SS-1 – SECRETARIAL STANDARD ON MEETINGS OF THE BOARD OF DIRECTORS
+NOTES

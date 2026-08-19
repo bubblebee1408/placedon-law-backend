@@ -1,0 +1,1736 @@
+
+SS-2
+SECRETARIAL STANDARD
+ON
+GENERAL MEETINGS
+Issued by
+The Institute of Company Secretaries of India
+and
+approved by the Central Government
+under Section 118(10) of the Companies Act, 2013
+(Revised version effective from 1st April, 2024)
+i
+First version: April 2015 (effective from 1st July, 2015)
+Second version (Revised): June 2017 (effective from 1st October, 2017)
+Third version (Revised): January 2024 (effective from 1st April, 2024)
+Price : Rs.70/- (Excluding postage)
+Issued by :
+THE INSTITUTE OF COMPANY SECRETARIES OF INDIA
+ICSI House, 22, Institutional Area, Lodi Road,
+New Delhi 110 003
+Phones : 011-4534 1000
+E-mail info@icsi.edu • Website www.icsi.edu
+ii
+CONTENTS
+Page No.
+INTRODUCTION 1
+SCOPE 1
+DEFINITIONS 2
+SECRETARIAL STANDARD 5
+1. Convening a Meeting 5
+2. Frequency of Meetings 14
+3. Quorum 15
+4. Presence of Directors and Auditors 16
+5. Chairman 18
+6. Proxies 19
+7. Voting 23
+8. Conduct of e-voting 26
+9. Conduct of Poll 31
+10. Prohibition on Withdrawal of Resolutions 33
+11. Rescinding of Resolutions 33
+12. Modifications to Resolutions 33
+13. Reading of Reports 33
+14. Distribution of Gifts 34
+15. Adjournment of Meetings 34
+16. Passing of Resolutions by postal ballot 36
+iii
+Page No.
+17. Minutes 43
+18. Preservation of Minutes and other Records 50
+19. Report on Annual General Meeting 50
+20. Disclosure 51
+EFFECTIVE DATE 51
+Annexure 52
+Items of business which shall be passed only by postal ballot
+iv
+SS-2 – SECRETARIAL STANDARD ON GENERAL MEETINGS 1
+SECRETARIAL STANDARD
+ON
+GENERAL MEETINGS
+Following is the text of the Secretarial Standard-2 (SS-2) on “General
+Meetings”, issued by the Council of the Institute of Company Secretaries
+of India and approved by the Central Government.
+Adherence by a company to this Secretarial Standard is mandatory, as
+per the provisions of the Companies Act, 2013.
+(In this Secretarial Standard, the Standard portions have been
+set in bold type. These shall be read in the context of the
+background material which has been set in normal type. Both
+the Standard portions and the background material have equal
+authority).
+INTRODUCTION
+This Standard seeks to prescribe a set of principles for the convening
+and conducting of General Meetings and matters related thereto.
+This Standard also deals with conduct of e-voting and postal ballot.
+SCOPE
+This Standard is applicable to all types of General Meetings of all
+companies incorporated under the Act except One Person Company
+(OPC) and a company registered under Section 8 of the Companies Act,
+2013 or corresponding provisions of any previous enactment thereof.
+However, companies registered under Section 8 of the Companies Act,
+2013 need to comply with the applicable provisions of the Act relating
+to General Meetings.
+2 SS-2 – SECRETARIAL STANDARD ON GENERAL MEETINGS
+The exemption to a company registered under Section 8 of the
+Companies Act, 2013 as referred above and the specific exemptions
+given to a private company and Government company in this Standard
+shall be available only if it has not committed any default in filing its
+Financial Statements or Annual Return with the Registrar of Companies.
+The principles enunciated in this Standard for General Meetings of
+Members are applicable mutatis-mutandis to Meetings of debenture-
+holders and creditors. A Meeting of the Members or class of Members
+or debenture-holders or creditors of a company under the directions of
+the Court or the Company Law Board (CLB) or the National Company Law
+Tribunal (NCLT) or any other prescribed authority shall be governed by
+this Standard without prejudice to any rules, regulations and directions
+prescribed for and orders of, such courts, judicial forums and other
+authorities with respect to the conduct of such Meetings.
+This Standard is in conformity with the provisions of the Act. However,
+if, due to subsequent changes in the Act, a particular Standard or any
+part thereof becomes inconsistent with the Act, the provisions of the
+Act shall prevail.
+DEFINITIONS
+The following terms are used in this Standard with the meaning
+specified:
+“Act” means the Companies Act, 2013 (Act No. 18 of 2013) or any
+previous enactment thereof, or any statutory modification thereto, or
+re-enactment thereof and includes any Rules and Regulations framed
+thereunder.
+“Agency” means agency approved or recognised by the Ministry
+of Corporate Affairs and appointed by the Board for providing and
+supervising electronic platform for voting.
+“Articles” means the Articles of Association of a company, as originally
+framed or as altered from time to time or applied in pursuance of any
+previous company law or the Companies Act, 2013.
+“Calendar Year” means calendar year as per Gregorian calendar, i.e.,
+SS-2 – SECRETARIAL STANDARD ON GENERAL MEETINGS 3
+a period of one year which begins on 1st January and ends on 31st
+December.
+“Chairman” means the Chairman of the Board or the Chairman
+appointed or elected for a Meeting.
+“Maintenance” means keeping registers and records either in physical
+or electronic form, as may be permitted under any law for the time
+being in force, and includes the making of necessary entries therein,
+the authentication of such entries and the preservation of such physical
+or electronic records.
+“Meeting” or “General Meeting” or “Annual General Meeting” or
+“Extra-Ordinary General Meeting” means a duly convened, held and
+conducted Meeting of Members.
+“Minutes” means a formal written record, in physical or electronic form,
+of the proceedings of a Meeting.
+“Minutes Book” means a Book maintained in physical or in electronic
+form for the purpose of recording of Minutes.
+“National Holiday” means Republic Day i.e. 26th January, Independence
+Day i.e. 15th August, Gandhi Jayanti i.e. 2nd October and such other day
+as may be declared as National Holiday by the Central Government.
+“Ordinary Business” means business to be transacted at an Annual
+General Meeting relating to (i) the consideration of financial statements,
+consolidated financial statements, if any, and the reports of the Board
+of Directors and Auditors; (ii) the declaration of any dividend; (iii) the
+appointment of Directors in the place of those retiring; and (iv) the
+appointment and fixing of remuneration of the Auditors.
+“Proxy” means an instrument in writing signed by a Member, authorising
+another person, whether a Member or not, to attend and vote on his
+behalf at a Meeting and also where the context so requires, the person
+so appointed by a Member.
+“Quorum” means the minimum number of Members whose presence
+is necessary for holding of a Meeting.
+4 SS-2 – SECRETARIAL STANDARD ON GENERAL MEETINGS
+“Remote e-voting” means the facility of casting votes by a member
+using an electronic voting system from a place other than venue of a
+general meeting.
+“Secretarial Auditor” means a Company Secretary in Practice or a firm
+of Company Secretary(ies) in Practice appointed in pursuance of the
+Act to conduct the secretarial audit of the company.
+“Secured Computer System” means computer hardware, software,
+and procedure that –
+(a) are reasonably secure from unauthorized access and misuse;
+(b) provide a reasonable level of reliability and correct operation;
+(c) are reasonably suited to performing the intended functions;
+and
+(d) adhere to generally accepted security procedures.
+“Special Business” means business other than the Ordinary Business
+to be transacted at an Annual General Meeting and all business to be
+transacted at any other General Meeting.
+“Timestamp” means the current time of an event that is recorded by
+a Secured Computer System and is used to describe the time that is
+printed to a file or other location to help keep track of when data is
+added, removed, sent or received.
+“Voting by electronic means” includes “remote e-voting” and voting at
+the general meeting through an electronic voting system which may
+be the same as used for remote e-voting.
+“Voting by postal ballot” means voting by ballot, by post or by electronic
+means.
+“Voting Right” means the right of a Member to vote on any matter at a
+Meeting of Members or by means of e-voting or postal or physical ballot.
+Words and expressions used and not defined herein shall have the
+meanings respectively assigned to them under the Act.
+SS-2 – SECRETARIAL STANDARD ON GENERAL MEETINGS 5
+SECRETARIAL STANDARD
+1. Convening a Meeting
+1.1 Authority
+A General Meeting shall be convened by or on the
+authority of the Board.
+The Board shall, every year, convene or authorise convening of a
+Meeting of its Members called the Annual General Meeting to transact
+items of Ordinary Business specifically required to be transacted at an
+Annual General Meeting as well as Special Business, if any. If the Board
+fails to convene its Annual General Meeting in any year, any Member
+of the company may approach the prescribed authority, which may
+then direct the calling of the Annual General Meeting of the company.
+The Board may also, whenever it deems fit, call an Extra-Ordinary
+General Meeting of the company.
+The Board shall, on the requisition of Members who hold, as on the
+date of the receipt of a valid requisition,
+(a) in the case of company having a share capital, not less than
+one-tenth of the paid-up share capital carrying Voting Rights or
+(b) in the case of a company not having share capital, not less
+than one-tenth of total voting power of the company,
+call an Extra-Ordinary General Meeting of the company.
+If, on receipt of a valid requisition having been made in this behalf, the
+Board, within twenty-one days from the date of such receipt, fails to call
+a Meeting on any day within forty-five days from the date of receipt of
+such requisition, the requisitionists may themselves call and hold the
+Meeting within three months from the date of requisition, in the same
+manner in which the Board should have called and held the Meeting.
+Explanatory statement need not be annexed to the Notice of an Extra-
+Ordinary General Meeting convened by the requisitionists and the
+requisitionists may disclose the reasons for the Resolution(s) which
+they propose to move at the Meeting.
+6 SS-2 – SECRETARIAL STANDARD ON GENERAL MEETINGS
+Such requisition shall not pertain to any item of business that is required
+to be transacted mandatorily through postal ballot.
+1.2 Notice
+1.2.1 Notice in writing of every Meeting shall be given to
+every Member of the company. Such Notice shall
+also be given to the Directors and Auditors of the
+company, to the Secretarial Auditor, to Debenture
+Trustees, if any, and, wherever applicable or so
+required, to other specified persons.
+In case of a Nidhi, Notice may be served individually only on Members
+who hold shares of more than one thousand rupees in face value
+or more than one percent of the total paid-up share capital of the
+company, whichever is less. For other Members, Notice may be served
+by a public notice in newspaper circulated in the district where the
+Registered Office of the company is situated and by displaying the
+same on the Notice Board of the company.
+In the case of Members, Notice shall be given at the address registered
+with the company or depository. In the case of shares or other securities
+held jointly by two or more persons, the Notice shall be given to the
+person whose name appears first as per records of the company or the
+depository, as the case may be. In the case of any other person who
+is entitled to receive Notice, the same shall be given to such person at
+the address provided by him.
+Where the company has received intimation of death of a Member, the
+Notice of Meeting shall be sent as under:
+(a) where securities are held singly, to the Nominee of the single
+holder;
+(b) where securities are held by more than one person jointly and
+any joint holder dies, to the surviving first joint holder;
+(c) where securities are held by more than one person jointly and
+all the joint holders die, to the Nominee appointed by all the
+joint holders;
+SS-2 – SECRETARIAL STANDARD ON GENERAL MEETINGS 7
+In the absence of a Nominee, the Notice shall be sent to the legal
+representative of the deceased Member.
+In case of insolvency of a Member, the Notice shall be sent to the
+assignee of the insolvent Member.
+In case the Member is a company or body corporate which is being
+wound up, Notice shall be sent to the liquidator.
+1.2.2 Notice shall be sent by hand or by ordinary post or
+by speed post or by registered post or by courier or
+by facsimile or by e-mail or by any other electronic
+means. ‘Electronic means’ means any communication
+sent by a company through its authorised and
+secured computer programme which is capable of
+producing confirmation and keeping record of such
+communication addressed to the person entitled to
+receive such communication at the last electronic
+mail address provided by the Member.
+In case the Notice and accompanying documents are given by e-mail,
+these shall be sent at the Members’ e-mail addresses, registered with
+the company or provided by the depository, in the manner prescribed
+under the Act.
+The company shall ensure that it uses a system which produces
+confirmation of the total number of recipients e-mailed and a record
+of each recipient to whom the Notice has been sent and copy of such
+record and any Notices of any failed transmissions and subsequent
+re-sending shall be retained by or on behalf of the company as “proof
+of sending” for such period as decided by the Board, which shall not
+be less than three years from the date of the Meeting.
+In case of the Directors, Auditors, Secretarial Auditors and others, if
+any, the Notice and accompanying documents shall be sent at the
+e-mail addresses provided by them to the company, if being sent by
+electronic means.
+Notice shall be sent to Members by registered post or speed post or
+courier or e-mail and not by ordinary post in the following cases:
+8 SS-2 – SECRETARIAL STANDARD ON GENERAL MEETINGS
+(a) if the company provides the facility of e-voting ;
+(b) if the item of business is being transacted through postal ballot.
+If a Member requests for delivery of Notice through a particular mode,
+other than the one followed by the company, he shall pay such fees
+as may be determined by the company in its Annual General Meeting
+and the Notice shall be sent to him in such mode.
+Notice shall be sent to Members by registered post or speed post or
+e-mail if the Meeting is called by the requisitionists themselves where
+the Board had not proceeded to call the Meeting.
+1.2.3 In case of companies having a website, the Notice
+shall simultaneously be hosted on the website till
+the conclusion of the Meeting.
+In case of a private company, the Notice shall be hosted on the website
+of the company, if any, unless otherwise provided in the Articles.
+1.2.4 Notice shall specify the day, date, time and full
+address of the venue of the Meeting.
+Notice of Annual General Meeting shall also specify the serial number
+of the Meeting.
+Notice shall contain complete particulars of the venue of the Meeting
+including route map and prominent land mark, if any, for easy location,
+except in case of –
+(i) a company in which only its directors and their relatives are
+members;
+(ii) a wholly owned subsidiary.
+An Annual General Meeting and a Meeting called by the requisitionists
+shall be called during business hours, i.e., between 9 a.m. and 6 p.m.,
+on a day that is not a National Holiday.
+Annual General Meetings shall be held either at the registered office of
+the company or at some other place within the city, town or village in
+which the registered office of the company is situated. However, Annual
+General Meetings of an unlisted company may be held at any place in
+SS-2 – SECRETARIAL STANDARD ON GENERAL MEETINGS 9
+India, if prior consent is given by all the members either in writing or by
+Electronic Mode. Such consent shall be received before the Meeting.
+Extra-Ordinary General Meetings may be held at any place within India.
+In case of a wholly owned subsidiary of a company incorporated outside
+India, Extra-Ordinary General Meetings may be held outside India.
+A Meeting called by the requisitionists shall be held either at the
+registered office of the company or at some other place within the city,
+town or village in which the registered office of the company is situated.
+In case of a Government company, the Annual General Meeting shall
+be held at its registered office or such other place within the city, town
+or village in which the registered office of the company is situated or
+such other place as the Central Government may approve in this behalf.
+Notice of a company which has a share capital or the Articles of which
+provide for voting at a Meeting by Proxy, shall prominently contain
+a statement that a Member entitled to attend and vote is entitled to
+appoint a Proxy, or where that is allowed, one or more Proxies, to attend
+and vote instead of himself and that a Proxy need not be a Member.
+In case of a private company, the Notice shall specify the entitlement of
+a member to appoint Proxy in accordance with this paragraph, unless
+otherwise provided in the Articles.
+1.2.5 Notice shall clearly specify the nature of the Meeting
+and the business to be transacted thereat. In respect of
+items of Special Business, each such item shall be in the
+form of a Resolution and shall be accompanied by an
+explanatory statement which shall set out all such facts
+as would enable a Member to understand the meaning,
+scope and implications of the item of business and to
+take a decision thereon. In respect of items of Ordinary
+Business, Resolutions are not required to be stated in the
+Notice.
+The nature of the concern or interest (financial or otherwise), if any, of
+the following persons, in any special item of business or in a proposed
+Resolution, shall be disclosed in the explanatory statement:
+10 SS-2 – SECRETARIAL STANDARD ON GENERAL MEETINGS
+(a) Directors and Manager;
+(b) Other Key Managerial Personnel; and
+(c) Relatives of the persons mentioned above.
+In case any item of Special Business to be transacted at a Meeting of
+the company relates to or affects any other company, the extent of
+shareholding interest in that other company of every Promoter, Director,
+Manager and of every other Key Managerial Personnel of the first
+mentioned company shall, if the extent of such shareholding is not less
+than two percent of the paid-up share capital of that company, also be
+stated in the explanatory statement.
+Where reference is made to any document, contract, agreement, the
+Memorandum of Association or Articles of Association, the relevant
+explanatory statement shall state that such documents are available
+for inspection and such documents shall be so made available for
+inspection in physical or in electronic form during specified business
+hours at the Registered Office of the company and copies thereof shall
+also be made available for inspection in physical or electronic form at
+the Head Office as well as Corporate Office of the company, if any, if
+such office is situated elsewhere, and also at the Meeting.
+In case of a private company, explanatory statement shall comply with
+the above requirements, unless otherwise provided in the Articles.
+In all cases relating to the appointment or re-appointment and/or
+fixation of remuneration of Directors including Managing Director or
+Executive Director or Whole - time Director or of Manager or variation
+of the terms of remuneration, details of each such Director or Manager,
+including age, qualifications, experience, terms and conditions of
+appointment or re-appointment along with details of remuneration
+sought to be paid and the remuneration last drawn by such person,
+if applicable, date of first appointment on the Board, shareholding in
+the company, relationship with other Directors, Manager and other Key
+Managerial Personnel of the company, the number of Meetings of the
+Board attended during the year and other Directorships, Membership/
+Chairmanship of Committees of other Boards shall be given in the
+explanatory statement.
+SS-2 – SECRETARIAL STANDARD ON GENERAL MEETINGS 11
+In case of appointment of Independent Directors, the justification for
+choosing the appointees for appointment as Independent Directors
+shall be disclosed and in case of re-appointment of Independent
+Directors, performance evaluation report of such Director or summary
+thereof shall be included in the explanatory statement.
+1.2.6 Notice and accompanying documents shall be
+given at least twenty-one clear days in advance
+of the Meeting.
+For the purpose of reckoning twenty-one days clear Notice, the day of
+sending the Notice and the day of Meeting shall not be counted. Further
+in case the company sends the Notice by post or courier, an additional
+two days shall be provided for the service of Notice.
+In case of a private company, the period of sending Notice including
+accompanying documents shall be as stated above, unless otherwise
+provided in the Articles.
+In case a valid special Notice under the Act has been received from
+Member(s), the company shall give Notice of the Resolution to all its
+Members at least seven days before the Meeting, exclusive of the day
+of dispatch of Notice and day of the Meeting, in the same manner as
+a Notice of any General Meeting is to be given.
+Where this is not practicable, the Notice shall be published in a
+vernacular newspaper in the principal vernacular language of the
+district in which the registered office of the company is situated, and
+in an English newspaper in English language, both having a wide
+circulation in that district, at least seven days before the Meeting,
+exclusive of the day of publication of the Notice and day of the Meeting.
+In case of companies having a website, such Notice shall simultaneously
+be hosted on the website.
+1.2.7 Notice and accompanying documents may be
+given at a shorter period of time if the requisite
+consent of Members in writing is accorded thereto,
+by physical or electronic means as under:
+(i) In case of an Annual General Meeting, consent by
+12 SS-2 – SECRETARIAL STANDARD ON GENERAL MEETINGS
+not less than ninety-five percent of the Members
+entitled to vote at such Meeting.
+However, the Financial Statements and other
+documents required to be annexed thereto may
+be given at a shorter period of time if the requisite
+consent of Members in writing, by physical or
+electronic means, is accorded thereto:
+(a) if the company has a share capital, consent
+by the majority in number of members
+entitled to vote and represent not less than
+ninety-five per cent of such part of the paid-
+up share capital of the company as gives a
+right to vote at the Meeting;
+(b) if the company has no share capital,
+consent by the Members having not less
+than ninety-five per cent of the total voting
+power exercisable at such Meeting.
+(ii) In case of any other General Meeting-
+(a) if the company has a share capital, consent
+by the majority in number of members
+entitled to vote and represent not less than
+ninety-five per cent of such part of the paid-
+up share capital of the company as gives a
+right to vote at the Meeting;
+(b) if the company has no share capital,
+consent by the Members having not less
+than ninety-five per cent of the total voting
+power exercisable at such Meeting.
+The request for consenting to shorter Notice and accompanying
+documents shall be sent together with the Notice and the Meeting
+shall be held only if the requisite consent of Members as stated above
+is received prior to the time fixed for the Meeting.
+SS-2 – SECRETARIAL STANDARD ON GENERAL MEETINGS 13
+Where any Member of a company is entitled to vote only on some
+resolution or resolutions to be moved at a Meeting and not on the
+other, then vote of the Member with respect to shorter notice shall only
+be counted for the purpose of the resolution on which the Member
+can vote.
+In addition, the company shall ensure compliance of provisions relating
+to appointment of Proxy unless all the Members entitled to vote at such
+Meeting, consent to holding of the General Meeting at shorter Notice.
+In case of a private company, consent for shorter Notice shall be
+obtained from such number of Members as specified in this paragraph,
+unless otherwise provided in the Articles.
+1.2.8 No business shall be transacted at a Meeting if
+Notice in accordance with this Standard has not
+been given.
+However, any accidental omission to give Notice to, or the non-receipt
+of such Notice by any Member or other person who is entitled to such
+Notice for any Meeting shall not invalidate the proceedings of the
+Meeting.
+1.2.9 No items of business other than those specified in
+the Notice and those specifically permitted under
+the Act shall be taken up at the Meeting.
+A Resolution shall be valid only if it is passed in respect of an item
+of business contained in the Notice convening the Meeting or it is
+specifically permitted under the Act.
+Items specifically permitted under the Act which may be taken up for
+consideration at the Meeting are:
+(a) Proposed Resolutions, the Notice of which has been given by
+Members;
+(b) Resolutions requiring special Notice, if received with the
+intention to move;
+(c) Candidature for Directorship, if any such Notice has been
+received.
+14 SS-2 – SECRETARIAL STANDARD ON GENERAL MEETINGS
+Where special Notice is required of any Resolution and Notice of the
+intention to move such Resolution is received by the company from the
+prescribed number of Members, such item of business shall be placed
+for consideration at the Meeting after giving Notice of the Resolution to
+Members in the manner prescribed under the Act.
+Any amendment to the Notice, including the addition of any item of
+business, can be made provided the Notice of amendment is given to
+all persons entitled to receive the Notice of the Meeting at least twenty-
+one clear days before the Meeting.
+1.2.10 Notice shall be accompanied, by an attendance
+slip and a Proxy form with clear instructions for
+filling, stamping, signing and/or depositing the
+Proxy form.
+1.2.11 A Meeting convened upon due Notice shall not be
+postponed or cancelled.
+If, for reasons beyond the control of the Board, a Meeting cannot
+be held on the date originally fixed, the Board may reconvene the
+Meeting, to transact the same business as specified in the original
+Notice, after giving not less than three days intimation to the Members.
+The intimation shall be either sent individually in the manner stated in
+this Standard or published in a vernacular newspaper in the principal
+vernacular language of the district in which the registered office of the
+company is situated, and in an English newspaper in English language,
+both having a wide circulation in that district.
+2. Frequency of Meetings
+2.1 Annual General Meeting
+Every company shall, in each Calendar Year, hold a
+General Meeting called the Annual General Meeting.
+Every company shall hold its first Annual General Meeting within nine
+months from the date of closing of the first financial year of the company
+and thereafter in each Calendar Year within six months of the close
+of the financial year, with an interval of not more than fifteen months
+SS-2 – SECRETARIAL STANDARD ON GENERAL MEETINGS 15
+between two successive Annual General Meetings. The aforesaid
+period of six months or interval of fifteen months may be extended
+by a period not exceeding three months with the prior approval of
+the Registrar of Companies, in case of any Annual General Meeting
+other than the first Annual General Meeting. If a company holds its
+first Annual General Meeting, as aforesaid, it shall not be necessary
+for the company to hold any Annual General Meeting in the Calendar
+Year of its incorporation.
+2.2 Extra-Ordinary General Meeting
+Items of business other than Ordinary Business may be
+considered at an Extra-Ordinary General Meeting or by
+means of a postal ballot, if thought fit by the Board.
+3. Quorum
+3.1 Quorum shall be present throughout the Meeting.
+Quorum shall be present not only at the time of commencement of the
+Meeting but also while transacting business.
+Unless the Articles provide for a larger number, the Quorum for a
+General Meeting shall be:
+(a) in case of a public company, –
+(i) five Members personally present if the number of
+Members as on the date of Meeting is not more than
+one thousand;
+(ii) fifteen Members personally present if the number of
+Members as on the date of Meeting is more than one
+thousand but up to five thousand;
+(iii) thirty Members personally present if the number of
+Members as on the date of the Meeting exceeds five
+thousand;
+(b) in the case of a private company, two Members personally
+present.
+16 SS-2 – SECRETARIAL STANDARD ON GENERAL MEETINGS
+Where the Quorum provided in the Articles is higher than that provided
+under the Act, the Quorum shall conform to such higher requirement.
+Members need to be personally present at a Meeting to constitute
+the Quorum.
+Proxies shall be excluded for determining the Quorum.
+3.2 A duly authorised representative of a body corporate
+or the representative of the President of India or the
+Governor of a State is deemed to be a Member personally
+present and enjoys all the rights of a Member present in
+person.
+One person can be an authorised representative of more than one
+body corporate. In such a case, he is treated as more than one Member
+present in person for the purpose of Quorum. However, to constitute
+a Meeting, at least two individuals shall be present in person. Thus, in
+case of a public company having not more than 1000 members with
+a Quorum requirement of five Members, an authorised representative
+of five bodies corporate cannot form a Quorum by himself but can do
+so if at least one more Member is personally present.
+Members who have voted by Remote e-voting have the right to attend
+the General Meeting and accordingly their presence shall be counted
+for the purpose of Quorum.
+A Member who is not entitled to vote on any particular item of business
+being a related party, if present, shall be counted for the purpose of
+Quorum.
+The stipulation regarding the presence of a Quorum does not apply
+with respect to items of business transacted through postal ballot.
+4. Presence of Directors and Auditors
+4.1 Directors
+4.1.1 If any Director is unable to attend the Meeting,
+the Chairman shall explain such absence at the
+Meeting.
+SS-2 – SECRETARIAL STANDARD ON GENERAL MEETINGS 17
+The Chairman of the Audit Committee, Nomination and Remuneration
+Committee and the Stakeholders Relationship Committee, or any other
+Member of any such Committee authorised by the Chairman of the
+respective Committee to attend on his behalf, shall attend the General
+Meeting.
+4.1.2 Directors who attend General Meetings of the
+company and the Company Secretary shall be
+seated with the Chairman.
+The Company Secretary shall assist the Chairman in conducting the
+Meeting.
+4.2 Auditors
+The Auditors, unless exempted by the company, shall, either by
+themselves or through their authorised representative, attend
+the General Meetings of the company and shall have the right
+to be heard at such Meetings on that part of the business which
+concerns them as Auditors.
+The authorised representative who attends the General Meeting of the
+company shall also be qualified to be an Auditor.
+4.3 Secretarial Auditor
+The Secretarial Auditor, unless exempted by the company shall,
+either by himself or through his authorised representative,
+attend the Annual General Meeting and shall have the right to
+be heard at such Meeting on that part of the business which
+concerns him as Secretarial Auditor.
+The Chairman may invite the Secretarial Auditor or his authorised
+representative to attend any other General Meeting, if he considers
+it necessary.
+The authorised representative who attends the General Meeting of the
+company shall also be qualified to be a Secretarial Auditor.
+18 SS-2 – SECRETARIAL STANDARD ON GENERAL MEETINGS
+5. Chairman
+5.1 Appointment
+The Chairman of the Board shall take the Chair and conduct the
+Meeting. If the Chairman is not present within fifteen minutes
+after the time appointed for holding the Meeting, or if he is
+unwilling to act as Chairman of the Meeting, or if no Director
+has been so designated, the Directors present at the Meeting
+shall elect one of themselves to be the Chairman of the Meeting.
+If no Director is present within fifteen Minutes after the time
+appointed for holding the Meeting, or if no Director is willing
+to take the Chair, the Members present shall elect, on a show
+of hands, one of themselves to be the Chairman of the Meeting,
+unless otherwise provided in the Articles.
+If a poll is demanded on the election of the Chairman, it shall be taken
+forthwith in accordance with the provisions of the Act and the Chairman
+elected on a show of hands shall continue to be the Chairman of the
+Meeting until some other person is elected as Chairman as a result
+of the poll, and such other person shall be the Chairman for the rest
+of the Meeting.
+In case of a private company, appointment of the Chairman shall be
+in accordance with this paragraph, unless otherwise provided in the
+Articles.
+The Chairman shall ensure that the Meeting is duly constituted in
+accordance with the Act and the Articles or any other applicable laws,
+before it proceeds to transact business. The Chairman shall then
+conduct the Meeting in a fair and impartial manner and ensure that
+only such business as has been set out in the Notice is transacted. The
+Chairman shall regulate the manner in which voting is conducted at
+the Meeting keeping in view the provisions of the Act.
+5.2 The Chairman shall explain the objective and implications
+of the Resolutions before they are put to vote at the
+Meeting.
+The Chairman shall provide a fair opportunity to Members who are
+SS-2 – SECRETARIAL STANDARD ON GENERAL MEETINGS 19
+entitled to vote to seek clarifications and/or offer comments related to
+any item of business and address the same, as warranted.
+5.3 In case of public companies, the Chairman shall not
+propose any Resolution in which he is deemed to be
+concerned or interested nor shall he conduct the
+proceedings for that item of business.
+If the Chairman is interested in any item of business, without prejudice
+to his Voting Rights on Resolutions, he shall entrust the conduct of the
+proceedings in respect of such item to any Non -Interested Director or
+to a Member, with the consent of the Members present, and resume
+the Chair after that item of business has been transacted.
+6. Proxies
+6.1 Right to Appoint
+A Member entitled to attend and vote is entitled to appoint a
+Proxy, or where that is allowed, one or more Proxies, to attend
+and vote instead of himself and a Proxy need not be a Member.
+A Proxy can act on behalf of Members not exceeding fifty and holding
+in the aggregate not more than ten percent of the total share capital
+of the company carrying Voting Rights.
+However, a Member holding more than ten percent of the total share
+capital of the company carrying Voting Rights may appoint a single
+person as Proxy for his entire shareholding and such person shall not
+act as a Proxy for another person or shareholder.
+If a Proxy is appointed for more than fifty Members, he shall choose
+any fifty Members and confirm the same to the company before the
+commencement of specified period for inspection. In case, the Proxy
+fails to do so, the company shall consider only the first fifty Proxies
+received as valid.
+In case of a private company, the Proxy shall be appointed in accordance
+with this paragraph, unless otherwise provided in the Articles.
+20 SS-2 – SECRETARIAL STANDARD ON GENERAL MEETINGS
+6.2 Form of Proxy
+6.2.1 An instrument appointing a Proxy shall be in the
+Form prescribed under the Act.
+Such instrument shall not be questioned on the ground that it fails to
+comply with any special requirements specified by the Articles of a
+company.
+The instrument of Proxy shall be signed by the appointer or his attorney
+duly authorised in writing, or if the appointer is a body corporate, be
+under its seal or be signed by an officer or an attorney duly authorised
+by it.
+6.2.2 An instrument of Proxy duly filled, stamped and
+signed, is valid only for the Meeting to which it
+relates including any adjournment thereof.
+6.3 Stamping of Proxies
+An instrument of Proxy is valid only if it is properly stamped as
+per the applicable law. Unstamped or inadequately stamped
+Proxies or Proxies upon which the stamps have not been
+cancelled are invalid.
+6.4 Execution of Proxies
+6.4.1 The Proxy-holder shall prove his identity at the
+time of attending the Meeting.
+6.4.2 An authorised representative of a body corporate
+or of the President of India or of the Governor of a
+State, holding shares in a company, may appoint
+a Proxy under his signature.
+6.5 Proxies in Blank and Incomplete Proxies
+6.5.1 A Proxy form which does not state the name of
+the Proxy shall not be considered valid.
+6.5.2 Undated Proxy shall not be considered valid.
+6.5.3 If a company receives multiple Proxies for the
+SS-2 – SECRETARIAL STANDARD ON GENERAL MEETINGS 21
+same holdings of a Member, the Proxy which is
+dated last shall be considered valid; if they are
+not dated or bear the same date without specific
+mention of time, all such multiple Proxies shall be
+treated as invalid.
+6.6 Deposit of Proxies and Authorisations
+6.6.1 Proxies shall be deposited with the company either
+in person or through post not later than forty-eight
+hours before the commencement of the Meeting in
+relation to which they are deposited and a Proxy
+shall be accepted even on a holiday if the last date
+by which it could be accepted is a holiday.
+Any provision in the Articles of a company which specifies or requires
+a longer period for deposit of Proxy than forty-eight hours before a
+Meeting of the company shall have effect as if a period of forty-eight
+hours had been specified in or required for such deposit.
+In case of a private company, the Proxy shall be deposited with the
+company in accordance with this paragraph, unless otherwise provided
+in the Articles.
+6.6.2 If the Articles so provide, a Member who has
+not appointed a Proxy to attend and vote on his
+behalf at a Meeting may appoint a Proxy for any
+adjourned Meeting, not later than forty-eight
+hours before the time of such adjourned Meeting.
+6.6.3 In case of remote e-voting:
+(i) the letter of appointment of representative(s)
+of the President of India or the Governor of
+a State; or
+(ii) the authorisation in respect of representative(s)
+of the Corporations;
+shall be received by the scrutiniser/company on
+or before close of e-voting.
+22 SS-2 – SECRETARIAL STANDARD ON GENERAL MEETINGS
+In case of postal ballot such letter of appointment/ authorisation shall
+be submitted to the scrutiniser alongwith physical ballot form.
+If the representative attends the Meeting in person to vote thereat, the
+letter of appointment / authorisation, as the case may be, shall be
+submitted before the commencement of Meeting.
+6.7 Revocation of Proxies
+6.7.1 If a Proxy had been appointed for the original
+Meeting and such Meeting is adjourned, any
+Proxy given for the adjourned Meeting revokes
+the Proxy given for the original Meeting.
+6.7.2 A Proxy later in date revokes any Proxy/Proxies
+dated prior to such Proxy.
+6.7.3 A Proxy is valid until written notice of revocation
+has been received by the company before the
+commencement of the Meeting or adjourned
+Meeting, as the case may be.
+An undated notice of revocation of Proxy shall not be accepted. A notice
+of revocation shall be signed by the same Member (s) who had signed
+the Proxy, in the case of joint Membership.
+6.7.4 When a Member appoints a Proxy and both the
+Member and Proxy attend the Meeting, the Proxy
+stands automatically revoked.
+6.8 Inspection of Proxies
+6.8.1 Requisitions, if any, for inspection of Proxies shall
+be received in writing from a Member entitled to
+vote on any Resolution at least three days before
+the commencement of the Meeting.
+6.8.2 Proxies shall be made available for inspection
+during the period beginning twenty-four hours
+before the time fixed for the commencement of
+the Meeting and ending with the conclusion of
+the Meeting.
+SS-2 – SECRETARIAL STANDARD ON GENERAL MEETINGS 23
+Inspection shall be allowed between 9 a.m. and 6 p.m. during such
+period.
+In case of a private company, inspection of Proxies shall be as stated
+above, unless otherwise provided in the Articles.
+6.8.3 A fresh requisition, conforming to the above
+requirements, shall be given for inspection of
+Proxies in case the original Meeting is adjourned.
+6.9 Record of Proxies
+6.9.1 All Proxies received by the company shall be
+recorded chronologically in a register kept for
+that purpose.
+6.9.2 In case any Proxy entered in the register is
+rejected, the reasons therefor shall be entered in
+the remarks column.
+7. Voting
+7.1 Proposing a Resolution at a Meeting
+Every Resolution, except a Resolution which has been put to
+vote through Remote e-Voting or on which a poll has been
+demanded, shall be proposed by a Member and seconded by
+another Member.
+7.2 E-voting
+7.2.1 Every company having its equity shares listed on a
+recognized stock exchange other than companies
+whose equity shares are listed on SME Exchange
+or on the Institutional Trading Platform and other
+companies as prescribed shall provide e-voting
+facility to their Members to exercise their Voting
+Rights.
+Other companies presently prescribed are companies having not less
+than one thousand Members.
+24 SS-2 – SECRETARIAL STANDARD ON GENERAL MEETINGS
+Nidhis are not required to provide e-voting facility to their Members.
+The facility of Remote e-voting does not dispense with the requirement
+of holding a General Meeting by the company.
+7.2.2 Voting at the Meeting
+Every company, which has provided e-voting facility to its
+Members, shall also put every Resolution to vote through a
+ballot process at the Meeting.
+Ballot process may be carried out by distributing ballot/poll slips or by
+making arrangement for voting through computer or secure electronic
+systems.
+Any Member, who has already exercised his votes through Remote
+e-voting, may attend the Meeting but is prohibited to vote at the Meeting
+and his vote, if any, cast at the Meeting shall be treated as invalid.
+A Proxy can vote in the ballot process.
+7.3 Show of Hands
+Every company shall, at the Meeting, put every Resolution,
+except a Resolution which has been put to Remote e-voting, to
+vote on a show of hands at the first instance, unless a poll is
+validly demanded.
+A Proxy cannot vote on a show of hands.
+In case of a private company, the voting by show of hands shall be
+in accordance with this paragraph, unless otherwise provided in the
+Articles.
+7.4 Poll
+The Chairman shall order a poll upon receipt of a valid demand
+for poll either before or on the declaration of the result of the
+voting on any Resolution on show of hands.
+Poll in such cases shall be through a Ballot process.
+While a Proxy cannot speak at the Meeting, he has the right to demand
+or join in the demand for a poll.
+SS-2 – SECRETARIAL STANDARD ON GENERAL MEETINGS 25
+The poll may be taken by the Chairman, on his own motion also.
+In case of a private company, the poll shall be conducted in accordance
+with this paragraph, unless otherwise provided in the Articles.
+7.5 Voting Rights
+7.5.1 Every Member holding equity shares and, in
+certain cases as prescribed in the Act, every
+Member holding preference shares, shall be
+entitled to vote on a Resolution.
+Every Member entitled to vote on a Resolution and present in person
+shall, on a show of hands, have only one vote irrespective of the number
+of shares held by him.
+A Member present in person or by Proxy shall, on a poll or ballot, have
+votes in proportion to his share in the paid up equity share capital of
+the company, subject to differential rights as to voting, if any, attached
+to certain shares as stipulated in the Articles or by the terms of issue
+of such shares.
+Preference shareholders have a right to vote only in certain cases as
+prescribed under the Act.
+In case of a private company, the Voting Rights shall be reckoned in
+accordance with this paragraph, unless otherwise provided in the
+Memorandum or Articles of the company.
+In case of a Nidhi, no Member shall exercise Voting Rights on poll in
+excess of five percent of total Voting Rights of equity shareholders.
+7.5.2 A Member who is a related party is not entitled to
+vote on a Resolution relating to approval of any
+contract or arrangement in which such Member
+is a related party, except in case of a company
+in which ninety percent or more Members, in
+number, are relatives of promoters or are related
+parties.
+Further in case of wholly owned subsidiary, the
+resolution passed by the holding company shall
+26 SS-2 – SECRETARIAL STANDARD ON GENERAL MEETINGS
+be sufficient for the purpose of entering into the
+transactions between wholly owned subsidiary
+and holding company.
+In case of a private company, a member who is a
+related party is entitled to vote on such Resolution.
+A member who is a related party is entitled to
+vote on a Resolution pertaining to approval of
+any contract or arrangement to be entered into
+by:
+(a) A Government company with any other
+Government company or with Central
+Government or any State Government or
+any combination thereof; or
+(b) An unlisted Government company with
+the prior approval of competent authority,
+other than those contract or arrangements
+referred in clause (a).
+7.6 Second or Casting Vote
+Unless otherwise provided in the Articles, in the event of equality
+of votes, whether on show of hands or electronically or on a poll,
+the Chairman of the Meeting shall have a second or casting vote.
+Where the Chairman has entrusted the conduct of proceedings in
+respect of an item in which he is interested to any Non-Interested
+Director or to a Member, a person who so takes the Chair shall have
+a second or casting vote.
+8. Conduct of e-voting
+8.1 Every company that is required or opts to provide
+e-voting facility to its Members shall comply with the
+provisions in this regard.
+8.2 Every company providing e-voting facility shall offer
+such facility to all Members, irrespective of whether they
+hold shares in physical form or in dematerialised form.
+SS-2 – SECRETARIAL STANDARD ON GENERAL MEETINGS 27
+8.3 The facility for Remote e-voting shall remain open for
+not less than three days.
+The voting period shall close at 5 p.m. on the day preceding the date
+of the General Meeting.
+8.4 Board Approval
+The Board shall:
+(a) appoint one or more scrutinisers for e-voting or the
+ballot process;
+The scrutiniser(s) may be a Company Secretary in Practice, a Chartered
+Accountant in Practice, a Cost Accountant in Practice, or an Advocate
+or any other person of repute who is not in the employment of the
+company and who can, in the opinion of the Board, scrutinise the
+e-voting process or the ballot process, as the case may be, in a fair
+and transparent manner.
+The scrutiniser(s) so appointed may take assistance of a person who
+is not in employment of the company and who is well-versed with the
+e-voting system.
+Prior consent to act as a scrutiniser(s) shall be obtained from the
+scrutiniser(s) and placed before the Board for noting.
+(b) appoint an Agency;
+(c) decide the cut-off date for the purpose of reckoning the
+names of Members who are entitled to Voting Rights;
+The cut-off date for determining the Members who are entitled to vote
+through Remote e-voting or voting at the meeting shall be a date not
+earlier than seven days prior to the date fixed for the Meeting.
+Only Members as on the cut-off date, who have not exercised their
+Voting Rights through Remote e-voting, shall be entitled to vote at the
+Meeting.
+8.5 Notice
+8.5.1 Notice of the Meeting, wherein the facility of
+e-voting is provided, shall be sent either by
+28 SS-2 – SECRETARIAL STANDARD ON GENERAL MEETINGS
+registered post or speed post or by courier or by
+e-mail or by any other electronic means.
+An advertisement containing prescribed details shall be published,
+immediately on completion of despatch of Notices for Meeting but
+atleast twenty one days before the date of the General Meeting, at least
+once in a vernacular newspaper in the principal vernacular language
+of the district in which the registered office of the company is situated
+and having a wide circulation in that district and at least once in English
+language in an English newspaper, having country-wide circulation,
+and specifying therein, inter-alia the following matters, namely:
+(a) A statement to the effect that the business may be transacted
+by e-voting;
+(b) The date and time of commencement of Remote e-voting;
+(c) The date and time of end of Remote e-voting;
+(d) The cut-off date as on which the right of voting of the Members
+shall be reckoned;
+(e) The manner in which persons who have acquired shares and
+become Members after the despatch of Notice may obtain the
+login ID and password;
+(f) The manner in which company shall provide for voting by
+Members present at the Meeting;
+(g) The statement that:
+(i) Remote e-voting shall not be allowed beyond the said
+date and time;
+(ii) a Member may participate in the General Meeting
+even after exercising his right to vote through Remote
+e-voting but shall not be entitled to vote again; and
+(iii) a Member as on the cut-off date shall only be entitled
+for availing the Remote e-voting facility or vote, as the
+case may be, in the General Meeting;
+(h) Website address of the company, in case of companies having
+a website and Agency where Notice is displayed; and
+SS-2 – SECRETARIAL STANDARD ON GENERAL MEETINGS 29
+(i) Name, designation, address, e-mail ID and phone number of
+the person responsible to address the grievances connected
+with the e-voting.
+Advertisement shall simultaneously be placed on the website of the
+company till the conclusion of Meeting, in case of companies having
+a website and of the Agency.
+8.5.2 Notice shall simultaneously be placed on the
+website of the company, in case of companies
+having a website, and of the Agency.
+Such Notice shall remain on the website till the date of General Meeting.
+8.5.3 Notice shall inform the Members about procedure
+of Remote e-voting, availability of such facility
+and provide necessary information thereof to
+enable them to access such facility.
+Notice shall clearly state that the company is providing e-voting facility
+and that the business may be transacted through such voting.
+Notice shall describe clearly the Remote e-voting procedure and the
+procedure of voting at the General Meeting by Members who do not
+vote by Remote e-voting.
+Notice shall also clearly specify the date and time of commencement
+and end of Remote e-voting and contain a statement that at the end
+of Remote e-voting period, the facility shall forthwith be blocked.
+Notice shall also contain contact details of the official responsible to
+address the grievances connected with voting by electronic means.
+Notice shall clearly specify that any Member, who has voted by Remote
+e-voting, cannot vote at the Meeting.
+Notice shall also specify the mode of declaration of the results of
+e-voting.
+Notice shall also clearly mention the cut-off date as on which the right
+of voting of the Members shall be reckoned and state that a person
+who is not a Member as on the cut off date should treat this Notice for
+information purposes only.
+30 SS-2 – SECRETARIAL STANDARD ON GENERAL MEETINGS
+Notice shall provide the details about the login ID and the process and
+manner for generating or receiving the password and for casting of
+vote in a secure manner.
+8.6 Declaration of results
+8.6.1 The scrutiniser(s) shall submit his report within
+three days from the date of the Meeting to the
+Chairman or a person authorised by him, who
+shall countersign the same and declare the result
+of the voting forthwith with details of the number
+of votes cast for and against the Resolution,
+invalid votes and whether the Resolution has
+been carried or not.
+8.6.2 The result of the voting, with details of the number
+of votes cast for and against the Resolution,
+invalid votes and whether the Resolution has been
+carried or not shall be displayed for at least three
+days on the Notice Board of the company at its
+Registered Office and its Head Office as well as
+Corporate Office, if any, if such office is situated
+elsewhere. Further, the results of voting alongwith
+the scrutiniser’s report shall also be placed on the
+website of the company, in case of companies
+having a website and of the Agency, immediately
+after the results are declared.
+8.6.3 The Resolution, if passed by a requisite majority,
+shall be deemed to have been passed on the date
+of the relevant General Meeting.
+8.7 Custody of scrutinisers’ register, report and other related
+papers
+The scrutinisers’ register, report and other related papers
+received from the scrutiniser(s) shall be kept in the custody of
+the Company Secretary or any other person authorised by the
+Board for this purpose.
+SS-2 – SECRETARIAL STANDARD ON GENERAL MEETINGS 31
+9. Conduct of Poll
+9.1 When a poll is demanded on any Resolution, the
+Chairman shall get the validity of the demand verified
+and, if the demand is valid, shall order the poll forthwith
+if it is demanded on the question of appointment of the
+Chairman or adjournment of the Meeting and, in any
+other case, within forty-eight hours of the demand for
+poll.
+9.2 In the case of a poll, which is not taken forthwith, the
+Chairman shall announce the date, venue and time of
+taking the poll to enable Members to have adequate
+and convenient opportunity to exercise their vote. The
+Chairman may permit any Member who so desires to be
+present at the time of counting of votes.
+If the date, venue and time of taking the poll cannot be announced at
+the Meeting, the Chairman shall inform the Members, the modes and
+the time of such communication, which shall in any case be within
+twenty four hours of closure of the Meeting.
+A Member who did not attend the Meeting can participate and vote
+in the poll in such cases.
+In case of a private company, the demand and conduct of poll shall be
+as stated above, unless otherwise provided in the Articles.
+9.3 Each Resolution put to vote by poll shall be put to vote
+separately.
+One ballot paper may be used for more than one item.
+9.4 Appointment of scrutinisers
+The Chairman shall appoint such number of scrutinisers, as he
+deems necessary, who may include a Company Secretary in
+Practice, a Chartered Accountant in Practice, a Cost Accountant
+in Practice, an Advocate or any other person of repute who is not
+in the employment of the company, to ensure that the scrutiny of
+the votes cast on a poll is done in a fair and transparent manner.
+32 SS-2 – SECRETARIAL STANDARD ON GENERAL MEETINGS
+In case of a private company, the appointment of scrutiniser(s) shall
+be in accordance with this paragraph, unless otherwise provided in
+the Articles.
+9.5 Declaration of results
+9.5.1 The scrutiniser(s) shall submit his report within
+seven days from the last date of the poll to the
+Chairman who shall countersign the same and
+declare the result of the poll within two days
+of the submission of report by the scrutiniser,
+with details of the number of votes cast for and
+against the Resolution, invalid votes and whether
+the Resolution has been carried or not.
+In case Chairman is not available, for such purpose, the report by the
+scrutiniser shall be submitted to a person authorised by the Chairman
+to receive such report, who shall countersign the scrutiniser’s report on
+behalf of the Chairman.
+The result shall be announced by the Chairman or any other person
+authorised by the Chairman in writing for this purpose.
+The Chairman of the Meeting shall have the power to regulate the
+manner in which the poll shall be taken and shall ensure that the poll
+is scrutinised in the manner prescribed under the Act.
+In case of a private company, the declaration of result of poll shall be
+in accordance with this paragraph, unless otherwise provided in the
+Articles.
+9.5.2 The result of the poll with details of the number of
+votes cast for and against the Resolution, invalid
+votes and whether the Resolution has been carried
+or not shall be displayed for at least three days on
+the Notice Board of the company at its Registered
+Office and its Head Office as well as Corporate
+Office, if any, if such office is situated elsewhere,
+and in case of companies having a website, shall
+also be placed on the website.
+SS-2 – SECRETARIAL STANDARD ON GENERAL MEETINGS 33
+9.5.3 The result of the poll shall be deemed to be the
+decision of the Meeting on the Resolution on
+which the poll was taken.
+10. Prohibition on Withdrawal of Resolutions
+Resolutions for items of business which are likely to affect the
+market price of the securities of the company shall not be
+withdrawn. Further, any resolution proposed for consideration
+through e-voting shall not be withdrawn.
+11. Rescinding of Resolutions
+A Resolution passed at a Meeting shall not be rescinded
+otherwise than by a Resolution passed at a subsequent Meeting.
+12. Modifications to Resolutions
+Modifications to any Resolution which do not change the
+purpose of the Resolution materially may be proposed, seconded
+and adopted by the requisite majority at the Meeting and,
+thereafter, the modified Resolution shall be duly proposed,
+seconded and put to vote.
+No modification to any proposed text of the Resolution shall be made
+if it in any way alters the substance of the Resolution as set out in the
+Notice. Grammatical, clerical, factual and typographical errors, if any,
+may be corrected as deemed fit by the Chairman.
+No modification shall be made to any Resolution which has already
+been put to vote by Remote e-voting before the Meeting.
+13. Reading of Reports
+13.1 The qualifications, observations or comments or other
+remarks, if any, mentioned in the Auditor’s Report on
+the financial transactions, which have any adverse effect
+on the functioning of the company shall be read at the
+Annual General Meeting and attention of the Members
+present shall be drawn to the explanations / comments
+given by the Board of Directors in their report.
+34 SS-2 – SECRETARIAL STANDARD ON GENERAL MEETINGS
+13.2 The qualifications, observations or comments or other
+remarks if any, mentioned in the Secretarial Audit Report
+issued by the Company Secretary in Practice, which have
+any material adverse effect on the functioning of the
+company, shall be read at the Annual General Meeting
+and attention of Members present shall be drawn to the
+explanations / comments given by the Board of Directors
+in their report.
+14. Distribution of Gifts
+No gifts, gift coupons, or cash in lieu of gifts shall be distributed
+to Members at or in connection with the Meeting.
+15. Adjournment of Meetings
+15.1 A duly convened Meeting shall not be adjourned unless
+circumstances so warrant. The Chairman may adjourn
+a Meeting with the consent of the Members, at which
+a Quorum is present, and shall adjourn a Meeting if so
+directed by the Members.
+Meetings shall stand adjourned for want of requisite Quorum.
+The Chairman may also adjourn a Meeting in the event of disorder or
+other like causes, when it becomes impossible to conduct the Meeting
+and complete its business.
+15.2 If a Meeting is adjourned sine-die or for a period of thirty
+days or more, a Notice of the adjourned Meeting shall
+be given in accordance with the provisions contained
+hereinabove relating to Notice.
+15.3 If a Meeting is adjourned for a period of less than
+thirty days, the company shall give not less than three
+days’ Notice specifying the day, date, time and venue of
+the Meeting, to the Members either individually or by
+publishing an advertisement in a vernacular newspaper
+in the principal vernacular language of the district in
+which the registered office of the company is situated,
+SS-2 – SECRETARIAL STANDARD ON GENERAL MEETINGS 35
+and in an English newspaper in English language, both
+having a wide circulation in that district.
+However, if a Meeting is adjourned for a period not exceeding three
+days and where an announcement of adjournment has been made
+at the Meeting itself, giving in the details of day, date, time, venue and
+business to be transacted at the adjourned Meeting, the company may
+also opt to give Notice of such adjourned Meeting either individually or
+by publishing an advertisement, as stated above.
+15.4 If a Meeting, other than an Annual General Meeting and
+a requisitioned Meeting, stands adjourned for want of
+Quorum, the adjourned Meeting shall be held on the
+same day, in the next week at the same time and place
+or on such other day or at such other time and place as
+may be determined by the Board.
+If a Meeting is adjourned for want of a Quorum to the same day on
+the next week, at the same time and place or with a change of day,
+time or place, the company shall give not less than three days’ Notice
+specifying the day, date, time and venue of the Meeting, to the Members
+either individually or by publishing an advertisement in a vernacular
+newspaper in the principal vernacular language of the district in which
+the registered office of the company is situated, and in an English
+newspaper in English language, both having a wide circulation in that
+district.
+If, at an adjourned Meeting, Quorum is not present within half an hour
+from the time appointed, the Members present, being not less than
+two in number, will constitute the Quorum.
+An adjourned Annual General Meeting, adjourned for want of quorum
+or otherwise, shall not be held on a National Holiday, only if any item
+relating to filling up of vacancy of a director retiring by rotation is included
+in the agenda of such adjourned Meeting.
+The company shall ensure compliance of the provisions of holding the
+Annual General Meeting every year, including adjournment thereof
+within a gap of not exceeding 15 months from the date of the previous
+36 SS-2 – SECRETARIAL STANDARD ON GENERAL MEETINGS
+Annual General Meeting or within such extended period permitted by
+the Registrar of Companies.
+In case of a private company, the adjournment of Meeting for want of
+quorum shall be in accordance with this paragraph, unless otherwise
+provided in the Articles.
+15.5 If, within half an hour from the time appointed for
+holding a Meeting called by requisitionists, a Quorum is
+not present, the Meeting shall stand cancelled.
+In case of a private company, the requisitioned meeting shall stand
+cancelled in accordance with this paragraph, unless otherwise provided
+in the Articles.
+15.6 At an adjourned Meeting, only the unfinished business
+of the original Meeting shall be considered.
+Any Resolution passed at an adjourned Meeting would be deemed to
+have been passed on the date of the adjourned Meeting and not on
+any earlier date.
+16. Passing of Resolutions by postal ballot
+16.1 Every company, except a company having less than or
+equal to two hundred Members, shall transact items of
+business as prescribed, only by means of postal ballot
+instead of transacting such business at a General
+Meeting. However, such item of business may be
+transacted at a General Meeting by a company which is
+required to provide e-voting facility to its Members.
+The list of items of businesses requiring to be transacted only by means
+of a postal ballot is given at Annexure.
+The Board may however opt to transact any other item of special
+business, not being any business in respect of which Directors or
+Auditors have a right to be heard at the Meeting, by means of postal
+ballot.
+Ordinary Business shall not be transacted by means of a postal ballot.
+SS-2 – SECRETARIAL STANDARD ON GENERAL MEETINGS 37
+16.2 Every company having its equity shares listed on a
+recognised stock exchange other than companies
+whose equity shares are listed on SME Exchange or on
+the Institutional Trading Platform and other companies
+which are required to provide e-voting facility shall
+provide such facility to its Members in respect of those
+items, which are required to be transacted through
+postal ballot.
+Other companies presently prescribed are companies having not less
+than one thousand Members.
+Nidhis are not required to provide e-voting facility to their Members.
+16.3 Board Approval
+The Board shall:
+(a) identify the businesses to be transacted through postal
+ballot;
+(b) approve the Notice of postal ballot incorporating
+proposed Resolution(s) and explanatory statement
+thereto;
+(c) authorise the Company Secretary or where there is no
+Company Secretary, any Director of the company to
+conduct postal ballot process and sign and send the
+Notice along with other documents;
+(d) appoint one scrutiniser for the postal ballot;
+The scrutiniser may be a Company Secretary in Practice, a Chartered
+Accountant in Practice, a Cost Accountant in Practice, an Advocate
+or any other person of repute who is not in the employment of the
+company and, who can in the opinion of the Board, scrutinise the postal
+ballot process in a fair and transparent manner.
+The scrutiniser shall however not be an officer or employee of the
+company.
+The scrutiniser so appointed may take assistance of a person who is
+38 SS-2 – SECRETARIAL STANDARD ON GENERAL MEETINGS
+not in employment of the company and who is well-versed with the
+e-voting system.
+Prior consent to act as a scrutiniser shall be obtained from the scrutiniser
+and placed before the Board for noting.
+(e) appoint an Agency in respect of e-voting for the postal
+ballot;
+(f) decide the cut-off date for reckoning Voting Rights and
+ascertaining those Members to whom the Notice and
+postal ballot forms shall be sent.
+Only Members as on the cut-off date shall be entitled to vote on the
+proposed Resolution by postal ballot.
+16.4 Notice
+16.4.1 Notice of the postal ballot shall be given in
+writing to every Member of the company. Such
+Notice shall be sent either by registered post or
+speed post, or by courier or by e-mail or by any
+other electronic means at the address registered
+with the company.
+The Notice shall be accompanied by the postal ballot form with the
+necessary instructions for filling, signing and returning the same.
+In case the Notice and accompanying documents are sent to Members
+by e-mail, these shall be sent to the Members’ e-mail addresses,
+registered with the company or provided by the depository, in the
+manner prescribed under the Act.
+Such Notice shall also be given to the Directors and Auditors of the
+company, to the Secretarial Auditor, to Debenture Trustees, if any, and,
+wherever applicable or so required, to other specified recipients.
+An advertisement containing prescribed details shall be published
+at least once in a vernacular newspaper in the principal vernacular
+language of the district in which the registered office of the company is
+situated, and having a wide circulation in that district, and at least once
+in English language in an English newspaper having a wide circulation in
+that district, about having dispatched the Notice and the ballot papers.
+SS-2 – SECRETARIAL STANDARD ON GENERAL MEETINGS 39
+16.4.2 In case of companies having a website, Notice of
+the postal ballot shall simultaneously be placed
+on the website.
+Such Notice shall remain on the website till the last date for receipt of
+the postal ballot forms from the Members.
+16.4.3 Notice shall specify the day, date, time and venue
+where the results of the voting by postal ballot
+will be announced and the link of the website
+where such results will be displayed.
+Notice shall also specify the mode of declaration of the results of the
+voting by postal ballot.
+16.4.4 Notice of the postal ballot shall inform the
+Members about availability of e-voting facility, if
+any, and provide necessary information thereof to
+enable them to access such facility.
+In case the facility of e-voting has been made available, the provisions
+relating to conduct of e-voting shall apply, mutatis mutandis, as far as
+applicable.
+Notice shall describe clearly the e-voting procedure.
+Notice shall also clearly specify the date and time of commencement
+and end of e-voting, if any and contain a statement that voting shall not
+be allowed beyond the said date and time. Notice shall also contain
+contact details of the official responsible to address the grievances
+connected with the e-voting for postal ballot.
+Notice shall clearly specify that any Member cannot vote both by post
+and e-voting and if he votes both by post and e-voting, his vote by post
+shall be treated as invalid.
+The advertisement shall, inter alia, state the following matters:
+(a) a statement to the effect that the business is to be transacted
+by postal ballot which may include voting by electronic means;
+(b) the date of completion of dispatch of Notices;
+40 SS-2 – SECRETARIAL STANDARD ON GENERAL MEETINGS
+(c) the date of commencement of voting (postal and e-voting);
+(d) the date of end of voting (postal and e-voting);
+(e) the statement that any postal ballot form received from the
+Member after thirty days from the date of dispatch of Notice
+will not be valid;
+(f) a statement to the effect that Member who has not received
+postal ballot form may apply to the company and obtain a
+duplicate thereof;
+(g) contact details of the person responsible to address the
+queries/grievances connected with the voting by postal ballot
+including voting by electronic means, if any; and
+(h) day, date, time and venue of declaration of results and the link
+of the website where such results will be displayed.
+Notice and the advertisement shall clearly mention the cut-off date as
+on which the right of voting of the Members shall be reckoned and
+state that a person who is not a Member as on the cut-off date should
+treat this Notice for information purposes only.
+16.4.5 Each item proposed to be passed through postal
+ballot shall be in the form of a Resolution and shall
+be accompanied by an explanatory statement
+which shall set out all such facts as would enable
+a Member to understand the meaning, scope and
+implications of the item of business and to take a
+decision thereon.
+16.5 Postal ballot forms
+16.5.1 The postal ballot form shall be accompanied by a
+postage prepaid reply envelope addressed to the
+scrutiniser.
+A single postal ballot form may provide for multiple items of business
+to be transacted.
+16.5.2 The postal ballot form shall contain instructions
+as to the manner in which the form is to be
+SS-2 – SECRETARIAL STANDARD ON GENERAL MEETINGS 41
+completed, assent or dissent is to be recorded
+and its return to the scrutiniser.
+The postal ballot form may specify instances in which such form shall
+be treated as invalid or rejected and procedure for issue of duplicate
+postal ballot forms.
+16.5.3 A postal ballot form shall be considered invalid if:
+(a) A form other than one issued by the company
+has been used;
+(b) It has not been signed by or on behalf of the
+Member;
+(c) Signature on the postal ballot form doesn’t
+match the specimen signatures with the
+company;
+(d) It is not possible to determine without any
+doubt the assent or dissent of the Member;
+(e) Neither assent nor dissent is mentioned;
+(f) Any competent authority has given directions
+in writing to the company to freeze the
+Voting Rights of the Member;
+(g) The envelope containing the postal
+ballot form is received after the last date
+prescribed;
+(h) The postal ballot form, signed in a
+representative capacity, is not accompanied
+by a certified copy of the relevant specific
+authority;
+(i) It is received from a Member who is in
+arrears of payment of calls;
+(j) It is defaced or mutilated in such a way that
+its identity as a genuine form cannot be
+established;
+42 SS-2 – SECRETARIAL STANDARD ON GENERAL MEETINGS
+(k) Member has made any amendment to the
+Resolution or imposed any condition while
+exercising his vote.
+A postal ballot form which is otherwise complete in all respects and
+is lodged within the prescribed time limit but is undated shall be
+considered valid.
+16.6 Declaration of results
+16.6.1 The scrutiniser shall submit his report within seven
+days from the last date of receipt of postal ballot
+forms to the Chairman or a person authorised by
+him, who shall countersign the same and declare
+the result of the postal ballot on the date, time
+and venue specified in the Notice, with details
+of the number of votes cast for and against the
+Resolution, invalid votes and the final result as to
+whether the Resolution has been carried or not.
+16.6.2 The result of the voting with details of the number
+of votes cast for and against the Resolution, invalid
+votes and whether the Resolution has been carried
+or not, along with the scrutiniser’s report shall be
+displayed for at least three days on the Notice
+Board of the company at its Registered Office and
+its Head Office as well as Corporate Office, if any,
+if such office is situated elsewhere, and also be
+placed on the website of the company, in case of
+companies having a website.
+16.6.3 The Resolution, if passed by requisite majority,
+shall be deemed to have been passed on the last
+date specified by the company for receipt of duly
+completed postal ballot forms or e-voting.
+16.7 Custody of scrutiniser’s registers, report and other
+related papers
+The postal ballot forms, other related papers, register and
+SS-2 – SECRETARIAL STANDARD ON GENERAL MEETINGS 43
+scrutiniser’s report received from the scrutiniser shall be kept
+in the custody of the Company Secretary or any other person
+authorised by the Board for this purpose.
+16.8 Rescinding the Resolution
+A Resolution passed by postal ballot shall not be rescinded
+otherwise than by a Resolution passed subsequently through
+postal ballot or passed at a General Meeting by a company
+which is required to provide e-voting facility to its Members.
+16.9 Modification to the Resolution
+No amendment or modification shall be made to any Resolution
+circulated to the Members for passing by means of postal ballot.
+17. Minutes
+Every company shall keep Minutes of all Meetings. Minutes kept in
+accordance with the provisions of the Act evidence the proceedings
+recorded therein. Minutes help in understanding the deliberations and
+decisions taken at the Meeting.
+17.1 Maintenance of Minutes
+17.1.1 Minutes shall be recorded in books maintained
+for that purpose.
+17.1.2 A distinct Minutes Book shall be maintained
+for Meetings of the Members of the company,
+creditors and others as may be required under
+the Act.
+Resolutions passed by postal ballot shall be recorded in the Minutes
+book of General Meetings.
+17.1.3 A company may maintain its Minutes in physical
+or in electronic form.
+Minutes may be maintained in electronic form in such manner as
+prescribed under the Act and as may be decided by the Board. Minutes
+in electronic form shall be maintained with Timestamp.
+44 SS-2 – SECRETARIAL STANDARD ON GENERAL MEETINGS
+A company shall, however, follow a uniform and consistent form of
+maintaining the Minutes. Any deviation in such form of maintenance
+shall be authorised by the Board.
+17.1.4 The pages of the Minutes Books shall be
+consecutively numbered.
+This shall be followed irrespective of a break in the Book arising out of
+periodical binding in case the Minutes are maintained in physical form.
+This shall be equally applicable for maintenance of Minutes Book in
+electronic form with Timestamp.
+In the event any page or part thereof in the Minutes Book is left blank,
+it shall be scored out and initialled by the Chairman who signs the
+Minutes.
+17.1.5 Minutes shall not be pasted or attached to the
+Minutes Book, or tampered with in any manner.
+17.1.6 Minutes of Meetings, if maintained in loose-leaf
+form, shall be bound periodically at least once in
+every three years.
+There shall be a proper locking device to ensure security and proper
+control to prevent removal or manipulation of the loose leaves.
+17.1.7 Minutes Books shall be kept at the Registered
+Office of the company.
+17.2 Contents of Minutes
+17.2.1 General Contents
+17.2.1.1 Minutes shall state, at the beginning the Meeting,
+name of the company, day, date, venue and time
+of commencement of the Meeting.
+Minutes of Annual General Meeting shall also state the serial number
+of the Meeting.
+In case a Meeting is adjourned, the Minutes shall be entered in respect
+of the original Meeting as well as the adjourned Meeting. In respect of
+SS-2 – SECRETARIAL STANDARD ON GENERAL MEETINGS 45
+a Meeting convened but adjourned for want of Quorum a statement to
+that effect shall be recorded by the Chairman or any Director present
+at the Meeting in the Minutes.
+17.2.1.2 Minutes shall record the names of the Directors
+and the Company Secretary present at the
+Meeting.
+The names of the Directors shall be listed in alphabetical order or in
+any other logical manner, but in either case starting with the name of
+the person in the Chair.
+17.2.2 Specific Contents
+17.2.2.1 Minutes shall, inter alia, contain:
+(a) The Record of election, if any, of the
+Chairman of the Meeting.
+(b) The fact that certain registers,
+documents, the Auditor’s Report and
+Secretarial Audit Report, as prescribed
+under the Act were available for
+inspection.
+(c) The Record of presence of Quorum.
+(d) The number of Members present in
+person including representatives.
+(e) The number of Proxies and the number
+of shares represented by them.
+(f) The presence of the Chairmen of
+the Audit Committee, Nomination
+and Remuneration Committee and
+Stakeholders Relationship Committee
+or their authorised representatives.
+(g) The presence if any, of the Secretarial
+Auditor, the Auditors, or their authorised
+representatives, the Court/Tribunal
+appointed observers or scrutinisers.
+46 SS-2 – SECRETARIAL STANDARD ON GENERAL MEETINGS
+(h) Summary of the opening remarks of the
+Chairman.
+(i) Reading of qualifications, observations
+or comments or other remarks on the
+financial transactions, which have any
+adverse effect on the functioning of the
+company, as mentioned in the report of
+the Auditors.
+(j) Reading of qualifications, observations
+or comments or other remarks, which
+have any material adverse effect
+on the functioning of the company,
+as mentioned in the report of the
+Secretarial Auditor.
+(k) Summary of the clarifications provided
+on various Agenda Items.
+(l) In respect of each Resolution, the type
+of the Resolution, the names of the
+persons who proposed and seconded
+and the majority with which such
+Resolution was passed.
+Where a motion is moved to modify a proposed Resolution, the result
+of voting on such motion shall be mentioned. If a Resolution proposed
+undergoes modification pursuant to a motion by shareholders, the
+Minutes shall contain the details of voting for the modified Resolution.
+(m) In the case of poll, the names of
+scrutinisers appointed and the number
+of votes cast in favour and against the
+Resolution and invalid votes.
+(n) If the Chairman vacates the Chair in
+respect of any specific item, the fact
+that he did so and in his place some
+other Director or Member took the
+Chair.
+SS-2 – SECRETARIAL STANDARD ON GENERAL MEETINGS 47
+(o) The time of commencement and
+conclusion of the Meeting.
+17.2.2.2 In respect of Resolutions passed by e-voting
+or postal ballot, a brief report on the e-voting
+or postal ballot conducted including the
+Resolution proposed, the result of the voting
+thereon and the summary of the scrutiniser’s
+report shall be recorded in the Minutes Book
+and signed by the Chairman or in the event
+of death or inability of the Chairman, by
+any Director duly authorised by the Board
+for the purpose, within thirty days from the
+date of passing of Resolution by e-voting or
+postal ballot.
+17.3 Recording of Minutes
+17.3.1 Minutes shall contain a fair and correct summary
+of the proceedings of the Meeting.
+The Company Secretary shall record the proceedings of the Meetings.
+Where there is no Company Secretary, any other person authorised by
+the Board or by the Chairman in this behalf shall record the proceedings.
+The Chairman shall ensure that the proceedings of the Meeting are
+correctly recorded.
+The Chairman has absolute discretion to exclude from the Minutes,
+matters which in his opinion are or could reasonably be regarded as
+defamatory of any person, irrelevant or immaterial to the proceedings
+or which are detrimental to the interests of the company.
+17.3.2 Minutes shall be written in clear, concise and
+plain language.
+Minutes shall be written in third person and past tense. Resolutions
+shall however be written in present tense.
+Minutes need not be an exact transcript of the proceedings at the
+Meeting.
+48 SS-2 – SECRETARIAL STANDARD ON GENERAL MEETINGS
+17.3.3 Each item of business taken up at the Meeting
+shall be numbered.
+Numbering shall be in a manner which would enable ease of reference
+or cross-reference.
+17.4 Entry in the Minutes Book
+17.4.1 Minutes shall be entered in the Minutes Book
+within thirty days from the date of conclusion of
+the Meeting.
+In case a Meeting is adjourned, the Minutes in respect of the original
+Meeting as well as the adjourned Meeting shall be entered in the
+Minutes Book within thirty days from the date of the respective Meetings.
+17.4.2 The date of entry of the Minutes in the Minutes
+Book shall be recorded by the Company Secretary.
+Where there is no Company Secretary, it shall be entered by any other
+person authorised by the Board or the Chairman.
+17.4.3 Minutes, once entered in the Minutes Book, shall
+not be altered.
+17.5 Signing and Dating of Minutes
+17.5.1 Minutes of a General Meeting shall be signed
+and dated by the Chairman of the Meeting or in
+the event of death or inability of that Chairman,
+by any Director who was present in the Meeting
+and duly authorised by the Board for the purpose,
+within thirty days of the General Meeting.
+17.5.2 The Chairman shall initial each page of the
+Minutes, sign the last page and append to such
+signature the date on which and the place where
+he has signed the Minutes.
+Any blank space in a page between the conclusion of the Minutes and
+signature of the Chairman shall be scored out.
+If the Minutes are maintained in electronic form, the Chairman shall
+sign the Minutes digitally.
+SS-2 – SECRETARIAL STANDARD ON GENERAL MEETINGS 49
+17.6 Inspection and Extracts of Minutes
+17.6.1 Directors and Members are entitled to inspect
+the Minutes of all General Meetings including
+Resolutions passed by postal ballot.
+Minutes of all General Meetings shall be open for inspection by any
+Member during business hours of the company, without charge, subject
+to such reasonable restrictions as the company may, by its Articles or
+in General Meeting, impose, so, however, that not less than two hours
+in each business day are allowed for inspection.
+The Company Secretary in Practice appointed by the company, the
+Secretarial Auditor, the Statutory Auditor, the Cost Auditor or the Internal
+Auditor of the company can inspect the Minutes as he may consider
+necessary for the performance of his duties.
+Inspection of Minutes Book may be provided in physical or in electronic
+form.
+While providing inspection of Minutes Book, the Company Secretary
+or the official of the company authorised by the Company Secretary
+to facilitate inspection shall take all precautions to ensure that the
+Minutes Book is not mutilated or in any way tampered with by the
+person inspecting.
+17.6.2 Extract of the Minutes shall be given only after
+the Minutes have been duly signed. However, any
+Resolution passed at a Meeting may be issued
+even pending signing of the Minutes, provided the
+same is certified by the Chairman or any Director
+or the Company Secretary.
+When a Member requests in writing for a copy of any Minutes, which he
+is entitled to inspect, the company shall furnish the same within seven
+working days of receipt of his request, subject to payment of such fee
+as may be specified in the Articles of the company. In case a Member
+requests for the copy of the Minutes in electronic form, in respect of any
+previous General Meetings held during a period immediately preceding
+three financial years, the company shall furnish the same on payment
+of such fee as prescribed under the Act.
+50 SS-2 – SECRETARIAL STANDARD ON GENERAL MEETINGS
+Copies of the Minutes or the extracts thereof as requisitioned by the
+Member, duly certified by the Company Secretary or where there is
+no Company Secretary, an officer duly authorised by the Board in this
+behalf, may be provided in physical or electronic form.
+18. Preservation of Minutes and other Records
+18.1 Minutes of all Meetings shall be preserved permanently
+in physical or in electronic form with Timestamp.
+Where, under a scheme of arrangement, a company has been merged
+or amalgamated with another company, Minutes of all Meetings of the
+transferor company, as handed over to the transferee company, shall
+be preserved permanently by the transferee company, notwithstanding
+that the transferor company might have been dissolved.
+18.2 Office copies of Notices, scrutiniser’s report and related
+papers shall be preserved in good order in physical or
+in electronic form for as long as they remain current or
+for eight financial years, whichever is later and may be
+destroyed thereafter with the approval of the Board.
+Office copies of Notices, scrutiniser’s report and related papers of the
+transferor company, as handed over to the transferee company, shall
+be preserved in good order in physical or electronic form for as long
+as they remain current or for eight financial years, whichever is later
+and may be destroyed thereafter with the approval of the Board and
+permission of the Central Government, where applicable.
+18.3 Minutes Books shall be kept in the custody of the
+Company Secretary.
+Where there is no Company Secretary, Minutes shall be kept in the
+custody of any Director duly authorised for the purpose by the Board.
+19. Report on Annual General Meeting
+Every listed public company shall prepare a report on Annual
+General Meeting in the prescribed form, including a confirmation
+that the Meeting was convened, held and conducted as per the
+provisions of the Act.
+SS-2 – SECRETARIAL STANDARD ON GENERAL MEETINGS 51
+Such report which shall be a fair and correct summary of the
+proceedings of the Meeting shall contain:
+(a) the day, date, time and venue of the Annual General Meeting;
+(b) confirmation with respect to appointment of Chairman of the
+Meeting;
+(c) number of Members attending the Meeting;
+(d) confirmation of Quorum;
+(e) confirmation with respect to compliance of the Act and
+Standards with respect to calling, convening and conducting
+the Meeting;
+(f) business transacted at the Meeting and result thereof with a
+brief summary of the discussions;
+(g) particulars with respect to any adjournment, postponement of
+Meeting, change in venue; and
+(h) any other points relevant for inclusion in the report.
+Such report shall be filed with the Registrar of Companies within thirty
+days of the conclusion of the Annual General Meeting.
+20. Disclosure
+The Annual Return of a company shall disclose the date of
+Annual General Meeting held during the financial year.
+EFFECTIVE DATE
+This Standard shall come into effect from 1st April, 2024.
+52 SS-2 – SECRETARIAL STANDARD ON GENERAL MEETINGS
+Annexure
+(Paragraph 16.1)
+Items of business which shall be passed only by postal ballot
+1. Alteration of the objects clause of the Memorandum and in
+the case of the company in existence immediately before the
+commencement of the Act, alteration of the Main Objects of the
+Memorandum
+2. Alteration of Articles of Association in relation to insertion or
+removal of provisions which are required to be included in the
+Articles of a company in order to constitute it a private company
+3. Change in place of Registered Office outside the local limits of
+any city, town or village
+4. Change in objects for which a company has raised money from
+public through prospectus and still has any unutilised amount
+out of the money so raised
+5. Issue of shares with differential rights as to voting or dividend
+or otherwise
+6. Variation in the rights attached to a class of shares or
+debentures or other securities
+7. Buy-back of shares by a company
+8. Appointment of a Director elected by Small Shareholders
+9. Sale of the whole or substantially the whole of an undertaking
+of a company or where the company owns more than one
+undertaking, of whole or substantially the whole of any of such
+undertakings
+10. Giving loans or extending guarantee or providing security in
+excess of the limit specified
+11. Any other Resolution prescribed under any applicable law,
+rules or regulations.

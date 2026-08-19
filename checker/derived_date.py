@@ -30,6 +30,28 @@ from datetime import date, timedelta
 from typing import Literal
 
 DayCount = Literal["calendar", "clear"]
+ServiceMode = Literal["hand", "electronic", "post", "courier", "speed_post", "registered_post"]
+
+# Verbatim, from ICSI Secretarial Standards. These are the CITED SOURCES for the day-count rules
+# below. Previously the clear-day arithmetic was asserted from reasoning with no authority behind
+# it — the exact defect this product exists to prevent. Now the rule quotes the standard.
+#
+# SS-2 (General Meetings, revised, effective 1 Apr 2024), para 1.2.6:
+SS2_CLEAR_DAYS = (
+    "clear days in advance of the Meeting. For the purpose of reckoning twenty-one days clear "
+    "Notice, the day of sending the Notice and the day of Meeting shall not be counted. Further "
+    "in case the company sends the Notice by post or courier, an additional two days shall be "
+    "provided for the service of Notice."
+)
+# SS-1 (Meetings of the Board, revised, effective 1 Apr 2024), para 1.3.6:
+SS1_BOARD_NOTICE = (
+    "least seven days before the date of the Meeting, unless the Articles prescribe a longer "
+    "period. In case the company sends the Notice by speed post or by registered post, an "
+    "additional two days shall be added for the service of Notice."
+)
+# Both standards add two days for physical service. Hand delivery and electronic service do not.
+SERVICE_ADDEND_DAYS = 2
+_POSTAL: frozenset[str] = frozenset({"post", "courier", "speed_post", "registered_post"})
 
 _WORD_NUM = {
     "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7,
@@ -57,13 +79,19 @@ class DerivedDate:
     day_count: DayCount
     citation: str
     quote: str             # the provision sentence, verbatim
+    service_mode: ServiceMode = "hand"
+    service_addend: int = 0
 
     def working(self) -> str:
         """The derivation, shown. This is what makes the result admissible."""
-        cc = " (clear days — both endpoints excluded)" if self.day_count == "clear" else ""
-        return (f"{self.anchor.isoformat()} ({self.anchor_label}, supplied by you)\n"
-                f"  + {self.interval_text}{cc}  — verbatim from {self.citation}\n"
-                f"  = {self.result.isoformat()}")
+        cc = " (clear days — day of sending and day of Meeting both excluded)" if self.day_count == "clear" else ""
+        lines = [f"{self.anchor.isoformat()} ({self.anchor_label}, supplied by you)",
+                 f"  + {self.interval_text}{cc}  — verbatim from {self.citation}"]
+        if self.service_addend:
+            lines.append(f"  + {self.service_addend} days for service by {self.service_mode.replace('_', ' ')}"
+                         f"  — {self.citation}")
+        lines.append(f"  = {self.result.isoformat()}")
+        return "\n".join(lines)
 
 
 def _add_months(d: date, n: int) -> date:
@@ -92,24 +120,33 @@ def derive(
     source_text: str,
     citation: str,
     day_count: DayCount = "calendar",
+    service_mode: ServiceMode = "hand",
 ) -> DerivedDate:
     """Derive a statutory deadline. The interval MUST appear in source_text or this raises."""
     verbatim, value, unit, is_clear = parse_interval(source_text)
     if is_clear:
         day_count = "clear"
 
+    # SS-1 1.3.6 / SS-2 1.2.6: physical service adds two days. Only applies to day-counted
+    # notice periods, and only where the cited source actually states the addend.
+    addend = 0
+    if (service_mode in _POSTAL and unit == "day"
+            and re.search(r"additional\s+two\s+days", source_text, re.I)):
+        addend = SERVICE_ADDEND_DAYS
+
     if unit == "month":
         result = _add_months(anchor, value)
     elif unit == "year":
         result = _add_months(anchor, value * 12)
     elif day_count == "clear":
-        # SS-2 1.2.6: twenty-one clear days excludes the day of sending AND the day of the meeting.
-        result = anchor + timedelta(days=value + 1)
+        # SS-2 1.2.6, verbatim: "the day of sending the Notice and the day of Meeting shall not be
+        # counted." Dispatch 1 May + 21 clear days -> 2-22 May are the clear days, meeting 23 May.
+        result = anchor + timedelta(days=value + 1 + addend)
     else:
-        result = anchor + timedelta(days=value)
+        result = anchor + timedelta(days=value + addend)
 
     return DerivedDate(result, anchor, anchor_label, verbatim, value, unit,
-                       day_count, citation, source_text.strip()[:300])
+                       day_count, citation, source_text.strip()[:300], service_mode, addend)
 
 
 def verify(dd: DerivedDate, source_text: str) -> bool:
@@ -117,7 +154,8 @@ def verify(dd: DerivedDate, source_text: str) -> bool:
     if dd.interval_text.lower() not in source_text.lower():
         return False
     return derive(anchor=dd.anchor, anchor_label=dd.anchor_label, source_text=source_text,
-                  citation=dd.citation, day_count=dd.day_count).result == dd.result
+                  citation=dd.citation, day_count=dd.day_count,
+                  service_mode=dd.service_mode).result == dd.result
 
 
 # --- self-test ---------------------------------------------------------------
@@ -129,7 +167,7 @@ S96 = ("Every company shall in each year hold in addition to any other meetings,
        "of the first financial year ... and in any other case, within a period of six months, from the "
        "date of closing of the financial year")
 S137 = "shall be filed with the Registrar within thirty days of the date of annual general meeting"
-SS2 = "Notice shall be given at least twenty-one clear days in advance of the Meeting."
+SS2 = "Notice shall be given at least twenty-one " + SS2_CLEAR_DAYS
 
 
 def _test() -> None:
@@ -168,6 +206,31 @@ def _test() -> None:
                 source_text=SS2, citation="SS-2 1.2.6")
     check(cd.day_count == "clear", "clear days detected from the source wording")
     check(cd.result == date(2026, 5, 23), "twenty-one clear days excludes both endpoints")
+    check("day of sending the Notice and the day of Meeting shall not be counted" in SS2_CLEAR_DAYS,
+          "clear-day rule now quotes SS-2 1.2.6 verbatim, not an assertion")
+
+    # SS-2 1.2.6 second limb: physical service adds two days.
+    post = derive(anchor=date(2026, 5, 1), anchor_label="date of dispatch", source_text=SS2,
+                  citation="SS-2 1.2.6", service_mode="post")
+    check(post.result == date(2026, 5, 25), "post service adds two days (23 May -> 25 May)")
+    check(post.service_addend == 2 and "service by post" in post.working(),
+          "service addend shown in the working")
+    check(derive(anchor=date(2026, 5, 1), anchor_label="d", source_text=SS2,
+                 citation="SS-2 1.2.6", service_mode="electronic").result == date(2026, 5, 23),
+          "electronic service adds nothing")
+
+    # SS-1 1.3.6: seven days board notice, +2 by speed/registered post.
+    bd = derive(anchor=date(2026, 5, 1), anchor_label="date of dispatch",
+                source_text=SS1_BOARD_NOTICE, citation="SS-1 1.3.6")
+    check(bd.interval_value == 7 and bd.result == date(2026, 5, 8), "SS-1: seven days board notice")
+    check(derive(anchor=date(2026, 5, 1), anchor_label="d", source_text=SS1_BOARD_NOTICE,
+                 citation="SS-1 1.3.6", service_mode="registered_post").result == date(2026, 5, 10),
+          "SS-1: registered post adds two days")
+
+    # The addend fires only where the source states it — never assumed.
+    check(derive(anchor=date(2026, 9, 30), anchor_label="agm", source_text=S137,
+                 citation="s.137(1)", service_mode="post").service_addend == 0,
+          "no addend where the cited source does not state one")
 
     # The gate: no interval in source => raise, never guess.
     try:
