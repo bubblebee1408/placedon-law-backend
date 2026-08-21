@@ -1,0 +1,556 @@
+[
+  {
+    "review_item_id": "ri-board_rules_2014-001",
+    "instrument_id": "BOARD_RULES_2014",
+    "scope": "INSTRUMENT",
+    "target_id": "RULE:COMPANIES_MEETINGS_BOARD_POWERS_2014",
+    "priority": "HIGH",
+    "status": "PENDING",
+    "reviewer_id": null,
+    "page_start": null,
+    "page_end": null,
+    "note": "Gazette G.S.R. 240(E) 31-03-2014; confirm principal, not amendment",
+    "questions": [
+      "Is the Gazette number and date correct?",
+      "Is this the principal instrument, not an amendment or consolidation?",
+      "Is the commencement date correct?"
+    ],
+    "decision": null
+  },
+  {
+    "review_item_id": "ri-board_rules_2014-002",
+    "instrument_id": "BOARD_RULES_2014",
+    "scope": "RULE",
+    "target_id": "RULE:COMPANIES_MEETINGS_BOARD_POWERS_2014:R1",
+    "priority": "HIGH",
+    "status": "PENDING",
+    "reviewer_id": null,
+    "page_start": 13,
+    "page_end": 13,
+    "note": "6 word(s) still split by extraction -- read text_raw against pages 13-13",
+    "questions": [
+      "Is the numbered rule boundary correct?",
+      "Is the heading materially faithful to the gazette?",
+      "Are the page bounds correct?",
+      "Is the extracted text usable for legal reasoning?"
+    ],
+    "decision": null
+  },
+  {
+    "review_item_id": "ri-board_rules_2014-003",
+    "instrument_id": "BOARD_RULES_2014",
+    "scope": "RULE",
+    "target_id": "RULE:COMPANIES_MEETINGS_BOARD_POWERS_2014:R2",
+    "priority": "HIGH",
+    "status": "PENDING",
+    "reviewer_id": null,
+    "page_start": 13,
+    "page_end": 13,
+    "note": "33 word(s) still split by extraction -- read text_raw against pages 13-13",
+    "questions": [
+      "Is the numbered rule boundary correct?",
+      "Is the heading materially faithful to the gazette?",
+      "Are the page bounds correct?",
+      "Is the extracted text usable for legal reasoning?"
+    ],
+    "decision": null
+  },
+  {
+    "review_item_id": "ri-board_rules_2014-004",
+    "instrument_id": "BOARD_RULES_2014",
+    "scope": "RULE",
+    "target_id": "RULE:COMPANIES_MEETINGS_BOARD_POWERS_2014:R3",
+    "priority": "HIGH",
+    "status": "PENDING",
+    "reviewer_id": null,
+    "page_start": 13,
+    "page_end": 15,
+    "note": "321 word(s) still split by extraction -- read text_raw against pages 13-15",
+    "questions": [
+      "Is the numbered rule boundary correct?",
+      "Is the heading materially faithful to the gazette?",
+      "Are the page bounds correct?",
+      "Is the extracted text usable for legal reasoning?"
+    ],
+    "decision": null
+  },
+  {
+    "review_item_id": "ri-board_rules_2014-005",
+    "instrument_id": "BOARD_RULES_2014",
+    "scope": "RULE",
+    "target_id": "RULE:COMPANIES_MEETINGS_BOARD_POWERS_2014:R4",
+    "priority": "HIGH",
+    "status": "PENDING",
+    "reviewer_id": null,
+    "page_start": 15,
+    "page_end": 15,
+    "note": "12 word(s) still split by extraction -- read text_raw against pages 15-15",
+    "questions": [
+      "Is the numbered rule boundary correct?",
+      "Is the heading materially faithful to the gazette?",
+      "Are the page bounds correct?",
+      "Is the extracted text usable for legal reasoning?"
+    ],
+    "decision": null
+  },
+  {
+    "review_item_id": "ri-board_rules_2014-006",
+    "instrument_id": "BOARD_RULES_2014",
+    "scope": "RULE",
+    "target_id": "RULE:COMPANIES_MEETINGS_BOARD_POWERS_2014:R5",
+    "priority": "HIGH",
+    "status": "PENDING",
+    "reviewer_id": null,
+    "page_start": 15,
+    "page_end": 15,
+    "note": "7 word(s) still split by extraction -- read text_raw against pages 15-15",
+    "questions": [
+      "Is the numbered rule boundary correct?",
+      "Is the heading materially faithful to the gazette?",
+      "Are the page bounds correct?",
+      "Is the extracted text usable for legal reasoning?"
+    ],
+    "decision": null
+  },
+  {
+    "review_item_id": "ri-board_rules_2014-007",
+    "instrument_id": "BOARD_RULES_2014",
+    "scope": "RULE",
+    "target_id": "RULE:COMPANIES_MEETINGS_BOARD_POWERS_2014:R6",
+    "priority": "HIGH",
+    "status": "PENDING",
+    "reviewer_id": null,
+    "page_start": 15,
+    "page_end": 15,
+    "note": "33 word(s) still split by extraction -- read text_raw against pages 15-15",
+    "questions": [
+      "Is the numbered rule boundary correct?",
+      "Is the heading materially faithful to the gazette?",
+      "Are the page bounds correct?",
+      "Is the extracted text usable for legal reasoning?"
+    ],
+    "decision": null
+  },
+  {
+    "review_item_id": "ri-board_rules_2014-008",
+    "instrument_id": "BOARD_RULES_2014",
+    "scope": "RULE",
+    "target_id": "RULE:COMPANIES_MEETINGS_BOARD_POWERS_2014:R7",
+    "priority": "HIGH",
+    "status": "PENDING",
+    "reviewer_id": null,
+    "page_start": 15,
+    "page_end": 16,
+    "note": "66 word(s) still split by extraction -- read text_raw against pages 15-16",
+    "questions": [
+      "Is the numbered rule boundary correct?",
+      "Is the heading materially faithful to the gazette?",
+      "Are the page bounds correct?",
+      "Is the extracted text usable for legal reasoning?"
+    ],
+    "decision": null
+  },
+  {
+    "review_item_id": "ri-board_rules_2014-009",
+    "instrument_id": "BOARD_RULES_2014",
+    "scope": "RULE",
+    "target_id": "RULE:COMPANIES_MEETINGS_BOARD_POWERS_2014:R8",
+    "priority": "HIGH",
+    "status": "PENDING",
+    "reviewer_id": null,
+    "page_start": 16,
+    "page_end": 16,
+    "note": "39 word(s) still split by extraction -- read text_raw against pages 16-16",
+    "questions": [
+      "Is the numbered rule boundary correct?",
+      "Is the heading materially faithful to the gazette?",
+      "Are the page bounds correct?",
+      "Is the extracted text usable for legal reasoning?"
+    ],
+    "decision": null
+  },
+  {
+    "review_item_id": "ri-board_rules_2014-010",
+    "instrument_id": "BOARD_RULES_2014",
+    "scope": "RULE",
+    "target_id": "RULE:COMPANIES_MEETINGS_BOARD_POWERS_2014:R9",
+    "priority": "HIGH",
+    "status": "PENDING",
+    "reviewer_id": null,
+    "page_start": 16,
+    "page_end": 16,
+    "note": "39 word(s) still split by extraction -- read text_raw against pages 16-16",
+    "questions": [
+      "Is the numbered rule boundary correct?",
+      "Is the heading materially faithful to the gazette?",
+      "Are the page bounds correct?",
+      "Is the extracted text usable for legal reasoning?"
+    ],
+    "decision": null
+  },
+  {
+    "review_item_id": "ri-board_rules_2014-011",
+    "instrument_id": "BOARD_RULES_2014",
+    "scope": "RULE",
+    "target_id": "RULE:COMPANIES_MEETINGS_BOARD_POWERS_2014:R10",
+    "priority": "HIGH",
+    "status": "PENDING",
+    "reviewer_id": null,
+    "page_start": 16,
+    "page_end": 16,
+    "note": "22 word(s) still split by extraction -- read text_raw against pages 16-16",
+    "questions": [
+      "Is the numbered rule boundary correct?",
+      "Is the heading materially faithful to the gazette?",
+      "Are the page bounds correct?",
+      "Is the extracted text usable for legal reasoning?"
+    ],
+    "decision": null
+  },
+  {
+    "review_item_id": "ri-board_rules_2014-012",
+    "instrument_id": "BOARD_RULES_2014",
+    "scope": "RULE",
+    "target_id": "RULE:COMPANIES_MEETINGS_BOARD_POWERS_2014:R11",
+    "priority": "HIGH",
+    "status": "PENDING",
+    "reviewer_id": null,
+    "page_start": 16,
+    "page_end": 16,
+    "note": "66 word(s) still split by extraction -- read text_raw against pages 16-16",
+    "questions": [
+      "Is the numbered rule boundary correct?",
+      "Is the heading materially faithful to the gazette?",
+      "Are the page bounds correct?",
+      "Is the extracted text usable for legal reasoning?"
+    ],
+    "decision": null
+  },
+  {
+    "review_item_id": "ri-board_rules_2014-013",
+    "instrument_id": "BOARD_RULES_2014",
+    "scope": "RULE",
+    "target_id": "RULE:COMPANIES_MEETINGS_BOARD_POWERS_2014:R12",
+    "priority": "HIGH",
+    "status": "PENDING",
+    "reviewer_id": null,
+    "page_start": 16,
+    "page_end": 17,
+    "note": "70 word(s) still split by extraction -- read text_raw against pages 16-17",
+    "questions": [
+      "Is the numbered rule boundary correct?",
+      "Is the heading materially faithful to the gazette?",
+      "Are the page bounds correct?",
+      "Is the extracted text usable for legal reasoning?"
+    ],
+    "decision": null
+  },
+  {
+    "review_item_id": "ri-board_rules_2014-014",
+    "instrument_id": "BOARD_RULES_2014",
+    "scope": "RULE",
+    "target_id": "RULE:COMPANIES_MEETINGS_BOARD_POWERS_2014:R13",
+    "priority": "HIGH",
+    "status": "PENDING",
+    "reviewer_id": null,
+    "page_start": 17,
+    "page_end": 17,
+    "note": "60 word(s) still split by extraction -- read text_raw against pages 17-17",
+    "questions": [
+      "Is the numbered rule boundary correct?",
+      "Is the heading materially faithful to the gazette?",
+      "Are the page bounds correct?",
+      "Is the extracted text usable for legal reasoning?"
+    ],
+    "decision": null
+  },
+  {
+    "review_item_id": "ri-board_rules_2014-015",
+    "instrument_id": "BOARD_RULES_2014",
+    "scope": "RULE",
+    "target_id": "RULE:COMPANIES_MEETINGS_BOARD_POWERS_2014:R14",
+    "priority": "HIGH",
+    "status": "PENDING",
+    "reviewer_id": null,
+    "page_start": 17,
+    "page_end": 17,
+    "note": "51 word(s) still split by extraction -- read text_raw against pages 17-17",
+    "questions": [
+      "Is the numbered rule boundary correct?",
+      "Is the heading materially faithful to the gazette?",
+      "Are the page bounds correct?",
+      "Is the extracted text usable for legal reasoning?"
+    ],
+    "decision": null
+  },
+  {
+    "review_item_id": "ri-board_rules_2014-016",
+    "instrument_id": "BOARD_RULES_2014",
+    "scope": "RULE",
+    "target_id": "RULE:COMPANIES_MEETINGS_BOARD_POWERS_2014:R15",
+    "priority": "HIGH",
+    "status": "PENDING",
+    "reviewer_id": null,
+    "page_start": 17,
+    "page_end": 22,
+    "note": "body runs to end-of-document and contains Annexure/Form matter -- the operative text ends earlier; a reviewer must set the boundary; 557 word(s) still split by ",
+    "questions": [
+      "Is the numbered rule boundary correct?",
+      "Is the heading materially faithful to the gazette?",
+      "Are the page bounds correct?",
+      "Is the extracted text usable for legal reasoning?"
+    ],
+    "decision": null
+  },
+  {
+    "review_item_id": "ri-board_rules_2014-017",
+    "instrument_id": "BOARD_RULES_2014",
+    "scope": "FORM",
+    "target_id": "RULE:COMPANIES_MEETINGS_BOARD_POWERS_2014:R15",
+    "priority": "HIGH",
+    "status": "PENDING",
+    "reviewer_id": null,
+    "page_start": 17,
+    "page_end": 22,
+    "note": "body runs to end-of-document and absorbs the Annexure/forms; the operative text ends earlier",
+    "questions": [
+      "Where does the operative rule text end and the Annexure begin?",
+      "Should the form tail be excluded from automatic serving?"
+    ],
+    "decision": null
+  },
+  {
+    "review_item_id": "ri-board_rules_2014-018",
+    "instrument_id": "BOARD_RULES_2014",
+    "scope": "LINK",
+    "target_id": "ACT:COMPANIES_ACT_2013:S173",
+    "priority": "MEDIUM",
+    "status": "PENDING",
+    "reviewer_id": null,
+    "page_start": null,
+    "page_end": null,
+    "note": "MADE_UNDER from the Rules' preamble: sections 173, 175, 177, 178, 179, 184, 185, 186, 187, 188, 189 and section 191 read with s",
+    "questions": [
+      "Does the cited provision actually appear in the rule's text?",
+      "Is MADE_UNDER vs REFERS_TO the correct relation?",
+      "Does the target section exist and match the subject matter?"
+    ],
+    "decision": null
+  },
+  {
+    "review_item_id": "ri-board_rules_2014-019",
+    "instrument_id": "BOARD_RULES_2014",
+    "scope": "LINK",
+    "target_id": "ACT:COMPANIES_ACT_2013:S175",
+    "priority": "MEDIUM",
+    "status": "PENDING",
+    "reviewer_id": null,
+    "page_start": null,
+    "page_end": null,
+    "note": "MADE_UNDER from the Rules' preamble: sections 173, 175, 177, 178, 179, 184, 185, 186, 187, 188, 189 and section 191 read with s",
+    "questions": [
+      "Does the cited provision actually appear in the rule's text?",
+      "Is MADE_UNDER vs REFERS_TO the correct relation?",
+      "Does the target section exist and match the subject matter?"
+    ],
+    "decision": null
+  },
+  {
+    "review_item_id": "ri-board_rules_2014-020",
+    "instrument_id": "BOARD_RULES_2014",
+    "scope": "LINK",
+    "target_id": "ACT:COMPANIES_ACT_2013:S177",
+    "priority": "MEDIUM",
+    "status": "PENDING",
+    "reviewer_id": null,
+    "page_start": null,
+    "page_end": null,
+    "note": "MADE_UNDER from the Rules' preamble: sections 173, 175, 177, 178, 179, 184, 185, 186, 187, 188, 189 and section 191 read with s",
+    "questions": [
+      "Does the cited provision actually appear in the rule's text?",
+      "Is MADE_UNDER vs REFERS_TO the correct relation?",
+      "Does the target section exist and match the subject matter?"
+    ],
+    "decision": null
+  },
+  {
+    "review_item_id": "ri-board_rules_2014-021",
+    "instrument_id": "BOARD_RULES_2014",
+    "scope": "LINK",
+    "target_id": "ACT:COMPANIES_ACT_2013:S178",
+    "priority": "MEDIUM",
+    "status": "PENDING",
+    "reviewer_id": null,
+    "page_start": null,
+    "page_end": null,
+    "note": "MADE_UNDER from the Rules' preamble: sections 173, 175, 177, 178, 179, 184, 185, 186, 187, 188, 189 and section 191 read with s",
+    "questions": [
+      "Does the cited provision actually appear in the rule's text?",
+      "Is MADE_UNDER vs REFERS_TO the correct relation?",
+      "Does the target section exist and match the subject matter?"
+    ],
+    "decision": null
+  },
+  {
+    "review_item_id": "ri-board_rules_2014-022",
+    "instrument_id": "BOARD_RULES_2014",
+    "scope": "LINK",
+    "target_id": "ACT:COMPANIES_ACT_2013:S179",
+    "priority": "MEDIUM",
+    "status": "PENDING",
+    "reviewer_id": null,
+    "page_start": null,
+    "page_end": null,
+    "note": "MADE_UNDER from the Rules' preamble: sections 173, 175, 177, 178, 179, 184, 185, 186, 187, 188, 189 and section 191 read with s",
+    "questions": [
+      "Does the cited provision actually appear in the rule's text?",
+      "Is MADE_UNDER vs REFERS_TO the correct relation?",
+      "Does the target section exist and match the subject matter?"
+    ],
+    "decision": null
+  },
+  {
+    "review_item_id": "ri-board_rules_2014-023",
+    "instrument_id": "BOARD_RULES_2014",
+    "scope": "LINK",
+    "target_id": "ACT:COMPANIES_ACT_2013:S184",
+    "priority": "MEDIUM",
+    "status": "PENDING",
+    "reviewer_id": null,
+    "page_start": null,
+    "page_end": null,
+    "note": "MADE_UNDER from the Rules' preamble: sections 173, 175, 177, 178, 179, 184, 185, 186, 187, 188, 189 and section 191 read with s",
+    "questions": [
+      "Does the cited provision actually appear in the rule's text?",
+      "Is MADE_UNDER vs REFERS_TO the correct relation?",
+      "Does the target section exist and match the subject matter?"
+    ],
+    "decision": null
+  },
+  {
+    "review_item_id": "ri-board_rules_2014-024",
+    "instrument_id": "BOARD_RULES_2014",
+    "scope": "LINK",
+    "target_id": "ACT:COMPANIES_ACT_2013:S185",
+    "priority": "MEDIUM",
+    "status": "PENDING",
+    "reviewer_id": null,
+    "page_start": null,
+    "page_end": null,
+    "note": "MADE_UNDER from the Rules' preamble: sections 173, 175, 177, 178, 179, 184, 185, 186, 187, 188, 189 and section 191 read with s",
+    "questions": [
+      "Does the cited provision actually appear in the rule's text?",
+      "Is MADE_UNDER vs REFERS_TO the correct relation?",
+      "Does the target section exist and match the subject matter?"
+    ],
+    "decision": null
+  },
+  {
+    "review_item_id": "ri-board_rules_2014-025",
+    "instrument_id": "BOARD_RULES_2014",
+    "scope": "LINK",
+    "target_id": "ACT:COMPANIES_ACT_2013:S186",
+    "priority": "MEDIUM",
+    "status": "PENDING",
+    "reviewer_id": null,
+    "page_start": null,
+    "page_end": null,
+    "note": "MADE_UNDER from the Rules' preamble: sections 173, 175, 177, 178, 179, 184, 185, 186, 187, 188, 189 and section 191 read with s",
+    "questions": [
+      "Does the cited provision actually appear in the rule's text?",
+      "Is MADE_UNDER vs REFERS_TO the correct relation?",
+      "Does the target section exist and match the subject matter?"
+    ],
+    "decision": null
+  },
+  {
+    "review_item_id": "ri-board_rules_2014-026",
+    "instrument_id": "BOARD_RULES_2014",
+    "scope": "LINK",
+    "target_id": "ACT:COMPANIES_ACT_2013:S187",
+    "priority": "MEDIUM",
+    "status": "PENDING",
+    "reviewer_id": null,
+    "page_start": null,
+    "page_end": null,
+    "note": "MADE_UNDER from the Rules' preamble: sections 173, 175, 177, 178, 179, 184, 185, 186, 187, 188, 189 and section 191 read with s",
+    "questions": [
+      "Does the cited provision actually appear in the rule's text?",
+      "Is MADE_UNDER vs REFERS_TO the correct relation?",
+      "Does the target section exist and match the subject matter?"
+    ],
+    "decision": null
+  },
+  {
+    "review_item_id": "ri-board_rules_2014-027",
+    "instrument_id": "BOARD_RULES_2014",
+    "scope": "LINK",
+    "target_id": "ACT:COMPANIES_ACT_2013:S188",
+    "priority": "MEDIUM",
+    "status": "PENDING",
+    "reviewer_id": null,
+    "page_start": null,
+    "page_end": null,
+    "note": "MADE_UNDER from the Rules' preamble: sections 173, 175, 177, 178, 179, 184, 185, 186, 187, 188, 189 and section 191 read with s",
+    "questions": [
+      "Does the cited provision actually appear in the rule's text?",
+      "Is MADE_UNDER vs REFERS_TO the correct relation?",
+      "Does the target section exist and match the subject matter?"
+    ],
+    "decision": null
+  },
+  {
+    "review_item_id": "ri-board_rules_2014-028",
+    "instrument_id": "BOARD_RULES_2014",
+    "scope": "LINK",
+    "target_id": "ACT:COMPANIES_ACT_2013:S189",
+    "priority": "MEDIUM",
+    "status": "PENDING",
+    "reviewer_id": null,
+    "page_start": null,
+    "page_end": null,
+    "note": "MADE_UNDER from the Rules' preamble: sections 173, 175, 177, 178, 179, 184, 185, 186, 187, 188, 189 and section 191 read with s",
+    "questions": [
+      "Does the cited provision actually appear in the rule's text?",
+      "Is MADE_UNDER vs REFERS_TO the correct relation?",
+      "Does the target section exist and match the subject matter?"
+    ],
+    "decision": null
+  },
+  {
+    "review_item_id": "ri-board_rules_2014-029",
+    "instrument_id": "BOARD_RULES_2014",
+    "scope": "LINK",
+    "target_id": "ACT:COMPANIES_ACT_2013:S191",
+    "priority": "MEDIUM",
+    "status": "PENDING",
+    "reviewer_id": null,
+    "page_start": null,
+    "page_end": null,
+    "note": "MADE_UNDER from the Rules' preamble: sections 173, 175, 177, 178, 179, 184, 185, 186, 187, 188, 189 and section 191 read with s",
+    "questions": [
+      "Does the cited provision actually appear in the rule's text?",
+      "Is MADE_UNDER vs REFERS_TO the correct relation?",
+      "Does the target section exist and match the subject matter?"
+    ],
+    "decision": null
+  },
+  {
+    "review_item_id": "ri-board_rules_2014-030",
+    "instrument_id": "BOARD_RULES_2014",
+    "scope": "LINK",
+    "target_id": "ACT:COMPANIES_ACT_2013:S469",
+    "priority": "MEDIUM",
+    "status": "PENDING",
+    "reviewer_id": null,
+    "page_start": null,
+    "page_end": null,
+    "note": "MADE_UNDER from the Rules' preamble: sections 173, 175, 177, 178, 179, 184, 185, 186, 187, 188, 189 and section 191 read with s",
+    "questions": [
+      "Does the cited provision actually appear in the rule's text?",
+      "Is MADE_UNDER vs REFERS_TO the correct relation?",
+      "Does the target section exist and match the subject matter?"
+    ],
+    "decision": null
+  }
+]

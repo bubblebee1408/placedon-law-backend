@@ -1,0 +1,43 @@
+{
+  "target_type": "RULE",
+  "target_id": "RULE:COMPANIES_MEETINGS_BOARD_POWERS_2014:R15",
+  "state": "HUMAN_REVIEW_PENDING",
+  "production_usable": false,
+  "restricted_use": false,
+  "restriction_codes": [],
+  "open_review_items": [],
+  "history": [
+    {
+      "event_type": "STATE_CHANGE",
+      "actor": "system",
+      "at": "2026-08-21T00:00:00Z",
+      "before": "DISCOVERED",
+      "after": "ACQUIRED",
+      "reason": "part of the acquired gazette"
+    },
+    {
+      "event_type": "STATE_CHANGE",
+      "actor": "system",
+      "at": "2026-08-21T00:00:00Z",
+      "before": "ACQUIRED",
+      "after": "TECHNICALLY_VERIFIED",
+      "reason": "extracted with page provenance"
+    },
+    {
+      "event_type": "STATE_CHANGE",
+      "actor": "system",
+      "at": "2026-08-21T00:00:00Z",
+      "before": "TECHNICALLY_VERIFIED",
+      "after": "STRUCTURED",
+      "reason": "parsed, pages 17-22"
+    },
+    {
+      "event_type": "STATE_CHANGE",
+      "actor": "system",
+      "at": "2026-08-21T00:00:00Z",
+      "before": "STRUCTURED",
+      "after": "HUMAN_REVIEW_PENDING",
+      "reason": "unread"
+    }
+  ]
+}

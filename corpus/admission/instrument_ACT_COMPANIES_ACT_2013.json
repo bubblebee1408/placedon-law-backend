@@ -1,0 +1,59 @@
+{
+  "target_type": "INSTRUMENT",
+  "target_id": "ACT:COMPANIES_ACT_2013",
+  "state": "PRODUCTION_USABLE",
+  "production_usable": true,
+  "restricted_use": false,
+  "restriction_codes": [],
+  "open_review_items": [],
+  "history": [
+    {
+      "event_type": "STATE_CHANGE",
+      "actor": "system",
+      "at": "2026-08-21T00:00:00Z",
+      "before": "DISCOVERED",
+      "after": "ACQUIRED",
+      "reason": "ingested from India Code"
+    },
+    {
+      "event_type": "STATE_CHANGE",
+      "actor": "system",
+      "at": "2026-08-21T00:00:00Z",
+      "before": "ACQUIRED",
+      "after": "TECHNICALLY_VERIFIED",
+      "reason": "hashed; cross-render check vs the full-Act PDF"
+    },
+    {
+      "event_type": "STATE_CHANGE",
+      "actor": "system",
+      "at": "2026-08-21T00:00:00Z",
+      "before": "TECHNICALLY_VERIFIED",
+      "after": "STRUCTURED",
+      "reason": "section index built, 464/474 mapped"
+    },
+    {
+      "event_type": "STATE_CHANGE",
+      "actor": "system",
+      "at": "2026-08-21T00:00:00Z",
+      "before": "STRUCTURED",
+      "after": "HUMAN_REVIEW_PENDING",
+      "reason": "awaiting review"
+    },
+    {
+      "event_type": "STATE_CHANGE",
+      "actor": "system",
+      "at": "2026-08-21T00:00:00Z",
+      "before": "HUMAN_REVIEW_PENDING",
+      "after": "HUMAN_REVIEWED",
+      "reason": "17 MVP sections read by hand against the source"
+    },
+    {
+      "event_type": "STATE_CHANGE",
+      "actor": "system",
+      "at": "2026-08-21T00:00:00Z",
+      "before": "HUMAN_REVIEWED",
+      "after": "PRODUCTION_USABLE",
+      "reason": "ADMITTED ON PRE-EXISTING EVIDENCE, not on a review item: the cross-render check (median record coverage 1.0000) and 17 hand-verified MVP sections. This predates the review queue and is recorded as such so it is never mistaken for a reviewed decision."
+    }
+  ]
+}

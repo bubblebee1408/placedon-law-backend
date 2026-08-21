@@ -1,0 +1,67 @@
+{
+  "target_type": "PROVISION",
+  "target_id": "ACT:COMPANIES_ACT_2013:S124",
+  "state": "SUSPENDED",
+  "production_usable": false,
+  "restricted_use": false,
+  "restriction_codes": [],
+  "open_review_items": [],
+  "history": [
+    {
+      "event_type": "STATE_CHANGE",
+      "actor": "system",
+      "at": "2026-08-21T00:00:00Z",
+      "before": "DISCOVERED",
+      "after": "ACQUIRED",
+      "reason": "ingested from India Code"
+    },
+    {
+      "event_type": "STATE_CHANGE",
+      "actor": "system",
+      "at": "2026-08-21T00:00:00Z",
+      "before": "ACQUIRED",
+      "after": "TECHNICALLY_VERIFIED",
+      "reason": "hashed; cross-render check vs the full-Act PDF"
+    },
+    {
+      "event_type": "STATE_CHANGE",
+      "actor": "system",
+      "at": "2026-08-21T00:00:00Z",
+      "before": "TECHNICALLY_VERIFIED",
+      "after": "STRUCTURED",
+      "reason": "section index built, 464/474 mapped"
+    },
+    {
+      "event_type": "STATE_CHANGE",
+      "actor": "system",
+      "at": "2026-08-21T00:00:00Z",
+      "before": "STRUCTURED",
+      "after": "HUMAN_REVIEW_PENDING",
+      "reason": "awaiting review"
+    },
+    {
+      "event_type": "STATE_CHANGE",
+      "actor": "system",
+      "at": "2026-08-21T00:00:00Z",
+      "before": "HUMAN_REVIEW_PENDING",
+      "after": "HUMAN_REVIEWED",
+      "reason": "17 MVP sections read by hand against the source"
+    },
+    {
+      "event_type": "STATE_CHANGE",
+      "actor": "system",
+      "at": "2026-08-21T00:00:00Z",
+      "before": "HUMAN_REVIEWED",
+      "after": "PRODUCTION_USABLE",
+      "reason": "admitted with the Act"
+    },
+    {
+      "event_type": "STATE_CHANGE",
+      "actor": "system",
+      "at": "2026-08-21T00:00:00Z",
+      "before": "PRODUCTION_USABLE",
+      "after": "SUSPENDED",
+      "reason": "SD-002: the JSON corpus carries PRE-AMENDMENT text for this section where the PDF carries the current consolidation. Serving it would state superseded law as current."
+    }
+  ]
+}

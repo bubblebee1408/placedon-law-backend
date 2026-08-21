@@ -1,0 +1,61 @@
+{
+  "target_type": "PROVISION",
+  "target_id": "ACT:COMPANIES_ACT_2013:S1",
+  "state": "DEFECT_FLAGGED_PRODUCTION_LIMITED",
+  "production_usable": true,
+  "restricted_use": true,
+  "restriction_codes": [
+    "NO_SERVE_EDITORIAL_TAIL"
+  ],
+  "open_review_items": [],
+  "history": [
+    {
+      "event_type": "STATE_CHANGE",
+      "actor": "system",
+      "at": "2026-08-21T00:00:00Z",
+      "before": "DISCOVERED",
+      "after": "ACQUIRED",
+      "reason": "ingested from India Code"
+    },
+    {
+      "event_type": "STATE_CHANGE",
+      "actor": "system",
+      "at": "2026-08-21T00:00:00Z",
+      "before": "ACQUIRED",
+      "after": "TECHNICALLY_VERIFIED",
+      "reason": "hashed; cross-render check vs the full-Act PDF"
+    },
+    {
+      "event_type": "STATE_CHANGE",
+      "actor": "system",
+      "at": "2026-08-21T00:00:00Z",
+      "before": "TECHNICALLY_VERIFIED",
+      "after": "STRUCTURED",
+      "reason": "section index built, 464/474 mapped"
+    },
+    {
+      "event_type": "STATE_CHANGE",
+      "actor": "system",
+      "at": "2026-08-21T00:00:00Z",
+      "before": "STRUCTURED",
+      "after": "HUMAN_REVIEW_PENDING",
+      "reason": "awaiting review"
+    },
+    {
+      "event_type": "STATE_CHANGE",
+      "actor": "system",
+      "at": "2026-08-21T00:00:00Z",
+      "before": "HUMAN_REVIEW_PENDING",
+      "after": "HUMAN_REVIEWED",
+      "reason": "17 MVP sections read by hand against the source"
+    },
+    {
+      "event_type": "STATE_CHANGE",
+      "actor": "system",
+      "at": "2026-08-21T00:00:00Z",
+      "before": "HUMAN_REVIEWED",
+      "after": "DEFECT_FLAGGED_PRODUCTION_LIMITED",
+      "reason": "SD-001: the record ends with the editorial instruction 'To be deleted', which is not statutory text. The section is law; the tail is not."
+    }
+  ]
+}
