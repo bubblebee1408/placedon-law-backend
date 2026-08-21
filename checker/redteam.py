@@ -173,15 +173,36 @@ def suspended_text() -> AdversarialStub:
 def wrong_types() -> list[AdversarialStub]:
     """RED-05: valid JSON, wrong types. Not a parser curiosity -- a real model asked for a list
     will occasionally return a string, and the adapter's own docstring promises that everything
-    downstream of the model fails CLOSED rather than raising at the caller."""
+    downstream of the model fails CLOSED rather than raising at the caller.
+
+    Five shapes, because each takes a DIFFERENT route through the parser and covering two of them
+    left three live. Before the RT-1 fix these produced three distinct uncaught exceptions:
+
+        claims: "..."          -> AttributeError on str.get
+        claims: [1, 2, 3]      -> AttributeError on int.get
+        evidence_ids: 173      -> TypeError, int not iterable
+        top level is a list    -> AttributeError on list.get
+        claims: null           -> reached the `or []` fallback and survived, silently
+
+    That last one matters most and is the least obvious: it did not crash, so a coverage-shaped
+    test would have called it handled. It produced a decision with no claims behind it, which is
+    the DECISION_WITHOUT_CLAIMS path rather than a parse failure -- a different fail-closed route,
+    and one worth pinning separately.
+    """
+    body = {"claim_id": "c1", "claim_type": LEGAL_TRIGGER,
+            "text": "The Board shall meet within thirty days."}
     return [
         AdversarialStub("WRONG_TYPES/claims-as-string",
                         _json(ma.APPLIES, "c1: the Board shall meet within thirty days")),
-        AdversarialStub("WRONG_TYPES/evidence-ids-as-int", json.dumps(
-            {"decision": ma.APPLIES,
-             "claims": [{"claim_id": "c1", "claim_type": LEGAL_TRIGGER,
-                         "text": "The Board shall meet within thirty days.",
-                         "evidence_ids": 173}]})),
+        AdversarialStub("WRONG_TYPES/evidence-ids-as-int",
+                        json.dumps({"decision": ma.APPLIES,
+                                    "claims": [{**body, "evidence_ids": 173}]})),
+        AdversarialStub("WRONG_TYPES/claims-as-list-of-ints",
+                        json.dumps({"decision": ma.APPLIES, "claims": [1, 2, 3]})),
+        AdversarialStub("WRONG_TYPES/top-level-is-a-list",
+                        json.dumps([{"decision": ma.APPLIES}])),
+        AdversarialStub("WRONG_TYPES/claims-is-null",
+                        json.dumps({"decision": ma.APPLIES, "claims": None})),
     ]
 
 
@@ -445,6 +466,35 @@ def _test() -> None:
           "raise ClaimError (caught) while a type confusion does not. The adapter now type-checks\n"
           "explicitly and has a defence-in-depth catch. The test above is strict, not a\n"
           "characterization, so a regression fails loudly.\n")
+
+    # --- the entailment gap, measured against frozen ground truth ------------------------------
+    # corpus/benchmark/entailment_v1.json holds four claims about s.173 with labels written before
+    # any checker was measured against them. The lexical verifier gets ONE right. This asserts the
+    # measured state so that neither a regression nor an improvement can pass unnoticed: if a
+    # future checker scores better, this test fails and someone must update the record deliberately.
+    import json as _json
+    from pathlib import Path as _Path
+    fx = _Path(__file__).resolve().parent.parent / "corpus/benchmark/entailment_v1.json"
+    if fx.is_file():
+        doc = _json.loads(fx.read_text())
+        pk, _ = retrieve("s.173", mode=MODE_MODEL)
+        prov = pk.usable[0]
+        agree = 0
+        for case in doc["cases"]:
+            v = verify_claim(
+                Claim(case["id"], case["claim"], case["claim_type"], (prov.key,)), pk)
+            if v.verdict == case["gold"]:
+                agree += 1
+        check(agree == 1,
+              f"lexical verifier agrees with entailment ground truth on {agree}/4 -- the measured "
+              "blind spot; a change here is a deliberate decision, not a silent drift")
+        e04 = next(c for c in doc["cases"] if c["id"] == "e04")
+        v4 = verify_claim(Claim("e04", e04["claim"], e04["claim_type"], (prov.key,)), pk)
+        check(v4.coverage == 1.0,
+              f"a FALSE statement of law scores perfect coverage ({v4.coverage:.3f}) because "
+              "'ninety' appears elsewhere in s.173 -- no threshold can fix this")
+    else:
+        print("[SKIP] entailment fixture not present")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:
