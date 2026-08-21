@@ -455,10 +455,15 @@ class PackedProvision:
 
 @dataclass(frozen=True)
 class EvidencePack:
+    # The pack records the mode it was BUILT in. An adapter that took `mode` as an argument could
+    # be lied to by its caller; a pack that attests to its own provenance cannot. MODE_REVIEW packs
+    # contain material a human may inspect and a model may not, so this field is a safety boundary,
+    # not metadata.
     provisions: tuple[PackedProvision, ...] = ()
     as_of: AsOf = field(default_factory=lambda: _build_as_of((), None))
     missing: tuple[str, ...] = ()
     query: str = ""
+    mode: str = "MODEL"
 
     @property
     def usable(self) -> tuple[PackedProvision, ...]:
@@ -489,6 +494,7 @@ class EvidencePack:
             "provision_keys": [p.key for p in self.provisions],
             "usable_keys": [p.key for p in self.usable],
             "unusable_keys": [p.key for p in self.unusable],
+            "mode": self.mode,
             "provisions": [p.to_dict() for p in self.provisions],
             "missing": list(self.missing),
         }
@@ -666,7 +672,7 @@ def _pack_one(row: dict) -> PackedProvision:
     )
 
 
-def build_pack(rows: list[dict], *, query: str = "",
+def build_pack(rows: list[dict], *, query: str = "", mode: str = "MODEL",
                requested_sections: tuple[str, ...] = (),
                point_in_time_request: date | str | None = None,
                instrument_id: str = DEFAULT_INSTRUMENT) -> EvidencePack:
@@ -700,7 +706,8 @@ def build_pack(rows: list[dict], *, query: str = "",
     if not provisions:
         missing.append("No provision was retrieved at all. This pack is empty.")
 
-    return EvidencePack(provisions=provisions, as_of=as_of, missing=tuple(missing), query=query)
+    return EvidencePack(provisions=provisions, as_of=as_of, missing=tuple(missing),
+                        query=query, mode=mode)
 
 
 # --- self-test ------------------------------------------------------------------------------------

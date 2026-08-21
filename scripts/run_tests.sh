@@ -13,6 +13,7 @@ suites=(
   checker/amendment.py
   checker/as_of.py
   checker/derived_date.py
+  checker/claim_schema.py
   checker/legal_ref.py
   checker/admission.py
   checker/review_queue.py
@@ -21,6 +22,8 @@ suites=(
   checker/text_search.py
   checker/evidence_pack.py
   checker/retrieve.py
+  checker/model_adapter.py
+  checker/claim_verifier.py
   checker/provenance.py
   checker/section_index.py
   checker/mvp_freeze.py
@@ -29,7 +32,7 @@ suites=(
 )
 
 # --test flag rather than a bare run: this one takes a PDF argument in normal use.
-extra=("scripts/acquire_rules.py --test" "scripts/parse_board_rules.py --test")
+extra=("scripts/acquire_rules.py --test" "scripts/parse_board_rules.py --test" "scripts/baseline_eval.py --test")
 
 fails=0
 for s in "${suites[@]}"; do

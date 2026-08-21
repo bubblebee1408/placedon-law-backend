@@ -89,7 +89,7 @@ def retrieve(query: str, *, top_k: int = SEARCH_TOP_K,
     hits = resolve(query)
     if hits:
         rows, blocked = _admission_filter(_rows(hits), mode)
-        pack = build_pack(rows, query=query, requested_sections=tuple(blocked))
+        pack = build_pack(rows, query=query, mode=mode, requested_sections=tuple(blocked))
         return pack, (ROUTE_EXACT if rows else ROUTE_ABSTAIN)
 
     if names_a_provision(query):
@@ -100,7 +100,7 @@ def retrieve(query: str, *, top_k: int = SEARCH_TOP_K,
     # Withheld items ride in `requested_sections`, which the pack already renders as "sought and
     # not found". That is the honest shape: the model is told something was asked for and is not
     # here, without being handed the inadmissible text itself.
-    pack = build_pack(rows, query=query, requested_sections=tuple(blocked))
+    pack = build_pack(rows, query=query, mode=mode, requested_sections=tuple(blocked))
     return pack, (ROUTE_SEARCH if rows else ROUTE_ABSTAIN)
 
 
