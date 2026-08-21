@@ -20,6 +20,17 @@ What it deliberately does not do:
     production -- including by inventing a record for a target that has none.
   - It does not repair the source. Gazette text is verbatim apart from non-printable bytes, which
     are a property of the terminal and not of the evidence; the count stripped is printed.
+  - It does not operate on a queue it could not fully parse, and it never writes one back. A tool
+    that reads a malformed queue, keeps the items it understood and saves the rest destroys the
+    decisions it could not read. Corruption stops the tool and names the item and the field.
+  - It does not lose a write it started. Both files it touches are written to a temp file in the
+    same directory and renamed over the target, so an interrupt truncates nothing.
+
+When the source cannot be read -- PDF missing, unparseable, or the item's pages outside the
+document -- the gazette column says so in words. An empty column would read as "the gazette does
+not say this", which is the one conclusion a reviewer must never draw from a missing file. Page
+bounds that fall outside the document are reported as a REVIEW FINDING, because a rule claiming
+pages the gazette does not have is precisely the extraction error this review exists to catch.
 
 Clock discipline follows `checker/review_queue.py`: nothing under test reads the clock. `now()` is
 called once per interactive session and passed down as an argument.
@@ -28,6 +39,7 @@ Run: python3 scripts/review.py --list
      python3 scripts/review.py --show ri-board_rules_2014-004
      python3 scripts/review.py --next
      python3 scripts/review.py --status
+     python3 scripts/review.py --reconcile
      python3 scripts/review.py --test
 """
 from __future__ import annotations
@@ -35,6 +47,7 @@ from __future__ import annotations
 import re
 import argparse
 import json
+import os
 import shutil
 import sys
 import textwrap
@@ -69,9 +82,26 @@ MENU = "approve/limited/reject/escalate/skip"
 DEFAULT_LINES = 60          # per column; a screenful and a half, then say how much is left
 GUTTER = " | "
 
+# The fields review_queue.load_queue() indexes without a .get(). An item missing any of them is not
+# something this tool can reason about, and the reviewer must be told which item and which field
+# rather than shown a KeyError.
+REQUIRED_ITEM_FIELDS = ("review_item_id", "instrument_id", "scope", "target_id", "priority",
+                        "status")
+REQUIRED_DECISION_FIELDS = ("decision", "reviewer_id", "at")
+# Derived from review_queue rather than restated. This matters: ReviewItem.is_open is a membership
+# test, so an unrecognised status reads as *resolved* -- a typo would silently retire an open item.
+KNOWN_STATUSES = tuple(dict.fromkeys(
+    rq.OPEN_STATUSES + (rq.APPROVED, rq.REJECTED, rq.ESCALATED)))
+# States a target can be left in when its items are all decided but the second write never landed.
+STALLED_STATES = (adm.HUMAN_REVIEW_PENDING, adm.HUMAN_REVIEWED)
+
 
 class NotInteractive(RuntimeError):
     """A decision was requested without a human at the keyboard."""
+
+
+class QueueUnreadable(RuntimeError):
+    """The queue exists but cannot be trusted. Nothing is read from it and nothing is written."""
 
 
 class Quit(Exception):
@@ -81,30 +111,223 @@ class Quit(Exception):
 # --------------------------------------------------------------------------- data
 
 
+def rel(p: Path) -> Path | str:
+    """A path as the reviewer will type it, when it is inside the repo."""
+    return p.relative_to(ROOT) if p.is_relative_to(ROOT) else p
+
+
 def load_rules_doc() -> dict:
-    return json.loads(RULES_DOC.read_text()) if RULES_DOC.is_file() else {}
+    """The parsed rules. {} when absent or unreadable -- the item still renders without it."""
+    if not RULES_DOC.is_file():
+        return {}
+    try:
+        doc = json.loads(RULES_DOC.read_text())
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return doc if isinstance(doc, dict) else {}
 
 
-_PAGES: list[str] | None = None
+_GAZETTE: tuple[list[str], str] | None = None
+
+
+def read_pages(path: Path) -> tuple[list[str], str]:
+    """(page texts, why there are none). Never raises.
+
+    `checker/pdf_text` is explicit that an empty extraction means "cannot read", never "the
+    document is empty". Nowhere does that distinction matter more than here: a blank gazette column
+    beside an extraction reads as "the gazette does not say this", and a reviewer who approves on
+    that basis has been misled by a missing file. So the reason travels with the pages.
+    """
+    if not path.is_file():
+        return [], f"{rel(path)} is not on disk"
+    try:
+        pgs = extract_pages(path)
+    except Exception as e:      # an unreadable source is a fact to report, not a crash to suffer
+        return [], f"{rel(path)} could not be parsed ({type(e).__name__}: {e})"
+    if not any(p.strip() for p in pgs):
+        return [], (f"{rel(path)} yielded no text ({len(pgs)} page object(s) found) -- an "
+                    "image-only scan, or a page tree this extractor cannot follow")
+    return pgs, ""
+
+
+def gazette() -> tuple[list[str], str]:
+    """Gazette page text, extracted once per process, with the reason when there is none."""
+    global _GAZETTE
+    if _GAZETTE is None:
+        _GAZETTE = read_pages(PDF)
+    return _GAZETTE
 
 
 def pages() -> list[str]:
-    """Gazette page text, extracted once per process. [] when the artifact is absent."""
-    global _PAGES
-    if _PAGES is None:
-        _PAGES = extract_pages(PDF) if PDF.is_file() else []
-    return _PAGES
+    return gazette()[0]
 
 
 def rule_for(target_id: str, doc: dict) -> dict | None:
     for r in doc.get("rules", []):
-        if r["rule_id"] == target_id:
+        if r.get("rule_id") == target_id:
             return r
     return None
 
 
+def load_record(target_type: str, target_id: str) -> tuple[adm.AdmissionRecord | None, str]:
+    """(record, why it could not be read). A corrupt record must not read as an absent one.
+
+    "No admission record" and "an admission record this tool could not parse" call for opposite
+    responses -- the first is expected for several targets here, the second is damage.
+    """
+    try:
+        return adm.load(target_type, target_id), ""
+    except (OSError, json.JSONDecodeError, ValueError, TypeError) as e:
+        return None, (f"the admission record at "
+                      f"{rel(adm.path_for(target_type, target_id))} is unreadable: {e}")
+
+
 def record_for(item: rq.ReviewItem) -> adm.AdmissionRecord | None:
-    return adm.load(SCOPE_TARGET_TYPE.get(item.scope, item.scope), item.target_id)
+    return load_record(SCOPE_TARGET_TYPE.get(item.scope, item.scope), item.target_id)[0]
+
+
+def record_problem_for(item: rq.ReviewItem) -> str:
+    return load_record(SCOPE_TARGET_TYPE.get(item.scope, item.scope), item.target_id)[1]
+
+
+# --------------------------------------------------------------------------- reading the queue
+
+
+def empty_queue_message() -> str:
+    """Why there is nothing to review, and the one command that changes that."""
+    state = "holds no items" if rq.QUEUE.is_file() else "does not exist"
+    return ("The review queue is empty.\n"
+            f"  {rel(rq.QUEUE)} {state}.\n"
+            "  Nothing to review. Build it with: python3 scripts/seed_admission.py")
+
+
+def validate_queue_data(data: object, where: Path) -> None:
+    """Refuse a queue this tool cannot fully understand, naming the item and the field.
+
+    The alternative -- parse what parses, ignore the rest -- is the one behaviour a review tool
+    must never have. The next save would write back a queue with the unreadable items quietly
+    gone, and the decisions recorded in them with it.
+    """
+    what = rel(where)
+    if not isinstance(data, list):
+        raise QueueUnreadable(
+            f"{what} holds {type(data).__name__}, not a list of review items.\n"
+            "  Refusing to operate on a queue that cannot be fully read; nothing was written.")
+    seen: set[str] = set()
+    for n, d in enumerate(data, start=1):
+        at = f"item {n} of {len(data)}"
+        if not isinstance(d, dict):
+            raise QueueUnreadable(f"{what}: {at} is {type(d).__name__}, not an object. "
+                                  "Nothing was written.")
+        ident = d.get("review_item_id")
+        if isinstance(ident, str) and ident:
+            at = f"{at} ({ident})"
+        missing = [f for f in REQUIRED_ITEM_FIELDS
+                   if not isinstance(d.get(f), str) or not d[f]]
+        if missing:
+            raise QueueUnreadable(
+                f"{what}: {at} is missing (or has an empty) {', '.join(missing)}.\n"
+                "  Refusing to operate on a queue that cannot be fully read; nothing was written.")
+        if d["scope"] not in rq.TEMPLATES:
+            raise QueueUnreadable(
+                f"{what}: {at} has scope {d['scope']!r}, which has no review template "
+                f"(known: {', '.join(sorted(rq.TEMPLATES))}). Nothing was written.")
+        if d["status"] not in KNOWN_STATUSES:
+            raise QueueUnreadable(
+                f"{what}: {at} has status {d['status']!r}. An unrecognised status reads as "
+                f"resolved and would hide an open item (known: {', '.join(KNOWN_STATUSES)}). "
+                "Nothing was written.")
+        if ident in seen:
+            raise QueueUnreadable(
+                f"{what}: {at} repeats review_item_id {ident!r}; a decision would land on "
+                "whichever copy came first and the other would keep the old status. "
+                "Nothing was written.")
+        seen.add(ident)
+        for f in ("page_start", "page_end"):
+            v = d.get(f)
+            if v is not None and (isinstance(v, bool) or not isinstance(v, int)):
+                raise QueueUnreadable(f"{what}: {at} has {f}={v!r}, which is not a page number. "
+                                      "Nothing was written.")
+        dec = d.get("decision")
+        if dec is None:
+            continue
+        if not isinstance(dec, dict):
+            raise QueueUnreadable(f"{what}: {at} has a decision that is "
+                                  f"{type(dec).__name__}, not an object. Nothing was written.")
+        gaps = [f for f in REQUIRED_DECISION_FIELDS
+                if not isinstance(dec.get(f), str) or not dec[f]]
+        if gaps:
+            raise QueueUnreadable(
+                f"{what}: {at} has a decision missing {', '.join(gaps)} -- a recorded judgement "
+                "with no author or no time is not an audit trail. Nothing was written.")
+
+
+def read_queue() -> list[rq.ReviewItem]:
+    """The whole queue, or an explanation. Never a partial queue.
+
+    review_queue.load_queue() is still the only loader; everything above it here exists to say
+    *which* item is wrong instead of surfacing a KeyError from inside a comprehension.
+    """
+    q = rq.QUEUE
+    if not q.is_file():
+        return []
+    try:
+        raw = q.read_text()
+    except OSError as e:
+        raise QueueUnreadable(f"{rel(q)} could not be read: {e}") from e
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as e:
+        raise QueueUnreadable(
+            f"{rel(q)} is not valid JSON: {e.msg} at line {e.lineno} column {e.colno}.\n"
+            "  Refusing to operate on a queue that cannot be fully read; nothing was written.\n"
+            f"  Fix the file, or restore it: git checkout -- {rel(q)}") from e
+    validate_queue_data(data, q)
+    try:
+        return rq.load_queue()
+    except (rq.ReviewError, KeyError, TypeError, ValueError) as e:
+        raise QueueUnreadable(f"{rel(q)}: {e}. Nothing was written.") from e
+
+
+# --------------------------------------------------------------------------- writing
+
+
+def atomic_write(path: Path, text: str) -> Path:
+    """Write to a temp file in the same directory, then rename over the target.
+
+    A queue truncated halfway through a write is a reviewer's afternoon gone. rename(2) within a
+    directory is atomic: a reader sees either the whole old file or the whole new one, and an
+    interrupt during the write leaves the original exactly as it was.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(f".{path.name}.tmp-{os.getpid()}")
+    try:
+        with open(tmp, "w", encoding="utf-8") as fh:
+            fh.write(text)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp, path)
+    finally:
+        tmp.unlink(missing_ok=True)
+    return path
+
+
+def queue_bytes(items: list[rq.ReviewItem]) -> str:
+    """Exactly what review_queue.save_queue writes -- the self-test compares them byte for byte."""
+    return json.dumps([i.to_dict() for i in items], indent=2, ensure_ascii=False)
+
+
+def record_bytes(rec: adm.AdmissionRecord) -> str:
+    """Exactly what admission.save writes -- the self-test compares them byte for byte."""
+    return json.dumps(rec.to_dict(), indent=2)
+
+
+def save_queue(items: list[rq.ReviewItem]) -> Path:
+    return atomic_write(rq.QUEUE, queue_bytes(items))
+
+
+def save_record(rec: adm.AdmissionRecord) -> Path:
+    return atomic_write(adm.path_for(rec.target_type, rec.target_id), record_bytes(rec))
 
 
 def find_item(items: list[rq.ReviewItem], item_id: str) -> rq.ReviewItem:
@@ -149,6 +372,40 @@ def page_slice(all_pages: list[str], page_start: int | None, page_end: int | Non
     end = page_end if page_end is not None else page_start
     lo, hi = max(1, page_start), min(len(all_pages), end)
     return [(n, all_pages[n - 1]) for n in range(lo, hi + 1)]
+
+
+def page_range_findings(page_start: int | None, page_end: int | None,
+                        n_pages: int) -> list[str]:
+    """What is wrong with an item's page bounds, phrased for the reviewer.
+
+    A rule that claims pages the gazette does not have is exactly the extraction error this review
+    exists to catch. So it is reported as a finding *on the item* -- something for the reviewer to
+    reject or note -- and never as a crash, and never by quietly clamping and showing whatever
+    pages happened to be in range.
+
+    n_pages of 0 means the document could not be read, and a range cannot be checked against a
+    document nobody has: no finding is invented in that case.
+    """
+    out: list[str] = []
+    if page_start is None:
+        if page_end is not None:
+            out.append(f"page_end is {page_end} but page_start is not set, so the item names no "
+                       "pages at all -- the bounds were half written")
+        return out
+    end = page_end if page_end is not None else page_start
+    if page_start < 1:
+        out.append(f"page_start is {page_start}; gazette pages are numbered from 1")
+    if end < page_start:
+        out.append(f"page_start {page_start} is after page_end {end} -- the range is inverted, so "
+                   "no gazette page can be shown for this item")
+    if n_pages:
+        if page_start > n_pages:
+            out.append(f"pages {page_start}-{end} are outside the document, which has {n_pages} "
+                       "page(s); no gazette text exists at those bounds")
+        elif end > n_pages:
+            out.append(f"page_end {end} is past the last page of the document ({n_pages}); the "
+                       f"view stops at p.{n_pages} and the rest of the claimed range does not exist")
+    return out
 
 
 def wrap(text: str, width: int) -> list[str]:
@@ -203,20 +460,22 @@ def summarise(items: list[rq.ReviewItem]) -> dict:
     }
 
 
-EMPTY_QUEUE = (
-    "The review queue is empty.\n"
-    f"  {rq.QUEUE.relative_to(ROOT) if rq.QUEUE.is_relative_to(ROOT) else rq.QUEUE} "
-    "is missing or holds no items.\n"
-    "  Nothing to review. Build it with: python3 scripts/seed_admission.py")
+def progress_line(s: dict) -> str:
+    """How far through the queue the reviewer is. 30 items is several sittings; resume needs this."""
+    total, done = s["total"], s["resolved"]
+    filled = round(20 * done / total) if total else 0
+    return (f"PROGRESS  {done} of {total} resolved  "
+            f"[{'#' * filled}{'.' * (20 - filled)}]  {s['open']} still open")
 
 
 def render_summary(items: list[rq.ReviewItem]) -> str:
     if not items:
-        return EMPTY_QUEUE
+        return empty_queue_message()
     s = summarise(items)
     out = ["REVIEW QUEUE  corpus/admission/review_queue.json",
            f"{s['total']} item(s) across {s['targets']} target(s): "
-           f"{s['open']} OPEN, {s['resolved']} resolved", ""]
+           f"{s['open']} OPEN, {s['resolved']} resolved",
+           progress_line(s), ""]
     out.append("BY SCOPE            open/total")
     for scope, (o, t) in s["by_scope"].items():
         out.append(f"  {scope:<18}{o:>4}/{t}")
@@ -236,20 +495,35 @@ def render_summary(items: list[rq.ReviewItem]) -> str:
     return "\n".join(out)
 
 
-def _header(item: rq.ReviewItem, rec: adm.AdmissionRecord | None, width: int) -> list[str]:
+def _header(item: rq.ReviewItem, rec: adm.AdmissionRecord | None, width: int,
+            rec_problem: str = "") -> list[str]:
     out = ["=" * width,
            f"{item.review_item_id}   {item.scope}   priority {item.priority}   "
            f"status {item.status}",
            f"target    {item.target_id}",
-           f"admission {render_state(rec)}"]
-    if item.page_start:
+           f"admission {rec_problem or render_state(rec)}"]
+    if item.page_start is not None:
         out.append(f"pages     {item.page_start}-{item.page_end or item.page_start} of "
-                   f"{PDF.relative_to(ROOT)}")
+                   f"{rel(PDF)}")
     if item.reviewer_id:
         out.append(f"reviewer  {item.reviewer_id}")
     if item.note:
         out.extend(f"note      {l}" for l in wrap(item.note, width - 10))
     return out
+
+
+def _findings_block(item: rq.ReviewItem, all_pages: list[str], pages_problem: str,
+                    width: int) -> list[str]:
+    """Page-bound problems, stated where the reviewer cannot miss them."""
+    lines: list[str] = []
+    for f in page_range_findings(item.page_start, item.page_end, len(all_pages)):
+        wrapped = wrap("REVIEW FINDING: " + f, width - 6)
+        lines.extend(("  ! " if n == 0 else "    ") + l for n, l in enumerate(wrapped))
+    if pages_problem and item.page_start is not None:
+        wrapped = wrap("the page bounds on this item could not be checked against the source: "
+                       + pages_problem, width - 6)
+        lines.extend(("  ? " if n == 0 else "    ") + l for n, l in enumerate(wrapped))
+    return ["", "FINDINGS"] + lines if lines else []
 
 
 def _decision_block(item: rq.ReviewItem, width: int) -> list[str]:
@@ -261,6 +535,8 @@ def _decision_block(item: rq.ReviewItem, width: int) -> list[str]:
         out.append(f"          restrictions: {', '.join(d.restriction_codes)}")
     if d.notes:
         out.extend(f"          {l}" for l in wrap(d.notes, width - 10))
+    out.append(f"          this item is resolved ({item.status}). --next skips it, and deciding "
+               "it again is refused by review_queue.decide().")
     return out
 
 
@@ -316,39 +592,80 @@ def _gazette_lines(item: rq.ReviewItem, all_pages: list[str], col: int,
         clean, lost = printable(raw)
         dropped += lost
         label = f"--- p.{n} "
-        if i == 0 and heading:
+        if i == 0 and heading and clean.strip():
             off = _align_offset(clean, heading)
             if off:
                 clean = clean[off:]
                 label = f"--- p.{n} (from the rule heading) "
         lines.append(label + "-" * max(0, col - len(label)))
-        lines.extend(wrap(clean, col))
+        if clean.strip():
+            lines.extend(wrap(clean, col))
+        else:
+            # An empty column would read as "the gazette says nothing here", which is a statement
+            # about the law. This is a statement about the extractor.
+            lines.extend(wrap(f"(no text could be extracted from p.{n}. That is a fact about this "
+                              "PDF, not evidence that the gazette page is blank -- open the page "
+                              "in a viewer before deciding.)", col))
     return lines, dropped
 
 
+def gazette_unavailable(item: rq.ReviewItem, all_pages: list[str], pages_problem: str) -> str:
+    """Why the gazette column has nothing to show. Never empty when it has nothing to show."""
+    if pages_problem:
+        return pages_problem
+    findings = page_range_findings(item.page_start, item.page_end, len(all_pages))
+    if findings:
+        return findings[0]
+    if item.page_start is None:
+        return "this item names no pages"
+    return f"no page in {rel(PDF)} matched this item's bounds"
+
+
 def render_item(item: rq.ReviewItem, *, doc: dict, all_pages: list[str], width: int = 100,
-                max_lines: int = DEFAULT_LINES, rec: adm.AdmissionRecord | None = None) -> str:
-    """One item in full. For RULE and FORM, extraction beside the gazette pages it claims."""
+                max_lines: int = DEFAULT_LINES, rec: adm.AdmissionRecord | None = None,
+                pages_problem: str = "", rec_problem: str = "") -> str:
+    """One item in full. For RULE and FORM, extraction beside the gazette pages it claims.
+
+    Everything that can be rendered is rendered even when a part is missing: an item whose PDF is
+    gone, whose rule is unparsed or whose admission record is damaged is still reviewable in every
+    other respect, and each gap says what it is rather than showing blank.
+    """
     col = max(20, (width - len(GUTTER)) // 2)
-    out = _header(item, rec, width)
+    out = _header(item, rec, width, rec_problem=rec_problem)
+    out.extend(_findings_block(item, all_pages, pages_problem, width))
 
     if item.scope in ("RULE", "FORM", "EXTRACTION_DEFECT"):
         rule = rule_for(item.target_id, doc)
         if rule is None:
-            out.append(f"\n(no parsed rule {item.target_id} in {RULES_DOC.relative_to(ROOT)})")
+            out.append(f"\n(no parsed rule {item.target_id} in {rel(RULES_DOC)} -- the extraction "
+                       "column cannot be shown; the gazette pages this item claims follow)")
+            right, dropped = _gazette_lines(item, all_pages, col)
+            if not right:
+                right = wrap("(no gazette text shown: "
+                             + gazette_unavailable(item, all_pages, pages_problem) + ")", col)
+            out.append("")
+            out.append(two_columns([], right, width=width, max_lines=max_lines,
+                                   left_title="EXTRACTED  (none)",
+                                   right_title="GAZETTE  pdf_text.extract_pages"))
         else:
-            out.append(f"rule      r.{rule['rule_number']} -- {rule['heading']}")
+            # .get throughout: a half-written rules doc must not take the whole view down with it.
+            out.append(f"rule      r.{rule.get('rule_number', '?')} -- "
+                       f"{rule.get('heading', '(no heading parsed)')}")
+            links = ', '.join(l.get('to_section', '?').split(':')[-1]
+                              for l in rule.get('act_links', []))
             out.append(f"sub-rules {len(rule.get('sub_rules', []))}   "
-                       f"act links {', '.join(l['to_section'].split(':')[-1] for l in rule.get('act_links', [])) or 'none'}")
+                       f"act links {links or 'none'}")
             if rule.get("text_reading") != rule.get("text_raw"):
                 out.append("          text_reading differs from text_raw (extraction joins "
                            "split words); text_raw is shown -- it is the unmodified extraction")
-            left = wrap(rule["text_raw"], col)
+            left = wrap(rule.get("text_raw", ""), col)
             right, dropped = _gazette_lines(item, all_pages, col,
                                             heading=rule.get('heading', ''))
             if not right:
-                right = ["(gazette page text unavailable: "
-                         f"{PDF.relative_to(ROOT)} not readable or pages out of range)"]
+                right = wrap("(no gazette text shown: "
+                             + gazette_unavailable(item, all_pages, pages_problem)
+                             + ". The source could not be read here -- this is not the gazette "
+                               "being silent about the rule.)", col)
             out.append("")
             out.append(two_columns(left, right, width=width, max_lines=max_lines,
                                    left_title="EXTRACTED  text_raw",
@@ -367,9 +684,13 @@ def render_item(item: rq.ReviewItem, *, doc: dict, all_pages: list[str], width: 
         made = doc.get("made_under", [])
         if made:
             out.append(f"  {'made_under':<24}{len(made)} section(s): " +
-                       ", ".join(m["to_section"].split(':')[-1] for m in made))
+                       ", ".join(m.get("to_section", "?").split(':')[-1] for m in made))
             out.append("  preamble evidence:")
-            out.extend(f"    {l}" for l in wrap(made[0]["evidence_text"], width - 6))
+            out.extend(f"    {l}" for l in wrap(made[0].get("evidence_text", "(none parsed)"),
+                                                width - 6))
+        if not doc:
+            out.append(f"  (no parsed instrument in {rel(RULES_DOC)}; the file is missing or "
+                       "could not be read, so there is nothing to check against the gazette)")
         out.append("  (no page bounds on this item -- check the preamble on the gazette's "
                    "first rules page)")
 
@@ -378,18 +699,21 @@ def render_item(item: rq.ReviewItem, *, doc: dict, all_pages: list[str], width: 
         out.append("LINK AS PARSED")
         section = item.target_id.split(":")[-1]
         for m in doc.get("made_under", []):
-            if m["to_section"] == item.target_id:
-                out.append(f"  relation   {m['relation']}  confidence {m['confidence']}")
+            if m.get("to_section") == item.target_id:
+                out.append(f"  relation   {m.get('relation', '?')}  "
+                           f"confidence {m.get('confidence', '?')}")
                 out.append("  evidence (the Rules' preamble):")
-                out.extend(f"    {l}" for l in wrap(m["evidence_text"], width - 6))
+                out.extend(f"    {l}" for l in wrap(m.get("evidence_text", "(none parsed)"),
+                                                    width - 6))
         cites = [(r, l) for r in doc.get("rules", []) for l in r.get("act_links", [])
-                 if l["to_section"] == item.target_id]
+                 if l.get("to_section") == item.target_id]
         out.append(f"  {section} is named in the body of {len(cites)} rule(s)"
                    + (":" if cites else " -- the preamble is the only evidence"))
         for r, l in cites:
-            out.append(f"    r.{r['rule_number']} (p.{r['page_start']}-{r['page_end']}) "
-                       f"{l['relation']}")
-            out.extend(f"      {x}" for x in wrap(l["evidence_text"], width - 8))
+            out.append(f"    r.{r.get('rule_number', '?')} "
+                       f"(p.{r.get('page_start', '?')}-{r.get('page_end', '?')}) "
+                       f"{l.get('relation', '?')}")
+            out.extend(f"      {x}" for x in wrap(l.get("evidence_text", ""), width - 8))
 
     out.extend(_decision_block(item, width))
     out.extend(_questions(item, width))
@@ -407,13 +731,19 @@ def render_state(rec: adm.AdmissionRecord | None) -> str:
     return "  |  ".join(bits)
 
 
-def render_status(items: list[rq.ReviewItem]) -> str:
-    """Admission state of every target the queue touches, plus every record on disk."""
+def queue_targets(items: list[rq.ReviewItem]) -> list[tuple[str, str]]:
+    """(target_type, target_id) for every target the queue touches, in first-seen order."""
     seen: list[tuple[str, str]] = []
     for i in items:
         key = (SCOPE_TARGET_TYPE.get(i.scope, i.scope), i.target_id)
         if key not in seen:
             seen.append(key)
+    return seen
+
+
+def render_status(items: list[rq.ReviewItem]) -> str:
+    """Admission state of every target the queue touches, plus every record on disk."""
+    seen = queue_targets(items)
     on_disk = sorted(adm.STORE.glob("*.json")) if adm.STORE.is_dir() else []
     for p in on_disk:
         if p.name == "review_queue.json":
@@ -428,10 +758,17 @@ def render_status(items: list[rq.ReviewItem]) -> str:
 
     rows = [f"{'STATE':<36} {'SERVE':<6} {'OPEN':<5} TARGET",
             f"{'-' * 36} {'-' * 6} {'-' * 5} {'-' * 40}"]
-    missing = 0
+    missing = damaged = 0
+    stalled: list[str] = []
     for ttype, tid in sorted(seen, key=lambda k: (k[0], k[1])):
-        rec = adm.load(ttype, tid)
-        n_open = sum(1 for i in items if i.target_id == tid and i.is_open)
+        rec, problem = load_record(ttype, tid)
+        mine = [i for i in items if i.target_id == tid]
+        n_open = sum(1 for i in mine if i.is_open)
+        if problem:
+            damaged += 1
+            rows.append(f"{'(UNREADABLE RECORD)':<36} {'?':<6} {n_open:<5} {tid}")
+            rows.append(f"    {problem}")
+            continue
         if rec is None:
             missing += 1
             rows.append(f"{'(no admission record)':<36} {'-':<6} {n_open:<5} {tid}")
@@ -439,11 +776,26 @@ def render_status(items: list[rq.ReviewItem]) -> str:
         codes = f"  [{','.join(rec.restriction_codes)}]" if rec.restriction_codes else ""
         rows.append(f"{rec.state:<36} {'yes' if rec.production_usable else 'no':<6} "
                     f"{n_open:<5} {tid}{codes}")
+        if mine and not n_open and rec.state in STALLED_STATES:
+            stalled.append(tid)
     if missing:
         rows += ["",
                  f"{missing} target(s) have review items but no admission record. Deciding those "
                  "items records the judgement in the queue and moves nothing: this tool will not "
                  "create an admission record, because that would be a second path to production."]
+    if damaged:
+        rows += ["",
+                 f"{damaged} admission record(s) could not be read. That is damage, not absence -- "
+                 "restore them from git before treating any state above as the truth."]
+    if stalled:
+        # A decision is two writes, the queue then the record. Interrupted between them, the
+        # judgement is safe and the promotion simply did not happen. Say so, and say the cure.
+        rows += ["",
+                 f"{len(stalled)} target(s) have every review item resolved but are still "
+                 f"pre-production: {', '.join(stalled)}.",
+                 "  The decisions are recorded; the admission write did not complete (an "
+                 "interrupted run does this).",
+                 "  Replay the recorded decisions with: python3 scripts/review.py --reconcile"]
     return "\n".join(rows)
 
 
@@ -532,8 +884,14 @@ def prompt_decision(item: rq.ReviewItem, *, reviewer_id: str, at: str, ask, say
 
 def review_session(items: list[rq.ReviewItem], *, reviewer_id: str, at: str, doc: dict,
                    all_pages: list[str], width: int, max_lines: int, ask, say,
-                   persist=True) -> list[rq.ReviewItem]:
-    """Walk the open items in priority order, prompting for each."""
+                   persist=True, pages_problem: str = "") -> list[rq.ReviewItem]:
+    """Walk the open items in priority order, prompting for each.
+
+    EOFError and KeyboardInterrupt are deliberately NOT caught here. Nothing is written until a
+    decision has been typed and confirmed, so an interruption anywhere in the prompts leaves the
+    queue exactly as it was; swallowing it here would only hide from the caller that the session
+    ended early. `main` turns them into a message and a non-zero exit.
+    """
     skipped: set[str] = set()
     while True:
         pending = [i for i in sorted((x for x in items if x.is_open), key=rank)
@@ -542,10 +900,12 @@ def review_session(items: list[rq.ReviewItem], *, reviewer_id: str, at: str, doc
             say("\nNo open items left to review in this session.")
             return items
         item = pending[0]
-        rec = record_for(item)
+        rec, rec_problem = load_record(SCOPE_TARGET_TYPE.get(item.scope, item.scope),
+                                       item.target_id)
         say("")
         say(render_item(item, doc=doc, all_pages=all_pages, width=width,
-                        max_lines=max_lines, rec=rec))
+                        max_lines=max_lines, rec=rec, pages_problem=pages_problem,
+                        rec_problem=rec_problem))
         say("")
         try:
             decision = prompt_decision(item, reviewer_id=reviewer_id, at=at, ask=ask, say=say)
@@ -557,12 +917,24 @@ def review_session(items: list[rq.ReviewItem], *, reviewer_id: str, at: str, doc
             say(f"skipped {item.review_item_id} (still open).")
             continue
 
-        items, moved = apply_decision(items, item.review_item_id, decision, rec,
-                                      actor=reviewer_id, at=at)
+        try:
+            items, moved = apply_decision(items, item.review_item_id, decision, rec,
+                                          actor=reviewer_id, at=at)
+        except (rq.ReviewError, adm.AdmissionError) as e:
+            # review_queue's rule (a resolved item cannot be decided twice) and admission's rules
+            # are surfaced in their own words. Nothing was written; the item stays as it was.
+            say(f"  refused: {e}")
+            say(f"nothing was recorded for {item.review_item_id}; the queue on disk is unchanged.")
+            skipped.add(item.review_item_id)
+            continue
         if persist:
-            rq.save_queue(items)
+            # Queue first, deliberately. Interrupted between the two writes, the reviewer's
+            # judgement survives and only the promotion is outstanding -- which --status reports
+            # and --reconcile replays. The other order would promote a target whose decision was
+            # never saved.
+            save_queue(items)
             if moved is not None:
-                adm.save(moved)
+                save_record(moved)
         say(f"recorded. queue saved ({sum(1 for i in items if i.is_open)} item(s) still open)")
         if moved is None:
             say(f"admission: {item.target_id} has no admission record -- the decision is "
@@ -571,6 +943,31 @@ def review_session(items: list[rq.ReviewItem], *, reviewer_id: str, at: str, doc
             say(f"admission: {moved.target_id}  ->  {render_state(moved)}")
         if ask("\nreview the next item? [Y/n]: ").strip().lower() in ("n", "no", "q", "quit"):
             return items
+
+
+def reconcile(items: list[rq.ReviewItem], *, actor: str, at: str
+              ) -> list[tuple[adm.AdmissionRecord, adm.AdmissionRecord]]:
+    """Replay decisions already in the queue onto admission records that did not get them.
+
+    This supplies no judgement of its own and cannot: it recomputes, through
+    review_queue.apply_to_admission() and nowhere else, the state the recorded decisions already
+    imply. It exists because recording a decision is two writes and a process can die between
+    them. A target with an open item does not move here, exactly as it would not move there.
+    """
+    moved: list[tuple[adm.AdmissionRecord, adm.AdmissionRecord]] = []
+    for ttype, tid in queue_targets(items):
+        rec, problem = load_record(ttype, tid)
+        if rec is None or problem:
+            continue
+        if any(i.is_open for i in items if i.target_id == tid):
+            continue
+        try:
+            after = rq.apply_to_admission(rec, items, actor=actor, at=at)
+        except adm.AdmissionError:
+            continue                      # an illegal transition is admission's call, not ours
+        if after.to_dict() != rec.to_dict():
+            moved.append((rec, after))
+    return moved
 
 
 def now() -> str:
@@ -590,6 +987,9 @@ def main(argv: list[str] | None = None) -> int:
     g.add_argument("--show", metavar="ID", help="one item in full, beside the gazette")
     g.add_argument("--next", action="store_true", help="highest-priority open item, then prompt")
     g.add_argument("--status", action="store_true", help="admission state of every target")
+    g.add_argument("--reconcile", action="store_true",
+                   help="replay recorded decisions onto admission records left behind by an "
+                        "interrupted run; records no decision of its own")
     g.add_argument("--test", action="store_true", help="run this module's self-test")
     ap.add_argument("--reviewer", metavar="ID", help="reviewer id recorded on decisions")
     ap.add_argument("--full", action="store_true", help="do not truncate the side-by-side view")
@@ -600,7 +1000,14 @@ def main(argv: list[str] | None = None) -> int:
         _test()
         return 0
 
-    items = rq.load_queue()
+    try:
+        items = read_queue()
+    except QueueUnreadable as e:
+        # Refusing to start costs one run. Operating on half a queue costs the decisions in the
+        # half that did not parse, the first time anything is saved.
+        print(e, file=sys.stderr)
+        return 2
+
     width = term_width(a.width)
     max_lines = 10 ** 6 if a.full else DEFAULT_LINES
 
@@ -608,18 +1015,34 @@ def main(argv: list[str] | None = None) -> int:
         print(render_summary(items))
         return 0
 
+    if not items:
+        print(empty_queue_message())
+        return 1
+
     if a.status:
-        if not items:
-            print(EMPTY_QUEUE)
-            return 1
         print(render_status(items))
         return 0
 
-    if not items:
-        print(EMPTY_QUEUE)
-        return 1
+    if a.reconcile:
+        actor = (a.reviewer or "").strip() or "review.py --reconcile"
+        changes = reconcile(items, actor=actor, at=now())
+        if not changes:
+            print("Nothing to reconcile: every admission record already matches the decisions "
+                  "recorded in the queue.")
+            return 0
+        for before, after in changes:
+            save_record(after)
+            print(f"{after.target_id}  {before.state}  ->  {render_state(after)}")
+        print(f"\n{len(changes)} admission record(s) brought up to date with decisions that were "
+              "already in the queue. No decision was made here.")
+        return 0
 
     doc = load_rules_doc()
+    all_pages, pages_problem = gazette()
+    if pages_problem:
+        print(f"note: the gazette could not be read -- {pages_problem}.\n"
+              "      Every item still renders; the gazette column will say so item by item.",
+              file=sys.stderr)
 
     if a.show:
         try:
@@ -627,21 +1050,26 @@ def main(argv: list[str] | None = None) -> int:
         except rq.ReviewError as e:
             print(e, file=sys.stderr)
             return 1
-        print(render_item(item, doc=doc, all_pages=pages(), width=width,
-                          max_lines=max_lines, rec=record_for(item)))
+        rec, rec_problem = load_record(SCOPE_TARGET_TYPE.get(item.scope, item.scope),
+                                       item.target_id)
+        print(render_item(item, doc=doc, all_pages=all_pages, width=width, max_lines=max_lines,
+                          rec=rec, pages_problem=pages_problem, rec_problem=rec_problem))
         return 0
 
     # --next: the only path that records anything, and it requires a person.
     item = next_open(items)
     if item is None:
         print("Nothing open. Every review item is resolved.")
+        print(render_summary(items))
+        print()
         print(render_status(items))
         return 0
+    rec, rec_problem = load_record(SCOPE_TARGET_TYPE.get(item.scope, item.scope), item.target_id)
     try:
         interactive_guard(sys.stdin.isatty())
     except NotInteractive as e:
-        print(render_item(item, doc=doc, all_pages=pages(), width=width,
-                          max_lines=max_lines, rec=record_for(item)))
+        print(render_item(item, doc=doc, all_pages=all_pages, width=width, max_lines=max_lines,
+                          rec=rec, pages_problem=pages_problem, rec_problem=rec_problem))
         print()
         print(e, file=sys.stderr)
         return 2
@@ -650,15 +1078,21 @@ def main(argv: list[str] | None = None) -> int:
     while not reviewer:
         try:
             reviewer = input("reviewer id (recorded on every decision): ").strip()
-        except EOFError:
+        except (EOFError, KeyboardInterrupt):
             print("\nno reviewer id; nothing recorded.", file=sys.stderr)
             return 2
     try:
-        review_session(items, reviewer_id=reviewer, at=now(), doc=doc, all_pages=pages(),
-                       width=width, max_lines=max_lines, ask=input, say=print)
+        review_session(items, reviewer_id=reviewer, at=now(), doc=doc, all_pages=all_pages,
+                       width=width, max_lines=max_lines, ask=input, say=print,
+                       pages_problem=pages_problem)
     except EOFError:
-        print("\ninput ended mid-item; nothing further recorded.", file=sys.stderr)
+        print("\ninput ended mid-item; nothing further recorded. Every decision you confirmed "
+              "before this point is on disk.", file=sys.stderr)
         return 2
+    except KeyboardInterrupt:
+        print("\ninterrupted mid-item; nothing further recorded. Every decision you confirmed "
+              "before this point is on disk.", file=sys.stderr)
+        return 130
     return 0
 
 
@@ -716,7 +1150,8 @@ def _test() -> None:
     check(s["targets"] == 4, "two items on one target count as one target")
     check(all(x in render_summary(items) for x in ("5 item(s)", "BY SCOPE", "NEXT")),
           "the summary renders")
-    check(render_summary([]) == EMPTY_QUEUE and "seed_admission" in EMPTY_QUEUE,
+    _empty = empty_queue_message()
+    check(render_summary([]) == _empty and "seed_admission" in _empty,
           "an empty queue says so and says how to fix it")
 
     resolved_one = [rq.decide(items[0], rq.ReviewDecision(rq.APPROVED, "c", T))] + items[1:]

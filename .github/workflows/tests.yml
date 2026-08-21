@@ -1,0 +1,53 @@
+# Runs the identical script the pre-commit hook runs. Never a reimplementation of the suite list:
+# two copies of the definition of "green" drift, and the drift is discovered as a false green.
+name: tests
+
+on:
+  push:
+  pull_request:
+
+# The suites only read the repo. Nothing here needs write access or a token.
+permissions:
+  contents: read
+
+# A superseded push has nothing left to tell us; cancel it rather than queue it.
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  suites:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10   # the suite is ~4s; ten minutes means "hung", not "slow"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      # None of the 25 suites imports a third-party package today -- verified by running the whole
+      # suite green under a venv built with --without-pip. Installed anyway so the CI environment
+      # is a superset of a normal dev machine: the day someone adds a suite that does import
+      # jinja2 or pdfplumber, CI must not go red while every laptop stays green. That divergence
+      # is the exact failure this workflow exists to prevent.
+      - run: python -m pip install --disable-pip-version-check -r requirements-dev.txt
+
+      # MEASURED, NOT PREDICTED: a checkout of this repo with no local artifacts fails exactly one
+      # suite -- checker/provenance.py -- because both PDFs it hashes are matched by the `*.pdf`
+      # line in .gitignore and are therefore not in the clone. That is a real finding about the
+      # repo, not a CI defect, so this workflow does NOT exclude the suite: one definition of
+      # green is the whole point. It only labels the failure so nobody spends an hour on it.
+      # Resolve by tracking the artifacts (LFS or an unignore rule) or by teaching provenance.py
+      # to distinguish "artifact absent" from "artifact wrong". Then delete this step.
+      - name: Flag artifacts that a clone cannot contain
+        run: |
+          for f in corpus/sources/companies_act_2013_indiacode.pdf \
+                   corpus/sources/companies_meetings_board_powers_rules_2014.pdf; do
+            [ -f "$f" ] || echo "::warning file=checker/provenance.py::$f is gitignored and absent from a fresh checkout; checker/provenance.py will fail below for this reason alone."
+          done
+
+      - run: ./scripts/run_tests.sh

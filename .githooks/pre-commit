@@ -1,0 +1,87 @@
+#!/bin/sh
+# Pre-commit gate: no commit lands while any self-testing suite is red.
+#
+# WHY THIS EXISTS
+# The suites encode every safety property this repo has -- admission gating, fail-closed model
+# parsing, defect propagation, abstention. Until this hook, they ran only when a human remembered
+# to type a command. A safety property nobody checks is a safety property you do not have.
+#
+# WHY IT RUNS EVERYTHING
+# The full suite is ~4 seconds, measured. A changed-files fast path would cost more in complexity
+# and in missed cross-module breakage than the seconds it saves. Cross-module breakage is the
+# common case here: section_index, mvp_freeze and legal_ref constrain each other.
+#
+# WHY IT DELEGATES TO scripts/run_tests.sh
+# That script is the single definition of "green". CI runs the same file. Two copies of the
+# definition would drift, and the drift would be discovered by a false green.
+#
+# SCOPE CAVEAT
+# This checks the WORKING TREE, not the staged index. Checking the index exactly would mean
+# stashing unstaged changes mid-commit, which can destroy work and races any other process
+# touching the tree. Working-tree truth is the safer trade. For a clean tree, or `git commit -a`,
+# the two are identical.
+
+set -u
+
+# Loud on purpose. A bypass nobody notices is worse than having no hook at all, because it buys
+# the confidence of a gate without the gate.
+if [ "${SKIP_TESTS:-}" = "1" ]; then
+    cat >&2 <<'SKIPPED'
+
+################################################################################
+#  SKIP_TESTS=1 -- THE TEST SUITE DID NOT RUN. THIS COMMIT IS UNVERIFIED.      #
+#                                                                              #
+#  Nothing checked admission gating, fail-closed parsing, defect propagation   #
+#  or abstention for this change. Run ./scripts/run_tests.sh before pushing.   #
+################################################################################
+
+SKIPPED
+    exit 0
+fi
+
+# --show-toplevel so the hook behaves identically when git is invoked from checker/ or scripts/.
+repo_root=$(git rev-parse --show-toplevel) || exit 1
+cd "$repo_root" || exit 1
+
+runner=scripts/run_tests.sh
+if [ ! -f "$runner" ]; then
+    echo "pre-commit: $runner is missing; refusing to commit blind." >&2
+    echo "pre-commit: bypass with  SKIP_TESTS=1 git commit ..." >&2
+    exit 1
+fi
+
+# Invoked through its own shebang, never `sh $runner`: run_tests.sh is bash and uses arrays, and
+# /bin/sh is dash on the Linux runners where CI executes the identical file.
+echo "pre-commit: running $runner (~4s)..." >&2
+output=$(bash "$runner" 2>&1)
+status=$?
+
+if [ "$status" -eq 0 ]; then
+    echo "pre-commit: all suites green." >&2
+    exit 0
+fi
+
+# Name the suites, not just the failure. run_tests.sh already prints one line per suite plus
+# indented detail under a failing one; reprint exactly those, so the answer to "why" is on screen
+# without scrolling through 20 passing lines.
+{
+    echo
+    echo "=============================================================================="
+    echo " COMMIT BLOCKED -- the test suite is red"
+    echo "=============================================================================="
+    printf '%s\n' "$output" | awk '
+        /^[^ ]/ && /FAIL|MISSING/ { show = 1; print "  " $0; next }
+        /^ /                      { if (show) print "  " $0; next }
+                                  { show = 0 }
+    '
+    echo "------------------------------------------------------------------------------"
+    echo " Reproduce:  ./scripts/run_tests.sh"
+    echo " One suite:  PYTHONPATH=. python3 <the file named above>"
+    echo " Bypass:     SKIP_TESTS=1 git commit ...   (says so loudly; leaves it unverified)"
+    echo "=============================================================================="
+    echo
+} >&2
+
+# Exit 1 rather than propagating run_tests.sh's status: it returns a failing-suite count, shells
+# reserve 126-255, and git only needs "non-zero". The failing suites are named on screen above.
+exit 1
