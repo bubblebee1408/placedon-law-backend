@@ -138,12 +138,26 @@ def _parse(raw: str, allowed: tuple[str, ...]) -> tuple[str, list[Claim], list[s
     except json.JSONDecodeError as e:
         raise AdapterError(f"model returned malformed JSON: {e}")
 
+    if not isinstance(d, dict):
+        raise AdapterError(f"model returned a JSON {type(d).__name__}, not an object")
+
     decision = d.get("decision")
     if decision not in DECISIONS:
         raise AdapterError(f"decision {decision!r} is not one of {DECISIONS}")
 
+    # Types are checked explicitly rather than discovered by exception. Model output is untrusted
+    # input; `claims` arriving as a string used to reach `.get()` and throw AttributeError straight
+    # past run()'s AdapterError handler and out to whoever asked the legal question -- the exact
+    # crash the fail-closed rule exists to prevent. Found by checker/redteam.py (RED-05).
+    raw_claims = d.get("claims") or []
+    if not isinstance(raw_claims, (list, tuple)):
+        raise AdapterError(f"'claims' is a {type(raw_claims).__name__}, expected a list")
+
     claims, rejected, seen_ids = [], [], set()
-    for i, c in enumerate(d.get("claims") or []):
+    for i, c in enumerate(raw_claims):
+        if not isinstance(c, dict):
+            rejected.append(f"c{i + 1}: claim is a {type(c).__name__}, expected an object")
+            continue
         cid = c.get("claim_id") or f"c{i + 1}"
         try:
             if cid in seen_ids:
@@ -154,7 +168,11 @@ def _parse(raw: str, allowed: tuple[str, ...]) -> tuple[str, list[Claim], list[s
             ctype = c.get("claim_type")
             if ctype not in CLAIM_TYPES:
                 raise ClaimError(f"{cid}: unknown claim_type {ctype!r}")
-            ids = tuple(c.get("evidence_ids") or ())
+            raw_ids = c.get("evidence_ids") or ()
+            if not isinstance(raw_ids, (list, tuple)):
+                raise ClaimError(
+                    f"{cid}: 'evidence_ids' is a {type(raw_ids).__name__}, expected a list")
+            ids = tuple(str(x) for x in raw_ids)
             unknown = [e for e in ids if e not in allowed]
             if unknown:
                 raise ClaimError(
@@ -197,13 +215,22 @@ def run(task: ModelTask, model: Callable[[str], str] | None = None,
     try:
         decision, claims, missing, warnings, rejected = _parse(raw, allowed)
     except AdapterError as e:
-        # Fail CLOSED. A model that returned something unparseable has told us nothing, and
-        # "nothing" is INSUFFICIENT_EVIDENCE -- not an exception thrown at whoever asked the
-        # legal question.
         return ModelResult(
             decision=INSUFFICIENT_EVIDENCE,
             warnings=(f"{MODEL_OUTPUT_PARSE_FAILURE}: {e}",),
             raw_text=raw, model_name=model_name)
+    except Exception as e:  # noqa: BLE001
+        # Defence in depth. The explicit type checks above cover what a model plausibly emits, but
+        # "plausibly" is doing real work in that sentence and the contract is absolute: NOTHING a
+        # model returns may crash the caller. The exception type is preserved in the warning so a
+        # genuine bug in our own code is still diagnosable rather than silently swallowed.
+        return ModelResult(
+            decision=INSUFFICIENT_EVIDENCE,
+            warnings=(f"{MODEL_OUTPUT_PARSE_FAILURE}: unexpected "
+                      f"{type(e).__name__} while parsing model output: {e}",),
+            raw_text=raw, model_name=model_name)
+    except BaseException:
+        raise
 
     # A model may not claim law applies while the pack says its evidence is insufficient.
     if pack.insufficient_evidence and decision in (APPLIES, DOES_NOT_APPLY):

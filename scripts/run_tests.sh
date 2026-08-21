@@ -24,6 +24,7 @@ suites=(
   checker/retrieve.py
   checker/model_adapter.py
   checker/claim_verifier.py
+  checker/redteam.py
   checker/provenance.py
   checker/section_index.py
   checker/mvp_freeze.py
