@@ -74,6 +74,11 @@ Files changed · Tests added or updated · Commands run · Results · Known limi
 | `research/TASKS.md` | The task ledger — single source of truth for what is open |
 
 ## Verification status
+- Corpus cross-render check: **PASS_WITH_DEFECTS**. India Code JSON vs India Code PDF agree
+  (median record coverage 1.0000, 456/464 >= 0.99) but **two confirmed defects** — see
+  `docs/SOURCE_DEFECTS.md`. Corpus status is NOT_FULLY_VERIFIED.
+- Independent-publisher verification: **PENDING**. Both renderings are India Code; a defect in
+  their own source is invisible to this check.
 - Section index: 464/474 mapped, 17 MVP sections hand-verified. **PDF-derived, not source-confirmed** —
   India Code returned 403 on 21 Aug 2026. Re-verify against the section view when reachable.
 - Point-in-time reconstruction: still UNVERIFIED against any external source.
