@@ -65,6 +65,7 @@ def _body(section_id: str) -> str:
 
 def _test() -> None:
     entries = json.loads(INDEX.read_text())["entries"]
+    from checker.legal_ref import ACT, AmbiguousReference, LegalRef, parse_key, resolve
     ok = fail = 0
 
     def check(cond: bool, label: str) -> None:
@@ -89,6 +90,21 @@ def _test() -> None:
     for num, phrase in TEXT_ANCHOR.items():
         sid = VERIFIED[num][0]
         check(phrase in _body(sid), f"s.{num} (id {sid}) text no longer contains {phrase!r}")
+
+    # An MVP section must stay an ACT reference. If one silently became a RULE reference, every
+    # citation built on it would name the wrong instrument while still looking well-formed.
+    refs = [LegalRef(ACT, "COMPANIES_ACT_2013", n, t, sid) for n, (sid, t) in VERIFIED.items()]
+    for r in refs:
+        check(parse_key(r.key()).instrument_type == ACT, f"{r.key()} is still an ACT reference")
+        check(r.key().startswith("ACT:COMPANIES_ACT_2013:S"), f"{r.key()} keeps the Act namespace")
+
+    # Number-only lookup must never resolve once the Rules land alongside the Act in Week 2.
+    from checker.legal_ref import COLLISION_FIXTURE
+    try:
+        resolve(refs + COLLISION_FIXTURE, "56")
+        check(False, "bare number 56 resolved -- Act/Rule namespaces have collapsed")
+    except AmbiguousReference:
+        check(True, "bare number 56 still refuses to resolve across instruments")
 
     print(f"{ok}/{ok + fail} passed" + ("" if not fail else "  <-- MVP MAPPING DRIFT"))
     if fail:

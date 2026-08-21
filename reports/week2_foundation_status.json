@@ -1,0 +1,29 @@
+{
+  "milestone": "Week 2 foundation",
+  "date": "2026-08-21",
+  "week_1_1_gate": {
+    "mapped": "464/474",
+    "pct": 97.9,
+    "gate": 95.0,
+    "duplicates": 0,
+    "mvp_sections_hand_verified": "17/17",
+    "status": "PASS"
+  },
+  "section_index_evidence": {
+    "against_artifact": "corpus/sources/companies_act_2013_indiacode.pdf",
+    "artifact_sha256": "d6e286d2a3feec89a7d432a5a572e91af9f0135411b03e57f72b7a8ef72139af",
+    "state": "VERIFIED (relative to that artifact only)",
+    "india_code_section_view": "UNFETCHED_CORROBORATION \u2014 HTTP 403 on 2026-08-21, WAF not bypassed"
+  },
+  "foundation_complete": true,
+  "suites": 9,
+  "checks": 223,
+  "all_green": true,
+  "open_questions": [
+    "versioning within an instrument (amended rule at two effective dates) is unreconciled with as_of.py"
+  ],
+  "blockers": [
+    "India Code section view returns 403; independent verification of the index is unavailable"
+  ],
+  "next": "Week 2.1 \u2014 acquire the Meetings of Board Rules 2014 with a SourceRecord before parsing"
+}
