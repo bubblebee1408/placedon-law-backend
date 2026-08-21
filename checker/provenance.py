@@ -35,9 +35,15 @@ RETRACTED = "RETRACTED"                            # was asserted, since disprov
 STATES = (UNRESOLVED, INFERRED, UNFETCHED_CORROBORATION, CORROBORATED, VERIFIED, RETRACTED)
 SERVABLE = (CORROBORATED, VERIFIED)  # what may reach a user as a legal statement
 
+# How the SOURCE behaved when we asked for it. A separate axis from the evidence states above:
+# those grade an artifact we hold, these grade an attempt to obtain one. Conflating the two is the
+# mistake that put a retry schedule against a WAF -- see docs/ACQUISITION_POLICY.md.
 ACCESSIBLE = "ACCESSIBLE"
 BLOCKED = "BLOCKED"          # 403 / WAF. Not bypassed -- see CLAUDE.md.
-UNREACHABLE = "UNREACHABLE"  # timeout / DNS / 404
+UNREACHABLE = "UNREACHABLE"  # timeout / DNS failure / connection refused: the host never answered.
+NOT_FOUND = "NOT_FOUND"      # 404 from a host that DID answer.
+
+ACCESSIBILITY_STATES = (ACCESSIBLE, BLOCKED, UNREACHABLE, NOT_FOUND)
 
 
 class ProvenanceError(ValueError):
@@ -56,6 +62,13 @@ class SourceRecord:
     artifact_sha256: str | None = None
     human_reviewed: bool = False
     notes: str = ""
+
+    def __post_init__(self) -> None:
+        # A typo'd accessibility is worse than a crash: it silently falls outside RETRYABLE, so the
+        # source is quietly never retried and nobody is told why.
+        if self.accessibility not in ACCESSIBILITY_STATES:
+            raise ProvenanceError(
+                f"{self.accessibility!r} is not an accessibility state; one of {ACCESSIBILITY_STATES}")
 
     def artifact_path(self) -> Path | None:
         return ROOT / self.local_artifact if self.local_artifact else None
@@ -215,16 +228,28 @@ PRINCIPAL_RULES_LEAD = {
 SOURCES = {s.source_id: s for s in (INDIACODE_PDF, INDIACODE_SECTION_VIEW,
                                     BOARD_MEETING_RULES_2014, INDIACODE_DISCOVERY)}
 
-RETRYABLE = (UNREACHABLE,)  # BLOCKED is never retried automatically. See INDIACODE_DISCOVERY.
+# Only an outage is retryable. BLOCKED and NOT_FOUND both mean the server answered us, and an
+# answer does not change because it was asked for twice.
+RETRYABLE = (UNREACHABLE,)
+
+
+def is_retryable(accessibility: str) -> bool:
+    """Whether an automated retry against a source in this state is appropriate.
+
+    A host that is down may be retried; it may come back. A source that returned 403 may not:
+    re-probing something that has refused us is abusive regardless of intent, and it is what the
+    WAF is there to stop. A 404 may not either, for a different reason -- the server answered, and
+    what it said was "not at this address". The address is what is wrong, and repeating a request
+    cannot fix an address; only re-discovery or human retrieval can. That is also all a 404 means:
+    India Code reshuffles file paths between releases, so a 404 at an exact known URL is evidence
+    about the URL and evidence of nothing whatever about whether the instrument exists.
+    """
+    return accessibility in RETRYABLE
 
 
 def should_retry(s: SourceRecord) -> bool:
-    """Whether an automated retry against this source is appropriate.
-
-    A host that is down may be retried. A source that returned 403 may not: re-probing something
-    that has refused us is abusive regardless of intent, and it is what the WAF is there to stop.
-    """
-    return s.accessibility in RETRYABLE
+    """Whether an automated retry against this source is appropriate. See is_retryable()."""
+    return is_retryable(s.accessibility)
 
 
 def _test() -> None:
@@ -287,6 +312,34 @@ def _test() -> None:
     check(not good3, "an unacquired source cannot support VERIFIED")
     check(not Claim("r1", "Rule 3 requires X", INFERRED, [r]).servable(),
           "nothing built on the unacquired Rules is servable")
+
+    # A 404 is its own state. Folding it into UNREACHABLE would schedule retries of a URL we
+    # already know is the wrong URL; folding it into BLOCKED would imply we had been refused.
+    stale = SourceRecord(
+        source_id="STALE_ADDRESS_EXAMPLE",
+        source_title="an exact address that no longer resolves to a document",
+        source_url="https://www.indiacode.nic.in/bitstream/123456789/0000/0/gone.pdf",
+        official=True,
+        accessibility=NOT_FOUND,
+        notes="Illustrative. No 404 has actually been observed for the Rules.",
+    )
+    check(NOT_FOUND in ACCESSIBILITY_STATES, "NOT_FOUND is a first-class accessibility state")
+    check(NOT_FOUND not in (UNREACHABLE, BLOCKED), "NOT_FOUND is not an alias of the other two")
+    check(not should_retry(stale), "a 404 at an exact address is not usefully retried")
+    check(is_retryable(UNREACHABLE) and not is_retryable(NOT_FOUND) and not is_retryable(BLOCKED),
+          "only an outage is retryable")
+    good4, _ = can_promote([stale])
+    check(not good4, "a 404 source supports nothing")
+    # The point of the state: it says the ADDRESS is wrong, not that the instrument is absent.
+    check(Claim("n1", "the Rules exist", UNRESOLVED, [stale]).state == UNRESOLVED,
+          "a 404 leaves existence UNRESOLVED, it does not disprove existence")
+
+    try:
+        SourceRecord(source_id="x", source_title="x", source_url="x", official=True,
+                     accessibility="MAYBE")
+        check(False, "invented accessibility state must raise")
+    except ProvenanceError:
+        check(True, "invented accessibility state rejected")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:

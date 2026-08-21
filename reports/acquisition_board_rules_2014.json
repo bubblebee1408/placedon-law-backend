@@ -1,0 +1,181 @@
+{
+  "schema": "acquisition_log/v1",
+  "instrument_id": "INDIACODE_MEETINGS_BOARD_RULES_2014",
+  "title": "The Companies (Meetings of Board and its Powers) Rules, 2014 \u2014 principal Rules",
+  "terminal_state": "HUMAN_RETRIEVAL_REQUIRED",
+  "handoff": "Every permitted automated route is exhausted: the one host that serves the file directly is down, and the only route that could discover the file's static address is behind a WAF that has refused us and must not be re-probed. A browser session is not subject to that block, so this is a five-minute human task -- see docs/ACQUISITION_HANDOFF_board_rules_2014.md, then run scripts/acquire_rules.py on the downloaded PDF. Third-party sources give a notification number and date for these Rules; those are LEADS for finding the file and must be read off the acquired document before they are recorded anywhere (see PRINCIPAL_RULES_LEAD in checker/provenance.py). Do not backfill them.",
+  "summary": {
+    "instrument_id": "INDIACODE_MEETINGS_BOARD_RULES_2014",
+    "title": "The Companies (Meetings of Board and its Powers) Rules, 2014 \u2014 principal Rules",
+    "attempts": 9,
+    "hosts_tried": [
+      "164.100.94.56",
+      "egazette.gov.in",
+      "upload.indiacode.nic.in",
+      "www.indiacode.nic.in",
+      "www.mca.gov.in"
+    ],
+    "by_outcome": {
+      "ACCESSIBLE": 2,
+      "BLOCKED": 5,
+      "UNREACHABLE": 2
+    },
+    "terminal_state": "HUMAN_RETRIEVAL_REQUIRED",
+    "terminal_state_is_success": true,
+    "human_retrieval_required": true,
+    "automated_retry_permitted": [
+      "http://164.100.94.56/",
+      "https://upload.indiacode.nic.in/showfile?actid=AC_CEN_22_29_00008_201318_1517807327856&type=rule&filename=The%20Companies%20(Meetings%20and%20Powers%20of%20Board)%20.pdf"
+    ],
+    "never_retry_automatically": [
+      "https://www.indiacode.nic.in/ViewFileUploaded",
+      "https://www.indiacode.nic.in/handle/123456789/1362",
+      "https://www.indiacode.nic.in/show-data",
+      "https://www.indiacode.nic.in/simple-search?searchradio=rules",
+      "https://www.mca.gov.in/"
+    ],
+    "instrument_existence": "EXISTENCE_UNDETERMINED",
+    "existence_note": "Failure to DISCOVER an instrument is not evidence that the instrument does not exist. Every outcome below is a fact about a host or an address -- a refusal, an outage, a wrong path -- and none of them is a fact about the law. Disproving existence would require reading a source that would list the instrument if it existed; no such source was read. Existence stays undetermined, and nothing downstream may treat absence-from-corpus as absence-from-law.",
+    "chain": {
+      "length": 9,
+      "head": "0daf86bab8d11e8b8293ca9d17af370ac50eb3fb92a7b10e1040ec8f2788cf39"
+    }
+  },
+  "records": [
+    {
+      "seq": 0,
+      "timestamp": "2026-08-21",
+      "instrument_id": "INDIACODE_MEETINGS_BOARD_RULES_2014",
+      "url": "https://upload.indiacode.nic.in/showfile?actid=AC_CEN_22_29_00008_201318_1517807327856&type=rule&filename=The%20Companies%20(Meetings%20and%20Powers%20of%20Board)%20.pdf",
+      "host": "upload.indiacode.nic.in",
+      "method": "GET",
+      "outcome": "UNREACHABLE",
+      "http_status": null,
+      "error": "ECONNREFUSED",
+      "note": "Refused instantly rather than timing out, which is a host that is down and not a network in between. Retryable: it may come back.",
+      "artifact_sha256": null,
+      "prev_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "entry_hash": "0dfc420cebc03c53a2351319a392018f63561b9f3e90a563924add84b34f806d"
+    },
+    {
+      "seq": 1,
+      "timestamp": "2026-08-21",
+      "instrument_id": "INDIACODE_MEETINGS_BOARD_RULES_2014",
+      "url": "http://164.100.94.56/",
+      "host": "164.100.94.56",
+      "method": "GET",
+      "outcome": "UNREACHABLE",
+      "http_status": null,
+      "error": "ECONNREFUSED",
+      "note": "The address upload.indiacode.nic.in resolves to. Probed to separate a DNS problem from a dead service; the service is dead.",
+      "artifact_sha256": null,
+      "prev_hash": "0dfc420cebc03c53a2351319a392018f63561b9f3e90a563924add84b34f806d",
+      "entry_hash": "aa8c4e519c3ec9ad57f820c1493c5bfd63214a5da794bf86e15d4ee4c54bb9fb"
+    },
+    {
+      "seq": 2,
+      "timestamp": "2026-08-21",
+      "instrument_id": "INDIACODE_MEETINGS_BOARD_RULES_2014",
+      "url": "https://www.indiacode.nic.in/handle/123456789/1362",
+      "host": "www.indiacode.nic.in",
+      "method": "GET",
+      "outcome": "BLOCKED",
+      "http_status": 403,
+      "error": null,
+      "note": "Browse by handle. Dynamic path.",
+      "artifact_sha256": null,
+      "prev_hash": "aa8c4e519c3ec9ad57f820c1493c5bfd63214a5da794bf86e15d4ee4c54bb9fb",
+      "entry_hash": "1025616a8782c71c76c3b258add6f102f035b3eba3a9547498e3162157f9243e"
+    },
+    {
+      "seq": 3,
+      "timestamp": "2026-08-21",
+      "instrument_id": "INDIACODE_MEETINGS_BOARD_RULES_2014",
+      "url": "https://www.indiacode.nic.in/simple-search?searchradio=rules",
+      "host": "www.indiacode.nic.in",
+      "method": "GET",
+      "outcome": "BLOCKED",
+      "http_status": 403,
+      "error": null,
+      "note": "Rules search -- the one route that would have yielded the file's static address.",
+      "artifact_sha256": null,
+      "prev_hash": "1025616a8782c71c76c3b258add6f102f035b3eba3a9547498e3162157f9243e",
+      "entry_hash": "567d1ebb5d44e9d1ca3194799845bd4cd1bc291817bc371b8c17af60c5e13e30"
+    },
+    {
+      "seq": 4,
+      "timestamp": "2026-08-21",
+      "instrument_id": "INDIACODE_MEETINGS_BOARD_RULES_2014",
+      "url": "https://www.indiacode.nic.in/show-data",
+      "host": "www.indiacode.nic.in",
+      "method": "GET",
+      "outcome": "BLOCKED",
+      "http_status": 403,
+      "error": null,
+      "note": "Section/rule view. Same endpoint family as INDIACODE_SECTION_VIEW in provenance.py.",
+      "artifact_sha256": null,
+      "prev_hash": "567d1ebb5d44e9d1ca3194799845bd4cd1bc291817bc371b8c17af60c5e13e30",
+      "entry_hash": "dd81d26b0e4c790d62bc0a8793ff7c551047babce523b21d4f7b10188af25964"
+    },
+    {
+      "seq": 5,
+      "timestamp": "2026-08-21",
+      "instrument_id": "INDIACODE_MEETINGS_BOARD_RULES_2014",
+      "url": "https://www.indiacode.nic.in/ViewFileUploaded",
+      "host": "www.indiacode.nic.in",
+      "method": "GET",
+      "outcome": "BLOCKED",
+      "http_status": 403,
+      "error": null,
+      "note": "File-serving endpoint reached through the dynamic pages.",
+      "artifact_sha256": null,
+      "prev_hash": "dd81d26b0e4c790d62bc0a8793ff7c551047babce523b21d4f7b10188af25964",
+      "entry_hash": "986dca3cac88ed764487f80e2410c99b30587ebc7f14d69123d70040c06039d1"
+    },
+    {
+      "seq": 6,
+      "timestamp": "2026-08-21",
+      "instrument_id": "INDIACODE_MEETINGS_BOARD_RULES_2014",
+      "url": "https://www.indiacode.nic.in/bitstream/123456789/2114/5/A2013-18.pdf",
+      "host": "www.indiacode.nic.in",
+      "method": "GET",
+      "outcome": "ACCESSIBLE",
+      "http_status": 200,
+      "error": null,
+      "note": "CONTROL, and deliberately carries no artifact hash: the bytes it returns are the Companies Act (INDIACODE_CA2013_PDF in checker/provenance.py), not the Rules. It matters because it is the same host as the four 403s above: the host is up and serving, so those are a deliberate block and not an outage. Without this probe the whole host looks down and gets a retry schedule it must not have.",
+      "artifact_sha256": null,
+      "prev_hash": "986dca3cac88ed764487f80e2410c99b30587ebc7f14d69123d70040c06039d1",
+      "entry_hash": "002bf4f005c212481bee323c9cc0b9fca2a83ab4873b9ea3b75eca554357e9ae"
+    },
+    {
+      "seq": 7,
+      "timestamp": "2026-08-21",
+      "instrument_id": "INDIACODE_MEETINGS_BOARD_RULES_2014",
+      "url": "https://www.mca.gov.in/",
+      "host": "www.mca.gov.in",
+      "method": "GET",
+      "outcome": "BLOCKED",
+      "http_status": 403,
+      "error": null,
+      "note": "Second official publisher. Refused. Not bypassed -- see CLAUDE.md.",
+      "artifact_sha256": null,
+      "prev_hash": "002bf4f005c212481bee323c9cc0b9fca2a83ab4873b9ea3b75eca554357e9ae",
+      "entry_hash": "9eb2a34e3730265d99c6e275fb8f0bafe96a5dbe099ab653dec65df096a50b83"
+    },
+    {
+      "seq": 8,
+      "timestamp": "2026-08-21",
+      "instrument_id": "INDIACODE_MEETINGS_BOARD_RULES_2014",
+      "url": "https://egazette.gov.in/",
+      "host": "egazette.gov.in",
+      "method": "GET",
+      "outcome": "ACCESSIBLE",
+      "http_status": 200,
+      "error": null,
+      "note": "Reachable, and the right archive, but retrieval runs through a stateful search form that a human drives. Reachable is not the same as automatable.",
+      "artifact_sha256": null,
+      "prev_hash": "9eb2a34e3730265d99c6e275fb8f0bafe96a5dbe099ab653dec65df096a50b83",
+      "entry_hash": "0daf86bab8d11e8b8293ca9d17af370ac50eb3fb92a7b10e1040ec8f2788cf39"
+    }
+  ]
+}

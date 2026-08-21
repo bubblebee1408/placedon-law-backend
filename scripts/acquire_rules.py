@@ -401,6 +401,24 @@ def _test() -> int:
     check([c for c, e in EXIT_CODES.items() if e == 0] == [VERIFIED_PRINCIPAL],
           "only VERIFIED_PRINCIPAL exits 0")
 
+    # The lead is stated in two places -- here, and checker/provenance.py. Duplicating a value
+    # that NOBODY HAS VERIFIED is how a wrong number quietly becomes load-bearing in two files at
+    # once. This script must run from any directory without PYTHONPATH, so it cannot import that
+    # module at runtime; instead the test asserts the two copies still agree, and fails if they
+    # drift. Soft: skipped when run outside the repo, where the check is not possible anyway.
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+        from checker.provenance import PRINCIPAL_RULES_LEAD as _lead
+    except Exception:
+        print("[SKIP] lead-drift check (checker.provenance not importable from here)")
+    else:
+        check(LEAD_NOTIFICATION_NUMBER in _lead["claimed_notification"],
+              f"lead notification agrees with provenance.py ({_lead['claimed_notification']})")
+        check(LEAD_DATE_CLAIM == _lead["claimed_date"],
+              f"lead date agrees with provenance.py ({_lead['claimed_date']})")
+        check(_lead["evidence_state"] == "UNFETCHED_CORROBORATION",
+              "the shared lead is still held as unverified, not promoted")
+
     print(f"\n{ok}/{ok + fail} passed")
     return 1 if fail else 0
 

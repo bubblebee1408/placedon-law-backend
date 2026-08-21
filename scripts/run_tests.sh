@@ -9,6 +9,7 @@ cd "$(dirname "$0")/.."
 export PYTHONPATH="$PWD"
 
 suites=(
+  checker/acquisition_log.py
   checker/amendment.py
   checker/as_of.py
   checker/derived_date.py
