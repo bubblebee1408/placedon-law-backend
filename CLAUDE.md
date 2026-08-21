@@ -61,6 +61,10 @@ Files changed · Tests added or updated · Commands run · Results · Known limi
 | Path | Contents |
 |---|---|
 | `checker/` | Verifier, applicability, retrieval, provision graph, amendment parser, as_of, derived_date |
+| `checker/section_index.py` | `section_by_number("173")` — number -> corpus ID (97.9% mapped) |
+| `checker/legal_ref.py` | Instrument-qualified refs. A provision number is never an identity |
+| `checker/mvp_freeze.py` | Pins the 17 hand-verified MVP mappings against silent drift |
+| `scripts/run_tests.sh` | Runs all 8 suites with PYTHONPATH set — use this, not bare python3 |
 | `checker/ss/` | Secretarial Standards defect scanner + evidenced RULES.md |
 | `corpus/companies_act/` | 527 ingested sections, hash-stamped |
 | `corpus/testdocs/` | Real + ICSI-specimen documents for scanner validation |
@@ -68,6 +72,11 @@ Files changed · Tests added or updated · Commands run · Results · Known limi
 | `scripts/` | Ingestion and verification harnesses |
 | `docs/` | Architecture, technical plans, retractions |
 | `research/TASKS.md` | The task ledger — single source of truth for what is open |
+
+## Verification status
+- Section index: 464/474 mapped, 17 MVP sections hand-verified. **PDF-derived, not source-confirmed** —
+  India Code returned 403 on 21 Aug 2026. Re-verify against the section view when reachable.
+- Point-in-time reconstruction: still UNVERIFIED against any external source.
 
 ## Known-invalid results — do not cite
 - Reconstruction "119/119 EXACT vs as-enacted print" — the reference was the CURRENT consolidation.
