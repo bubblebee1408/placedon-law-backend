@@ -40,7 +40,7 @@ this module.
 checks a NECESSARY condition -- that a claim's distinctive words occur in the evidence it cites --
 and that passing "is not proof of support". RED-07 is the exploit of exactly that: a claim that
 borrows s.173's own vocabulary ("company", "meeting", "Board", "thirty days") and then asserts a
-Registrar-filing obligation s.173 does not impose. It is graded SUPPORTED at 0.667 coverage and
+Registrar-filing obligation s.173 does not impose. It reaches LEXICAL_CANDIDATE at 0.667 coverage and
 travels the whole pipeline with a green verdict. This test asserts that the gap EXISTS. It does
 not pretend the claim is caught, and the verifier is NOT loosened or tightened to change the
 outcome -- a green test that misrepresents a blind spot is worth less than no test, because it
@@ -72,7 +72,8 @@ from checker import model_adapter as ma  # noqa: E402
 from checker.claim_schema import (LEGAL_TRIGGER, PROCEDURAL_REQUIREMENT,  # noqa: E402
                                   Claim)
 from checker.claim_verifier import (CONTRADICTED, INVALID_CITATION,  # noqa: E402
-                                    PARTIAL, SUPPORTED, verify_all, verify_claim)
+                                    LEXICAL_CANDIDATE, PARTIAL, SUPPORTED,
+                                    establishes_support, verify_all, verify_claim)
 from checker.evidence_pack import EvidencePack  # noqa: E402
 from checker.retrieve import MODE_MODEL, MODE_REVIEW, retrieve  # noqa: E402
 
@@ -436,15 +437,17 @@ def _test() -> None:
           "RED-07 not caught at PARSE: the citation is real and the claim is atomic")
     check(r7.decision == ma.APPLIES,
           "RED-07 not caught at ADAPTER_POLICY: a substantive claim survives, so APPLIES stands")
-    # The claim's operative word is absent from the provision, and the verdict is SUPPORTED anyway.
+    # The claim's operative word is absent from the provision, and it still passes lexical triage.
+    # Since the relabel, that no longer AUTHORISES anything -- establishes_support() is False -- but
+    # the checker still cannot tell this claim from a true one, which is the finding.
     check("registrar" not in provision_text,
           "RED-07 precondition: s.173 imposes no Registrar filing -- 'Registrar' is not in it")
     v7 = verify_all(r7.claims, pack)[0]
-    check(v7.verdict in (SUPPORTED, PARTIAL),
+    check(v7.verdict in (LEXICAL_CANDIDATE, PARTIAL),
           f"RED-07 documented limit: a lexical check cannot catch a claim that borrows the right "
           f"vocabulary -- verdict {v7.verdict} at coverage {v7.coverage:.3f}")
-    check(v7.verdict == SUPPORTED,
-          "RED-07 recorded exactly: an invented statutory obligation is graded SUPPORTED, and "
+    check(v7.verdict == LEXICAL_CANDIDATE,
+          "RED-07 recorded exactly: an invented statutory obligation reaches LEXICAL_CANDIDATE, and "
           "closing this needs an entailment model (see the module docstring)")
     ledger.append(("PLAUSIBLE_BUT_WRONG", LAYER_NONE))
 
@@ -485,9 +488,17 @@ def _test() -> None:
                 Claim(case["id"], case["claim"], case["claim_type"], (prov.key,)), pk)
             if v.verdict == case["gold"]:
                 agree += 1
-        check(agree == 1,
-              f"lexical verifier agrees with entailment ground truth on {agree}/4 -- the measured "
-              "blind spot; a change here is a deliberate decision, not a silent drift")
+        # 0/4, and the zero is the point. The lexical path can no longer emit SUPPORTED at all,
+        # so it agrees with entailment ground truth on nothing. It previously scored 1/4 by getting
+        # e01 "right" -- but it graded e01 (a true restatement) and e04 (thirty days changed to
+        # ninety) BOTH at coverage 1.000. It was never distinguishing them; it was labelling a coin
+        # flip. 0/4 states what the checker actually establishes about entailment: nothing.
+        check(agree == 0,
+              f"lexical verifier agrees with entailment ground truth on {agree}/4 -- it establishes "
+              "nothing about entailment; a change here is a deliberate decision, not silent drift")
+        check(all(verify_claim(Claim(c["id"], c["claim"], c["claim_type"], (prov.key,)),
+                               pk).verdict != SUPPORTED for c in doc["cases"]),
+              "no entailment fixture reaches SUPPORTED -- the verdict is reserved, not earned here")
         e04 = next(c for c in doc["cases"] if c["id"] == "e04")
         v4 = verify_claim(Claim("e04", e04["claim"], e04["claim_type"], (prov.key,)), pk)
         check(v4.coverage == 1.0,

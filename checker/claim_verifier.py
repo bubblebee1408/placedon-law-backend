@@ -10,12 +10,25 @@ the cited text cannot support the claim.
 Calling a lexical overlap check "entailment" would be precisely the overclaim this repo exists to
 prevent, so the verdicts are named for what was actually established:
 
-  SUPPORTED        -- the claim's distinctive terms are present in cited, admissible evidence
-  PARTIAL          -- some are present; a material term is not
-  UNSUPPORTED      -- the cited text is real but does not carry the claim's terms
-  INVALID_CITATION -- the claim cites something that is not in the pack at all
-  CONTRADICTED     -- the cited text or an accepted claim negates it
-  MISSING          -- the claim asserts an absence, so there is nothing to ground
+  LEXICAL_CANDIDATE -- the claim's distinctive terms are present in cited, admissible evidence.
+                       This is a TRIAGE result, not grounding. See below.
+  PARTIAL           -- some are present; a material term is not
+  UNSUPPORTED       -- the cited text is real but does not carry the claim's terms
+  INVALID_CITATION  -- the claim cites something that is not in the pack at all
+  CONTRADICTED      -- the cited text or an accepted claim negates it
+  MISSING           -- the claim asserts an absence, so there is nothing to ground
+  SUPPORTED         -- entailment established. **This module never returns it.**
+
+**Why SUPPORTED is unreachable here.** It used to be the top lexical verdict, and that was a lie
+told by a variable name: `corpus/benchmark/entailment_v1.json` holds four claims about s.173, and
+this checker cannot distinguish any of them. The claim that restates the provision and the claim
+that swaps "thirty days" for "ninety days" BOTH score coverage 1.000, because "ninety" happens to
+appear elsewhere in s.173. Reporting one of those as SUPPORTED while the other is equally scored is
+not a near miss; it is the checker having no opinion and a confident label.
+
+So the lexical path now tops out at LEXICAL_CANDIDATE, and `establishes_support()` is False for it.
+SUPPORTED is reserved for a verdict an entailment checker has confirmed. Nothing in this repo can
+produce one today, and that is the honest state rather than a gap to paper over.
 
 Contradiction detection is the known weak point of claim-level checkers, and this implementation is
 deliberately conservative: it fires only on direct polarity conflict between two claims about the
@@ -32,17 +45,33 @@ from dataclasses import dataclass
 from checker.claim_schema import Claim, MISSING_FACT
 from checker.evidence_pack import EvidencePack
 
-__all__ = ["ClaimVerification", "verify_claim", "verify_all", "VERDICTS",
-           "SUPPORTED", "PARTIAL", "UNSUPPORTED", "CONTRADICTED", "MISSING"]
+__all__ = ["ClaimVerification", "verify_claim", "verify_all", "VERDICTS", "establishes_support",
+           "SUPPORTED", "LEXICAL_CANDIDATE", "PARTIAL", "UNSUPPORTED", "CONTRADICTED", "MISSING",
+           "INVALID_CITATION"]
 
-SUPPORTED, PARTIAL, UNSUPPORTED = "SUPPORTED", "PARTIAL", "UNSUPPORTED"
+SUPPORTED = "SUPPORTED"                    # reserved: requires entailment; never returned here
+LEXICAL_CANDIDATE = "LEXICAL_CANDIDATE"    # terms present -- triage only, NOT grounding
+PARTIAL, UNSUPPORTED = "PARTIAL", "UNSUPPORTED"
 CONTRADICTED, MISSING = "CONTRADICTED", "MISSING"
 # Kept separate from UNSUPPORTED deliberately. They look alike in a summary and call for opposite
 # fixes: an INVALID_CITATION means the model pointed at something that is not in the pack, which is
 # a fabrication or a retrieval mismatch; UNSUPPORTED means it pointed at real evidence that does
 # not carry the claim, which is a reasoning error. Collapsing them hides which one you have.
 INVALID_CITATION = "INVALID_CITATION"
-VERDICTS = (SUPPORTED, PARTIAL, UNSUPPORTED, CONTRADICTED, MISSING, INVALID_CITATION)
+VERDICTS = (SUPPORTED, LEXICAL_CANDIDATE, PARTIAL, UNSUPPORTED, CONTRADICTED, MISSING,
+            INVALID_CITATION)
+
+# The only verdict that may authorise a legal statement. Deliberately a function rather than a
+# constant set membership test at each call site: callers must ask the question, and a new verdict
+# added later cannot silently default to "yes".
+def establishes_support(verdict: str) -> bool:
+    """Whether this verdict permits asserting the claim as grounded in law.
+
+    LEXICAL_CANDIDATE is False. That is the whole point: word overlap survived, nothing was
+    established, and a caller that treats triage as grounding is the failure this module exists
+    to prevent.
+    """
+    return verdict == SUPPORTED
 
 # Words too common in statute to distinguish one provision from another. A claim that overlaps a
 # provision only on these has demonstrated nothing.
@@ -132,14 +161,14 @@ def verify_claim(claim: Claim, pack: EvidencePack,
                                      tuple(support_ids), coverage)
 
     if coverage >= 0.6 and not issues:
-        verdict = SUPPORTED
+        verdict = LEXICAL_CANDIDATE
     elif coverage >= 0.3:
         verdict = PARTIAL
         issues.append(f"terms not found in cited text: {', '.join(missing_terms)}")
     else:
         verdict = UNSUPPORTED
         issues.append(f"cited text does not carry the claim's terms: {', '.join(missing_terms)}")
-    if on_withheld and verdict == SUPPORTED:
+    if on_withheld and verdict == LEXICAL_CANDIDATE:
         verdict = PARTIAL
     return ClaimVerification(claim.claim_id, verdict, tuple(issues), tuple(support_ids), coverage)
 
@@ -167,7 +196,13 @@ def _test() -> None:
     good = Claim("c1", "Every company shall hold the first meeting of the Board of Directors "
                        "within thirty days of incorporation.", LEGAL_TRIGGER, (key,), "DIRECT")
     v = verify_claim(good, pack)
-    check(v.verdict == SUPPORTED, f"a claim lifted from the provision is SUPPORTED ({v.verdict})")
+    check(v.verdict == LEXICAL_CANDIDATE,
+          f"a claim lifted from the provision reaches LEXICAL_CANDIDATE, not SUPPORTED ({v.verdict})")
+    check(not establishes_support(v.verdict),
+          "...and LEXICAL_CANDIDATE does NOT establish support -- triage is not grounding")
+    check(establishes_support(SUPPORTED), "only SUPPORTED establishes support")
+    check(not any(establishes_support(x) for x in VERDICTS if x != SUPPORTED),
+          "no other verdict establishes support")
     check(v.supporting_evidence_ids == (key,), "the supporting evidence is named")
     check(v.coverage > 0.6, f"coverage reported: {v.coverage:.2f}")
 
@@ -175,7 +210,7 @@ def _test() -> None:
                         "declaring dividend on preference shares.", LEGAL_TRIGGER, (key,))
     vb = verify_claim(bogus, pack)
     check(vb.verdict in (UNSUPPORTED, PARTIAL),
-          f"a claim the provision does not carry is not SUPPORTED ({vb.verdict})")
+          f"a claim the provision does not carry is not a candidate ({vb.verdict})")
     check(any("does not carry" in i or "not found" in i for i in vb.issues),
           "...and the issue names the missing terms")
 
@@ -199,7 +234,7 @@ def _test() -> None:
     stopword_only = Claim("c7", "The company shall be a company under the Act.",
                           FACT_INFERENCE, (key,))
     vs = verify_claim(stopword_only, pack)
-    check(vs.verdict != SUPPORTED,
+    check(vs.verdict != LEXICAL_CANDIDATE,
           "overlap on statutory boilerplate alone does not establish support")
 
     check(all(v.verdict in VERDICTS for v in verify_all((good, bogus, miss), pack)),
