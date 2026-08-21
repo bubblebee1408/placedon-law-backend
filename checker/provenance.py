@@ -180,17 +180,23 @@ INDIACODE_SECTION_VIEW = SourceRecord(
 # outcome of an acquisition is provenance whether or not it succeeded, and an unrecorded failed
 # attempt invites a second identical attempt later.
 BOARD_MEETING_RULES_2014 = SourceRecord(
-    source_id="INDIACODE_MEETINGS_BOARD_RULES_2014",
+    source_id="EGAZETTE_MEETINGS_BOARD_RULES_2014",
     source_title="The Companies (Meetings of Board and its Powers) Rules, 2014 — principal Rules",
-    source_url=("https://upload.indiacode.nic.in/showfile?actid=AC_CEN_22_29_00008_201318_"
-                "1517807327856&type=rule&filename=The%20Companies%20(Meetings%20and%20Powers%20"
-                "of%20Board)%20.pdf"),
+    source_url="https://egazette.gov.in/WriteReadData/2014/159201.pdf",
     official=True,
-    accessibility=UNREACHABLE,
-    retrieved_on=None,
+    accessibility=ACCESSIBLE,
+    retrieved_on="2026-08-21",
+    local_artifact="corpus/sources/companies_meetings_board_powers_rules_2014.pdf",
+    artifact_sha256="b8b2e01b3d151ee038215c81d4fb10d802e4b84b8762ac385c2347417597167c",
     human_reviewed=False,
-    notes="NOT ACQUIRED. upload.indiacode.nic.in (164.100.94.56) refuses connections instantly "
-          "-- the host is down. Retrying this is legitimate.",
+    notes="ACQUIRED from eGazette after every India Code route failed. Found via the Gazette's "
+          "own notification-date search (31 MAR 2014), which returned content id 159201; the "
+          "document is served from the static WriteReadData path under that id. 22 pages. "
+          "Identity confirmed by scripts/acquire_rules.py: VERIFIED_PRINCIPAL, carrying "
+          "'Short title and commencement', no amending language, no consolidation markers. "
+          "The document states its own notification as G.S.R. 240(E) dated 31st March 2014, "
+          "which CONFIRMS what was previously held only as an unverified third-party lead. "
+          "human_reviewed stays False until a person reads it -- can_promote() enforces that.",
 )
 
 # Kept as a SEPARATE record from the host outage above, because the two failures need opposite
@@ -220,9 +226,13 @@ PRINCIPAL_RULES_LEAD = {
     "claimed_notification": "G.S.R. 240(E)",
     "claimed_date": "31-03-2014",
     "claimed_amendments": ["G.S.R. 398(E)", "G.S.R. 590(E)", "G.S.R. 409(E)"],
-    "evidence_state": UNFETCHED_CORROBORATION,
-    "caution": "Unverified. Read the actual notification off the acquired PDF; do not backfill "
-               "these values into any record.",
+    # RESOLVED for the notification and date on 2026-08-21: the acquired gazette states
+    # "G.S.R. 240 (E)" and "31st March, 2014" in its own text, so this is no longer a third-party
+    # claim. The AMENDMENT list below has NOT been checked against anything and stays a lead.
+    "evidence_state": CORROBORATED,
+    "resolved_by": "EGAZETTE_MEETINGS_BOARD_RULES_2014",
+    "caution": "Notification and date confirmed from the document. The amendment list remains "
+               "unverified -- do not treat it as established.",
 }
 
 SOURCES = {s.source_id: s for s in (INDIACODE_PDF, INDIACODE_SECTION_VIEW,
@@ -299,17 +309,32 @@ def _test() -> None:
     good2, why2 = can_promote([tampered])
     check(not good2 and "hash mismatch" in why2, "hash mismatch blocks promotion")
 
-    # Week 2.1: the Rules are recorded as attempted-and-unreachable, not silently absent.
+    # Week 2.1 closed: the Rules were acquired from eGazette on 2026-08-21 after every India Code
+    # route failed. These assertions used to encode the not-acquired state; they now guard the
+    # acquired one, and the retry-policy property they protected is tested against the source that
+    # is still blocked.
     r = BOARD_MEETING_RULES_2014
-    check(r.accessibility == UNREACHABLE, "Rules upload host recorded UNREACHABLE (down, not 403)")
-    check(should_retry(r), "a downed host may be retried")
+    check(r.accessibility == ACCESSIBLE, "the Rules source is ACCESSIBLE -- acquired")
+    check(r.artifact_present(), "the Rules PDF is stored in-repo")
+    check(r.artifact_matches_hash(), "the stored Rules PDF still hashes to the recorded value")
+    check(not r.human_reviewed, "human_reviewed stays False until a person reads it")
+    good3, why3 = can_promote([r])
+    check(not good3 and "no human review" in why3,
+          "an unreviewed artifact cannot reach VERIFIED, however official its source")
+
     check(not should_retry(INDIACODE_DISCOVERY), "a 403 source is NEVER retried automatically")
-    check(INDIACODE_DISCOVERY.accessibility == BLOCKED, "dynamic discovery recorded BLOCKED")
-    check(PRINCIPAL_RULES_LEAD["evidence_state"] == UNFETCHED_CORROBORATION,
-          "the G.S.R. lead is held as a lead, not as fact")
-    check(r.local_artifact is None and not r.artifact_present(), "no Rules artifact is claimed")
-    good3, _ = can_promote([r])
-    check(not good3, "an unacquired source cannot support VERIFIED")
+    check(INDIACODE_DISCOVERY.accessibility == BLOCKED, "dynamic discovery stays recorded BLOCKED")
+    check(should_retry(SourceRecord("x", "t", "u", True, UNREACHABLE)),
+          "a downed host may still be retried")
+
+    # The notification and date are now read off the document itself, so they are no longer a
+    # third-party claim. The amendment list never was checked and must not drift into fact.
+    check(PRINCIPAL_RULES_LEAD["evidence_state"] == CORROBORATED,
+          "the G.S.R. number and date are confirmed from the acquired document")
+    check(PRINCIPAL_RULES_LEAD["resolved_by"] == "EGAZETTE_MEETINGS_BOARD_RULES_2014",
+          "...and the record says which artifact confirmed them")
+    check("amendment list remains" in PRINCIPAL_RULES_LEAD["caution"],
+          "the unchecked amendment list is still flagged as unverified")
     check(not Claim("r1", "Rule 3 requires X", INFERRED, [r]).servable(),
           "nothing built on the unacquired Rules is servable")
 

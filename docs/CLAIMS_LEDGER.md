@@ -121,3 +121,47 @@ refuses an *Amendment Rules* document in place of the principal 2014 Rules — n
 different instruments. 7/7 tests.
 
     python3 scripts/acquire_rules.py ~/Downloads/<file>.pdf
+
+## Week 2.1 — ACQUIRED (2026-08-21)
+
+**The Companies (Meetings of Board and its Powers) Rules, 2014 — principal Rules.**
+`corpus/sources/companies_meetings_board_powers_rules_2014.pdf`, sha256 `b8b2e01b…67c`, 22 pages.
+Classified `VERIFIED_PRINCIPAL` by `scripts/acquire_rules.py`.
+
+### How, after every India Code route failed
+
+India Code stayed blocked throughout (four dynamic endpoints 403, file host down). The document
+came from **eGazette's own notification-date search** — searched 31 MAR 2014, which returned
+content id **159201**, served from the static `WriteReadData` path under that id. No mirror, no WAF
+evasion, no brute-forced identifiers: the id came from the Gazette's own search results.
+
+The earlier judgement that eGazette was "too fragile to script unattended" was wrong. It took one
+correction to find: the date field rejects `31/03/2014` with an HTTP 500 and accepts `31 MAR 2014`.
+
+### The lead is now confirmed from the document
+
+`G.S.R. 240(E)`, `31st March, 2014` — previously an unverified third-party claim, held deliberately
+as a lead. The acquired gazette **states both in its own text**. `PRINCIPAL_RULES_LEAD` moves
+`UNFETCHED_CORROBORATION → CORROBORATED`, naming the artifact that resolved it. The *amendment*
+list in that record was never checked and remains a lead.
+
+### Two false negatives the guard produced, both corrected
+
+1. **`CORRUPT_OR_UNREADABLE`** — `pdftotext` is not installed on this machine. The document was
+   perfectly readable. A guard reporting a property of the toolchain as a property of the evidence
+   is worse than no guard, because it reads as a fact about the law. Fixed by
+   `checker/pdf_text.py`, a dependency-free reader, now the PRIMARY path.
+2. **`REJECTED_AMENDMENT`** — triggered by `"in the said rules"`, which appears in the *definitions
+   clause of the principal Rules*: "…shall have the same meanings respectively assigned to them in
+   the Act or in the said Rules." Ordinary cross-reference, not an amendment operation. The pattern
+   now requires an operative direction ("In the said rules, in rule 4, …"). Separately, extraction
+   splits the title as "Meetings of Board **an d** its Powers", so the title match now tolerates the
+   known intra-word spacing artifact.
+
+Both were corrected against the document's own evidence — `"further to amend"` absent,
+`"Short title and commencement"` present — not by relaxing the guard to obtain a pass.
+
+### Status
+
+`human_reviewed = False`. `can_promote()` refuses VERIFIED until a person reads it. **Acquisition
+is custody, not review.** Nothing has been ingested into the corpus; that is Week 2.2.

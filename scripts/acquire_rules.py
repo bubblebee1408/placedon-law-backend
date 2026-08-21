@@ -64,8 +64,16 @@ EXIT_CODES = {
     UNCONFIRMED_DOCUMENT: 6,
 }
 
+# PDF extraction splits words at line-wrap points: the real gazette renders the title as
+# "Meetings of Board an d its Powers". A regex demanding whole words therefore fails on the very
+# document it exists to recognise, so every gap here tolerates a stray space. This is the known
+# India Code artifact ("an d preserve", "sub -section"), not a typo in the source.
 PRINCIPAL_TITLE = re.compile(
-    r"Companies\s*\(\s*Meetings\s+of\s+Board\s+and\s+its\s+Powers\s*\)\s*Rules,?\s*2014", re.I)
+    r"C\s?o\s?m\s?p\s?a\s?n\s?i\s?e\s?s\s*\(\s*M\s?e\s?e\s?t\s?i\s?n\s?g\s?s\s+"
+    r"o\s?f\s+B\s?o\s?a\s?r\s?d\s+a\s?n\s?d\s+i\s?t\s?s\s+P\s?o\s?w\s?e\s?r\s?s\s*\)"
+    r"\s*R\s?u\s?l\s?e\s?s\s*,?\s*2\s?0\s?1\s?4", re.I)
+PRINCIPAL_CLAUSE = re.compile(r"S\s?h\s?o\s?r\s?t\s+t\s?i\s?t\s?l\s?e\s+a\s?n\s?d\s+"
+                              r"c\s?o\s?m\s?m\s?e\s?n\s?c\s?e\s?m\s?e\s?n\s?t", re.I)
 AMENDMENT_TITLE = re.compile(r"Amendment\s+Rules", re.I)
 NOTIFICATION = re.compile(r"G\.?S\.?R\.?\s*(\d{1,4})\s*\(\s*E\s*\)", re.I)
 # Gazette notifications write the date both as "dated the 31st March, 2014" and, in the dateline,
@@ -77,9 +85,17 @@ DATED = re.compile(r"(?:dated\s+)?the\s+(\d{1,2}(?:st|nd|rd|th)?\s+[A-Z][a-z]+,?
 # 2014", which contains the PRINCIPAL title verbatim, while the clause that names it an "Amendment
 # Rules" sits in the short-title paragraph that may fall past the pages we extract. Body language
 # is therefore the more reliable signal, not a supplement to the title.
+# A bare "in the said rules" is NOT amendment language and was removed after it produced a false
+# rejection of the genuine principal Rules. Their definitions clause reads "...shall have the same
+# meanings respectively assigned to them in the Act or in the said Rules", a cross-reference to the
+# Definitions Rules. An amendment says it *amends*: it names itself an Amendment, says "further to
+# amend", or carries an operative direction ("In the said rules, in rule 4, ... shall be
+# substituted"). The operative form below requires that direction, not the bare phrase.
 AMENDING_LANGUAGE = (
     ("further to amend", re.compile(r"further\s+to\s+amend", re.I)),
-    ("in the said rules", re.compile(r"in\s+the\s+said\s+rules", re.I)),
+    ("operative amendment direction",
+     re.compile(r"in\s+the\s+said\s+rules\s*,\s*(?:in\s+)?(?:rule|sub-?rule|the\s+Annexure|"
+                r"for|after)\b", re.I)),
     ("shall be substituted", re.compile(r"shall\s+be\s+substituted", re.I)),
     ("shall be inserted", re.compile(r"shall\s+be\s+inserted", re.I)),
     ("shall be omitted", re.compile(r"shall\s+be\s+omitted", re.I)),
@@ -110,7 +126,24 @@ LEAD_DATE_CLAIM = "31-03-2014"
 
 
 def extract_text(pdf: Path) -> str:
-    for cmd in (["pdftotext", "-l", "3", str(pdf), "-"], ["mdls", "-name", "kMDItemTextContent", str(pdf)]):
+    """Text of the PDF, by whichever route this machine actually has.
+
+    checker/pdf_text.py is tried FIRST and is not optional. poppler is not installed here, and
+    without a fallback this function returned "" for a perfectly readable official gazette -- the
+    guard then reported CORRUPT_OR_UNREADABLE, which is a claim about the toolchain masquerading
+    as a claim about the evidence. That is the most dangerous kind of wrong answer this repo can
+    produce, so the dependency-free reader is the primary path and the external tools are extras.
+    """
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+        from checker.pdf_text import extract_text as _pure
+        text = _pure(pdf)
+        if len(re.findall(r"[A-Za-z]{3,}", text)) >= 30:
+            return text
+    except Exception:
+        pass
+    for cmd in (["pdftotext", "-l", "3", str(pdf), "-"],
+                ["mdls", "-name", "kMDItemTextContent", str(pdf)]):
         try:
             r = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
             if r.returncode == 0 and len(r.stdout) > 200:
@@ -416,8 +449,11 @@ def _test() -> int:
               f"lead notification agrees with provenance.py ({_lead['claimed_notification']})")
         check(LEAD_DATE_CLAIM == _lead["claimed_date"],
               f"lead date agrees with provenance.py ({_lead['claimed_date']})")
-        check(_lead["evidence_state"] == "UNFETCHED_CORROBORATION",
-              "the shared lead is still held as unverified, not promoted")
+        # Was UNFETCHED_CORROBORATION until the gazette was acquired and stated its own
+        # notification. Confirmed from the document is exactly CORROBORATED; it is not VERIFIED,
+        # because nobody has read the document yet.
+        check(_lead["evidence_state"] == "CORROBORATED",
+              "the shared lead is now confirmed from the document, not promoted past it")
 
     print(f"\n{ok}/{ok + fail} passed")
     return 1 if fail else 0

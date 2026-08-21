@@ -14,6 +14,7 @@ suites=(
   checker/as_of.py
   checker/derived_date.py
   checker/legal_ref.py
+  checker/pdf_text.py
   checker/legal_retrieval.py
   checker/text_search.py
   checker/evidence_pack.py
