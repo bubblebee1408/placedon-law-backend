@@ -53,6 +53,7 @@ NO_ADMISSIBLE_EVIDENCE = "NO_ADMISSIBLE_EVIDENCE"
 MODEL_OUTPUT_PARSE_FAILURE = "MODEL_OUTPUT_PARSE_FAILURE"
 DECISION_DOWNGRADED = "DECISION_DOWNGRADED"
 DECISION_WITHOUT_CLAIMS = "DECISION_WITHOUT_CLAIMS"
+DUPLICATE_CLAIM_ID = "DUPLICATE_CLAIM_ID"
 
 INSTRUCTION = """\
 You are given the complete admissible evidence for this task. Nothing else is available to you.
@@ -122,6 +123,16 @@ def build_prompt(task: ModelTask) -> str:
     return "\n".join(parts)
 
 
+def _claim_id(c: dict, i: int) -> str:
+    """The id a claim will be known by, including the positional fallback for an unlabelled one.
+
+    Stringified so that 1 and "1" count as ONE id rather than two. They are indistinguishable to a
+    reader of the audit trail, and two claims a reader cannot tell apart is the exact condition the
+    duplicate rule exists to catch.
+    """
+    return str(c.get("claim_id") or f"c{i + 1}")
+
+
 def _parse(raw: str, allowed: tuple[str, ...]) -> tuple[str, list[Claim], list[str], list[str],
                                                         list[str]]:
     """Parse model output. Anything unauditable is REJECTED, never repaired.
@@ -153,18 +164,38 @@ def _parse(raw: str, allowed: tuple[str, ...]) -> tuple[str, list[Claim], list[s
     if not isinstance(raw_claims, (list, tuple)):
         raise AdapterError(f"'claims' is a {type(raw_claims).__name__}, expected a list")
 
-    claims, rejected, seen_ids = [], [], set()
+    # Which ids are duplicated is decided BEFORE any claim is accepted. A `seen` set cannot express
+    # this rule: rejecting the second copy leaves the first standing, so of two claims sharing an id
+    # -- "Board approval is required" and "no approval is required" -- the one that becomes the
+    # answer is the one the model happened to emit first, not the one better supported by the
+    # evidence. That is choosing a legal conclusion by accident. A duplicated id means claim
+    # identity is unreliable for EVERY claim carrying it, so every one of them is rejected and the
+    # decision falls back to the downgrade rules below.
+    id_counts: dict[str, int] = {}
+    for i, c in enumerate(raw_claims):
+        if isinstance(c, dict):
+            cid = _claim_id(c, i)
+            id_counts[cid] = id_counts.get(cid, 0) + 1
+    duplicated = {cid for cid, n in id_counts.items() if n > 1}
+
+    claims, rejected = [], []
     for i, c in enumerate(raw_claims):
         if not isinstance(c, dict):
             rejected.append(f"c{i + 1}: claim is a {type(c).__name__}, expected an object")
             continue
-        cid = c.get("claim_id") or f"c{i + 1}"
+        cid = _claim_id(c, i)
         try:
-            if cid in seen_ids:
+            # Checked first, so both copies are rejected for the same stated reason even when one
+            # of them is independently malformed -- the rejection text then does not depend on
+            # which order the copies arrived in either.
+            if cid in duplicated:
                 raise ClaimError(
-                    f"{cid}: duplicate claim_id -- verification results would be unattributable, "
-                    "since two different claims would share one verdict")
-            seen_ids.add(cid)
+                    f"{cid}: duplicate claim_id -- {id_counts[cid]} claims in this response share "
+                    f"this id, so ALL of them are rejected (this is claim {i + 1} of "
+                    f"{len(raw_claims)}; the text of each is preserved verbatim in raw_text). "
+                    "Keeping one would let emission order rather than evidence decide which "
+                    "survives, and verification results would be unattributable, since two "
+                    "different claims would share one verdict.")
             ctype = c.get("claim_type")
             if ctype not in CLAIM_TYPES:
                 raise ClaimError(f"{cid}: unknown claim_type {ctype!r}")
@@ -186,8 +217,16 @@ def _parse(raw: str, allowed: tuple[str, ...]) -> tuple[str, list[Claim], list[s
         except ClaimError as e:
             rejected.append(str(e))
 
-    return (decision, claims, [str(x) for x in d.get("missing_facts") or []],
-            [str(x) for x in d.get("warnings") or []], rejected)
+    warnings = [str(x) for x in d.get("warnings") or []]
+    if duplicated:
+        names = ", ".join(sorted(duplicated))
+        warnings.append(
+            f"{DUPLICATE_CLAIM_ID}: {names} -- "
+            f"{'this id was' if len(duplicated) == 1 else 'these ids were'} used by more than one "
+            "claim; every claim carrying a duplicated id was rejected, since a claim id is what a "
+            "verification verdict is attributed to")
+
+    return (decision, claims, [str(x) for x in d.get("missing_facts") or []], warnings, rejected)
 
 
 def run(task: ModelTask, model: Callable[[str], str] | None = None,
@@ -380,15 +419,68 @@ def _test() -> None:
               "...and the parse failure is named in the warnings")
         check(r.raw_text == junk, "...and the raw output is preserved for diagnosis")
 
-    # --- duplicate claim ids ---
-    dupes = json.dumps({"decision": INSUFFICIENT_FACTS, "claims": [
-        {"claim_id": "c1", "claim_type": LEGAL_TRIGGER, "text": "The Board shall meet.",
+    # --- duplicate claim ids: every copy goes, and emission order decides nothing ---
+    # The rule the earlier version got wrong: it kept the FIRST claim under a repeated id, so of
+    # two contradictory claims the answer was whichever the model listed first. Both are rejected
+    # now, and the pair below is run in both orders to prove it.
+    REQUIRED = "Board approval is required."
+    NOT_REQUIRED = "No Board approval is required."
+
+    def _dupe_pair(first: str, second: str) -> str:
+        return json.dumps({"decision": APPLIES, "claims": [
+            {"claim_id": "c1", "claim_type": LEGAL_TRIGGER, "text": t,
+             "evidence_ids": list(allowed[:1])} for t in (first, second)]})
+
+    ra = run(task, model=lambda p: _dupe_pair(REQUIRED, NOT_REQUIRED))
+    rb = run(task, model=lambda p: _dupe_pair(NOT_REQUIRED, REQUIRED))
+    check(ra.claims == () and rb.claims == (),
+          "both claims sharing one id are rejected -- not merely the later one")
+    check(len(ra.rejected_claims) == 2
+          and all("duplicate claim_id" in x for x in ra.rejected_claims),
+          "...and each discarded claim is recorded in rejected_claims with a reason")
+    # to_dict() carries decision, claims, missing_facts, warnings and rejected_claims -- everything
+    # a reader is served. Only raw_text differs, because the two raw responses genuinely differ.
+    check(ra.to_dict() == rb.to_dict(),
+          "ORDER-INDEPENDENCE: both emission orders produce an identical result")
+    check(not any(t in c.text for c in ra.claims + rb.claims for t in (REQUIRED, NOT_REQUIRED)),
+          "...so neither side of the contradiction can win by arriving first")
+    check(any(DUPLICATE_CLAIM_ID in w and "c1" in w for w in ra.warnings),
+          "the warning names the duplicated id")
+    check(ra.decision == INSUFFICIENT_EVIDENCE
+          and any(DECISION_WITHOUT_CLAIMS in w for w in ra.warnings),
+          "APPLIES resting only on duplicated claims is downgraded to INSUFFICIENT_EVIDENCE")
+
+    # A malformed pair must not take good claims down with it.
+    mixed = json.dumps({"decision": APPLIES, "claims": [
+        {"claim_id": "c1", "claim_type": LEGAL_TRIGGER, "text": REQUIRED,
          "evidence_ids": list(allowed[:1])},
-        {"claim_id": "c1", "claim_type": LEGAL_TRIGGER, "text": "The Board shall not meet.",
+        {"claim_id": "c1", "claim_type": LEGAL_TRIGGER, "text": NOT_REQUIRED,
+         "evidence_ids": list(allowed[:1])},
+        {"claim_id": "c2", "claim_type": LEGAL_TRIGGER, "text": "The Board shall meet.",
          "evidence_ids": list(allowed[:1])}]})
-    rd = run(task, model=lambda p: dupes)
-    check(len(rd.claims) == 1 and any("duplicate claim_id" in x for x in rd.rejected_claims),
-          "a duplicate claim_id is rejected, not silently overwritten")
+    rmix = run(task, model=lambda p: mixed)
+    check([c.claim_id for c in rmix.claims] == ["c2"],
+          "a uniquely-identified claim survives alongside a duplicated pair")
+    check(len(rmix.rejected_claims) == 2, "...and exactly the two duplicates are rejected")
+    check(rmix.decision == APPLIES,
+          "...and the surviving substantive claim still holds the decision up")
+
+    # Three copies, not two: the rule is about the id, not about being the second sighting.
+    triple = json.dumps({"decision": INSUFFICIENT_FACTS, "claims": [
+        {"claim_id": "c1", "claim_type": LEGAL_TRIGGER, "text": t,
+         "evidence_ids": list(allowed[:1])}
+        for t in ("The Board shall meet once a year.", "The Board shall meet twice a year.",
+                  "The Board shall meet four times a year.")]})
+    rt3 = run(task, model=lambda p: triple)
+    check(rt3.claims == () and len(rt3.rejected_claims) == 3,
+          "three claims sharing one id all go, not two of the three")
+    check(any(DUPLICATE_CLAIM_ID in w for w in rt3.warnings),
+          "...and the duplicate warning is raised regardless of the decision")
+
+    # The unaffected path: distinct ids draw no duplicate warning at all.
+    clean = run(task)
+    check(not any(DUPLICATE_CLAIM_ID in w for w in clean.warnings),
+          "distinct claim ids raise no duplicate warning")
 
     # --- a conclusion with no surviving reasoning is not a conclusion ---
     hollow = json.dumps({"decision": APPLIES, "claims": [
