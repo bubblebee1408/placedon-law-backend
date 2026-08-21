@@ -168,7 +168,7 @@ INDIACODE_SECTION_VIEW = SourceRecord(
 # attempt invites a second identical attempt later.
 BOARD_MEETING_RULES_2014 = SourceRecord(
     source_id="INDIACODE_MEETINGS_BOARD_RULES_2014",
-    source_title="The Companies (Meetings of Board and its Powers) Rules, 2014",
+    source_title="The Companies (Meetings of Board and its Powers) Rules, 2014 — principal Rules",
     source_url=("https://upload.indiacode.nic.in/showfile?actid=AC_CEN_22_29_00008_201318_"
                 "1517807327856&type=rule&filename=The%20Companies%20(Meetings%20and%20Powers%20"
                 "of%20Board)%20.pdf"),
@@ -176,17 +176,55 @@ BOARD_MEETING_RULES_2014 = SourceRecord(
     accessibility=UNREACHABLE,
     retrieved_on=None,
     human_reviewed=False,
-    notes="NOT ACQUIRED 2026-08-21. upload.indiacode.nic.in (164.100.94.56) refuses connections "
-          "-- ECONNREFUSED, i.e. the host is down, not blocking. On www.indiacode.nic.in static "
-          "/bitstream/*.pdf serves (200) but every dynamic path (/handle/, /oai/, /rest/, "
-          "sitemap) times out, so the Rules' bitstream path cannot be discovered. www.mca.gov.in "
-          "returns 403. egazette.gov.in is reachable and is the next avenue, but needs a stateful "
-          "search form. Dynamic India Code worked on 20 Aug, so this is intermittent: retry before "
-          "concluding the document is gone. No unofficial mirror substituted -- see runbook.",
+    notes="NOT ACQUIRED. upload.indiacode.nic.in (164.100.94.56) refuses connections instantly "
+          "-- the host is down. Retrying this is legitimate.",
 )
 
-SOURCES = {s.source_id: s
-           for s in (INDIACODE_PDF, INDIACODE_SECTION_VIEW, BOARD_MEETING_RULES_2014)}
+# Kept as a SEPARATE record from the host outage above, because the two failures need opposite
+# responses and were conflated in the first write-up of this attempt (corrected 2026-08-21).
+INDIACODE_DISCOVERY = SourceRecord(
+    source_id="INDIACODE_DYNAMIC_DISCOVERY",
+    source_title="India Code dynamic discovery (/handle/, /simple-search, /oai/, /rest/)",
+    source_url="https://www.indiacode.nic.in/handle/123456789/1362/simple-search?searchradio=rules",
+    official=True,
+    accessibility=BLOCKED,
+    retrieved_on=None,
+    human_reviewed=False,
+    notes="HTTP 403 on 2026-08-21. curl merely times out, which reads as an outage; a request "
+          "path that actually receives the response gets 403, so this is a deliberate block, not "
+          "downtime. DO NOT schedule automated retries against it -- repeated probing of a source "
+          "that has refused us is exactly what the WAF exists to stop. The static "
+          "/bitstream/*.pdf paths on the same host serve 200 and are unaffected. Consequence: the "
+          "Rules' static address cannot be discovered by us automatically.",
+)
+
+# An unverified lead, recorded so it is not re-researched, and NOT treated as fact.
+# Third-party sources state the principal Rules were notified by G.S.R. 240(E) dated 31-03-2014,
+# and that later amendments (G.S.R. 398(E), 590(E), 409(E)) refer back to them. None of this has
+# been read off an official document by us. It is a search hint for whoever retrieves the file,
+# and a thing to CHECK against the document, never a thing to assert.
+PRINCIPAL_RULES_LEAD = {
+    "claimed_notification": "G.S.R. 240(E)",
+    "claimed_date": "31-03-2014",
+    "claimed_amendments": ["G.S.R. 398(E)", "G.S.R. 590(E)", "G.S.R. 409(E)"],
+    "evidence_state": UNFETCHED_CORROBORATION,
+    "caution": "Unverified. Read the actual notification off the acquired PDF; do not backfill "
+               "these values into any record.",
+}
+
+SOURCES = {s.source_id: s for s in (INDIACODE_PDF, INDIACODE_SECTION_VIEW,
+                                    BOARD_MEETING_RULES_2014, INDIACODE_DISCOVERY)}
+
+RETRYABLE = (UNREACHABLE,)  # BLOCKED is never retried automatically. See INDIACODE_DISCOVERY.
+
+
+def should_retry(s: SourceRecord) -> bool:
+    """Whether an automated retry against this source is appropriate.
+
+    A host that is down may be retried. A source that returned 403 may not: re-probing something
+    that has refused us is abusive regardless of intent, and it is what the WAF is there to stop.
+    """
+    return s.accessibility in RETRYABLE
 
 
 def _test() -> None:
@@ -238,7 +276,12 @@ def _test() -> None:
 
     # Week 2.1: the Rules are recorded as attempted-and-unreachable, not silently absent.
     r = BOARD_MEETING_RULES_2014
-    check(r.accessibility == UNREACHABLE, "Rules source recorded UNREACHABLE (host down, not 403)")
+    check(r.accessibility == UNREACHABLE, "Rules upload host recorded UNREACHABLE (down, not 403)")
+    check(should_retry(r), "a downed host may be retried")
+    check(not should_retry(INDIACODE_DISCOVERY), "a 403 source is NEVER retried automatically")
+    check(INDIACODE_DISCOVERY.accessibility == BLOCKED, "dynamic discovery recorded BLOCKED")
+    check(PRINCIPAL_RULES_LEAD["evidence_state"] == UNFETCHED_CORROBORATION,
+          "the G.S.R. lead is held as a lead, not as fact")
     check(r.local_artifact is None and not r.artifact_present(), "no Rules artifact is claimed")
     good3, _ = can_promote([r])
     check(not good3, "an unacquired source cannot support VERIFIED")
