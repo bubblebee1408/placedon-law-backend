@@ -47,3 +47,20 @@ excluded from the denominator, not counted as failures.
 
 **Limitation.** The index is built from the India Code full-Act PDF. It inherits any error in that
 PDF and in its text extraction. It is not independent verification of the corpus content itself.
+
+## Week 1.1 gate — PASS (2026-08-21)
+
+464/474 (97.9%) mapped · 0 duplicates · 17/17 MVP sections hand-verified · 8 suites green.
+Denominator is 474: the 43 sections omitted in the source are excluded, not counted as failures.
+This denominator is fixed and must not be quietly restated later.
+
+**Attempted and failed: independent verification.** India Code publishes a section view whose URL
+carries both number and ID (`sectionId=49099&sectionno=173`), which would confirm the mapping from
+the source rather than from my inference. It returned HTTP 403 and timed out on direct request on
+21 Aug 2026. Project rules forbid working around the WAF, so this was not pursued further. A
+third-party document quotes that URL with a value agreeing with the mapping derived here; agreement
+between two independent derivations is corroboration, **not** verification, and is not recorded as
+such. The index remains PDF-derived and inherits any defect in that PDF.
+
+**Follow-up when India Code is reachable:** fetch the section view for the 17 MVP sections and
+compare against `_index.json`. That would upgrade the index from inferred to source-confirmed.
