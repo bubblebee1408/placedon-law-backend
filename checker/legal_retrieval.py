@@ -43,7 +43,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from checker.legal_ref import ACT, RULE, LegalRef, parse_key  # noqa: E402
 from checker.section_index import section_by_number  # noqa: E402
 
-__all__ = ["Hit", "resolve", "DEFECT_REGISTER", "WITHHELD_DEFECTS", "COMPANIES_ACT_2013"]
+__all__ = ["Hit", "resolve", "names_a_provision", "DEFECT_REGISTER", "WITHHELD_DEFECTS",
+           "COMPANIES_ACT_2013"]
 
 COMPANIES_ACT_2013 = "COMPANIES_ACT_2013"
 
@@ -132,6 +133,12 @@ _SEP = re.compile(
     r"\s*(?:(?P<range2>-|–|—)|,|;|&)\s*",
     re.IGNORECASE,
 )
+
+# A citation prefix followed by digits. Deliberately looser than _ITEM: this asks "did the user
+# cite something", not "can we resolve it".
+_CITATION_SHAPE = re.compile(
+    r"(?:\bu/s\b|\bs{1,2}\b|\bsec(?:tion|s)?\b|\brules?\b|\br\b|§+)\s*\.?\s*[0-9]",
+    re.IGNORECASE)
 
 _QUALIFIED_KEY = re.compile(r"\b(?:ACT|RULE):[A-Z0-9_]+:[SR][0-9]{1,3}[A-Z]{0,3}\b")
 
@@ -272,6 +279,23 @@ def _to_hit(cite: _Cite) -> Hit | None:
         defects=defects,
         subsection=cite.subsection,
     )
+
+
+def names_a_provision(query: str) -> bool:
+    """Whether the query explicitly cites a provision, whether or not we can resolve it.
+
+    The distinction matters at the composition layer. "rule 4" names a provision we do not hold;
+    "related party transactions" names none. Both make resolve() return nothing, but they must be
+    treated oppositely -- the first must abstain, the second may fall through to a text search.
+    Without this, a keyword search silently answers a citation it was never asked to interpret.
+    """
+    if _scan(query):
+        return True
+    # _scan only accepts well-formed numbers (1-3 digits + optional letters), so "s.9999" parses
+    # as nothing at all. Syntactically it is still plainly a citation, and letting it fall through
+    # to a keyword search returns whatever sections happen to share its words -- an answer to a
+    # question nobody asked. Detect the SYNTAX, not just the resolvable cases.
+    return bool(_CITATION_SHAPE.search(query))
 
 
 def resolve(query: str) -> list[Hit]:
