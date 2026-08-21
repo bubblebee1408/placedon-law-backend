@@ -64,3 +64,44 @@ such. The index remains PDF-derived and inherits any defect in that PDF.
 
 **Follow-up when India Code is reachable:** fetch the section view for the 17 MVP sections and
 compare against `_index.json`. That would upgrade the index from inferred to source-confirmed.
+
+## Week 2.1 — acquisition of the Meetings of Board Rules 2014: NOT ACQUIRED (2026-08-21)
+
+**Outcome: BLOCKED — loop halted at T1 per runbook. No unofficial mirror substituted.**
+
+| Host | Result | Reading |
+|---|---|---|
+| `upload.indiacode.nic.in` | ECONNREFUSED (164.100.94.56) | Host down — not blocking us |
+| `www.indiacode.nic.in` `/bitstream/*.pdf` | 200 | Static assets serve |
+| `www.indiacode.nic.in` `/handle/`, `/oai/`, `/rest/`, sitemap | timeout | **All dynamic paths dead** |
+| `www.mca.gov.in` | 403 | Blocked |
+| `egazette.gov.in` | 200 | Reachable; stateful search form |
+
+**Why this blocks acquisition.** India Code serves the document from a static bitstream path, but
+the *path is discovered* through dynamic pages, and those are down. The document is very likely
+still there; we cannot currently find its address. This is the same static/dynamic split seen in
+Week 1, now confirmed twice.
+
+**Not done, deliberately:** no unofficial mirror (`ca2013.com`, `vlex`, `taxguru`, `thc.nic.in`)
+was used. Their fidelity to the gazetted text is unestablished, and an unofficial copy that is 99%
+right is worse than none — it is indistinguishable from the real thing at the point of use. No WAF
+evasion, no brute-forcing of bitstream paths.
+
+**Recorded as `UNREACHABLE`, not `BLOCKED`.** The distinction is load-bearing: ECONNREFUSED and
+timeouts mean infrastructure failure, and dynamic India Code was working on 20 Aug. This is
+intermittent and should be retried, not treated as withdrawal of the document.
+
+### Incidental finding — the Week 1 artifact is authentic
+
+The Act PDF was re-fetched from India Code today and is **byte-identical** to the stored copy:
+`d6e286d2a3feec89a7d432a5a572e91af9f0135411b03e57f72b7a8ef72139af`. The artifact underpinning the
+section index is confirmed unmodified since retrieval on 19 Aug. This does **not** upgrade the
+index's evidence state — it is the same single source, re-read, not an independent one.
+
+### Next action
+
+1. Retry India Code dynamic paths (intermittent; worked 20 Aug).
+2. If still down, a human can retrieve the Rules from eGazette — notified by G.S.R. dated
+   31 Mar 2014 — via the search form, and drop the PDF into `corpus/sources/`. **Verify the
+   instrument identity on download**: principal Rules vs a later amendment rule is exactly the
+   confusion this project must not make.

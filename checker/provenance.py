@@ -163,7 +163,30 @@ INDIACODE_SECTION_VIEW = SourceRecord(
           "Would upgrade the index from INFERRED to VERIFIED if it ever becomes readable.",
 )
 
-SOURCES = {s.source_id: s for s in (INDIACODE_PDF, INDIACODE_SECTION_VIEW)}
+# Week 2.1 acquisition attempt, 2026-08-21. Recorded BEFORE any parsing, per the runbook: the
+# outcome of an acquisition is provenance whether or not it succeeded, and an unrecorded failed
+# attempt invites a second identical attempt later.
+BOARD_MEETING_RULES_2014 = SourceRecord(
+    source_id="INDIACODE_MEETINGS_BOARD_RULES_2014",
+    source_title="The Companies (Meetings of Board and its Powers) Rules, 2014",
+    source_url=("https://upload.indiacode.nic.in/showfile?actid=AC_CEN_22_29_00008_201318_"
+                "1517807327856&type=rule&filename=The%20Companies%20(Meetings%20and%20Powers%20"
+                "of%20Board)%20.pdf"),
+    official=True,
+    accessibility=UNREACHABLE,
+    retrieved_on=None,
+    human_reviewed=False,
+    notes="NOT ACQUIRED 2026-08-21. upload.indiacode.nic.in (164.100.94.56) refuses connections "
+          "-- ECONNREFUSED, i.e. the host is down, not blocking. On www.indiacode.nic.in static "
+          "/bitstream/*.pdf serves (200) but every dynamic path (/handle/, /oai/, /rest/, "
+          "sitemap) times out, so the Rules' bitstream path cannot be discovered. www.mca.gov.in "
+          "returns 403. egazette.gov.in is reachable and is the next avenue, but needs a stateful "
+          "search form. Dynamic India Code worked on 20 Aug, so this is intermittent: retry before "
+          "concluding the document is gone. No unofficial mirror substituted -- see runbook.",
+)
+
+SOURCES = {s.source_id: s
+           for s in (INDIACODE_PDF, INDIACODE_SECTION_VIEW, BOARD_MEETING_RULES_2014)}
 
 
 def _test() -> None:
@@ -177,6 +200,8 @@ def _test() -> None:
             fail += 1; print(f"[FAIL] {label}")
 
     check(INDIACODE_PDF.artifact_present(), "the PDF the index rests on is stored in-repo")
+    # Re-fetched from India Code on 2026-08-21 and compared: byte-identical to the stored copy.
+    # Confirms the artifact is authentic and unmodified since retrieval on 19 Aug.
     check(INDIACODE_PDF.artifact_matches_hash(), "stored PDF still hashes to the recorded value")
 
     good, why = can_promote([INDIACODE_PDF])
@@ -210,6 +235,15 @@ def _test() -> None:
     tampered = SourceRecord(**{**INDIACODE_PDF.__dict__, "artifact_sha256": "0" * 64})
     good2, why2 = can_promote([tampered])
     check(not good2 and "hash mismatch" in why2, "hash mismatch blocks promotion")
+
+    # Week 2.1: the Rules are recorded as attempted-and-unreachable, not silently absent.
+    r = BOARD_MEETING_RULES_2014
+    check(r.accessibility == UNREACHABLE, "Rules source recorded UNREACHABLE (host down, not 403)")
+    check(r.local_artifact is None and not r.artifact_present(), "no Rules artifact is claimed")
+    good3, _ = can_promote([r])
+    check(not good3, "an unacquired source cannot support VERIFIED")
+    check(not Claim("r1", "Rule 3 requires X", INFERRED, [r]).servable(),
+          "nothing built on the unacquired Rules is servable")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:
