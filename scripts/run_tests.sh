@@ -30,6 +30,7 @@ suites=(
   checker/mvp_freeze.py
   checker/ss/defects.py
   applicability.py
+  checker/assessment.py
 )
 
 # --test flag rather than a bare run: this one takes a PDF argument in normal use.
