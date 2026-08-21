@@ -105,3 +105,19 @@ index's evidence state — it is the same single source, re-read, not an indepen
    31 Mar 2014 — via the search form, and drop the PDF into `corpus/sources/`. **Verify the
    instrument identity on download**: principal Rules vs a later amendment rule is exactly the
    confusion this project must not make.
+
+### Week 2.1 retry, 16:36 IST — no change
+
+India Code dynamic paths still time out; `upload.indiacode.nic.in` still refuses connections;
+static `/bitstream/*.pdf` still serves 200. Web-search discovery of the official bitstream address
+was unavailable (session search budget exhausted, 200/200). Automated acquisition is out of options.
+
+**Loop stopped.** Further unattended re-probing would spend budget to learn nothing. Acquisition now
+needs either India Code to recover or a human download.
+
+**Handoff built:** `scripts/acquire_rules.py` verifies, hashes, stores and prints the provenance
+record for a downloaded PDF. It REFUSES a file whose identity it cannot confirm, and specifically
+refuses an *Amendment Rules* document in place of the principal 2014 Rules — near-identical titles,
+different instruments. 7/7 tests.
+
+    python3 scripts/acquire_rules.py ~/Downloads/<file>.pdf

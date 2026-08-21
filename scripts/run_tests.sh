@@ -20,6 +20,9 @@ suites=(
   applicability.py
 )
 
+# --test flag rather than a bare run: this one takes a PDF argument in normal use.
+extra=("scripts/acquire_rules.py --test")
+
 fails=0
 for s in "${suites[@]}"; do
   [ -f "$s" ] || { printf '%-28s %s\n' "$s" "MISSING"; fails=$((fails+1)); continue; }
@@ -32,6 +35,13 @@ for s in "${suites[@]}"; do
   else
     printf '%-28s ok    %s\n' "$s" "${res:-(no count)}"
   fi
+done
+
+for e in "${extra[@]}"; do
+  out=$(python3 $e 2>&1); rc=$?
+  res=$(printf '%s' "$out" | grep -oE '[0-9]+/[0-9]+ passed' | tail -1)
+  if [ $rc -ne 0 ]; then printf '%-28s FAIL  %s\n' "${e%% *}" "$res"; fails=$((fails+1))
+  else printf '%-28s ok    %s\n' "${e%% *}" "$res"; fi
 done
 
 echo
