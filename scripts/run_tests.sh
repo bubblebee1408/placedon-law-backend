@@ -14,6 +14,7 @@ suites=(
   checker/as_of.py
   checker/derived_date.py
   checker/legal_ref.py
+  checker/legal_retrieval.py
   checker/provenance.py
   checker/section_index.py
   checker/mvp_freeze.py
