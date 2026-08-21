@@ -10,11 +10,12 @@ the cited text cannot support the claim.
 Calling a lexical overlap check "entailment" would be precisely the overclaim this repo exists to
 prevent, so the verdicts are named for what was actually established:
 
-  SUPPORTED    -- the claim's distinctive terms are present in cited, admissible evidence
-  PARTIAL      -- some are present; a material term is not
-  UNSUPPORTED  -- the cited text does not carry the claim's terms
-  CONTRADICTED -- the cited text or an accepted claim negates it
-  MISSING      -- the claim asserts an absence, so there is nothing to ground
+  SUPPORTED        -- the claim's distinctive terms are present in cited, admissible evidence
+  PARTIAL          -- some are present; a material term is not
+  UNSUPPORTED      -- the cited text is real but does not carry the claim's terms
+  INVALID_CITATION -- the claim cites something that is not in the pack at all
+  CONTRADICTED     -- the cited text or an accepted claim negates it
+  MISSING          -- the claim asserts an absence, so there is nothing to ground
 
 Contradiction detection is the known weak point of claim-level checkers, and this implementation is
 deliberately conservative: it fires only on direct polarity conflict between two claims about the
@@ -36,7 +37,12 @@ __all__ = ["ClaimVerification", "verify_claim", "verify_all", "VERDICTS",
 
 SUPPORTED, PARTIAL, UNSUPPORTED = "SUPPORTED", "PARTIAL", "UNSUPPORTED"
 CONTRADICTED, MISSING = "CONTRADICTED", "MISSING"
-VERDICTS = (SUPPORTED, PARTIAL, UNSUPPORTED, CONTRADICTED, MISSING)
+# Kept separate from UNSUPPORTED deliberately. They look alike in a summary and call for opposite
+# fixes: an INVALID_CITATION means the model pointed at something that is not in the pack, which is
+# a fabrication or a retrieval mismatch; UNSUPPORTED means it pointed at real evidence that does
+# not carry the claim, which is a reasoning error. Collapsing them hides which one you have.
+INVALID_CITATION = "INVALID_CITATION"
+VERDICTS = (SUPPORTED, PARTIAL, UNSUPPORTED, CONTRADICTED, MISSING, INVALID_CITATION)
 
 # Words too common in statute to distinguish one provision from another. A claim that overlaps a
 # provision only on these has demonstrated nothing.
@@ -84,13 +90,19 @@ def verify_claim(claim: Claim, pack: EvidencePack,
     issues, support_ids = [], []
     bad = [e for e in claim.evidence_ids if e not in usable and e not in withheld]
     if bad:
-        issues.append(f"cites evidence absent from the pack: {', '.join(bad)}")
+        # Decisive on its own: the model pointed somewhere that does not exist here.
+        return ClaimVerification(
+            claim.claim_id, INVALID_CITATION,
+            (f"cites evidence absent from the pack: {', '.join(bad)}",))
+
     on_withheld = [e for e in claim.evidence_ids if e in withheld]
     if on_withheld:
         issues.append(f"relies on withheld material: {', '.join(on_withheld)}")
 
     cited = [usable[e] for e in claim.evidence_ids if e in usable]
     if not cited:
+        # Everything it cited exists but none of it is admissible -- a claim resting entirely on
+        # material a reviewer withheld.
         return ClaimVerification(claim.claim_id, UNSUPPORTED,
                                  tuple(issues or ("no admissible evidence cited",)))
 
@@ -179,8 +191,10 @@ def _test() -> None:
     fake = Claim("c6", "Section 999 requires quarterly filings with the Registrar.",
                  LEGAL_TRIGGER, ("ACT:COMPANIES_ACT_2013:S999",))
     vf = verify_claim(fake, pack)
-    check(vf.verdict == UNSUPPORTED and any("absent from the pack" in i for i in vf.issues),
-          "a citation to something not in the pack is UNSUPPORTED and named")
+    check(vf.verdict == INVALID_CITATION and any("absent from the pack" in i for i in vf.issues),
+          "a citation to something not in the pack is INVALID_CITATION, not merely UNSUPPORTED")
+    check(vf.verdict != UNSUPPORTED,
+          "...kept distinct: fabricated citation and failed grounding need different fixes")
 
     stopword_only = Claim("c7", "The company shall be a company under the Act.",
                           FACT_INFERENCE, (key,))

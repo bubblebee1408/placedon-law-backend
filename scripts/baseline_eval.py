@@ -70,6 +70,12 @@ def evaluate(model=None, model_name: str = "stub") -> dict:
             "unsupported_claims": len(unsupported),
             "rejected_claims": len(result.rejected_claims),
             "verdicts": [v.verdict for v in verifications],
+            # A mixed-pack case must SAY that a relevant rule was withheld. Serving the Act while
+            # staying silent about the Rules reads as "the Act is the whole answer", which is a
+            # different and wrong statement of the law.
+            "withheld_rule_reported": any("RULE:" in m for m in pack.missing),
+            "withheld_rule_ok": (any("RULE:" in m for m in pack.missing)
+                                 == case.get("expect_withheld_rule", False)),
         })
 
     n = len(rows)
@@ -85,6 +91,7 @@ def evaluate(model=None, model_name: str = "stub") -> dict:
         "gradable_claims": gradable,
         "unsupported_claim_rate": round(unsupported / gradable, 3) if gradable else 0.0,
         "claims_rejected_at_parse": sum(r["rejected_claims"] for r in rows),
+        "withheld_rule_reporting": round(sum(r["withheld_rule_ok"] for r in rows) / n, 3),
         "measures": "the harness, not model quality -- the default model is a stub",
     }
     return {"summary": summary, "cases": rows}
@@ -104,8 +111,10 @@ def main() -> None:
     print(f"unsupported-claim rate  : {s['unsupported_claim_rate']:.3f} "
           f"over {s['gradable_claims']} gradable claims")
     print(f"claims rejected at parse: {s['claims_rejected_at_parse']}")
+    print(f"withheld-rule reporting : {s['withheld_rule_reporting']:.3f}")
     bad = [r for r in res["cases"]
-           if not (r["decision_ok"] and r["abstain_ok"] and r["evidence_recall_ok"])]
+           if not (r["decision_ok"] and r["abstain_ok"] and r["evidence_recall_ok"]
+                   and r["withheld_rule_ok"])]
     print(f"\nfailing cases: {len(bad)}")
     for r in bad:
         print(f"  {r['id']} [{r['kind']}] {r['query']!r}: decision={r['decision']} "
@@ -133,6 +142,7 @@ def _test() -> None:
     kinds = {c["kind"] for c in bench["cases"]}
     for k in ("suspended-source", "review-gated", "defect-limited", "out-of-domain"):
         check(k in kinds, f"the benchmark covers {k}")
+    check("mixed-pack" in kinds, "the benchmark covers the mixed admissible/withheld case")
 
     # No case may depend on unreviewed law, or the benchmark blesses the thing the gate blocks.
     rules_cases = [c for c in bench["cases"]

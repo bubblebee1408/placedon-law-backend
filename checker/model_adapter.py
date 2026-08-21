@@ -15,6 +15,11 @@ Three refusals happen BEFORE any model call, because a prompt is not a safety me
   3. Output citing an evidence id that is not in the pack is rejected, not repaired. A citation to
      something absent is the signature of a fabricated one.
 
+Everything downstream of the model FAILS CLOSED. Malformed output does not raise -- it becomes
+INSUFFICIENT_EVIDENCE with a parse-failure warning. An exception here would propagate to whatever
+is asking the legal question, and a crash is a worse answer than an abstention: abstention is
+correct-and-unhelpful, a crash is neither.
+
 The model here is a callable, and the default is a stub. That is deliberate: the contract should be
 provable without spending money or depending on one model's habits, and swapping in a real model is
 one argument.
@@ -42,6 +47,12 @@ INSUFFICIENT_EVIDENCE = "INSUFFICIENT_EVIDENCE"    # the law itself is not here 
 DECISIONS = (APPLIES, DOES_NOT_APPLY, INSUFFICIENT_FACTS, INSUFFICIENT_EVIDENCE)
 
 PROMPT_VERSION = "closed-world-v1"
+
+# Warning codes. Strings, so they survive JSON round-trips into the audit trail.
+NO_ADMISSIBLE_EVIDENCE = "NO_ADMISSIBLE_EVIDENCE"
+MODEL_OUTPUT_PARSE_FAILURE = "MODEL_OUTPUT_PARSE_FAILURE"
+DECISION_DOWNGRADED = "DECISION_DOWNGRADED"
+DECISION_WITHOUT_CLAIMS = "DECISION_WITHOUT_CLAIMS"
 
 INSTRUCTION = """\
 You are given the complete admissible evidence for this task. Nothing else is available to you.
@@ -131,10 +142,15 @@ def _parse(raw: str, allowed: tuple[str, ...]) -> tuple[str, list[Claim], list[s
     if decision not in DECISIONS:
         raise AdapterError(f"decision {decision!r} is not one of {DECISIONS}")
 
-    claims, rejected = [], []
+    claims, rejected, seen_ids = [], [], set()
     for i, c in enumerate(d.get("claims") or []):
         cid = c.get("claim_id") or f"c{i + 1}"
         try:
+            if cid in seen_ids:
+                raise ClaimError(
+                    f"{cid}: duplicate claim_id -- verification results would be unattributable, "
+                    "since two different claims would share one verdict")
+            seen_ids.add(cid)
             ctype = c.get("claim_type")
             if ctype not in CLAIM_TYPES:
                 raise ClaimError(f"{cid}: unknown claim_type {ctype!r}")
@@ -178,14 +194,37 @@ def run(task: ModelTask, model: Callable[[str], str] | None = None,
 
     prompt = build_prompt(task)
     raw = (model or StubModel(pack=pack))(prompt)
-    decision, claims, missing, warnings, rejected = _parse(raw, allowed)
+    try:
+        decision, claims, missing, warnings, rejected = _parse(raw, allowed)
+    except AdapterError as e:
+        # Fail CLOSED. A model that returned something unparseable has told us nothing, and
+        # "nothing" is INSUFFICIENT_EVIDENCE -- not an exception thrown at whoever asked the
+        # legal question.
+        return ModelResult(
+            decision=INSUFFICIENT_EVIDENCE,
+            warnings=(f"{MODEL_OUTPUT_PARSE_FAILURE}: {e}",),
+            raw_text=raw, model_name=model_name)
 
     # A model may not claim law applies while the pack says its evidence is insufficient.
     if pack.insufficient_evidence and decision in (APPLIES, DOES_NOT_APPLY):
         warnings = warnings + [
-            f"model answered {decision} but the pack reports insufficient evidence; "
-            "downgraded to INSUFFICIENT_EVIDENCE"]
+            f"{DECISION_DOWNGRADED}: model answered {decision} but the pack reports insufficient "
+            "evidence; downgraded to INSUFFICIENT_EVIDENCE"]
         decision = INSUFFICIENT_EVIDENCE
+
+    # A conclusion with no surviving reasoning is not a conclusion. If every claim behind APPLIES
+    # or DOES_NOT_APPLY was rejected at parse, the decision has nothing left holding it up.
+    substantive = [c for c in claims if c.claim_type != MISSING_FACT]
+    if decision in (APPLIES, DOES_NOT_APPLY) and not substantive:
+        warnings = warnings + [
+            f"{DECISION_WITHOUT_CLAIMS}: {decision} was asserted with no surviving substantive "
+            f"claim ({len(rejected)} rejected at parse); downgraded to INSUFFICIENT_EVIDENCE"]
+        decision = INSUFFICIENT_EVIDENCE
+
+    # An abstention with no stated reason is unauditable: a reader cannot tell whether the law was
+    # absent, withheld, or simply not looked for.
+    if decision == INSUFFICIENT_EVIDENCE and not (warnings or missing or pack.missing):
+        warnings = warnings + ["INSUFFICIENT_EVIDENCE returned without a stated reason"]
 
     return ModelResult(decision=decision, claims=tuple(claims), missing_facts=tuple(missing),
                        warnings=tuple(warnings), raw_text=raw, model_name=model_name,
@@ -304,6 +343,48 @@ def _test() -> None:
         _parse(json.dumps({"decision": "MAYBE"}), allowed); check(False, "bad decision must raise")
     except AdapterError:
         check(True, "an invented decision value is refused")
+
+    # --- fail closed: run() must never propagate a parse failure to the caller ---
+    for junk in ("not json at all", "{broken", json.dumps({"decision": "MAYBE"})):
+        r = run(task, model=lambda p, j=junk: j)
+        check(r.decision == INSUFFICIENT_EVIDENCE,
+              f"malformed output {junk[:14]!r} abstains instead of raising")
+        check(any(MODEL_OUTPUT_PARSE_FAILURE in w for w in r.warnings),
+              "...and the parse failure is named in the warnings")
+        check(r.raw_text == junk, "...and the raw output is preserved for diagnosis")
+
+    # --- duplicate claim ids ---
+    dupes = json.dumps({"decision": INSUFFICIENT_FACTS, "claims": [
+        {"claim_id": "c1", "claim_type": LEGAL_TRIGGER, "text": "The Board shall meet.",
+         "evidence_ids": list(allowed[:1])},
+        {"claim_id": "c1", "claim_type": LEGAL_TRIGGER, "text": "The Board shall not meet.",
+         "evidence_ids": list(allowed[:1])}]})
+    rd = run(task, model=lambda p: dupes)
+    check(len(rd.claims) == 1 and any("duplicate claim_id" in x for x in rd.rejected_claims),
+          "a duplicate claim_id is rejected, not silently overwritten")
+
+    # --- a conclusion with no surviving reasoning is not a conclusion ---
+    hollow = json.dumps({"decision": APPLIES, "claims": [
+        {"claim_id": "c1", "claim_type": LEGAL_TRIGGER, "text": "Section 999 applies.",
+         "evidence_ids": ["ACT:COMPANIES_ACT_2013:S999"]}]})
+    rh = run(task, model=lambda p: hollow)
+    check(rh.decision == INSUFFICIENT_EVIDENCE,
+          "APPLIES with every claim rejected is downgraded, not served")
+    check(any(DECISION_WITHOUT_CLAIMS in w for w in rh.warnings),
+          "...and the downgrade says why")
+
+    only_missing = json.dumps({"decision": APPLIES, "claims": [
+        {"claim_id": "c1", "claim_type": MISSING_FACT,
+         "text": "The document does not state the date.", "evidence_ids": []}]})
+    rm = run(task, model=lambda p: only_missing)
+    check(rm.decision == INSUFFICIENT_EVIDENCE,
+          "APPLIES supported only by a MISSING_FACT is downgraded")
+
+    # --- an abstention must carry a reason ---
+    bare = json.dumps({"decision": INSUFFICIENT_EVIDENCE, "claims": [],
+                       "missing_facts": [], "warnings": []})
+    rb = run(task, model=lambda p: bare)
+    check(rb.warnings or rb.missing_facts, "an abstention without a reason gains one")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:

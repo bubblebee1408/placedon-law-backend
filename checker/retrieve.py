@@ -20,6 +20,8 @@ Run: python3 checker/retrieve.py
 """
 from __future__ import annotations
 
+import json
+import re
 import sys
 from pathlib import Path
 
@@ -42,6 +44,67 @@ ROUTE_SEARCH = "search"
 ROUTE_ABSTAIN = "abstain"
 
 SEARCH_TOP_K = 3
+
+_RULES_DOC = Path(__file__).resolve().parent.parent / "corpus/rules/board_powers_2014.json"
+
+
+# Words that carry no subject matter in a rule heading. Without these, "section 11" matched r.10
+# and r.11 purely because their headings read "...under section 185" -- a notice that tells a
+# reader a rule may be relevant when nothing suggests it is. Noise here is not free: it trains the
+# reader to ignore the notices that matter.
+_RULE_MATCH_STOP = frozenset("""
+section sections rule rules under this that with from shall company companies made
+""".split())
+
+
+_RULE_CITE = re.compile(r"\b(?:rule|r)\s*\.?\s*(\d{1,2})\b", re.I)
+
+
+def _named_rule_notice(query: str) -> list[str]:
+    """A notice for a rule the query names by number and we hold but have not admitted."""
+    if not _RULES_DOC.is_file():
+        return []
+    doc = json.loads(_RULES_DOC.read_text())
+    if doc.get("production_usable"):
+        return []
+    m = _RULE_CITE.search(query)
+    if not m:
+        return []
+    for r in doc["rules"]:
+        if r["rule_number"] == m.group(1):
+            return [f"{r['rule_id']} ({r['heading'][:52]}) was cited and DOES exist, but is not "
+                    f"admitted for model use: {doc['status']}. Its text is unknown to you."]
+    return []
+
+
+def _withheld_rules(query: str) -> list[str]:
+    """Rules relevant to the query that exist but are not admitted.
+
+    They are never returned as evidence -- they have not been reviewed. But staying SILENT about
+    them is the failure admission control exists to prevent: a reader cannot distinguish "there is
+    no rule on this" from "there is a rule and you may not see it", and those are opposite answers.
+    So a match becomes a withheld notice, which the pack reports as sought-and-not-available.
+
+    Matching is intentionally crude -- heading words only. A rule that is merely *plausibly*
+    relevant still deserves a notice; the cost of an extra notice is a sentence, and the cost of a
+    missed one is a reader concluding the law is silent.
+    """
+    if not _RULES_DOC.is_file():
+        return []
+    doc = json.loads(_RULES_DOC.read_text())
+    if doc.get("production_usable"):
+        return []                      # admitted: retrieval proper should serve them, not this
+    terms = {w for w in re.findall(r"[a-z]{4,}", query.lower())} - _RULE_MATCH_STOP
+    if not terms:
+        return []
+    out = []
+    for r in doc["rules"]:
+        head = {w for w in re.findall(r"[a-z]{4,}", r["heading"].lower())}
+        if terms & head:
+            out.append(
+                f"{r['rule_id']} ({r['heading'][:52]}) exists but is not admitted for model use: "
+                f"{doc['status']}, pages {r['page_start']}-{r['page_end']}")
+    return out
 
 
 def _rows(hits: list[Hit]) -> list[dict]:
@@ -87,20 +150,27 @@ def retrieve(query: str, *, top_k: int = SEARCH_TOP_K,
     different answers and only one of them means the question is settled.
     """
     hits = resolve(query)
+    rule_notices = _withheld_rules(query)
     if hits:
         rows, blocked = _admission_filter(_rows(hits), mode)
-        pack = build_pack(rows, query=query, mode=mode, requested_sections=tuple(blocked))
+        blocked = blocked + rule_notices
+        pack = build_pack(rows, query=query, mode=mode, withheld_notices=tuple(blocked))
         return pack, (ROUTE_EXACT if rows else ROUTE_ABSTAIN)
 
     if names_a_provision(query):
-        # Cited, unresolvable. Do NOT search -- see the module docstring.
-        return build_pack([], query=query), ROUTE_ABSTAIN
+        # Cited, unresolvable. Do NOT search -- see the module docstring. But if the citation names
+        # a rule we HOLD and have not admitted, say so. Abstaining silently here tells the reader
+        # the same thing as "no such rule exists", and one of those is false.
+        return (build_pack([], query=query, mode=mode,
+                           withheld_notices=tuple(rule_notices + _named_rule_notice(query))),
+                ROUTE_ABSTAIN)
 
     rows, blocked = _admission_filter(search(query, top_k=top_k), mode)
+    blocked = blocked + rule_notices
     # Withheld items ride in `requested_sections`, which the pack already renders as "sought and
     # not found". That is the honest shape: the model is told something was asked for and is not
     # here, without being handed the inadmissible text itself.
-    pack = build_pack(rows, query=query, mode=mode, requested_sections=tuple(blocked))
+    pack = build_pack(rows, query=query, mode=mode, withheld_notices=tuple(blocked))
     return pack, (ROUTE_SEARCH if rows else ROUTE_ABSTAIN)
 
 
@@ -161,9 +231,23 @@ def _test() -> None:
     check(rpack.to_dict()["provisions"], "MODE_REVIEW shows suspended law to a human")
     check(rroute == ROUTE_EXACT, "MODE_REVIEW resolves it normally")
 
-    # The Rules are parsed and unread: invisible to the model, visible to a reviewer.
     check(retrieve("s.1", mode=MODE_MODEL)[0].to_dict()["provisions"],
           "s.1 is limited-production and still servable (the tail is restricted, not the law)")
+
+    # --- the mixed pack: admissible Act section beside withheld Rules ---
+    mixed, mroute = retrieve("related party transactions", mode=MODE_MODEL)
+    keys = [p.key for p in mixed.usable]
+    check("ACT:COMPANIES_ACT_2013:S188" in keys, "the admissible Act section is served")
+    notices = " ".join(mixed.missing)
+    check("R15" in notices or "related party" in notices.lower(),
+          f"the withheld rule is REPORTED, not silently omitted ({notices[:80]!r})")
+    check(not any("RULE:" in k for k in keys), "no unadmitted rule is served as evidence")
+    check(mroute == ROUTE_SEARCH, "the mixed query still resolves via search")
+
+    # Silence would be the failure. A reader must be able to tell these apart.
+    quiet, _ = retrieve("s.174", mode=MODE_MODEL)
+    check(not any("RULE:" in m for m in quiet.missing),
+          "a query with no relevant rule gets no rule notice")
 
     block = retrieve("s.173")[0].prompt_block()
     check("INSUFFICIENT EVIDENCE" in block, "the prompt block names the abstention answer")

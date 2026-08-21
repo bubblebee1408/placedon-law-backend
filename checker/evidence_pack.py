@@ -674,12 +674,18 @@ def _pack_one(row: dict) -> PackedProvision:
 
 def build_pack(rows: list[dict], *, query: str = "", mode: str = "MODEL",
                requested_sections: tuple[str, ...] = (),
+               withheld_notices: tuple[str, ...] = (),
                point_in_time_request: date | str | None = None,
                instrument_id: str = DEFAULT_INSTRUMENT) -> EvidencePack:
     """Build the pack from retrieved rows.
 
     `requested_sections` lets the caller name what it asked for, so the pack can say a provision
     was sought and not found. A gap that nobody records is a gap the model will fill.
+
+    `withheld_notices` carries already-formed sentences about material that EXISTS and is not
+    admitted. They are kept separate from `requested_sections` because that argument formats bare
+    section numbers into Act keys -- passing a prose notice through it produced the mangled
+    "ACT:COMPANIES_ACT_2013:SRULE:...:R15". Two different kinds of gap, two different arguments.
     """
     provisions = tuple(_pack_one(r) for r in rows)
 
@@ -695,6 +701,8 @@ def build_pack(rows: list[dict], *, query: str = "", mode: str = "MODEL",
             key = LegalRef(ACT, instrument_id, n).key()
             missing.append(f"{key} was requested and is NOT in this pack. Its text is unknown to "
                            f"you; say so rather than reconstructing it.")
+    missing.extend(str(n) for n in withheld_notices if str(n).strip())
+
     for p in provisions:
         if not p.usable_for_answering:
             missing.append(f"{p.key} was located but its text may not be used: "
