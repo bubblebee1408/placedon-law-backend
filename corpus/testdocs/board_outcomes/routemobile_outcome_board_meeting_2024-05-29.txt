@@ -1,0 +1,81 @@
+# REAL FILED DOCUMENT — Outcome of Board Meeting (SEBI LODR Reg. 30 disclosure)
+# Issuer: Route Mobile Limited | Small/mid cap, NSE/BSE listed
+# Board meeting date: May 29, 2024
+# https://routemobile.com/wp-content/uploads/2024/05/Outcome-of-Board-Meeting-May-29-2024.pdf
+# Type: board resolution / meeting outcome filing | Real | text-extractable, no OCR needed
+# 1pp — cleanest T1.6b/T1.6c case in the corpus: 'commenced at 03:00 P.M. and concluded at 03:15 P.M.'
+
+Ref No: RML/2024-25/470 
+Date: May 29, 2024 
+ 
+To,  
+BSE Limited                                                                                                National Stock Exchange of India Limited 
+Scrip Code: 543228                                  Symbol: ROUTE 
+Dear Sir/Madam, 
+ 
+Sub: Outcome of Board Meeting held on May 29, 2024. 
+Pursuant to the Regulation 30 read with Schedule III of the SEBI (Listing Obligations and Disclosure Requirements), 
+Regulations, 2015 (“Listing Regulations”) , we hereby inform you that the Board of Directors (“Board”) of Route Mobile 
+Limited (the “Company”) at its meeting held today i.e. May 29, 2024 have approved the following:  
+Corporate Guarantee: 
+       The Board has approved extending of corporate guarantee for short term loan facility of USD 35,000,000 being availed by 
+Route Mobile (UK) Limited (“Borrower”), wholly owned subsidiary of the Company from a leading Bank. 
+The details in relation to the aforementioned guarantee required under Listing Regulations read with SEBI Circular   
+SEBI/HO/CFD/CFD-PoD-1/P/CIR/2023/123 dated July 13, 2023 are given below: 
+ 
+Sr. 
+No. 
+Particulars 
+ 
+Details 
+1.  Name of party for which such guarantees or 
+indemnity or surety was given; 
+Route Mobile (UK) Limited 
+2.  Whether the promoter / promoter group / group 
+companies have any interest in the transaction If yes, 
+nature of interest and details thereof and whether the 
+same is done at “arms’ length”; 
+ No 
+3.  Brief details of such guarantee or indemnity or 
+becoming a surety viz. brief details of agreement 
+entered (if any) including significant terms and 
+conditions, including amount of guarantee; 
+Route Mobile Limited  (“the Company”) have agreed to 
+extend Corporate Guarantee of an amount up to USD 
+35,000,000 ($35mn) and all obligations including but not 
+limited to principal, interest and other  obligations that 
+RML UK may have under the facility  and charge over the 
+fixed deposit accounts of INR 500 Mi llion with a leading 
+Bank 
+for availing short term loan facility up to USD 
+35,000,000 by Route Mobile (UK) Limited, wholly -owned 
+subsidiary of the Company. 
+4.  Impact of such guarantees or indemnity or surety on 
+listed entity 
+The Corporate Guarantee will be treated as a contingent 
+liability for the Company.  
+ 
+The meeting of the Board of Directors commenced at 03:00 P.M. and concluded at 03:15 P.M. You are requested to take 
+the above information on record. 
+      
+Thanking You 
+Yours faithfully, 
+For Route Mobile Limited 
+ 
+ 
+ 
+       ___________________________________ 
+Rathindra Das 
+Group Head-Legal, Company Secretary & Compliance Officer 
+Membership No: F12663
+ 
+C> 
+routemobile . 
+commun ication simplified 
+Registered & Corporate Office: 
+Route Mobile Limited 
+4th Dimension, 3"' floor, Mind Space, Malad (West), 
+Mumbai - 400 064, India 
++91 22 4033 7676/77-99 I Fax: +91 22 4033 7650 
+info@routemobile.com I www.routemobi le.com 
+CIN No: L72900MH2004PLC146323

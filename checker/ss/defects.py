@@ -17,8 +17,40 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 from typing import Literal
 
-Status = Literal["PASS", "DEFECT", "NEEDS_BOOK"]
+Status = Literal["PASS", "DEFECT", "NEEDS_BOOK", "N/A"]
 MeetingKind = Literal["board", "general"]
+# The document type decides which checks even apply. Running minutes checks against a notice
+# was the largest defect the real-document corpus exposed: an AGM NOTICE is issued BEFORE the
+# meeting, so it cannot record when the meeting concluded, whether a quorum was present, or the
+# date minutes were entered in the book. Reporting those as DEFECT is a category error, and it
+# produced false-positive rates of 80-93% against genuinely compliant filings.
+DocType = Literal["minutes", "notice", "outcome", "unknown"]
+
+APPLICABILITY: dict[str, frozenset[str]] = {
+    "T1.1": frozenset({"minutes"}), "T1.2": frozenset({"minutes"}),
+    "T1.3": frozenset({"minutes"}), "T1.4a": frozenset({"minutes"}),
+    "T1.4b": frozenset({"minutes"}), "T1.5": frozenset({"minutes"}),
+    "T1.6a": frozenset({"minutes", "notice", "outcome"}),
+    "T1.6b": frozenset({"minutes", "outcome"}),
+    "T1.6c": frozenset({"minutes", "outcome"}),
+    "T1.7": frozenset({"minutes"}), "T1.8": frozenset({"minutes"}),
+    "C.quorum": frozenset({"minutes"}),
+}
+
+_NOTICE_HINT = re.compile(r"notice\s+is\s+hereby\s+given|NOTICE\s+OF\s+THE|explanatory\s+statement|proxy\s+form|e-?voting", re.I)
+_MINUTES_HINT = re.compile(r"minutes\s+of\s+the|the\s+meeting\s+(?:commenced|concluded)|chairman.{0,30}signed", re.I)
+_OUTCOME_HINT = re.compile(r"outcome\s+of\s+(?:the\s+)?board|regulation\s+30", re.I)
+
+
+def classify(text: str) -> DocType:
+    """Infer document type. Order matters - an outcome filing also uses notice language."""
+    if _OUTCOME_HINT.search(text):
+        return "outcome"
+    if _MINUTES_HINT.search(text):
+        return "minutes"
+    if _NOTICE_HINT.search(text):
+        return "notice"
+    return "unknown"
 
 # s.118(11). s.446B halves both for small company / startup / OPC / producer company.
 PENALTY_COMPANY = 25_000
@@ -43,7 +75,7 @@ class Finding:
 
 @dataclass(frozen=True)
 class Minutes:
-    """What we can read out of a minutes document."""
+    """What we can read out of a document. doc_type gates which checks apply."""
     text: str
     kind: MeetingKind
     meeting_date: date | None = None
@@ -52,6 +84,7 @@ class Minutes:
     pages_consecutive_across_book: bool | None = None
     every_page_initialled: bool | None = None
     blank_pages_scored_out: bool | None = None
+    doc_type: DocType | None = None      # None => infer with classify()
 
 
 # --- textual detectors -------------------------------------------------------
@@ -59,21 +92,46 @@ class Minutes:
 # checking a document they are about to rely on. Each pattern was written against the language the
 # ICSI specimen minutes actually use.
 
+_ORDINAL_WORDS = (r"first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|eleventh|"
+                  r"twelfth|thirteenth|fourteenth|fifteenth|sixteenth|seventeenth|eighteenth|"
+                  r"nineteenth|twentieth|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety")
+# Two forms occur in practice and both must pass:
+#   explicit label   -> "Meeting No: 14", "Serial No. 3"
+#   ordinal in title -> "the 62nd Annual General Meeting", 'the Twenty First ("21st") Meeting'
+# The first form alone was the author's own fixture phrasing and fired DEFECT on 18/18 real
+# documents, including all five ICSI specimens. That was circular testing, caught by real corpus.
 _SERIAL = re.compile(
-    r"\b(?:meeting\s+(?:no|number|serial)|serial\s+(?:no|number)|minutes?\s+no)\b\.?\s*[:\-]?\s*\d+",
+    r"\b(?:meeting\s+(?:no|number|serial)|serial\s+(?:no|number)|minutes?\s+no)\b\.?\s*[:\-]?\s*\d+"
+    r"|\b\d{1,3}(?:st|nd|rd|th)\s+(?:annual\s+general|extra-?ordinary\s+general|general|board)\s+meeting\b"
+    r"|\b(?:" + _ORDINAL_WORDS + r")[\s\-]*(?:" + _ORDINAL_WORDS + r")?\s*\(?\"?\d{0,3}(?:st|nd|rd|th)?\"?\)?\s*"
+    r"(?:annual\s+general|extra-?ordinary\s+general|general|board)\s+meeting\b",
     re.I,
 )
 _TIME = re.compile(r"\b\d{1,2}[:.]\d{2}\s*(?:a\.?m\.?|p\.?m\.?|hours|hrs)\b", re.I)
 _COMMENCED = re.compile(r"\b(commenc\w+|began|started|convened)\b", re.I)
+# Contexts where a "commenced ... at TIME" sentence is about something other than the meeting.
+# Remote e-voting windows are the common trap in modern Indian AGM notices.
+_NOT_THE_MEETING = re.compile(
+    r"\b(e-?voting|remote\s+voting|voting\s+period|book\s+closure|register\s+of\s+members|"
+    r"cut-?off\s+date|dividend|window\s+closure|trading\s+window)\b", re.I)
 _CONCLUDED = re.compile(r"\b(conclud\w+|terminat\w+|ended|closed|dispers\w+)\b", re.I)
-_PLACE_SIGNED = re.compile(r"\b(place|signed\s+at)\b\s*[:\-]?\s*\w+", re.I)
+# "Place" must sit in a signing context. The bare word appears constantly in ordinary prose
+# ("place of business", "took place"), and matching it false-PASSED 8 real AGM notices on a check
+# backed by real penalty orders (Wind World, Sany).
+_PLACE_SIGNED = re.compile(
+    r"\b(?:signed\s+at|place\s+of\s+signing|place\s+of\s+meeting)\b\s*[:\-]?\s*[A-Z][\w\s]{2,40}"
+    r"|^\s*place\s*[:\-]\s*[A-Z][\w\s]{2,40}",
+    re.I | re.M)
 _ENTRY_DATE = re.compile(r"\b(date\s+of\s+entry|entered\s+(?:in|on)|recorded\s+in\s+the\s+minutes?\s+book)\b", re.I)
 _QUORUM = re.compile(r"\bquorum\b", re.I)
 _CHAIR_ELECTED = re.compile(r"\b(chair(?:man|person)?)\b.{0,60}\b(elect\w+|took\s+the\s+chair|presided)\b", re.I | re.S)
 _ON_BEHALF = re.compile(r"\bon\s+behalf\s+of\b.{0,40}\bchair(?:man|person)?\b", re.I | re.S)
 # SS-1 7.3.2 — resolutions in present tense; minutes otherwise third person past tense.
 _RESOLVED = re.compile(r"\bRESOLVED\s+THAT\b")
-_FIRST_PERSON = re.compile(r"\b(we|our|us|I)\b(?!\s*[.,]?\s*[A-Z]{2,})", re.I)
+# Indian corporate documents are full of roman-numeral list markers - "i)", "(iii)", "ii." - which
+# a naive \bI\b match reads as the first-person pronoun. It fired on 15/18 real documents.
+_ROMAN_MARKER = re.compile(r"\(?\b[ivx]{1,4}\b\s*[).\]]", re.I)
+_FIRST_PERSON = re.compile(r"\b(we|our|us)\b|(?<![\w(])I\b(?!\s*[).\]])", re.I)
 
 
 def _has(pattern: re.Pattern, text: str) -> str | None:
@@ -100,7 +158,7 @@ def check_commencement_and_conclusion(m: Minutes) -> list[Finding]:
         # a time must appear in the same sentence as the commence/conclude verb
         found = None
         for sent in re.split(r"(?<=[.;])\s+", m.text):
-            if verb.search(sent) and _TIME.search(sent):
+            if verb.search(sent) and _TIME.search(sent) and not _NOT_THE_MEETING.search(sent):
                 found = sent.strip()[:120]
                 break
         out.append(Finding(
@@ -183,7 +241,8 @@ def check_quorum_recorded(m: Minutes) -> Finding:
 
 def check_tense(m: Minutes) -> Finding:
     """SS-1 7.3.2 — third person and past tense; resolutions in present tense."""
-    bad = _has(_FIRST_PERSON, m.text)
+    stripped = _ROMAN_MARKER.sub(" ", m.text)
+    bad = _has(_FIRST_PERSON, stripped)
     return Finding(
         "T1.8", "DEFECT" if bad else "PASS",
         "SS-1 7.3.2 / SS-2 17.3.2",
@@ -222,6 +281,7 @@ def check_physical_book(m: Minutes) -> list[Finding]:
 
 
 def scan(m: Minutes) -> list[Finding]:
+    dt = m.doc_type or classify(m.text)
     findings = [
         check_serial_number(m),
         *check_commencement_and_conclusion(m),
@@ -233,7 +293,17 @@ def scan(m: Minutes) -> list[Finding]:
         check_tense(m),
         *check_physical_book(m),
     ]
-    return findings
+    # A check that does not apply to this document type makes no claim at all.
+    out = []
+    for f in findings:
+        allowed = APPLICABILITY.get(f.check_id)
+        if allowed is not None and dt not in allowed:
+            out.append(Finding(f.check_id, "N/A", f.ss_cite, f.defect,
+                               f"not applicable to a document of type {dt!r}",
+                               f.precedent, f.advisory_only))
+        else:
+            out.append(f)
+    return out
 
 
 def exposure(findings: list[Finding], officers: int, small_company: bool = False) -> int:
