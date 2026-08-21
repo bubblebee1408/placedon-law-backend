@@ -24,7 +24,7 @@ import re
 import zlib
 from pathlib import Path
 
-__all__ = ["extract_text", "has_extractable_text"]
+__all__ = ["extract_text", "extract_pages", "has_extractable_text"]
 
 # Scan streams globally rather than walking obj...endobj. Object bodies hold binary data that can
 # contain the literal "endobj", so boundary-parsing silently drops most streams -- an early
@@ -148,6 +148,15 @@ def _englishness(text: str) -> int:
     return sum(1 for w in re.findall(r"[A-Za-z]{2,}", text.lower()) if w in _COMMON)
 
 
+def _render_stream(stream: bytes, cmap: dict[int, str]) -> str:
+    parts: list[str] = []
+    for m in _SHOW.finditer(stream):
+        for lit in _LIT.findall(m.group(1)):
+            parts.append(_decode(lit, cmap))
+        parts.append(" ")
+    return re.sub(r"[ \t]{2,}", " ", "".join(parts))
+
+
 def _render(data: bytes, cmap: dict[int, str], max_chars: int) -> str:
     parts: list[str] = []
     for stream in _content_streams(data):
@@ -177,6 +186,45 @@ def extract_text(path: str | Path, *, max_chars: int = 400_000) -> str:
         return raw
     mapped = _render(data, cmap, max_chars)
     return mapped if _englishness(mapped) > _englishness(raw) else raw
+
+
+_OBJ_HDR = re.compile(rb"(?m)^\s*(\d+)\s+(\d+)\s+obj\b")
+_PAGE = re.compile(rb"/Type\s*/Page\b(?!s)")
+_CONTENTS = re.compile(rb"/Contents\s+(\d+)\s+0\s+R")
+
+
+def extract_pages(path: str | Path) -> list[str]:
+    """Text per page, in document order.
+
+    Page provenance is not decoration here: a legal record has to say where in the source it came
+    from, so a reviewer can open the gazette at that page and check it. Content streams are not
+    1:1 with pages (22 pages, 25 text-bearing streams in this gazette), so the /Type/Page objects
+    and their /Contents references are followed rather than guessed at by position.
+
+    Returns [] when the page tree cannot be read; callers must not mistake that for a blank
+    document.
+    """
+    data = Path(path).read_bytes()
+    bodies: dict[int, bytes] = {}
+    starts = [(int(m.group(1)), m.end()) for m in _OBJ_HDR.finditer(data)]
+    for i, (num, off) in enumerate(starts):
+        end = starts[i + 1][1] if i + 1 < len(starts) else len(data)
+        bodies[num] = data[off:end]
+
+    cmap = _cmaps(data)
+    pages: list[str] = []
+    for m in _PAGE.finditer(data):
+        ref = _CONTENTS.search(data[m.start():m.start() + 400])
+        if not ref:
+            pages.append("")
+            continue
+        body = bodies.get(int(ref.group(1)), b"")
+        sm = _STREAM.search(body)
+        blob = _inflate(sm.group(1)) if sm else b""
+        raw = _render_stream(blob, {})
+        mapped = _render_stream(blob, cmap) if cmap else ""
+        pages.append(mapped if _englishness(mapped) > _englishness(raw) else raw)
+    return pages
 
 
 def has_extractable_text(path: str | Path, *, min_words: int = 30) -> bool:
@@ -212,6 +260,18 @@ def _test() -> None:
 
     # The real gazette, if it has been acquired. Guards the regression that mattered: a merged
     # CMap destroyed this document's text, and the naive reading was the correct one.
+    stored = Path(__file__).resolve().parent.parent / \
+        "corpus/sources/companies_meetings_board_powers_rules_2014.pdf"
+    if stored.is_file():
+        pg = extract_pages(stored)
+        check(len(pg) == 22, f"the Rules gazette reports 22 pages (got {len(pg)})")
+        check(sum(1 for p in pg if p.strip()) >= 20, "at least 20 pages carry text")
+        joined = " ".join(pg)
+        check("Meetings of Board" in joined, "page text carries the title")
+        check(_englishness(joined) > 500, "page text reads as prose")
+    else:
+        print("[SKIP] stored Rules PDF not present")
+
     gaz = Path.home() / "Downloads/placedon-review/egazette_159201_31mar2014.pdf"
     if gaz.is_file():
         t = extract_text(gaz)

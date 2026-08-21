@@ -27,7 +27,7 @@ suites=(
 )
 
 # --test flag rather than a bare run: this one takes a PDF argument in normal use.
-extra=("scripts/acquire_rules.py --test")
+extra=("scripts/acquire_rules.py --test" "scripts/parse_board_rules.py --test")
 
 fails=0
 for s in "${suites[@]}"; do
