@@ -43,7 +43,25 @@ class Interview:
     interview_date: str = ""
     consent_recorded: str = ""        # y/n
 
-    # Stage 1 — baseline, before any demo
+    # Stage 1 — what they actually do. These test CLAIMS_TO_TEST.md Tier 1: money, counts and
+    # specific past events. Everything else a practitioner says is softer than these.
+    redo_due_to_rule_change: str = ""      # y/n/? — T4
+    redo_last_instance: str = ""           # when, and what it cost
+    past_date_question_asked: str = ""     # y/n/? — B2
+    past_date_what_they_did: str = ""
+    past_date_time_taken: str = ""
+    pays_for_alerts: str = ""              # y/n/? — T2
+    pays_for_alerts_amount: str = ""
+    pays_for_historical_research: str = ""  # y/n/? — T3, the claim most likely to be invented
+    pays_for_historical_amount: str = ""
+    current_research_tool: str = ""        # T1
+    current_research_spend: str = ""
+    research_tool_approver: str = ""
+    filings_last_quarter: str = ""         # T5/T6 — a count, not an impression
+    who_drafts: str = ""                   # B3
+    fy_2018_19_outcome: str = ""           # could_not | from_memory | opened_source
+
+    # Stage 2 — baseline task
     baseline_answer: str = ""
     baseline_seconds: str = ""
     sources_used: str = ""            # pipe-separated
@@ -108,7 +126,22 @@ PROMPTS = {
     "city_or_region": "city or region",
     "interview_date": "interview date (YYYY-MM-DD)",
     "consent_recorded": "consent recorded? [y/n]",
-    "baseline_answer": "STAGE 1 — their answer (a date, or what they said)",
+    "redo_due_to_rule_change": "STAGE 1 — ever redone a document because a rule changed? [y/n/?]",
+    "redo_last_instance": "  ...when, and what it cost (blank if none recalled)",
+    "past_date_question_asked": "  ever asked what the law was on a PAST date? [y/n/?]",
+    "past_date_what_they_did": "  ...what they actually did",
+    "past_date_time_taken": "  ...how long it took",
+    "pays_for_alerts": "  pays for rule-change alerts? [y/n/?]",
+    "pays_for_alerts_amount": "  ...how much",
+    "pays_for_historical_research": "  pays anyone for HISTORICAL legal research? [y/n/?]",
+    "pays_for_historical_amount": "  ...how much",
+    "current_research_tool": "  current research tool",
+    "current_research_spend": "  ...annual spend",
+    "research_tool_approver": "  ...who signs it off",
+    "filings_last_quarter": "  filings/minutes done personally LAST QUARTER (a number)",
+    "who_drafts": "  who drafts in their office, and why",
+    "fy_2018_19_outcome": "  FY 2018-19 question [could_not/from_memory/opened_source]",
+    "baseline_answer": "STAGE 2 — their answer (a date, or what they said)",
     "baseline_seconds": "  seconds taken",
     "sources_used": "  sources opened (pipe-separated; blank = none)",
     "checked_six_month": "  checked six-month limb? [y/n/?]",
@@ -176,6 +209,21 @@ def summary() -> int:
                  if PLAUSIBLE_MISS in (r.get("baseline_answer") or ""))
     print(f"\n    missed the fifteen-month limb: {missed}/{n}")
     print(f"    checked it unprompted        : {count('checked_fifteen_month')}/{n}")
+
+    print("\n  TIER-1 CLAIMS — the checkable ones (see research/CLAIMS_TO_TEST.md)")
+    for field, label, claim in (
+            ("pays_for_historical_research", "pays for historical research", "T3"),
+            ("pays_for_alerts", "pays for change alerts", "T2"),
+            ("redo_due_to_rule_change", "redid work after a rule change", "T4"),
+            ("past_date_question_asked", "was asked a past-date question", "B2")):
+        yes = count(field); no = count(field, "n")
+        verdict = ("SUPPORTED" if yes >= 3 else
+                   "REFUTED" if no >= 3 else "not settled")
+        print(f"    {claim} {label:<34} y={yes} n={no} of {n}   {verdict}")
+    could_not = sum(1 for r in rows if (r.get("fy_2018_19_outcome") or "") == "could_not")
+    if n:
+        print(f"    B2 could NOT answer the FY 2018-19 question: {could_not}/{n}"
+              + ("   <- the strongest signal available" if could_not >= 3 else ""))
 
     print("\n  DECISION RULE (3 of 5 needed, and commitment is what counts)")
     hist = count("reported_outdated_guidance")
