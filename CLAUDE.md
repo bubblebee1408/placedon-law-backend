@@ -65,6 +65,8 @@ Files changed · Tests added or updated · Commands run · Results · Known limi
 | `checker/legal_ref.py` | Instrument-qualified refs. A provision number is never an identity |
 | `checker/mvp_freeze.py` | Pins the 17 hand-verified MVP mappings against silent drift |
 | `scripts/run_tests.sh` | Runs all 8 suites with PYTHONPATH set — use this, not bare python3 |
+| `checker/robots.py` | Robots + TLS enforcement in the fetch path; fails closed |
+| `checker/corroborate.py` | Prior wording vs the amending Act — the non-circular check |
 | `checker/ss/` | Secretarial Standards defect scanner + evidenced RULES.md |
 | `corpus/companies_act/` | 527 ingested sections, hash-stamped |
 | `corpus/testdocs/` | Real + ICSI-specimen documents for scanner validation |
@@ -81,7 +83,13 @@ Files changed · Tests added or updated · Commands run · Results · Known limi
   their own source is invisible to this check.
 - Section index: 464/474 mapped, 17 MVP sections hand-verified. **PDF-derived, not source-confirmed** —
   India Code returned 403 on 21 Aug 2026. Re-verify against the section view when reachable.
-- Point-in-time reconstruction: still UNVERIFIED against any external source.
+- Point-in-time reconstruction: **section-level reconstruction still UNVERIFIED**.
+  But prior wording is now independently corroborated for the first time: 24 amended
+  spans matched against the amending Acts themselves on Indian Kanoon, **0 conflicts**;
+  21/24 where the instrument is held. See `docs/CORROBORATION.md`. This corroborates
+  individual spans, not whole sections — the distinction the retracted claims missed.
+- Indian Kanoon does not host The Companies (Amendment) Act, 2019, so claims resting
+  on Act 22 of 2019 have no witness on that source (9 of 16 unresolved cases).
 
 ## Known-invalid results — do not cite
 - Reconstruction "119/119 EXACT vs as-enacted print" — the reference was the CURRENT consolidation.

@@ -158,10 +158,55 @@ class Corroborator:
                 hits.append((title, ORIGIN + m.group(1).split("?")[0]))
         return st, hits
 
+    # ---- whole-instrument witness ---------------------------------------
+    def witness_text(self, instrument: str) -> tuple[str, str] | None:
+        """The full text of an amending Act, or None if we hold no copy of it."""
+        url = WITNESS_ACTS.get(instrument or "")
+        if not url:
+            return None
+        if not hasattr(self, "_wcache"):
+            self._wcache: dict[str, tuple[str, str] | None] = {}
+        if instrument not in self._wcache:
+            st, page = self._cached_get(url)
+            self._wcache[instrument] = (_visible_text(page), url) if st == 200 else None
+        return self._wcache[instrument]
+
+    def corroborate_in_instrument(self, claim: Claim) -> Result | None:
+        """Check the named instrument directly. None means we hold no copy."""
+        w = self.witness_text(claim.instrument or "")
+        if w is None:
+            return None
+        text, url = w
+        now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        target = normalise(claim.prior_wording)
+        overlap: Result | None = None
+        for quote in extract_substituted_quotes(text):
+            nq = normalise(quote)
+            if nq == target:
+                verdict = EXACT if quote.strip() == claim.prior_wording.strip() else NORMALISED
+                return Result(claim.section, verdict, claim.prior_wording,
+                              witness_quote=quote, witness_title=claim.instrument,
+                              witness_url=url, note="matched in the full instrument",
+                              fetched_at=now)
+            if overlap is None and len(target) > 30 and (nq in target or target in nq):
+                overlap = Result(claim.section, CONFLICT, claim.prior_wording,
+                                 witness_quote=quote, witness_title=claim.instrument,
+                                 witness_url=url,
+                                 note="instrument names an overlapping but different span",
+                                 fetched_at=now)
+        return overlap
+
     # ---- the test -------------------------------------------------------
     def corroborate(self, claim: Claim) -> Result:
         """Look for an amending instrument that names this wording as replaced."""
         now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+        # Prefer the named instrument read in full — it takes the search index out
+        # of the evidence path entirely.
+        direct = self.corroborate_in_instrument(claim)
+        if direct is not None and direct.verdict != CONFLICT:
+            return direct
+
         # Search on a prefix: instruments and consolidations sometimes differ in
         # trailing punctuation, and an over-long exact phrase returns nothing at all.
         probe = " ".join(claim.prior_wording.split()[:18])
@@ -204,10 +249,30 @@ class Corroborator:
 
         if best:
             return best
+        if direct is not None:      # a real conflict inside the named instrument
+            return direct
         return Result(claim.section, NO_WITNESS, claim.prior_wording,
                       witness_title=witnesses[0][0], witness_url=witnesses[0][1],
                       note="amending Act found but it names no matching substitution",
                       fetched_at=now)
+
+
+# Whole amending Acts, fetched once and searched locally.
+#
+# Phrase search alone corroborated 9/13 of the 2017 Act's claims but only 2/11 of
+# the 2019 Act's — not because our data is worse for 2019, but because Indian
+# Kanoon's *index* surfaces those pages unevenly. Reading each instrument end to
+# end removes the search engine from the evidence path: either the Act contains
+# the words or it does not.
+#
+# The 2019 Act is absent from this table because Indian Kanoon does not appear to
+# host it. That is a gap in the witness, not a defect in the claim, and claims
+# resting on Act 22 of 2019 are reported NO_WITNESS rather than counted against us.
+WITNESS_ACTS: dict[str, str] = {
+    "Act 21 of 2015": f"{ORIGIN}/doc/147153123/",   # Companies (Amendment) Act, 2015
+    "Act 1 of 2018": f"{ORIGIN}/doc/9573987/",      # Companies (Amendment) Act, 2017
+    "Act 29 of 2020": f"{ORIGIN}/doc/69330370/",    # Companies (Amendment) Act, 2020
+}
 
 
 def claims_from_corpus(limit: int | None = None, min_words: int = 6) -> list[Claim]:
@@ -324,6 +389,11 @@ def _test() -> None:
     check(len(cl) >= 10, f"the corpus yields testable claims ({len(cl)})")
     check(all(len(c.prior_wording.split()) >= 6 for c in cl),
           "every claim is specific enough to search")
+
+    check("Act 22 of 2019" not in WITNESS_ACTS,
+          "the 2019 Act is not claimed as a witness — Indian Kanoon does not host it")
+    check(all(u.startswith(ORIGIN) for u in WITNESS_ACTS.values()),
+          "every witness Act is a resolvable URL on the attributed source")
 
     txt = report([Result("s1", EXACT, "x"), Result("s2", NO_WITNESS, "y")])
     check("1/2" in txt, "the report counts only corroborated claims")
