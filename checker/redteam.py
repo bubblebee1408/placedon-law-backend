@@ -53,6 +53,15 @@ scores 0.667 too) without touching this one, because the borrowed vocabulary IS 
 This test is the strongest concrete argument in the repo for wiring an entailment checker, and it
 is here so the argument survives as a runnable fact rather than a note in a design doc.
 
+**Why RED-08 is a frozen attack and not only a unit test.** Duplicate-claim rejection was already
+tested inside `model_adapter._test`, next to the code that implements it. A unit test asserts the
+OUTCOME and is blind to where the outcome came from: move the rule out of `_parse` -- into `run()`,
+or into the verifier -- and that test stays green while the defence has quietly changed layer, and
+with it what else it protects. A rule enforced at PARSE rejects the claim before anything can be
+attributed to it; the same rule enforced later means a verdict was computed against an id two claims
+share, and the audit trail is already unattributable by the time anyone objects. RED-08 declares
+PARSE and asserts it, so that migration fails the suite instead of passing it.
+
 Everything here is offline. No new dependency, no network, no model call.
 
 Run: python3 checker/redteam.py
@@ -104,6 +113,14 @@ WITHHELD_RULE_ID = "RULE:COMPANIES_MEETINGS_BOARD_POWERS_2014:R15"
 SUSPENDED_SECTION_QUERY = "s.16"
 SUSPENDED_WORDING = "fine of one thousand rupees for every day"
 
+# The two halves of one legal question, and RED-08's payload. Under a first-wins duplicate rule the
+# survivor is whichever the model happened to emit first, so the answer to "does the Board have to
+# approve this?" is settled by ordering rather than by evidence. Both texts are individually
+# well-formed, atomic and correctly cited: there is nothing wrong with either claim except that they
+# arrive under the same identity.
+DUPE_REQUIRED = "Board approval is required."
+DUPE_NOT_REQUIRED = "No approval is required."
+
 
 # --- the stubs ----------------------------------------------------------------------------------
 
@@ -134,7 +151,11 @@ def _json(decision: str, claims: list | str, **extra) -> str:
                        "warnings": extra.pop("warnings", []), **extra})
 
 
-def _claim(cid: str, text: str, ids, ctype: str = LEGAL_TRIGGER, support: str = "DIRECT") -> dict:
+# `cid` is deliberately not annotated `str`: a model emitting 1 where the schema says "1" is the
+# realistic shape of RED-08's canonicalisation collision, and a stub that could not express it would
+# only ever test ids we had already normalised ourselves.
+def _claim(cid: object, text: str, ids, ctype: str = LEGAL_TRIGGER,
+           support: str = "DIRECT") -> dict:
     return {"claim_id": cid, "claim_type": ctype, "text": text,
             "evidence_ids": ids, "support": support, "confidence": "HIGH"}
 
@@ -225,6 +246,65 @@ def plausible_but_wrong(evidence_id: str) -> AdversarialStub:
                ctype=PROCEDURAL_REQUIREMENT)]))
 
 
+def duplicate_order_pair(evidence_id: str) -> tuple[AdversarialStub, AdversarialStub]:
+    """RED-08a: one id, two contradicting claims, emitted in both orders.
+
+    Both stubs carry the SAME name, so `model_name` is identical in both results and comparing
+    to_dict() compares the only thing that actually differed -- the order the model emitted the
+    claims in -- rather than a label the test attached.
+    """
+    def pair(first: str, second: str) -> str:
+        return _json(ma.APPLIES, [_claim("c1", first, [evidence_id]),
+                                  _claim("c1", second, [evidence_id])])
+    return (AdversarialStub("DUPLICATE_CLAIM_ID/order-pair",
+                            pair(DUPE_REQUIRED, DUPE_NOT_REQUIRED)),
+            AdversarialStub("DUPLICATE_CLAIM_ID/order-pair",
+                            pair(DUPE_NOT_REQUIRED, DUPE_REQUIRED)))
+
+
+def duplicate_split_evidence(id_a: str, id_b: str) -> AdversarialStub:
+    """RED-08b: one id, two claims, two DIFFERENT admissible citations.
+
+    Nothing here is a citation problem and nothing here is a contradiction: each claim is true of
+    the provision it cites. The collision is on IDENTITY alone, and a defence that only fired when
+    the texts conflicted -- or only when a citation was bad -- would let this through while looking
+    like it worked.
+    """
+    return AdversarialStub("DUPLICATE_CLAIM_ID/split-evidence", _json(ma.APPLIES, [
+        _claim("c1", "A contract or arrangement with a related party requires the consent of the "
+                     "Board of Directors.", [id_a]),
+        _claim("c1", "A related party transaction requires the approval of the Audit Committee.",
+               [id_b])]))
+
+
+def duplicate_plus_unique(evidence_id: str) -> AdversarialStub:
+    """RED-08c: a duplicated pair standing beside a uniquely-identified claim.
+
+    The over-broad fix -- fail the whole response closed the moment any id repeats -- passes every
+    other RED-08 variant and fails here. Discarding sound, separately-identified reasoning because
+    two OTHER claims collided destroys work the model did correctly, and an abstention nobody had
+    to make is still a wrong answer.
+    """
+    return AdversarialStub("DUPLICATE_CLAIM_ID/plus-unique", _json(ma.APPLIES, [
+        _claim("c1", DUPE_REQUIRED, [evidence_id]),
+        _claim("c1", DUPE_NOT_REQUIRED, [evidence_id]),
+        _claim("c2", "The Board of Directors shall hold a minimum number of four meetings every "
+                     "year.", [evidence_id])]))
+
+
+def duplicate_canonicalisation(evidence_id: str) -> AdversarialStub:
+    """RED-08d: claim_id 1 (int) beside claim_id "1" (string).
+
+    JSON says these are different values, and a `seen` set keyed on the raw value agrees. An audit
+    trail does not: both render as `1`, so a reader handed two verdicts under `1` cannot tell which
+    claim either belongs to. That unattributable state is precisely what the duplicate rule exists
+    to prevent, so treating the two as distinct recreates the flaw while passing a type check.
+    """
+    return AdversarialStub("DUPLICATE_CLAIM_ID/canonicalisation", _json(ma.APPLIES, [
+        _claim(1, DUPE_REQUIRED, [evidence_id]),
+        _claim("1", DUPE_NOT_REQUIRED, [evidence_id])]))
+
+
 @dataclass(frozen=True)
 class Attack:
     """A named attack and the layer that is supposed to stop it, so the expectation is data rather
@@ -250,6 +330,9 @@ ATTACKS: tuple[Attack, ...] = (
            "APPLIES with nothing behind it is downgraded"),
     Attack("PLAUSIBLE_BUT_WRONG", LAYER_NONE,
            "documented limit: lexical grounding cannot detect a borrowed-vocabulary claim"),
+    Attack("DUPLICATE_CLAIM_ID", LAYER_PARSE,
+           "two claims under one id are unattributable, so every copy is rejected BEFORE a verdict "
+           "can be computed against a shared identity -- and emission order decides nothing"),
 )
 
 
@@ -451,12 +534,93 @@ def _test() -> None:
           "closing this needs an entailment model (see the module docstring)")
     ledger.append(("PLAUSIBLE_BUT_WRONG", LAYER_NONE))
 
+    # --- RED-08 DUPLICATE_CLAIM_ID -> PARSE -----------------------------------------------------
+    # Four ways the same flaw can come back. Each is a different question about the rule -- does it
+    # depend on order, on the texts conflicting, on the citations matching, on the ids being the
+    # same TYPE -- and a fix that answers only one of them looks correct until the next one lands.
+    s8a, s8b = duplicate_order_pair(key)
+    r8a = ma.run(task, model=s8a, model_name=s8a.name)
+    r8b = ma.run(task, model=s8b, model_name=s8b.name)
+    check(s8a.was_called and s8b.was_called,
+          "RED-08a the model WAS consulted -- a parse catch, not a refusal before the call")
+    # Without this the equality below proves nothing: two identical inputs are trivially equal, and
+    # a test that compared a response to itself would pass however first-wins the parser was.
+    check(r8a.raw_text != r8b.raw_text,
+          "RED-08a precondition: the two raw model responses genuinely DIFFER")
+    check(r8a.to_dict() == r8b.to_dict()
+          and json.dumps(r8a.to_dict(), sort_keys=True)
+          == json.dumps(r8b.to_dict(), sort_keys=True),
+          "RED-08a ORDER-INDEPENDENCE: both orders yield byte-identical served results")
+    check(r8a.claims == () and r8b.claims == (),
+          "RED-08a NEITHER claim survives -- not the later copy, and not the earlier one either")
+    check(len(r8a.rejected_claims) == 2
+          and all("duplicate claim_id" in x for x in r8a.rejected_claims),
+          "RED-08a caught at PARSE: both copies appear in rejected_claims, named as duplicates")
+    check(any(ma.DUPLICATE_CLAIM_ID in w and "c1" in w for w in r8a.warnings),
+          "RED-08a ...and the DUPLICATE_CLAIM_ID warning NAMES the offending id")
+    check(r8a.decision == ma.INSUFFICIENT_EVIDENCE
+          and any(ma.DECISION_WITHOUT_CLAIMS in w for w in r8a.warnings),
+          "RED-08a APPLIES resting only on duplicated claims is downgraded, and says why")
+    ledger.append(("DUPLICATE_CLAIM_ID/order-pair", LAYER_PARSE))
+
+    # Same id, different admissible citations: reuses the related-party pack from RED-02 because it
+    # carries several usable provisions, so two claims can cite DIFFERENT valid evidence.
+    id_a, id_b = (pv.key for pv in rp.usable[:2])
+    check(id_a != id_b and id_a in ma.evidence_ids(rp) and id_b in ma.evidence_ids(rp),
+          "RED-08b precondition: both citations are distinct and admissible, so nothing here can "
+          "be rejected as a bad citation")
+    s8c = duplicate_split_evidence(id_a, id_b)
+    r8c = ma.run(rtask, model=s8c, model_name=s8c.name)
+    check(r8c.claims == () and len(r8c.rejected_claims) == 2,
+          "RED-08b caught at PARSE: both are rejected though each cites different, valid evidence")
+    # len() repeated deliberately: `all()` over an empty list is True, so without it this check
+    # would pass on a parser that rejected nothing at all.
+    check(len(r8c.rejected_claims) == 2
+          and all("duplicate claim_id" in x for x in r8c.rejected_claims)
+          and not any("not in the pack" in x for x in r8c.rejected_claims),
+          "RED-08b ...and the stated reason is the ID COLLISION, not the citation or the content")
+    check(r8c.decision == ma.INSUFFICIENT_EVIDENCE,
+          "RED-08b ...and the APPLIES they were holding up collapses")
+    ledger.append(("DUPLICATE_CLAIM_ID/split-evidence", LAYER_PARSE))
+
+    # A duplicated pair beside a unique claim. The assertions that matter are the NEGATIVE ones:
+    # the good claim is untouched and the decision still stands.
+    s8d = duplicate_plus_unique(key)
+    r8d = ma.run(task, model=s8d, model_name=s8d.name)
+    check([c.claim_id for c in r8d.claims] == ["c2"],
+          "RED-08c the uniquely-identified claim SURVIVES the duplicated pair beside it")
+    check(len(r8d.rejected_claims) == 2 and all("c1" in x for x in r8d.rejected_claims),
+          "RED-08c ...and exactly the two colliding claims are rejected, by id")
+    check(r8d.decision == ma.APPLIES
+          and not any(ma.DECISION_WITHOUT_CLAIMS in w for w in r8d.warnings),
+          "RED-08c ...and the decision is NOT downgraded: a malformed pair must not discard good "
+          "work")
+    check(any(ma.DUPLICATE_CLAIM_ID in w for w in r8d.warnings),
+          "RED-08c ...while the collision is still REPORTED -- a served answer with a silent "
+          "defect behind it is what this warning exists to prevent")
+    ledger.append(("DUPLICATE_CLAIM_ID/plus-unique", LAYER_PARSE))
+
+    # 1 vs "1". Asserting the payload first, because if the stub emitted two identical ids the rest
+    # would pass as an ordinary duplicate and prove nothing about canonicalisation.
+    s8e = duplicate_canonicalisation(key)
+    check('"claim_id": 1,' in s8e.payload and '"claim_id": "1",' in s8e.payload,
+          "RED-08d precondition: the ids are emitted as genuinely different JSON values")
+    r8e = ma.run(task, model=s8e, model_name=s8e.name)
+    check(r8e.claims == () and len(r8e.rejected_claims) == 2,
+          'RED-08d caught at PARSE: 1 and "1" are ONE id after canonicalisation, so both go')
+    check(any(f"{ma.DUPLICATE_CLAIM_ID}: 1 --" in w for w in r8e.warnings),
+          "RED-08d ...and the warning names the canonicalised id, which is what a reader would "
+          "have seen in the trail")
+    check(r8e.decision == ma.INSUFFICIENT_EVIDENCE,
+          "RED-08d ...and the decision they supported is downgraded")
+    ledger.append(("DUPLICATE_CLAIM_ID/canonicalisation", LAYER_PARSE))
+
     # The ATTACKS registry is the declared expectation; `ledger` is what actually happened.
     # Comparing them here is what keeps the registry honest -- otherwise it is a comment that
     # cannot go stale because nothing reads it.
     print("\nlayer ledger (attack -> layer that actually caught it):")
     for name, layer in ledger:
-        print(f"  {name:<34} {layer}")
+        print(f"  {name:<38} {layer}")
     check(all(layer in LAYERS for _, layer in ledger), "every recorded layer is a declared layer")
     for name, layer in ledger:
         base = name.split("/")[0]
