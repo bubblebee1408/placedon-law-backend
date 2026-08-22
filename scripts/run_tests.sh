@@ -35,10 +35,11 @@ suites=(
   checker/agm.py
   checker/provenance_slots.py
   checker/drafting.py
+  checker/matter.py
 )
 
 # --test flag rather than a bare run: this one takes a PDF argument in normal use.
-extra=("scripts/acquire_rules.py --test" "scripts/parse_board_rules.py --test" "scripts/baseline_eval.py --test" "scripts/review.py --test" "scripts/review_brief.py --check")
+extra=("scripts/acquire_rules.py --test" "scripts/parse_board_rules.py --test" "scripts/baseline_eval.py --test" "scripts/review.py --test" "scripts/review_brief.py --check" "scripts/slice_s96.py --test")
 
 fails=0
 for s in "${suites[@]}"; do
