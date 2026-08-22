@@ -33,6 +33,7 @@ suites=(
   checker/assessment.py
   checker/attribution.py
   checker/agm.py
+  checker/timeline.py
   checker/provenance_slots.py
   checker/drafting.py
   checker/matter.py
