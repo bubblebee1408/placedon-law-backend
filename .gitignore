@@ -26,3 +26,7 @@ outbox/
 .placedon/
 *gmail_credentials*.json
 *gmail_token*.json
+
+# Cached third-party source pages. Our verdicts are ours to publish; Indian
+# Kanoon's page copies are not. Attribution is not the same as redistribution.
+corpus/corroboration/*.html

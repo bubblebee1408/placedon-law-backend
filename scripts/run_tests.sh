@@ -35,6 +35,7 @@ suites=(
   checker/agm.py
   checker/timeline.py
   checker/robots.py
+  checker/corroborate.py
   checker/provenance_slots.py
   checker/drafting.py
   checker/matter.py
