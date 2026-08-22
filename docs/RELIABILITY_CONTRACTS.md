@@ -79,7 +79,35 @@ diagnostic precision inside while the boundary degrades safely.
 Found by red-teaming: three type-confusion inputs previously escaped as uncaught exceptions, in the
 one component whose output is untrusted by definition.
 
-## 5. Withheld material is reported, never silently dropped
+## 5. Failures are attributed to a stage, and to a KIND
+
+`checker/attribution.py`. A whole-pipeline accuracy number cannot say which stage broke, and the
+remedies are opposite: a provision never retrieved is a retrieval problem no prompt change fixes;
+one retrieved, admitted and served but never cited is a generation problem no retrieval work fixes.
+
+Stages: `RETRIEVED → ADMITTED → SERVED → CITED → GROUNDED`, monotonic and enforced at construction —
+a ladder reporting CITED while SERVED failed describes something impossible.
+
+Four outcome classes, kept apart from the stages on purpose:
+
+| Class | Meaning |
+|---|---|
+| `PIPELINE_DEFECT` | our code is wrong; go fix it |
+| `MODEL_FAILURE_CAUGHT` | the model misbehaved and a guard stopped it — working as designed |
+| `CORRECT_REFUSAL` | we declined deliberately; no answer, and that is right |
+| `COMPLETE` | an answer came out |
+
+An earlier version had a single `system_behaved_correctly` boolean, and it reported
+`GROUNDING_UNAVAILABLE` as **False** — implying a defect when the system had correctly declined to
+claim grounding it cannot establish. Collapsing "go fix this" and "produced no answer" into one flag
+makes the metric wrong in both directions: it panics about working safety behaviour, and it would
+congratulate a system that answers nothing. `is_defect` and `produced_result` are now separate.
+
+**Current reading:** all 7 frozen benchmark provisions attribute to `GROUNDING_UNAVAILABLE` /
+`CORRECT_REFUSAL`. Nothing is broken; nothing is answered. That is the honest state of a system with
+no entailment checker.
+
+## 6. Withheld material is reported, never silently dropped
 
 A relevant-but-unadmitted Rule produces a notice saying it exists and is not admitted. Silence and
 "no such rule exists" are indistinguishable to a reader, and one of them is false.

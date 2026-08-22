@@ -36,8 +36,9 @@ from checker.claim_verifier import ClaimVerification, establishes_support
 from checker.evidence_pack import EvidencePack
 from checker.model_adapter import ModelResult
 
-__all__ = ["StageResult", "Attribution", "attribute", "STAGES",
-           "RETRIEVED", "ADMITTED", "SERVED", "CITED", "GROUNDED", "VERDICTS"]
+__all__ = ["StageResult", "Attribution", "attribute", "STAGES", "CLASSES",
+           "RETRIEVED", "ADMITTED", "SERVED", "CITED", "GROUNDED", "VERDICTS",
+           "PIPELINE_DEFECT", "MODEL_FAILURE_CAUGHT", "CORRECT_REFUSAL", "COMPLETE"]
 
 RETRIEVED = "RETRIEVED"
 ADMITTED = "ADMITTED"
@@ -58,9 +59,35 @@ GROUNDING_UNAVAILABLE = "GROUNDING_UNAVAILABLE"  # cited, but nothing here can e
 VERDICTS = (COMPLETE, RETRIEVAL_FAILURE, ADMISSION_BLOCK, SERVING_FAILURE, GENERATION_FAILURE,
             GROUNDING_FAILURE, GROUNDING_UNAVAILABLE)
 
-# Verdicts where the pipeline did what it should have. Kept as data rather than an `in` check at
-# each call site, so a verdict added later cannot silently default to "this was a bug".
-CORRECT_REFUSALS = (ADMISSION_BLOCK,)
+# Three different questions, deliberately not collapsed into one boolean. An earlier version had a
+# single `system_behaved_correctly`, and it reported GROUNDING_UNAVAILABLE as False -- implying a
+# defect, when the system had correctly declined to claim grounding it cannot establish. Conflating
+# "go fix this" with "produced no answer" makes the metric useless in both directions: it panics
+# about working safety behaviour and it congratulates a system that answers nothing.
+#
+#   PIPELINE_DEFECT      our code is wrong; someone must fix it
+#   MODEL_FAILURE_CAUGHT the model misbehaved and a guard stopped it -- working as designed
+#   CORRECT_REFUSAL      we declined deliberately; no answer, and that is right
+#   COMPLETE             an answer came out
+PIPELINE_DEFECT = "PIPELINE_DEFECT"
+MODEL_FAILURE_CAUGHT = "MODEL_FAILURE_CAUGHT"
+CORRECT_REFUSAL = "CORRECT_REFUSAL"
+CLASSES = (PIPELINE_DEFECT, MODEL_FAILURE_CAUGHT, CORRECT_REFUSAL, COMPLETE)
+
+_CLASS_OF = {
+    COMPLETE: COMPLETE,
+    # Retrieval finding nothing is our problem: the corpus, the index, or the query route.
+    RETRIEVAL_FAILURE: PIPELINE_DEFECT,
+    # Admitted but absent from the pack means admission and packing disagree -- a bug between two
+    # of our own components, and the only verdict here that indicates broken code with no excuse.
+    SERVING_FAILURE: PIPELINE_DEFECT,
+    # The model cited the wrong thing, or cited something we refuted. The guard did its job.
+    GENERATION_FAILURE: MODEL_FAILURE_CAUGHT,
+    GROUNDING_FAILURE: MODEL_FAILURE_CAUGHT,
+    # We declined on purpose. Not defects.
+    ADMISSION_BLOCK: CORRECT_REFUSAL,
+    GROUNDING_UNAVAILABLE: CORRECT_REFUSAL,
+}
 
 _UNREACHED = "not reached: an earlier stage failed, so this was never tested"
 
@@ -96,13 +123,24 @@ class Attribution:
             seen_failure = seen_failure or not s.passed
 
     @property
-    def system_behaved_correctly(self) -> bool:
-        """Whether this outcome is the pipeline working, not the pipeline broken."""
-        return self.verdict in CORRECT_REFUSALS or self.verdict == COMPLETE
+    def outcome_class(self) -> str:
+        """Which of the four kinds of outcome this is. See _CLASS_OF."""
+        return _CLASS_OF[self.verdict]
+
+    @property
+    def is_defect(self) -> bool:
+        """Whether someone must go fix our code. NOT the same as 'no answer came out'."""
+        return self.outcome_class == PIPELINE_DEFECT
+
+    @property
+    def produced_result(self) -> bool:
+        """Whether a usable conclusion came out. Only COMPLETE does."""
+        return self.verdict == COMPLETE
 
     def to_dict(self) -> dict:
         return dict(expected_key=self.expected_key, failed_at=self.failed_at,
-                    verdict=self.verdict, system_behaved_correctly=self.system_behaved_correctly,
+                    verdict=self.verdict, outcome_class=self.outcome_class,
+                    is_defect=self.is_defect, produced_result=self.produced_result,
                     stages=[s.to_dict() for s in self.stages])
 
 
@@ -227,8 +265,8 @@ def _test() -> None:
     b = attribute("ACT:COMPANIES_ACT_2013:S16", *pipeline("s.16"))
     check(b.failed_at == ADMITTED, f"s.16 fails at ADMITTED ({b.failed_at})")
     check(b.verdict == ADMISSION_BLOCK, "...as an ADMISSION_BLOCK")
-    check(b.system_behaved_correctly,
-          "...and that counts as the system behaving CORRECTLY, not failing")
+    check(b.outcome_class == CORRECT_REFUSAL and not b.is_defect,
+          "...classed as a CORRECT_REFUSAL, not a defect")
     check(b.stages[0].passed, "retrieval still succeeded -- finding it and declining differ")
 
     # An unreviewed Rule: found, named in a notice, correctly not served.
@@ -236,7 +274,7 @@ def _test() -> None:
                   *pipeline("related party transactions"))
     check(c.failed_at == ADMITTED and c.verdict == ADMISSION_BLOCK,
           f"an unreviewed Rule is an ADMISSION_BLOCK ({c.failed_at}/{c.verdict})")
-    check(c.system_behaved_correctly, "...also correct behaviour")
+    check(c.outcome_class == CORRECT_REFUSAL and not c.is_defect, "...also a correct refusal")
     check("not admitted" in c.stages[1].detail.lower() or "R15" in c.stages[1].detail,
           "...and the detail names the withheld rule")
 
@@ -244,7 +282,8 @@ def _test() -> None:
     d = attribute("ACT:COMPANIES_ACT_2013:S999", *pipeline("what colour is the sky"))
     check(d.failed_at == RETRIEVED and d.verdict == RETRIEVAL_FAILURE,
           f"an absent provision is a RETRIEVAL_FAILURE ({d.verdict})")
-    check(not d.system_behaved_correctly, "...and that IS something to go fix")
+    check(d.is_defect and d.outcome_class == PIPELINE_DEFECT,
+          "...and that IS something to go fix")
     check(all(s.detail == _UNREACHED for s in d.stages[1:]),
           "later stages report as unreached, not as independently failed")
 
@@ -258,6 +297,16 @@ def _test() -> None:
     check(e.failed_at == CITED and e.verdict == GENERATION_FAILURE,
           f"served-but-not-cited is a GENERATION_FAILURE ({e.failed_at}/{e.verdict})")
     check("S177" in e.stages[3].detail, "...and the detail names what was cited instead")
+    check(e.outcome_class == MODEL_FAILURE_CAUGHT and not e.is_defect,
+          "a model citing the wrong provision is MODEL_FAILURE_CAUGHT -- the guard worked")
+
+    # The distinction the single boolean destroyed: no answer, but nothing to fix.
+    check(a.outcome_class == CORRECT_REFUSAL,
+          "GROUNDING_UNAVAILABLE is a CORRECT_REFUSAL -- declining to claim unestablished grounding")
+    check(not a.is_defect, "...so it is NOT a defect")
+    check(not a.produced_result, "...but it produced no usable result either")
+    check(sorted({_CLASS_OF[v] for v in VERDICTS}) == sorted(set(CLASSES)),
+          "every verdict maps to a class, and every class is reachable")
 
     # Monotonicity, asserted rather than assumed.
     for att in (a, b, c, d, e):
