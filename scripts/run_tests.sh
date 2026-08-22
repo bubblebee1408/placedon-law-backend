@@ -33,6 +33,8 @@ suites=(
   checker/assessment.py
   checker/attribution.py
   checker/agm.py
+  checker/provenance_slots.py
+  checker/drafting.py
 )
 
 # --test flag rather than a bare run: this one takes a PDF argument in normal use.
