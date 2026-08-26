@@ -65,6 +65,8 @@ Files changed · Tests added or updated · Commands run · Results · Known limi
 | `checker/legal_ref.py` | Instrument-qualified refs. A provision number is never an identity |
 | `checker/mvp_freeze.py` | Pins the 17 hand-verified MVP mappings against silent drift |
 | `scripts/run_tests.sh` | Runs all 8 suites with PYTHONPATH set — use this, not bare python3 |
+| `scripts/verify_document.py` | Is this PDF real? Cryptographic signature check, CCA India |
+| `scripts/verify_section_index.py` | Our number->id map vs India Code's own API |
 | `checker/robots.py` | Robots + TLS enforcement in the fetch path; fails closed |
 | `checker/corroborate.py` | Prior wording vs the amending Act — the non-circular check |
 | `checker/ss/` | Secretarial Standards defect scanner + evidenced RULES.md |
@@ -81,8 +83,12 @@ Files changed · Tests added or updated · Commands run · Results · Known limi
   `docs/SOURCE_DEFECTS.md`. Corpus status is NOT_FULLY_VERIFIED.
 - Independent-publisher verification: **PENDING**. Both renderings are India Code; a defect in
   their own source is invisible to this check.
-- Section index: 464/474 mapped, 17 MVP sections hand-verified. **PDF-derived, not source-confirmed** —
-  India Code returned 403 on 21 Aug 2026. Re-verify against the section view when reachable.
+- Section index: 464/474 mapped. **Now source-confirmed**: 12/12 MVP sections verified against
+  India Code's own REST API, 0 mismatches (`scripts/verify_section_index.py`).
+- **India Code moved domain.** `indiacode.nic.in` 403s everything; the live host is
+  **`indiacode.gov.in`**, running DSpace with an open REST API (no key, no auth) exposing
+  `dc.identifier.section_number`, `section_id`, `section_footnote`, `act_name`. The 403 that
+  blocked us since 21 Aug was a dead domain, not a block. Any hardcoded `.nic.in` URL is dead.
 - Point-in-time reconstruction: **section-level reconstruction still UNVERIFIED**.
   But prior wording is now independently corroborated for the first time: 24 amended
   spans matched against the amending Acts themselves on Indian Kanoon, **0 conflicts**;
