@@ -204,7 +204,37 @@ def evaluate(predict, rows: list[Row] | None = None) -> dict[str, Score]:
     return out
 
 
-def report(scores: dict[str, Score]) -> str:
+def trivial_baselines(rows) -> dict[str, dict[str, float]]:
+    """Accuracy and F1 for answering the same thing every time.
+
+    Afane et al. (CSLAW 2026) found an all-affirmative baseline scoring F1 0.73
+    on statutory-survey questions, beating Westlaw AI (0.64) and Lexis+ AI
+    (0.41). A system that cannot beat "always no" has not been shown to do
+    anything, and reporting its accuracy without this line beside it is the
+    single easiest way to mislead a reader — including oneself.
+    """
+    n = len(rows)
+    pos = sum(r.entailed for r in rows)
+    out = {}
+    for name, always in (("always ENTAILED", True), ("always NOT_ENTAILED", False)):
+        tp = pos if always else 0
+        fp = (n - pos) if always else 0
+        fn = 0 if always else pos
+        prec = tp / (tp + fp) if tp + fp else 0.0
+        rec = tp / (tp + fn) if tp + fn else 0.0
+        out[name] = {
+            "accuracy": (pos if always else n - pos) / n if n else 0.0,
+            "f1": 2 * prec * rec / (prec + rec) if prec + rec else 0.0,
+        }
+    out["MAJORITY CLASS"] = {
+        "accuracy": max(out["always ENTAILED"]["accuracy"],
+                        out["always NOT_ENTAILED"]["accuracy"]),
+        "f1": max(out["always ENTAILED"]["f1"], out["always NOT_ENTAILED"]["f1"]),
+    }
+    return out
+
+
+def report(scores: dict[str, Score], rows=None) -> str:
     lines = [f"{'subset':<20}{'n':>6}{'acc':>7}{'prec':>7}{'rec':>7}{'F1':>7}"
              f"{'false-current':>15}"]
     for k in sorted(scores, key=lambda x: (x not in ("MATCHED", "ALL"), x)):
@@ -213,6 +243,21 @@ def report(scores: dict[str, Score]) -> str:
                      f"{s.recall:>7.2f}{s.f1:>7.2f}{s.false_current_rate:>15.2f}")
     lines.append("  false-current = NOT_ENTAILED rows wrongly accepted; on MATCHED")
     lines.append("  that is repealed wording served as current law.")
+
+    # The baseline is printed with the result, never separately. A score that is
+    # not compared to answering the same thing every time is not a result.
+    if rows is not None:
+        b = trivial_baselines(rows)
+        lines.append("")
+        lines.append("  TRIVIAL BASELINES — a system must beat these to mean anything")
+        for k, v in b.items():
+            lines.append(f"    {k:<24}{v['accuracy']:>7.2f}{v['f1']:>7.2f}")
+        maj = b["MAJORITY CLASS"]["accuracy"]
+        allr = scores.get("ALL")
+        if allr is not None:
+            beats = allr.accuracy > maj
+            lines.append(f"    {'->':<24}measured {allr.accuracy:.2f} vs majority "
+                         f"{maj:.2f}: {'BEATS' if beats else 'DOES NOT BEAT'} it")
     return "\n".join(lines)
 
 
@@ -285,7 +330,29 @@ def _test() -> None:
     check(perfect["ALL"].accuracy == 1.0, "an oracle scores 1.00")
     check(perfect["ALL"].f1 == 1.0, "...with F1 1.00")
 
-    txt = report(perfect)
+    rows_b = trivial_baselines(rows)
+    check(0.50 < rows_b["MAJORITY CLASS"]["accuracy"] < 0.70,
+          f"the majority class is measured, not assumed "
+          f"({rows_b['MAJORITY CLASS']['accuracy']:.2f})")
+    check(rows_b["always NOT_ENTAILED"]["f1"] == 0.0,
+          "always-NOT_ENTAILED has F1 0 — high accuracy, no useful behaviour")
+
+    from checker.entail_baseline import predict as e3
+    e3_scores = evaluate(e3, rows)
+    e3_txt = report(e3_scores, rows)
+    # On THIS set — the templated one — E3 does beat the majority class, because
+    # its negatives alter a single checkable token. On the strict 71-pair set it
+    # does not (0.44 vs 0.66). Both facts are true of the same checker, and the
+    # verdict line must report whichever set it was handed.
+    check(("BEATS" in e3_txt) and e3_scores["ALL"].accuracy >
+          rows_b["MAJORITY CLASS"]["accuracy"],
+          f"the verdict line reports this set's comparison "
+          f"({e3_scores['ALL'].accuracy:.2f} vs "
+          f"{rows_b['MAJORITY CLASS']['accuracy']:.2f})")
+    check("TRIVIAL BASELINES" in e3_txt,
+          "no report can be produced without the trivial baselines beside it")
+
+    txt = report(perfect, rows)
     check("MATCHED" in txt and "ALL" in txt, "the report shows both subsets")
     check("false-current" in txt, "the report names the legally dangerous error")
 

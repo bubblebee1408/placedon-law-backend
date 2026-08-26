@@ -45,6 +45,30 @@ preserved with its reason and a pointer to its replacement.
 Reviewers are recorded by pseudonymous ID. The identity map is local and
 gitignored: a reviewer's address is not evidence that a claim was reviewed.
 
+## The trivial baseline, and why it is printed with every score
+
+Afane, Hariri, Ouyang & Ho (CSLAW 2026, arXiv:2603.03300) measured 1,647
+statutory-survey questions and found an **all-affirmative baseline scoring
+F1 0.73, beating Westlaw AI (0.64) and Lexis+ AI (0.41)**. A score reported
+without the trivial baseline beside it is the easiest way to mislead a reader,
+including yourself.
+
+Run on this benchmark:
+
+| strategy | accuracy | F1 |
+|---|---|---|
+| always ENTAILED | 0.34 | 0.51 |
+| always NOT_ENTAILED | **0.66** | 0.00 |
+| E3 deterministic | **0.44** | 0.29 |
+
+**E3 does not beat the majority class: 0.44 against 0.66.**
+
+The same checker scores 1.00 on the templated set, where the majority class is
+0.57. Both are true. The templated negatives alter one checkable token, which is
+exactly what E3 inspects; the strict negatives drop a qualifier or rebind a
+quantity, which it cannot see. Reporting only the first number would be true and
+misleading.
+
 ## Measured — E3 deterministic baseline
 
 Recorded as `CLAIM_PARTIALLY_MATCHED`. **Never GROUNDED.**

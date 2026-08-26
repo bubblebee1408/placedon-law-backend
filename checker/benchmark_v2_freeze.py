@@ -192,6 +192,59 @@ def freeze() -> dict:
     return man
 
 
+def baseline_report() -> str:
+    """Measured scores beside the trivial baselines. Never one without the other.
+
+    The two benchmarks disagree about E3, and the disagreement is the point:
+
+        templated set (2,052 pairs)  E3 1.00 vs majority 0.57  -> beats it
+        strict set (71 pairs)        E3 0.44 vs majority 0.66  -> does NOT
+
+    The templated negatives alter one checkable token, which is what E3 checks.
+    The strict set's negatives drop a qualifier or rebind a quantity, which it
+    cannot see. Reporting only the first number would be true and misleading,
+    which is the failure Afane et al. (CSLAW 2026) measured in two commercial
+    products: an all-affirmative baseline scored F1 0.73 against Westlaw AI's
+    0.64 and Lexis+ AI's 0.41.
+    """
+    from checker.entail_baseline import judge
+    from checker.entail_pairs_v2 import all_pairs
+
+    rows = [json.loads(l) for l in
+            APPROVED_F.read_text().splitlines() if l.strip()]
+    spans = {p.id: p.source_span for p in all_pairs()}
+    n = len(rows)
+    gold = [r["label"] == ENTAILED for r in rows]
+    pos = sum(gold)
+
+    def prf(pred):
+        tp = sum(p and g for p, g in zip(pred, gold))
+        fp = sum(p and not g for p, g in zip(pred, gold))
+        fn = sum((not p) and g for p, g in zip(pred, gold))
+        pr = tp / (tp + fp) if tp + fp else 0.0
+        rc = tp / (tp + fn) if tp + fn else 0.0
+        return (sum(p == g for p, g in zip(pred, gold)) / n if n else 0.0,
+                2 * pr * rc / (pr + rc) if pr + rc else 0.0)
+
+    always_yes = prf([True] * n)
+    always_no = prf([False] * n)
+    e3 = prf([judge(spans[r["pair_id"]], r["claim"]).entailed for r in rows])
+    majority = max(always_yes[0], always_no[0])
+
+    lines = [
+        "", f"STRICT BENCHMARK — n={n} ({pos} ENTAILED / {n - pos} NOT_ENTAILED)",
+        f"  {'strategy':<26}{'accuracy':>10}{'F1':>8}",
+        f"    {'always ENTAILED':<24}{always_yes[0]:>10.2f}{always_yes[1]:>8.2f}",
+        f"    {'always NOT_ENTAILED':<24}{always_no[0]:>10.2f}{always_no[1]:>8.2f}",
+        f"    {'MAJORITY CLASS':<24}{majority:>10.2f}",
+        f"    {'E3 deterministic':<24}{e3[0]:>10.2f}{e3[1]:>8.2f}",
+        "",
+        f"  E3 {'BEATS' if e3[0] > majority else 'DOES NOT BEAT'} the majority class "
+        f"({e3[0]:.2f} vs {majority:.2f}, delta {e3[0] - majority:+.2f})",
+    ]
+    return "\n".join(lines)
+
+
 def verify() -> list[str]:
     """Re-read everything from disk and check it against the manifest."""
     problems: list[str] = []
@@ -280,6 +333,13 @@ def _test() -> None:
 
     probs = verify()
     check(probs == [], f"the manifest verifies against disk ({probs[:2]})")
+
+    br = baseline_report()
+    check("MAJORITY CLASS" in br, "the strict report carries the trivial baselines")
+    check("DOES NOT BEAT" in br,
+          "E3's failure against the majority class on the strict set is stated")
+    check("always NOT_ENTAILED" in br,
+          "both trivial strategies are shown, not just the winning one")
 
     # Tamper detection.
     orig = APPROVED_F.read_text()
