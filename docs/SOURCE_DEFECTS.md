@@ -95,3 +95,45 @@ Sampling their character: mostly word fragments from PDF hyphenation and line br
 and statute cross-references the classifier does not recognise. **Six carry long unexplained runs
 and have not been individually inspected** — s.16, s.124 and s.378ZR are the largest. These are
 open, not cleared.
+
+---
+
+## SD-003 — Unbalanced amendment-span markup (120 spans)
+
+**Found:** 26 Aug 2026, while proving the temporal engine.
+**Source:** India Code section content (`SectionPageContent`).
+**Severity:** blocks exact point-in-time reconstruction for the affected spans.
+
+India Code marks amended spans inline as `<sup>N</sup>[ ... ]`. In **120 spans
+across the corpus** the opening bracket has no matching close.
+
+s.96 is one of them. Its content contains exactly one `[` after the marker at
+offset 1823 and **zero** `]` characters thereafter:
+
+    <sup>1</sup>[Provided that annual general meeting of an unlisted company
+    may be held at any place in India if consent is given ...
+
+The section's footnote *does* quote the prior wording
+(`Subs. by Act 1 of 2018, s. 26, for "Provided that"`), so the change is known —
+but the extent of the replaced span is not, so the substitution cannot be
+reversed. `checker/as_of.py` reports PARTIAL and names marker 1.
+
+**Not repaired.** Guessing the span end would mean choosing where the amendment
+stops, which is a legal judgement disguised as a parsing decision. `_find_span`
+already carries a comment recording an earlier attempt to swallow to
+end-of-document: it captured 8,777 characters in s.1323 and destroyed a later
+marker in the same section.
+
+**Consequence.** Across amended sections, reconstruction before the first
+amendment date is:
+
+| | count |
+|---|---|
+| PARTIAL before, EXACT on/after | 118 |
+| EXACT both sides | 45 |
+| PARTIAL both sides | 41 |
+| ABSTAIN | 2 |
+
+Roughly two thirds of amended sections cannot be reconstructed exactly from this
+source alone. The remedy is the amending Act itself — the same independent
+witness used in `docs/CORROBORATION.md` — not a repair to India Code's markup.

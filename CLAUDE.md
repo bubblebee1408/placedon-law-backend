@@ -95,7 +95,13 @@ Files changed · Tests added or updated · Commands run · Results · Known limi
   **`indiacode.gov.in`**, running DSpace with an open REST API (no key, no auth) exposing
   `dc.identifier.section_number`, `section_id`, `section_footnote`, `act_name`. The 403 that
   blocked us since 21 Aug was a dead domain, not a block. Any hardcoded `.nic.in` URL is dead.
-- Point-in-time reconstruction: **section-level reconstruction still UNVERIFIED**.
+- Point-in-time reconstruction: **boundary behaviour proved** on s.177, s.447 and s.35 —
+  6/6 boundaries, text changes across each, effective dates inclusive
+  (`scripts/prove_temporal.py`, `docs/TEMPORAL_PROOF.md`). EXACT there rests on 5 insertions
+  (recoverable by deletion, no witness needed) and 3 substitutions (single-sourced footnotes).
+- **SD-003: 120 amendment spans carry unbalanced markup.** s.96 is one — it cannot be
+  reconstructed before 13-6-2018 at all. Two thirds of amended sections are affected.
+- Section-level reconstruction of **substituted** spans still UNVERIFIED.
   But prior wording is now independently corroborated for the first time: 24 amended
   spans matched against the amending Acts themselves on Indian Kanoon, **0 conflicts**;
   21/24 where the instrument is held. See `docs/CORROBORATION.md`. This corroborates
