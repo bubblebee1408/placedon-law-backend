@@ -212,6 +212,14 @@ def _test() -> None:
     check("dc.identifier.act_number" in src and "AND" in src,
           "the Act is constrained in the query, not only client-side")
 
+    # Regression: --all once read the index's top level, whose keys are
+    # "source"/"built_offline"/"entries", and dutifully looked up s.built_offline.
+    idx = json.loads(Path("corpus/companies_act/_index.json").read_text())
+    check("entries" in idx and len(idx["entries"]) > 400,
+          f"section numbers are read from .entries ({len(idx.get('entries', {}))})")
+    check(all(k[0].isdigit() for k in list(idx["entries"])[:50]),
+          "every key taken from .entries looks like a section number")
+
     print(f"\n{ok}/{ok + fail} passed")
     if fail:
         raise SystemExit(1)
@@ -226,8 +234,12 @@ if __name__ == "__main__":
     from checker.section_index import MVP_SECTIONS
 
     if "--all" in args:
+        # The section numbers live under "entries"; the top level also holds
+        # "source" and "built_offline". Reading the top level treated those
+        # metadata keys as section numbers and "checked" s.built_offline.
         idx = json.loads(Path("corpus/companies_act/_index.json").read_text())
-        nums = sorted(idx.keys(), key=lambda s: (len(s), s))
+        entries = idx.get("entries", idx)
+        nums = sorted(entries.keys(), key=lambda s: (len(s), s))
     else:
         nums = list(MVP_SECTIONS)
 
