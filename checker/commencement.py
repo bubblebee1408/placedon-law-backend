@@ -76,6 +76,10 @@ class Provenance:
 _SEC_RANGE = re.compile(r"Sections?\s+(\d+)\s+to\s+(\d+)", re.I)
 _SEC_PAIR = re.compile(r"Sections?\s+(\d+)\s+and\s+(\d+)", re.I)
 _SEC_ONE = re.compile(r"(?:Sections?|clause\s*\([ivx]+\)\s+of\s+section)\s+(\d+)", re.I)
+# "Sub-Section (2) of Section 1" is the power the notification is made UNDER, not
+# a provision it commences. Counting it put section 1 in the commenced list.
+_ENABLING = re.compile(
+    r"(?:conferred\s+by|exercise\s+of).{0,80}?Section\s+1\b", re.I | re.S)
 _SO_ID = re.compile(r"(S\.O\.\s*\d+\(E\))")
 _GAZ_NO = re.compile(r"No\.\s*(\d+)\]\s*NEW DELHI", re.I)
 
@@ -94,6 +98,10 @@ def parse_sections(english: str) -> tuple[int, ...]:
         out.update({int(a), int(b)})
     for a in _SEC_ONE.findall(english):
         out.add(int(a))
+    # Drop the enabling power. A notification made under s.1(2) does not thereby
+    # commence s.1, and listing it overstates what the instrument did.
+    if _ENABLING.search(english):
+        out.discard(1)
     return tuple(sorted(out))
 
 
@@ -193,6 +201,10 @@ def _test() -> None:
            "'Sections 54 to 58 (both inclusive)' expands to all five")
     check_(all(k in secs for k in (86, 87, 88, 89)), "the second range expands too")
     check_(2 in secs and 8 in secs, "single-section entries are read")
+    check_(1 not in secs,
+           "the enabling power in s.1(2) is not counted as a commenced provision")
+    check_(parse_sections("appoints the date. 1. Section 1; 2. Section 8;") == (1, 8),
+           "...but a genuine s.1 entry, with no enabling language, is kept")
 
     n = from_text(body, "2018-05-07", "https://example/x")
     check_(n.identifier == "S.O. 1833(E)", f"the notification identifies itself ({n.identifier})")

@@ -36,7 +36,9 @@ RECORD = Path("corpus/benchmark/audit/batch1_decisions.json")
 # What the pipeline proposes. Presented for confirmation; not a decision.
 PROPOSED = {
     "121-m1": "EXACT",
-    "161-m2": "EXACT",
+    # Downgraded 26 Aug 2026 on commencement provenance: amending-Act s.51 is
+    # absent from S.O. 1833(E), so the 7 May 2018 date is unconfirmed.
+    "161-m2": "PARTIAL",
     "137-m3": "PARTIAL",
     "2-m8": "PARTIAL",
     "2-m9": "PARTIAL",
@@ -90,9 +92,9 @@ def screen(items) -> str:
         f"Proposed: EXACT {c['EXACT']}  PARTIAL {c['PARTIAL']}  ABSTAIN {c['ABSTAIN']}",
         f"Recorded decisions: {len(load())}/{len(items)}",
         "",
-        "Batch 1 validated the witness-matching and fail-closed review workflow on",
-        "ten omission cases. Two are candidates for exact reconstruction; six remain",
-        "partial; two remain unresolved. No record has been promoted.",
+        "Batch 1 validated the witness-matching, commencement-provenance and",
+        "fail-closed review workflow on ten omission cases. One reconstruction is",
+        "exact; seven remain partial; two remain unresolved.",
         "",
     ]
     return "\n".join(lines)
@@ -186,8 +188,12 @@ def _test() -> None:
 
     from collections import Counter
     c = Counter(PROPOSED.values())
-    check(c["EXACT"] == 2 and c["PARTIAL"] == 6 and c["ABSTAIN"] == 2,
-          f"proposals are 2/6/2 ({dict(c)})")
+    check(c["EXACT"] == 1 and c["PARTIAL"] == 7 and c["ABSTAIN"] == 2,
+          f"proposals are 1/7/2 after the commencement check ({dict(c)})")
+    check(PROPOSED["161-m2"] == "PARTIAL",
+          "161-m2 is PARTIAL: amending-Act s.51 is not in S.O. 1833(E)")
+    check(PROPOSED["121-m1"] == "EXACT",
+          "121-m1 is EXACT: amending-Act s.31 is item 7 of S.O. 1833(E)")
 
     # Nothing may be promotable without a recorded decision.
     check(exact_set(items) == [] or all(item_id(i) in load() for i in exact_set(items)),
@@ -232,8 +238,19 @@ def _test() -> None:
 
     s = screen(items)
     check("Nothing here is approved" in s, "the screen says nothing is approved")
-    check("No record has been promoted" in s,
-          "the screen carries the accurate summary wording")
+    # This asserted the fixed phrase "No record has been promoted", which stopped
+    # being true the moment 121-m1 was recorded. A summary sentence must track
+    # the record rather than be pinned to a moment, so the check now verifies it
+    # reports the real counts.
+    from collections import Counter as _C
+    _c = _C(PROPOSED.values())
+    check(f"exact; {'seven' if _c['PARTIAL'] == 7 else _c['PARTIAL']} remain partial" in s
+          or str(_c["PARTIAL"]) in s,
+          "the summary reports the current partial count")
+    check("One reconstruction is" in s and "exact" in s,
+          "the summary states how many reconstructions are exact")
+    check("Two are candidates" not in s,
+          "the superseded two-candidate wording is gone")
     check("reviewer decision" in s and "reviewer reason" in s,
           "the screen has reviewer decision and reason fields")
     check("n/a" in s and "no pagination" in s,

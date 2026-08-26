@@ -99,6 +99,18 @@ def _act_text(c: Corroborator, instrument: str) -> tuple[str, str] | None:
     return c.witness_text(instrument)
 
 
+def _clause_number(text: str, section: str) -> int | None:
+    """The amending Act's own section number that amends this principal section.
+
+    Needed because a commencement notification lists the AMENDING Act's sections,
+    not the principal Act's. s.121 is amended by clause 31; asking a notification
+    about "121" would find nothing and wrongly read as uncommenced.
+    """
+    m = re.search(rf"(\d+)\.\s*(?:Omission|Amendment)\s+of\s+section\s+"
+                  rf"{re.escape(section)}\b", text, re.I)
+    return int(m.group(1)) if m else None
+
+
 def _clause_for_section(text: str, section: str) -> str | None:
     """The amending Act's clause dealing with this section, if it names one."""
     for m in re.finditer(
@@ -285,13 +297,36 @@ def build(offline: bool = False) -> list[Item]:
             items.append(it)
             continue
 
+        # Strict EXACT requires commencement provenance. The notification lists
+        # the AMENDING Act's sections, so the clause number is what to ask about.
+        from checker import commencement as cm
+        cno = _clause_number(text, it.section)
+        prov = cm.check(cno, it.commencement_date) if cno else None
+        if prov is not None and prov.notification is not None:
+            it.commencement_source = prov.notification.locator
+            it.commencement_type = "NOTIFICATION"
+        if prov is None or not prov.confirmed:
+            it.status = PARTIAL
+            it.reconstructed_before = longest
+            it.reason = (
+                f"text and clause identity are established (amending Act s.{cno}, "
+                f"sub-section ({chosen.subsection})), but commencement is not: "
+                + (prov.note if prov else "the amending clause number is unknown"))
+            it.missing_evidence = (
+                f"a notification bringing amending-Act s.{cno} into force")
+            it.next_source = "the remaining commencement notifications in the series"
+            it.commencement_type = "UNKNOWN" if prov is None or not prov.notification \
+                else it.commencement_type
+            items.append(it)
+            continue
+
         it.reconstructed_before = longest
         it.reconstructed_after = "(text omitted)"
         it.status = EXACT
         it.reason = (getattr(it, "reason_prefix", "") +
                      f"the Act omits these words from sub-section ({chosen.subsection}) "
-                     "of this section, and they are absent from the current "
-                     "consolidation as expected")
+                     "of this section; they are absent from the current "
+                     f"consolidation as expected; and {prov.note}")
         items.append(it)
 
     # A section may carry several omissions in one clause. This code locates the
