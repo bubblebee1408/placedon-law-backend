@@ -211,6 +211,15 @@ def fetch_rules(origin: str, *, timeout: float = 15.0) -> Rules:
             if r.status != 200:
                 return Rules(source=f"{url} HTTP {r.status}")
             body = r.read().decode("utf-8", "replace")
+    except urllib.error.HTTPError as exc:
+        # A 4xx is an *answer*: the server is reachable and states that no rules
+        # file exists, which RFC 9309 treats as full allowance. A 5xx is not an
+        # answer, and neither is a timeout — those stay closed. Collapsing the two
+        # would either lock us out of every site without a robots.txt (cca.gov.in
+        # among them) or, worse, let a failing server look like permission.
+        if 400 <= exc.code < 500:
+            return Rules(loaded=True, source=f"{url} HTTP {exc.code}: no rules published")
+        return Rules(source=f"{url} HTTP {exc.code}")
     except (urllib.error.URLError, OSError, ValueError) as exc:
         return Rules(source=f"{url} unreachable: {exc}")
     return parse(body, source=url)
@@ -320,6 +329,16 @@ def _test() -> None:
     check(Fetcher("https://a.org", rules=parse("User-agent: *\n"))
           .get("https://b.org/x")[0] == 999,
           "a cross-origin URL is refused rather than fetched")
+
+    # A 404 means "no rules exist"; a 503 means "no answer". Only the first grants
+    # permission, and conflating them is a bug in either direction.
+    r404 = Rules(loaded=True, source="HTTP 404: no rules published")
+    check(allowed("https://cca.gov.in/anything", r404),
+          "a 404 robots.txt permits fetching (RFC 9309)")
+    check(not allowed("https://x.org/a", Rules(source="HTTP 503")),
+          "a 5xx robots.txt still denies everything")
+    check(not allowed("https://x.org/a", Rules(source="timeout")),
+          "an unreachable robots.txt still denies everything")
 
     # TLS verification is part of provenance, not a networking detail.
     ctx = ssl_context()

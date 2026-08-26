@@ -65,6 +65,9 @@ def run(paths: list[str], as_json: bool) -> int:
                 "digest": r.digest_alg or None,
                 "signature_verified": r.signature_verified,
                 "chains_to_cca_india": r.chains_to_cca,
+                "chain_verdict": r.chain_verdict or None,
+                "chain_root": r.chain_root or None,
+                "chain_path": r.chain_names or None,
                 "revocation_checked": r.revocation_checked,
                 "covered_bytes": r.covered_bytes,
                 "total_bytes": r.total_bytes,
@@ -79,6 +82,8 @@ def run(paths: list[str], as_json: bool) -> int:
         print(f"\n[{mark}] {f.name}")
         print(f"  {PLAIN.get(r.verdict, r.verdict)}")
         print(r.summary())
+        if r.chain_names:
+            print(f"  chain              : {' <- '.join(r.chain_names)}")
 
     if results:
         n_ok = sum(1 for _, r in results if r.verdict == VALID)
@@ -106,6 +111,9 @@ def _test() -> None:
     check(set(PLAIN) == {VALID, MODIFIED, COVERAGE_INCOMPLETE, UNSIGNED, MALFORMED,
                          UNSUPPORTED},
           "every verdict has a plain-language meaning")
+    from checker.pdf_signature import SignatureResult
+    check(SignatureResult(VALID).chains_to_cca is False,
+          "chain trust defaults to false, never assumed from a valid signature")
     check("Do not rely" in PLAIN[MODIFIED],
           "the MODIFIED wording tells the reader not to rely on the document")
     check("not a finding about the document" in PLAIN[UNSUPPORTED].lower(),

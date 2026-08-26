@@ -87,11 +87,10 @@ _RDN = {
     "1.2.840.113549.1.9.1": "email",
 }
 
-# Certificates whose issuer chain reaches the Indian government root. Matching is
-# on the issuer string because we do not yet hold CCA's root certificates; see
-# `trust_note` on the result, which states this limitation rather than implying a
-# full chain validation we have not performed.
-_CCA_MARKERS = ("CCA India", "Controller of Certifying Authorities")
+# Chain validation now runs against the real CCA roots held in corpus/trust/cca
+# (see checker/trust.py). The previous implementation matched the string
+# "CCA India" inside a certificate, which any self-issued certificate can
+# contain — it tested spelling, not trust.
 
 
 @dataclass
@@ -121,7 +120,10 @@ class SignatureResult:
     total_bytes: int = 0
     signature_bytes: int = 0        # the /Contents blob, which cannot sign itself
     uncovered_ranges: list[tuple[int, int]] = field(default_factory=list)
-    chains_to_cca: bool = False
+    chains_to_cca: bool = False            # cryptographically verified to a CCA root
+    chain_verdict: str = ""
+    chain_root: str = ""
+    chain_names: list[str] = field(default_factory=list)
     revocation_checked: bool = False       # never True: we perform no CRL/OCSP check
     signature_verified: bool = False       # public-key check actually performed
     note: str = ""
@@ -158,7 +160,9 @@ class SignatureResult:
             f"({self.coverage_pct:.2f}%)",
         f"  signature blob     : {self.signature_bytes} bytes (excluded; cannot "
             f"sign itself)",
-            f"  chains to CCA India: {'yes' if self.chains_to_cca else 'not established'}",
+            f"  chains to CCA India: "
+            f"{'YES — ' + self.chain_root if self.chains_to_cca else 'not established'}"
+            f"{'' if self.chains_to_cca else ' (' + (self.chain_verdict or 'not attempted') + ')'}",
             f"  signature checked  : {'yes' if self.signature_verified else 'no'}",
             f"  revocation checked : no (never performed by this tool)",
         ]
@@ -234,6 +238,21 @@ def _parse_time(n: Node) -> datetime | None:
         return datetime.strptime(s[:len(fmt) + 2], fmt).replace(tzinfo=timezone.utc)
     except ValueError:
         return None
+
+
+def _der_of(blob: bytes, cert: Node) -> bytes:
+    """A certificate's exact DER bytes, recovered by re-parsing from the blob.
+
+    Node offsets are relative to the parent's content buffer, so a certificate
+    cannot be sliced out of `blob` directly. Re-serialising from the parsed tree
+    would risk producing bytes that differ from what was signed; searching for the
+    original run keeps the comparison honest.
+    """
+    body = cert.content
+    idx = blob.find(body)
+    if idx < 0:
+        return b""
+    return blob[idx - cert.header_len:idx + len(body)]
 
 
 def _certificates(signed_data: Node) -> list[Node]:
@@ -455,19 +474,42 @@ def verify(path: str | Path) -> SignatureResult:
         signer = Signer(subject=sub, issuer=iss, serial=_cert_serial(signer_cert),
                         not_before=nb, not_after=na)
 
-    chains = any(any(m in v for m in _CCA_MARKERS)
-                 for cert in certs
-                 for d in _cert_names(cert)[:2] for v in d.values())
-
     signing_time = None
     if OID_SIGNING_TIME in attrs:
         signing_time = _parse_time(attrs[OID_SIGNING_TIME])
+
+    # Real chain validation: verify every signature from the signing certificate
+    # up to a root published by CCA, rather than looking for its name in a string.
+    chain_verdict, chain_root, chain_names = "", "", []
+    chains = False
+    try:
+        from checker import trust
+        roots = trust.load_roots()
+        loaded = []
+        for c in certs:
+            try:
+                loaded.append(trust.load_certificate(_der_of(blob, c)))
+            except Exception:
+                continue
+        leaf = next((lc for lc in loaded
+                     if signer_cert is not None
+                     and lc.der == _der_of(blob, signer_cert)), None)
+        if leaf is not None:
+            at = signing_time or datetime.now(timezone.utc)
+            cr = trust.build_chain(leaf, loaded, roots, when=at)
+            chain_verdict = cr.verdict
+            chains = cr.trusted
+            chain_root = cr.root.cn if cr.root else ""
+            chain_names = [c.cn for c in cr.chain]
+    except Exception as exc:                     # trust store missing or unusable
+        chain_verdict = f"NOT_CHECKED ({exc})"
 
     res = SignatureResult(
         verdict=VALID, signer=signer, digest_alg=dig_name, signing_time=signing_time,
         covered_bytes=len(covered), total_bytes=total,
         signature_bytes=(ct_m.end(1) - ct_m.start(1)) // 2,
         uncovered_ranges=gaps, chains_to_cca=chains,
+        chain_verdict=chain_verdict, chain_root=chain_root, chain_names=chain_names,
     )
 
     # 1. Does the signed messageDigest match the bytes actually in the file?

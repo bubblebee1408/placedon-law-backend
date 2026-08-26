@@ -38,6 +38,7 @@ suites=(
   checker/corroborate.py
   checker/asn1.py
   checker/pdf_signature.py
+  checker/trust.py
   checker/provenance_slots.py
   checker/drafting.py
   checker/matter.py
