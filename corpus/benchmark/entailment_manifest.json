@@ -1,0 +1,43 @@
+{
+ "sha256": "96d0304c4d6f41f4ec7f12289848ed6b44fba3228b42fcfd101265fc58b974a0",
+ "rows": 2052,
+ "entailed": 1168,
+ "not_entailed": 884,
+ "sections": 424,
+ "kinds": {
+  "amended_by": {
+   "ENTAILED": 399,
+   "NOT_ENTAILED": 0
+  },
+  "wrong_instrument": {
+   "ENTAILED": 0,
+   "NOT_ENTAILED": 399
+  },
+  "quoted_span": {
+   "ENTAILED": 688,
+   "NOT_ENTAILED": 0
+  },
+  "current_wording": {
+   "ENTAILED": 81,
+   "NOT_ENTAILED": 0
+  },
+  "wrong_date": {
+   "ENTAILED": 0,
+   "NOT_ENTAILED": 290
+  },
+  "wrong_number": {
+   "ENTAILED": 0,
+   "NOT_ENTAILED": 155
+  },
+  "prior_as_current": {
+   "ENTAILED": 0,
+   "NOT_ENTAILED": 40
+  }
+ },
+ "matched_kinds": [
+  "prior_as_current",
+  "current_wording"
+ ],
+ "source": "checker/entail_mine.py --emit",
+ "note": "Frozen. Do not regenerate to make a score improve. Per-kind metrics only; the pooled figure is dominated by trivially-easy quoted_span positives."
+}

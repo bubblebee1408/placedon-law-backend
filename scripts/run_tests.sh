@@ -40,6 +40,8 @@ suites=(
   checker/pdf_signature.py
   checker/trust.py
   checker/entail_mine.py
+  checker/benchmark_freeze.py
+  checker/entail_baseline.py
   checker/provenance_slots.py
   checker/drafting.py
   checker/matter.py
