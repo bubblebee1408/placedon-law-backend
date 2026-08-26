@@ -1,0 +1,52 @@
+{
+ "benchmark_version": "1.0.0",
+ "description": "human-reviewed, corpus-derived benchmark for selected Indian corporate-law proposition types",
+ "excluded_labels": [
+  "INVALID_FIXTURE",
+  "PENDING_REVIEW",
+  "UNRESOLVED",
+  "SOURCE_MISSING",
+  "CONTRADICTORY"
+ ],
+ "fixture_hashes": {
+  "approved_pairs.jsonl": "5542490798792fd7b7dccbc6d990e828fdc84bcbe95f7d8d95abb8f91b94f963",
+  "invalid_fixtures.jsonl": "73a36cec3c7e028797f3ce14312c08c7ecf19f702289ca63fea63ac61aac7100",
+  "pending_reviews.jsonl": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "rejected_pairs.jsonl": "8fc751f7e9312563d4d2e389e93278357cbdff9904d3ce032d6749d88cb8efcf"
+ },
+ "invalid_fixture_count": 9,
+ "label_basis_counts": {
+  "CONSTRUCTED": 54,
+  "HUMAN_JUDGED": 17
+ },
+ "label_counts": {
+  "ENTAILED": 24,
+  "NOT_ENTAILED": 47
+ },
+ "not_a_claim_of": "This benchmark does not measure general legal grounding. It is derived from selected provisions of one Act, its negatives are constructed, and its positives were written and reviewed by one reviewer.",
+ "pair_count": 71,
+ "pending_review_count": 0,
+ "rejected_count": 1,
+ "review_timestamps": [
+  "2026-08-26T10:39:22+00:00",
+  "2026-08-26T11:26:22+00:00"
+ ],
+ "reviewer_ids": [
+  "reviewer-01"
+ ],
+ "software_commit": "b4418f28898933afddb3074a320d416b228f5c60",
+ "source_ids": [
+  "companies-act-2013-s101",
+  "companies-act-2013-s103",
+  "companies-act-2013-s173",
+  "companies-act-2013-s174",
+  "companies-act-2013-s96"
+ ],
+ "source_span_hashes": {
+  "companies-act-2013-s101": "sha256:8b63965692f28c157133e9b873018f3ee0b8325f49b047163fe4cf57ccab84cc",
+  "companies-act-2013-s103": "sha256:fb37f5002083be65c6e1d338b8e95aa9ba7f0b8b17e28fe23811affc8b3bb602",
+  "companies-act-2013-s173": "sha256:1e268aed56f953b7ed799f0ab64192e9e74e7f03d20caf32938352e5957b4db9",
+  "companies-act-2013-s174": "sha256:99e58c080c552137d3481870ebeb8f4e1bcab8b43983a07cd8facd585ea63da7",
+  "companies-act-2013-s96": "sha256:eeeff47c69dfdfe1badc087ed5853535dbef20a596dc3d76082840df52ab3fc4"
+ }
+}

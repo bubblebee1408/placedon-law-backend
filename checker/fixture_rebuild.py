@@ -103,9 +103,9 @@ _SPECIAL: dict[str, tuple[str, str]] = {
 
 
 def propose() -> list[Proposal]:
-    from checker.entail_pairs_v2 import all_pairs, source_span
+    from checker.entail_pairs_v2 import base_pairs, source_span
     out: list[Proposal] = []
-    for p in all_pairs():
+    for p in base_pairs():
         if p.label != INVALID_FIXTURE:
             continue
         key = (p.section, p.subsection)
@@ -150,14 +150,14 @@ def _scope_of(claim: str) -> str:
 
 def invalid_records() -> list[dict]:
     """The originals, preserved permanently with their invalidation reason."""
-    from checker.entail_pairs_v2 import all_pairs
+    from checker.entail_pairs_v2 import base_pairs
     return [{
         "pair_id": p.id, "section": p.section, "subsection": p.subsection,
         "source_id": f"companies-act-2013-s{p.section}",
         "claim": p.claim, "label": INVALID_FIXTURE, "reason": INVALID_REASON,
         "qualifiers_omitted": [q["kind"] for q in p.qualifiers],
         "superseded_by": p.id.replace("-bind-", "-qbind-"),
-    } for p in all_pairs() if p.label == INVALID_FIXTURE]
+    } for p in base_pairs() if p.label == INVALID_FIXTURE]
 
 
 def write(proposals_path: Path = PROPOSALS, invalid_path: Path = INVALID) -> tuple[str, str]:
@@ -227,7 +227,7 @@ def _test() -> None:
           "every proposal supersedes a preserved original")
 
     # Contradiction detection against everything already decided.
-    from checker.entail_pairs_v2 import Pair, contradictions, all_pairs
+    from checker.entail_pairs_v2 import Pair, contradictions, all_pairs, base_pairs
     from checker.grounding_policy import CONSTRUCTED
     as_pairs = [Pair(id=p.pair_id, section=p.section, subsection=p.subsection,
                      source_span=p.source_span, claim=p.claim, label=p.label,
@@ -236,10 +236,16 @@ def _test() -> None:
     cons = contradictions(all_pairs() + as_pairs)
     check(cons == [], f"no contradiction against approved or rejected pairs ({cons[:2]})")
 
-    # A proposal must not collide with an existing id.
-    existing = {p.id for p in all_pairs()}
+    # A proposal must not collide with a PRE-EXISTING pair. Checked against
+    # base_pairs(), not all_pairs(): once approved, a proposal is folded into
+    # all_pairs() under its own id, so comparing there would flag success as a
+    # collision.
+    existing = {p.id for p in base_pairs()}
     check(not (existing & {p.pair_id for p in props}),
-          "no proposal reuses an existing pair id")
+          "no proposal reuses a pre-existing pair id")
+    approved_ids = {p.id for p in all_pairs()} - existing
+    check(approved_ids <= {p.pair_id for p in props},
+          "every pair beyond the base set came from an approved proposal")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:

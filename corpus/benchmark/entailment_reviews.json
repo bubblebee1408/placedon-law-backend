@@ -35,6 +35,12 @@
   "reviewer": "reviewer-01",
   "status": "REJECTED"
  },
+ "v2-173-2-pos-r2": {
+  "note": "Approved after side-by-side review of original claim, replacement, source span, qualifier inventory and transformation. Qualified positives under the fail-closed convention.",
+  "reviewed_at": "2026-08-26T11:26:22+00:00",
+  "reviewer": "reviewer-01",
+  "status": "APPROVED"
+ },
  "v2-174-1-pos": {
   "note": "Approved after review of source span, claim, qualifier inventory and rationale. Fail-closed convention applied: each positive carries its material qualifiers.",
   "reviewed_at": "2026-08-26T10:39:22+00:00",
@@ -44,6 +50,60 @@
  "v2-174-2-pos": {
   "note": "Approved after review of source span, claim, qualifier inventory and rationale. Fail-closed convention applied: each positive carries its material qualifiers.",
   "reviewed_at": "2026-08-26T10:39:22+00:00",
+  "reviewer": "reviewer-01",
+  "status": "APPROVED"
+ },
+ "v2-p101-qbind-0": {
+  "note": "Approved after side-by-side review of original claim, replacement, source span, qualifier inventory and transformation. Qualified positives under the fail-closed convention.",
+  "reviewed_at": "2026-08-26T11:26:22+00:00",
+  "reviewer": "reviewer-01",
+  "status": "APPROVED"
+ },
+ "v2-p101-qbind-1": {
+  "note": "Approved after side-by-side review of original claim, replacement, source span, qualifier inventory and transformation. Qualified positives under the fail-closed convention.",
+  "reviewed_at": "2026-08-26T11:26:22+00:00",
+  "reviewer": "reviewer-01",
+  "status": "APPROVED"
+ },
+ "v2-p103-qbind-0": {
+  "note": "Approved after side-by-side review of original claim, replacement, source span, qualifier inventory and transformation. Qualified positives under the fail-closed convention.",
+  "reviewed_at": "2026-08-26T11:26:22+00:00",
+  "reviewer": "reviewer-01",
+  "status": "APPROVED"
+ },
+ "v2-p103-qbind-1": {
+  "note": "Approved after side-by-side review of original claim, replacement, source span, qualifier inventory and transformation. Qualified positives under the fail-closed convention.",
+  "reviewed_at": "2026-08-26T11:26:22+00:00",
+  "reviewer": "reviewer-01",
+  "status": "APPROVED"
+ },
+ "v2-p103-qbind-2": {
+  "note": "Approved after side-by-side review of original claim, replacement, source span, qualifier inventory and transformation. Qualified positives under the fail-closed convention.",
+  "reviewed_at": "2026-08-26T11:26:22+00:00",
+  "reviewer": "reviewer-01",
+  "status": "APPROVED"
+ },
+ "v2-p103-qbind-3": {
+  "note": "Approved after side-by-side review of original claim, replacement, source span, qualifier inventory and transformation. Qualified positives under the fail-closed convention.",
+  "reviewed_at": "2026-08-26T11:26:22+00:00",
+  "reviewer": "reviewer-01",
+  "status": "APPROVED"
+ },
+ "v2-p173-qbind-0": {
+  "note": "Approved after side-by-side review of original claim, replacement, source span, qualifier inventory and transformation. Qualified positives under the fail-closed convention.",
+  "reviewed_at": "2026-08-26T11:26:22+00:00",
+  "reviewer": "reviewer-01",
+  "status": "APPROVED"
+ },
+ "v2-p173-qbind-1": {
+  "note": "Approved after side-by-side review of original claim, replacement, source span, qualifier inventory and transformation. Qualified positives under the fail-closed convention.",
+  "reviewed_at": "2026-08-26T11:26:22+00:00",
+  "reviewer": "reviewer-01",
+  "status": "APPROVED"
+ },
+ "v2-p173-qbind-2": {
+  "note": "Approved after side-by-side review of original claim, replacement, source span, qualifier inventory and transformation. Qualified positives under the fail-closed convention.",
+  "reviewed_at": "2026-08-26T11:26:22+00:00",
   "reviewer": "reviewer-01",
   "status": "APPROVED"
  }

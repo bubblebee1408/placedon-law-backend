@@ -351,8 +351,43 @@ def constructed_pairs() -> list[Pair]:
     return out
 
 
-def all_pairs() -> list[Pair]:
+def approved_replacements() -> list[Pair]:
+    """Rebuilt fixtures that a human has approved.
+
+    Imported here rather than defined in this module so the proposal machinery
+    stays separate from the pair set: a proposal that nobody approved must not
+    be able to reach the benchmark by being in the same file as pairs that were.
+    """
+    from checker.fixture_rebuild import propose
+    from checker.reviews import status_of
+    out = []
+    for pr in propose():
+        st, who, when = status_of(pr.pair_id)
+        if st != REVIEW_APPROVED:
+            continue
+        out.append(Pair(
+            id=pr.pair_id, section=pr.section, subsection=pr.subsection,
+            source_span=pr.source_span, claim=pr.claim, label=ENTAILED,
+            label_basis=HUMAN_JUDGED, qualifiers=pr.qualifiers,
+            preserves_all_qualifiers=True, reviewer_status=st, reviewer=who,
+            reviewed_at=when, rationale=pr.transformation,
+            kind="paraphrase_qualified", supersedes=pr.supersedes,
+        ))
+    return out
+
+
+def base_pairs() -> list[Pair]:
+    """Pairs before approved replacements are folded in.
+
+    `propose()` reads this rather than `all_pairs()`: a replacement is derived
+    from an invalid fixture, so having the proposal generator read the set that
+    already contains approved replacements is a cycle.
+    """
     return rewritten_pairs() + constructed_pairs()
+
+
+def all_pairs() -> list[Pair]:
+    return base_pairs() + approved_replacements()
 
 
 def frozen_candidates() -> list[Pair]:
