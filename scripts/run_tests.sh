@@ -48,6 +48,7 @@ suites=(
   checker/witness_span.py
   checker/s96_slice.py
   checker/eval_taxonomy.py
+  checker/entail_binding.py
   checker/grounding_policy.py
   checker/entail_pairs_v2.py
   checker/reviews.py

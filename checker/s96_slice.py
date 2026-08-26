@@ -60,8 +60,10 @@ class SourcePacket:
     current_text: str
     current_sha256: str
     stored_sha256: str | None
-    source_url: str | None
-    fetched_at: str | None
+    source_url: str | None          # where we actually fetched it — a historical fact
+    citable_url: str | None         # where a reader can go today
+    url_note: str = ""
+    fetched_at: str | None = None
     amending_act: str | None = None
     amending_clause: int | None = None
     amending_text: str | None = None
@@ -80,6 +82,36 @@ class SourcePacket:
              self.commencement_identifier, self.commencement_sha256))
 
 
+# India Code moved from indiacode.nic.in to indiacode.gov.in. Every URL recorded
+# at ingestion points at the dead host, and the handle in India Code's OWN
+# metadata is worse — it names `test1.indiacode.nic.in` over plain HTTP, a test
+# hostname published in the live record.
+#
+# The retrieval URL is kept: it is a historical fact about where the bytes came
+# from, and rewriting it would falsify the provenance. A separate citable URL is
+# added for the reader, and the difference is stated rather than hidden. A
+# citation nobody can follow is not a citation.
+_HANDLES: dict[str, str] = {
+    "96": "https://indiacode.gov.in/handle/123456789/514826",
+}
+_DEAD_HOSTS = ("indiacode.nic.in", "test1.indiacode.nic.in")
+
+
+def _citable_url(section: str, retrieved: str | None) -> tuple[str | None, str]:
+    h = _HANDLES.get(section)
+    if h:
+        note = ""
+        if retrieved and any(d in retrieved for d in _DEAD_HOSTS):
+            note = ("the retrieval URL points at indiacode.nic.in, which no longer "
+                    "serves this content; the citable URL is on indiacode.gov.in")
+        return h, note
+    if retrieved and any(d in retrieved for d in _DEAD_HOSTS):
+        return None, ("the retrieval URL is on a host that no longer serves this "
+                      "content, and no citable replacement is recorded for this "
+                      "section")
+    return retrieved, ""
+
+
 def build_packet(section: str = "96") -> SourcePacket:
     from checker.section_index import section_by_number
     from checker.commencement import load_cached
@@ -88,14 +120,17 @@ def build_packet(section: str = "96") -> SourcePacket:
 
     rec = section_by_number(section)
     if rec is None:
-        return SourcePacket(section, "", "", "", None, None, None,
+        return SourcePacket(section, "", "", "", None, None, None, "",
                             problems=[f"s.{section} is not in the corpus"])
 
     content = rec.get("content") or ""
+    retrieved = rec.get("source_url")
+    citable, note = _citable_url(section, retrieved)
     p = SourcePacket(
         section=section, title=rec.get("title", ""), current_text=content,
         current_sha256=_sha(content), stored_sha256=rec.get("sha256"),
-        source_url=rec.get("source_url"), fetched_at=rec.get("fetched_at"),
+        source_url=retrieved, citable_url=citable, url_note=note,
+        fetched_at=rec.get("fetched_at"),
     )
     # The stored hash was taken at ingestion. If it no longer matches, the record
     # changed after we vouched for it, and nothing downstream may rely on it.
@@ -209,8 +244,11 @@ class EvidenceCard:
             "  SOURCE",
             f"    current text  : {len(self.packet.current_text)} chars  "
             f"{self.packet.current_sha256[:26]}…",
-            f"    retrieved     : {self.packet.source_url or '(no url)'}",
+            f"    cite          : {self.packet.citable_url or '(NO RESOLVABLE URL)'}",
+            f"    retrieved from: {self.packet.source_url or '(no url)'}",
             f"    fetched       : {self.packet.fetched_at or '(unrecorded)'}",
+        ] + ([f"    url note      : {self.packet.url_note}"] if self.packet.url_note
+             else []) + [
             "",
             "  AMENDMENT",
             f"    instrument    : {self.packet.amending_act or '(none)'} "
@@ -332,6 +370,18 @@ def _test() -> None:
     p = build_packet("96")
     check(p.current_text and p.title, f"the source packet loads ({p.title})")
     check(p.current_sha256.startswith("sha256:"), "the current text is hashed")
+    check(p.citable_url and "indiacode.gov.in" in p.citable_url,
+          f"the card cites a live host ({p.citable_url})")
+    check(p.source_url and "indiacode.nic.in" in p.source_url,
+          "the retrieval URL is preserved as provenance, not rewritten")
+    check(p.url_note and "no longer serves" in p.url_note,
+          "the difference between the two is stated, not hidden")
+    dead, note = _citable_url("999", "https://www.indiacode.nic.in/x")
+    check(dead is None and "no citable replacement" in note,
+          "a section with no recorded handle yields no citable URL and says so")
+    live, n2 = _citable_url("999", "https://example.org/live")
+    check(live == "https://example.org/live" and not n2,
+          "a retrieval URL on a live host is cited unchanged")
     check(p.amending_act == AMENDING_ACT and p.amending_sha256,
           "the amending clause is attached with its hash")
     check(p.commencement_identifier == "S.O. 2422(E)",
