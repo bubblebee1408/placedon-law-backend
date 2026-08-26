@@ -34,3 +34,7 @@ corpus/corroboration/*.html
 # Reviewer identity map. Benchmark files carry pseudonymous reviewer IDs;
 # the real identities stay local and are not distributed.
 corpus/benchmark/.reviewer_identities.json
+
+# Cached CRLs. Retrieved from the issuing CA; integrity comes from their
+# signature, not from us storing them.
+corpus/trust/crl/

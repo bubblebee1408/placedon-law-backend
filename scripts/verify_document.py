@@ -24,6 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from checker.pdf_signature import (  # noqa: E402
     COVERAGE_INCOMPLETE, MALFORMED, MODIFIED, UNSIGNED, UNSUPPORTED, VALID, verify,
 )
+from checker.doc_verification import verify_document as _vd  # noqa: E402
 
 # What each verdict means to someone who is not a cryptographer.
 PLAIN = {
@@ -38,19 +39,32 @@ PLAIN = {
 }
 
 
+# Exit codes are not ordered by severity — 3 (incomplete) is numerically larger
+# than 1 (modified) but far less serious — so aggregating with max() would report
+# "incomplete" for a batch containing an altered document. Precedence is explicit.
+_SEVERITY = [1, 2, 4, 3, 0]      # modified > unsupported > config > incomplete > ok
+
+
+def _worst(codes: list[int]) -> int:
+    for c in _SEVERITY:
+        if c in codes:
+            return c
+    return 0
+
+
 def run(paths: list[str], as_json: bool) -> int:
     results = []
-    worst_ok = True
+    # Tracks only files we could not open. Whether a signature verified is
+    # already carried by each document's own exit code; folding the two together
+    # made a batch containing one UNSUPPORTED document report "modified".
+    missing_file = False
     for p in paths:
         f = Path(p)
         if not f.exists():
             print(f"{p}: no such file", file=sys.stderr)
-            worst_ok = False
+            missing_file = True
             continue
-        r = verify(f)
-        results.append((f, r))
-        if r.verdict != VALID:
-            worst_ok = False
+        results.append((f, verify(f)))
 
     if as_json:
         out = []
@@ -64,6 +78,7 @@ def run(paths: list[str], as_json: bool) -> int:
                 "signing_time": r.signing_time.isoformat() if r.signing_time else None,
                 "digest": r.digest_alg or None,
                 "signature_verified": r.signature_verified,
+                "verification": json.loads(_vd(f).to_json()),
                 "chains_to_cca_india": r.chains_to_cca,
                 "chain_verdict": r.chain_verdict or None,
                 "chain_root": r.chain_root or None,
@@ -75,23 +90,33 @@ def run(paths: list[str], as_json: bool) -> int:
                 "note": r.note,
             })
         print(json.dumps(out, indent=2))
-        return 0 if worst_ok else 1
+        codes = [_vd(f, offline=True).exit_code() for f, _ in results]
+        return _worst(codes + ([1] if missing_file else []))
 
+    from checker.doc_verification import verify_document
     for f, r in results:
-        mark = "PASS" if r.verdict == VALID else "FAIL"
-        print(f"\n[{mark}] {f.name}")
-        print(f"  {PLAIN.get(r.verdict, r.verdict)}")
-        print(r.summary())
+        v = verify_document(f, offline=as_json is None)
+        print(f"\n{f.name}")
+        rows = [("File structure", "PASS" if r.verdict != MALFORMED else "FAIL"),
+                ("PDF signature", v.signature),
+                ("Signed byte integrity", v.file_integrity),
+                ("Unsigned appended content",
+                 "FOUND" if r.uncovered_ranges else "NOT_FOUND"),
+                ("Certificate chain", v.certificate_chain),
+                ("Certificate validity at signing", v.certificate_validity_at_signing),
+                ("Revocation", v.detail.get("revocation", {}).get("status", "NOT_CHECKED")),
+                ("Trusted timestamp", v.trusted_timestamp),
+                ("Official issuer match", v.official_issuer_match),
+                ("Official record match", v.official_record_match)]
+        for k, val in rows:
+            print(f"  {k:<34}{val}")
         if r.chain_names:
-            print(f"  chain              : {' <- '.join(r.chain_names)}")
+            print(f"  {'Chain':<34}{' <- '.join(r.chain_names)}")
+        print(f"\n  Overall: {v.overall_status}")
+        print(f"  {v.sentence()}")
 
-    if results:
-        n_ok = sum(1 for _, r in results if r.verdict == VALID)
-        print(f"\n{n_ok}/{len(results)} verified as signed and unmodified.")
-        if not worst_ok:
-            print("Revocation is never checked by this tool; a valid signature does "
-                  "not prove the signer's authority.")
-    return 0 if worst_ok else 1
+    codes = [_vd(f, offline=True).exit_code() for f, _ in results]
+    return _worst(codes + ([1] if missing_file else []))
 
 
 def _test() -> None:
@@ -121,10 +146,27 @@ def _test() -> None:
 
     signed = [p for p in sorted(Path("corpus/testdocs/_raw").glob("*.pdf"))
               if b"/ByteRange" in p.read_bytes()]
-    check(run([str(p) for p in signed if verify(p).verdict == VALID], as_json=True) == 0,
-          "exit status is 0 when every document is VALID")
+    from checker.doc_verification import (EXIT_INCOMPLETE, EXIT_MODIFIED,
+                                          EXIT_UNSUPPORTED, EXIT_CONFIG)
+    check({EXIT_INCOMPLETE, EXIT_MODIFIED, EXIT_UNSUPPORTED, EXIT_CONFIG} == {3, 1, 2, 4},
+          "the documented exit-code contract is what the code uses")
+    # The batch contains one document whose signing mode we do not implement, and
+    # 2 outranks 3 — so the batch code is 2. Asserting 3 here was wrong about the
+    # corpus, not about the code.
+    code = run([str(p) for p in signed], as_json=True)
+    check(code == EXIT_UNSUPPORTED,
+          f"a batch containing an unsupported signature exits 2 ({code})")
+    supported = [str(p) for p in signed if verify(p).verdict == VALID]
+    check(run(supported, as_json=True) == EXIT_INCOMPLETE,
+          "documents with valid signatures still exit 3 — none is fully verified")
+    check(run(supported, as_json=True) != 0,
+          "no real document exits 0; full verification needs a trusted timestamp")
     check(run(["/nonexistent.pdf"], as_json=True) == 1,
           "a missing file is an error, not a silent pass")
+    check(_worst([3, 1]) == 1,
+          "a modified document outranks an incomplete one, despite 3 > 1")
+    check(_worst([3, 2]) == 2, "an unsupported signature outranks incomplete")
+    check(_worst([3, 3]) == 3 and _worst([0]) == 0, "otherwise the code passes through")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:
