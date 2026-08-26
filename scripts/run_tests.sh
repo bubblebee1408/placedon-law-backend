@@ -43,6 +43,7 @@ suites=(
   checker/benchmark_freeze.py
   checker/entail_baseline.py
   checker/entail_paraphrase.py
+  checker/span_inventory.py
   checker/grounding_policy.py
   checker/entail_pairs_v2.py
   checker/reviews.py
@@ -56,7 +57,7 @@ suites=(
 )
 
 # --test flag rather than a bare run: this one takes a PDF argument in normal use.
-extra=("scripts/acquire_rules.py --test" "scripts/parse_board_rules.py --test" "scripts/baseline_eval.py --test" "scripts/review.py --test" "scripts/review_brief.py --check" "scripts/slice_s96.py --test" "scripts/record_interview.py --test" "scripts/verify_document.py --test" "scripts/verify_section_index.py --test" "scripts/resolve_missing_sections.py --test" "scripts/prove_temporal.py --test")
+extra=("scripts/acquire_rules.py --test" "scripts/parse_board_rules.py --test" "scripts/baseline_eval.py --test" "scripts/review.py --test" "scripts/review_brief.py --check" "scripts/slice_s96.py --test" "scripts/record_interview.py --test" "scripts/verify_document.py --test" "scripts/verify_section_index.py --test" "scripts/resolve_missing_sections.py --test" "scripts/prove_temporal.py --test" "scripts/batch1_omissions.py --test")
 
 fails=0
 for s in "${suites[@]}"; do
