@@ -99,8 +99,11 @@ Files changed · Tests added or updated · Commands run · Results · Known limi
   6/6 boundaries, text changes across each, effective dates inclusive
   (`scripts/prove_temporal.py`, `docs/TEMPORAL_PROOF.md`). EXACT there rests on 5 insertions
   (recoverable by deletion, no witness needed) and 3 substitutions (single-sourced footnotes).
-- **SD-003: 120 amendment spans carry unbalanced markup.** s.96 is one — it cannot be
-  reconstructed before 13-6-2018 at all. Two thirds of amended sections are affected.
+- **SD-003 CORRECTED**: 42 of the 121 "unbalanced spans" were our own regex, not a source
+  defect. Fixing it recovered 41 spans; sections EXACT on both sides went 45 -> 83. Genuine
+  India Code defects: 10 spans. s.96 is one and still cannot be reconstructed before 13-6-2018.
+  The 69 bracket-less spans are mostly omissions — correct source behaviour, and reachable
+  only via the amending Act.
 - Section-level reconstruction of **substituted** spans still UNVERIFIED.
   But prior wording is now independently corroborated for the first time: 24 amended
   spans matched against the amending Acts themselves on Indian Kanoon, **0 conflicts**;

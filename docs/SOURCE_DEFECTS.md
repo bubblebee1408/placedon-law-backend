@@ -98,6 +98,49 @@ open, not cleared.
 
 ---
 
+## SD-003 — CORRECTED. Mostly not a source defect.
+
+**Filed:** 26 Aug 2026 as "120 unbalanced spans".
+**Corrected:** same day, before any of it was acted on.
+
+The original entry claimed India Code emitted 120 amendment spans with an
+opening `<sup>N</sup>[` and no closing bracket. That was wrong, and the error was
+mine. Classifying the 121 cases by actual cause:
+
+| Cause | n | Whose defect |
+|---|---|---|
+| Bracket present, after a formatting tag | **42** | **ours** — the regex |
+| No bracket at all (mostly omissions) | 69 | neither: correct source behaviour |
+| Opens but never closes | 5 | India Code |
+| Marker absent from content | 5 | India Code |
+
+India Code writes `<sup>2</sup><b>[` and `<sup>2</sup><i>[Explanation.</i>` as
+freely as `<sup>1</sup>[`. Our `_SPAN_OPEN` allowed only whitespace between the
+marker and the bracket, so 42 well-formed spans read as broken markup.
+
+Fixing the pattern to permit short intervening tags recovered **41 spans** and
+moved **38 sections** from PARTIAL to EXACT on both sides of their first
+amendment (45 -> 83).
+
+**The 69 without a bracket are not defects.** 61 of them are omissions. When
+text is omitted the marker points at where it used to be and there is nothing to
+bracket, because the text is gone from the current consolidation entirely. Its
+prior wording cannot come from India Code at any price; it can only come from
+the amending Act.
+
+**What remains a genuine India Code defect: 10 spans.** Five open and never
+close (s.96 among them, blocking reconstruction before 13-6-2018), and five
+name a marker in the footnote that appears nowhere in the content.
+
+**Lesson recorded rather than quietly fixed.** A source-defect claim is an
+accusation against a government publisher, and this one survived a commit, a
+docs entry and a CLAUDE.md status line before anybody classified the failures by
+cause. Counting instances is not diagnosis.
+
+---
+
+## SD-003 (original entry, retained for the record)
+
 ## SD-003 — Unbalanced amendment-span markup (120 spans)
 
 **Found:** 26 Aug 2026, while proving the temporal engine.

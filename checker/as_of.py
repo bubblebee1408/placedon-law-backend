@@ -40,7 +40,15 @@ Fidelity = Literal["EXACT", "PARTIAL", "ABSTAIN"]
 COMMENCEMENT = date(2014, 4, 1)
 
 # <sup>1</sup>[ ... ] — the amended span, with its marker.
-_SPAN_OPEN = re.compile(r"<sup>\s*(\d{1,3})\s*</sup>\s*\[")
+# India Code writes the opening bracket inside a formatting tag as often as not:
+# `<sup>2</sup><b>[` and `<sup>2</sup><i>[Explanation.</i>` are both normal. A
+# pattern allowing only whitespace between the marker and the bracket missed 42
+# spans and made them look like unbalanced source markup — a defect I recorded
+# against India Code that was in fact this regex. Only short tags are permitted
+# between the two, and at most six of them, so a marker cannot bind to a bracket
+# far away in the text — the previous pattern allowed unbounded whitespace and
+# would have adopted a bracket forty characters downstream.
+_SPAN_OPEN = re.compile(r"<sup>\s*(\d{1,3})\s*</sup>(?:\s|<[^>]{1,12}>){0,6}\[")
 # Prior wording quoted in a footnote: Subs. ... for "the old words"  /  for the words "X"
 _PRIOR = re.compile(r'\bfor\s+(?:the\s+(?:words?|figures?|brackets?|letters?)\s+)?[""“"]([^""”"]{2,400})[""”"]', re.I)
 
@@ -161,6 +169,7 @@ def section_as_of(record: dict, target: date) -> Reconstruction:
 # --- self-test against the real ingested corpus ------------------------------
 
 def _test() -> None:
+    """Includes a regression for the span-opener pattern; see SD-003 (corrected)."""
     import json
     from pathlib import Path
     ok = fail = 0
@@ -218,6 +227,18 @@ def _test() -> None:
 
     check(prior_wording(type("A", (), {"raw": 'Subs. by Act 33 of 2021, s. 28, for "Part XIV of Chapter VI"'})()) 
           == "Part XIV of Chapter VI", "prior wording extracted when the footnote quotes it")
+
+    # Regression for SD-003: the opening bracket often sits inside a formatting
+    # tag. Requiring bare whitespace made 42 well-formed spans look like broken
+    # source markup and cost 38 sections their EXACT reconstruction.
+    for markup in ("<sup>1</sup>[x]", "<sup>1</sup><b>[x]</b>",
+                   "<sup>1</sup><i>[x</i>]", "<sup>1</sup> <b>[x]"):
+        check(_find_span(markup, 1) is not None,
+              f"span opener tolerates markup: {markup}")
+    check(_find_span("<sup>1</sup>" + " " * 40 + "[x]", 1) is None,
+          "...but a bracket far from its marker is not adopted")
+    check(_find_span("<sup>1</sup>[unclosed", 1) is None,
+          "an unclosed span is still refused rather than guessed")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:

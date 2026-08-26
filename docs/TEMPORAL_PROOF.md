@@ -64,10 +64,35 @@ recoverability, not about truth.
 Section-level reconstruction remains unverified against an independent source
 for substituted spans. Insertions are a different matter and are sound.
 
+## Correction to SD-003, and its effect
+
+The first version of this document reported "120 unbalanced spans" in India Code.
+That was wrong. Classified by cause, 42 of the 121 were **our own regex** —
+India Code writes `<sup>2</sup><b>[` as freely as `<sup>1</sup>[`, and the
+pattern allowed only whitespace between marker and bracket. Fixing it recovered
+41 spans and moved sections EXACT on both sides from **45 to 83**.
+
+| (before, on-date) fidelity | was | now |
+|---|---:|---:|
+| EXACT / EXACT | 45 | **83** |
+| PARTIAL / EXACT | 118 | 80 |
+| PARTIAL / PARTIAL | 41 | 41 |
+
+Genuine India Code defects: **10 spans**, not 120. Five open and never close
+(s.96 among them), five name a marker that appears nowhere in the content.
+
+The 69 spans with no bracket are not defects at all: 61 are omissions, where the
+marker points at where text used to be and there is nothing to bracket. Their
+prior wording cannot come from India Code at any price — only from the amending
+Act.
+
 ## Scope limit worth stating plainly
 
-**s.96 cannot be reconstructed before 13 June 2018.** The flagship example of
-this project is blocked by SD-003: its amendment span carries unbalanced markup,
-so the substitution cannot be reversed. Two thirds of amended sections are
-affected. The engine refuses rather than guessing, and a test pins that refusal
-so it is not quietly "fixed" later.
+**s.96 still cannot be reconstructed before 13 June 2018.** It is one of the
+five genuinely unbalanced spans: one `[` after the marker, zero `]` thereafter.
+The engine refuses rather than guessing, and a test pins that refusal so it is
+not quietly "fixed" later.
+
+The remaining PARTIALs are dominated by **omissions**, which no parser fix can
+reach: the text is gone from the consolidation, so only the amending Act can
+supply it. That is the genuine witness task, and it is unstarted.
