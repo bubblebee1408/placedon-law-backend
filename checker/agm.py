@@ -132,9 +132,32 @@ def _require(source_text: str, phrase: str, label: str) -> str:
     return phrase
 
 
+# s.96(1) opens "Every company OTHER THAN A ONE PERSON COMPANY". An OPC has no
+# AGM obligation at all — s.122 substitutes a written resolution entered in the
+# minutes book, and s.122(3) deems that entry's date to be "the date of the
+# meeting for all the purposes under this Act". Computing an AGM deadline for an
+# OPC invents an obligation, which is the same class of error as missing one and
+# arguably worse: it tells a company secretary to convene a meeting the statute
+# does not require.
+OPC_EXEMPTION = (
+    "s.96(1) applies to every company other than a One Person Company. An OPC "
+    "has no annual general meeting obligation; s.122(3) deems the date a "
+    "resolution is entered in the minutes book to be the date of the meeting.")
+
+
 def compute(*, source_text: str, financial_year_end: date, is_first_agm: bool,
-            previous_agm: date | None = None) -> AGMDeadline:
+            previous_agm: date | None = None,
+            is_one_person_company: bool = False) -> AGMDeadline:
     """The AGM deadline, with every applicable limb shown and the binding one identified."""
+    if is_one_person_company:
+        # Not a deadline that could not be computed — an obligation that does
+        # not exist. `complete` stays False so nothing downstream treats this as
+        # a due date, and the reason is stated rather than left as an absence.
+        return AGMDeadline(constraints=(), binding=None,
+                           missing_facts=(),
+                           notes=(OPC_EXEMPTION,),
+                           complete=False)
+
     constraints: list[Constraint] = []
     missing: list[str] = []
     notes: list[str] = []
@@ -257,6 +280,24 @@ def _test() -> None:
 
     check("DERIVED" in d.render() and "human verification" in d.render(),
           "the rendering states the result is derived and needs verification")
+
+    # s.96(1) — the One Person Company carve-out.
+    opc = compute(source_text=src, financial_year_end=date(2026, 3, 31),
+                  is_first_agm=False, previous_agm=date(2025, 5, 10),
+                  is_one_person_company=True)
+    check(opc.binding is None,
+          "an OPC gets no AGM deadline — s.96(1) does not apply to it")
+    check(not opc.complete,
+          "...and the result is not complete, so nothing downstream reads it as a date")
+    check(opc.notes and "One Person Company" in opc.notes[0],
+          "...and the reason is stated, not left as an absence")
+    check(not opc.missing_facts,
+          "the OPC case is an absent obligation, not a missing fact")
+
+    same = compute(source_text=src, financial_year_end=date(2026, 3, 31),
+                   is_first_agm=False, previous_agm=date(2025, 5, 10))
+    check(same.binding is not None and same.complete,
+          "the same inputs without the OPC flag still produce a deadline")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:
