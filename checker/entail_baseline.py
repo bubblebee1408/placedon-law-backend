@@ -51,6 +51,38 @@ worse there. Closing that needs pairs whose hypotheses preserve meaning while
 changing surface form — which is E4's actual job, and is not "train something to
 beat 1.00".
 
+## Measured against hand-written paraphrases: 1/4. This is the ceiling.
+
+`corpus/benchmark/entailment_v1.json` holds four claims about s.173 written by
+hand rather than templated. This checker gets **1 of 4**, and every error is a
+false accept — it declares three false statements of law SUPPORTED.
+
+The two decisive cases:
+
+- *"...within ninety days of incorporation"* (gold UNSUPPORTED). "ninety days"
+  really does occur in s.173 — governing the **gap between two meetings**, not
+  the first-meeting deadline. The claim takes a genuine quantity from the
+  provision and attaches it to the wrong obligation. Checking numeral-with-unit
+  as a pair, which fixed the constructed set, does nothing here.
+- *"...file a return of each meeting with the Registrar..."* (gold UNSUPPORTED).
+  "return" and "Registrar" occur **zero** times in s.173, yet coverage stays
+  above threshold because they are 2 content words out of ~10. Raising the
+  threshold cannot separate them: e01 (true) and e02 (false) both score 0.667,
+  because the borrowed vocabulary *is* the provision's.
+
+This is the failure Magesh et al. call inapplicable authority — every
+distinctive term present, the proposition false — and it is structural. No
+threshold, no additional token check, and no amount of tuning against the
+constructed set reaches it, because the error is in how the proposition binds
+its terms together, not in which terms it uses.
+
+**Conclusion.** This checker is retained as a cheap fail-closed pre-filter: it
+never produced a false accept on the matched subset and it catches token-level
+substitution reliably. It must never be the gate that establishes GROUNDED. A
+claim it accepts is *not obviously wrong*; that is a different statement from
+*supported by the cited text*, and conflating the two is how a system serves a
+false statement of law with a citation attached.
+
 ## Bias toward refusal
 
 Ambiguity resolves to NOT_ENTAILED. In this domain a false accept means repealed
@@ -61,6 +93,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from pathlib import Path
 
 from checker.benchmark_freeze import Row
 
@@ -258,7 +291,7 @@ def _test() -> None:
     # A near-perfect score on a self-constructed set is a limitation to keep
     # visible, not an achievement to bank. Pinned so it cannot quietly become a
     # capability claim in a deck.
-    src = __import__("pathlib").Path(__file__).read_text()
+    src = Path(__file__).read_text()
     check("warning, not a result" in src,
           "the near-circularity of this benchmark is documented in the module")
     check(a.accuracy < 1.0 or "cannot distinguish" in src,
@@ -268,6 +301,29 @@ def _test() -> None:
     for k in ("prior_as_current", "current_wording", "wrong_date",
               "wrong_instrument", "wrong_number", "quoted_span", "amended_by"):
         check(k in scores, f"{k} was scored")
+
+    # The hand-written paraphrases. Pinned so the ceiling stays visible: without
+    # this, a 1.00 on the constructed set is the only number anyone remembers.
+    import json as _json
+    import re as _re
+    from checker.section_index import section_by_number
+    fx = _json.loads(Path("corpus/benchmark/entailment_v1.json").read_text())
+    prem = _re.sub(r"\s+", " ",
+                   _re.sub(r"<[^>]+>", " ", section_by_number("173")["content"]))
+    agree = sum(
+        (judge(prem, c["claim"]).entailed) == (c["gold"] == "SUPPORTED")
+        for c in fx["cases"])
+    false_accepts = sum(
+        judge(prem, c["claim"]).entailed and c["gold"] != "SUPPORTED"
+        for c in fx["cases"])
+    print(f"\n  hand-written paraphrases: {agree}/{len(fx['cases'])} "
+          f"({false_accepts} false accepts)")
+    check(agree < len(fx["cases"]),
+          f"the paraphrase ceiling is real and recorded ({agree}/{len(fx['cases'])}) — "
+          "this checker cannot be the grounding gate")
+    check("must never be the gate that establishes GROUNDED" in
+          Path(__file__).read_text(),
+          "the module states it must not establish GROUNDED")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:

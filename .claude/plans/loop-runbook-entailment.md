@@ -49,10 +49,39 @@ Lexical overlap + numeric/date agreement + citation match. No model.
 This is the number every model must beat. If a model cannot beat it, we ship this.
 - **Done when:** precision/recall reported on the frozen set.
 
-### E4 — Entailment checker
-Only now introduce a model. Report precision, recall, and the threshold.
-Abstain by default: an unresolved pair is `UNRESOLVED`, never `GROUNDED`.
-- **Done when:** it beats E3 on the frozen set, or E3 is kept and this is recorded.
+### E4 — DECIDED 2026-08-26: build paraphrased pairs. Do not ship E3 as the gate.
+
+Evidence. E3 scores **1.00** on the constructed set and **1/4** on the four
+hand-written paraphrases in `corpus/benchmark/entailment_v1.json` — with all
+three errors being false accepts, i.e. false statements of law declared
+SUPPORTED.
+
+The mechanism is structural, not a tuning problem:
+- "first meeting within **ninety days**" — "ninety days" genuinely occurs in
+  s.173, governing the gap between two meetings. The claim binds a real quantity
+  to the wrong obligation.
+- "file a return with the **Registrar**" — neither word occurs in s.173, yet
+  coverage holds because they are 2 content words of ~10. The fixture's own
+  acceptance note records that no threshold separates e01 from e02: both score
+  0.667, because the borrowed vocabulary is the provision's.
+
+Ship-as-is was the cheaper answer and it is the wrong one: it would attach a
+citation to three false statements of law out of four.
+
+**E3 is retained as a fail-closed pre-filter** — zero false accepts on the
+matched subset, reliable on token-level substitution — but a claim it accepts is
+*not obviously wrong*, which is not *supported by the cited text*.
+
+**E4 tasks:**
+1. Author paraphrased pairs where surface matching must fail: right vocabulary /
+   wrong binding, quantity attached to the wrong obligation, negation, scope
+   swap (every company vs listed company), conflated sub-sections.
+2. Every pair human-verified. Model-generated paraphrase is permitted as a
+   *drafting* aid; a model may never assign the gold label.
+3. Target ≥120 pairs, ≥40 of them right-vocabulary/wrong-binding.
+4. Then, and only then, evaluate a checker against them.
+- **Done when:** the stop condition holds and E3's 1/4 ceiling is beaten on the
+  paraphrase set without losing its 0.00 false-accept rate on the matched set.
 
 ### E5 — Wire into the ladder
 `GROUNDED` becomes reachable in `checker/attribution.py`.
