@@ -30,3 +30,7 @@ outbox/
 # Cached third-party source pages. Our verdicts are ours to publish; Indian
 # Kanoon's page copies are not. Attribution is not the same as redistribution.
 corpus/corroboration/*.html
+
+# Reviewer identity map. Benchmark files carry pseudonymous reviewer IDs;
+# the real identities stay local and are not distributed.
+corpus/benchmark/.reviewer_identities.json

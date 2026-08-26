@@ -7,6 +7,12 @@ in one place rather than scattered through source; and a diff of who approved
 what is readable by someone who does not read Python.
 
 A pair with no entry is unapproved. Absence is never approval.
+
+Reviewers are recorded by **pseudonymous ID** (`reviewer-01`), not by email. The
+benchmark files are meant to be distributable, and a reviewer's address is not
+part of the evidence that a claim was reviewed — only that an identified person
+reviewed it and can be traced through a local map. `.reviewer_identities.json`
+holds that map and is gitignored.
 """
 from __future__ import annotations
 
@@ -39,6 +45,10 @@ def record(pair_ids: list[str], *, reviewer: str, status: str = APPROVED,
         raise ValueError("a rejection requires a written reason")
     if not reviewer.strip():
         raise ValueError("a decision requires a named reviewer")
+    if "@" in reviewer:
+        raise ValueError(
+            "record a pseudonymous reviewer ID, not an email address; the "
+            "identity map in .reviewer_identities.json stays local")
     data = load(path)
     stamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
     for pid in pair_ids:
@@ -74,12 +84,17 @@ def _test() -> None:
         p = Path(d) / "r.json"
         check(status_of("nope", p)[0] == PENDING,
               "an unrecorded pair is PENDING — absence is never approval")
-        record(["a1"], reviewer="someone@example.com", path=p)
+        try:
+            record(["a0"], reviewer="someone@example.com", path=p)
+            check(False, "an email address is refused as a reviewer id")
+        except ValueError:
+            check(True, "an email address is refused as a reviewer id")
+        record(["a1"], reviewer="reviewer-01", path=p)
         st, who, when = status_of("a1", p)
-        check(st == APPROVED and who == "someone@example.com" and when,
+        check(st == APPROVED and who == "reviewer-01" and when,
               "an approval records status, reviewer and timestamp")
         try:
-            record(["a2"], reviewer="x@y.z", status=REJECTED, path=p)
+            record(["a2"], reviewer="reviewer-02", status=REJECTED, path=p)
             check(False, "a rejection without a reason is refused")
         except ValueError:
             check(True, "a rejection without a reason is refused")
@@ -88,7 +103,7 @@ def _test() -> None:
             check(False, "an unnamed reviewer is refused")
         except ValueError:
             check(True, "an unnamed reviewer is refused")
-        record(["a1"], reviewer="x@y.z", status=REJECTED, note="wrong", path=p)
+        record(["a1"], reviewer="reviewer-02", status=REJECTED, note="wrong", path=p)
         check(status_of("a1", p)[0] == REJECTED, "a decision can be revoked")
     print(f"\n{ok}/{ok + fail} passed")
     if fail:

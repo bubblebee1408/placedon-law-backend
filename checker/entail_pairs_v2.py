@@ -184,13 +184,23 @@ _REWRITTEN: list[tuple] = [
      "dropped_government_exemption", "p173-auth-12"),
 
     # J3
-    ("v2-173-2-pos", "173", "2",
+    # REVOKED 2026-08-26. The prior wording read "except for matters the Central
+    # Government HAS BARRED", which converts a conferred statutory power into an
+    # assertion that the power has been exercised. s.173(2) says the Central
+    # Government "may, by notification, specify" such matters; whether any
+    # notification exists, and what it specifies, are separate facts this corpus
+    # does not hold. The replacement keeps the three apart: the power, its
+    # exercise by notification, and the matters any notification specifies.
+    ("v2-173-2-pos-r2", "173", "2",
      "Directors may take part in a Board meeting through video conferencing or other "
-     "audio visual means in the manner prescribed, except for matters the Central "
-     "Government has barred from being dealt with by those means.",
+     "audio visual means in the manner prescribed, subject to the Central "
+     "Government's power to specify by notification matters that may not be dealt "
+     "with by those means.",
      PENDING_REVIEW, HUMAN_JUDGED, True,
-     "carries both the delegated-rule condition and the excluded-matters bar",
-     "paraphrase_qualified", "p173-auth-13"),
+     "carries the delegated-rule condition and states the excluded-matters bar as a "
+     "power conferred, not as a power exercised; supersedes v2-173-2-pos, which "
+     "asserted that matters had been barred",
+     "paraphrase_qualified", "v2-173-2-pos"),
     ("v2-173-2-neg", "173", "2",
      "Directors are permitted to take part in a Board meeting by video link rather "
      "than in person.",

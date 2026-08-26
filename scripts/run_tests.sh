@@ -46,6 +46,7 @@ suites=(
   checker/grounding_policy.py
   checker/entail_pairs_v2.py
   checker/reviews.py
+  checker/fixture_rebuild.py
   checker/provenance_slots.py
   checker/drafting.py
   checker/matter.py
