@@ -88,6 +88,7 @@ class Item:
     next_source: str = ""
     needs_legal_interpretation: bool = False
     human_review: str = "PENDING"
+    reason_prefix: str = ""
 
 
 def _sha(s: str) -> str:
@@ -109,6 +110,44 @@ def _clause_for_section(text: str, section: str) -> str | None:
                         rest[10:])
         return (rest[:nxt.start() + 10] if nxt else rest).strip()
     return None
+
+
+# An omission, bound to the verb that performs it. The quote must be governed by
+# "shall be omitted" — taking the longest quoted string in a clause regardless of
+# its operation made s.161 read as a CONFLICT, because the longest quote there
+# belongs to an INSERTION and is therefore still present in the current text.
+_OMISSION_OP = re.compile(
+    r"(?:the\s+(?:words?|figures?|brackets?|letters?)"
+    r"(?:\s+and\s+(?:words?|figures?|brackets?|letters?))*\s*)"
+    r"[\"“\'']([^\"”\'']{3,400})[\"”\'']"
+    r"[^\".;]{0,60}?shall\s+be\s+omitted",
+    re.I | re.S)
+
+# "in sub-section (2)", "in the second proviso" — the path an operation sits on.
+_SUBSEC = re.compile(r"in\s+sub-?section\s*\((\d+[A-Z]?)\)", re.I)
+
+
+@dataclass
+class Omission:
+    text: str
+    subsection: str
+    at: int
+
+
+def omissions_in(clause: str) -> list[Omission]:
+    """Every omission the clause performs, each bound to its own verb.
+
+    Nested items — (i) in sub-section (1),— (a) ... omitted; (b) ... omitted —
+    are read individually. The sub-section attributed to an omission is the
+    nearest one appearing before it, which is how the drafting reads.
+    """
+    out: list[Omission] = []
+    for m in _OMISSION_OP.finditer(clause):
+        subs = [s for s in _SUBSEC.finditer(clause) if s.start() < m.start()]
+        out.append(Omission(text=m.group(1).strip(),
+                            subsection=subs[-1].group(1) if subs else "(unstated)",
+                            at=m.start()))
+    return out
 
 
 def build(offline: bool = False) -> list[Item]:
@@ -176,21 +215,57 @@ def build(offline: bool = False) -> list[Item]:
             items.append(it)
             continue
 
-        quoted = _QUOTED.findall(clause)
-        if not quoted:
+        omits = omissions_in(clause)
+        if not omits:
             it.status = PARTIAL
-            it.reason = ("the Act confirms an omission of this section but does not "
-                         "quote the omitted words, so the earlier text cannot be "
+            it.reason = ("the Act's clause for this section performs no omission "
+                         "whose words it quotes, so the earlier text cannot be "
                          "reproduced")
-            it.missing_evidence = "verbatim text of the omitted provision"
+            it.missing_evidence = "an omission operation with quoted words"
             it.next_source = "the Act as originally enacted (Gazette, 30 Aug 2013)"
             items.append(it)
             continue
 
-        # The Act quotes text. Does India Code's current content still contain it?
-        # If it does, the words were not in fact removed from this section and the
-        # two sources disagree about what happened.
-        longest = max(quoted, key=len)
+        # Determinacy. A marker can be tied to an omission only when the clause
+        # leaves no choice: either it performs exactly one omission, or it
+        # performs several that omit identical words — which the Act does do, as
+        # s.137 omits "within the time specified under section 403" twice.
+        markers_here = sum(1 for x in cands if x.section == s.section)
+        distinct = {normalise(o.text) for o in omits}
+        if len(omits) > 1 and len(distinct) > 1:
+            it.status = PARTIAL
+            it.reason = (f"the clause performs {len(omits)} distinct omissions "
+                         f"({', '.join(sorted(o.subsection for o in omits))}); "
+                         "nothing in the record ties this marker to one of them")
+            it.missing_evidence = "marker-to-operation mapping"
+            it.next_source = "the pre-amendment text, to match each omission to its place"
+            it.needs_legal_interpretation = True
+            items.append(it)
+            continue
+
+        chosen = omits[0]
+        it.subsection = chosen.subsection
+        if len(omits) > 1:
+            it.reason_prefix = (f"the clause omits the same words {len(omits)} times "
+                                f"and India Code carries {markers_here} marker(s); ")
+
+        longest = chosen.text
+        # The presence test only means something for distinctive wording. s.2's
+        # clause omits the single word "and", which naturally still occurs
+        # throughout the section — the test reported a CONFLICT between two
+        # sources that do not in fact disagree. Below this threshold the check
+        # carries no information and must not be run.
+        if len(longest.split()) < 4 or len(longest) < 20:
+            it.status = PARTIAL
+            it.reason = (f"the Act omits {longest!r} from sub-section "
+                         f"({chosen.subsection}), but the wording is too short to "
+                         "test against the current consolidation: its presence "
+                         "there would prove nothing")
+            it.missing_evidence = "distinctive wording, or the pre-amendment text"
+            it.next_source = "the Act as originally enacted (Gazette, 30 Aug 2013)"
+            items.append(it)
+            continue
+
         if normalise(longest) in normalise(html):
             it.status = CONFLICT
             it.reason = ("the Act quotes this text as omitted, but it is still "
@@ -213,9 +288,10 @@ def build(offline: bool = False) -> list[Item]:
         it.reconstructed_before = longest
         it.reconstructed_after = "(text omitted)"
         it.status = EXACT
-        it.reason = ("the amending Act names this section, confirms an omission, "
-                     "and quotes the omitted words; they are absent from the "
-                     "current consolidation as expected")
+        it.reason = (getattr(it, "reason_prefix", "") +
+                     f"the Act omits these words from sub-section ({chosen.subsection}) "
+                     "of this section, and they are absent from the current "
+                     "consolidation as expected")
         items.append(it)
 
     # A section may carry several omissions in one clause. This code locates the
@@ -337,6 +413,25 @@ def _test() -> None:
         "clause scaffolding is recognised and cannot be served as omitted text")
     check(not _OPERATIVE.search("within the time as specified, under section 403"),
           "genuine omitted wording is not mistaken for scaffolding")
+
+    # Clause-level binding: the quote must be governed by the omission verb.
+    s161 = ('51. Amendment of section 161. In section 161 of the principal Act,- '
+            '(i) in sub-section (2), after the words "alternate directorship", the '
+            'words "or holding directorship in the same company" shall be inserted; '
+            '(ii) in sub-section (4),- (a) the words "In the case of a public '
+            'company," shall be omitted;')
+    os = omissions_in(s161)
+    check(len(os) == 1, f"only the omission is extracted, not the insertion ({len(os)})")
+    check(os and os[0].text == "In the case of a public company,",
+          "the omitted words are the ones the omission verb governs")
+    check(os and os[0].subsection == "4",
+          "the omission is attributed to its own sub-section, not the clause's first")
+    check(all("holding directorship" not in o.text for o in os),
+          "inserted text is never returned as omitted text")
+
+    multi = ('In section 137, (i) in sub-section (1),- (a) the words "A B C D E" '
+             'shall be omitted; (b) the words "X Y Z P Q" shall be omitted;')
+    check(len(omissions_in(multi)) == 2, "each omission in a nested clause is seen")
 
     r = report(items)
     check("Human review required  : 10" in r or f"Human review required  : {len(items)}" in r,

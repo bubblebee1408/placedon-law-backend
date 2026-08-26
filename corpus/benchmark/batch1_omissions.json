@@ -19,7 +19,8 @@
   "missing_evidence": "clause of Act 1 of 2018 affecting s.117",
   "next_source": "the Act's Schedules",
   "needs_legal_interpretation": true,
-  "human_review": "PENDING"
+  "human_review": "PENDING",
+  "reason_prefix": ""
  },
  {
   "section": "117",
@@ -41,11 +42,12 @@
   "missing_evidence": "clause of Act 1 of 2018 affecting s.117",
   "next_source": "the Act's Schedules",
   "needs_legal_interpretation": true,
-  "human_review": "PENDING"
+  "human_review": "PENDING",
+  "reason_prefix": ""
  },
  {
   "section": "121",
-  "subsection": "(not isolated)",
+  "subsection": "2",
   "marker": 1,
   "operation": "omitted",
   "amending_act": "Act 1 of 2018",
@@ -59,11 +61,12 @@
   "reconstructed_before": "within the time as specified, under section 403",
   "reconstructed_after": "(text omitted)",
   "status": "EXACT",
-  "reason": "the amending Act names this section, confirms an omission, and quotes the omitted words; they are absent from the current consolidation as expected",
+  "reason": "the Act omits these words from sub-section (2) of this section, and they are absent from the current consolidation as expected",
   "missing_evidence": "",
   "next_source": "",
   "needs_legal_interpretation": false,
-  "human_review": "PENDING"
+  "human_review": "PENDING",
+  "reason_prefix": ""
  },
  {
   "section": "137",
@@ -78,18 +81,19 @@
   "witness_clause": "39. Amendment of section 137. In section 137 of the principal Act,\u2014 (i) in sub-section (1),\u2014 (a) the words and figures \"within the time specified under section 403\" shall be omitted; (b) in the second proviso, the words and figures \"within the time specified under section 403\" shall be omitted; (c) after the fourth proviso, the following proviso shall be inserted namely:\u2014 'Provided also that in the case of a subsidiary which has been incorporated outside India (herein referred to as \"foreign subsidiary\"), which is not required to get its financial statement audited under any law of the country",
   "witness_sha256": "sha256:0db92c8f084ada98eaab04ee6f70328ab5b364469fe98c89a06f1cfce3a073d4",
   "india_code_state": "marker present, no bracketed span: text omitted from the consolidation",
-  "reconstructed_before": "within the time specified, under section 403",
-  "reconstructed_after": "(text omitted)",
-  "status": "EXACT",
-  "reason": "the amending Act names this section, confirms an omission, and quotes the omitted words; they are absent from the current consolidation as expected",
-  "missing_evidence": "",
-  "next_source": "",
-  "needs_legal_interpretation": false,
-  "human_review": "PENDING"
+  "reconstructed_before": null,
+  "reconstructed_after": null,
+  "status": "PARTIAL",
+  "reason": "the clause performs 3 distinct omissions (1, 1, 2); nothing in the record ties this marker to one of them",
+  "missing_evidence": "marker-to-operation mapping",
+  "next_source": "the pre-amendment text, to match each omission to its place",
+  "needs_legal_interpretation": true,
+  "human_review": "PENDING",
+  "reason_prefix": ""
  },
  {
   "section": "161",
-  "subsection": "(not isolated)",
+  "subsection": "4",
   "marker": 2,
   "operation": "omitted",
   "amending_act": "Act 1 of 2018",
@@ -100,14 +104,15 @@
   "witness_clause": "51. Amendment of section 161. In section 161 of the principal Act,\u2014 (i) in sub-section (2), after the words \"alternate directorship for any other director in the company\", the words \"or holding directorship in the same company\" shall be inserted; (ii) in sub-section (4),\u2014 (a) the words \"In the case of a public company,\" shall be omitted; (b) after the words \"meeting of the Board\", the words \"which shall be subsequently approved by members in the immediate next general meeting\" shall be inserted",
   "witness_sha256": "sha256:15ce685f6f0b33c0c0041b7521a8e5ba4c955efdc99c441a54ce07e4fdcec379",
   "india_code_state": "marker present, no bracketed span: text omitted from the consolidation",
-  "reconstructed_before": null,
-  "reconstructed_after": null,
-  "status": "CONFLICT",
-  "reason": "the Act quotes this text as omitted, but it is still present in India Code's current content",
+  "reconstructed_before": "In the case of a public company,",
+  "reconstructed_after": "(text omitted)",
+  "status": "EXACT",
+  "reason": "the Act omits these words from sub-section (4) of this section, and they are absent from the current consolidation as expected",
   "missing_evidence": "",
   "next_source": "",
-  "needs_legal_interpretation": true,
-  "human_review": "PENDING"
+  "needs_legal_interpretation": false,
+  "human_review": "PENDING",
+  "reason_prefix": ""
  },
  {
   "section": "197",
@@ -125,15 +130,16 @@
   "reconstructed_before": null,
   "reconstructed_after": null,
   "status": "PARTIAL",
-  "reason": "the extracted text contains the amending Act's own operative language, so it is clause scaffolding rather than the omitted provision",
-  "missing_evidence": "the omitted words, isolated from the clause",
-  "next_source": "the clause read against the pre-amendment text",
+  "reason": "the clause performs 3 distinct omissions (1, 11, 3); nothing in the record ties this marker to one of them",
+  "missing_evidence": "marker-to-operation mapping",
+  "next_source": "the pre-amendment text, to match each omission to its place",
   "needs_legal_interpretation": true,
-  "human_review": "PENDING"
+  "human_review": "PENDING",
+  "reason_prefix": ""
  },
  {
   "section": "2",
-  "subsection": "(not isolated)",
+  "subsection": "(unstated)",
   "marker": 8,
   "operation": "omitted",
   "amending_act": "Act 1 of 2018",
@@ -147,15 +153,16 @@
   "reconstructed_before": null,
   "reconstructed_after": null,
   "status": "PARTIAL",
-  "reason": "2 markers in s.2 resolved to identical text; the clause names the section but this code cannot map a marker to a specific omission within it",
-  "missing_evidence": "marker-to-omission mapping within the clause",
-  "next_source": "the clause's sub-section and clause references",
-  "needs_legal_interpretation": true,
-  "human_review": "PENDING"
+  "reason": "the Act omits 'and' from sub-section ((unstated)), but the wording is too short to test against the current consolidation: its presence there would prove nothing",
+  "missing_evidence": "distinctive wording, or the pre-amendment text",
+  "next_source": "the Act as originally enacted (Gazette, 30 Aug 2013)",
+  "needs_legal_interpretation": false,
+  "human_review": "PENDING",
+  "reason_prefix": ""
  },
  {
   "section": "2",
-  "subsection": "(not isolated)",
+  "subsection": "(unstated)",
   "marker": 9,
   "operation": "omitted",
   "amending_act": "Act 1 of 2018",
@@ -169,15 +176,16 @@
   "reconstructed_before": null,
   "reconstructed_after": null,
   "status": "PARTIAL",
-  "reason": "2 markers in s.2 resolved to identical text; the clause names the section but this code cannot map a marker to a specific omission within it",
-  "missing_evidence": "marker-to-omission mapping within the clause",
-  "next_source": "the clause's sub-section and clause references",
-  "needs_legal_interpretation": true,
-  "human_review": "PENDING"
+  "reason": "the Act omits 'and' from sub-section ((unstated)), but the wording is too short to test against the current consolidation: its presence there would prove nothing",
+  "missing_evidence": "distinctive wording, or the pre-amendment text",
+  "next_source": "the Act as originally enacted (Gazette, 30 Aug 2013)",
+  "needs_legal_interpretation": false,
+  "human_review": "PENDING",
+  "reason_prefix": ""
  },
  {
   "section": "200",
-  "subsection": "(not isolated)",
+  "subsection": "(unstated)",
   "marker": 1,
   "operation": "omitted",
   "amending_act": "Act 1 of 2018",
@@ -195,11 +203,12 @@
   "missing_evidence": "marker-to-omission mapping within the clause",
   "next_source": "the clause's sub-section and clause references",
   "needs_legal_interpretation": true,
-  "human_review": "PENDING"
+  "human_review": "PENDING",
+  "reason_prefix": ""
  },
  {
   "section": "200",
-  "subsection": "(not isolated)",
+  "subsection": "(unstated)",
   "marker": 2,
   "operation": "omitted",
   "amending_act": "Act 1 of 2018",
@@ -217,6 +226,7 @@
   "missing_evidence": "marker-to-omission mapping within the clause",
   "next_source": "the clause's sub-section and clause references",
   "needs_legal_interpretation": true,
-  "human_review": "PENDING"
+  "human_review": "PENDING",
+  "reason_prefix": ""
  }
 ]
