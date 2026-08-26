@@ -87,6 +87,34 @@ matched subset, reliable on token-level substitution — but a claim it accepts 
 `GROUNDED` becomes reachable in `checker/attribution.py`.
 - **Done when:** the stop condition above holds.
 
+## Grounding convention — DECIDED 2026-08-26, fail-closed
+
+> **Grounding is strict: a claim is supported only when its cited evidence
+> entails the claim with all material legal qualifications preserved.
+> General-rule summaries are not supported if their unqualified wording could
+> mislead a reasonable compliance professional.**
+
+> A source citation proves that the authority exists.
+> It does not prove that the generated proposition follows from the authority.
+
+States (`checker/grounding_policy.py`). Only the last two may yield GROUNDED:
+
+    CITATION_FOUND -> SOURCE_ADMITTED -> SOURCE_IN_FORCE ->
+    CLAIM_PARTIALLY_MATCHED -> CLAIM_QUALIFIERS_CHECKED ->
+    CLAIM_ENTAILED -> HUMAN_APPROVED
+
+E3 acceptance is `CLAIM_PARTIALLY_MATCHED` and is recorded separately from
+grounding status. It is never sufficient for GROUNDED.
+
+## Hard stops — the loop halts, it does not decide
+
+- human approval is required
+- source evidence is missing
+- labels conflict
+- a certificate or licence is unresolved
+- the frozen benchmark would change
+- the system would otherwise infer a legal conclusion
+
 ## Binding constraints
 
 - Never use ILDC, HLDC, IL-TUR, Pile of Law or any CC-BY-NC dataset. Commercial

@@ -43,6 +43,9 @@ suites=(
   checker/benchmark_freeze.py
   checker/entail_baseline.py
   checker/entail_paraphrase.py
+  checker/grounding_policy.py
+  checker/entail_pairs_v2.py
+  checker/reviews.py
   checker/provenance_slots.py
   checker/drafting.py
   checker/matter.py
