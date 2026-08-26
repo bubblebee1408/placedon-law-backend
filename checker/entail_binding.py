@@ -50,6 +50,23 @@ accepting more true claims.
 
 Neither number licenses a claim that this validates grounding generally.
 
+## Where it still fails, characterised
+
+The four remaining false accepts on the target bucket share one shape:
+**within-clause role confusion**. The quantity and the wrong obligation live in
+the SAME clause, so clause-level segmentation cannot separate them.
+
+    s.174   "two directors as the fraction of total strength"   overlap 0.71
+            source: "one-third of its total strength or two directors,
+                     whichever is higher" — both roles, one sentence
+    s.96    "fifteen months as the deadline for the first AGM"  overlap 0.44
+    s.173   "120 days as the minimum number of Board meetings"  overlap 0.40
+
+This checker separates *between* clauses. It cannot separate *roles within* one.
+Closing that needs argument-role extraction — which quantity is the fraction and
+which is the floor — not finer segmentation, and the s.174 case shows why: the
+two quantities are joined by "or", in one clause, by design.
+
 ## What it deliberately does not do
 
 It does not judge paraphrase. A claim with no extractable quantity binding is
@@ -108,11 +125,52 @@ def _plain(html: str) -> str:
     return _norm(re.sub(r"<[^>]+>", " ", html or ""))
 
 
+# Comparison direction. s.173 states a ceiling ("not more than one hundred and
+# twenty days shall intervene") and a floor ("the gap ... is not less than ninety
+# days") in the same section, and the whole legal content of s.173(5) is that its
+# ninety days is a MINIMUM — the inverse of the 120-day maximum. The words that
+# carry that distinction were in the stop list, so "not less than ninety days"
+# and "not more than ninety days" compared identical. Direction is now a property
+# of the binding, not a word to be filtered out.
+CEILING = "CEILING"        # at most
+FLOOR = "FLOOR"            # at least
+UNSPECIFIED = "UNSPECIFIED"
+
+_CEILING = re.compile(
+    r"\bnot\s+more\s+than\b|\bnot\s+exceed(?:ing)?\b|\bwithin\b|\bmaximum\b"
+    r"|\bat\s+most\b|\bnot\s+later\s+than\b|\bup\s+to\b|\bshall\s+not\s+exceed\b",
+    re.I)
+_FLOOR = re.compile(
+    r"\bnot\s+less\s+than\b|\bat\s+least\b|\bminimum\b|\bnot\s+fewer\s+than\b"
+    r"|\bor\s+more\b|\bno\s+less\s+than\b",
+    re.I)
+
+
+def direction_near(text: str, at: int, window: int = 60) -> str:
+    """Whether the quantity at `at` is bounded above or below.
+
+    Read from the words immediately before it — statutory drafting puts the
+    comparator there ("not more than ninety days"). A window rather than the
+    whole clause, because one clause can carry both a floor and a ceiling.
+    """
+    lo = max(0, at - window)
+    before = text[lo:at]
+    c, f = _CEILING.search(before), _FLOOR.search(before)
+    if c and f:
+        return CEILING if c.start() > f.start() else FLOOR
+    if c:
+        return CEILING
+    if f:
+        return FLOOR
+    return UNSPECIFIED
+
+
 @dataclass(frozen=True)
 class Binding:
     quantity: str
     context: str            # the clause the quantity governs
     at: int
+    direction: str = UNSPECIFIED
 
     @property
     def terms(self) -> frozenset[str]:
@@ -143,7 +201,8 @@ def bindings(text: str) -> list[Binding]:
         lo = starts[-1] if starts else 0
         nxt = _BOUNDARY.search(t, m.end())
         hi = nxt.start() if nxt else len(t)
-        out.append(Binding(qty, t[lo:hi].strip(), m.start()))
+        out.append(Binding(qty, t[lo:hi].strip(), m.start(),
+                           direction_near(t, m.start())))
     return out
 
 
@@ -177,10 +236,14 @@ def judge(premise: str, claim: str, *, threshold: float = 0.34) -> BindingVerdic
     # separated nothing and cannot say which obligation any of them governs.
     # Answering anyway would produce exactly the false accept this exists to
     # prevent, so it abstains and names the reason.
-    ctxs = [s.context for s in sb]
-    if len(sb) > 1 and len(set(ctxs)) < len(ctxs):
+    # Keyed on (context, direction), not context alone. Direction now separates
+    # quantities that share a clause — "at least one meeting" and "not less than
+    # ninety days" sit in one sentence but bind differently, and treating the
+    # clause as degenerate abstained on the whole of s.173(5).
+    keys = [(s.context, s.direction) for s in sb]
+    if len(sb) > 1 and len(set(keys)) < len(keys):
         dupes = [q for q in {s.quantity for s in sb
-                             if ctxs.count(s.context) > 1}]
+                             if keys.count((s.context, s.direction)) > 1}]
         return BindingVerdict(
             UNRESOLVED,
             note=("several quantities in the provision share one clause "
@@ -196,7 +259,25 @@ def judge(premise: str, claim: str, *, threshold: float = 0.34) -> BindingVerdic
             if worst is None or v.status == ABSENT:
                 worst = v
             continue
+        # Direction first. A claim that turns a floor into a ceiling is false
+        # however well its words match — and it is exactly the error that makes
+        # s.173(5) compliance look satisfied by meetings held thirty days apart.
+        dir_clash = [s for s in same
+                     if c.direction != UNSPECIFIED and s.direction != UNSPECIFIED
+                     and c.direction != s.direction]
+        if dir_clash and not [s for s in same if s.direction == c.direction]:
+            v = BindingVerdict(
+                CONTRADICTED, c.quantity, c.context, dir_clash[0].context, 0.0,
+                note=(f"the claim bounds {c.quantity!r} as a "
+                      f"{c.direction.lower()}; the provision states it as a "
+                      f"{dir_clash[0].direction.lower()}"))
+            worst = v
+            continue
+
         # The claim's clause must resemble the clause the source binds it to.
+        same = [s for s in same
+                if c.direction == UNSPECIFIED or s.direction == UNSPECIFIED
+                or s.direction == c.direction] or same
         best = max(same, key=lambda s: _sim(c.terms, s.terms))
         score = _sim(c.terms, best.terms)
         if score >= threshold:
@@ -317,6 +398,25 @@ def _test() -> None:
 
     check(predict(type("R", (), {"premise": S103, "hypothesis": "no numbers here"})())
           is None, "predict() returns None where the checker abstains")
+
+    # Direction — the s.173(5) failure mode.
+    check(direction_near("the gap is not less than ninety days", 33) == FLOOR,
+          "'not less than' reads as a floor")
+    check(direction_near("not more than one hundred and twenty days shall", 13)
+          == CEILING, "'not more than' reads as a ceiling")
+    check(direction_near("at least one meeting shall be held", 9) == FLOOR,
+          "'at least' reads as a floor")
+    check(direction_near("hold four meetings every year", 5) == UNSPECIFIED,
+          "a bare quantity has no direction")
+
+    FLOOR_SRC = "the gap between the two meetings is not less than ninety days"
+    v = judge(FLOOR_SRC, "the gap between the two meetings is not less than ninety days")
+    check(v.supported, f"a floor restated as a floor is supported ({v.status})")
+    v = judge(FLOOR_SRC, "the gap between the two meetings is not more than ninety days")
+    check(v.status == CONTRADICTED,
+          f"a floor restated as a ceiling is CONTRADICTED ({v.status})")
+    check("floor" in v.note and "ceiling" in v.note,
+          f"...and the verdict names both directions ({v.note[:70]})")
 
     # The measured claim, pinned. If a future edit stops it beating E3 on the
     # bucket it was built for, that is the whole reason it exists.
