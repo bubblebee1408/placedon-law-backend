@@ -76,7 +76,12 @@ UNREACHABLE = "UNREACHABLE"
 # The reverse is the dangerous case and gets its own verdict: if we hold live
 # text for a section the source marks omitted, we would serve repealed law as
 # current. That is STALE_TEXT.
-_OMITTED_RX = re.compile(r"\bomitted\b", re.I)
+# Match the *structure* of an omission stub, not the word. s.59 says a name may
+# be "omitted there from" the register of members — ordinary operative text that
+# a bare \bomitted\b search flagged as a repealed provision. India Code's real
+# stubs look like "[Heading.] Omitted by s. 255 and the Eleventh Schedule..." or
+# carry the title "[Omitted.]".
+_OMITTED_RX = re.compile(r"\[\s*Omitted|\]\s*Omitted\s+by|^\s*Omitted\s+by", re.I)
 
 
 @dataclass
@@ -110,6 +115,19 @@ def _get(url: str, timeout: float = 40.0) -> dict | None:
 def _md(obj: dict, key: str) -> str:
     vals = obj.get("metadata", {}).get(key) or []
     return vals[0].get("value", "") if vals else ""
+
+
+_ENTRIES: dict | None = None
+
+
+def _we_call_it_omitted(number: str) -> bool:
+    """Does OUR index record this section as omitted, as opposed to unresolved?"""
+    global _ENTRIES
+    if _ENTRIES is None:
+        _ENTRIES = json.loads(
+            Path("corpus/companies_act/_index.json").read_text()).get("entries", {})
+    e = _ENTRIES.get(number) or {}
+    return "omitted" in (e.get("method", "") + " " + e.get("title", "")).lower()
 
 
 def _is_omitted(title: str, body: str) -> bool:
@@ -162,7 +180,11 @@ def check_numbers(numbers: list[str], verbose: bool = True) -> list[Check]:
         theirs, title = lookup(num)
         src_omitted = "\x00OMITTED" in title
         title = title.replace("\x00OMITTED", "")
-        ours_omitted = ours is None
+        # "We recorded this as omitted" is not the same as "our parser could not
+        # resolve it". s.51 has section_id None with method 'ambiguous' — a parse
+        # failure, and India Code holds it as 1241. Treating the two alike hid a
+        # real, fixable gap behind a legitimate-looking verdict.
+        ours_omitted = ours is None and _we_call_it_omitted(num)
 
         if theirs is None:
             verdict = NOT_FOUND
@@ -239,6 +261,17 @@ def _test() -> None:
     check(not _is_omitted("Annual general meeting.",
                           "(1) Every company other than a One Person Company shall"),
           "a live section is not mistaken for an omitted one")
+    # Regression: s.59's operative text contains the word "omitted".
+    check(not _is_omitted("Rectification of register of members.",
+                          "(1) If the name of any person is, without sufficient cause, "
+                          "entered in the register of members of a company, or after "
+                          "having been entered in the register, is, without sufficient "
+                          "cause, omitted there from, or if a default is made"),
+          "'omitted there from' in operative text is not an omission stub")
+    check(_is_omitted("[Omitted.]", "[Omitted.]"), "the [Omitted.] title is recognised")
+    check(_we_call_it_omitted("11"), "our index records s.11 as omitted")
+    check(not _we_call_it_omitted("51"),
+          "s.51 is unresolved in our index, not omitted — a fixable gap")
 
     r2 = report([Check("255", "1", "1", STALE_TEXT)])
     check("OMITTED" in r2 and "WE HOLD TEXT" in r2,

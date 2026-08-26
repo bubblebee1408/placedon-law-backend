@@ -18,7 +18,8 @@ Three properties are load-bearing, in this order:
    corpus wording there is pre-amendment. Attaching the defect id to the Hit is the only way that
    holds; a note in prose does not survive a function boundary.
 
-3. Unmapped is an answer. `section_by_number` returns None for sections it could not map (s.378ZA)
+3. Unmapped is an answer. `section_by_number` returns None for sections it could not map, and for
+   sections the legislature omitted (s.11)
    or that the Act omits (s.11). Those return no Hit. Fabricating one would be the exact failure
    this repo exists to prevent.
 
@@ -361,7 +362,12 @@ def _test() -> None:
 
     # --- unmapped / omitted / unknown: no Hit, never a fabricated one ---
     check(any(c.number == "378ZA" for c in _scan("s.378ZA")), "s.378ZA parses as 378ZA")
-    check(resolve("s.378ZA") == [], "unmapped s.378ZA yields no hit rather than a wrong one")
+    # s.378ZA used to stand for "unmapped" here. It is now source-confirmed as
+    # 52450, so the property is asserted with cases that remain unresolvable:
+    # a section the legislature omitted, and one that does not exist.
+    check(resolve("s.378ZA") != [], "s.378ZA now resolves — source-confirmed via India Code")
+    check(resolve("s.11") == [], "an omitted section yields no hit rather than a wrong one")
+    check(resolve("s.9999") == [], "a nonexistent section yields no hit rather than a guess")
     check(section_by_number("11") is None and resolve("s.11") == [],
           "omitted s.11 yields no hit")
     check(resolve("s.999") == [], "unknown section number yields no hit")

@@ -83,8 +83,14 @@ Files changed · Tests added or updated · Commands run · Results · Known limi
   `docs/SOURCE_DEFECTS.md`. Corpus status is NOT_FULLY_VERIFIED.
 - Independent-publisher verification: **PENDING**. Both renderings are India Code; a defect in
   their own source is invisible to this check.
-- Section index: 464/474 mapped. **Now source-confirmed**: 12/12 MVP sections verified against
-  India Code's own REST API, 0 mismatches (`scripts/verify_section_index.py`).
+- Section index: **474/517 entries mapped, 0 live sections unresolved.** The remaining 43 are
+  provisions the legislature omitted (s.11; ss.253-269, omitted by the IBC w.e.f. 15-11-2016),
+  which resolve to None by design. 10 sections our PDF parse left ambiguous — s.51 and nine
+  Producer Company provisions — were resolved from India Code's API and carry
+  `confidence: source-confirmed` (`scripts/resolve_missing_sections.py`).
+- MVP sections verified against India Code's own REST API: 12/12, 0 mismatches
+  (`scripts/verify_section_index.py`). The checker also reports **STALE_TEXT** — holding live
+  text for a provision the source marks omitted, i.e. serving repealed law as current.
 - **India Code moved domain.** `indiacode.nic.in` 403s everything; the live host is
   **`indiacode.gov.in`**, running DSpace with an open REST API (no key, no auth) exposing
   `dc.identifier.section_number`, `section_id`, `section_footnote`, `act_name`. The 403 that

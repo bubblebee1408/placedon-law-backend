@@ -27,6 +27,14 @@ def lookup(section_number: str) -> dict | None:
     return _index().get(str(section_number).strip().upper())
 
 
+# Confidence labels a mapping may be served under. "high"/"medium" come from the
+# PDF slicing heuristic; "source-confirmed" comes from India Code's own API
+# returning section_id for a named Act, which is stronger evidence than either.
+# The allowlist is explicit rather than a comparison, so a label nobody has
+# reasoned about is refused instead of ranked.
+TRUSTED_CONFIDENCE = ("source-confirmed", "high", "medium")
+
+
 def section_by_number(section_number: str) -> dict | None:
     """The full corpus record for a section number, with its index entry attached.
 
@@ -36,7 +44,7 @@ def section_by_number(section_number: str) -> dict | None:
     e = lookup(section_number)
     if not e or not e.get("section_id"):
         return None
-    if e.get("confidence") not in ("high", "medium"):
+    if e.get("confidence") not in TRUSTED_CONFIDENCE:
         return None
     rec = json.loads((CORPUS / f"{e['section_id']}.json").read_text())
     rec["section_number"] = e["section_number"]
