@@ -50,6 +50,8 @@ suites=(
   checker/eval_taxonomy.py
   checker/entail_binding.py
   checker/entail_role.py
+  checker/metric_policy.py
+  checker/s173_slice.py
   checker/grounding_policy.py
   checker/entail_pairs_v2.py
   checker/reviews.py
