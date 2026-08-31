@@ -52,8 +52,18 @@ def record(pair_ids: list[str], *, reviewer: str, status: str = APPROVED,
     data = load(path)
     stamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
     for pid in pair_ids:
-        data[pid] = {"status": status, "reviewer": reviewer,
-                     "reviewed_at": stamp, "note": note}
+        prior = data.get(pid)
+        entry = {"status": status, "reviewer": reviewer,
+                 "reviewed_at": stamp, "note": note}
+        if prior:
+            # A decision that replaces another does not erase it. Retracting an
+            # approval is exactly the case where someone later needs to see that
+            # the pair WAS approved, by whom, and when — writing the new status
+            # over the old left no trace of the thing being undone.
+            history = list(prior.pop("history", []))
+            history.append(prior)
+            entry["history"] = history
+        data[pid] = entry
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, indent=1, sort_keys=True) + "\n")
     return data
@@ -64,6 +74,11 @@ def status_of(pair_id: str, path: Path = REVIEWS) -> tuple[str, str | None, str 
     if not e:
         return PENDING, None, None
     return e["status"], e.get("reviewer"), e.get("reviewed_at")
+
+
+def history_of(pair_id: str, path: Path = REVIEWS) -> list[dict]:
+    """Every superseded decision on this pair, oldest first."""
+    return list(load(path).get(pair_id, {}).get("history", []))
 
 
 def _test() -> None:
@@ -105,6 +120,27 @@ def _test() -> None:
             check(True, "an unnamed reviewer is refused")
         record(["a1"], reviewer="reviewer-02", status=REJECTED, note="wrong", path=p)
         check(status_of("a1", p)[0] == REJECTED, "a decision can be revoked")
+    # A replaced decision is kept, not overwritten.
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        hp = Path(td) / "hist.json"
+        record(["h"], reviewer="reviewer-01", status=APPROVED, path=hp)
+        first = load(hp)["h"]["reviewed_at"]
+        record(["h"], reviewer="reviewer-01", status=REJECTED,
+               note="retracted", path=hp)
+        e = load(hp)["h"]
+        check(e["status"] == REJECTED, "the current status is the new one")
+        hist = history_of("h", hp)
+        check(len(hist) == 1 and hist[0]["status"] == APPROVED,
+              f"the superseded approval is kept ({[x['status'] for x in hist]})")
+        check(hist[0]["reviewed_at"] == first,
+              "...with its original timestamp, not restamped")
+        check("history" not in hist[0],
+              "history does not nest inside itself")
+        record(["h"], reviewer="reviewer-01", status=APPROVED, path=hp)
+        check([x["status"] for x in history_of("h", hp)] == [APPROVED, REJECTED],
+              "each further decision appends, oldest first")
+
     print(f"\n{ok}/{ok + fail} passed")
     if fail:
         raise SystemExit(1)
