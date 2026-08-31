@@ -41,7 +41,7 @@ from dataclasses import dataclass
 from datetime import date
 
 from checker.company_profile import Money
-from checker.provenance import SERVABLE, UNRESOLVED, VERIFIED
+from checker.provenance import CORROBORATED, SERVABLE, UNRESOLVED, VERIFIED
 
 
 @dataclass(frozen=True)
@@ -113,33 +113,65 @@ _ACT_BOUNDS: tuple[Threshold, ...] = (
               "no prescribed amount may exceed this"),
 )
 
-# The prescribed amounts. On record as a LEAD, not as law we may serve.
-_PRESCRIBED: tuple[Threshold, ...] = (
-    Threshold("small_company.paid_up_capital.prescribed", Money.crore(4),
-              date(2022, 9, 15), None,
-              "G.S.R. 700(E), Companies (Specification of Definition Details) "
-              "Amendment Rules, 2022, dated 15-09-2022",
-              f"{_INDIA_CODE}/508916",
-              UNRESOLVED,
-              "read outside the robots-respecting fetch path and returned "
-              "paraphrased, not verbatim; indiacode.gov.in/robots.txt answers "
-              "HTTP 502 so checker.robots declines. Acquire under S-002 before "
-              "serving."),
-    Threshold("small_company.turnover.prescribed", Money.crore(40),
-              date(2022, 9, 15), None,
-              "G.S.R. 700(E), Companies (Specification of Definition Details) "
-              "Amendment Rules, 2022, dated 15-09-2022",
-              f"{_INDIA_CODE}/508916",
-              UNRESOLVED,
-              "same instrument and same acquisition gap as the capital limb"),
-)
+def _prescribed_state() -> tuple[str, str]:
+    """(evidence state, note) for the prescribed amounts, derived from evidence.
 
-ALL: tuple[Threshold, ...] = _ACT_BOUNDS + _PRESCRIBED
+    Not a hand-edited constant. A constant saying CORROBORATED can outlive the
+    artifact it was asserting, and the whole point of the registration record is
+    that the state follows the evidence rather than someone's memory of it.
+    """
+    try:
+        from scripts.register_gsr700e import registration, is_attested
+    except ImportError:                                     # pragma: no cover
+        return UNRESOLVED, "the registration module could not be imported"
+
+    rec = registration()
+    if rec is None:
+        return UNRESOLVED, (
+            "no registration on record. India Code lists the instrument and its "
+            "text bitstream is reachable, but indiacode.gov.in/robots.txt answers "
+            "HTTP 502 so checker.robots declines, and egazette chains to a root "
+            "absent from this machine's trust store. Acquire under S-002: "
+            "download in a browser, then scripts/register_gsr700e.py.")
+    if not is_attested(rec):
+        missing = [k for k in ("identity_checked_by", "verbatim_clause_checked_by")
+                   if not rec.get(k)]
+        return UNRESOLVED, (
+            f"artifact registered ({rec.get('artifact_sha256', '?')[:23]}…) but not "
+            f"attested: {', '.join(missing) or 'status is not CORROBORATED'}. "
+            "Hashing proves the bytes did not change, not that they are the right "
+            "instrument or that the clause survived extraction. Run "
+            "scripts/register_gsr700e.py --attest <reviewer-id>.")
+    return CORROBORATED, (
+        f"registered and attested by {rec['identity_checked_by']} at "
+        f"{rec['identity_checked_at']}; artifact "
+        f"{rec.get('artifact_sha256', '?')[:23]}…")
+
+
+# The prescribed amounts. Their state is DERIVED, never asserted here.
+def _prescribed() -> tuple[Threshold, ...]:
+    state, note = _prescribed_state()
+    return (
+        Threshold("small_company.paid_up_capital.prescribed", Money.crore(4),
+                  date(2022, 9, 15), None,
+                  "G.S.R. 700(E), Companies (Specification of Definition Details) "
+                  "Amendment Rules, 2022, dated 15-09-2022",
+                  f"{_INDIA_CODE}/508916", state, note),
+        Threshold("small_company.turnover.prescribed", Money.crore(40),
+                  date(2022, 9, 15), None,
+                  "G.S.R. 700(E), Companies (Specification of Definition Details) "
+                  "Amendment Rules, 2022, dated 15-09-2022",
+                  f"{_INDIA_CODE}/508916", state, note),
+    )
+
+
+def all_thresholds() -> tuple[Threshold, ...]:
+    return _ACT_BOUNDS + _prescribed()
 
 
 def held(key: str, as_of: date) -> list[Threshold]:
     """Every recorded amount for this key covering that date, servable or not."""
-    return [t for t in ALL if t.key == key and t.covers(as_of)]
+    return [t for t in all_thresholds() if t.key == key and t.covers(as_of)]
 
 
 def lookup(key: str, as_of: date) -> Threshold:
@@ -227,15 +259,62 @@ def _test() -> None:
         check("no amount is on record" in str(e), f"an unknown key raises ({e})")
 
     # Every record names an instrument and a source.
-    check(all(t.instrument and t.source_url for t in ALL),
+    check(all(t.instrument and t.source_url for t in all_thresholds()),
           "every threshold names its instrument and source")
-    check(all(t.state in (VERIFIED, UNRESOLVED) for t in ALL),
+    check(all(t.state in (VERIFIED, UNRESOLVED, CORROBORATED) for t in all_thresholds()),
           "every threshold carries a provenance state")
 
     # The Act figures must never be confused for the operative ones.
     check(all("floor" in t.key or "ceiling" in t.key
               for t in _ACT_BOUNDS),
           "the Act's limbs are keyed as floor/ceiling, never as the operative amount")
+
+    # The whole acquisition gate, exercised end to end against a temporary
+    # record. Registration alone must NOT unlock the thresholds; only a
+    # registration carrying both human attestations may.
+    import json, tempfile
+    from unittest import mock
+    import scripts.register_gsr700e as reg
+
+    unattested = {"artifact_sha256": "sha256:" + "ab" * 32,
+                  "identity_checked_by": None, "identity_checked_at": None,
+                  "verbatim_clause_checked_by": None,
+                  "verbatim_clause_checked_at": None,
+                  "status": "PENDING_HUMAN_REVIEW"}
+    with mock.patch.object(reg, "registration", lambda: unattested):
+        st, note = _prescribed_state()
+        check(st == UNRESOLVED, f"a registered but unattested artifact stays refused ({st})")
+        check("not attested" in note, f"...and the note says why ({note[:60]}…)")
+        try:
+            operative_small_company_limits(today)
+            check(False, "...and the limits are still unavailable")
+        except ThresholdUnavailable:
+            check(True, "...and the limits are still unavailable")
+
+    attested = dict(unattested, identity_checked_by="reviewer-01",
+                    identity_checked_at="2026-08-31T00:00:00Z",
+                    verbatim_clause_checked_by="reviewer-01",
+                    verbatim_clause_checked_at="2026-08-31T00:00:00Z",
+                    status="CORROBORATED")
+    with mock.patch.object(reg, "registration", lambda: attested):
+        st2, note2 = _prescribed_state()
+        check(st2 == CORROBORATED, f"an attested artifact makes them servable ({st2})")
+        check("reviewer-01" in note2, "...and the note names the attesting reviewer")
+        cap, turn = operative_small_company_limits(today)
+        check(cap == Money.crore(4) and turn == Money.crore(40),
+              f"...and the limits come through ({cap} / {turn})")
+
+    # A partial attestation is not an attestation.
+    half = dict(attested, verbatim_clause_checked_by=None)
+    with mock.patch.object(reg, "registration", lambda: half):
+        st3, _ = _prescribed_state()
+        check(st3 == UNRESOLVED, "one of the two checks alone is not enough")
+
+    # And with no record at all we are back to the real state.
+    with mock.patch.object(reg, "registration", lambda: None):
+        st4, note4 = _prescribed_state()
+        check(st4 == UNRESOLVED, "no registration means no servable threshold")
+        check("S-002" in note4, "...and the note names the open task")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:

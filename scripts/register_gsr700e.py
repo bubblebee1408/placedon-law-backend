@@ -40,6 +40,21 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 STORE = Path("corpus/rules/gsr_700e_2022.txt")
 RECORD = Path("corpus/sources/gsr700e_registration.json")
 
+SOURCE_URL = "https://indiacode.gov.in/handle/123456789/508916"
+BITSTREAM_ID = "6d5e9902-44a7-4ee5-975a-1fd7fc5d51a5"
+
+# The record's own status, distinct from any evidence state. A registered
+# artifact is not usable law until both human checks are recorded against it.
+PENDING_HUMAN_REVIEW = "PENDING_HUMAN_REVIEW"
+CORROBORATED = "CORROBORATED"
+
+ATTESTATIONS = (
+    "identity: this file is G.S.R. 700(E) of 15-09-2022, and not the principal "
+    "2014 Rules, the 2021 amendment, or a consolidated reprint",
+    "clause: the operative wording recorded here is verbatim from the file, "
+    "with no repair, normalisation or reflow",
+)
+
 VERIFIED_INSTRUMENT = "VERIFIED_INSTRUMENT"
 WRONG_INSTRUMENT = "WRONG_INSTRUMENT"
 CLAUSE_NOT_FOUND = "CLAUSE_NOT_FOUND"
@@ -141,29 +156,112 @@ def register(src: Path) -> str:
         "instrument_id": "INDIACODE_GSR_700E_DEFINITIONS_AMENDMENT_2022",
         "title": "G.S.R. 700(E) — Companies (Specification of Definition Details) "
                  "Amendment Rules, 2022, dated 15-09-2022",
+        "source_url": SOURCE_URL,
+        "bitstream_id": BITSTREAM_ID,
+        "downloaded_at": None,          # filled by --attest; only a person knows it
         "registered_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "source_file_sha256": digest,
+        "acquisition_method": "human_browser",
+        "artifact_sha256": digest,
         "stored_text": str(STORE),
         "stored_text_sha256": "sha256:" + hashlib.sha256(
             STORE.read_bytes()).hexdigest(),
         "operative_clause": clause,
         "classification": outcome,
-        "evidence_state": "CORROBORATED",
-        "not_yet": ("VERIFIED requires a hashed artifact AND human review. This script "
-                    "performs the first half only. A person must read the clause above "
-                    "against the stored text before the state moves to VERIFIED."),
+        # The two human checks. Null until a person runs --attest. Nothing
+        # downstream may treat this instrument as usable while either is null:
+        # hashing proves the bytes did not change, not that they are the right
+        # instrument or that the clause survived extraction intact.
+        "identity_checked_by": None,
+        "identity_checked_at": None,
+        "verbatim_clause_checked_by": None,
+        "verbatim_clause_checked_at": None,
+        "status": PENDING_HUMAN_REVIEW,
+        "attests_to": ATTESTATIONS,
     }, indent=1) + "\n", encoding="utf-8")
 
     print(f"stored         : {STORE}")
     print(f"record         : {RECORD}")
-    print("\nNext, by hand:")
-    print("  1. read the clause above against corpus/rules/gsr_700e_2022.txt")
-    print("  2. in checker/prescribed_thresholds.py, change the two _PRESCRIBED")
-    print("     entries from UNRESOLVED to CORROBORATED and cite this record")
-    print("  3. run scripts/run_tests.sh — classify.small_company should stop")
-    print("     answering INSUFFICIENT_DATA on the arithmetic")
-    print("  4. close S-002 in research/TASKS.md")
+    print(f"status         : {PENDING_HUMAN_REVIEW}")
+    print("\nThe artifact is stored and hashed. It is NOT yet usable law.")
+    print("Two human checks remain, and both are recorded, not assumed:")
+    for a in ATTESTATIONS:
+        print(f"  - {a}")
+    print("\nWhen you have done both:")
+    print("  python3 scripts/register_gsr700e.py --attest <your-reviewer-id>")
+    print("\nNo constant needs editing. prescribed_thresholds reads this record,")
+    print("so the threshold becomes servable when the attestation lands and not")
+    print("before. Then run scripts/run_tests.sh and close S-002.")
     return outcome
+
+
+def attest(reviewer_id: str, downloaded_at: str | None = None) -> str:
+    """Record that a person performed both checks. Without this the artifact
+    is stored but not usable, and prescribed_thresholds keeps refusing.
+
+    A reviewer id, not an address: benchmark and corpus files are meant to be
+    distributable and a reviewer's address is not part of the evidence.
+    """
+    if not RECORD.is_file():
+        print(f"no registration to attest: {RECORD} does not exist")
+        print("register the downloaded file first")
+        return UNREADABLE
+    if "@" in reviewer_id:
+        print("record a pseudonymous reviewer id, not an email address")
+        return WRONG_INSTRUMENT
+
+    rec = json.loads(RECORD.read_text())
+
+    # The stored text must still hash to what was registered. An attestation
+    # against a file that changed after registration attests to nothing.
+    if STORE.is_file():
+        now_hash = "sha256:" + hashlib.sha256(STORE.read_bytes()).hexdigest()
+        if now_hash != rec.get("stored_text_sha256"):
+            print("REFUSED: the stored text has changed since registration")
+            print(f"  registered : {rec.get('stored_text_sha256')}")
+            print(f"  on disk    : {now_hash}")
+            print("re-register the artifact before attesting to it")
+            return WRONG_INSTRUMENT
+    else:
+        print(f"REFUSED: {STORE} is missing; nothing to attest to")
+        return UNREADABLE
+
+    stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    rec.update({
+        "identity_checked_by": reviewer_id,
+        "identity_checked_at": stamp,
+        "verbatim_clause_checked_by": reviewer_id,
+        "verbatim_clause_checked_at": stamp,
+        "downloaded_at": downloaded_at or rec.get("downloaded_at"),
+        "status": CORROBORATED,
+    })
+    RECORD.write_text(json.dumps(rec, indent=1) + "\n", encoding="utf-8")
+    print(f"attested by {reviewer_id} at {stamp}")
+    print(f"status         : {CORROBORATED}")
+    print("\nprescribed_thresholds derives its state from this record, so the")
+    print("small-company limits are now servable. Run scripts/run_tests.sh and")
+    print("close S-002 with the artifact hash, reviewer id and timestamps above.")
+    return VERIFIED_INSTRUMENT
+
+
+def registration() -> dict | None:
+    """The registration record, if one exists. Read by prescribed_thresholds."""
+    if not RECORD.is_file():
+        return None
+    try:
+        return json.loads(RECORD.read_text())
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def is_attested(rec: dict | None) -> bool:
+    """Both human checks recorded, and the status says so."""
+    if not rec:
+        return False
+    return bool(rec.get("identity_checked_by")
+                and rec.get("identity_checked_at")
+                and rec.get("verbatim_clause_checked_by")
+                and rec.get("verbatim_clause_checked_at")
+                and rec.get("status") == CORROBORATED)
 
 
 def _test() -> int:
@@ -229,6 +327,9 @@ def _test() -> int:
 if __name__ == "__main__":
     if len(sys.argv) == 2 and sys.argv[1] == "--test":
         raise SystemExit(_test())
+    if len(sys.argv) >= 3 and sys.argv[1] == "--attest":
+        raise SystemExit(EXIT[attest(sys.argv[2],
+                                     sys.argv[3] if len(sys.argv) > 3 else None)])
     if len(sys.argv) != 2:
         print(__doc__)
         raise SystemExit(1)
