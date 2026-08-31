@@ -310,6 +310,53 @@ def baseline_report() -> str:
     return "\n".join(lines)
 
 
+# Fields that name a person. Checked across every benchmark file, not only the
+# ones the manifest hashes, because the leak that prompted this was in an
+# ungoverned export nothing reads.
+_IDENTITY_FIELDS = ("reviewer", "reviewer_id", "reviewed_by", "approved_by")
+
+
+def identity_leaks(dirpath: Path = DIR) -> list[str]:
+    """Benchmark records naming a person by address rather than pseudonym.
+
+    reviews.record() refuses an "@" at write time, but that guard only covers
+    the review store. The exported pair file carried a real address for eight
+    records because it was written before the rule existed and never
+    regenerated — a rule enforced at one door and not the others.
+    """
+    out: list[str] = []
+
+    def scan(where: str, obj) -> None:
+        if isinstance(obj, dict):
+            for k, v in obj.items():
+                if k in _IDENTITY_FIELDS and isinstance(v, str) and "@" in v:
+                    out.append(f"{where}: {k}={v!r} is an address, not a pseudonymous id")
+                else:
+                    scan(where, v)
+        elif isinstance(obj, list):
+            for item in obj:
+                scan(where, item)
+
+    for f in sorted(dirpath.glob("*.json")) + sorted(dirpath.glob("*.jsonl")):
+        try:
+            text = f.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        if f.suffix == ".jsonl":
+            for i, line in enumerate(text.splitlines(), 1):
+                if line.strip():
+                    try:
+                        scan(f"{f.name}:{i}", json.loads(line))
+                    except json.JSONDecodeError:
+                        continue
+        else:
+            try:
+                scan(f.name, json.loads(text))
+            except json.JSONDecodeError:
+                continue
+    return out
+
+
 def verify() -> list[str]:
     """Re-read everything from disk and check it against the manifest."""
     problems: list[str] = []
@@ -432,6 +479,14 @@ def _test() -> None:
 
     for f in (APPROVED_F, REJECTED_F, INVALID_F, PENDING_F, MANIFEST_F):
         check(f.exists(), f"{f.name} was written")
+
+    # No benchmark file may name a reviewer by address. reviews.record() blocks
+    # this at write time; this catches a file written before that rule, or by
+    # any path that does not go through record().
+    leaks = identity_leaks()
+    check(not leaks, f"no benchmark record names a reviewer by address ({leaks[:2]})")
+    check(identity_leaks(Path("corpus")) == identity_leaks(),
+          "the scan is scoped to the benchmark directory")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:
