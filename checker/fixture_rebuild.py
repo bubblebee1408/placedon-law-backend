@@ -91,6 +91,22 @@ _SUFFIX: dict[tuple[str, str], str] = {
 # appending "subject to the shorter-notice requirement" would be circular. It
 # needs its own framing.
 _SPECIAL: dict[str, tuple[str, str]] = {
+    # s.174(1) fixes the quorum as the GREATER of two limbs. Stating either limb
+    # alone is wrong on a small board: with three directors, one-third is 1 but
+    # the quorum is 2. Neither limb can be repaired by appending a clause to it,
+    # so both are restated as the whole rule.
+    "v2-p174-bind-0": (
+        "Section 174 sets the quorum for a meeting of the Board at one-third of "
+        "the total strength or two directors, whichever is higher.",
+        "restated: the original gave one-third alone as the quorum fraction; the "
+        "replacement states both limbs and the selector that chooses between "
+        "them, because one-third understates the quorum on a board of three"),
+    "v2-p174-bind-1": (
+        "Section 174 sets the quorum for a meeting of the Board at two directors "
+        "or one-third of the total strength, whichever is higher.",
+        "restated: the original gave two directors as a free-standing floor; the "
+        "replacement states both limbs and the selector, because two directors "
+        "understates the quorum on a board of nine"),
     "v2-p101-bind-1": (
         "Where shorter notice is given for an annual general meeting, section 101 "
         "requires the consent of not less than ninety-five per cent of the members "
@@ -189,7 +205,7 @@ def _test() -> None:
     print("fixture_rebuild")
 
     props = propose()
-    check(len(props) == 9, f"one proposal per invalid fixture ({len(props)})")
+    check(len(props) == 11, f"one proposal per invalid fixture ({len(props)})")
     check(all(p.label == PENDING_REVIEW for p in props),
           "every proposal is PENDING_REVIEW — none assigns itself ENTAILED")
     check(all(p.label_basis == HUMAN_JUDGED for p in props),
@@ -209,15 +225,40 @@ def _test() -> None:
     check(all(p.claim != p.original_claim for p in props),
           "no proposal is identical to the invalid claim it replaces")
 
-    # And it must mention the qualifier it was meant to restore.
-    hedges = ("unless", "subject to", "where shorter notice")
-    missing = [p.pair_id for p in props
-               if not any(h in p.claim.lower() for h in hedges)]
+    # And it must mention the qualifier it was meant to restore. Tied to each
+    # proposal's own inventory rather than a fixed hedge list: the fixed list
+    # held only conditional hedges, so s.174's selector — restored as "whichever
+    # is higher" — read as no qualifier at all.
+    # What counts as restoring each KIND of qualifier. Keyed on kind rather than
+    # a flat hedge list, because a replacement restores a qualifier in its own
+    # words, not the statute's: s.174's selector comes back as "whichever is
+    # higher" and s.101's proviso as "subject to the shorter-notice consent
+    # requirement", and no single list of phrases covers both.
+    restoring = {
+        "selector": ("whichever is",),
+        "threshold": ("whichever is", "at least", "not less than"),
+        "proviso": ("provided", "subject to", "shorter notice", "unless", "where"),
+        "articles_override": ("unless", "articles"),
+        "government_exemption": ("subject to", "exempt", "central government"),
+        "delegated_rule": ("prescribed", "subject to"),
+        "scope_limit": ("subject to", "only", "for the purposes of"),
+    }
+
+    def _restores(pr) -> bool:
+        low = pr.claim.lower()
+        for q in pr.qualifiers:
+            if q["trigger"].lower() in low:
+                return True
+            if any(ph in low for ph in restoring.get(q["kind"], ())):
+                return True
+        return False
+
+    missing = [p.pair_id for p in props if not _restores(p)]
     check(not missing, f"every proposal carries a qualifying clause ({missing})")
 
     # Originals preserved, not edited.
     inv = invalid_records()
-    check(len(inv) == 9, f"all nine originals are preserved ({len(inv)})")
+    check(len(inv) == 11, f"all eleven originals are preserved ({len(inv)})")
     check(all(r["reason"] == INVALID_REASON for r in inv),
           "each original carries the standard invalidation reason")
     check(all(r["superseded_by"] for r in inv),

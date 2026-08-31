@@ -74,6 +74,14 @@ class Pair:
         return True
 
 
+# A whole-provision fallback, not a 400-char head. At 400 the s.96 slice cut
+# into the middle of the first proviso, so the premise stopped before "nine
+# months" while a pair labelled ENTAILED asserted exactly that. The premise did
+# not contain the evidence for its own label. The cap stays only to bound a
+# pathologically long section; the longest fallback section here is 1858 chars.
+_FALLBACK_PREMISE_CHARS = 2500
+
+
 def provision(number: str) -> str:
     from checker.section_index import section_by_number
     rec = section_by_number(number)
@@ -125,7 +133,17 @@ QUALIFIERS: dict[tuple[str, str], list[Qualifier]] = {
         Qualifier("delegated_rule", "in such manner as maybe prescribed",
                   "the manner of giving notice is set by rules"),
     ],
-    ("174", "1"): [],
+    # Was an EMPTY list, which the INVALID_FIXTURE routing reads as "this
+    # provision carries no qualifier" — so three unqualified positives were
+    # emitted as ENTAILED. s.174(1) fixes the quorum at one-third of total
+    # strength OR two directors, WHICHEVER IS HIGHER. Stating either limb alone
+    # is wrong on a small board: on three directors one-third is 1, the quorum
+    # is 2. Found by entail_qualifier.inventory_gaps().
+    ("174", "1"): [
+        Qualifier("selector", "whichever is higher",
+                  "the quorum is the greater of one-third of total strength and "
+                  "two directors; neither limb states it alone"),
+    ],
     ("174", "2"): [
         Qualifier("exception", "if and so long as their number is reduced below the quorum",
                   "continuing directors may then act only for limited purposes"),
@@ -144,6 +162,26 @@ _SPANS: dict[tuple[str, str], tuple[str, int]] = {
     ("174", "1"): (r"\(1\) The quorum for a meeting", 300),
     ("174", "2"): (r"\(2\) The continuing directors", 360),
 }
+
+
+def subsection_of(section: str, quantity: str) -> str:
+    """Which numbered sub-section the quantity actually sits in.
+
+    The pair builder used to assume "1" for every constructed pair, so s.174's
+    "whichever is higher" — a qualifier on the sub-section (1) quorum — was
+    applied to a claim about the two-thirds interested-director rule in
+    sub-section (3), and invalidated a fixture that was sound. The quantity is
+    recorded by the builder, so its sub-section is read from the text rather
+    than assumed. Falls back to "1" when the provision carries no markers or
+    the quantity cannot be located: this must never narrow silently.
+    """
+    text = provision(section)
+    at = text.lower().find(quantity.lower())
+    if at < 0:
+        return "1"
+    marks = [(m.start(), m.group(1)) for m in re.finditer(r"\((\d+)\)\s", text)]
+    before = [num for start, num in marks if start <= at]
+    return before[-1] if before else "1"
 
 
 def source_span(section: str, sub: str) -> str:
@@ -320,7 +358,8 @@ def constructed_pairs() -> list[Pair]:
     from checker.entail_paraphrase import rebind_pairs, SUPPORTED
     out = []
     for p in rebind_pairs():
-        sub = "1"
+        sub = subsection_of(p.section, p.provenance.get("real_quantity", "")) \
+            if p.provenance.get("real_quantity") else "1"
         quals = [asdict(q) for q in QUALIFIERS.get((p.section, sub), [])]
         is_positive = p.gold == SUPPORTED
         if is_positive and quals:
@@ -344,7 +383,7 @@ def constructed_pairs() -> list[Pair]:
         out.append(Pair(
             id=f"v2-{p.id}", section=p.section, subsection=sub,
             source_span=source_span(p.section, sub) if (p.section, sub) in _SPANS
-            else provision(p.section)[:400],
+            else provision(p.section)[:_FALLBACK_PREMISE_CHARS],
             claim=p.claim, label=label, label_basis=CONSTRUCTED, qualifiers=quals,
             preserves_all_qualifiers=preserves, rationale=why, kind=p.kind,
         ))

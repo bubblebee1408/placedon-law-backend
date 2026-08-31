@@ -29,8 +29,8 @@ from dataclasses import dataclass, field
 # Thresholds. Deliberately not aspirational — these are what the current
 # cascade achieves plus a small margin, so the gate catches regression rather
 # than blocking work. Raising them is a decision to record, not to drift into.
-FALSE_ACCEPT_CEILING = 10        # cascade currently 8
-F1_FLOOR = 0.40                  # cascade currently 0.48; baseline is 0.00
+FALSE_ACCEPT_CEILING = 10        # cascade currently 4 with the E6 gate, 13 without
+F1_FLOOR = 0.40                  # cascade currently 0.49; baseline is 0.00
 ABSTENTION_CAP = 0.25            # cascade currently 0.00; E5 alone is 0.83
 BUCKET_MIN_REPORTED = 3          # buckets below this size are named, not scored
 
@@ -43,6 +43,7 @@ MODULE_ROLES = {
     "E3": GENERAL,
     "E4": SPECIALIST,
     "E5": SPECIALIST,
+    "E6": GATE,
 }
 
 
@@ -150,6 +151,7 @@ def _test() -> None:
           "E5 is registered as a specialist, not a standalone verifier")
     check(MODULE_ROLES["E4"] == SPECIALIST, "E4 is a specialist too")
     check(MODULE_ROLES["E3"] == GENERAL, "E3 is the general module")
+    check(MODULE_ROLES["E6"] == GATE, "E6 is a gate — it may refuse, never accept")
 
     from checker.entail_pairs_v2 import all_pairs
     from checker.grounding_policy import ENTAILED, NOT_ENTAILED
@@ -157,6 +159,7 @@ def _test() -> None:
     from checker.entail_baseline import judge as e3j
     from checker.entail_binding import judge as e4j, UNRESOLVED as U4
     from checker.entail_role import judge_claim as e5j, UNRESOLVED as U5
+    from checker.entail_qualifier import judge as e6j, UNRESOLVED as U6
 
     rows = [p for p in all_pairs() if p.label in (ENTAILED, NOT_ENTAILED)]
 
@@ -171,7 +174,17 @@ def _test() -> None:
         v = e4j(r.source_span, r.claim)
         return None if v.status == U4 else v.supported
 
+    def E6(r):
+        v = e6j(r.source_span, r.claim)
+        return None if v.status == U6 else v.entailed
+
     def cascade(r):
+        # E6 runs first and may only ever refuse. A gate that could also accept
+        # would let a qualifier check overrule the modules that actually read
+        # the binding — it does not know whether a claim is right, only whether
+        # a qualifier was dropped.
+        if E6(r) is False:
+            return False
         for f in (E5, E4):
             v = f(r)
             if v is not None:
@@ -195,6 +208,22 @@ def _test() -> None:
     check(not g3.passed, "E3 alone fails the gate")
     check(any("false accepts" in f for f in g3.failures),
           f"...on the false-accept ceiling ({g3.false_accepts})")
+
+    # The gate must never turn a rejection into an acceptance: for every row,
+    # the gated cascade's verdict is either the ungated one or False.
+    def ungated(r):
+        for f in (E5, E4):
+            v = f(r)
+            if v is not None:
+                return v
+        return E3(r)
+
+    check(all(cascade(r) is ungated(r) or cascade(r) is False for r in rows),
+          "the E6 gate only ever converts an accept into a refusal")
+
+    gu = evaluate_gate(ungated, rows, bucket_of)
+    check(gu.false_accepts > FALSE_ACCEPT_CEILING,
+          f"the ungated cascade fails the false-accept ceiling ({gu.false_accepts})")
 
     gc = evaluate_gate(cascade, rows, bucket_of)
     check(gc.passed, f"the cascade passes the gate ({gc.failures})")

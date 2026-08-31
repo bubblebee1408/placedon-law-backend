@@ -180,3 +180,39 @@ amendment date is:
 Roughly two thirds of amended sections cannot be reconstructed exactly from this
 source alone. The remedy is the amending Act itself — the same independent
 witness used in `docs/CORROBORATION.md` — not a repair to India Code's markup.
+
+## SD-004 — transcription errors in the India Code text of s.174(1) and s.101(1)
+
+Found 2026-08-30 while building qualifier inventories. Two words are wrong in
+the served text. Both are preserved verbatim in the corpus and are **not**
+repaired, per the standing rule on defective government sources.
+
+| section | served text | apparent intent |
+|---|---|---|
+| 174(1) | `...of a company **hall** be one-third of its total strength...` | `shall be` |
+| 101(1) | `...in such manner as **maybe** prescribed...` | `may be` |
+
+Verbatim, as served:
+
+> The quorum for a meeting of the Board of Directors of a company hall be
+> one-third of its total strength
+
+> notice either in writing or through electronic mode in such manner as maybe
+> prescribed
+
+### Why these are recorded rather than fixed
+
+Neither changes the legal effect, and both are plainly typographical. That is
+exactly why they are worth recording: a checker that silently normalises
+`hall` to `shall` has taken an editorial decision about statutory text, and the
+next such decision may not be harmless. The rule is that we never repair a
+defective government source, and a harmless instance is not an exception to it.
+
+### Practical effect
+
+Any exact-phrase match against `shall be one-third` or `may be prescribed` will
+miss these provisions. `entail_qualifier`'s delegated-rule pattern
+(`as may be prescribed`) does **not** match s.101(1) for this reason — the
+qualifier is present in law and invisible to that pattern. Trigger phrases in
+the `QUALIFIERS` inventory quote the served text, typo included, so the
+inventory-verification test passes against the source as it actually is.
