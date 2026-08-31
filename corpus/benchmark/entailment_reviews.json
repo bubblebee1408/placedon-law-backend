@@ -54,16 +54,32 @@
   "status": "APPROVED"
  },
  "v2-p101-qbind-0": {
-  "note": "Approved after side-by-side review of original claim, replacement, source span, qualifier inventory and transformation. Qualified positives under the fail-closed convention.",
-  "reviewed_at": "2026-08-26T11:26:22+00:00",
+  "history": [
+   {
+    "note": "Approved after side-by-side review of original claim, replacement, source span, qualifier inventory and transformation. Qualified positives under the fail-closed convention.",
+    "reviewed_at": "2026-08-26T11:26:22+00:00",
+    "reviewer": "reviewer-01",
+    "status": "APPROVED"
+   }
+  ],
+  "note": "Section 101 qualifier omissions identified during review; previously frozen ENTAILED pairs must be retracted. Both state the rule while omitting the s.101(1) prescribed-manner delegated-rule qualifier.",
+  "reviewed_at": "2026-08-31T14:23:19+00:00",
   "reviewer": "reviewer-01",
-  "status": "APPROVED"
+  "status": "REJECTED"
  },
  "v2-p101-qbind-1": {
-  "note": "Approved after side-by-side review of original claim, replacement, source span, qualifier inventory and transformation. Qualified positives under the fail-closed convention.",
-  "reviewed_at": "2026-08-26T11:26:22+00:00",
+  "history": [
+   {
+    "note": "Approved after side-by-side review of original claim, replacement, source span, qualifier inventory and transformation. Qualified positives under the fail-closed convention.",
+    "reviewed_at": "2026-08-26T11:26:22+00:00",
+    "reviewer": "reviewer-01",
+    "status": "APPROVED"
+   }
+  ],
+  "note": "Section 101 qualifier omissions identified during review; previously frozen ENTAILED pairs must be retracted. Both state the rule while omitting the s.101(1) prescribed-manner delegated-rule qualifier.",
+  "reviewed_at": "2026-08-31T14:23:19+00:00",
   "reviewer": "reviewer-01",
-  "status": "APPROVED"
+  "status": "REJECTED"
  },
  "v2-p103-qbind-0": {
   "note": "Approved after side-by-side review of original claim, replacement, source span, qualifier inventory and transformation. Qualified positives under the fail-closed convention.",

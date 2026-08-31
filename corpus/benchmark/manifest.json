@@ -9,7 +9,7 @@
   "CONTRADICTORY"
  ],
  "fixture_hashes": {
-  "approved_pairs.jsonl": "5542490798792fd7b7dccbc6d990e828fdc84bcbe95f7d8d95abb8f91b94f963",
+  "approved_pairs.jsonl": "771715289c943f96ea01924bf599876d65f466892aa08f1269a4826359f84025",
   "invalid_fixtures.jsonl": "73a36cec3c7e028797f3ce14312c08c7ecf19f702289ca63fea63ac61aac7100",
   "pending_reviews.jsonl": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
   "rejected_pairs.jsonl": "8fc751f7e9312563d4d2e389e93278357cbdff9904d3ce032d6749d88cb8efcf"
@@ -17,14 +17,14 @@
  "invalid_fixture_count": 9,
  "label_basis_counts": {
   "CONSTRUCTED": 54,
-  "HUMAN_JUDGED": 17
+  "HUMAN_JUDGED": 15
  },
  "label_counts": {
-  "ENTAILED": 24,
+  "ENTAILED": 22,
   "NOT_ENTAILED": 47
  },
  "not_a_claim_of": "This benchmark does not measure general legal grounding. It is derived from selected provisions of one Act, its negatives are constructed, and its positives were written and reviewed by one reviewer.",
- "pair_count": 71,
+ "pair_count": 69,
  "pending_review_count": 0,
  "rejected_count": 1,
  "review_timestamps": [
@@ -34,7 +34,7 @@
  "reviewer_ids": [
   "reviewer-01"
  ],
- "software_commit": "e8f2e25a4d7733d8ad57955c8b014bc6dafb0018",
+ "software_commit": "340db682a280c095c81209df43a85d66623661a2",
  "source_ids": [
   "companies-act-2013-s101",
   "companies-act-2013-s103",

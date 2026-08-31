@@ -22,3 +22,4 @@ the main session to record. Status: open / ready / in-progress / blocked / compl
 | H-002 | Apply: Indian Kanoon free non-commercial tier | **founder** | **open** | ₹10,000/mo, exceeds whole budget | — | human-only |
 | H-003 | ICSI CoP query | **founder** | **deprioritised** | CS is now a secondary segment | — | — |
 | H-004 | Reddit OAuth credentials | **founder** | **open** | only route to live practitioner voice | — | human-only |
+| S-001 | Resolve SD-004 s.174(1) transcription defect ("of a company **hall** be one-third") | legal-source-researcher | **open** | defect logged, text preserved verbatim; blocks `v2-174-1-rule-pos` promotion | — | needs an independent authoritative witness for s.174(1); India Code is the only rendering held |
