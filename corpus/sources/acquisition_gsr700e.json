@@ -1,0 +1,67 @@
+{
+  "schema": "acquisition_log/v1",
+  "instrument_id": "INDIACODE_GSR_700E_DEFINITIONS_AMENDMENT_2022",
+  "title": "G.S.R. 700(E) — Companies (Specification of Definition Details) Amendment Rules, 2022, dated 15-09-2022",
+  "terminal_state": "HUMAN_RETRIEVAL_REQUIRED",
+  "handoff": "Download the text bitstream from India Code in a browser (an up-to-date trust store verifies egazette; a browser is also outside our robots gate by design, since a person is not a crawler): https://indiacode.gov.in/handle/123456789/508916 — item uuid 5bf8f9e9-b4ca-463c-90ce-5960b3007584, text bitstream uuid 6d5e9902-44a7-4ee5-975a-1fd7fc5d51a5 (5153 bytes). Save it, then register it so it is hashed and provenanced. Until then prescribed_thresholds keeps the amounts UNRESOLVED and classify.small_company answers INSUFFICIENT_DATA.",
+  "summary": {
+    "instrument_id": "INDIACODE_GSR_700E_DEFINITIONS_AMENDMENT_2022",
+    "title": "G.S.R. 700(E) — Companies (Specification of Definition Details) Amendment Rules, 2022, dated 15-09-2022",
+    "attempts": 2,
+    "hosts_tried": [
+      "egazette.gov.in",
+      "indiacode.gov.in"
+    ],
+    "by_outcome": {
+      "BLOCKED": 1,
+      "UNREACHABLE": 1
+    },
+    "terminal_state": "HUMAN_RETRIEVAL_REQUIRED",
+    "terminal_state_is_success": true,
+    "human_retrieval_required": true,
+    "automated_retry_permitted": [
+      "https://egazette.gov.in/robots.txt"
+    ],
+    "never_retry_automatically": [
+      "https://indiacode.gov.in/robots.txt"
+    ],
+    "instrument_existence": "EXISTENCE_UNDETERMINED",
+    "existence_note": "Failure to DISCOVER an instrument is not evidence that the instrument does not exist. Every outcome below is a fact about a host or an address -- a refusal, an outage, a wrong path -- and none of them is a fact about the law. Disproving existence would require reading a source that would list the instrument if it existed; no such source was read. Existence stays undetermined, and nothing downstream may treat absence-from-corpus as absence-from-law.",
+    "chain": {
+      "length": 2,
+      "head": "835b57bdb70c252acc377bf67903a994249a0e488d0240d1b4ccb735930cdd78"
+    }
+  },
+  "records": [
+    {
+      "seq": 0,
+      "timestamp": "2026-08-31T18:10:58Z",
+      "instrument_id": "INDIACODE_GSR_700E_DEFINITIONS_AMENDMENT_2022",
+      "url": "https://indiacode.gov.in/robots.txt",
+      "host": "indiacode.gov.in",
+      "method": "GET",
+      "outcome": "BLOCKED",
+      "http_status": 502,
+      "error": null,
+      "note": "robots.txt unavailable on three consecutive attempts. checker.robots fails closed on 5xx per RFC 9309 (a 4xx means no rules exist; a 5xx means we cannot know them), so the compliant fetcher declines the bitstream. The item and its text bitstream are themselves reachable — the gate is the block, not the document.",
+      "artifact_sha256": null,
+      "prev_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "entry_hash": "5bc81fcd3927b3721b27028d31b037b05add885a03d35723f49536762194b63e"
+    },
+    {
+      "seq": 1,
+      "timestamp": "2026-08-31T18:10:58Z",
+      "instrument_id": "INDIACODE_GSR_700E_DEFINITIONS_AMENDMENT_2022",
+      "url": "https://egazette.gov.in/robots.txt",
+      "host": "egazette.gov.in",
+      "method": "GET",
+      "outcome": "UNREACHABLE",
+      "http_status": null,
+      "error": "SSLCertVerificationError: unable to get issuer certificate",
+      "note": "Alternative official source. Server presents a valid Let's Encrypt leaf (CN=YR2, valid 2026-07-21 to 2026-10-19) but sends no intermediate. Fetching the intermediate via the certificate's own AIA URI moved the failure up one level: YR2 chains to ISRG 'Root YR', absent from this machine's trust store (/etc/ssl/cert.pem). NOT resolved by side-loading that root — a root obtained over plain HTTP is trusted on the say-so of an untrusted transport, which is not verification. The fix is to update the local trust store, not to weaken the check.",
+      "artifact_sha256": null,
+      "prev_hash": "5bc81fcd3927b3721b27028d31b037b05add885a03d35723f49536762194b63e",
+      "entry_hash": "835b57bdb70c252acc377bf67903a994249a0e488d0240d1b4ccb735930cdd78"
+    }
+  ]
+}
