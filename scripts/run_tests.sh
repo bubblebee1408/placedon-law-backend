@@ -53,6 +53,7 @@ suites=(
   checker/entail_qualifier.py
   checker/cascade.py
   checker/company_profile.py
+  checker/prescribed_thresholds.py
   checker/review_table.py
   checker/review_record.py
   checker/resubmission.py
