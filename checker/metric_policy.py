@@ -29,8 +29,8 @@ from dataclasses import dataclass, field
 # Thresholds. Deliberately not aspirational — these are what the current
 # cascade achieves plus a small margin, so the gate catches regression rather
 # than blocking work. Raising them is a decision to record, not to drift into.
-FALSE_ACCEPT_CEILING = 10        # cascade currently 4 with the E6 gate, 13 without
-F1_FLOOR = 0.40                  # cascade currently 0.49; baseline is 0.00
+FALSE_ACCEPT_CEILING = 10        # cascade currently 2 with the E6 gate, 13 without
+F1_FLOOR = 0.40                  # cascade currently 0.58; baseline is 0.00
 ABSTENTION_CAP = 0.25            # cascade currently 0.00; E5 alone is 0.83
 BUCKET_MIN_REPORTED = 3          # buckets below this size are named, not scored
 
