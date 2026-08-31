@@ -36,7 +36,6 @@ from checker.grounding_policy import (
     PENDING_REVIEW, REVIEW_APPROVED, REVIEW_PENDING, SOURCE_CHECKED,
 )
 
-OUT = Path("corpus/benchmark/entailment_pairs_v2.jsonl")
 
 
 @dataclass
@@ -497,13 +496,15 @@ def qualifier_failures(pairs: list[Pair] | None = None) -> list[dict]:
     return out
 
 
-def write(path: Path = OUT) -> str:
-    import hashlib
-    body = "".join(json.dumps(asdict(p), ensure_ascii=False, sort_keys=True) + "\n"
-                   for p in sorted(all_pairs(), key=lambda x: x.id))
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(body, encoding="utf-8")
-    return hashlib.sha256(body.encode()).hexdigest()
+# write() and its OUT path are deliberately gone. They emitted
+# corpus/benchmark/entailment_pairs_v2.jsonl, an ungoverned copy of the gold
+# labels that nothing read, that the freeze manifest did not hash, and that
+# drifted 71 -> 78 records across several sessions while looking exactly like
+# benchmark data. It also carried a reviewer's email address for eight records
+# long after reviews.record() began refusing one. The governed artefact is
+# corpus/benchmark/approved_pairs.jsonl, written only by
+# benchmark_v2_freeze.freeze(promote=True). Two files that both look like the
+# benchmark is how the wrong one eventually gets cited.
 
 
 def _test() -> None:
@@ -626,8 +627,4 @@ def _test() -> None:
 
 
 if __name__ == "__main__":
-    import sys
-    if "--emit" in sys.argv:
-        print(f"sha256: {write()}")
-    else:
-        _test()
+    _test()
