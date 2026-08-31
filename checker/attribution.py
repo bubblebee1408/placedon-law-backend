@@ -144,6 +144,10 @@ class Attribution:
                     stages=[s.to_dict() for s in self.stages])
 
 
+# Every model here is a scripted double, declared as costing nothing so the
+# adapter's budget refusal does not fire on a test that spends no money.
+from checker.model_adapter import NO_SPEND as ma_NO_SPEND
+
 def _mentions(notices: tuple[str, ...], key: str) -> str:
     """The notice naming this key, if any.
 
@@ -249,7 +253,7 @@ def _test() -> None:
 
     def pipeline(query: str, model=None):
         pack, _ = retrieve(query, mode=MODE_MODEL)
-        res = run(ModelTask("APPLICABILITY_CHECK", query, pack), model=model)
+        res = run(ModelTask("APPLICABILITY_CHECK", query, pack), model=model, budget=ma_NO_SPEND)
         return pack, res, cv.verify_all(res.claims, pack)
 
     # A clean provision goes all the way to GROUNDED and stops there -- the honest current ceiling.

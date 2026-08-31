@@ -67,7 +67,14 @@ class GateResult:
         if self.buckets:
             lines.append("  per bucket:")
             for k, v in sorted(self.buckets.items()):
-                lines.append(f"    {k:<22}n={v['n']:<4} FA={v['fa']:<4} F1={v['f1']:.2f}")
+                f1 = "  n/a" if v["f1"] is None else f"{v['f1']:.2f}"
+                note = ""
+                if v.get("single_label"):
+                    kind = "no positives" if not v["pos"] else "no negatives"
+                    note = (f"   [{kind}: F1 undefined]" if v["f1"] is None
+                            else f"   [{kind}: cannot detect false accepts]")
+                lines.append(f"    {k:<22}n={v['n']:<4} FA={v['fa']:<4} "
+                             f"F1={f1}{note}")
         for f in self.failures:
             lines.append(f"  FAILED: {f}")
         if self.passed:
@@ -87,9 +94,10 @@ def evaluate_gate(predict, rows, bucket_of=None) -> GateResult:
         g = (r.label == ENTAILED)
         key = bucket_of(r.kind) if bucket_of else None
         b = buckets.setdefault(key, {"n": 0, "tp": 0, "fp": 0, "tn": 0, "fn": 0,
-                                     "ab": 0}) if key else None
+                                     "ab": 0, "pos": 0, "neg": 0}) if key else None
         if b is not None:
             b["n"] += 1
+            b["pos" if g else "neg"] += 1
         if v is None:
             ab += 1
             if b is not None:
@@ -117,8 +125,17 @@ def evaluate_gate(predict, rows, bucket_of=None) -> GateResult:
     for k, b in buckets.items():
         bp = b["tp"] / (b["tp"] + b["fp"]) if b["tp"] + b["fp"] else 0.0
         br = b["tp"] / (b["tp"] + b["fn"]) if b["tp"] + b["fn"] else 0.0
+        # F1 is defined over positives. A bucket holding no positive examples
+        # has none to find, so its F1 is pinned at 0.00 by arithmetic and not by
+        # performance — dropped_qualifier read 0.00 while sitting at zero false
+        # accepts, which made a solved bucket look broken and invited someone to
+        # "fix" a number that cannot move. Report it as undefined instead.
+        single_label = b["pos"] == 0 or b["neg"] == 0
         out[k] = {"n": b["n"], "fa": b["fp"],
-                  "f1": 2 * bp * br / (bp + br) if bp + br else 0.0}
+                  "f1": None if b["pos"] == 0
+                        else (2 * bp * br / (bp + br) if bp + br else 0.0),
+                  "pos": b["pos"], "neg": b["neg"],
+                  "single_label": single_label}
 
     fails = []
     if fp > FALSE_ACCEPT_CEILING:
@@ -218,6 +235,29 @@ def _test() -> None:
     gc = evaluate_gate(cascade, rows, bucket_of)
     check(gc.passed, f"the cascade passes the gate ({gc.failures})")
     check(gc.buckets, "per-bucket results are reported")
+    # A bucket with no positives has no F1 to report, and printing 0.00 made a
+    # solved bucket look like a failing one.
+    dq = gc.buckets["dropped_qualifier"]
+    check(dq["pos"] == 0, f"dropped_qualifier holds no positives ({dq['pos']})")
+    check(dq["f1"] is None, "...so its F1 is reported as undefined, not 0.00")
+    check(dq["fa"] == 0, f"...and its real signal, false accepts, is 0 ({dq['fa']})")
+
+    pa = gc.buckets["paraphrase"]
+    check(pa["neg"] == 0, f"paraphrase holds no negatives ({pa['neg']})")
+    check(pa["single_label"], "...and is flagged single-label")
+    check(pa["f1"] is not None,
+          "...but keeps an F1, since it does have positives to find")
+
+    wb = gc.buckets["wrong_binding"]
+    check(not wb["single_label"] and wb["f1"] is not None,
+          "a bucket carrying both labels reports a real F1")
+
+    rr = gc.render()
+    check("n/a" in rr, "the rendered gate prints n/a rather than a false 0.00")
+    check("F1 undefined" in rr, "...and says why")
+    check("cannot detect false accepts" in rr,
+          "an all-positive bucket is marked as unable to detect false accepts")
+
     r = gc.render()
     check("not evidence that grounding is solved" in r,
           "a passing gate states what it does not mean")

@@ -145,6 +145,10 @@ class AdversarialStub:
         return bool(self.prompts)
 
 
+# Every model here is a scripted double, declared as costing nothing so the
+# adapter's budget refusal does not fire on a test that spends no money.
+from checker.model_adapter import NO_SPEND as ma_NO_SPEND
+
 def _json(decision: str, claims: list | str, **extra) -> str:
     return json.dumps({"decision": decision, "claims": claims,
                        "missing_facts": extra.pop("missing_facts", []),
@@ -355,7 +359,7 @@ def _run_capturing(task: ma.ModelTask, stub: AdversarialStub):
     from, not merely that it did.
     """
     try:
-        return ma.run(task, model=stub, model_name=stub.name), None, ""
+        return ma.run(task, model=stub, model_name=stub.name, budget=ma_NO_SPEND), None, ""
     except Exception as e:                       # noqa: BLE001 - capturing IS the point here
         return None, e, traceback.format_exc()
 
@@ -386,7 +390,7 @@ def _test() -> None:
 
     # --- RED-01 FABRICATED_CITATION -> PARSE ----------------------------------------------------
     s1 = fabricated_citation()
-    r1 = ma.run(task, model=s1, model_name=s1.name)
+    r1 = ma.run(task, model=s1, model_name=s1.name, budget=ma_NO_SPEND)
     check(s1.was_called, "RED-01 the model WAS consulted (the pack had evidence to reason over)")
     check(any(FABRICATED_ID in x for x in r1.rejected_claims),
           "RED-01 caught at PARSE: the fabricated id appears in rejected_claims")
@@ -417,7 +421,7 @@ def _test() -> None:
     check(WITHHELD_RULE_ID not in ma.evidence_ids(rp),
           "RED-02 precondition: ...while it is NOT an admissible evidence id")
     s2 = withheld_as_support()
-    r2 = ma.run(rtask, model=s2, model_name=s2.name)
+    r2 = ma.run(rtask, model=s2, model_name=s2.name, budget=ma_NO_SPEND)
     check(any(WITHHELD_RULE_ID in x for x in r2.rejected_claims),
           "RED-02 caught at PARSE: citing withheld material is rejected")
     check(any("not in the pack" in x for x in r2.rejected_claims),
@@ -428,7 +432,7 @@ def _test() -> None:
 
     # --- RED-03 CONTRADICTS_PROVISION -> CLAIM_VERIFIER -----------------------------------------
     s3 = contradicts_provision(key)
-    r3 = ma.run(task, model=s3, model_name=s3.name)
+    r3 = ma.run(task, model=s3, model_name=s3.name, budget=ma_NO_SPEND)
     # The layer assertion matters more than the catch here: the adapter has no grounds to object,
     # and asserting that it does not is what proves the verifier is load-bearing rather than
     # decorative.
@@ -452,7 +456,7 @@ def _test() -> None:
     check(any("SUSPENDED" in m and "S16" in m for m in spack.missing),
           "RED-04 ...and it is reported as withheld, so 'no law' and 'law withheld' stay distinct")
     s4 = suspended_text()
-    r4 = ma.run(stask, model=s4, model_name=s4.name)
+    r4 = ma.run(stask, model=s4, model_name=s4.name, budget=ma_NO_SPEND)
     check(not s4.was_called,
           "RED-04 the model is NEVER consulted for the suspended query -- no chance to answer")
     check(r4.decision == ma.INSUFFICIENT_EVIDENCE and r4.claims == (),
@@ -502,7 +506,7 @@ def _test() -> None:
 
     # --- RED-06 EMPTY_CLAIMS_APPLIES -> ADAPTER_POLICY ------------------------------------------
     s6 = empty_claims_applies()
-    r6 = ma.run(task, model=s6, model_name=s6.name)
+    r6 = ma.run(task, model=s6, model_name=s6.name, budget=ma_NO_SPEND)
     check(r6.decision == ma.INSUFFICIENT_EVIDENCE,
           "RED-06 caught at ADAPTER_POLICY: APPLIES with an empty claims array is downgraded")
     check(any(ma.DECISION_WITHOUT_CLAIMS in w for w in r6.warnings),
@@ -515,7 +519,7 @@ def _test() -> None:
 
     # --- RED-07 PLAUSIBLE_BUT_WRONG -> NOT CAUGHT (documented limit) ----------------------------
     s7 = plausible_but_wrong(key)
-    r7 = ma.run(task, model=s7, model_name=s7.name)
+    r7 = ma.run(task, model=s7, model_name=s7.name, budget=ma_NO_SPEND)
     check(not r7.rejected_claims and len(r7.claims) == 1,
           "RED-07 not caught at PARSE: the citation is real and the claim is atomic")
     check(r7.decision == ma.APPLIES,
@@ -539,8 +543,8 @@ def _test() -> None:
     # depend on order, on the texts conflicting, on the citations matching, on the ids being the
     # same TYPE -- and a fix that answers only one of them looks correct until the next one lands.
     s8a, s8b = duplicate_order_pair(key)
-    r8a = ma.run(task, model=s8a, model_name=s8a.name)
-    r8b = ma.run(task, model=s8b, model_name=s8b.name)
+    r8a = ma.run(task, model=s8a, model_name=s8a.name, budget=ma_NO_SPEND)
+    r8b = ma.run(task, model=s8b, model_name=s8b.name, budget=ma_NO_SPEND)
     check(s8a.was_called and s8b.was_called,
           "RED-08a the model WAS consulted -- a parse catch, not a refusal before the call")
     # Without this the equality below proves nothing: two identical inputs are trivially equal, and
@@ -570,7 +574,7 @@ def _test() -> None:
           "RED-08b precondition: both citations are distinct and admissible, so nothing here can "
           "be rejected as a bad citation")
     s8c = duplicate_split_evidence(id_a, id_b)
-    r8c = ma.run(rtask, model=s8c, model_name=s8c.name)
+    r8c = ma.run(rtask, model=s8c, model_name=s8c.name, budget=ma_NO_SPEND)
     check(r8c.claims == () and len(r8c.rejected_claims) == 2,
           "RED-08b caught at PARSE: both are rejected though each cites different, valid evidence")
     # len() repeated deliberately: `all()` over an empty list is True, so without it this check
@@ -586,7 +590,7 @@ def _test() -> None:
     # A duplicated pair beside a unique claim. The assertions that matter are the NEGATIVE ones:
     # the good claim is untouched and the decision still stands.
     s8d = duplicate_plus_unique(key)
-    r8d = ma.run(task, model=s8d, model_name=s8d.name)
+    r8d = ma.run(task, model=s8d, model_name=s8d.name, budget=ma_NO_SPEND)
     check([c.claim_id for c in r8d.claims] == ["c2"],
           "RED-08c the uniquely-identified claim SURVIVES the duplicated pair beside it")
     check(len(r8d.rejected_claims) == 2 and all("c1" in x for x in r8d.rejected_claims),
@@ -605,7 +609,7 @@ def _test() -> None:
     s8e = duplicate_canonicalisation(key)
     check('"claim_id": 1,' in s8e.payload and '"claim_id": "1",' in s8e.payload,
           "RED-08d precondition: the ids are emitted as genuinely different JSON values")
-    r8e = ma.run(task, model=s8e, model_name=s8e.name)
+    r8e = ma.run(task, model=s8e, model_name=s8e.name, budget=ma_NO_SPEND)
     check(r8e.claims == () and len(r8e.rejected_claims) == 2,
           'RED-08d caught at PARSE: 1 and "1" are ONE id after canonicalisation, so both go')
     check(any(f"{ma.DUPLICATE_CLAIM_ID}: 1 --" in w for w in r8e.warnings),

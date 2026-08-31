@@ -5,15 +5,24 @@ The model is the least trusted component here and is treated that way. It is han
 required to cite into it, and its output is parsed into a rigid structure that rejects anything it
 cannot audit. Nothing it says becomes an answer until claim_verifier has checked it.
 
-Three refusals happen BEFORE any model call, because a prompt is not a safety mechanism:
+Four refusals happen BEFORE any model call, because a prompt is not a safety mechanism:
 
   1. A pack not built in MODE_MODEL is refused. MODE_REVIEW packs deliberately contain material a
      human may inspect and a model may not. The pack attests to its own mode, so a caller cannot
      simply assert the wrong one.
   2. A pack with no admissible evidence is answered INSUFFICIENT_EVIDENCE without asking a model.
      There is nothing to reason over, and asking anyway invites the model to reason from memory.
-  3. Output citing an evidence id that is not in the pack is rejected, not repaired. A citation to
+  3. A real model with no budget tracker is refused. Spending against an unknown balance is
+     exactly what backend/budget.py refuses to do, and this module was the only place an LLM may
+     be called while being the only one that never consulted the guard.
+  4. Output citing an evidence id that is not in the pack is rejected, not repaired. A citation to
      something absent is the signature of a fabricated one.
+
+The budget check sits immediately before the call, NOT first. A pack with no admissible evidence
+never reaches a model, so refusing it on budget grounds would report a money problem where no
+money would have been spent -- and "we cannot afford to answer" is a different statement to the
+user than "the law is not here". BUDGET_EXHAUSTED is deliberately NOT in DECISIONS: a model must
+never be able to emit it.
 
 Everything downstream of the model FAILS CLOSED. Malformed output does not raise -- it becomes
 INSUFFICIENT_EVIDENCE with a parse-failure warning. An exception here would propagate to whatever
@@ -37,7 +46,8 @@ from checker.claim_schema import (CLAIM_TYPES, Claim, ClaimError, LEGAL_TRIGGER,
                                   SUPPORT_LEVELS)
 from checker.evidence_pack import EvidencePack
 
-__all__ = ["ModelTask", "ModelResult", "AdapterError", "run", "build_prompt",
+__all__ = ["ModelTask", "ModelResult", "AdapterError", "run", "build_prompt", "NO_SPEND",
+           "BUDGET_EXHAUSTED",
            "StubModel", "APPLIES", "DOES_NOT_APPLY", "INSUFFICIENT_FACTS", "INSUFFICIENT_EVIDENCE"]
 
 APPLIES = "APPLIES"
@@ -45,6 +55,10 @@ DOES_NOT_APPLY = "DOES_NOT_APPLY"
 INSUFFICIENT_FACTS = "INSUFFICIENT_FACTS"          # law is here; the document does not say enough
 INSUFFICIENT_EVIDENCE = "INSUFFICIENT_EVIDENCE"    # the law itself is not here or not admissible
 DECISIONS = (APPLIES, DOES_NOT_APPLY, INSUFFICIENT_FACTS, INSUFFICIENT_EVIDENCE)
+
+# Not a decision a model may return -- it is a statement about our wallet, not about the law, and
+# it is absent from DECISIONS so a model claiming it is rejected as an unknown decision.
+BUDGET_EXHAUSTED = "BUDGET_EXHAUSTED"
 
 PROMPT_VERSION = "closed-world-v1"
 
@@ -77,6 +91,27 @@ PROCEDURAL_REQUIREMENT|MISSING_FACT", "evidence_ids": ["..."], "support": "DIREC
  "missing_facts": ["..."],
  "warnings": ["..."]}
 """
+
+
+class _NoSpend:
+    """Declares that a model callable costs nothing — a stub, fake or replay.
+
+    The adapter cannot tell a real API client from a lambda, so the caller has to
+    say. Silence is refused rather than assumed free: a missing guard must never
+    read as an unlimited one. Passing NO_SPEND is a deliberate statement that
+    this callable issues no billable request.
+    """
+    __slots__ = ()
+
+    def __repr__(self) -> str:  # pragma: no cover - diagnostics only
+        return "NO_SPEND"
+
+
+NO_SPEND = _NoSpend()
+
+_PRICED: tuple[str, ...] = ("claude-haiku-4-5", "claude-sonnet-5", "claude-opus-5")
+_DEFAULT_PRICED = "claude-sonnet-5"
+_LEDGER_WRITE_FAILED: list[str] = []
 
 
 class AdapterError(ValueError):
@@ -230,8 +265,13 @@ def _parse(raw: str, allowed: tuple[str, ...]) -> tuple[str, list[Claim], list[s
 
 
 def run(task: ModelTask, model: Callable[[str], str] | None = None,
-        *, model_name: str = "stub") -> ModelResult:
-    """Run the task, refusing before the model wherever a refusal is possible."""
+        *, model_name: str = "stub", budget=None) -> ModelResult:
+    """Run the task, refusing before the model wherever a refusal is possible.
+
+    `budget` is required whenever `model` is a real callable. Passing None there
+    is refused rather than allowed: a missing guard must not read as an
+    unlimited one. The stub costs nothing and needs no tracker.
+    """
     pack = task.evidence_pack
 
     if pack.mode != "MODEL":
@@ -250,7 +290,44 @@ def run(task: ModelTask, model: Callable[[str], str] | None = None,
             model_name=model_name)
 
     prompt = build_prompt(task)
+
+    # Refusal 3. Immediately before the spend, not before the work: everything
+    # above this line is free, and a pack that never reaches a model must not be
+    # reported as a budget failure.
+    if model is not None and budget is not NO_SPEND:
+        if budget is None:
+            return ModelResult(
+                decision=BUDGET_EXHAUSTED,
+                warnings=("a model callable was supplied with no budget tracker and no "
+                          "NO_SPEND declaration; refusing to spend against an unknown "
+                          "balance",),
+                model_name=model_name)
+        # Token counts are approximated at 4 chars/token. The estimate is used
+        # only to decide affordability, and budget.py's rule is that a guard may
+        # only ever be wrong in the expensive direction.
+        est_in, est_out = len(prompt) // 4, 700
+        v = budget.can_make_call(model=model_name, input_tokens=est_in,
+                                 output_tokens=est_out) \
+            if model_name in _PRICED else budget.can_make_call(input_tokens=est_in,
+                                                               output_tokens=est_out)
+        if not v.allowed:
+            return ModelResult(
+                decision=BUDGET_EXHAUSTED,
+                warnings=(f"no model was consulted: {v.reason}",),
+                model_name=model_name)
+
     raw = (model or StubModel(pack=pack))(prompt)
+
+    if model is not None and budget is not None and budget is not NO_SPEND:
+        from backend.budget import cost_inr
+        try:
+            spent = cost_inr(model_name if model_name in _PRICED else _DEFAULT_PRICED,
+                             len(prompt) // 4, len(raw) // 4)
+            budget.record_call(spent)
+        except (ValueError, OSError) as e:  # noqa: PERF203
+            # A ledger that cannot be written is a real problem, but losing the
+            # answer we already paid for makes it worse. Surface it, keep the answer.
+            _LEDGER_WRITE_FAILED.append(str(e))
     try:
         decision, claims, missing, warnings, rejected = _parse(raw, allowed)
     except AdapterError as e:
@@ -378,7 +455,7 @@ def _test() -> None:
     spack, _ = retrieve("s.16", mode=MODE_MODEL)
     called = []
     res2 = run(ModelTask("APPLICABILITY_CHECK", "q", spack),
-               model=lambda p: called.append(p) or "{}")
+               model=lambda p: called.append(p) or "{}", budget=NO_SPEND)
     check(res2.decision == INSUFFICIENT_EVIDENCE, "an empty pack yields INSUFFICIENT_EVIDENCE")
     check(not called, "...and the model is never called")
 
@@ -412,7 +489,7 @@ def _test() -> None:
 
     # --- fail closed: run() must never propagate a parse failure to the caller ---
     for junk in ("not json at all", "{broken", json.dumps({"decision": "MAYBE"})):
-        r = run(task, model=lambda p, j=junk: j)
+        r = run(task, model=lambda p, j=junk: j, budget=NO_SPEND)
         check(r.decision == INSUFFICIENT_EVIDENCE,
               f"malformed output {junk[:14]!r} abstains instead of raising")
         check(any(MODEL_OUTPUT_PARSE_FAILURE in w for w in r.warnings),
@@ -431,8 +508,8 @@ def _test() -> None:
             {"claim_id": "c1", "claim_type": LEGAL_TRIGGER, "text": t,
              "evidence_ids": list(allowed[:1])} for t in (first, second)]})
 
-    ra = run(task, model=lambda p: _dupe_pair(REQUIRED, NOT_REQUIRED))
-    rb = run(task, model=lambda p: _dupe_pair(NOT_REQUIRED, REQUIRED))
+    ra = run(task, model=lambda p: _dupe_pair(REQUIRED, NOT_REQUIRED), budget=NO_SPEND)
+    rb = run(task, model=lambda p: _dupe_pair(NOT_REQUIRED, REQUIRED), budget=NO_SPEND)
     check(ra.claims == () and rb.claims == (),
           "both claims sharing one id are rejected -- not merely the later one")
     check(len(ra.rejected_claims) == 2
@@ -458,7 +535,7 @@ def _test() -> None:
          "evidence_ids": list(allowed[:1])},
         {"claim_id": "c2", "claim_type": LEGAL_TRIGGER, "text": "The Board shall meet.",
          "evidence_ids": list(allowed[:1])}]})
-    rmix = run(task, model=lambda p: mixed)
+    rmix = run(task, model=lambda p: mixed, budget=NO_SPEND)
     check([c.claim_id for c in rmix.claims] == ["c2"],
           "a uniquely-identified claim survives alongside a duplicated pair")
     check(len(rmix.rejected_claims) == 2, "...and exactly the two duplicates are rejected")
@@ -471,7 +548,7 @@ def _test() -> None:
          "evidence_ids": list(allowed[:1])}
         for t in ("The Board shall meet once a year.", "The Board shall meet twice a year.",
                   "The Board shall meet four times a year.")]})
-    rt3 = run(task, model=lambda p: triple)
+    rt3 = run(task, model=lambda p: triple, budget=NO_SPEND)
     check(rt3.claims == () and len(rt3.rejected_claims) == 3,
           "three claims sharing one id all go, not two of the three")
     check(any(DUPLICATE_CLAIM_ID in w for w in rt3.warnings),
@@ -486,7 +563,7 @@ def _test() -> None:
     hollow = json.dumps({"decision": APPLIES, "claims": [
         {"claim_id": "c1", "claim_type": LEGAL_TRIGGER, "text": "Section 999 applies.",
          "evidence_ids": ["ACT:COMPANIES_ACT_2013:S999"]}]})
-    rh = run(task, model=lambda p: hollow)
+    rh = run(task, model=lambda p: hollow, budget=NO_SPEND)
     check(rh.decision == INSUFFICIENT_EVIDENCE,
           "APPLIES with every claim rejected is downgraded, not served")
     check(any(DECISION_WITHOUT_CLAIMS in w for w in rh.warnings),
@@ -495,15 +572,88 @@ def _test() -> None:
     only_missing = json.dumps({"decision": APPLIES, "claims": [
         {"claim_id": "c1", "claim_type": MISSING_FACT,
          "text": "The document does not state the date.", "evidence_ids": []}]})
-    rm = run(task, model=lambda p: only_missing)
+    rm = run(task, model=lambda p: only_missing, budget=NO_SPEND)
     check(rm.decision == INSUFFICIENT_EVIDENCE,
           "APPLIES supported only by a MISSING_FACT is downgraded")
 
     # --- an abstention must carry a reason ---
     bare = json.dumps({"decision": INSUFFICIENT_EVIDENCE, "claims": [],
                        "missing_facts": [], "warnings": []})
-    rb = run(task, model=lambda p: bare)
+    rb = run(task, model=lambda p: bare, budget=NO_SPEND)
     check(rb.warnings or rb.missing_facts, "an abstention without a reason gains one")
+
+    # ── Refusal 3: the budget guard ─────────────────────────────────────────
+    from backend.budget import BudgetTracker, MONTHLY_CAP_INR
+
+    class _Mem:
+        def __init__(self, d=None): self.d = dict(d or {})
+        def read(self): return dict(self.d)
+        def write(self, data): self.d = dict(data)
+
+    called = []
+
+    def spy(prompt):
+        called.append(prompt)
+        return '{"decision": "INSUFFICIENT_FACTS", "claims": [], "missing_facts": ["x"]}'
+
+    # A model callable with neither a tracker nor a NO_SPEND declaration is
+    # refused. Silence must not read as unlimited.
+    called.clear()
+    rb = run(task, model=spy)
+    check(rb.decision == BUDGET_EXHAUSTED,
+          f"a model with no budget tracker is refused ({rb.decision})")
+    check(not called, "...and the model was never called")
+    check(any("unknown balance" in w for w in rb.warnings),
+          "...and the refusal says why")
+    check(BUDGET_EXHAUSTED not in DECISIONS,
+          "BUDGET_EXHAUSTED is not a decision a model may emit")
+
+    # An exhausted budget refuses before the call.
+    called.clear()
+    # The date keys matter: budget._state() zeroes a counter whose month does
+    # not match today, so a fixture without them silently reads as unspent.
+    from datetime import date as _date
+    _t = _date.today()
+    broke = BudgetTracker(_Mem({"month": _t.strftime("%Y-%m"), "day": _t.isoformat(),
+                                "month_inr": MONTHLY_CAP_INR, "day_inr": 0.0}))
+    rx = run(task, model=spy, model_name="claude-haiku-4-5", budget=broke)
+    check(rx.decision == BUDGET_EXHAUSTED,
+          f"an exhausted budget refuses ({rx.decision})")
+    check(not called, "...and no model call was made")
+    check(any("monthly cap" in w for w in rx.warnings),
+          f"...and the cap is named ({rx.warnings})")
+
+    # Within budget the call proceeds and the spend is recorded.
+    called.clear()
+    mem = _Mem()
+    ok_budget = BudgetTracker(mem)
+    rok = run(task, model=spy, model_name="claude-haiku-4-5", budget=ok_budget)
+    check(rok.decision != BUDGET_EXHAUSTED,
+          f"a funded call proceeds ({rok.decision})")
+    check(len(called) == 1, "...the model was called exactly once")
+    check(mem.d.get("month_inr", 0) > 0,
+          f"...and the spend was recorded ({mem.d.get('month_inr')})")
+    check(mem.d.get("calls_today") == 1, "...as one call")
+
+    # NO_SPEND skips the guard without touching the ledger.
+    called.clear()
+    mem2 = _Mem()
+    run(task, model=spy, budget=NO_SPEND)
+    check(len(called) == 1, "a NO_SPEND double is called")
+    check(mem2.d == {}, "...and no ledger is written")
+
+    # The stub needs no declaration and spends nothing.
+    rs = run(task)
+    check(rs.decision != BUDGET_EXHAUSTED,
+          "the stub model needs no budget declaration")
+
+    # A pack with no admissible evidence must NOT be reported as a budget
+    # failure: nothing would have been spent, and "we cannot afford to answer"
+    # is a different statement to a user than "the law is not here".
+    empty = run(ModelTask("APPLICABILITY_CHECK", "q", spack), model=spy)
+    check(empty.decision == INSUFFICIENT_EVIDENCE,
+          f"an empty pack answers INSUFFICIENT_EVIDENCE, not BUDGET_EXHAUSTED "
+          f"({empty.decision})")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:
