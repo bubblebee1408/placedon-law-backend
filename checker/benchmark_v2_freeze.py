@@ -47,6 +47,7 @@ REJECTED_F = DIR / "rejected_pairs.jsonl"
 INVALID_F = DIR / "invalid_fixtures.jsonl"
 PENDING_F = DIR / "pending_reviews.jsonl"
 MANIFEST_F = DIR / "manifest.json"
+PROMOTION_F = DIR / "pending_promotion.json"
 
 VERSION = "1.0.0"
 DESCRIPTION = ("human-reviewed, corpus-derived benchmark for selected Indian "
@@ -112,10 +113,62 @@ def _record(p) -> dict:
     }
 
 
-def freeze() -> dict:
+def label_drift() -> dict:
+    """What freezing now would change in the gold-label set on disk.
+
+    A freeze that rewrites itself is not a freeze. `freeze()` used to write
+    approved_pairs.jsonl unconditionally, and `_test()` calls it — so every run
+    of the suite re-froze the benchmark from whatever the code currently said.
+    That is how two s.174 pairs left the scored set when a qualifier inventory
+    was corrected: no review, no record, and the diff only visible in git.
+
+    Nothing here writes. It reports what a promotion would do.
+    """
+    from checker.entail_pairs_v2 import all_pairs
+
+    prospective = {p.id: p.label for p in eligible(all_pairs())}
+    current: dict[str, str] = {}
+    if APPROVED_F.exists():
+        for line in APPROVED_F.read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                r = json.loads(line)
+                current[r["pair_id"]] = r["label"]
+
+    return {
+        "added": sorted(set(prospective) - set(current)),
+        "removed": sorted({k: current[k] for k in set(current) - set(prospective)}.items()),
+        "relabelled": sorted((k, current[k], prospective[k])
+                             for k in set(current) & set(prospective)
+                             if current[k] != prospective[k]),
+    }
+
+
+def _drift_is_empty(d: dict) -> bool:
+    return not (d["added"] or d["removed"] or d["relabelled"])
+
+
+def freeze(promote: bool = False) -> dict:
+    """Write the frozen benchmark. Refuses to move a gold label without consent.
+
+    `promote=True` is the explicit gold-label promotion step, and is the only
+    way a label reaches disk. Without it a drift is recorded to
+    pending_promotion.json and the freeze raises, so a code change that would
+    move the benchmark surfaces as a refusal rather than as a silent rewrite.
+    """
     from checker.entail_pairs_v2 import all_pairs, contradictions, qualifier_failures
     from checker.fixture_rebuild import invalid_records, propose
     from checker.reviews import load as load_reviews, status_of
+
+    drift = label_drift()
+    if not _drift_is_empty(drift) and not promote:
+        DIR.mkdir(parents=True, exist_ok=True)
+        PROMOTION_F.write_text(json.dumps(drift, indent=1, sort_keys=True) + "\n",
+                               encoding="utf-8")
+        raise FreezeError(
+            f"freezing would move the gold-label set: {len(drift['added'])} added, "
+            f"{len(drift['removed'])} removed, {len(drift['relabelled'])} relabelled. "
+            f"Recorded in {PROMOTION_F}. Re-run with promote=True only after the "
+            f"change has been reviewed.")
 
     pairs = all_pairs()
 
@@ -151,6 +204,18 @@ def freeze() -> dict:
         "".join(json.dumps(r, ensure_ascii=False, sort_keys=True) + "\n" for r in pend),
         encoding="utf-8")
 
+    return write_manifest(recs, len(inv), len(pend), len(rej))
+
+
+def write_manifest(recs: list[dict], invalid_count: int, pending_count: int,
+                   rejected_count: int) -> dict:
+    """Build the manifest from a record list and write it.
+
+    Extracted from freeze() so a scoped write can rebuild the manifest from the
+    records actually on disk. freeze() derives its records from code state; a
+    scoped retraction must not, or it would re-apply every pending change while
+    claiming to have applied one.
+    """
     labels: dict[str, int] = {}
     bases: dict[str, int] = {}
     for r in recs:
@@ -184,9 +249,9 @@ def freeze() -> dict:
         "reviewer_ids": reviewers,
         "review_timestamps": stamps,
         "excluded_labels": list(EXCLUDED_LABELS),
-        "invalid_fixture_count": len(inv),
-        "pending_review_count": len(pend),
-        "rejected_count": len(rej),
+        "invalid_fixture_count": invalid_count,
+        "pending_review_count": pending_count,
+        "rejected_count": rejected_count,
     }
     MANIFEST_F.write_text(json.dumps(man, indent=1, sort_keys=True) + "\n")
     return man
@@ -315,7 +380,21 @@ def _test() -> None:
     except FreezeError:
         check(True, "an unapproved HUMAN_JUDGED record raises")
 
-    man = freeze()
+    # A pending drift must stop the freeze, not be written through by a test run.
+    drift = label_drift()
+    if not _drift_is_empty(drift):
+        try:
+            freeze()
+            check(False, "a pending label drift must refuse to freeze")
+        except FreezeError as e:
+            check("would move the gold-label set" in str(e),
+                  f"a pending label drift refuses to freeze ({e})")
+        check(PROMOTION_F.exists(), "...and is recorded for review")
+        man = json.loads(MANIFEST_F.read_text())
+        check(True, f"manifest read from disk; {len(drift['removed'])} removal(s) "
+                    f"await promotion")
+    else:
+        man = freeze()
     check(man["pair_count"] > 0, f"the benchmark froze ({man['pair_count']} pairs)")
     check(set(man["label_counts"]) <= set(FROZEN_LABELS),
           f"only ENTAILED/NOT_ENTAILED are frozen ({man['label_counts']})")
