@@ -156,40 +156,24 @@ def _test() -> None:
     from checker.entail_pairs_v2 import all_pairs
     from checker.grounding_policy import ENTAILED, NOT_ENTAILED
     from checker.eval_taxonomy import bucket_of
-    from checker.entail_baseline import judge as e3j
-    from checker.entail_binding import judge as e4j, UNRESOLVED as U4
-    from checker.entail_role import judge_claim as e5j, UNRESOLVED as U5
-    from checker.entail_qualifier import judge as e6j, UNRESOLVED as U6
+    # Imported, not redefined. While this was a closure the gate scored code no
+    # runtime could reach, so a shipped verifier and a measured verifier were
+    # only ever the same by coincidence.
+    from checker.cascade import judge_row as cascade, e3, e4, e5, e6
 
     rows = [p for p in all_pairs() if p.label in (ENTAILED, NOT_ENTAILED)]
 
     def E3(r):
-        return e3j(r.source_span, r.claim).entailed
-
-    def E5(r):
-        v = e5j(r.source_span, r.claim)
-        return None if v.status == U5 else v.compatible
+        return e3(r.source_span, r.claim)
 
     def E4(r):
-        v = e4j(r.source_span, r.claim)
-        return None if v.status == U4 else v.supported
+        return e4(r.source_span, r.claim)
+
+    def E5(r):
+        return e5(r.source_span, r.claim)
 
     def E6(r):
-        v = e6j(r.source_span, r.claim)
-        return None if v.status == U6 else v.entailed
-
-    def cascade(r):
-        # E6 runs first and may only ever refuse. A gate that could also accept
-        # would let a qualifier check overrule the modules that actually read
-        # the binding — it does not know whether a claim is right, only whether
-        # a qualifier was dropped.
-        if E6(r) is False:
-            return False
-        for f in (E5, E4):
-            v = f(r)
-            if v is not None:
-                return v
-        return E3(r)
+        return e6(r.source_span, r.claim)
 
     # The refuse-everything baseline must FAIL the gate. That is the whole point.
     g = evaluate_gate(lambda r: False, rows, bucket_of)
@@ -217,6 +201,12 @@ def _test() -> None:
             if v is not None:
                 return v
         return E3(r)
+
+    from checker.cascade import verdict as _verdict
+    check(all(cascade(r) is _verdict(r.source_span, r.claim).supported
+              for r in rows),
+          "the gate scores checker.cascade, on the (premise, claim) primitive "
+          "a runtime would call")
 
     check(all(cascade(r) is ungated(r) or cascade(r) is False for r in rows),
           "the E6 gate only ever converts an accept into a refusal")
