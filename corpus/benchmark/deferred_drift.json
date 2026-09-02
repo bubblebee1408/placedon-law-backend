@@ -1,17 +1,4 @@
 {
- "deferred": [
-  {
-   "current_label": "ENTAILED",
-   "deferred_because": "outside the authorised scope",
-   "pair_id": "v2-p174-bind-0",
-   "would_become": "excluded (INVALID_FIXTURE)"
-  },
-  {
-   "current_label": "ENTAILED",
-   "deferred_because": "outside the authorised scope",
-   "pair_id": "v2-p174-bind-1",
-   "would_become": "excluded (INVALID_FIXTURE)"
-  }
- ],
+ "deferred": [],
  "note": "These changes are pending and were NOT applied. The frozen set knowingly diverges from what the current code would produce; label_drift() will keep reporting them and freeze() will keep refusing until a reviewer decides."
 }

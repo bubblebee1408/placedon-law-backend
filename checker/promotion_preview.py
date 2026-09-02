@@ -416,8 +416,13 @@ def _test() -> None:
 
     check(not any("resubmissions" in f for f in pv.files_changed),
           f"no resubmission file is touched when nothing is added ({pv.files_changed})")
-    check(len(pv.files_changed) == 2,
-          f"exactly the two files a retraction touches ({pv.files_changed})")
+    # files_changed is derived from what would actually be written, so it is
+    # empty when nothing is pending. Assert the derivation, not a fixed count.
+    expected = ({"corpus/benchmark/approved_pairs.jsonl",
+                 "corpus/benchmark/manifest.json"} if pv.label_changes else set())
+    check(set(pv.files_changed) == expected,
+          f"files_changed lists exactly what a write would touch "
+          f"({pv.files_changed or 'nothing pending'})")
 
     r = render(pv)
     check("nothing has been promoted" in r, "the preview says what it is not")
