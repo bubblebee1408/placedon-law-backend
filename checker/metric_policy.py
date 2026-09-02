@@ -66,15 +66,25 @@ class GateResult:
         ]
         if self.buckets:
             lines.append("  per bucket:")
+            lines.append(f"    {'bucket':<20} {'n':>4} {'pos':>4} {'neg':>4} "
+                         f"{'FA':>4} {'F1':>6}  FA?  F1?")
             for k, v in sorted(self.buckets.items()):
-                f1 = "  n/a" if v["f1"] is None else f"{v['f1']:.2f}"
-                note = ""
-                if v.get("single_label"):
-                    kind = "no positives" if not v["pos"] else "no negatives"
-                    note = (f"   [{kind}: F1 undefined]" if v["f1"] is None
-                            else f"   [{kind}: cannot detect false accepts]")
-                lines.append(f"    {k:<22}n={v['n']:<4} FA={v['fa']:<4} "
-                             f"F1={f1}{note}")
+                f1 = "   n/a" if v["f1"] is None else f"{v['f1']:>6.2f}"
+                # A bucket can only detect a false accept if it HOLDS negatives,
+                # and can only score F1 if it holds positives. Reporting the
+                # validity beside the number stops a vacuous figure reading as an
+                # informative one -- paraphrase shows FA=0 and there is nothing
+                # there to falsely accept.
+                fa_ok = "yes" if v["neg"] else "NO "
+                f1_ok = "yes" if v["pos"] else "NO "
+                lines.append(f"    {k:<20} {v['n']:>4} {v['pos']:>4} {v['neg']:>4} "
+                             f"{v['fa']:>4} {f1}  {fa_ok}  {f1_ok}")
+            blind = [k for k, v in sorted(self.buckets.items())
+                     if not v["pos"] or not v["neg"]]
+            if blind:
+                lines.append(f"    {len(blind)} of {len(self.buckets)} buckets "
+                             f"cannot measure one of their two axes: "
+                             f"{', '.join(blind)}")
         for f in self.failures:
             lines.append(f"  FAILED: {f}")
         if self.passed:
@@ -277,9 +287,14 @@ def _test() -> None:
 
     rr = gc.render()
     check("n/a" in rr, "the rendered gate prints n/a rather than a false 0.00")
-    check("F1 undefined" in rr, "...and says why")
-    check("cannot detect false accepts" in rr,
-          "an all-positive bucket is marked as unable to detect false accepts")
+    check("cannot measure one of their two axes" in rr,
+          "...and names the buckets that cannot measure their axis")
+    # The validity columns say it structurally rather than in prose: a bucket
+    # with no negatives shows FA? = NO, whatever its false-accept count reads.
+    check("  NO " in rr and "FA?" in rr,
+          "a bucket that cannot detect false accepts is marked NO in the table")
+    check("pos" in rr and "neg" in rr,
+          "...and the per-class counts are shown so the reader can check it")
 
     r = gc.render()
     check("not evidence that grounding is solved" in r,
