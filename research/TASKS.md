@@ -15,7 +15,7 @@ the main session to record. Status: open / ready / in-progress / blocked / compl
 | R-007 | Current ICSI CoP figure (AR 2024-25) | legal-source-researcher | **open** | AR 2023-24 gives 11,460, contracting 3%/yr | `ad4daaa` | — |
 | R-008 | Measure scanner FALSE NEGATIVES | scanner-engineer | **open** | never measured — all corpus docs are compliant | — | need known-defective docs |
 | R-009 | RBI e-mandate: does annual auto-renewal work? | legal-source-researcher | **open** | UNVERIFIED | — | — |
-| R-010 | Retire HR-era agents and docs | main | **open** | `hr-ops-researcher`, `trust-boundary-reviewer`, PoSH corpus | — | — |
+| R-010 | Retire HR-era agents and docs | main | **complete** | `hr-ops-researcher`, `trust-boundary-reviewer`, PoSH corpus | — | — |
 | B-001 | Corporate-law task benchmark, 30-50 docs incl. **defective** ones | benchmark-engineer | **open** | none | — | CRITICAL PATH |
 | B-002 | Accessible legal testers (students, junior associates) | founder | **open** | none | — | after B-001 |
 | H-001 | Expert review by 1-2 practising corporate lawyers | **founder** | **open** | zero | — | gates CLAIMS not development |
