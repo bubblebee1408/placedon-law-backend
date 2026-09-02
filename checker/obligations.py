@@ -73,6 +73,7 @@ class Evidence:
     board_meetings: tuple[date, ...] | None = None
     calendar_year: int | None = None
     total_board_strength: int | None = None
+    special_resolution_for_excess_directors: bool | None = None
 
 
 # A decider answers "was it complied with", given the profile and the evidence.
@@ -216,6 +217,55 @@ def _decide_agm(p: CompanyProfile, ev: Evidence) -> tuple[bool | None, str]:
                    f"fifteen-month limit of {limit}")
 
 
+# s.149(1)(a), quoted from our corpus of the Act:
+#   "a minimum number of three directors in the case of a public company, two
+#    directors in the case of a private company, and one director in the case
+#    of a One Person Company"
+_MINIMUM_DIRECTORS = {"public": 3, "private": 2, "opc": 1}
+_MAXIMUM_DIRECTORS = 15          # s.149(1)(b)
+
+
+def _decide_board_size(p: CompanyProfile, ev: Evidence) -> tuple[bool | None, str]:
+    """s.149(1) — enough directors, and not too many without a special resolution.
+
+    Three limbs behaving three different ways, which is why this obligation is
+    worth having: the minimum is decidable outright, the maximum is gated by a
+    proviso, and the woman-director requirement is delegated to rules we do not
+    hold and is therefore never decided here — it is surfaced instead.
+    """
+    n = p.director_count
+    if n is None:
+        return None, "the number of directors is not on the profile"
+
+    floor = _MINIMUM_DIRECTORS.get(p.company_class)
+    if floor is None:
+        return None, f"no statutory minimum is registered for {p.company_class!r}"
+
+    if n < floor:
+        return False, (f"{n} director{'s' if n != 1 else ''} against the "
+                       f"s.149(1)(a) minimum of {floor} for a "
+                       f"{p.company_class} company")
+
+    if n > _MAXIMUM_DIRECTORS:
+        sr = ev.special_resolution_for_excess_directors
+        if sr is True:
+            return True, (f"{n} directors, above the s.149(1)(b) maximum of "
+                          f"{_MAXIMUM_DIRECTORS}, permitted by the special "
+                          f"resolution recorded (numbers limbs only)")
+        if sr is False:
+            return False, (f"{n} directors exceeds the s.149(1)(b) maximum of "
+                           f"{_MAXIMUM_DIRECTORS} and no special resolution was "
+                           f"passed")
+        return None, (f"{n} directors is above the s.149(1)(b) maximum of "
+                      f"{_MAXIMUM_DIRECTORS}, which the first proviso permits "
+                      f"after a special resolution — we were not told whether "
+                      f"one was passed")
+
+    return True, (f"{n} directors: at or above the minimum of {floor} and not "
+                  f"above the maximum of {_MAXIMUM_DIRECTORS} "
+                  f"(numbers limbs only)")
+
+
 REGISTER: tuple[Obligation, ...] = (
     Obligation(
         "CA13-S96-AGM",
@@ -236,6 +286,19 @@ REGISTER: tuple[Obligation, ...] = (
         note="the s.173(5) relaxed regime turns on small-company status, so "
              "this row can be blocked by an unacquired Rule",
         decided_by=_decide_board),
+    Obligation(
+        "CA13-S149-BOARD-SIZE",
+        "Have enough directors, and not more than the maximum",
+        "Companies Act 2013, s.149(1)",
+        _every_company,
+        evidence_needed=("number of directors",
+                         "whether a special resolution was passed, if there "
+                         "are more than fifteen"),
+        note="the numbers limbs only. The second proviso requires at least one "
+             "woman director for prescribed classes, and that prescription is "
+             "delegated legislation this system does not hold, so it is "
+             "surfaced and never decided here",
+        decided_by=_decide_board_size),
     Obligation(
         "CA13-S2-85-SMALL",
         "Establish whether the company is a small company",
@@ -393,14 +456,28 @@ def _test() -> None:
           f"a public company is definitively not small ({s2.state})")
     check(not s2.blocked_by, "...and is not blocked on the unacquired Rule")
 
-    # NO row may claim compliance. The register does not hold the evidence.
-    for prof in (bare, priv, pub, opc):
+    # NO row may claim compliance without a factual basis. Note the shape of
+    # this: some duties ARE decidable from the profile alone -- s.149(1) asks
+    # how many directors there are, which is what the company IS rather than
+    # something that happened -- so the invariant is not "no Evidence object"
+    # but "no facts". A profile carrying none of the relevant facts must
+    # produce no pass anywhere.
+    factless = (bare, priv, pub)          # no director_count, no evidence
+    for prof in factless:
         for r in build(prof):
             if r.state == APPLIES_SATISFIED:
-                check(False, f"{r.obligation_id} claimed compliance without evidence")
+                check(False, f"{r.obligation_id} claimed compliance with no facts")
                 break
     else:
-        check(True, "no row claims compliance — the register holds no evidence")
+        check(True, "no row claims compliance when the facts are absent")
+
+    # ...and where the facts ARE present, a pass is legitimate and must carry
+    # what settled it.
+    opc_row = [r for r in build(opc) if r.obligation_id == "CA13-S149-BOARD-SIZE"][0]
+    check(opc_row.state == APPLIES_SATISFIED,
+          f"one director satisfies the OPC minimum ({opc_row.state})")
+    check(opc_row.evidence and "1 director" in opc_row.evidence[0],
+          f"...and the row carries the fact that settled it ({opc_row.evidence})")
 
     # An applicable duty must say what evidence would settle it.
     appl = [r for r in build(pub) if r.state == APPLIES_UNDETERMINED]
@@ -484,18 +561,56 @@ def _test() -> None:
     check("small-company status" in b4.basis,
           "...and says the regime is what is missing")
 
-    # THE GATE: no row may reach APPLIES_SATISFIED without evidence.
+    # THE GATE: an EVENT duty may never pass without evidence of the event.
+    # s.149 is excluded deliberately — it is decided from company composition,
+    # not from an event — and excluding it is recorded here rather than left
+    # implicit, so nobody later widens the exclusion by accident.
+    EVENT_DUTIES = {"CA13-S96-AGM", "CA13-S173-BOARD"}
     for prof in (bare, priv, pub, opc, CompanyProfile(**LIMITS_OK)):
         for r in build(prof):
-            if r.state == APPLIES_SATISFIED:
+            if r.obligation_id in EVENT_DUTIES and r.state == APPLIES_SATISFIED:
                 check(False, f"{r.obligation_id} passed with no evidence at all")
                 break
     else:
-        check(True, "no row reaches APPLIES_SATISFIED without evidence")
+        check(True, "no event duty reaches APPLIES_SATISFIED without evidence")
 
     # A satisfied row must carry the evidence it rested on.
     check(agm_row.evidence and agm_row.evidence[0],
           "a satisfied row carries the evidence that settled it")
+
+    # ── s.149(1): three limbs, three different behaviours ───────────────────
+    def size(cls: str, n: int, sr=None):
+        prof = CompanyProfile(company_class=cls, director_count=n, **common)
+        ev = Evidence(special_resolution_for_excess_directors=sr)
+        return [r for r in build(prof, evidence=ev)
+                if r.obligation_id == "CA13-S149-BOARD-SIZE"][0]
+
+    check(size("public", 2).state == APPLIES_NOT_SATISFIED,
+          "two directors fails the public-company minimum of three")
+    check("minimum of 3" in size("public", 2).basis,
+          "...and the basis names the minimum it fell short of")
+    check(size("private", 2).state == APPLIES_SATISFIED,
+          "two directors meets the private-company minimum")
+    check(size("public", 2).state != size("private", 2).state,
+          "the same board size passes or fails on company class")
+
+    # The maximum is gated by a proviso, so it is NOT decided without it.
+    over = size("public", 16)
+    check(over.state == APPLIES_UNDETERMINED,
+          f"sixteen directors is not decided without the proviso ({over.state})")
+    check("special resolution" in over.basis,
+          "...and the basis names the special resolution that would settle it")
+    check(size("public", 16, sr=True).state == APPLIES_SATISFIED,
+          "a recorded special resolution permits the excess")
+    check(size("public", 16, sr=False).state == APPLIES_NOT_SATISFIED,
+          "no special resolution and sixteen directors is a failure")
+
+    # The delegated limb must never be decided.
+    reg149 = [o for o in REGISTER if o.obligation_id == "CA13-S149-BOARD-SIZE"][0]
+    check("woman director" in reg149.note and "never decided" in reg149.note,
+          "the woman-director prescription is surfaced, never decided")
+    check("numbers limbs only" in size("private", 2).basis,
+          "a pass says which limbs it covered")
 
     out = render(pub, build(pub))
     check("No row claims compliance" in out, "the render says what it does not claim")

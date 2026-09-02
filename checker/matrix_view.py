@@ -219,6 +219,9 @@ def _form(params: dict) -> str:
         g("calendar_year"))}
 {_field("total board strength", "total_board_strength",
         g("total_board_strength"))}
+{_tri_field("special resolution passed for more than 15 directors",
+            "special_resolution_for_excess_directors",
+            g("special_resolution_for_excess_directors"))}
 </div></fieldset>
 <button type="submit">Build the matrix</button></form>"""
 
@@ -266,7 +269,9 @@ def parse_evidence(params: dict) -> Evidence:
 
     return Evidence(agm_dates=_dates(params, "agm_dates"),
                     board_meetings=_dates(params, "board_meetings"),
-                    calendar_year=yr, total_board_strength=bs)
+                    calendar_year=yr, total_board_strength=bs,
+                    special_resolution_for_excess_directors=_tri(
+                        params, "special_resolution_for_excess_directors"))
 
 
 def _rows_html(profile: CompanyProfile, evidence: Evidence | None = None) -> str:
