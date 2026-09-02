@@ -114,12 +114,27 @@ def review(*, company_class: str, calendar_year: int, meetings: list[date],
            total_board_strength: int | None = None,
            source_text: str | None = None) -> BoardMeetingReview:
     """Assess s.173 for one company and one calendar year."""
-    ms = sorted(meetings)
+    # Meetings outside the year do not count toward that year's minimum. Without
+    # this filter two meetings in 2024 and two in 2025 satisfied "four meetings
+    # in the year" for 2025 -- a false pass built out of the wrong year's work.
+    # The GAP limb still sees every date, because s.173(1) bounds the interval
+    # "between two consecutive meetings" and that interval crosses year ends.
+    all_dates = sorted(meetings)
+    ms = [d for d in all_dates if d.year == calendar_year]
+    outside = [d for d in all_dates if d.year != calendar_year]
     relaxed = company_class in RELAXED_CLASSES
     regime = ("s.173(5) relaxed — OPC, small or dormant company" if relaxed
               else "s.173(1) standard")
     r = BoardMeetingReview(company_class=company_class, calendar_year=calendar_year,
                            meetings=ms, regime=regime)
+
+    if outside:
+        r.open_questions.append(
+            f"{len(outside)} supplied meeting date(s) fall outside {calendar_year} "
+            f"({', '.join(str(d) for d in outside[:4])}"
+            f"{'…' if len(outside) > 4 else ''}) and were not counted toward this "
+            f"year's minimum; they are still used for the interval between "
+            f"consecutive meetings")
 
     # The proviso disapplies s.173 AND s.174 entirely for a single-director OPC.
     if single_director_opc:

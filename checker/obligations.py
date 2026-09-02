@@ -92,6 +92,11 @@ class Obligation:
     evidence_needed: tuple[str, ...] = ()
     note: str = ""
     decided_by: Decider | None = None
+    # Limbs of the provision this system does NOT decide. A duty with any
+    # undecided limb can never render APPLIES_SATISFIED, because a partial pass
+    # under a green badge reads as a full pass -- which is how a tool tells a
+    # director their year is fine when it is not.
+    limbs_not_decided: tuple[str, ...] = ()
 
 
 @dataclass
@@ -196,6 +201,19 @@ def _decide_agm(p: CompanyProfile, ev: Evidence) -> tuple[bool | None, str]:
     ds = sorted(ev.agm_dates)
     if not ds:
         return False, "no annual general meeting was held"
+
+    # s.96(1) requires an AGM "in each year". Two meetings can sit inside the
+    # fifteen-month gap and still skip a calendar year entirely -- 31-12-2023 to
+    # 31-01-2025 is 397 days and holds no AGM in 2024 at all. Checking the gap
+    # alone reported that as compliant.
+    years = {d.year for d in ds}
+    span = range(min(years), max(years) + 1)
+    missed = [y for y in span if y not in years]
+    if missed:
+        return False, (f"no annual general meeting was held in "
+                       f"{', '.join(str(y) for y in missed)}; s.96(1) requires "
+                       f"one in each year")
+
     if len(ds) < 2:
         return None, ("only one AGM date is on record; the fifteen-month gap "
                       "needs the previous one as well")
@@ -276,7 +294,13 @@ REGISTER: tuple[Obligation, ...] = (
                          "date of closing of the financial year"),
         note="the first AGM has its own deadline; the gap between successive "
              "AGMs and the Registrar's extension are separate limbs",
-        decided_by=_decide_agm),
+        decided_by=_decide_agm,
+        limbs_not_decided=(
+            "the first-AGM deadline of nine months from the close of the first "
+            "financial year",
+            "the six-month deadline from the close of the financial year for "
+            "any other AGM",
+            "any extension granted by the Registrar")),
     Obligation(
         "CA13-S173-BOARD",
         "Hold the minimum number of board meetings, correctly spaced",
@@ -298,7 +322,10 @@ REGISTER: tuple[Obligation, ...] = (
              "woman director for prescribed classes, and that prescription is "
              "delegated legislation this system does not hold, so it is "
              "surfaced and never decided here",
-        decided_by=_decide_board_size),
+        decided_by=_decide_board_size,
+        limbs_not_decided=(
+            "whether a woman director is required, which the second proviso "
+            "delegates to rules this system does not hold",)),
     Obligation(
         "CA13-S2-85-SMALL",
         "Establish whether the company is a small company",
@@ -346,7 +373,17 @@ def build(profile: CompanyProfile,
         met, why = (ob.decided_by(profile, ev) if ob.decided_by
                     else (None, "no decision procedure is registered for this duty"))
 
-        if met is True:
+        if met is True and ob.limbs_not_decided:
+            # Everything we CAN check passed. That is not the same as compliance,
+            # and the row must not say it is.
+            rows.append(Row(ob.obligation_id, ob.duty, ob.provision,
+                            APPLIES_UNDETERMINED,
+                            f"{basis}. {why} — but this system does not decide "
+                            f"{'; '.join(ob.limbs_not_decided)}, so compliance "
+                            f"with the whole provision is not established",
+                            missing_facts=ob.limbs_not_decided,
+                            evidence=(why,)))
+        elif met is True:
             rows.append(Row(ob.obligation_id, ob.duty, ob.provision,
                             APPLIES_SATISFIED, f"{basis}. {why}",
                             evidence=(why,)))
@@ -474,10 +511,11 @@ def _test() -> None:
     # ...and where the facts ARE present, a pass is legitimate and must carry
     # what settled it.
     opc_row = [r for r in build(opc) if r.obligation_id == "CA13-S149-BOARD-SIZE"][0]
-    check(opc_row.state == APPLIES_SATISFIED,
-          f"one director satisfies the OPC minimum ({opc_row.state})")
     check(opc_row.evidence and "1 director" in opc_row.evidence[0],
-          f"...and the row carries the fact that settled it ({opc_row.evidence})")
+          f"one director meets the OPC minimum ({opc_row.evidence})")
+    check(opc_row.state == APPLIES_UNDETERMINED,
+          f"...but the row is not SATISFIED, because the woman-director limb is "
+          f"delegated to rules we do not hold ({opc_row.state})")
 
     # An applicable duty must say what evidence would settle it.
     appl = [r for r in build(pub) if r.state == APPLIES_UNDETERMINED]
@@ -492,10 +530,11 @@ def _test() -> None:
     ev_ok = Evidence(agm_dates=(date(2024, 8, 20), date(2025, 9, 15)))
     agm_row = [r for r in build(CompanyProfile(**LIMITS_OK), evidence=ev_ok)
                if r.obligation_id == "CA13-S96-AGM"][0]
-    check(agm_row.state == APPLIES_SATISFIED,
-          f"an AGM inside the fifteen-month gap satisfies that limb ({agm_row.state})")
-    check("this limb only" in agm_row.basis,
-          "...and says it decided one limb, not the whole section")
+    check("within the fifteen-month limit" in agm_row.basis,
+          "an AGM inside the gap passes that limb")
+    check(agm_row.state == APPLIES_UNDETERMINED,
+          f"...and the row stays undetermined, because the six-month and "
+          f"first-AGM deadlines are not decided ({agm_row.state})")
 
     # Sixteen months apart — over the limit.
     ev_late = Evidence(agm_dates=(date(2024, 8, 20), date(2025, 12, 30)))
@@ -578,6 +617,45 @@ def _test() -> None:
     check(agm_row.evidence and agm_row.evidence[0],
           "a satisfied row carries the evidence that settled it")
 
+    # ── a partial pass may never render as a full pass ──────────────────────
+    # Found by adversarial review: AGMs on 2023-12-31 and 2025-01-31 are 397
+    # days apart, inside the fifteen-month gap, and the company held NO AGM in
+    # 2024 at all. The gap limb alone reported that as satisfied, under a green
+    # badge, with the caveat in body text.
+    skipped = [r for r in build(CompanyProfile(company_class="private", **common),
+                                evidence=Evidence(agm_dates=(date(2023, 12, 31),
+                                                             date(2025, 1, 31))))
+               if r.obligation_id == "CA13-S96-AGM"][0]
+    check(skipped.state == APPLIES_NOT_SATISFIED,
+          f"a year with no AGM fails even inside the gap ({skipped.state})")
+    check("2024" in skipped.basis and "each year" in skipped.basis,
+          "...naming the year missed and the limb it breached")
+
+    # And a clean gap is still not a full pass, because limbs remain undecided.
+    clean = [r for r in build(CompanyProfile(company_class="private", **common),
+                              evidence=Evidence(agm_dates=(date(2024, 8, 20),
+                                                           date(2025, 9, 15))))
+             if r.obligation_id == "CA13-S96-AGM"][0]
+    check(clean.state == APPLIES_UNDETERMINED,
+          f"a clean gap is not compliance with the whole provision ({clean.state})")
+    check("does not decide" in clean.basis,
+          "...and the row says which limbs were not reached")
+
+    check(all(o.limbs_not_decided or o.obligation_id in
+              ("CA13-S173-BOARD", "CA13-S2-85-SMALL")
+              for o in REGISTER),
+          "every obligation declares the limbs it does not decide")
+
+    # THE INVARIANT: no obligation with an undecided limb may ever be SATISFIED.
+    partial = [o.obligation_id for o in REGISTER if o.limbs_not_decided]
+    for prof in (bare, priv, pub, opc, CompanyProfile(**LIMITS_OK)):
+        for e in (None, Evidence(agm_dates=(date(2024, 8, 20), date(2025, 9, 15)))):
+            for r in build(prof, evidence=e):
+                if r.obligation_id in partial and r.state == APPLIES_SATISFIED:
+                    check(False, f"{r.obligation_id} rendered a partial pass as full")
+                    break
+    check(True, "no obligation with an undecided limb renders APPLIES_SATISFIED")
+
     # ── s.149(1): three limbs, three different behaviours ───────────────────
     def size(cls: str, n: int, sr=None):
         prof = CompanyProfile(company_class=cls, director_count=n, **common)
@@ -589,7 +667,8 @@ def _test() -> None:
           "two directors fails the public-company minimum of three")
     check("minimum of 3" in size("public", 2).basis,
           "...and the basis names the minimum it fell short of")
-    check(size("private", 2).state == APPLIES_SATISFIED,
+    check("minimum of 2" in size("private", 2).basis
+          and size("private", 2).state != APPLIES_NOT_SATISFIED,
           "two directors meets the private-company minimum")
     check(size("public", 2).state != size("private", 2).state,
           "the same board size passes or fails on company class")
@@ -600,7 +679,7 @@ def _test() -> None:
           f"sixteen directors is not decided without the proviso ({over.state})")
     check("special resolution" in over.basis,
           "...and the basis names the special resolution that would settle it")
-    check(size("public", 16, sr=True).state == APPLIES_SATISFIED,
+    check("permitted by the special resolution" in size("public", 16, sr=True).basis,
           "a recorded special resolution permits the excess")
     check(size("public", 16, sr=False).state == APPLIES_NOT_SATISFIED,
           "no special resolution and sixteen directors is a failure")
@@ -611,6 +690,8 @@ def _test() -> None:
           "the woman-director prescription is surfaced, never decided")
     check("numbers limbs only" in size("private", 2).basis,
           "a pass says which limbs it covered")
+    check("woman director" in size("private", 2).basis,
+          "...and which limb it could not reach")
 
     out = render(pub, build(pub))
     check("No row claims compliance" in out, "the render says what it does not claim")

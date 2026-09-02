@@ -32,10 +32,27 @@ DEFAULT_PORT = 8014
 class Handler(BaseHTTPRequestHandler):
     server_version = "PlacedonMatrix/1"
 
+    def do_POST(self) -> None:                      # noqa: N802
+        """Company facts arrive here, in the body, never in the URL."""
+        try:
+            n = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            n = 0
+        if n > 64 * 1024:
+            self.send_response(413)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        raw = self.rfile.read(n).decode("utf-8", "replace") if n else ""
+        self._respond(urlsplit(self.path).path, "", raw)
+
     def do_GET(self) -> None:                       # noqa: N802
         parts = urlsplit(self.path)
+        self._respond(parts.path, parts.query, "")
+
+    def _respond(self, path: str, query: str, body_in: str) -> None:
         try:
-            status, ctype, body = handle(parts.path, parts.query)
+            status, ctype, body = handle(path, query, body_in)
         except Exception as e:                      # noqa: BLE001
             # A crash must not leak a stack trace to the page, and must not
             # take the server down mid-session.
@@ -124,6 +141,17 @@ def _test() -> int:
         check(r2.status == 200, f"the matrix route serves ({r2.status})")
         check("CA13-S96-AGM" in page, "...and renders obligation rows")
         check("S-002" in page, "...including the blocked row")
+
+        # Facts in the body, not the URL.
+        payload = ("company_class=private&incorporation_date=2019-06-01&"
+                   "financial_year=2024-25&paid_up_capital_crore=2")
+        c.request("POST", "/matrix", body=payload,
+                  headers={"Content-Type": "application/x-www-form-urlencoded"})
+        rp = c.getresponse()
+        pg = rp.read().decode()
+        check(rp.status == 200 and "CA13-S96-AGM" in pg,
+              f"POSTed facts build the matrix ({rp.status})")
+        check('method="post"' in pg, "...and the form posts")
 
         c.request("GET", "/nope")
         r3 = c.getresponse()

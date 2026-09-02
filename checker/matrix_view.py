@@ -188,7 +188,7 @@ def _form(params: dict) -> str:
     cls_opts = "".join(
         f'<option value="{c}"{" selected" if c == cls else ""}>{c}</option>'
         for c in _CLASSES)
-    return f"""<form method="get" action="/matrix">
+    return f"""<form method="post" action="/matrix">
 <fieldset><legend>the company</legend><div class="grid">
 <div><label for="company_class">company class</label>
 <select id="company_class" name="company_class">{cls_opts}</select></div>
@@ -308,9 +308,17 @@ def _page(body: str) -> str:
             f"</div></body></html>")
 
 
-def handle(path: str, query: str = "") -> tuple[int, str, str]:
-    """Route. Pure: no I/O, no globals, no model. (status, content-type, body)."""
-    params = parse_qs(query, keep_blank_values=True)
+def handle(path: str, query: str = "", body: str = "") -> tuple[int, str, str]:
+    """Route. Pure: no I/O, no globals, no model. (status, content-type, body).
+
+    Facts arrive in the POST body, never the query string. They are a company's
+    paid-up capital, turnover, meeting dates and compliance defaults, and a query
+    string travels into server logs, browser history and Referer headers on
+    every onward link. On a serverless host those logs belong to a third party.
+    The form is POST for that reason and the query string is read only so a bare
+    GET still serves the empty form.
+    """
+    params = parse_qs(body or query, keep_blank_values=True)
 
     if path not in ("/", "/matrix"):
         return 404, "text/html; charset=utf-8", _page(
@@ -435,8 +443,8 @@ def _test() -> None:
 
     q_ev = q + "&agm_dates=2024-08-20,2025-09-15"
     _, _, pg = handle("/matrix", q_ev)
-    check(shown(pg, "APPLIES_SATISFIED"),
-          "supplied AGM dates can resolve a row to satisfied")
+    check(shown(pg, "APPLIES_UNDETERMINED") and "fifteen-month limit" in pg,
+          "supplied AGM dates resolve the gap limb without claiming compliance")
 
     q_bad = q + "&agm_dates=2024-08-20,2025-12-30"
     _, _, pg2 = handle("/matrix", q_bad)
@@ -461,6 +469,13 @@ def _test() -> None:
     check(st8 == 400 and "YYYY-MM-DD" in err4,
           "a misformatted date refuses and says the expected form")
     check("commas" in err4, "...and explains how to give several")
+
+    # Company facts must travel in the body, never the URL.
+    check('method="post"' in body, "the form posts rather than gets")
+    st9, _, pg9 = handle("/matrix", "", q)
+    check(st9 == 200 and "CA13-S96-AGM" in pg9,
+          "facts supplied in the body build the matrix")
+    check(handle("/")[0] == 200, "a bare GET still serves the empty form")
 
     # No dependency outside the standard library and this repo. Parsed from the
     # module's own import statements rather than searched for as text, because a
