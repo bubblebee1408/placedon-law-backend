@@ -69,6 +69,7 @@ suites=(
   checker/reviews.py
   checker/fixture_rebuild.py
   checker/benchmark_v2_freeze.py
+  checker/benchmark_versions.py
   checker/revocation.py
   checker/doc_verification.py
   checker/provenance_slots.py
