@@ -37,7 +37,7 @@ one.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, timedelta
 from typing import Callable
 
 from applicability import Result
@@ -74,6 +74,9 @@ class Evidence:
     calendar_year: int | None = None
     total_board_strength: int | None = None
     special_resolution_for_excess_directors: bool | None = None
+    first_financial_year_end: date | None = None   # s.96(1) first proviso
+    aoc4_filed_on: date | None = None              # s.137(1)
+    annual_return_filed_on: date | None = None     # s.92(4)
 
 
 # A decider answers "was it complied with", given the profile and the evidence.
@@ -188,6 +191,15 @@ def _decide_board(p: CompanyProfile, ev: Evidence) -> tuple[bool | None, str]:
     return None, open_q
 
 
+def _add_months(d: date, months: int) -> date:
+    """d plus n calendar months. Statutory periods are months, not day counts."""
+    m = d.month - 1 + months
+    y, m = d.year + m // 12, m % 12 + 1
+    leap = y % 4 == 0 and (y % 100 != 0 or y % 400 == 0)
+    last = [31, 29 if leap else 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][m - 1]
+    return date(y, m, min(d.day, last))
+
+
 def _decide_agm(p: CompanyProfile, ev: Evidence) -> tuple[bool | None, str]:
     """s.96 — did an AGM happen, and inside the fifteen-month gap.
 
@@ -214,9 +226,41 @@ def _decide_agm(p: CompanyProfile, ev: Evidence) -> tuple[bool | None, str]:
                        f"{', '.join(str(y) for y in missed)}; s.96(1) requires "
                        f"one in each year")
 
+    # s.96(1) first proviso, verbatim from our corpus: the first AGM "shall be
+    # held within a period of nine months from the date of closing of the first
+    # financial year", and "in any other case, within a period of six months,
+    # from the date of closing of the financial year".
+    fy_end = ev.financial_year_end
+    first_end = ev.first_financial_year_end
+    latest = ds[-1]
+    is_first = len(ds) == 1 and first_end is not None
+
+    # Every limb is evaluated before anything is returned. A limb that cannot be
+    # decided must not short-circuit one that can: a company whose gap plainly
+    # exceeds fifteen months has failed s.96 whether or not we know its
+    # financial year end, and an earlier version returned UNDETERMINED there.
+    undecided: list[str] = []
+
+    if is_first:
+        limit = _add_months(first_end, 9)
+        if latest > limit:
+            return False, (f"the first annual general meeting was held on "
+                           f"{latest}, past the nine-month limit of {limit} "
+                           f"from the close of the first financial year")
+    elif fy_end is not None:
+        limit = _add_months(fy_end, 6)
+        if latest > limit:
+            return False, (f"the annual general meeting was held on {latest}, "
+                           f"past the six-month limit of {limit} from the close "
+                           f"of the financial year")
+    else:
+        undecided.append("the six-month deadline, which runs from the close of "
+                         "the financial year and was not supplied")
+
     if len(ds) < 2:
-        return None, ("only one AGM date is on record; the fifteen-month gap "
-                      "needs the previous one as well")
+        note = ("only one AGM date is on record; the fifteen-month gap needs "
+                "the previous one as well")
+        return None, (f"{note}; also {'; '.join(undecided)}" if undecided else note)
     gap = (ds[-1] - ds[-2]).days
     # s.96(1): "not more than fifteen months shall elapse between the date of
     # one annual general meeting and that of the next". Fifteen months is not a
@@ -229,8 +273,11 @@ def _decide_agm(p: CompanyProfile, ev: Evidence) -> tuple[bool | None, str]:
                          31, 30, 31, 30, 31, 31, 30, 31, 30, 31][limit_month - 1])
     limit = date(limit_year, limit_month, day)
     if ds[-1] <= limit:
-        return True, (f"gap of {gap} days from {prev} to {ds[-1]}, within the "
-                      f"fifteen-month limit of {limit} (this limb only)")
+        passed = (f"gap of {gap} days from {prev} to {ds[-1]}, within the "
+                  f"fifteen-month limit of {limit}")
+        if undecided:
+            return None, f"{passed}; but {'; '.join(undecided)}"
+        return True, passed
     return False, (f"gap of {gap} days from {prev} to {ds[-1]} exceeds the "
                    f"fifteen-month limit of {limit}")
 
@@ -284,6 +331,58 @@ def _decide_board_size(p: CompanyProfile, ev: Evidence) -> tuple[bool | None, st
                   f"(numbers limbs only)")
 
 
+def _decide_aoc4(p: CompanyProfile, ev: Evidence) -> tuple[bool | None, str]:
+    """s.137(1) — financial statements filed "within thirty days of the date of
+    annual general meeting". Thirty days, not a month: the section says days."""
+    if not ev.agm_dates:
+        return None, "the thirty days run from the AGM, and no AGM date was given"
+    agm = sorted(ev.agm_dates)[-1]
+    due = agm + timedelta(days=30)
+    if ev.aoc4_filed_on is None:
+        return None, (f"the filing was due by {due} (thirty days from the AGM on "
+                      f"{agm}); we were not told whether it was filed")
+    if ev.aoc4_filed_on <= due:
+        return True, (f"filed {ev.aoc4_filed_on}, within thirty days of the AGM "
+                      f"on {agm} (due {due})")
+    late = (ev.aoc4_filed_on - due).days
+    return False, (f"filed {ev.aoc4_filed_on}, {late} day{'s' if late != 1 else ''} "
+                   f"after the thirty-day limit of {due}")
+
+
+def _decide_annual_return(p: CompanyProfile, ev: Evidence) -> tuple[bool | None, str]:
+    """s.92(4) — annual return within sixty days of the AGM, "or where no annual
+    general meeting is held in any year within sixty days from the date on which
+    the annual general meeting should have been held".
+
+    That second limb is the one a company in default most needs and most often
+    misses: missing the AGM does not postpone the return, it starts the clock
+    from the date the AGM was due. It is only computable when the financial year
+    end is known, so it refuses rather than assuming one.
+    """
+    if ev.agm_dates:
+        agm = sorted(ev.agm_dates)[-1]
+        due = agm + timedelta(days=60)
+        basis = f"sixty days from the AGM on {agm}"
+    elif ev.agm_dates is not None and ev.financial_year_end is not None:
+        # Told there was none. The clock runs from when it should have been held.
+        should = _add_months(ev.financial_year_end, 6)
+        due = should + timedelta(days=60)
+        basis = (f"no AGM was held, so s.92(4) runs sixty days from {should}, "
+                 f"the date it should have been held")
+    else:
+        return None, ("the sixty days run from the AGM, or from the date one "
+                      "should have been held; neither is established")
+
+    if ev.annual_return_filed_on is None:
+        return None, f"the annual return was due by {due} ({basis}); we were " \
+                     f"not told whether it was filed"
+    if ev.annual_return_filed_on <= due:
+        return True, f"filed {ev.annual_return_filed_on}, within {basis} (due {due})"
+    late = (ev.annual_return_filed_on - due).days
+    return False, (f"filed {ev.annual_return_filed_on}, {late} day"
+                   f"{'s' if late != 1 else ''} after the limit of {due} ({basis})")
+
+
 REGISTER: tuple[Obligation, ...] = (
     Obligation(
         "CA13-S96-AGM",
@@ -291,16 +390,15 @@ REGISTER: tuple[Obligation, ...] = (
         "Companies Act 2013, s.96(1)",
         _agm_applies,
         evidence_needed=("date of the last AGM", "date of this AGM",
-                         "date of closing of the financial year"),
+                         "date of closing of the financial year",
+                         "date of closing of the first financial year, for a "
+                         "company holding its first AGM"),
         note="the first AGM has its own deadline; the gap between successive "
              "AGMs and the Registrar's extension are separate limbs",
         decided_by=_decide_agm,
         limbs_not_decided=(
-            "the first-AGM deadline of nine months from the close of the first "
-            "financial year",
-            "the six-month deadline from the close of the financial year for "
-            "any other AGM",
-            "any extension granted by the Registrar")),
+            "any extension of up to three months granted by the Registrar under "
+            "the third proviso, which we cannot see",)),
     Obligation(
         "CA13-S173-BOARD",
         "Hold the minimum number of board meetings, correctly spaced",
@@ -326,6 +424,28 @@ REGISTER: tuple[Obligation, ...] = (
         limbs_not_decided=(
             "whether a woman director is required, which the second proviso "
             "delegates to rules this system does not hold",)),
+    Obligation(
+        "CA13-S137-AOC4",
+        "File the financial statements with the Registrar in time",
+        "Companies Act 2013, s.137(1)",
+        _every_company,
+        evidence_needed=("date of the annual general meeting",
+                         "date the financial statements were filed"),
+        note="thirty days, counted in days rather than months because the "
+             "section says days; the additional-fee regime for a late filing is "
+             "a separate consequence this row does not compute",
+        decided_by=_decide_aoc4),
+    Obligation(
+        "CA13-S92-RETURN",
+        "File the annual return with the Registrar in time",
+        "Companies Act 2013, s.92(4)",
+        _every_company,
+        evidence_needed=("date of the annual general meeting, or the date one "
+                         "should have been held",
+                         "date the annual return was filed"),
+        note="missing the AGM does not postpone the return: where none is held, "
+             "the sixty days run from the date it should have been held",
+        decided_by=_decide_annual_return),
     Obligation(
         "CA13-S2-85-SMALL",
         "Establish whether the company is a small company",
@@ -614,8 +734,13 @@ def _test() -> None:
         check(True, "no event duty reaches APPLIES_SATISFIED without evidence")
 
     # A satisfied row must carry the evidence it rested on.
-    check(agm_row.evidence and agm_row.evidence[0],
-          "a satisfied row carries the evidence that settled it")
+    filed = [r for r in build(
+        CompanyProfile(company_class="public", **common),
+        evidence=Evidence(agm_dates=(date(2025, 9, 15),),
+                          aoc4_filed_on=date(2025, 10, 10)))
+        if r.obligation_id == "CA13-S137-AOC4"][0]
+    check(filed.state == APPLIES_SATISFIED and filed.evidence and filed.evidence[0],
+          f"a satisfied row carries the evidence that settled it ({filed.evidence})")
 
     # ── a partial pass may never render as a full pass ──────────────────────
     # Found by adversarial review: AGMs on 2023-12-31 and 2025-01-31 are 397
@@ -638,13 +763,13 @@ def _test() -> None:
              if r.obligation_id == "CA13-S96-AGM"][0]
     check(clean.state == APPLIES_UNDETERMINED,
           f"a clean gap is not compliance with the whole provision ({clean.state})")
-    check("does not decide" in clean.basis,
-          "...and the row says which limbs were not reached")
+    check("six-month deadline" in clean.basis or "does not decide" in clean.basis,
+          f"...and the row says which limb was not reached ({clean.basis[-70:]})")
 
-    check(all(o.limbs_not_decided or o.obligation_id in
-              ("CA13-S173-BOARD", "CA13-S2-85-SMALL")
-              for o in REGISTER),
-          "every obligation declares the limbs it does not decide")
+    check(all(all(x.strip() for x in o.limbs_not_decided) for o in REGISTER),
+          "a declared undecided limb is never an empty string")
+    check(any(o.limbs_not_decided for o in REGISTER),
+          "at least one obligation declares a limb it cannot reach")
 
     # THE INVARIANT: no obligation with an undecided limb may ever be SATISFIED.
     partial = [o.obligation_id for o in REGISTER if o.limbs_not_decided]
@@ -655,6 +780,63 @@ def _test() -> None:
                     check(False, f"{r.obligation_id} rendered a partial pass as full")
                     break
     check(True, "no obligation with an undecided limb renders APPLIES_SATISFIED")
+
+    # ── s.96 deadline limbs, s.137 and s.92 ─────────────────────────────────
+    PUB = dict(company_class="public", **common)
+
+    def row(oid, **ev):
+        return [r for r in build(CompanyProfile(**PUB), evidence=Evidence(**ev))
+                if r.obligation_id == oid][0]
+
+    # First AGM: nine months from the close of the FIRST financial year.
+    late_first = row("CA13-S96-AGM", agm_dates=(date(2025, 2, 1),),
+                     first_financial_year_end=date(2024, 3, 31))
+    check(late_first.state == APPLIES_NOT_SATISFIED,
+          f"a first AGM past nine months fails ({late_first.state})")
+    check("nine-month limit of 2024-12-31" in late_first.basis,
+          f"...on a calendar-month limit ({late_first.basis[-60:]})")
+    ok_first = row("CA13-S96-AGM", agm_dates=(date(2024, 12, 1),),
+                   first_financial_year_end=date(2024, 3, 31))
+    check(ok_first.state != APPLIES_NOT_SATISFIED,
+          "a first AGM inside nine months does not fail")
+
+    # Any other AGM: six months from the close of the financial year.
+    late_other = row("CA13-S96-AGM", agm_dates=(date(2024, 8, 20), date(2025, 11, 5)),
+                     financial_year_end=date(2025, 3, 31))
+    check(late_other.state == APPLIES_NOT_SATISFIED,
+          f"an AGM past six months fails ({late_other.state})")
+    check("six-month limit of 2025-09-30" in late_other.basis,
+          f"...naming the limit ({late_other.basis[-55:]})")
+
+    no_fy = row("CA13-S96-AGM", agm_dates=(date(2024, 8, 20), date(2025, 9, 15)))
+    check(no_fy.state == APPLIES_UNDETERMINED,
+          "without the financial year end the six-month limb is not decided")
+
+    # s.137 — thirty DAYS, not a month.
+    check(row("CA13-S137-AOC4", agm_dates=(date(2025, 9, 15),),
+              aoc4_filed_on=date(2025, 10, 15)).state == APPLIES_SATISFIED,
+          "filing on the thirtieth day is in time")
+    check(row("CA13-S137-AOC4", agm_dates=(date(2025, 9, 15),),
+              aoc4_filed_on=date(2025, 10, 16)).state == APPLIES_NOT_SATISFIED,
+          "filing on the thirty-first day is late")
+    due_only = row("CA13-S137-AOC4", agm_dates=(date(2025, 9, 15),))
+    check(due_only.state == APPLIES_UNDETERMINED and "due by" in due_only.basis,
+          "with no filing date the row states the deadline and waits")
+
+    # s.92(4) — and the limb that matters: no AGM does not postpone the return.
+    none_held = row("CA13-S92-RETURN", agm_dates=(),
+                    financial_year_end=date(2025, 3, 31),
+                    annual_return_filed_on=date(2026, 1, 10))
+    check(none_held.state == APPLIES_NOT_SATISFIED,
+          f"no AGM does not postpone the annual return ({none_held.state})")
+    check("should have been held" in none_held.basis,
+          f"...and the row says the clock ran from the date it was due")
+    check("2025-09-30" in none_held.basis,
+          "...computed from six months after the financial year end")
+
+    silent = row("CA13-S92-RETURN", financial_year_end=date(2025, 3, 31))
+    check(silent.state == APPLIES_UNDETERMINED,
+          "saying nothing about AGMs is not the same as saying none was held")
 
     # ── s.149(1): three limbs, three different behaviours ───────────────────
     def size(cls: str, n: int, sr=None):

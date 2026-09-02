@@ -217,6 +217,13 @@ def _form(params: dict) -> str:
         g("board_meetings"))}
 {_field("calendar year those meetings belong to", "calendar_year",
         g("calendar_year"))}
+{_field("financial year end (YYYY-MM-DD)", "financial_year_end",
+        g("financial_year_end"), "date")}
+{_field("first financial year end, if this is the first AGM",
+        "first_financial_year_end", g("first_financial_year_end"), "date")}
+{_field("date AOC-4 was filed", "aoc4_filed_on", g("aoc4_filed_on"), "date")}
+{_field("date the annual return was filed", "annual_return_filed_on",
+        g("annual_return_filed_on"), "date")}
 {_field("total board strength", "total_board_strength",
         g("total_board_strength"))}
 {_tri_field("special resolution passed for more than 15 directors",
@@ -252,6 +259,16 @@ def _dates(params: dict, name: str) -> tuple[date, ...] | None:
     return tuple(out)
 
 
+def _one_date(params: dict, name: str) -> date | None:
+    raw = (params.get(name) or [UNKNOWN])[0].strip()
+    if not raw:
+        return None
+    try:
+        return date.fromisoformat(raw)
+    except ValueError:
+        raise InputError(f"{name}: {raw!r} is not YYYY-MM-DD") from None
+
+
 def parse_evidence(params: dict) -> Evidence:
     """What the user says happened. Blank stays unknown."""
     yr_raw = (params.get("calendar_year") or [UNKNOWN])[0].strip()
@@ -271,7 +288,13 @@ def parse_evidence(params: dict) -> Evidence:
                     board_meetings=_dates(params, "board_meetings"),
                     calendar_year=yr, total_board_strength=bs,
                     special_resolution_for_excess_directors=_tri(
-                        params, "special_resolution_for_excess_directors"))
+                        params, "special_resolution_for_excess_directors"),
+                    financial_year_end=_one_date(params, "financial_year_end"),
+                    first_financial_year_end=_one_date(
+                        params, "first_financial_year_end"),
+                    aoc4_filed_on=_one_date(params, "aoc4_filed_on"),
+                    annual_return_filed_on=_one_date(
+                        params, "annual_return_filed_on"))
 
 
 def _rows_html(profile: CompanyProfile, evidence: Evidence | None = None) -> str:
