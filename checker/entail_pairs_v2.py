@@ -344,11 +344,19 @@ def rewritten_pairs() -> list[Pair]:
     for (pid, sec, sub, claim, label, basis, preserves, why, kind, sup) in _REWRITTEN:
         quals = [asdict(q) for q in QUALIFIERS.get((sec, sub), [])]
         st, who, when = status_of(pid)
-        # A HUMAN_JUDGED pair carries PENDING_REVIEW until a person decides. Once
-        # approved it takes the gold label the reviewer signed off; the model
-        # never writes that transition itself.
+        # A HUMAN_JUDGED pair carries PENDING_REVIEW until a person decides, and
+        # then takes THE LABEL THE REVIEWER RECORDED. This used to read
+        # `label = ENTAILED`, which meant approval was compiled into a positive
+        # and no human-judged pair could ever carry NOT_ENTAILED.
         if basis == HUMAN_JUDGED and st == REVIEW_APPROVED:
-            label = ENTAILED
+            from checker.reviews import label_of
+            recorded, _src = label_of(pid)
+            if recorded is None:
+                # Approved with no label recorded. Not a positive by default:
+                # nobody stated what it is, so it stays pending.
+                label = PENDING_REVIEW
+            else:
+                label = recorded
         out.append(Pair(
             id=pid, section=sec, subsection=sub, source_span=source_span(sec, sub),
             claim=claim, label=label, label_basis=basis, qualifiers=quals,
@@ -409,9 +417,15 @@ def approved_replacements() -> list[Pair]:
         st, who, when = status_of(pr.pair_id)
         if st != REVIEW_APPROVED:
             continue
+        from checker.reviews import label_of
+        recorded, _src = label_of(pr.pair_id)
+        if recorded is None:
+            # An approved replacement whose label nobody stated does not enter
+            # the benchmark as a positive. It enters as pending.
+            continue
         out.append(Pair(
             id=pr.pair_id, section=pr.section, subsection=pr.subsection,
-            source_span=pr.source_span, claim=pr.claim, label=ENTAILED,
+            source_span=pr.source_span, claim=pr.claim, label=recorded,
             label_basis=HUMAN_JUDGED, qualifiers=pr.qualifiers,
             preserves_all_qualifiers=True, reviewer_status=st, reviewer=who,
             reviewed_at=when, rationale=pr.transformation,

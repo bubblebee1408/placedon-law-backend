@@ -26,6 +26,11 @@ APPROVED = "APPROVED"
 REJECTED = "REJECTED"
 PENDING = "PENDING_REVIEW"
 
+# How a recorded label got there. The distinction is the whole point of F4.
+STATED = "STATED_BY_REVIEWER"          # the reviewer said what the label is
+INFERRED = "INFERRED_FROM_APPROVAL"    # migrated: they approved a proposed label
+LABEL_SOURCES = (STATED, INFERRED)
+
 
 def load(path: Path = REVIEWS) -> dict[str, dict]:
     if not path.exists():
@@ -34,12 +39,27 @@ def load(path: Path = REVIEWS) -> dict[str, dict]:
 
 
 def record(pair_ids: list[str], *, reviewer: str, status: str = APPROVED,
-           note: str = "", path: Path = REVIEWS) -> dict[str, dict]:
+           note: str = "", label: str | None = None,
+           proposed_label: str | None = None,
+           path: Path = REVIEWS) -> dict[str, dict]:
     """Write a decision. A rejection requires a reason; an approval does not.
 
     The asymmetry is deliberate and matches checker/review_queue.py: approving
     is the default outcome of a careful read, whereas restricting or rejecting
     is a judgement someone will later need explained.
+
+    `label` is the reviewer's own legal judgement and is separate from `status`.
+    Before F4 there was no such field: a reviewer recorded APPROVAL, approval was
+    compiled to ENTAILED, and there was no code path by which a human-judged pair
+    could ever carry NOT_ENTAILED. The paraphrase bucket's blindness to false
+    accepts was therefore permanent by construction — more review could not fix
+    it, because every additional human-judged pair the pipeline could produce was
+    another positive.
+
+    So the reviewer's question changes from "approve this proposed positive?" to
+    "is this claim entailed by this span, yes or no?". `proposed_label` records
+    what they were shown, so a reviewer who disagreed with the proposal is
+    visible rather than merely absent.
     """
     if status == REJECTED and not note.strip():
         raise ValueError("a rejection requires a written reason")
@@ -55,6 +75,13 @@ def record(pair_ids: list[str], *, reviewer: str, status: str = APPROVED,
         prior = data.get(pid)
         entry = {"status": status, "reviewer": reviewer,
                  "reviewed_at": stamp, "note": note}
+        if label is not None:
+            entry["label"] = label
+            entry["label_source"] = STATED
+        if proposed_label is not None:
+            entry["proposed_label"] = proposed_label
+            entry["reviewer_disagreed"] = (label is not None
+                                           and label != proposed_label)
         if prior:
             # A decision that replaces another does not erase it. Retracting an
             # approval is exactly the case where someone later needs to see that
@@ -74,6 +101,19 @@ def status_of(pair_id: str, path: Path = REVIEWS) -> tuple[str, str | None, str 
     if not e:
         return PENDING, None, None
     return e["status"], e.get("reviewer"), e.get("reviewed_at")
+
+
+def label_of(pair_id: str, path: Path = REVIEWS) -> tuple[str | None, str | None]:
+    """(the reviewer's label, how it got there). (None, None) if unrecorded.
+
+    A caller must not fall back to a default when this returns None. An
+    unrecorded label means nobody judged it, which is different from a judgement
+    that happens to be positive.
+    """
+    e = load(path).get(pair_id)
+    if not e or "label" not in e:
+        return None, None
+    return e["label"], e.get("label_source", INFERRED)
 
 
 def history_of(pair_id: str, path: Path = REVIEWS) -> list[dict]:
@@ -140,6 +180,44 @@ def _test() -> None:
         record(["h"], reviewer="reviewer-01", status=APPROVED, path=hp)
         check([x["status"] for x in history_of("h", hp)] == [APPROVED, REJECTED],
               "each further decision appends, oldest first")
+
+    # ── F4: a reviewer records a LABEL, not an approval ─────────────────────
+    with tempfile.TemporaryDirectory() as td:
+        fp = Path(td) / "f4.json"
+
+        # The property that was structurally impossible before this repair.
+        record(["neg"], reviewer="reviewer-01", status=APPROVED,
+               label="NOT_ENTAILED", proposed_label="ENTAILED",
+               note="the claim drops the proviso", path=fp)
+        lab, src = label_of("neg", fp)
+        check(lab == "NOT_ENTAILED",
+              f"an APPROVED review can now carry NOT_ENTAILED ({lab})")
+        check(src == STATED, f"...recorded as stated, not inferred ({src})")
+        check(load(fp)["neg"]["reviewer_disagreed"] is True,
+              "a reviewer who disagreed with the proposal is visible")
+
+        # Agreement is visible too, and is not the same as silence.
+        record(["pos"], reviewer="reviewer-01", status=APPROVED,
+               label="ENTAILED", proposed_label="ENTAILED", path=fp)
+        check(load(fp)["pos"]["reviewer_disagreed"] is False,
+              "agreement is recorded as agreement")
+
+        # Silence is neither.
+        record(["quiet"], reviewer="reviewer-01", status=APPROVED, path=fp)
+        check(label_of("quiet", fp) == (None, None),
+              "an approval with no label yields no label, and no default")
+
+        check(len({label_of(p, fp)[0] for p in ("neg", "pos")}) == 2,
+              "the store can hold both classes from human review")
+
+    # The migrated records must not masquerade as stated judgements.
+    real = load()
+    migrated = [k for k, v in real.items() if v.get("label_source") == INFERRED]
+    check(bool(migrated), f"the pre-F4 records are marked inferred ({len(migrated)})")
+    check(all("migration_note" in real[k] for k in migrated),
+          "...each carrying why it is not an independent judgement")
+    check(not any(v.get("label_source") == STATED for v in real.values()),
+          "no pre-F4 record claims to be a stated label")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:
