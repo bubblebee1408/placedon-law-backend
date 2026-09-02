@@ -1,0 +1,228 @@
+<title>Placedon — 20 minutes of your judgement</title>
+<style>
+:root{
+  --paper:#FAF9F6; --card:#FFFFFF; --ink:#1A1D23; --ink-soft:#4A4F58;
+  --ink-faint:#7C8189; --rule:#E2DFD8; --rule-firm:#C9C4B9;
+  --accent:#3E5C76; --accent-wash:#EDF1F5;
+  --good:#2D6A4F; --good-wash:#E6F0EA;
+  --warn:#8A6410; --warn-wash:#F6EFDE;
+  --bad:#8C2F39;  --bad-wash:#F5E8E9;
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;
+  --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --paper:#14161A; --card:#1C1F25; --ink:#E8E6E1; --ink-soft:#B0AEA8;
+  --ink-faint:#83817C; --rule:#2C2F36; --rule-firm:#3E424A;
+  --accent:#9DB8D2; --accent-wash:#1B2530;
+  --good:#7BC49B; --good-wash:#16241D;
+  --warn:#D6AC5F; --warn-wash:#241E10;
+  --bad:#DE8B93;  --bad-wash:#2A171A;
+}}
+:root[data-theme="dark"]{
+  --paper:#14161A; --card:#1C1F25; --ink:#E8E6E1; --ink-soft:#B0AEA8;
+  --ink-faint:#83817C; --rule:#2C2F36; --rule-firm:#3E424A;
+  --accent:#9DB8D2; --accent-wash:#1B2530;
+  --good:#7BC49B; --good-wash:#16241D;
+  --warn:#D6AC5F; --warn-wash:#241E10;
+  --bad:#DE8B93;  --bad-wash:#2A171A;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);
+  font-size:17px;line-height:1.65;-webkit-font-smoothing:antialiased}
+.wrap{max-width:47rem;margin:0 auto;padding:clamp(2rem,1rem+4vw,4.5rem) 1.25rem 6rem;
+  display:flex;flex-direction:column;gap:3rem}
+.eyebrow{font-family:var(--mono);font-size:.7rem;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--accent);margin:0 0 .9rem}
+h1{font-family:var(--serif);font-size:clamp(2rem,1.4rem+2.4vw,3rem);line-height:1.1;
+  font-weight:600;margin:0 0 .8rem;letter-spacing:-.015em;text-wrap:balance}
+h2{font-family:var(--serif);font-size:1.5rem;font-weight:600;margin:0 0 .3rem;
+  letter-spacing:-.008em}
+h3{font-size:1rem;font-weight:650;margin:1.6rem 0 .4rem}
+p{margin:0 0 1rem;max-width:64ch}
+.lede{font-size:1.12rem;color:var(--ink-soft)}
+.sec-no{font-family:var(--mono);font-size:.72rem;letter-spacing:.14em;
+  color:var(--ink-faint);display:block;margin-bottom:.35rem}
+section{border-top:1px solid var(--rule-firm);padding-top:1.6rem}
+blockquote{margin:1.2rem 0;padding:1.1rem 1.4rem;background:var(--card);
+  border-left:3px solid var(--bad);border-radius:0 5px 5px 0;
+  font-family:var(--serif);font-size:1.02rem;line-height:1.62;color:var(--ink-soft)}
+blockquote strong{color:var(--bad);font-weight:650}
+.src{font-family:var(--mono);font-size:.74rem;color:var(--ink-faint);
+  margin-top:.7rem;display:block}
+.marks{display:grid;gap:.9rem;margin:1.2rem 0}
+.mark{background:var(--card);border:1px solid var(--rule);border-radius:5px;
+  padding:.9rem 1.1rem}
+.mark b{display:block;font-size:.95rem;margin-bottom:.15rem}
+.mark span{font-size:.9rem;color:var(--ink-soft)}
+.matrix{display:flex;flex-direction:column;gap:.7rem;margin:1.2rem 0}
+.row{background:var(--card);border:1px solid var(--rule);border-left:4px solid var(--rule-firm);
+  border-radius:5px;padding:.95rem 1.15rem}
+.row.satisfied{border-left-color:var(--good)}
+.row.notsat{border-left-color:var(--bad)}
+.row.undet{border-left-color:var(--warn)}
+.row.cannot{border-left-color:var(--accent)}
+.rowhead{display:flex;flex-wrap:wrap;align-items:baseline;gap:.5rem .8rem;margin-bottom:.35rem}
+.prov{font-family:var(--serif);font-weight:600;font-size:1rem}
+.badge{font-family:var(--mono);font-size:.66rem;letter-spacing:.06em;
+  padding:.16rem .45rem;border-radius:3px;white-space:nowrap;margin-left:auto}
+.b-satisfied{background:var(--good-wash);color:var(--good)}
+.b-notsat{background:var(--bad-wash);color:var(--bad)}
+.b-undet{background:var(--warn-wash);color:var(--warn)}
+.b-cannot{background:var(--accent-wash);color:var(--accent)}
+.duty{font-size:.93rem;color:var(--ink-soft);margin-bottom:.4rem}
+.basis{font-size:.88rem;color:var(--ink-soft);border-top:1px dotted var(--rule);
+  padding-top:.45rem}
+ol.q{list-style:none;counter-reset:q;padding:0;margin:1.2rem 0 0;
+  display:flex;flex-direction:column;gap:1.1rem}
+ol.q li{counter-increment:q;background:var(--card);border:1px solid var(--rule);
+  border-radius:5px;padding:1rem 1.2rem 1rem 3.2rem;position:relative}
+ol.q li::before{content:counter(q);position:absolute;left:1.1rem;top:1rem;
+  font-family:var(--mono);font-size:.8rem;font-weight:600;color:var(--accent)}
+ol.q b{display:block;margin-bottom:.2rem}
+ol.q span{font-size:.92rem;color:var(--ink-soft)}
+.notclaim{background:var(--card);border:1px solid var(--rule-firm);border-radius:5px;
+  padding:1.2rem 1.4rem}
+.notclaim ul{margin:.6rem 0 0;padding-left:1.1rem}
+.notclaim li{margin-bottom:.45rem;color:var(--ink-soft);font-size:.94rem}
+footer{border-top:1px solid var(--rule-firm);padding-top:1.4rem;font-size:.88rem;
+  color:var(--ink-faint)}
+code{font-family:var(--mono);font-size:.86em;color:var(--ink-soft)}
+</style>
+
+<div class="wrap">
+
+<header>
+  <p class="eyebrow">Placedon · Companies Act 2013 · request for review</p>
+  <h1>Twenty minutes of your judgement, on a tool that refuses to guess</h1>
+  <p class="lede">We have built a compliance checker for Indian corporate law. It has never
+  been seen by a practising Company Secretary or corporate lawyer. Before we build anything
+  else, we would like you to tell us where it is wrong.</p>
+</header>
+
+<section>
+  <span class="sec-no">01</span>
+  <h2>Start with a finding you can check yourself</h2>
+  <p>ICSI's own Guidance Note on General Meetings publishes a specimen AGM notice. It
+  still reads, in the resolution and again in the explanatory statement:</p>
+
+  <blockquote>
+  “…to hold office from the conclusion of this Annual General Meeting till the conclusion
+  of the ____ Annual General Meeting of the company <strong>(subject to ratification of
+  their appointment at every AGM)</strong>, at a remuneration of Rs. _______/- … plus
+  reimbursement of out of pocket expenses and <strong>service tax</strong>, as applicable.”
+  <span class="src">Guidance Note on General Meeting (revised SS-2), Annexure II p.131;
+  repeated at Annexure XVI p.163</span>
+  </blockquote>
+
+  <div class="marks">
+    <div class="mark"><b>Auditor ratification</b><span>The first proviso to s.139(1) required
+    ratification of the auditor's appointment at every AGM. It was omitted by the Companies
+    (Amendment) Act 2017, s.40, with effect from 7 May 2018. A resolution drafted in these
+    terms today states a requirement that no longer exists.</span></div>
+    <div class="mark"><b>“service tax”</b><span>Subsumed into GST from 1 July 2017.</span></div>
+  </div>
+
+  <p>We are not making a point about ICSI. We are making a point about <b>templates</b>. Every
+  precedent in every firm drifts from the law the day it is saved, and the drift is invisible
+  because the document still looks correct. That is the problem we are trying to solve, and
+  the specimen above is the cleanest proof we have that it is real.</p>
+</section>
+
+<section>
+  <span class="sec-no">02</span>
+  <h2>What it produces</h2>
+  <p>One private company, financial year 2024-25, two directors, an AGM on 30 December 2025
+  following one on 20 August 2024, and three board meetings during 2025. The tool returns
+  four rows, and each behaves differently on purpose.</p>
+
+  <div class="matrix">
+    <div class="row notsat">
+      <div class="rowhead"><span class="prov">s.96(1) — annual general meeting</span>
+      <span class="badge b-notsat">NOT SATISFIED</span></div>
+      <div class="duty">Hold an AGM, and within the statutory gap</div>
+      <div class="basis">Gap of 497 days from 2024-08-20 to 2025-12-30 exceeds the
+      fifteen-month limit of 2025-11-20. <em>This limb only</em> — the first-AGM deadline and
+      the Registrar's extension are separate limbs and are not decided here.</div>
+    </div>
+
+    <div class="row undet">
+      <div class="rowhead"><span class="prov">s.173(1) — board meetings</span>
+      <span class="badge b-undet">UNDETERMINED</span></div>
+      <div class="duty">Hold the minimum number, correctly spaced</div>
+      <div class="basis">Three meetings would fail the standard regime. But the relaxed
+      s.173(5) regime turns on small-company status, which we cannot establish — so we
+      decline rather than judge this company on the stricter standard it may not owe.</div>
+    </div>
+
+    <div class="row satisfied">
+      <div class="rowhead"><span class="prov">s.149(1) — board size</span>
+      <span class="badge b-satisfied">SATISFIED</span></div>
+      <div class="duty">Enough directors, and not more than the maximum</div>
+      <div class="basis">Two directors: at or above the private-company minimum of two and
+      not above the maximum of fifteen. <em>Numbers limbs only</em> — the woman-director
+      requirement is prescribed by rules we do not hold, so it is never decided here.</div>
+    </div>
+
+    <div class="row cannot">
+      <div class="rowhead"><span class="prov">s.2(85) — small company</span>
+      <span class="badge b-cannot">CANNOT DETERMINE</span></div>
+      <div class="duty">Establish whether the company is a small company</div>
+      <div class="basis">The Act sets ₹50 lakh and ₹2 crore, then delegates the operative
+      figures to rules. The commonly-quoted ₹4 crore / ₹40 crore come from G.S.R. 700(E) of
+      15 September 2022, which we have located but not properly acquired — so we refuse the
+      arithmetic and name the instrument.</div>
+    </div>
+  </div>
+
+  <p>The last row is the one we most want you to react to. A chatbot would answer that
+  question confidently from memory. We would rather say what is missing.</p>
+</section>
+
+<section>
+  <span class="sec-no">03</span>
+  <h2>What we would like you to tell us</h2>
+  <ol class="q">
+    <li><b>Is the refusal useful or annoying?</b><span>When it says CANNOT DETERMINE and
+    names the missing rule — does that read as rigour, or as the tool not working?</span></li>
+    <li><b>Which of these four questions do you actually get asked?</b><span>And roughly
+    how often — weekly, at year end, only when something has gone wrong?</span></li>
+    <li><b>What would you have to check yourself anyway?</b><span>If the answer is
+    “all of it”, say so. That is the most useful thing you could tell us.</span></li>
+    <li><b>Is the template-drift problem real in your practice?</b><span>Do you reuse
+    precedents, and has an outdated one ever caused you a problem?</span></li>
+    <li><b>What is the first question you would want it to answer?</b><span>Not the most
+    impressive — the most repetitive.</span></li>
+    <li><b>Would you trust it enough to use it as a second check?</b><span>Not to replace
+    your judgement. To catch what you missed at eleven at night.</span></li>
+  </ol>
+</section>
+
+<section>
+  <span class="sec-no">04</span>
+  <h2>What we are not claiming</h2>
+  <div class="notclaim">
+    <p>We would rather you knew the limits before you spend time on it.</p>
+    <ul>
+      <li><b>No accuracy claim.</b> The system has never been tested against real defective
+      documents. Its internal benchmark is 69 constructed examples across five sections,
+      reviewed by one person who is not a lawyer.</li>
+      <li><b>Four obligations, not the Act.</b> Sections 96, 149, 173 and the s.2(85)
+      classification. Everything else is unbuilt.</li>
+      <li><b>The rules are largely missing.</b> We hold 529 sections of the Act and one set
+      of subordinate rules. Many operative thresholds live in rules we have not acquired,
+      which is why one row above refuses.</li>
+      <li><b>No language model is involved</b> in any answer above. Every line is a
+      provision, a fact supplied, or arithmetic on the two.</li>
+      <li><b>It is not a filing tool</b> and does not connect to MCA.</li>
+    </ul>
+  </div>
+</section>
+
+<footer>
+  <p>If any of this is wrong, that is the most valuable thing you can tell us — a corrected
+  refusal is worth more to us than a confirmed answer. There is no product to buy and
+  nothing to sign up for.</p>
+</footer>
+
+</div>
