@@ -37,8 +37,8 @@ from datetime import date
 from urllib.parse import parse_qs
 
 from checker.company_profile import CompanyProfile, Figure, Money
-from checker.obligations import (CANNOT_DETERMINE, DOES_NOT_APPLY, build,
-                                 REGISTER)
+from checker.obligations import (CANNOT_DETERMINE, DOES_NOT_APPLY, Evidence,
+                                 build, REGISTER)
 
 UNKNOWN = ""            # what the form submits for "not known"
 
@@ -210,12 +210,68 @@ def _form(params: dict) -> str:
         g("paid_up_capital_crore"))}
 {_field("turnover, preceding FY (crore)", "turnover_crore", g("turnover_crore"))}
 </div></fieldset>
+<fieldset><legend>what happened — blank means you have not told us; write
+“none” if there were none</legend><div class="grid">
+{_field("AGM dates (comma separated)", "agm_dates", g("agm_dates"))}
+{_field("board meeting dates (comma separated)", "board_meetings",
+        g("board_meetings"))}
+{_field("calendar year those meetings belong to", "calendar_year",
+        g("calendar_year"))}
+{_field("total board strength", "total_board_strength",
+        g("total_board_strength"))}
+</div></fieldset>
 <button type="submit">Build the matrix</button></form>"""
 
 
-def _rows_html(profile: CompanyProfile) -> str:
+def _dates(params: dict, name: str) -> tuple[date, ...] | None:
+    """A comma-separated date list. Absent stays None; "none" means none held.
+
+    The two are different answers and the form must be able to say both. A user
+    who has not told us about AGMs is not the same as a user telling us there
+    were none, and only the second is a finding.
+    """
+    raw = (params.get(name) or [UNKNOWN])[0].strip()
+    if not raw:
+        return None
+    if raw.lower() in ("none", "no", "nil"):
+        return ()
     out = []
-    for r in build(profile):
+    for piece in raw.replace(";", ",").split(","):
+        piece = piece.strip()
+        if not piece:
+            continue
+        try:
+            out.append(date.fromisoformat(piece))
+        except ValueError:
+            raise InputError(
+                f"{name}: {piece!r} is not YYYY-MM-DD. Separate several dates "
+                f"with commas, or write 'none' if there were none.") from None
+    return tuple(out)
+
+
+def parse_evidence(params: dict) -> Evidence:
+    """What the user says happened. Blank stays unknown."""
+    yr_raw = (params.get("calendar_year") or [UNKNOWN])[0].strip()
+    try:
+        yr = int(yr_raw) if yr_raw else None
+    except ValueError:
+        raise InputError(f"calendar_year: {yr_raw!r} is not a year") from None
+
+    bs_raw = (params.get("total_board_strength") or [UNKNOWN])[0].strip()
+    try:
+        bs = int(bs_raw) if bs_raw else None
+    except ValueError:
+        raise InputError(
+            f"total_board_strength: {bs_raw!r} is not a whole number") from None
+
+    return Evidence(agm_dates=_dates(params, "agm_dates"),
+                    board_meetings=_dates(params, "board_meetings"),
+                    calendar_year=yr, total_board_strength=bs)
+
+
+def _rows_html(profile: CompanyProfile, evidence: Evidence | None = None) -> str:
+    out = []
+    for r in build(profile, evidence=evidence):
         cls = "no" if r.state == DOES_NOT_APPLY else ("attn" if r.needs_attention else "")
         parts = [f'<div class="row {cls}"><div class="id">{_E(r.obligation_id)}</div>',
                  f'<div class="duty">{_E(r.duty)}</div>',
@@ -265,12 +321,13 @@ def handle(path: str, query: str = "") -> tuple[int, str, str]:
 
     try:
         profile = parse_profile(params)
+        evidence = parse_evidence(params)
     except InputError as e:
         return 400, "text/html; charset=utf-8", _page(
             head + f'<div class="err">{_E(str(e))}</div>' + _form(params))
 
     return 200, "text/html; charset=utf-8", _page(
-        head + _form(params) + _rows_html(profile))
+        head + _form(params) + _rows_html(profile, evidence))
 
 
 def _test() -> None:
@@ -364,6 +421,41 @@ def _test() -> None:
             break
     else:
         check(True, "the card cites provisions but serves no bare statutory text")
+
+    # ── evidence reaches the page and resolves rows ─────────────────────────
+    # Match the rendered badge, not the stylesheet: the CSS defines a class per
+    # state, so a bare substring search finds every state on every page.
+    def shown(page: str, state: str) -> bool:
+        return f">{state}</span>" in page
+
+    q_ev = q + "&agm_dates=2024-08-20,2025-09-15"
+    _, _, pg = handle("/matrix", q_ev)
+    check(shown(pg, "APPLIES_SATISFIED"),
+          "supplied AGM dates can resolve a row to satisfied")
+
+    q_bad = q + "&agm_dates=2024-08-20,2025-12-30"
+    _, _, pg2 = handle("/matrix", q_bad)
+    check(shown(pg2, "APPLIES_NOT_SATISFIED"),
+          "a gap beyond fifteen months shows as not satisfied")
+
+    # "none" and blank are different answers, and the form must express both.
+    _, _, pg3 = handle("/matrix", q + "&agm_dates=none")
+    check(shown(pg3, "APPLIES_NOT_SATISFIED"),
+          "'none' means no AGM was held — a finding")
+    _, _, pg4 = handle("/matrix", q)
+    check(not shown(pg4, "APPLIES_SATISFIED")
+          and not shown(pg4, "APPLIES_NOT_SATISFIED"),
+          "saying nothing resolves nothing")
+
+    ev = parse_evidence(parse_qs("agm_dates=none", keep_blank_values=True))
+    check(ev.agm_dates == (), "'none' parses to an empty tuple")
+    ev2 = parse_evidence(parse_qs("", keep_blank_values=True))
+    check(ev2.agm_dates is None, "...and blank parses to None, not to empty")
+
+    st8, _, err4 = handle("/matrix", q + "&agm_dates=20-08-2024")
+    check(st8 == 400 and "YYYY-MM-DD" in err4,
+          "a misformatted date refuses and says the expected form")
+    check("commas" in err4, "...and explains how to give several")
 
     # No dependency outside the standard library and this repo. Parsed from the
     # module's own import statements rather than searched for as text, because a
