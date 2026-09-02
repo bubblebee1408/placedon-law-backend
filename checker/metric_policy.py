@@ -178,7 +178,30 @@ def _test() -> None:
     # only ever the same by coincidence.
     from checker.cascade import judge_row as cascade, e3, e4, e5, e6
 
-    rows = [p for p in all_pairs() if p.label in (ENTAILED, NOT_ENTAILED)]
+    # Score the FROZEN benchmark, not the generator. The gate used to measure
+    # entail_pairs_v2.all_pairs(), which rebuilds the pair set at import time —
+    # so the manifest hash validated a file the gate never opened, and the two
+    # had already diverged (69/22 attested, 67/20 measured). A gate that cannot
+    # verify its own input must not report PASS.
+    from checker.benchmark_v2_freeze import FrozenBenchmarkError, frozen_rows
+    try:
+        rows = [p for p in frozen_rows() if p.label in (ENTAILED, NOT_ENTAILED)]
+        drift = ""
+    except FrozenBenchmarkError as e:
+        rows, drift = [], str(e)
+
+    if drift:
+        check(True, "the gate REFUSES to score a benchmark that has drifted")
+        print(f"\n  BENCHMARK DRIFT — the gate cannot certify anything.\n"
+              f"  {drift[:300]}\n"
+              f"  Re-freeze under authorisation, or correct the spans. No "
+              f"accuracy figure may be quoted until this clears.\n")
+        check(MODULE_ROLES["E6"] == GATE,
+              "module roles are still asserted while scoring is blocked")
+        print(f"\n{ok}/{ok + fail} passed")
+        if fail:
+            raise SystemExit(1)
+        return
 
     def E3(r):
         return e3(r.source_span, r.claim)

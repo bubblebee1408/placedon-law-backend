@@ -160,6 +160,12 @@ _SPANS: dict[tuple[str, str], tuple[str, int]] = {
     ("101", "1"): (r"\(1\) A general meeting", 330),
     ("174", "1"): (r"\(1\) The quorum for a meeting", 300),
     ("174", "2"): (r"\(2\) The continuing directors", 360),
+    # Added after subsection_of() correctly reattributed the "two-thirds" pairs
+    # from s.174(1) to s.174(3). Without an entry here they fell through to the
+    # whole-provision fallback, silently widening their premise from 300 to 1691
+    # characters — a drift no test saw, because the release gate scored the
+    # generator rather than the frozen file.
+    ("174", "3"): (r"\(3\) Where at any time the number of interested", 420),
 }
 
 

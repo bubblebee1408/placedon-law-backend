@@ -33,7 +33,7 @@ from __future__ import annotations
 import hashlib
 import json
 import subprocess
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from checker.grounding_policy import (
@@ -355,6 +355,72 @@ def identity_leaks(dirpath: Path = DIR) -> list[str]:
             except json.JSONDecodeError:
                 continue
     return out
+
+
+@dataclass(frozen=True)
+class FrozenRow:
+    """One scored row, whose label comes from the frozen file, not from code."""
+    id: str
+    claim: str
+    source_span: str
+    label: str
+    label_basis: str
+    kind: str
+    section: str
+
+
+class FrozenBenchmarkError(RuntimeError):
+    """The frozen benchmark and the generator disagree. Nothing is scored."""
+
+
+def frozen_rows() -> list[FrozenRow]:
+    """The rows the release gate must score. Read from disk, not generated.
+
+    The gate used to score `entail_pairs_v2.all_pairs()` — a generator that
+    rebuilds the pair set at import time from Python literals, a paraphrase
+    rebinder and the review store. So the freeze protected a file the gate never
+    opened, and the manifest hash would validate forever while the measured set
+    drifted underneath it. It had already drifted: the file attests 69 pairs and
+    22 ENTAILED, the generator supplied 67 and 20.
+
+    This is the same defect `cascade.py` fixed one layer down, one level up.
+
+    The frozen file is authoritative on WHICH pairs are scored and WHAT their
+    labels are. It stores only a hash of each source span, so the span text is
+    resolved from the generator and its sha256 checked against the frozen hash.
+    A mismatch is a hard error: scoring a claim against text that is not the
+    text it was labelled against is worse than not scoring at all.
+    """
+    from checker.entail_pairs_v2 import all_pairs
+
+    if not APPROVED_F.exists():
+        raise FrozenBenchmarkError(f"{APPROVED_F} is missing; nothing to score")
+
+    spans = {p.id: p.source_span for p in all_pairs()}
+    rows, problems = [], []
+    for line in APPROVED_F.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        r = json.loads(line)
+        pid = r["pair_id"]
+        span = spans.get(pid)
+        if span is None:
+            problems.append(f"{pid}: frozen but the generator no longer supplies "
+                            f"its source span")
+            continue
+        got = "sha256:" + _sha(span.encode("utf-8"))
+        if got != r["source_span_hash"]:
+            problems.append(f"{pid}: source span has changed since it was frozen "
+                            f"({got[:23]}… != {r['source_span_hash'][:23]}…)")
+            continue
+        rows.append(FrozenRow(pid, r["claim"], span, r["label"],
+                              r["label_basis"], r.get("kind", ""), r["section"]))
+
+    if problems:
+        raise FrozenBenchmarkError(
+            f"{len(problems)} frozen pair(s) cannot be scored: " +
+            "; ".join(problems[:3]))
+    return rows
 
 
 def verify() -> list[str]:
