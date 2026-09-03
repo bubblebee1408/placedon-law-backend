@@ -1,7 +1,7 @@
 # Competitor feature matrix — from vendor primary sources
 
-Fetched 2026-09-01 from the vendors' own sites: `legora.com` and
-`harvey.ai/products`. This replaces the earlier basis for competitor claims,
+Fetched from the vendors' own sites: `legora.com` and `harvey.ai/products`
+(2026-09-01), `spellbook.com` (2026-09-03). This replaces the earlier basis for competitor claims,
 which was an unsourced document of unknown authorship — see
 `COMPETITOR_PATTERN_ANALYSIS.md`, which classified several of its claims as
 likely fabricated.
@@ -19,7 +19,8 @@ be broken in our favour:
    words we did not match. Every "not listed" cell below means exactly that and
    must never be read or quoted as "they cannot do this".
 
-Neither site was crawled beyond its product page. Nothing here rests on
+No site was crawled beyond its public product and security pages, and no
+authenticated area was accessed. Nothing here rests on
 inference about internals: no architecture, no model choices, no retrieval
 design. Those remain unverified and are out of scope for this document.
 
@@ -62,28 +63,56 @@ Note one correction to the earlier unsourced document: it asserted a Vault
 ceiling of 100,000 documents. Harvey's own page says "thousands". The specific
 figure was not sourced from the vendor and should not be repeated.
 
+### Spellbook (spellbook.com, 2026-09-03)
+
+`spellbook.legal` 301s to `spellbook.com`.
+
+| Surface | Vendor's own words |
+|---|---|
+| Spellbook Associate | "The AI agent for multi-document drafting and review" |
+| ACM (Autonomous Contract Management) | "The first AI system that powers contracts end-to-end" |
+| Review | "Spot risks and add redlines to your contracts—right in Word" |
+| Draft | "Draft clauses and documents from scratch, or use your preferred precedents" |
+| Compare | "Compare your contracts to thousands of similar agreements" |
+| Ask | "Quick answers to complex questions"; "Answers you can trust, with citations" |
+| Playbooks | "Encode your legal standards" |
+
+Also claims Word and Google Docs without switching windows, intake from email,
+Slack and Salesforce, zero data retention, and GDPR / CCPA / HIPAA / SOC 2
+Type II compliance.
+
+From the security page, verbatim: *"Spellbook has negotiated agreements with
+both OpenAI and Anthropic for zero data retention (ZDR)"*, and processing in
+*"data centers in Canada and US"*.
+
+**What the security page does NOT address**, checked and recorded because a gap
+is easier to over-read than a statement: whether customer data trains models,
+human review requirements, accuracy or hallucination disclaimers, or citation
+verification. Under the reading rules above, that is not evidence those things
+are absent from the product — only that they are not on that page.
+
 ## Matrix against what Placedon holds
 
 `HELD` means it exists in this repo and its tests pass. `PARTIAL` means the
 machinery exists but no product surface does. `NONE` means it does not exist.
 
-| Capability | Legora | Harvey | Placedon | Note |
-|---|---|---|---|---|
-| Multi-step agent execution | Agent | Agents | **NONE** | `AGENT_ARCHITECTURE_PLAN.md` designs it; `model_adapter` is stubbed |
-| Bulk document workspace | — | Vault | **NONE** | no UI of any kind exists |
-| Cross-org shared workspace | Portal | Spaces | **NONE** | |
-| Tabular / grid review | Tabular Review | Contract Intelligence | **PARTIAL** | `review_table.py` builds a traceable grid; axes are documents × rules, not documents × questions |
-| Legal research with citations | Legal Research | Knowledge | **PARTIAL** | `evidence_pack.py` + span hashes; no query surface |
-| Regulatory change monitoring | Monitors | not listed | **PARTIAL** | `amendment.py`, `as_of.py`, commencement provenance — the closest thing we have to a differentiator, and it is machinery not a product |
-| Word / Outlook / mobile surfaces | yes | yes | **NONE** | |
-| Usage analytics for firm leadership | — | Command Center | **NONE** | |
-| Personalisation / memory | Lists | Memory | **NONE** | |
-| Deterministic verification of legal conclusions | not listed | not listed | **HELD** | E3–E6 cascade, `cascade.py`, gated by `metric_policy.py` |
-| Point-in-time statutory reconstruction | not listed | not listed | **HELD** | `TEMPORAL_PROOF.md`, 6/6 boundaries |
-| Commencement provenance per amendment | not listed | not listed | **HELD** | `commencement.py` |
-| Refusal on unacquired subordinate legislation | not listed | not listed | **HELD** | `prescribed_thresholds.py` — small-company arithmetic refuses today |
-| Immutable review + retraction governance | not listed | not listed | **HELD** | `review_record.py`, `scoped_retraction.py`, attestation gate |
-| Source-defect preservation | not listed | not listed | **HELD** | `SOURCE_DEFECTS.md` SD-001…SD-004 |
+| Capability | Legora | Harvey | Spellbook | Placedon | Note |
+|---|---|---|---|---|---|
+| Multi-step agent execution | Agent | Agents | Associate | **NONE** | `AGENT_ARCHITECTURE_PLAN.md` designs it; `model_adapter` is stubbed |
+| Bulk document workspace | — | Vault | multi-doc | **NONE** | no UI of any kind exists |
+| Cross-org shared workspace | Portal | Spaces | not listed | **NONE** | |
+| Tabular / grid review | Tabular Review | Contract Intelligence | Compare | **PARTIAL** | `review_table.py` builds a traceable grid; axes are documents × rules, not documents × questions |
+| Legal research with citations | Legal Research | Knowledge | Ask | **PARTIAL** | `evidence_pack.py` + span hashes; no query surface |
+| Regulatory change monitoring | Monitors | not listed | not listed | **PARTIAL** | `amendment.py`, `as_of.py`, commencement provenance — the closest thing we have to a differentiator, and it is machinery not a product |
+| Word / Outlook / mobile surfaces | yes | yes | Word, Docs | **NONE** | |
+| Usage analytics for firm leadership | — | Command Center | not listed | **NONE** | |
+| Personalisation / memory | Lists | Memory | Playbooks | **NONE** | |
+| Deterministic verification of legal conclusions | not listed | not listed | not listed | **HELD** | E3–E6 cascade, `cascade.py`, gated by `metric_policy.py` |
+| Point-in-time statutory reconstruction | not listed | not listed | not listed | **HELD** | `TEMPORAL_PROOF.md`, 6/6 boundaries |
+| Commencement provenance per amendment | not listed | not listed | not listed | **HELD** | `commencement.py` |
+| Refusal on unacquired subordinate legislation | not listed | not listed | not listed | **HELD** | `prescribed_thresholds.py` — small-company arithmetic refuses today |
+| Immutable review + retraction governance | not listed | not listed | not listed | **HELD** | `review_record.py`, `scoped_retraction.py`, attestation gate |
+| Source-defect preservation | not listed | not listed | not listed | **HELD** | `SOURCE_DEFECTS.md` SD-001…SD-004 |
 
 ## What this actually says
 
@@ -93,13 +122,21 @@ verification machinery. That is a real and uncomfortable summary: a lawyer
 cannot use any of what we have built, because there is no way to put a document
 in or get an answer out.
 
-The four `HELD` rows in the lower block are not listed by either vendor. Under
+The six `HELD` rows in the lower block are not listed by any of the three. Under
 rule 2 above, that is **not** evidence they lack them. What it does support is
 narrower and still useful: these capabilities are not what either vendor leads
 with, and a product whose headline is point-in-time correctness would be saying
-something neither competitor's marketing says. Whether that is a gap in their
-products or merely in their homepages is unknown and cannot be settled from
-here.
+something no competitor's marketing says. Whether that is a gap in their products or
+merely in their homepages is unknown and cannot be settled from here.
+
+Spellbook sharpens the point rather than blunting it. Its ground truth is the
+customer's own contracts and playbooks — *"Compare your contracts to thousands
+of similar agreements"*, *"Encode your legal standards"*. A contract has no
+commencement date, no amending instrument and no Gazette notification, so a
+contract-review product has no reason to build point-in-time reconstruction and
+would gain nothing by it. That is the clearest statement yet of why this
+capability is unlikely to arrive from that direction: not that they could not
+build it, but that their problem never asks for it.
 
 The honest asymmetry is this. Their surfaces are ordinary software we could
 build in weeks — grids, uploads, add-ins. Our verification core took months and
