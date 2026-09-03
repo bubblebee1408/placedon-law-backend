@@ -118,6 +118,8 @@ def parse_profile(params: dict) -> CompanyProfile:
         governed_by_special_act=_tri(params, "governed_by_special_act"),
         paid_up_capital=_money(params, "paid_up_capital_crore", fy),
         turnover=_money(params, "turnover_crore", fy),
+        net_worth=_money(params, "net_worth_crore", fy),
+        net_profit=_money(params, "net_profit_crore", fy),
     )
 
 
@@ -209,6 +211,8 @@ def _form(params: dict) -> str:
 {_field("paid-up share capital (crore)", "paid_up_capital_crore",
         g("paid_up_capital_crore"))}
 {_field("turnover, preceding FY (crore)", "turnover_crore", g("turnover_crore"))}
+{_field("net worth (crore)", "net_worth_crore", g("net_worth_crore"))}
+{_field("net profit, preceding FY (crore)", "net_profit_crore", g("net_profit_crore"))}
 </div></fieldset>
 <fieldset><legend>what happened — blank means you have not told us; write
 “none” if there were none</legend><div class="grid">

@@ -147,6 +147,51 @@ def _not_opc_single_director(p: CompanyProfile) -> tuple[Result, str]:
     return Result.APPLIES, "one-person company with more than one director"
 
 
+# s.135(1) thresholds, verbatim from our corpus: "net worth of rupees five
+# hundred crore or more, or turnover of rupees one thousand crore or more or a
+# net profit of rupees five crore or more during the immediately preceding
+# financial year". Held here as amounts because they are stated in the Act
+# itself, not delegated to a rule -- the first threshold obligation this system
+# can decide today, and the reason it is not blocked like s.203 or s.177.
+from checker.company_profile import Money as _Money
+_CSR_TESTS = (("net_worth", _Money.crore(500)),
+              ("turnover", _Money.crore(1000)),
+              ("net_profit", _Money.crore(5)))
+
+
+def _csr_applies(p: CompanyProfile) -> tuple[Result, str]:
+    """s.135(1): the CSR committee duty attaches on ANY of three thresholds.
+
+    The disjunction governs how an unknown is handled, and it is the opposite of
+    a conjunction. One threshold met -> APPLIES, whatever else is unknown. But if
+    none of the KNOWN figures reaches its threshold and ANY figure is unknown,
+    we cannot say the duty does not apply -- an unknown could be the one that
+    crosses. Only when every figure is known and all are below does it not apply.
+    """
+    met, unknown = [], []
+    for field_name, limit in _CSR_TESTS:
+        fig = getattr(p, field_name, None)
+        if fig is None:
+            unknown.append(field_name)
+            continue
+        # Each threshold reads the immediately preceding financial year; the
+        # figure carries its own year and amount_for would refuse a mismatch,
+        # but applicability here only needs the amount, so read it directly.
+        amount = fig.amount.rupees
+        if amount >= limit.rupees:
+            met.append(f"{field_name.replace('_', ' ')} {fig.amount} reaches {limit}")
+    if met:
+        return Result.APPLIES, "; ".join(met)
+    if unknown:
+        return (Result.INSUFFICIENT_DATA,
+                f"no known figure reaches its s.135(1) threshold, but "
+                f"{', '.join(unknown)} {'is' if len(unknown) == 1 else 'are'} "
+                f"unknown -- any one could cross, so applicability cannot be ruled out")
+    return (Result.DOES_NOT_APPLY,
+            "net worth, turnover and net profit are all below the s.135(1) "
+            "thresholds of Rs 500 crore, Rs 1000 crore and Rs 5 crore")
+
+
 def _agm_applies(p: CompanyProfile) -> tuple[Result, str]:
     # s.96(1) opens "Every company other than a One Person Company".
     if p.company_class == "opc":
@@ -490,6 +535,21 @@ REGISTER: tuple[Obligation, ...] = (
         note="missing the AGM does not postpone the return: where none is held, "
              "the sixty days run from the date it should have been held",
         decided_by=_decide_annual_return),
+    Obligation(
+        "CA13-S135-CSR",
+        "Constitute a CSR committee, if the company crosses a CSR threshold",
+        "Companies Act 2013, s.135(1)",
+        _csr_applies,
+        evidence_needed=("net worth, turnover or net profit for the immediately "
+                         "preceding financial year",
+                         "number of directors, and whether one is independent"),
+        note="applicability turns on three thresholds joined by 'or', all stated "
+             "in the Act itself; whether the committee was actually constituted, "
+             "and its composition, is a separate limb this row does not decide",
+        limbs_not_decided=(
+            "whether the CSR committee was in fact constituted",
+            "its composition, including the independent-director requirement",
+            "the s.135(5) spend of two per cent of average net profits")),
     Obligation(
         "CA13-S2-85-SMALL",
         "Establish whether the company is a small company",
@@ -946,6 +1006,44 @@ def _test() -> None:
     r149 = [o for o in REGISTER if o.obligation_id == "CA13-S149-3-RESIDENT"][0]
     check(r149.applies_when is _every_company,
           "s.149(3) reaches every company, with no delegated threshold")
+
+    # ── s.135(1) CSR: a disjunction, decided from Act-stated thresholds ──────
+    def csr(**figs):
+        prof = CompanyProfile(company_class="public", **common, **figs)
+        return [r for r in build(prof) if r.obligation_id == "CA13-S135-CSR"][0]
+
+    # One threshold crossed: the duty attaches. UNDETERMINED, not SATISFIED,
+    # because whether the committee was constituted is a separate limb.
+    crossed = csr(net_profit=Figure(Money.crore(6), "2024-25"))
+    check(crossed.state == APPLIES_UNDETERMINED,
+          f"a net profit over Rs 5 crore attaches the CSR duty ({crossed.state})")
+    check("net profit" in crossed.basis and "reaches" in crossed.basis,
+          "...naming the threshold it crossed")
+
+    # Every figure known and all below: it genuinely does not apply.
+    below = csr(net_worth=Figure(Money.crore(10), "2024-25"),
+                turnover=Figure(Money.crore(20), "2024-25"),
+                net_profit=Figure(Money.crore(2), "2024-25"))
+    check(below.state == DOES_NOT_APPLY,
+          f"all three figures below all three thresholds does not apply ({below.state})")
+
+    # THE DISJUNCTION: below on the known figure, but another unknown, cannot be
+    # ruled out -- the opposite of how a conjunction treats an unknown.
+    maybe = csr(net_profit=Figure(Money.crore(2), "2024-25"))
+    check(maybe.state == CANNOT_DETERMINE,
+          f"below on profit but net worth unknown cannot rule the duty out "
+          f"({maybe.state})")
+    check("could cross" in maybe.basis or "cannot be ruled out" in maybe.basis,
+          "...and the basis explains why an unknown blocks a negative here")
+
+    # The Act's thresholds, not a rule's, so this row is never blocked on S-002.
+    r135 = [o for o in REGISTER if o.obligation_id == "CA13-S135-CSR"][0]
+    check(r135.applies_when.__name__ == "_csr_applies",
+          "s.135 decides applicability from thresholds stated in the Act")
+    check(len(r135.limbs_not_decided) == 3
+          and any("constituted" in x for x in r135.limbs_not_decided)
+          and any("spend" in x for x in r135.limbs_not_decided),
+          "the constitution, composition and spend limbs are surfaced, not decided")
 
     out = render(pub, build(pub))
     check("No row claims compliance" in out, "the render says what it does not claim")

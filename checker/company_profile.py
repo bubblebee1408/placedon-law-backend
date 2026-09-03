@@ -128,6 +128,7 @@ class CompanyProfile:
     paid_up_capital: Figure | None = None
     turnover: Figure | None = None                 # s.2(85)(ii): preceding FY
     net_worth: Figure | None = None
+    net_profit: Figure | None = None                # s.135(1): CSR applicability
     borrowings: Figure | None = None
     deposits_accepted: Figure | None = None
 
