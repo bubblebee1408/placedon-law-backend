@@ -207,6 +207,24 @@ def freeze(promote: bool = False) -> dict:
     return write_manifest(recs, len(inv), len(pend), len(rej))
 
 
+def _frozen_at_commit() -> str:
+    """The commit the current pair file was frozen at.
+
+    Preserved from the existing manifest while the pair file is unchanged; only
+    a genuine change to the frozen set advances it.
+    """
+    cur = _sha(APPROVED_F.read_bytes()) if APPROVED_F.exists() else ""
+    if MANIFEST_F.exists():
+        try:
+            old = json.loads(MANIFEST_F.read_text())
+        except (OSError, json.JSONDecodeError):
+            old = {}
+        was = old.get("fixture_hashes", {}).get("approved_pairs.jsonl")
+        if was and was == cur and old.get("software_commit"):
+            return old["software_commit"]
+    return _commit()
+
+
 def write_manifest(recs: list[dict], invalid_count: int, pending_count: int,
                    rejected_count: int) -> dict:
     """Build the manifest from a record list and write it.
@@ -234,7 +252,12 @@ def write_manifest(recs: list[dict], invalid_count: int, pending_count: int,
                            "grounding. It is derived from selected provisions of "
                            "one Act, its negatives are constructed, and its "
                            "positives were written and reviewed by one reviewer."),
-        "software_commit": _commit(),
+        # The commit at which the benchmark was FROZEN, not the commit at which
+        # someone happened to run the suite. _test() calls freeze(), so
+        # restamping here dirtied a tracked file on every test run, and the
+        # resulting commit changed the stamp again -- churn that made a real
+        # benchmark change indistinguishable from noise in a diff.
+        "software_commit": _frozen_at_commit(),
         "pair_count": len(recs),
         "label_counts": labels,
         "label_basis_counts": bases,
