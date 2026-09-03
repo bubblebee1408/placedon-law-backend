@@ -52,6 +52,12 @@ class Handler(BaseHTTPRequestHandler):
 
     def _respond(self, path: str, query: str, body_in: str) -> None:
         try:
+            # Stamp the pack's generated-at at request time. handle() stays pure;
+            # the timestamp is injected here, at the one place that has a clock.
+            from datetime import datetime, timezone
+            import checker.matrix_view as mv
+            mv._GENERATED_AT = datetime.now(timezone.utc).strftime(
+                "%Y-%m-%dT%H:%M:%SZ")
             status, ctype, body = handle(path, query, body_in)
         except Exception as e:                      # noqa: BLE001
             # A crash must not leak a stack trace to the page, and must not

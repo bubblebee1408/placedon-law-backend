@@ -39,8 +39,13 @@ from urllib.parse import parse_qs
 from checker.company_profile import CompanyProfile, Figure, Money
 from checker.obligations import (CANNOT_DETERMINE, DOES_NOT_APPLY, Evidence,
                                  build, REGISTER)
+from checker.diligence_pack import build_pack, render as render_pack
 
 UNKNOWN = ""            # what the form submits for "not known"
+
+# Deterministic default so handle() has no wall-clock dependency; the server
+# passes a real timestamp via _GENERATED_AT before each request.
+_GENERATED_AT = "generated_at not set by the caller"
 
 _CLASSES = ("private", "public", "opc")
 
@@ -168,6 +173,9 @@ dd{margin:.1rem 0 0;color:var(--soft)}
 border-radius:0 4px 4px 0;margin-bottom:1.2rem}
 footer{margin-top:2rem;padding-top:1.2rem;border-top:1px solid var(--rule);
 color:var(--faint);font-size:.85rem}
+pre.pack{background:var(--card);border:1px solid var(--rule);border-radius:6px;
+padding:1.2rem;overflow-x:auto;font:.8rem/1.5 ui-monospace,Menlo,Consolas,monospace;
+color:var(--ink);white-space:pre-wrap;word-break:break-word}
 """
 
 
@@ -184,13 +192,13 @@ def _tri_field(label: str, name: str, value: str = "") -> str:
             f'<select id="{name}" name="{name}">{opts}</select></div>')
 
 
-def _form(params: dict) -> str:
+def _form(params: dict, action: str = "/matrix") -> str:
     g = lambda k: (params.get(k) or [""])[0]  # noqa: E731
     cls = g("company_class")
     cls_opts = "".join(
         f'<option value="{c}"{" selected" if c == cls else ""}>{c}</option>'
         for c in _CLASSES)
-    return f"""<form method="post" action="/matrix">
+    return f"""<form method="post" action="{action}">
 <fieldset><legend>the company</legend><div class="grid">
 <div><label for="company_class">company class</label>
 <select id="company_class" name="company_class">{cls_opts}</select></div>
@@ -341,6 +349,21 @@ def _rows_html(profile: CompanyProfile, evidence: Evidence | None = None) -> str
     return "".join(out)
 
 
+def _pack_html(profile: CompanyProfile, evidence: Evidence, generated_at: str) -> str:
+    pack = build_pack(profile, evidence, generated_at=generated_at)
+    # The pack's own text renderer is the source of truth; the page shows it
+    # verbatim in a <pre> so what a reader sees on screen is byte-identical to
+    # what they would hand to counsel. No second formatting to drift from it.
+    text = render_pack(pack)
+    n = len(pack.unverified())
+    banner = (f'<p class=sub>{len(pack.not_satisfied)} not satisfied · '
+              f'{len(pack.undetermined) + len(pack.cannot_determine)} unresolved · '
+              f'{n} item{"s" if n != 1 else ""} to verify. '
+              f'This is a record, not a certificate — read the foot of the pack '
+              f'for what it does not establish.</p>')
+    return (banner + f'<pre class="pack">{_E(text)}</pre>')
+
+
 def _page(body: str) -> str:
     return (f"<!doctype html><html lang=en><head><meta charset=utf-8>"
             f'<meta name=viewport content="width=device-width,initial-scale=1">'
@@ -365,27 +388,41 @@ def handle(path: str, query: str = "", body: str = "") -> tuple[int, str, str]:
     """
     params = parse_qs(body or query, keep_blank_values=True)
 
-    if path not in ("/", "/matrix"):
+    if path not in ("/", "/matrix", "/pack"):
         return 404, "text/html; charset=utf-8", _page(
             "<h1>Not found</h1><p class=sub>There is no page at that address.</p>")
 
-    head = ("<h1>Compliance matrix</h1><p class=sub>Companies Act 2013. "
-            "Obligations are generated from what the company <em>is</em>, "
-            "not from documents you upload — so a company that has filed "
-            "nothing still gets a full matrix.</p>")
+    if path == "/pack":
+        head = ('<h1>Pre-diligence evidence pack</h1><p class=sub>The same '
+                'obligations as the matrix, rendered as a dated, cited record a '
+                'reader can hand to diligence counsel — with an explicit list of '
+                'what could not be verified. It reports; it does not draft.</p>')
+    else:
+        head = ("<h1>Compliance matrix</h1><p class=sub>Companies Act 2013. "
+                "Obligations are generated from what the company <em>is</em>, "
+                "not from documents you upload — so a company that has filed "
+                "nothing still gets a full matrix.</p>")
 
     if path == "/" or not params.get("company_class"):
-        return 200, "text/html; charset=utf-8", _page(head + _form(params))
+        # The form action follows the path, so submitting from /pack returns a
+        # pack and from /matrix returns the matrix.
+        action = "/pack" if path == "/pack" else "/matrix"
+        return 200, "text/html; charset=utf-8", _page(head + _form(params, action))
 
     try:
         profile = parse_profile(params)
         evidence = parse_evidence(params)
     except InputError as e:
+        action = path if path in ("/matrix", "/pack") else "/matrix"
         return 400, "text/html; charset=utf-8", _page(
-            head + f'<div class="err">{_E(str(e))}</div>' + _form(params))
+            head + f'<div class="err">{_E(str(e))}</div>' + _form(params, action))
 
+    if path == "/pack":
+        return 200, "text/html; charset=utf-8", _page(
+            head + _form(params, "/pack")
+            + _pack_html(profile, evidence, _GENERATED_AT))
     return 200, "text/html; charset=utf-8", _page(
-        head + _form(params) + _rows_html(profile, evidence))
+        head + _form(params, "/matrix") + _rows_html(profile, evidence))
 
 
 def _test() -> None:
@@ -514,6 +551,41 @@ def _test() -> None:
     check(st8 == 400 and "YYYY-MM-DD" in err4,
           "a misformatted date refuses and says the expected form")
     check("commas" in err4, "...and explains how to give several")
+
+    # ── /pack route: the evidence pack, same facts, same POST discipline ────
+    import checker.matrix_view as _mv
+    _mv._GENERATED_AT = "2026-09-04T00:00:00Z"
+    sp, _, ppg = handle("/pack", "", q)
+    check(sp == 200 and "EVIDENCE PACK" in ppg,
+          f"the /pack route renders the evidence pack ({sp})")
+    check("reports; it does not draft" in ppg.lower()
+          or "it does not draft" in ppg.lower(),
+          "the pack page states it reports rather than drafts")
+    check("could not be verified" in ppg.lower() or "WHAT COULD NOT" in ppg,
+          "the pack surfaces its unverified section")
+
+    # The pack is shown inside a <pre>, so it is served verbatim rather than
+    # re-formatted into HTML rows. The byte-identical property against the pack
+    # renderer is proven in diligence_pack's own suite; here it is enough that
+    # the page does not rebuild it.
+    import re as _re
+    _pre = _re.search(r'<pre class="pack">(.*?)</pre>', ppg, _re.S)
+    check(_pre is not None and "PRE-DILIGENCE EVIDENCE PACK" in _pre.group(1),
+          "the pack is served verbatim inside a <pre>, not reformatted")
+    check("<div class=\"row" not in _pre.group(1),
+          "...and the matrix row markup is not mixed into the pack text")
+
+    # An empty /pack GET serves the form, and it posts back to /pack.
+    ep, _, epg = handle("/pack")
+    check(ep == 200 and 'action="/pack"' in epg,
+          "an empty /pack serves a form that posts back to /pack")
+    _, _, mform = handle("/matrix")
+    check('action="/matrix"' in mform, "the matrix form posts to /matrix")
+
+    # A bad input on /pack returns to the /pack form, not the matrix.
+    sb, _, bpg = handle("/pack", "", "company_class=private&incorporation_date=bad")
+    check(sb == 400 and 'action="/pack"' in bpg,
+          "a bad /pack submission returns to the /pack form")
 
     # Company facts must travel in the body, never the URL.
     check('method="post"' in body, "the form posts rather than gets")
