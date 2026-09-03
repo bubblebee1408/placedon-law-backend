@@ -12,6 +12,13 @@ __pycache__/
 # checked from a clean checkout. A provenance chain whose evidence is not in the
 # repository is one in name only.
 !corpus/sources/*.pdf
+# Also the signed documents the signature and revocation suites verify. These
+# are public listed-company disclosures, a permitted source. The exact BYTES
+# matter here in a way they rarely do: what is under test is a cryptographic
+# signature over a byte range, so re-downloading a re-issued copy would not
+# reproduce the test. 24 MB into a private repo is the correct trade against
+# four suites that cannot run anywhere but one laptop.
+!corpus/testdocs/_raw/*.pdf
 *.pyc
 corpus/.asks.jsonl
 corpus/.budget.json
@@ -23,6 +30,13 @@ corpus/raw/*.pdf
 # checked from a clean checkout. A provenance chain whose evidence is not in the
 # repository is one in name only.
 !corpus/sources/*.pdf
+# Also the signed documents the signature and revocation suites verify. These
+# are public listed-company disclosures, a permitted source. The exact BYTES
+# matter here in a way they rarely do: what is under test is a cryptographic
+# signature over a byte range, so re-downloading a re-issued copy would not
+# reproduce the test. 24 MB into a private repo is the correct trade against
+# four suites that cannot run anywhere but one laptop.
+!corpus/testdocs/_raw/*.pdf
 corpus/review_pack.html
 corpus/review_response.json
 corpus/sample_*.html
