@@ -132,48 +132,72 @@ code{font-family:var(--mono);font-size:.86em;color:var(--ink-soft)}
 <section>
   <span class="sec-no">02</span>
   <h2>What it produces</h2>
-  <p>One private company, financial year 2024-25, two directors, an AGM on 30 December 2025
-  following one on 20 August 2024, and three board meetings during 2025. The tool returns
-  four rows, and each behaves differently on purpose.</p>
+  <p>One private company, financial year 2024-25: two directors, an AGM on 30 December 2025
+  following one on 20 August 2024, three board meetings in 2025, its most-present director in
+  India 90 days, both filings made in January 2026. The tool returns seven rows, and all five
+  outcome states appear — including two it refuses to decide, for two different reasons.</p>
 
   <div class="matrix">
     <div class="row notsat">
       <div class="rowhead"><span class="prov">s.96(1) — annual general meeting</span>
       <span class="badge b-notsat">NOT SATISFIED</span></div>
       <div class="duty">Hold an AGM, and within the statutory gap</div>
-      <div class="basis">Gap of 497 days from 2024-08-20 to 2025-12-30 exceeds the
-      fifteen-month limit of 2025-11-20. <em>This limb only</em> — the first-AGM deadline and
-      the Registrar's extension are separate limbs and are not decided here.</div>
+      <div class="basis">The AGM was held 30 December 2025, past the six-month limit
+      of 30 September 2025 from the close of the financial year.</div>
     </div>
 
     <div class="row undet">
       <div class="rowhead"><span class="prov">s.173(1) — board meetings</span>
       <span class="badge b-undet">UNDETERMINED</span></div>
       <div class="duty">Hold the minimum number, correctly spaced</div>
-      <div class="basis">Three meetings would fail the standard regime. But the relaxed
-      s.173(5) regime turns on small-company status, which we cannot establish — so we
-      decline rather than judge this company on the stricter standard it may not owe.</div>
+      <div class="basis">Three meetings would fail the standard regime — but the
+      relaxed s.173(5) regime turns on small-company status, which we cannot
+      establish (see the last row). So we decline rather than judge this company
+      on a stricter standard it may not owe.</div>
+    </div>
+
+    <div class="row undet">
+      <div class="rowhead"><span class="prov">s.149(1) — board size</span>
+      <span class="badge b-undet">UNDETERMINED</span></div>
+      <div class="duty">Enough directors, not more than the maximum</div>
+      <div class="basis">Two directors is at or above the private-company minimum
+      of two. But s.149's second proviso requires a woman director for prescribed
+      classes, and that prescription is in rules we do not hold — so we will not
+      call the whole provision satisfied on the strength of the numbers alone.</div>
+    </div>
+
+    <div class="row notsat">
+      <div class="rowhead"><span class="prov">s.149(3) — resident director</span>
+      <span class="badge b-notsat">NOT SATISFIED</span></div>
+      <div class="duty">One director resident in India 182 days</div>
+      <div class="basis">The most-present director was in India 90 days, short of
+      the 182-day minimum.</div>
     </div>
 
     <div class="row satisfied">
-      <div class="rowhead"><span class="prov">s.149(1) — board size</span>
+      <div class="rowhead"><span class="prov">s.137(1) — AOC-4 filing</span>
       <span class="badge b-satisfied">SATISFIED</span></div>
-      <div class="duty">Enough directors, and not more than the maximum</div>
-      <div class="basis">Two directors: at or above the private-company minimum of two and
-      not above the maximum of fifteen. <em>Numbers limbs only</em> — the woman-director
-      requirement is prescribed by rules we do not hold, so it is never decided here.</div>
+      <div class="duty">File financial statements within 30 days of the AGM</div>
+      <div class="basis">Filed 15 January 2026, within thirty days of the AGM on
+      30 December 2025.</div>
+    </div>
+
+    <div class="row satisfied">
+      <div class="rowhead"><span class="prov">s.92(4) — annual return</span>
+      <span class="badge b-satisfied">SATISFIED</span></div>
+      <div class="duty">File the annual return within 60 days of the AGM</div>
+      <div class="basis">Filed 20 January 2026, within sixty days of the AGM.</div>
     </div>
 
     <div class="row cannot">
       <div class="rowhead"><span class="prov">s.2(85) — small company</span>
       <span class="badge b-cannot">CANNOT DETERMINE</span></div>
       <div class="duty">Establish whether the company is a small company</div>
-      <div class="basis">The Act sets ₹50 lakh and ₹2 crore, then delegates the operative
-      figures to rules. The commonly-quoted ₹4 crore / ₹40 crore come from G.S.R. 700(E) of
-      15 September 2022, which we have located but not properly acquired — so we refuse the
-      arithmetic and name the instrument.</div>
+      <div class="basis">The Act sets ₹50 lakh and ₹2 crore, then delegates the
+      operative figures to rules. The commonly-quoted ₹4 crore / ₹40 crore come
+      from G.S.R. 700(E) of 15 September 2022, which we have located but not
+      properly acquired — so we refuse the arithmetic and name the instrument.</div>
     </div>
-  </div>
 
   <p>The last row is the one we most want you to react to. A chatbot would answer that
   question confidently from memory. We would rather say what is missing.</p>
@@ -207,7 +231,7 @@ code{font-family:var(--mono);font-size:.86em;color:var(--ink-soft)}
       <li><b>No accuracy claim.</b> The system has never been tested against real defective
       documents. Its internal benchmark is 69 constructed examples across five sections,
       reviewed by one person who is not a lawyer.</li>
-      <li><b>Four obligations, not the Act.</b> Sections 96, 149, 173 and the s.2(85)
+      <li><b>Seven obligations, not the Act.</b> Sections 96, 92, 137, 149(1), 149(3), 173 and the s.2(85)
       classification. Everything else is unbuilt.</li>
       <li><b>The rules are largely missing.</b> We hold 529 sections of the Act and one set
       of subordinate rules. Many operative thresholds live in rules we have not acquired,
