@@ -167,6 +167,69 @@ against a competitor's design than in the abstract.
 
 ---
 
+## 4a. What a deeper public read settled, and what it did not
+
+Four surfaces read on 2026-09-03: the homepage, the security page, the Associate
+product page, and the blog. `docs.spellbook.legal` does not resolve;
+`/product/associate` and `/ask` return 404.
+
+**Associate, verbatim:** *"completes complex drafting projects across
+documents"*, *"Revise multiple documents in one click"*, *"makes connections
+across documents, enabling higher accuracy and new workflows"*, *"breaks goals
+down into tasks and executes them"*. Named use cases: dataroom reviews,
+financing documents, disclosure schedules, employment packages.
+
+**Not one of the four pages describes citation granularity, missing-source
+behaviour, human review requirements, or any verification mechanism.** That is
+now a pattern across four surfaces rather than a gap on one. It still is not
+evidence the mechanisms are absent — the rule at the top of this document holds
+— but it does mean **every OPEN marker above stays open**, and no amount of
+further public reading will close them. Only the vendor can.
+
+### Their one publication on accuracy
+
+*"Spellbook Labs Report: Humans Hallucinate Too"*. Worth reading closely,
+because its shape matters more than its numbers.
+
+**What it measured:** 3,019 material-contract exhibits from EDGAR, 2005–2026,
+over 500 public companies, analysed with Spellbook Review. Reported: *"Sixty
+percent of contracts had drafting errors"*; 2.5% carrying high-risk issues,
+defined as a mistake *"that changes the meaning of the agreement in a
+substantially negative way for at least one party"*; 1.15 issues per contract;
+high-risk rates ranging 1.4% (healthcare) to 6.8% (media/telecom).
+
+**To their credit,** the report states its own limits plainly: findings *"should
+be treated as a proxy"*, the analysis was *"deliberately conservative"*, and the
+numbers are *"the floor, not a full account"*.
+
+**What it does not establish, and this is the important part.** The study
+measures how many contracts contain errors, using Spellbook Review as the
+measuring instrument. It does not measure how often Spellbook Review is *right*.
+No count of human reviewers validating the findings is given, and there is no
+false-positive rate anywhere in it — if the tool flags 60% of contracts, the
+question a buyer needs answered is how many of those flags are wrong, and the
+report does not ask it.
+
+That is not a criticism of a marketing report for being a marketing report. It
+is a note on what can and cannot be inferred: **this is a claim about the
+corpus, not about the tool**, and it is self-graded.
+
+### Why that observation is useful to us rather than merely critical
+
+Our own `metric_policy.py` refuses a score without a majority-class baseline, and
+`benchmark_v2_freeze` refuses to certify a benchmark whose spans have drifted.
+Those rules exist because a number with no baseline and no false-positive rate
+reads as evidence and is not. The most-cited public accuracy artifact in this
+space has exactly that shape.
+
+The useful conclusion is not that they are wrong. It is that **the bar for a
+defensible accuracy claim in legal AI is currently low**, and a company that
+publishes a false-positive rate against practitioner-labelled ground truth would
+be saying something nobody else in this comparison is saying. We cannot do that
+today either — 67 constructed pairs, one non-lawyer reviewer, two of three
+buckets unable to measure their own axis. But it is a reachable position, and it
+is worth more than another feature.
+
 ## 5. How to falsify this document
 
 Ask them. `VENDOR_QUESTIONS.md` holds eighteen questions, and four of them
