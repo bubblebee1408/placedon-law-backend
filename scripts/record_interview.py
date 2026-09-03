@@ -82,6 +82,20 @@ class Interview:
     useful_parts: str = ""
     noise_parts: str = ""
 
+    # Stage 2b — the matrix itself, row by row. This is what H-001 is FOR: not
+    # "did they like it" but "which specific row would a practitioner call
+    # wrong". Each is the obligation_id and their verdict:
+    #   right | wrong | missing_limb | too_cautious | not_how_i_work | unsure
+    row_s96_agm: str = ""             # CA13-S96-AGM
+    row_s173_board: str = ""          # CA13-S173-BOARD
+    row_s149_size: str = ""           # CA13-S149-BOARD-SIZE
+    row_s137_aoc4: str = ""           # CA13-S137-AOC4
+    row_s92_return: str = ""          # CA13-S92-RETURN
+    row_s2_85_small: str = ""         # CA13-S2-85-SMALL — the refusing row
+    small_refusal_reaction: str = ""  # rigour | broken | annoying — the one row we most want a reaction to
+    obligations_we_are_missing: str = ""   # what a real matter needs that is not here
+    row_they_would_check_first: str = ""   # which one earns or loses trust fastest
+
     # Stage 3 — commitment, not opinion
     version_questions_frequency: str = ""
     conflict_resolution_practice: str = ""
@@ -156,6 +170,15 @@ PROMPTS = {
     "noticed_two_limbs": "  noticed the two limbs? [y/n/?]",
     "trust_without_checking": "  would trust WITHOUT opening the section? [y/n/?]",
     "blocking_reaction": "  blocked approval [helpful/annoying/neutral]",
+    "row_s96_agm": "  s.96 AGM row [right/wrong/missing_limb/too_cautious/not_how_i_work/unsure]",
+    "row_s173_board": "  s.173 board-meeting row [right/wrong/missing_limb/too_cautious/unsure]",
+    "row_s149_size": "  s.149 board-size row [right/wrong/missing_limb/too_cautious/unsure]",
+    "row_s137_aoc4": "  s.137 AOC-4 row [right/wrong/missing_limb/too_cautious/unsure]",
+    "row_s92_return": "  s.92 annual-return row [right/wrong/missing_limb/too_cautious/unsure]",
+    "row_s2_85_small": "  s.2(85) small-company row, which REFUSES [right/wrong/unsure]",
+    "small_refusal_reaction": "  the refusal itself [rigour/broken/annoying]",
+    "obligations_we_are_missing": "  what a real matter needs that is not on the matrix",
+    "row_they_would_check_first": "  which row they would sanity-check first",
     "useful_parts": "  what they called useful",
     "noise_parts": "  what they called noise",
     "version_questions_frequency": "STAGE 3 — how often does the version of the law matter",

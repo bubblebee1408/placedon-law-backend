@@ -18,7 +18,7 @@ the main session to record. Status: open / ready / in-progress / blocked / compl
 | R-010 | Retire HR-era agents and docs | main | **complete** | `hr-ops-researcher`, `trust-boundary-reviewer`, PoSH corpus | — | — |
 | B-001 | Corporate-law task benchmark, 30-50 docs incl. **defective** ones | benchmark-engineer | **open** | none | — | CRITICAL PATH |
 | B-002 | Accessible legal testers (students, junior associates) | founder | **open** | none | — | after B-001 |
-| H-001 | Expert review by 1-2 practising corporate lawyers | **founder** | **open** | zero | — | gates CLAIMS not development |
+| H-001 | Expert review by 1 practising Company Secretary of the matrix | **founder** | **ready** | outreach + capture built: docs/H001_OUTREACH.md, validation_kit.html, record_interview.py with per-row fields | — | gates CLAIMS not development |
 | H-002 | Apply: Indian Kanoon free non-commercial tier | **founder** | **open** | ₹10,000/mo, exceeds whole budget | — | human-only |
 | H-003 | ICSI CoP query | **founder** | **deprioritised** | CS is now a secondary segment | — | — |
 | H-004 | Reddit OAuth credentials | **founder** | **open** | only route to live practitioner voice | — | human-only |
