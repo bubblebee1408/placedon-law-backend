@@ -6,11 +6,23 @@ __pycache__/
 .venv/
 .vercel
 *.pdf
+# ...but NOT the source artifacts the provenance chain hashes. A blanket *.pdf
+# kept them out of the repo, so a fresh clone failed five suites and the whole
+# "hashed local artifact plus human review equals VERIFIED" claim could not be
+# checked from a clean checkout. A provenance chain whose evidence is not in the
+# repository is one in name only.
+!corpus/sources/*.pdf
 *.pyc
 corpus/.asks.jsonl
 corpus/.budget.json
 corpus/.checks.jsonl
 corpus/raw/*.pdf
+# ...but NOT the source artifacts the provenance chain hashes. A blanket *.pdf
+# kept them out of the repo, so a fresh clone failed five suites and the whole
+# "hashed local artifact plus human review equals VERIFIED" claim could not be
+# checked from a clean checkout. A provenance chain whose evidence is not in the
+# repository is one in name only.
+!corpus/sources/*.pdf
 corpus/review_pack.html
 corpus/review_response.json
 corpus/sample_*.html
