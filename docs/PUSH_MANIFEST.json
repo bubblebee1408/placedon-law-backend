@@ -1,0 +1,30 @@
+{
+ "blocked_by": "token lacks the workflow scope; commit aed8794 adds .github/workflows/tests.yml and GitHub refuses workflow files from a token without it",
+ "branch": "engine/entailment",
+ "checks": {
+  "no_personal_field_in_distributable_benchmark_files": true,
+  "no_secrets_in_tracked_files": true,
+  "release_snapshot_verifies": true,
+  "reviewer_identity_map_untracked": true,
+  "v2_archive_verifies": true,
+  "workflow_file_read_and_intentional": true
+ },
+ "commits_ahead_of_main": 127,
+ "diff_vs_main": "870 files changed, 101533 insertions(+), 8747 deletions(-)",
+ "generated_at": "2026-09-03T06:35:17Z",
+ "head_commit": "a3c88335e070b72a03b859b2db1b8002d4828eba",
+ "remote": "https://github.com/bubblebee1408/placedon-law-backend.git (PRIVATE)",
+ "suites_green": true,
+ "tracked_files": 917,
+ "unblock_command": "gh auth login --scopes workflow",
+ "what_changed": [
+  "corporate stack: company_profile, classify, prescribed_thresholds, obligations",
+  "first Companies Act HTTP surface: matrix_view + serve_matrix, no dependencies",
+  "E6 qualifier gate and the importable cascade",
+  "review governance: review_record, scoped_retraction, promotion_preview",
+  "benchmark versioning, release provenance, v2 archived, v3 promoted",
+  "F4 repair: reviewers record a label rather than an approval",
+  "PoSH surface retired: 34 files, 8748 lines"
+ ],
+ "workflow_file_purpose": "runs scripts/run_tests.sh, the same script the pre-commit hook runs, with contents:read only. No token, no write access."
+}
