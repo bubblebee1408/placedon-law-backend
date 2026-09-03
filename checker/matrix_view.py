@@ -224,6 +224,11 @@ def _form(params: dict) -> str:
 {_field("date AOC-4 was filed", "aoc4_filed_on", g("aoc4_filed_on"), "date")}
 {_field("date the annual return was filed", "annual_return_filed_on",
         g("annual_return_filed_on"), "date")}
+{_field("days in India this FY, most-present director",
+        "resident_director_days", g("resident_director_days"))}
+{_tri_field("incorporated during this financial year",
+            "incorporated_this_financial_year",
+            g("incorporated_this_financial_year"))}
 {_field("total board strength", "total_board_strength",
         g("total_board_strength"))}
 {_tri_field("special resolution passed for more than 15 directors",
@@ -257,6 +262,16 @@ def _dates(params: dict, name: str) -> tuple[date, ...] | None:
                 f"{name}: {piece!r} is not YYYY-MM-DD. Separate several dates "
                 f"with commas, or write 'none' if there were none.") from None
     return tuple(out)
+
+
+def _int(params: dict, name: str) -> int | None:
+    raw = (params.get(name) or [UNKNOWN])[0].strip()
+    if not raw:
+        return None
+    try:
+        return int(raw)
+    except ValueError:
+        raise InputError(f"{name}: {raw!r} is not a whole number") from None
 
 
 def _one_date(params: dict, name: str) -> date | None:
@@ -294,7 +309,10 @@ def parse_evidence(params: dict) -> Evidence:
                         params, "first_financial_year_end"),
                     aoc4_filed_on=_one_date(params, "aoc4_filed_on"),
                     annual_return_filed_on=_one_date(
-                        params, "annual_return_filed_on"))
+                        params, "annual_return_filed_on"),
+                    resident_director_days=_int(params, "resident_director_days"),
+                    incorporated_this_financial_year=_tri(
+                        params, "incorporated_this_financial_year"))
 
 
 def _rows_html(profile: CompanyProfile, evidence: Evidence | None = None) -> str:

@@ -77,6 +77,9 @@ class Evidence:
     first_financial_year_end: date | None = None   # s.96(1) first proviso
     aoc4_filed_on: date | None = None              # s.137(1)
     annual_return_filed_on: date | None = None     # s.92(4)
+    resident_director_days: int | None = None      # s.149(3): max days-in-India
+                                                   # among the directors, this FY
+    incorporated_this_financial_year: bool | None = None  # s.149(3) proviso
 
 
 # A decider answers "was it complied with", given the profile and the evidence.
@@ -383,6 +386,34 @@ def _decide_annual_return(p: CompanyProfile, ev: Evidence) -> tuple[bool | None,
                    f"{'s' if late != 1 else ''} after the limit of {due} ({basis})")
 
 
+def _decide_resident_director(p: CompanyProfile, ev: Evidence) -> tuple[bool | None, str]:
+    """s.149(3), verbatim from our corpus: "Every company shall have at least
+    one director who stays in India for a total period of not less than one
+    hundred and eighty-two days during the financial year".
+
+    The proviso is not silently dropped: "in case of a newly incorporated
+    company the requirement ... shall apply proportionately at the end of the
+    financial year in which it is incorporated". A day count against a flat 182
+    is the wrong test for a company that did not exist for the whole year, so
+    this refuses rather than applying the full-year figure to a part year.
+    """
+    days = ev.resident_director_days
+    if days is None:
+        return None, ("no director's days-in-India were supplied; s.149(3) needs "
+                      "at least one director present 182 days in the year")
+    if ev.incorporated_this_financial_year is True:
+        return None, (f"the most-present director was in India {days} days, but "
+                      f"this company was incorporated during the financial year, "
+                      f"so s.149(3)'s proviso applies the requirement "
+                      f"PROPORTIONATELY -- a flat 182-day test would be wrong and "
+                      f"the proportionate figure is not computed here")
+    if days >= 182:
+        return True, (f"a director was resident in India {days} days, at or above "
+                      f"the 182-day minimum")
+    return False, (f"the most-present director was in India {days} days, short of "
+                   f"the 182-day minimum in s.149(3)")
+
+
 REGISTER: tuple[Obligation, ...] = (
     Obligation(
         "CA13-S96-AGM",
@@ -424,6 +455,19 @@ REGISTER: tuple[Obligation, ...] = (
         limbs_not_decided=(
             "whether a woman director is required, which the second proviso "
             "delegates to rules this system does not hold",)),
+    Obligation(
+        "CA13-S149-3-RESIDENT",
+        "Have at least one director resident in India for 182 days",
+        "Companies Act 2013, s.149(3)",
+        _every_company,
+        evidence_needed=("days in India this financial year of the most-present "
+                         "director",
+                         "whether the company was incorporated during this "
+                         "financial year"),
+        note="a flat 182-day test, except for a company incorporated during the "
+             "year, where the proviso applies it proportionately -- which this "
+             "row surfaces rather than computes",
+        decided_by=_decide_resident_director),
     Obligation(
         "CA13-S137-AOC4",
         "File the financial statements with the Registrar in time",
@@ -874,6 +918,34 @@ def _test() -> None:
           "a pass says which limbs it covered")
     check("woman director" in size("private", 2).basis,
           "...and which limb it could not reach")
+
+    # ── s.149(3): resident director, and the proviso that must not be ignored ─
+    def res(**ev):
+        return [r for r in build(CompanyProfile(company_class="private", **common),
+                                 evidence=Evidence(**ev))
+                if r.obligation_id == "CA13-S149-3-RESIDENT"][0]
+
+    check(res(resident_director_days=182).state == APPLIES_SATISFIED,
+          "exactly 182 days meets the minimum")
+    check(res(resident_director_days=181).state == APPLIES_NOT_SATISFIED,
+          "181 days is short by one")
+    check("182-day minimum" in res(resident_director_days=90).basis,
+          "a failure names the statutory minimum")
+
+    # The proviso: a company incorporated this year is NOT judged on a flat 182.
+    newco = res(resident_director_days=300, incorporated_this_financial_year=True)
+    check(newco.state == APPLIES_UNDETERMINED,
+          f"a company incorporated this year is not judged on the flat 182 "
+          f"({newco.state})")
+    check("proportionate" in newco.basis.lower(),
+          "...and the row names the proviso rather than dropping it")
+    check(res().state == APPLIES_UNDETERMINED,
+          "no days supplied, no decision")
+
+    # It applies to EVERY company, so it is not blocked by any threshold.
+    r149 = [o for o in REGISTER if o.obligation_id == "CA13-S149-3-RESIDENT"][0]
+    check(r149.applies_when is _every_company,
+          "s.149(3) reaches every company, with no delegated threshold")
 
     out = render(pub, build(pub))
     check("No row claims compliance" in out, "the render says what it does not claim")
