@@ -584,9 +584,14 @@ def build(profile: CompanyProfile,
 
         if verdict is Result.INSUFFICIENT_DATA:
             blocked = "S-002" if "servable" in basis or "S-002" in basis else ""
+            # What THIS obligation needs to be decided -- its own evidence_needed
+            # -- not every unknown field on the profile. Dumping all unknowns
+            # buried the one fact that mattered under a dozen that did not, which
+            # in a diligence pack is noise where a reader needs a checklist.
+            need = ob.evidence_needed or tuple(profile.unknowns())
             rows.append(Row(ob.obligation_id, ob.duty, ob.provision,
                             CANNOT_DETERMINE, basis,
-                            missing_facts=tuple(profile.unknowns()),
+                            missing_facts=need,
                             blocked_by=blocked))
             continue
 

@@ -57,6 +57,7 @@ suites=(
   checker/classify.py
   checker/obligations.py
   checker/matrix_view.py
+  checker/diligence_pack.py
   checker/review_table.py
   checker/review_record.py
   checker/resubmission.py
