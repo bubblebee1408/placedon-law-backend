@@ -26,6 +26,15 @@ from checker.structural_chunk import clean_html
 # "which section governs this" without touching the body text.
 _HEADING_BOOST = 5
 
+# Producer Company provisions (Part IXA, s.378A-378ZU) are a parallel regime
+# that shadows the general sections -- a query about "board powers" should reach
+# s.179, not the producer-company variant s.378R. Unless the query is explicitly
+# about producer companies, their score is demoted (not removed -- a producer
+# query still finds them). This is a structural prior, not eval tuning: the two
+# regimes genuinely coexist and a general question belongs to the general one.
+_PRODUCER_PENALTY = 0.2
+_PRODUCER_SECTION = re.compile(r"^378[A-Z]?", re.I)
+
 
 def _clean(raw: str) -> str:
     s = re.sub(r"<[^>]+>", " ", raw or "")
@@ -53,11 +62,22 @@ def _index() -> tuple[BM25, dict]:
 
 
 def search(query: str, top_k: int = 5) -> list[tuple[str, str, float]]:
-    """(section_number, title, score) best-first, up to top_k, score>0 only."""
+    """(section_number, title, score) best-first, up to top_k, score>0 only.
+
+    Producer Company sections are demoted unless the query is about them, so the
+    general regime wins a general question.
+    """
     bm, titles = _index()
-    ranked = [(num, titles.get(num, ""), score)
-              for num, score in bm.rank(query) if score > 0.0]
-    return ranked[:top_k]
+    about_producer = "producer" in query.lower()
+    scored: list[tuple[str, str, float]] = []
+    for num, score in bm.rank(query):
+        if score <= 0.0:
+            continue
+        if not about_producer and _PRODUCER_SECTION.match(num):
+            score *= _PRODUCER_PENALTY
+        scored.append((num, titles.get(num, ""), score))
+    scored.sort(key=lambda t: -t[2])
+    return scored[:top_k]
 
 
 def best_section(query: str) -> str | None:
