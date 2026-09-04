@@ -1,0 +1,16 @@
+{
+ "instrument": "Rule 15, Companies (Meetings of Board and its Powers) Rules, 2014 (as amended)",
+ "task": "S-188-RULES",
+ "source": "corpus/rules/board_powers_2014.json (rule 15)",
+ "source_sha256": "b8b2e01b3d151ee038215c81d4fb10d802e4b84b8762ac385c2347417597167c",
+ "status": "PENDING_HUMAN_REVIEW",
+ "candidate_limbs": {
+  "paid_up_capital_floor_rupees": 100000000,
+  "pct_of_turnover": 10.0,
+  "pct_of_net_worth": 10.0,
+  "extraction_note": "from a DEFECTIVE extraction of Rule 15, amended over time. The single pct_of_turnover / pct_of_net_worth values here are a SIMPLIFICATION -- the real Rule has PER-TRANSACTION-TYPE limbs the held fragments show as: goods ~25% of turnover; property/leasing/services ~10% of net worth or turnover; underwriting ~1% of net worth; office of profit ~Rs 2.5 lakh/month; plus a paid-up-capital class trigger the 2019 amendment may have removed. A reviewer MUST verify every limb against a clean dated copy and decide how to encode the per-type granularity before attesting. Do NOT serve these unread."
+ },
+ "limbs": null,
+ "reviewed_by": null,
+ "reviewed_at": null
+}

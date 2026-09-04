@@ -49,6 +49,7 @@ class TxnType(str, Enum):
 
 
 NEEDS_BOARD_RESOLUTION = "NEEDS_BOARD_RESOLUTION"
+NEEDS_MEMBER_APPROVAL = "NEEDS_MEMBER_APPROVAL"                     # determinate: above the threshold
 NEEDS_MEMBER_APPROVAL_UNDETERMINED = "NEEDS_MEMBER_APPROVAL_UNDETERMINED"
 EXEMPT = "EXEMPT"
 NOT_CAUGHT = "NOT_CAUGHT"
@@ -74,6 +75,13 @@ class TxnFacts:
     # caller asserts there are no unmodelled related-party relations (KMP-based,
     # accustomed-to-act, prescribed). Only then may a NEGATIVE be returned.
     no_unmodelled_relations: bool = False
+    # financials for the first-proviso members'-approval threshold (Rule 15). Money
+    # or None; None = unknown (never treated as under). Used only once the threshold
+    # rule is reviewed+attested (checker.s188_threshold); ignored until then.
+    transaction_value: "object | None" = None      # a company_profile.Money
+    turnover: "object | None" = None
+    net_worth: "object | None" = None
+    paid_up_capital: "object | None" = None
 
 
 @dataclass(frozen=True)
@@ -86,7 +94,7 @@ class Determination:
 
     @property
     def needs_attention(self) -> bool:
-        return self.status in (NEEDS_BOARD_RESOLUTION,
+        return self.status in (NEEDS_BOARD_RESOLUTION, NEEDS_MEMBER_APPROVAL,
                                NEEDS_MEMBER_APPROVAL_UNDETERMINED, CANNOT_DETERMINE)
 
 
@@ -171,18 +179,49 @@ def assess(facts: TxnFacts, graph: EntityGraph) -> Determination:
                              "the members' resolution is not (s.188 fifth proviso)",
                              conditions=conditions)
 
-    # Otherwise: Board resolution is required, and whether a members' resolution is
-    # ALSO required turns on the prescribed threshold, which we do not hold.
-    return Determination(NEEDS_MEMBER_APPROVAL_UNDETERMINED,
-                         "a related-party transaction of a caught type: a Board resolution "
-                         "is required (s.188(1)); whether a members' resolution is ALSO "
-                         "required depends on the prescribed capital/transaction threshold "
-                         "(first proviso), which is set by a delegated rule not acquired",
-                         conditions=conditions + (
-                             "if above the prescribed threshold, prior approval by a members' "
-                             "resolution, on which a related-party member may not vote "
-                             "(s.188 first & second provisos)",),
-                         blocked_by=MEMBER_THRESHOLD_TASK)
+    # Board resolution is required; whether a members' resolution is ALSO required
+    # turns on the first-proviso threshold (Rule 15). Consult the reviewed threshold:
+    # if it is not yet attested we refuse (naming the task); once attested we resolve.
+    from checker import s188_threshold as thr
+    servable, why = thr.available()
+    if not servable:
+        return Determination(NEEDS_MEMBER_APPROVAL_UNDETERMINED,
+                             "a related-party transaction of a caught type: a Board resolution "
+                             "is required (s.188(1)); whether a members' resolution is ALSO "
+                             "required depends on the prescribed capital/transaction threshold "
+                             "(first proviso), a delegated rule not yet reviewed",
+                             conditions=conditions + (
+                                 "if above the prescribed threshold, prior approval by a members' "
+                                 "resolution, on which a related-party member may not vote "
+                                 "(s.188 first & second provisos)",),
+                             blocked_by=MEMBER_THRESHOLD_TASK)
+
+    from datetime import date as _date
+    threshold = thr.lookup(_date.today())
+    crossed = threshold.crosses(txn_value=facts.transaction_value,
+                                turnover=facts.turnover, net_worth=facts.net_worth,
+                                paid_up_capital=facts.paid_up_capital)
+    if crossed is True:
+        return Determination(NEEDS_MEMBER_APPROVAL,
+                             "a related-party transaction ABOVE the prescribed threshold "
+                             f"({threshold.instrument}): a Board resolution AND prior members' "
+                             "approval are required (s.188(1) & first proviso)",
+                             conditions=conditions + (
+                                 "prior approval by a members' resolution; a related-party "
+                                 "member may not vote on it (s.188 first & second provisos)",))
+    if crossed is False:
+        return Determination(NEEDS_BOARD_RESOLUTION,
+                             "a related-party transaction BELOW the prescribed threshold "
+                             f"({threshold.instrument}): a Board resolution is required; a "
+                             "members' resolution is not (s.188(1))",
+                             conditions=conditions)
+    return Determination(CANNOT_DETERMINE,
+                         "a related-party transaction of a caught type; a Board resolution is "
+                         "required, but the members'-approval threshold cannot be tested while "
+                         "a needed figure is unknown (an unknown figure is not treated as below)",
+                         conditions=conditions,
+                         missing=("the transaction value, and the company's turnover / net worth "
+                                  "/ paid-up capital, to test the first-proviso threshold",))
 
 
 def _test() -> None:
@@ -263,6 +302,41 @@ def _test() -> None:
           .with_relationship(Relationship("KMP", Rel.PARTNER_IN, "KFIRM")))
     check(related_party("CO", "KFIRM", g8, kmp=("KMP",)) is Answer.YES,
           "a firm in which a supplied KMP is a partner is related (s.2(76)(iii))")
+
+    # ── D1: once Rule 15 is reviewed+attested, the threshold RESOLVES ───────
+    # Mock the reviewed threshold (a reviewer having set the limbs); the live path
+    # stays UNDETERMINED until a real record is attested (tested above).
+    from unittest import mock
+    import checker.s188_threshold as thr
+    from checker.company_profile import Money
+    stub = thr.attested_stub()  # 10cr floor, 10% turnover, 10% net worth
+    with mock.patch.object(thr, "available", lambda: (True, "attested [stub]")), \
+         mock.patch.object(thr, "lookup", lambda _as_of: stub):
+        # a large transaction (> 10% turnover) -> determinate MEMBER approval
+        big = assess(TxnFacts("CO", "FIRM", TxnType.GOODS,
+                              transaction_value=Money.crore(5), turnover=Money.crore(30),
+                              net_worth=Money.crore(20), paid_up_capital=Money.crore(2)), g)
+        check(big.status == NEEDS_MEMBER_APPROVAL,
+              f"above the threshold resolves to NEEDS_MEMBER_APPROVAL ({big.status})")
+        check("Rule 15" in big.reason, "...citing the reviewed rule")
+        # a small transaction, small company -> board resolution only
+        below = assess(TxnFacts("CO", "FIRM", TxnType.GOODS,
+                                transaction_value=Money.lakh(1), turnover=Money.crore(30),
+                                net_worth=Money.crore(20), paid_up_capital=Money.crore(2)), g)
+        check(below.status == NEEDS_BOARD_RESOLUTION,
+              f"below the threshold resolves to Board resolution only ({below.status})")
+        # unknown financials -> CANNOT_DETERMINE, never silently 'below'
+        unk = assess(TxnFacts("CO", "FIRM", TxnType.GOODS), g)
+        check(unk.status == CANNOT_DETERMINE,
+              f"an unknown transaction value cannot be tested against the threshold ({unk.status})")
+        check(bool(unk.missing), "...and names the figures needed")
+
+    # And with the threshold UNAVAILABLE (the real state today) it still refuses.
+    with mock.patch.object(thr, "available", lambda: (False, "S-188-RULES not attested")):
+        refused = assess(TxnFacts("CO", "FIRM", TxnType.GOODS), g)
+        check(refused.status == NEEDS_MEMBER_APPROVAL_UNDETERMINED
+              and refused.blocked_by == MEMBER_THRESHOLD_TASK,
+              "with Rule 15 unattested, s188 still refuses and names S-188-RULES")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:
