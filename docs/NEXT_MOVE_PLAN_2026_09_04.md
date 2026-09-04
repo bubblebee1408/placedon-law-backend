@@ -199,7 +199,7 @@ abstention-first:
 ## Decision A taken — retrieval ships on BM25 (2026-09-04)
 
 `checker/chunk_retrieval.py` is the shipped ranker (best/rank/search_section);
-retrieval_eval scores exactly it (0.62); no dependency added. Embeddings (decision
-B) revisited only if real usage shows 0.62 is not enough — and B remains gated on
-the operator naming the backend (local sentence-transformers vs a Voyage/OpenAI
-embedding API), because backend choice is an architecture + cost + privacy call.
+retrieval_eval scores exactly it (0.62); no dependency added. **Decision B: DEFERRED (2026-09-04).** Operator chose to keep BM25 and not add an
+embedding dependency now. Retrieval is settled with zero new dependencies;
+embeddings are revisited only if real usage shows 0.62 is not enough. The eval
+(`retrieval_eval.py`) stays as the bar any future embedder must beat.
