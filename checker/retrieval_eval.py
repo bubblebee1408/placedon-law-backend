@@ -72,6 +72,19 @@ _SCORED: tuple[EvalCase, ...] = (
     EvalCase("the definition of a small company",
              "2", "2(85)",
              note="the small-company definition head"),
+    # Definition cases: "which clause defines term X" is textually determined --
+    # the clause literally reads '"X" means ...'. Each expected path was derived
+    # programmatically (not guessed) by matching the quoted defined term, so these
+    # are genuinely structural, not legal judgement. They widen the measurement
+    # from 5 to a real signal without needing the H-B lawyer labels.
+    EvalCase("the definition of a foreign company", "2", "2(42)"),
+    EvalCase("the definition of a private company", "2", "2(68)"),
+    EvalCase("the definition of a public company", "2", "2(71)"),
+    EvalCase("the definition of a Government company", "2", "2(45)"),
+    EvalCase("the definition of a listed company", "2", "2(52)"),
+    EvalCase("the definition of a One Person Company", "2", "2(62)"),
+    EvalCase("the definition of net worth", "2", "2(57)"),
+    EvalCase("the definition of free reserves", "2", "2(43)"),
 )
 
 # Cases whose correct span is a matter of legal judgement. NOT scored. Each is a
