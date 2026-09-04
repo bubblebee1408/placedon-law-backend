@@ -60,6 +60,7 @@ suites=(
   checker/entity_graph.py
   checker/s185.py
   checker/s188.py
+  checker/s186.py
   checker/currency.py
   checker/structural_chunk.py
   checker/structural_index.py
