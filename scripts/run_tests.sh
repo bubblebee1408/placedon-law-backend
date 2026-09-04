@@ -58,6 +58,7 @@ suites=(
   checker/obligations.py
   checker/obligation_citations.py
   checker/entity_graph.py
+  checker/corporate_data.py
   checker/s185.py
   checker/s188.py
   checker/s186.py

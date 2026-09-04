@@ -167,7 +167,13 @@ class EntityGraph:
         """
         if any(r.src == src and r.rel == rel and r.dst == dst for r in self.relationships):
             return Answer.YES
-        return Answer.NO if self._is_complete(src, rel) else Answer.UNKNOWN
+        # A real absence is settled by completeness on EITHER side: the source's
+        # OUT edges are fully known, OR the destination's IN edges are (e.g. the
+        # company's full board is known, so a name not on it is not a director).
+        if (self._is_complete(src, rel, Direction.OUT)
+                or self._is_complete(dst, rel, Direction.IN)):
+            return Answer.NO
+        return Answer.UNKNOWN
 
     def is_director(self, individual: str, company: str) -> Answer:
         return self.holds(individual, Rel.DIRECTOR_OF, company)
