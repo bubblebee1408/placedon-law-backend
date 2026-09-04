@@ -104,6 +104,12 @@ DEPENDENCIES: tuple[Dependency, ...] = (
     Dependency("CA13-S188-RPT",
                "Companies Act 2013 s.188, held verbatim in corpus; the members'-approval "
                "threshold is a delegated rule (S-188-RULES) surfaced on the obligation row"),
+    Dependency("CA13-S177-AUDIT-CTTE",
+               "Companies Act 2013 s.177, held verbatim; the prescribed class (Rule 6) is a "
+               "delegated rule (S-177-RULES) surfaced on the obligation row"),
+    Dependency("CA13-S203-KMP",
+               "Companies Act 2013 s.203, held verbatim; the prescribed KMP class is a "
+               "delegated rule (S-203-RULES) surfaced on the obligation row"),
 )
 
 

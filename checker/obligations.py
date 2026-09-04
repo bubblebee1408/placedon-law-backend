@@ -140,6 +140,43 @@ def _every_company(p: CompanyProfile) -> tuple[Result, str]:
     return Result.APPLIES, "applies to every company registered under the Act"
 
 
+def _audit_committee(p: CompanyProfile) -> tuple[Result, str]:
+    """s.177(1): every LISTED PUBLIC company (Act text) and a prescribed class.
+
+    The Act's own trigger — a listed public company — is decided. The prescribed
+    class for everyone else is set by Rule 6 of the Companies (Meetings of Board
+    and its Powers) Rules, 2014, which is held but not reviewed, so it refuses
+    (S-177-RULES) rather than guessing which unlisted companies fall in.
+    """
+    if p.company_class == "public" and p.is_listed is True:
+        return Result.APPLIES, ("a listed public company must constitute an Audit "
+                                "Committee (s.177(1))")
+    if p.is_listed is None and p.company_class == "public":
+        return (Result.INSUFFICIENT_DATA,
+                "a public company whose listing status is unknown: a listed public "
+                "company must have an Audit Committee (s.177(1)); the prescribed class "
+                "for others is Rule 6, not yet reviewed (S-177-RULES)")
+    return (Result.INSUFFICIENT_DATA,
+            "not a listed public company: whether an Audit Committee is required turns "
+            "on the prescribed class under Rule 6 of the Companies (Meetings of Board "
+            "and its Powers) Rules, 2014, held but not reviewed (S-177-RULES)")
+
+
+def _kmp(p: CompanyProfile) -> tuple[Result, str]:
+    """s.203(1): whole-time KMP for a PRESCRIBED class of companies.
+
+    s.203 has no Act-stated trigger — the class is entirely prescribed by the
+    Companies (Appointment and Remuneration of Managerial Personnel) Rules, 2014,
+    which this corpus does not hold. So the obligation exists but its applicability
+    cannot be decided until that rule is acquired and reviewed (S-203-RULES).
+    """
+    return (Result.INSUFFICIENT_DATA,
+            "the whole-time KMP requirement applies to a prescribed class of "
+            "companies; that class is set by the Companies (Appointment and "
+            "Remuneration of Managerial Personnel) Rules, 2014, not held or reviewed "
+            "(S-203-RULES)")
+
+
 def _not_opc_single_director(p: CompanyProfile) -> tuple[Result, str]:
     # s.173(5) proviso disapplies s.173 for a one-person company with a single
     # director. We do not hold director counts for every profile, so this
@@ -660,6 +697,30 @@ REGISTER: tuple[Obligation, ...] = (
         limbs_not_decided=(
             "the prescribed members'-approval threshold (delegated rule, S-188-RULES)",
             "whether the required Board / members' resolutions were in fact obtained")),
+    Obligation(
+        "CA13-S177-AUDIT-CTTE",
+        "Constitute an Audit Committee, if required",
+        "Companies Act 2013, s.177",
+        _audit_committee,
+        evidence_needed=("listing status; and, for the prescribed class, Rule 6 of "
+                         "the Board Powers Rules (paid-up capital / turnover / "
+                         "outstanding-loan thresholds), which must be reviewed",),
+        note="a listed public company is caught by the Act itself; the class for "
+             "others is a delegated rule this system has not reviewed",
+        limbs_not_decided=(
+            "whether the committee was in fact constituted",
+            "its composition — minimum three directors, independent-director "
+            "majority (s.177(2))")),
+    Obligation(
+        "CA13-S203-KMP",
+        "Appoint whole-time key managerial personnel, if in the prescribed class",
+        "Companies Act 2013, s.203",
+        _kmp,
+        evidence_needed=("the Companies (Appointment and Remuneration of Managerial "
+                         "Personnel) Rules, 2014 (the prescribed KMP class), which "
+                         "this system does not hold",),
+        note="s.203 has no Act-stated trigger — the class is entirely prescribed, "
+             "so applicability refuses until that rule is acquired and reviewed"),
 )
 
 
@@ -683,7 +744,9 @@ def build(profile: CompanyProfile,
             continue
 
         if verdict is Result.INSUFFICIENT_DATA:
-            blocked = "S-002" if "servable" in basis or "S-002" in basis else ""
+            import re as _re
+            _m = _re.search(r"S-\d{3}-RULES|S-002", basis)
+            blocked = _m.group(0) if _m else ("S-002" if "servable" in basis else "")
             # What THIS obligation needs to be decided -- its own evidence_needed
             # -- not every unknown field on the profile. Dumping all unknowns
             # buried the one fact that mattered under a dozen that did not, which
@@ -1221,6 +1284,21 @@ def _test() -> None:
             if x.obligation_id == "CA13-S186-LOAN-INVESTMENT"][0]
     check(r186.state == APPLIES_UNDETERMINED,
           f"an over-limit investment makes s.186 UNDETERMINED pending SR ({r186.state})")
+
+    # ── s.177 audit committee: Act trigger decided, class refuses ───────────
+    listed_pub = CompanyProfile(company_class="public", is_listed=True, **common)
+    r177 = [x for x in build(listed_pub) if x.obligation_id == "CA13-S177-AUDIT-CTTE"][0]
+    check(r177.state in (APPLIES_UNDETERMINED, APPLIES_SATISFIED, APPLIES_NOT_SATISFIED),
+          f"a listed public company IS caught by s.177 (Act trigger) ({r177.state})")
+    priv177 = [x for x in build(CompanyProfile(company_class="private", **common))
+               if x.obligation_id == "CA13-S177-AUDIT-CTTE"][0]
+    check(priv177.state == CANNOT_DETERMINE and priv177.blocked_by == "S-177-RULES",
+          f"a non-listed company refuses s.177 naming Rule 6 ({priv177.state}/{priv177.blocked_by})")
+
+    # ── s.203 KMP: entirely prescribed, refuses naming its rule ─────────────
+    r203 = [x for x in build(listed_pub) if x.obligation_id == "CA13-S203-KMP"][0]
+    check(r203.state == CANNOT_DETERMINE and r203.blocked_by == "S-203-RULES",
+          f"s.203 refuses (entirely prescribed) naming S-203-RULES ({r203.state}/{r203.blocked_by})")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:
