@@ -140,3 +140,29 @@ and the one narrow training the plan endorses.
 **Next autonomous build, when authorised:** the embedding layer (plan §3.4) to
 beat the 0.20 retrieval baseline — but it wants the H-B lawyer labels first, so
 it is correctly downstream of a human step, not ahead of one.
+
+---
+
+## CONTINUATION — retrieval measured, entity graph started
+
+After H-A (700(E) attested, small-company thresholds live), autonomous work continued:
+
+- **BM25 ranker** (`checker/lexical_rank.py`, zero deps): retrieval 0.20 → 0.62 on a
+  widened 13-case eval. The embedding layer is now **staged and justified** but gated
+  on a decision that is the operator's, not mine: add a heavy dependency
+  (torch/sentence-transformers or a paid embedding API) vs. the "no new dependency"
+  rule, AND expand the eval's semantically-hard cases (needs H-B lawyer labels). I
+  stopped rather than overfit 13 cases or add a dependency unilaterally.
+- **Corporate Entity Graph** (`checker/entity_graph.py`): the substrate for s.185/186/188
+  — typed, dated, directed relationships with tri-state (absence ≠ denial) queries.
+  Decides no obligation yet; it is the data structure the deciders build on.
+
+### Open decision for the operator (embeddings)
+- **A** — accept BM25 (0.62), revisit only if real usage demands it (most YAGNI).
+- **B** — authorise a specific embedding dependency (name local vs. API); I build it.
+- **C** — H-B lawyer labels first, widen the eval, then decide B on firm ground. (Recommended.)
+
+### Next autonomous build (dependency-free, human-free): s.185/186/188 deciders
+Now unblocked by the entity graph. Each is a decider over the graph + profile, same
+five-state discipline as the existing obligations, feeding the register and the pack.
+This is the path I will continue unless redirected.
