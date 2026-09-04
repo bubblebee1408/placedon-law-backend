@@ -259,7 +259,12 @@ def _test() -> None:
                   board_meetings=(date(2025, 3, 1),), calendar_year=2025,
                   resident_director_days=90)
 
-    pack = build_pack(prof, ev, generated_at="2026-09-04T00:00:00Z")
+    # Build against the forced-unacquired state so the pack's blocked-row and
+    # law-currency-watch assertions are deterministic and do not depend on the
+    # live 700(E) attestation (which flips this row to CURRENT once attested).
+    import scripts.register_gsr700e as _reg
+    with _reg.stub_registration(None):
+        pack = build_pack(prof, ev, generated_at="2026-09-04T00:00:00Z")
 
     check(len(pack.rows) == len(REGISTER),
           f"the pack covers every registered obligation ({len(pack.rows)})")
@@ -298,6 +303,12 @@ def _test() -> None:
           "the rendered pack carries a law-currency watch section")
     check("G.S.R. 700(E)" in text,
           "...naming the exact instrument to acquire")
+
+    # Once 700(E) is attested, the small-company row leaves the currency watch.
+    with _reg.stub_registration(_reg.attested_stub()):
+        pack_ok = build_pack(prof, ev, generated_at="2026-09-04T00:00:00Z")
+    check("CA13-S2-85-SMALL" not in {f.obligation_id for f in pack_ok.currency_flags},
+          "an attested 700(E) clears the small-company row from the currency watch")
 
     # Structural citations: the small-company row cites its sub-clause limbs
     # by path + hash (T6), never reproducing the statutory text.

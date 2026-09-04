@@ -11,11 +11,11 @@
  "stored_text_sha256": "sha256:406f1936d3f3f051a8b4b91ef4d28f919bf0eda4bec0602590b5f84bcabb4d28",
  "operative_clause": "paid up capital and turnover of the small company shall not exceed rupees four crore and rupees forty crore [F .",
  "classification": "VERIFIED_INSTRUMENT",
- "identity_checked_by": null,
- "identity_checked_at": null,
- "verbatim_clause_checked_by": null,
- "verbatim_clause_checked_at": null,
- "status": "PENDING_HUMAN_REVIEW",
+ "identity_checked_by": "NS",
+ "identity_checked_at": "2026-09-04T12:57:39Z",
+ "verbatim_clause_checked_by": "NS",
+ "verbatim_clause_checked_at": "2026-09-04T12:57:39Z",
+ "status": "CORROBORATED",
  "attests_to": [
   "identity: this file is G.S.R. 700(E) of 15-09-2022, and not the principal 2014 Rules, the 2021 amendment, or a consolidated reprint",
   "clause: the operative wording recorded here is verbatim from the file, with no repair, normalisation or reflow"

@@ -139,11 +139,17 @@ def _test() -> int:
         check("default-src 'none'" in (r.getheader("Content-Security-Policy") or ""),
               "a CSP is set")
 
-        c.request("GET", "/matrix?company_class=private&"
-                         "incorporation_date=2019-06-01&financial_year=2024-25&"
-                         "paid_up_capital_crore=2&turnover_crore=30")
-        r2 = c.getresponse()
-        page = r2.read().decode()
+        # Force the unacquired state for the blocked-row assertion so it does not
+        # depend on the live 700(E) attestation. The server runs in-process
+        # (ThreadingHTTPServer in a daemon thread), so the stub reaches the
+        # handler, and the request below is synchronous within the block.
+        import scripts.register_gsr700e as _reg
+        with _reg.stub_registration(None):
+            c.request("GET", "/matrix?company_class=private&"
+                             "incorporation_date=2019-06-01&financial_year=2024-25&"
+                             "paid_up_capital_crore=2&turnover_crore=30")
+            r2 = c.getresponse()
+            page = r2.read().decode()
         check(r2.status == 200, f"the matrix route serves ({r2.status})")
         check("CA13-S96-AGM" in page, "...and renders obligation rows")
         check("S-002" in page, "...including the blocked row")

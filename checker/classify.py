@@ -218,12 +218,21 @@ def _test() -> None:
     small = prof(paid_up_capital=Figure(Money.crore(2), "2024-25"),
                  turnover=Figure(Money.crore(30), "2024-25"))
 
-    # ── the headline: no answer while the thresholds are unacquired ─────────
-    r, tr = small_company(small)
-    check(r is Result.INSUFFICIENT_DATA,
-          f"with no acquired thresholds the arithmetic is refused ({r})")
-    check("not servable" in tr.render() or "S-002" in tr.render(),
-          "...and the trace names the acquisition gap")
+    # ── the headline: no answer while the thresholds are unacquired. Forced
+    # via the stub so it does not depend on the live 700(E) attestation state. ─
+    import scripts.register_gsr700e as _reg
+    with _reg.stub_registration(None):
+        r, tr = small_company(small)
+        check(r is Result.INSUFFICIENT_DATA,
+              f"with no acquired thresholds the arithmetic is refused ({r})")
+        check("not servable" in tr.render() or "S-002" in tr.render(),
+              "...and the trace names the acquisition gap")
+
+    # ── and a definite answer once the thresholds are acquired ──────────────
+    with _reg.stub_registration(_reg.attested_stub()):
+        r_ok, _ = small_company(small)
+        check(r_ok is Result.APPLIES,
+              f"with acquired thresholds a small company is classified ({r_ok})")
 
     # ── but definitive answers that need no threshold still come out ────────
     r2, tr2 = small_company(prof(company_class="public"))
@@ -301,7 +310,8 @@ def _test() -> None:
     _, tr13 = small_company(no_turn, limits=LIMITS)
     check("not on the profile" in tr13.render(),
           "a missing figure is reported as a missing figure")
-    _, tr14 = small_company(small)          # no limits: missing LIMIT
+    with _reg.stub_registration(None):      # no limits acquired: missing LIMIT
+        _, tr14 = small_company(small)
     check("limit is not available" in tr14.render() or "not servable" in tr14.render(),
           "a missing limit is reported as a missing limit")
 

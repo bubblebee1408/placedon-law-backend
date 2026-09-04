@@ -215,14 +215,27 @@ def _test() -> None:
     severities = [_SEVERITY[f.status] for f in rep]
     check(severities == sorted(severities, reverse=True), "worst findings sort first")
 
-    # ── the small-company duty rests on G.S.R. 700(E), which is UNACQUIRED ───
-    small = [f for f in rep if f.obligation_id == "CA13-S2-85-SMALL"][0]
-    check(small.status == UNACQUIRED,
-          f"small-company currency is UNACQUIRED while 700(E) is unacquired ({small.status})")
-    check(small.instrument and "700(E)" in small.instrument,
-          f"...and names the instrument to acquire ({small.instrument})")
-    check(small.needs_action, "...and is flagged as needing action")
-    check(small in stale(today), "...and appears on the stale/alert list")
+    # ── the small-company duty rests on G.S.R. 700(E): UNACQUIRED when the Rule
+    # is not attested. Forced via the stub so this does not depend on the live
+    # on-disk attestation state (which flips once a reviewer attests 700(E)).
+    import scripts.register_gsr700e as _reg
+    with _reg.stub_registration(None):
+        rep_unacq = report(today)
+        small = [f for f in rep_unacq if f.obligation_id == "CA13-S2-85-SMALL"][0]
+        check(small.status == UNACQUIRED,
+              f"small-company currency is UNACQUIRED while 700(E) is unacquired ({small.status})")
+        check(small.instrument and "700(E)" in small.instrument,
+              f"...and names the instrument to acquire ({small.instrument})")
+        check(small.needs_action, "...and is flagged as needing action")
+        check(small in stale(today), "...and appears on the stale/alert list")
+
+    # ── and CURRENT once the Rule is attested ───────────────────────────────
+    with _reg.stub_registration(_reg.attested_stub()):
+        small_c = [f for f in report(today)
+                   if f.obligation_id == "CA13-S2-85-SMALL"][0]
+        check(small_c.status == CURRENT,
+              f"small-company currency is CURRENT once 700(E) is attested ({small_c.status})")
+        check(not small_c.needs_action, "...and no longer needs action")
 
     # ── an Act-only obligation is CURRENT ────────────────────────────────────
     agm = [f for f in rep if f.obligation_id == "CA13-S96-AGM"][0]

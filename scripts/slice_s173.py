@@ -150,15 +150,25 @@ def _test() -> int:
     check(cls == "other", f"a public company resolves without a threshold ({cls})")
     check("not a small company" in why, f"...and says why ({why[:50]})")
 
-    # A private company under the cited limits cannot be classified today.
+    # A private company under the cited limits cannot be classified while the
+    # Rule is unacquired. Forced via the stub so this demonstrates the blocked
+    # behaviour deterministically, independent of the live 700(E) attestation.
+    import importlib
+    _reg = importlib.import_module("scripts.register_gsr700e")
     p = CompanyProfile(company_class="private",
                        paid_up_capital=Figure(Money.crore(2), "2024-25"),
                        turnover=Figure(Money.crore(30), "2024-25"), **common)
-    cls2, why2 = regime_for(p)
+    with _reg.stub_registration(None):
+        cls2, why2 = regime_for(p)
     check(cls2 == "UNRESOLVED",
           f"the regime refuses while G.S.R. 700(E) is unacquired ({cls2})")
     check("servable" in why2 or "S-002" in why2,
           f"...naming the acquisition gap ({why2[:70]})")
+    # ...and resolves once the Rule is attested.
+    with _reg.stub_registration(_reg.attested_stub()):
+        cls3, _ = regime_for(p)
+    check(cls3 != "UNRESOLVED",
+          f"the regime resolves once 700(E) is attested ({cls3})")
 
     # The refusal must NOT silently become the standard regime in the result.
     # It propagates as a provisional answer, which is a different claim.
@@ -182,7 +192,7 @@ def _test() -> int:
     import io
     from contextlib import redirect_stdout
     buf = io.StringIO()
-    with redirect_stdout(buf):
+    with _reg.stub_registration(None), redirect_stdout(buf):
         main()
     out = buf.getvalue()
     check("MATTER:" in out and out.count("MATTER:") == 3,

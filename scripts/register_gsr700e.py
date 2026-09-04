@@ -264,6 +264,51 @@ def is_attested(rec: dict | None) -> bool:
                 and rec.get("status") == CORROBORATED)
 
 
+# ── test support ──────────────────────────────────────────────────────────────
+# The acquisition state is on-disk and changes when a reviewer attests. Tests
+# that exercise "refuses while unacquired" or "servable once acquired" must
+# CONTROL that state rather than depend on the ambient record, or they flip red
+# the moment 700(E) is attested (which is exactly what happened). These stub the
+# registration lookup within a block. Test-only; no production path calls them.
+from contextlib import contextmanager as _contextmanager
+import sys as _sys
+
+
+def registered_unattested_stub() -> dict:
+    """A registration record that exists but carries neither human check."""
+    return {"artifact_sha256": "sha256:" + "00" * 32,
+            "identity_checked_by": None, "identity_checked_at": None,
+            "verbatim_clause_checked_by": None, "verbatim_clause_checked_at": None,
+            "status": PENDING_HUMAN_REVIEW}
+
+
+def attested_stub(reviewer: str = "TEST") -> dict:
+    """A registration record with both human checks recorded."""
+    return {"artifact_sha256": "sha256:" + "11" * 32,
+            "identity_checked_by": reviewer, "identity_checked_at": "2026-01-01T00:00:00Z",
+            "verbatim_clause_checked_by": reviewer,
+            "verbatim_clause_checked_at": "2026-01-01T00:00:00Z",
+            "status": CORROBORATED}
+
+
+@_contextmanager
+def stub_registration(rec):
+    """Force registration() to return `rec` within the block.
+
+    rec=None simulates 'not acquired'; registered_unattested_stub() simulates
+    'downloaded but not attested'; attested_stub() simulates 'acquired'. Callers
+    that do `from scripts.register_gsr700e import registration` inside a function
+    pick up the patched attribute because the import runs at call time.
+    """
+    mod = _sys.modules[__name__]
+    orig = mod.registration
+    mod.registration = lambda: rec
+    try:
+        yield
+    finally:
+        mod.registration = orig
+
+
 def _test() -> int:
     ok = fail = 0
 

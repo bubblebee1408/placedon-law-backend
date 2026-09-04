@@ -706,14 +706,23 @@ def _test() -> None:
           "'cannot tell if it applies' never becomes 'does not apply'")
 
     # A blocked source must be named on the row, not hidden in a basis string.
+    # Forced unacquired via the stub so this does not depend on the live 700(E)
+    # attestation state (once attested, this row resolves instead of blocking).
+    import scripts.register_gsr700e as _reg
     priv = CompanyProfile(company_class="private",
                           paid_up_capital=Figure(Money.crore(2), "2024-25"),
                           turnover=Figure(Money.crore(30), "2024-25"), **common)
-    small = [r for r in build(priv) if r.obligation_id == "CA13-S2-85-SMALL"][0]
-    check(small.state == CANNOT_DETERMINE,
-          f"small-company status refuses while the Rule is unacquired ({small.state})")
-    check(small.blocked_by == "S-002",
-          f"...and the row names the blocking task ({small.blocked_by!r})")
+    with _reg.stub_registration(None):
+        small = [r for r in build(priv) if r.obligation_id == "CA13-S2-85-SMALL"][0]
+        check(small.state == CANNOT_DETERMINE,
+              f"small-company status refuses while the Rule is unacquired ({small.state})")
+        check(small.blocked_by == "S-002",
+              f"...and the row names the blocking task ({small.blocked_by!r})")
+    # ...and resolves once the Rule is attested.
+    with _reg.stub_registration(_reg.attested_stub()):
+        small_ok = [r for r in build(priv) if r.obligation_id == "CA13-S2-85-SMALL"][0]
+        check(small_ok.state != CANNOT_DETERMINE,
+              f"small-company status resolves once 700(E) is attested ({small_ok.state})")
 
     # A public company resolves without any threshold.
     pub = CompanyProfile(company_class="public", **common)
@@ -821,13 +830,14 @@ def _test() -> None:
     priv_ev = CompanyProfile(company_class="private",
                              paid_up_capital=Figure(Money.crore(2), "2024-25"),
                              turnover=Figure(Money.crore(30), "2024-25"), **common)
-    b4 = [r for r in build(priv_ev, evidence=three)
-          if r.obligation_id == "CA13-S173-BOARD"][0]
-    check(b4.state == APPLIES_UNDETERMINED,
-          f"a blocked regime declines rather than applying the stricter one "
-          f"({b4.state})")
-    check("small-company status" in b4.basis,
-          "...and says the regime is what is missing")
+    with _reg.stub_registration(None):
+        b4 = [r for r in build(priv_ev, evidence=three)
+              if r.obligation_id == "CA13-S173-BOARD"][0]
+        check(b4.state == APPLIES_UNDETERMINED,
+              f"a blocked regime declines rather than applying the stricter one "
+              f"({b4.state})")
+        check("small-company status" in b4.basis,
+              "...and says the regime is what is missing")
 
     # THE GATE: an EVENT duty may never pass without evidence of the event.
     # s.149 is excluded deliberately — it is decided from company composition,

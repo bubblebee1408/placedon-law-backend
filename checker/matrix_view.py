@@ -452,7 +452,14 @@ def _test() -> None:
          "&financial_year=2024-25&paid_up_capital_crore=2&turnover_crore=30"
          "&is_holding_company=no&is_subsidiary_company=no&is_section_8=no"
          "&governed_by_special_act=no")
-    st2, _, page = handle("/matrix", q)
+    # Build under the forced-unacquired state so the blocked-row assertion is
+    # deterministic (once 700(E) is attested the small-company row resolves).
+    # Loaded dynamically so production import purity (stdlib + checker only,
+    # asserted below) is preserved — the stub is a test-only concern.
+    import importlib
+    _reg = importlib.import_module("scripts.register_gsr700e")
+    with _reg.stub_registration(None):
+        st2, _, page = handle("/matrix", q)
     check(st2 == 200, f"a filled form builds the matrix ({st2})")
     check("CA13-S96-AGM" in page and "CA13-S173-BOARD" in page,
           "...and renders the obligation rows")

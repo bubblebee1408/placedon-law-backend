@@ -77,7 +77,7 @@ deps, one commit, full runner green before push. Tick when merged.
 
 ## Human-gated (do NOT do in the loop — leave for the operator)
 
-- [ ] **H-A — Attest G.S.R. 700(E).** `python3 scripts/register_gsr700e.py
+- [x] **H-A — Attest G.S.R. 700(E) (DONE: reviewer NS, 2026-09-04).** `python3 scripts/register_gsr700e.py
   --attest <id>` after eyeballing `corpus/sources/gsr700e_2022.pdf`. Then run the
   suite; commit the attested record; currency flips 2(85) → CURRENT. Prep the
   loop can do: nothing further — it is genuinely one operator command.
