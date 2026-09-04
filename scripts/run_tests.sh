@@ -61,6 +61,7 @@ suites=(
   checker/corporate_data.py
   checker/s185.py
   checker/s188.py
+  checker/s184.py
   checker/s188_threshold.py
   checker/s186.py
   checker/currency.py
