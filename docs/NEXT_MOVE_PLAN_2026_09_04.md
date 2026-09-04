@@ -166,3 +166,30 @@ After H-A (700(E) attested, small-company thresholds live), autonomous work cont
 Now unblocked by the entity graph. Each is a decider over the graph + profile, same
 five-state discipline as the existing obligations, feeding the register and the pack.
 This is the path I will continue unless redirected.
+
+---
+
+## s.185 / s.186 / s.188 deciders — DONE
+
+Built on the entity graph, each grounded in the corpus text (read, not recalled),
+abstention-first:
+
+- **s.185** (`checker/s185.py`, 11/11) — loans to directors. PROHIBITED /
+  PERMITTED_WITH_CONDITIONS / EXEMPT / NOT_CAUGHT / CANNOT_DETERMINE. NOT_CAUGHT
+  only when the counterparty is provably in none of the caught classes.
+- **s.188** (`checker/s188.py`, 12/12) — related-party transactions, with the
+  s.2(76) related-party test on the graph. The members'-approval limb sits behind
+  an unacquired prescribed rule (S-188-RULES), flagged not guessed.
+- **s.186** (`checker/s186.py`, 13/13) — loan/investment ceiling arithmetic,
+  money-discipline (unknown ≠ zero); the two-layers limb noted as not modelled.
+- Graph extended with incoming queries + directional completeness (23/23).
+
+### Honest boundaries recorded (not hidden)
+- s.188 members'-approval threshold and any s.185/188 prescribed rules are the
+  same S-002-class gap — acquire via the browser+register+attest path
+  ([[project_placedon_gazette_acquisition]]).
+- s.2(76) KMP/manager and "accustomed-to-act" limbs are only partly modelled;
+  negatives stay conservative (CANNOT_DETERMINE unless vouched).
+- These deciders are transaction-scoped; wiring them into the obligation register
+  / evidence pack (a company-level "do you have RPT/loan controls" row) is the
+  natural next step, plus acquiring the s.188 threshold rule.
