@@ -42,6 +42,7 @@ from dataclasses import dataclass, field
 from datetime import date
 
 from checker.company_profile import CompanyProfile
+from checker import currency
 from checker.obligations import (APPLIES_NOT_SATISFIED, APPLIES_SATISFIED,
                                  APPLIES_UNDETERMINED, CANNOT_DETERMINE,
                                  DOES_NOT_APPLY, Evidence, REGISTER, Row, build)
@@ -75,6 +76,8 @@ class DiligencePack:
     generated_at: str
     provenance: dict
     rows: list[Row] = field(default_factory=list)
+    # Obligations resting on law we cannot yet show is current (currency.stale).
+    currency_flags: list = field(default_factory=list)
 
     # Derived groupings, so a reader sees the shape before the detail.
     @property
@@ -140,7 +143,8 @@ def build_pack(profile: CompanyProfile,
         financial_year=profile.latest_financial_year,
         generated_at=generated_at,
         provenance=prov_block,
-        rows=build(profile, evidence=evidence or Evidence()))
+        rows=build(profile, evidence=evidence or Evidence()),
+        currency_flags=currency.stale(profile.as_of))
 
 
 _STATE_LABEL = {
@@ -199,6 +203,18 @@ def render(pack: DiligencePack) -> str:
               ""]
         for oid, need in unv:
             L.append(f"    {oid:<22} {need[:90]}")
+        L.append("")
+
+    if pack.currency_flags:
+        L += ["-" * 78,
+              f"  LAW-CURRENCY WATCH ({len(pack.currency_flags)}) — rows resting on law "
+              "not yet shown current",
+              ""]
+        for f in pack.currency_flags:
+            L.append(f"    [{f.status}] {f.obligation_id}")
+            if f.instrument:
+                L.append(f"       acquire : {f.instrument}")
+            L.append(f"       why     : {f.detail[:110]}")
         L.append("")
 
     L += ["=" * 78,
@@ -267,6 +283,16 @@ def _test() -> None:
           "the small-company row names the instrument it waits on")
 
     text = render(pack)
+
+    # Currency: the small-company row rests on G.S.R. 700(E), unacquired, so the
+    # pack must carry a LAW-CURRENCY WATCH naming the instrument to acquire.
+    cf_ids = {f.obligation_id for f in pack.currency_flags}
+    check("CA13-S2-85-SMALL" in cf_ids,
+          f"the small-company row is flagged as resting on non-current law ({cf_ids})")
+    check("LAW-CURRENCY WATCH" in text,
+          "the rendered pack carries a law-currency watch section")
+    check("G.S.R. 700(E)" in text,
+          "...naming the exact instrument to acquire")
 
     # NOT a certificate, and it says so on its face.
     check("not a certificate of compliance" in text.lower(),
