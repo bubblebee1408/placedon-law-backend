@@ -28,21 +28,17 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from checker.ground_span import select_chunk
-from checker.lexical_rank import BM25
 from checker.structural_index import chunks_for_section
 
 
 def bm25_select(question, chunks):
-    """Rank a section's chunks for a question with BM25; return the top Chunk.
+    """The shipped BM25 ranker's top chunk (checker.chunk_retrieval.best).
 
-    The dependency-free alternative to the naive term-overlap selector. Returns
-    None when nothing scores above zero, same contract as select_chunk.
+    Kept as a thin alias so the eval scores exactly the production ranker rather
+    than a re-implementation. Same contract as select_chunk: Chunk or None.
 """
-    if not chunks:
-        return None
-    bm = BM25([(c.path, c.text) for c in chunks])
-    top = bm.top(question)
-    return next((c for c in chunks if c.path == top), None) if top else None
+    from checker.chunk_retrieval import best
+    return best(question, chunks)
 
 
 @dataclass(frozen=True)
