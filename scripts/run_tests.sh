@@ -58,6 +58,7 @@ suites=(
   checker/obligations.py
   checker/obligation_citations.py
   checker/entity_graph.py
+  checker/s185.py
   checker/currency.py
   checker/structural_chunk.py
   checker/structural_index.py
