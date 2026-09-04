@@ -23,6 +23,21 @@ be interested. That is a normal cold-outreach funnel, not a failure.
 A friend-of-a-friend intro converts far better than any cold message below. Try
 this first and give it 48 hours.
 
+The exact post, copy-paste ready (edit the bracket, nothing else):
+
+> I've been building a compliance tool for the Companies Act, 2013, and before I
+> take it further I want it torn apart by someone who does this work for real.
+>
+> If you're a practising Company Secretary — or you know one — I'd value 20
+> minutes. Not a pitch, the opposite: I want to know where it's wrong. It even
+> leads with a drafting defect in ICSI's own specimen AGM notice that you can
+> check in under a minute.
+>
+> Reply or DM. [your name]
+
+Post it once, publicly, from your own account. Tag no one; let it travel. Give it
+48 hours before working the searches below.
+
 **LinkedIn search.** Paste each into LinkedIn search, filter to your city and to
 people, prefer small/independent practice over large firms (they feel the pain
 the product is aimed at):
