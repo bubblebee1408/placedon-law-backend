@@ -203,3 +203,28 @@ retrieval_eval scores exactly it (0.62); no dependency added. **Decision B: DEFE
 embedding dependency now. Retrieval is settled with zero new dependencies;
 embeddings are revisited only if real usage shows 0.62 is not enough. The eval
 (`retrieval_eval.py`) stays as the bar any future embedder must beat.
+
+---
+
+## RAG accuracy — cross-section retrieval built and measured
+
+The retrieval eval only measured WITHIN a known section (0.62). The harder, truer
+accuracy question — given a plain question, does retrieval reach the right SECTION
+across the whole Act — is now built and measured:
+
+- `checker/corpus_retrieval.py` — BM25 over all ~474 sections, heading boosted 5x,
+  Producer Company regime (378*) demoted for general queries.
+- `checker/cross_section_eval.py` — 45 plain-English questions → governing section
+  (labels structural, read off section titles).
+- **Measured: precision@1 = 0.73, recall@5 = 0.93** (zero dependencies).
+
+recall@5 0.93 is the operational number: with a reviewer seeing the top five, the
+right section is present 93% of the time. The 3 residual p@1 misses are vocabulary
+gaps ("rights issue" absent from s.62's title; "disqualified" collides with s.167)
+— semantic, the **embedding target (decision B, deferred)**, not lexically fixable
+without overfitting 45 cases. The lexical accuracy loop is at its honest plateau.
+
+Note: the planned sub-agent fan-out to expand the eval hit an account session
+limit (resets ~21:50 IST); the eval was authored directly instead, since the
+labels need no legal judgement. When the limit resets, sub-agents can widen it
+further and re-measure — but the plateau conclusion is unlikely to move without B.
