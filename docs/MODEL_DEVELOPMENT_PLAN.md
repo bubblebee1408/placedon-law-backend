@@ -13,11 +13,17 @@ from that pass.
 
 ## 0. The decision this document exists to make
 
-Harvey's reported build is: fine-tune an OpenAI base model on ~10B tokens of US
-case law, wrap it in hybrid RAG, run 100+ agent calls per task, and enforce
-citations by **programmatically parsing the output for a hyperlink**. Strip the
-marketing and that is a *probabilistic* system with a *post-hoc* citation check:
-the model generates, then a parser checks that a link is present.
+Harvey's build, now confirmed from primary sources (OpenAI's own Harvey page and
+harvey.ai/blog): a **custom-trained case-law model** — OpenAI states they "added
+the equivalent of 10 billion tokens" of US case law into it — plus a **custom legal
+embedding model** (voyage-law-2-harvey, 20B+ legal tokens), hybrid RAG, and
+multi-agent orchestration ("dozens" of subagents in parallel) with **structural
+citation anchoring** (each document element gets a unique id so an agent cites it
+unambiguously). Strip the marketing and the correctness guarantee is, precisely,
+*"grounded, not guaranteed"*: the substantive answer is a probabilistic LLM output
+made auditable by deterministic *references*, not a deterministic proof that the
+answer is correct. **No primary source — Harvey's or Legora's — claims
+deterministic correctness.**
 
 Copying it would be a mistake for us, and not a small one. Our entire moat is that
 **the model is not trusted — a deterministic verifier is.** "The model may propose.
@@ -43,53 +49,87 @@ two bodies of law are shaped differently:
 | Size | Millions of judgments, ~10B+ tokens | One Act + rules + a few thousand judgments — orders of magnitude smaller |
 | Shape | Reasoning-heavy, analogical, unstructured prose | A structured statute: sections, sub-sections, provisos, numbered limbs, dated thresholds |
 | What "correct" means | A persuasive argument grounded in precedent | A decidable predicate: does this duty attach, is it met, on this date |
-| What helps most | Fine-tune to imitate legal reasoning; RAG for facts | A **deterministic decider** over the statute's own structure; RAG for the current text |
+| What helps most | Custom-train case-law content in + RAG + custom legal embeddings | A **deterministic decider** over the statute's own structure; RAG for the current text |
 
-Fine-tuning "how a litigator thinks" pays off when the task is open-ended
-reasoning over a vast corpus. A compliance obligation is not that: "did this
-private company hold an AGM within nine months of its first financial year-end" is
-arithmetic on a date and a statutory limb, not a question of legal style. For
-that, a fine-tune adds risk (a model that has *memorised* a threshold will recite
-last year's number with confidence) where a verifier adds a guarantee. Even
-Harvey's own account says fine-tuning must **not** teach case facts, because that
-hallucinates — which is exactly the failure a small, precise statutory corpus
-would invite if we fine-tuned knowledge into it.
-
----
-
-## 2. The pasted research, classified (verification pass)
-
-_Two sub-agents checked the claims you pasted against primary sources
-(openai.com/index/harvey, harvey.ai/blog, legora.com/blog). Verdicts fold in here
-on their return. Until then these are provisional, from primary pages fetched
-2026-09-04 plus your pasted secondary sources._
-
-**What is safe to treat as real (primary-sourced last turn):** model-agnostic
-routing behind an abstraction layer; zero-data-retention as architecture; cost
-routing to cheaper models where "good enough"; a multi-agent Playbook Review;
-Legora's aOS layering, parallel sub-agents, source-anchored verification, and MCP
-integrations.
-
-**What stays PLAUSIBLE at best (secondary only — do not build a plan that depends
-on the exact figure):** the "10B token" fine-tune size; "Voyage AI 20B token"
-embeddings; "100+ model calls"; "Redis token-bucket" internals; "tens of thousands
-of simultaneous calls." These are engineering *patterns* worth learning from, not
-facts to cite to an investor.
-
-**The load-bearing point survives either verdict:** whether Harvey fine-tuned on
-10B tokens or 3B, its correctness guarantee is a probabilistic generate-then-check.
-Ours is a deterministic verify-or-refuse. That contrast is the plan.
+This is a **deliberate divergence** from Harvey, not agreement with it. Harvey did
+train case-law content into its model (10B tokens, primary-verified) and accepts a
+"grounded, not guaranteed" answer. We choose the opposite for three corpus-specific
+reasons, none of which applied to Harvey: (a) the 10B-token corpus that makes
+custom-training pay off **does not exist** for the Companies Act — it is one Act
+plus rules; (b) a compliance obligation is a *decidable predicate* ("did this
+company hold an AGM within nine months of its first financial year-end" is
+arithmetic on a date and a limb), so a verifier can give a real guarantee where
+Harvey's analogical case-law reasoning cannot; (c) memorising a *dated* threshold
+that later changes by amendment is the single worst failure this system can have —
+a model that has learned "₹4 crore" in its weights keeps reciting it after the
+Gazette moves. Harvey could afford scale-and-ground because its problem is not
+decidable; we can afford deterministic-verify because ours largely is.
 
 ---
+
+## 2. The pasted research, classified (primary-source verification)
+
+Two sub-agents checked your pasted claims against **primary** sources only
+(openai.com/index/harvey via its verbatim archived copy — the live page 403s bots
+— and live harvey.ai/blog and legora.com pages). Secondary sources could only make
+a claim PLAUSIBLE, never VERIFIED.
+
+### Harvey (verdicts)
+
+| Claim | Verdict | Note (primary source) |
+|---|---|---|
+| Custom-trained case-law model, "10 billion tokens" added | **VERIFIED** | openai.com/index/harvey. Caveat: **case law**, not statutes/filings; a *custom-trained* model, not naive API fine-tune |
+| Fine-tune teaches reasoning/format, NOT facts | **UNSUPPORTED / contradicted** | OpenAI page says they added case-law *content* precisely because retrieval alone was insufficient |
+| Partnered with OpenAI on a custom-trained model | **VERIFIED** | openai.com/index/harvey |
+| Hybrid fine-tune + RAG | **VERIFIED** | openai.com + harvey.ai voyage post |
+| Voyage AI embeddings, 20B+ legal tokens (voyage-law-2-harvey) | **VERIFIED** | harvey.ai/blog/harvey-partners-with-voyage… |
+| Multi-model routing (GPT/Claude/Gemini) + fallback | **VERIFIED** (rate-limiting internals unconfirmed) | harvey.ai/blog/why-harvey-is-multi-model-by-design |
+| Zero-data-retention; no training on client data | **VERIFIED** ("secure enclaves" wording unconfirmed) | why-we-built-our-own-cloud-agent-infrastructure; security-by-design |
+| OpenAI Agent SDK + "Tool Bundles" (LexisNexis, SEC EDGAR) | **UNSUPPORTED** | they built their **own** harness; LexisNexis exists as an integration, not a "tool bundle" |
+| 100+ model calls per task | **PLAUSIBLE** | primary says "dozens" of subagents in parallel, not "100+" |
+| Citations enforced by parsing for a hyperlink | **PLAUSIBLE** | real mechanism is structural: each document element gets a unique id, edits tracked on a versioned branch tagged to the rule |
+| "Vault" + iManage/SharePoint/NetDocuments | **VERIFIED** (loose paraphrase) | iManage/NetDocuments integrations confirmed; Vault is a distinct feature |
+
+### Legora (verdicts)
+
+| Claim | Verdict | Note (primary source) |
+|---|---|---|
+| aOS = 7-layer stack | **VERIFIED** | legora.com/product/aos |
+| Multi-phase plan → parallel specialist sub-agents | **VERIFIED** | legora.com/blog/introducing-the-agent |
+| Sub-agents pause for human oversight | **VERIFIED** | introducing-the-agent |
+| Model-agnostic hot-swap Claude/GPT per task | **PLAUSIBLE** | "model selection" in harness; specific Claude/GPT swap not named |
+| MCP to DMS as system of record | **VERIFIED** (MCP + NetDocuments); iManage/SharePoint not named | legora.com/product/agent |
+| RAG over firm playbooks/precedents | **VERIFIED** | legora.com/product/aos |
+| Per-clause enforced source-anchoring | **PLAUSIBLE / over-read** | primary says output-level *traceability* + "structured citations", **not** a described per-claim deterministic check |
+| Zero training on client data; SOC2/ISO/GDPR/HIPAA | **VERIFIED** | legora.com/security |
+| Tens of thousands of simultaneous calls | **UNSUPPORTED** | no quantitative figure in any primary source |
+| Locked-box containers, wiped, regional residency | **UNSUPPORTED** | not stated in primary sources |
+
+### The one finding that anchors the plan
+
+From the Harvey verification, verbatim: Harvey's correctness guarantee is
+*"probabilistic generation wrapped in deterministic grounding and anchoring — not
+a deterministic correctness proof… the answer's substantive correctness remains a
+probabilistic LLM output that is grounded, not formally guaranteed — no primary
+source claims deterministic correctness."* Legora's own materials describe grounding
+as **traceability + structured citations**, verification method unstated — the
+strong "enforced per-clause verification" reading is not supported by their pages.
+
+**So neither funded leader has a deterministic entailment verifier.** Both make the
+answer *auditable*; neither makes it *guaranteed*. Placedon's E3→E6 cascade — the
+claim must be entailed by the cited span or it is NOT_ESTABLISHED — is the guarantee
+that sits precisely in that gap. This is now confirmed from their own primary
+sources, not inferred.
 
 ## 3. How we develop the model — six decisions
 
 **3.1 No knowledge fine-tune. Ever.**
 We will not fine-tune statute or case text into model weights. The corpus is small
 enough that the model would memorise and then mis-recite, and a confidently wrong
-threshold is the worst output this system can produce. This also aligns with
-`CLAUDE.md` ("do not train a foundation model") and with Harvey's own caution that
-fine-tuning must not carry facts.
+threshold is the worst output this system can produce. This aligns with
+`CLAUDE.md` ("do not train a foundation model"). Note it is a *divergence* from
+Harvey, which did train case law in — see §1 for why the corpus forces the
+different choice.
 
 **3.2 RAG over the statutory corpus is how current law enters — retrieval, not
 weights.**
