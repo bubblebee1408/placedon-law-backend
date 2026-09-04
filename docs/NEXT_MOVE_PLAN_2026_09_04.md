@@ -52,7 +52,7 @@ deps, one commit, full runner green before push. Tick when merged.
   existing admission/withheld-rules discipline. Acceptance: a query naming a
   section returns its chunks with paths; a withheld rule stays withheld.
 
-- [ ] **T4 — Chunk → E-gate candidate span.** `checker/ground_span.py`: given a
+- [x] **T4 — Chunk → E-gate candidate span.** `checker/ground_span.py`: given a
   model-proposed claim + a section, deterministically pick the best-matching
   structural chunk as the candidate witness span, then hand it to the existing
   E3→E6 cascade. This is the "model proposes, cascade disposes" wiring from the
