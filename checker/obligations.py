@@ -81,6 +81,14 @@ class Evidence:
                                                    # among the directors, this FY
     incorporated_this_financial_year: bool | None = None  # s.149(3) proviso
 
+    # ── transaction evidence for the s.185/186/188 controls (all Optional) ──
+    # None means "we were not told"; an empty tuple means "we were told there are
+    # none". The deciders below refuse (UNDETERMINED) on None and assess a tuple.
+    entity_graph: "object | None" = None           # a checker.entity_graph.EntityGraph
+    loans_s185: "tuple | None" = None              # tuple[s185.LoanFacts]
+    rpts_s188: "tuple | None" = None               # tuple[s188.TxnFacts]
+    investments_s186: "tuple | None" = None        # tuple[s186.InvestmentFacts]
+
 
 # A decider answers "was it complied with", given the profile and the evidence.
 # It returns None when the evidence does not settle it — which is the common
@@ -459,6 +467,65 @@ def _decide_resident_director(p: CompanyProfile, ev: Evidence) -> tuple[bool | N
                    f"the 182-day minimum in s.149(3)")
 
 
+# ── the transaction-control deciders (s.185/186/188) ────────────────────────
+# These sections are prohibitions/conditions on TRANSACTIONS, so a company-level
+# row cannot say "compliant" from company facts alone. Without the company's
+# transactions the honest state is APPLIES_UNDETERMINED naming what to supply;
+# with them, the row reflects the worst finding the per-transaction decider
+# returns. A clear s.185(1) prohibition is a real breach (False); the rest mostly
+# resolve to UNDETERMINED because the sections state a REQUIREMENT (board/member
+# resolution, special resolution) whose fulfilment is a further fact.
+
+def _decide_s185(p: CompanyProfile, ev: "Evidence") -> tuple[bool | None, str]:
+    if ev.loans_s185 is None:
+        return None, ("no loans supplied: give the company's loans, guarantees and "
+                      "securities, with the director/relative graph, to assess s.185")
+    if ev.entity_graph is None:
+        return None, "an entity graph of directors and relatives is needed to assess s.185"
+    from checker.s185 import (assess, PROHIBITED, PERMITTED_WITH_CONDITIONS,
+                              CANNOT_DETERMINE as CD)
+    results = [assess(loan, ev.entity_graph) for loan in ev.loans_s185]
+    prohibited = [r for r in results if r.status == PROHIBITED]
+    if prohibited:
+        return False, (f"{len(prohibited)} loan(s) PROHIBITED under s.185(1) — "
+                       f"{prohibited[0].reason}")
+    if any(r.status in (PERMITTED_WITH_CONDITIONS, CD) for r in results):
+        return None, ("a loan is an interested-person or undetermined case under s.185; "
+                      "its special-resolution / principal-business conditions are not established")
+    return True, "no supplied loan is caught by the s.185 prohibition"
+
+
+def _decide_s188(p: CompanyProfile, ev: "Evidence") -> tuple[bool | None, str]:
+    if ev.rpts_s188 is None:
+        return None, ("no related-party transactions supplied: give the company's "
+                      "contracts of the s.188(1) types to assess")
+    if ev.entity_graph is None:
+        return None, "an entity graph is needed to assess related-party status (s.2(76))"
+    from checker.s188 import assess, NOT_CAUGHT, EXEMPT
+    results = [assess(t, ev.entity_graph) for t in ev.rpts_s188]
+    caught = [r for r in results if r.status not in (NOT_CAUGHT, EXEMPT)]
+    if caught:
+        return None, (f"{len(caught)} related-party transaction(s) require approval under "
+                      f"s.188; whether the board/member resolutions were obtained is not "
+                      f"established (and the members' threshold rule is unacquired)")
+    return True, "no supplied transaction requires approval under s.188"
+
+
+def _decide_s186(p: CompanyProfile, ev: "Evidence") -> tuple[bool | None, str]:
+    if ev.investments_s186 is None:
+        return None, ("no loans/investments supplied: give the company's loans, "
+                      "guarantees, securities and acquisitions to test the s.186(2) limit")
+    from checker.s186 import assess, WITHIN_LIMIT, EXEMPT, EXCEEDS_NEEDS_SPECIAL_RESOLUTION
+    results = [assess(i) for i in ev.investments_s186]
+    exceeds = [r for r in results if r.status == EXCEEDS_NEEDS_SPECIAL_RESOLUTION]
+    if exceeds:
+        return None, ("an investment exceeds the s.186(2) limit; a prior special "
+                      "resolution is required and its passing is not established")
+    if any(r.status not in (WITHIN_LIMIT, EXEMPT) for r in results):
+        return None, "a balance-sheet figure is unknown, so the s.186(2) ceiling is not testable"
+    return True, "all supplied loans/investments are within the s.186(2) limit"
+
+
 REGISTER: tuple[Obligation, ...] = (
     Obligation(
         "CA13-S96-AGM",
@@ -560,6 +627,39 @@ REGISTER: tuple[Obligation, ...] = (
                          "holding or subsidiary status"),
         note="a classification, not a duty — but it gates the regime of "
              "several duties, so it earns a row"),
+    Obligation(
+        "CA13-S185-LOANS-DIRECTORS",
+        "Ensure no loan/guarantee/security is given to a director or connected person",
+        "Companies Act 2013, s.185",
+        _every_company,
+        evidence_needed=("the company's loans, guarantees and securities, and the "
+                         "director/relative/partner graph, to assess against s.185",),
+        decided_by=_decide_s185,
+        note="a transaction prohibition, not a periodic duty: it binds every "
+             "company but can only be tested against the company's actual loans"),
+    Obligation(
+        "CA13-S186-LOAN-INVESTMENT",
+        "Keep loans/investments within the s.186(2) limit, or authorise the excess",
+        "Companies Act 2013, s.186",
+        _every_company,
+        evidence_needed=("the company's loans, guarantees, securities and acquisitions, "
+                         "with paid-up capital, free reserves and securities premium",),
+        decided_by=_decide_s186,
+        limbs_not_decided=(
+            "s.186(1): investment through not more than two layers of investment companies",
+            "s.186(5): the Board resolution with all directors present",
+            "whether any required special resolution was in fact passed")),
+    Obligation(
+        "CA13-S188-RPT",
+        "Obtain the required approvals for related-party transactions",
+        "Companies Act 2013, s.188",
+        _every_company,
+        evidence_needed=("the company's contracts of the s.188(1) types with related "
+                         "parties, and the s.2(76) relationship graph",),
+        decided_by=_decide_s188,
+        limbs_not_decided=(
+            "the prescribed members'-approval threshold (delegated rule, S-188-RULES)",
+            "whether the required Board / members' resolutions were in fact obtained")),
 )
 
 
@@ -1063,6 +1163,64 @@ def _test() -> None:
     out = render(pub, build(pub))
     check("No row claims compliance" in out, "the render says what it does not claim")
     check("need attention" in out, "...and counts what a reviewer must read")
+
+    # ── s.185/186/188 company-level rows ────────────────────────────────────
+    from checker.entity_graph import EntityGraph, Entity, Kind, Relationship, Rel
+    from checker.s185 import LoanFacts
+    from checker.s188 import TxnFacts, TxnType
+    from checker.s186 import InvestmentFacts
+    from checker.company_profile import Money
+
+    plain = CompanyProfile(company_class="private", **common)
+
+    # Without transaction evidence: the three rows are UNDETERMINED and name what
+    # to supply -- never silently "compliant".
+    rows_noev = build(plain)
+    for oid in ("CA13-S185-LOANS-DIRECTORS", "CA13-S186-LOAN-INVESTMENT", "CA13-S188-RPT"):
+        r = [x for x in rows_noev if x.obligation_id == oid][0]
+        check(r.state == APPLIES_UNDETERMINED,
+              f"{oid} is UNDETERMINED without transactions ({r.state})")
+        check(bool(r.missing_facts), f"...and {oid} names what to supply")
+        check(r.state != APPLIES_SATISFIED, f"...and {oid} never reads compliant from silence")
+
+    # A PROHIBITED loan to a director -> s.185 row is APPLIES_NOT_SATISFIED.
+    g = (EntityGraph().with_entity(Entity("CO", Kind.COMPANY))
+         .with_entity(Entity("D", Kind.INDIVIDUAL))
+         .with_relationship(Relationship("D", Rel.DIRECTOR_OF, "CO")))
+    ev185 = Evidence(entity_graph=g, loans_s185=(LoanFacts("CO", "D"),))
+    r185 = [x for x in build(plain, evidence=ev185)
+            if x.obligation_id == "CA13-S185-LOANS-DIRECTORS"][0]
+    check(r185.state == APPLIES_NOT_SATISFIED,
+          f"a loan to a director makes s.185 NOT_SATISFIED ({r185.state})")
+    check("PROHIBITED" in r185.basis, "...and the basis names the prohibition")
+
+    # An empty loan tuple ("we were told there are none") -> SATISFIED for s.185.
+    ev_none = Evidence(entity_graph=g, loans_s185=())
+    r185b = [x for x in build(plain, evidence=ev_none)
+             if x.obligation_id == "CA13-S185-LOANS-DIRECTORS"][0]
+    check(r185b.state == APPLIES_SATISFIED,
+          f"no loans (told) makes s.185 SATISFIED ({r185b.state})")
+
+    # A caught related-party transaction -> s.188 row is UNDETERMINED (needs approval).
+    g2 = (EntityGraph().with_entity(Entity("CO", Kind.COMPANY))
+          .with_entity(Entity("D", Kind.INDIVIDUAL)).with_entity(Entity("F", Kind.COMPANY))
+          .with_relationship(Relationship("D", Rel.DIRECTOR_OF, "CO"))
+          .with_relationship(Relationship("D", Rel.PARTNER_IN, "F")))
+    ev188 = Evidence(entity_graph=g2, rpts_s188=(TxnFacts("CO", "F", TxnType.GOODS),))
+    r188 = [x for x in build(plain, evidence=ev188)
+            if x.obligation_id == "CA13-S188-RPT"][0]
+    check(r188.state == APPLIES_UNDETERMINED,
+          f"a caught RPT makes s.188 UNDETERMINED pending approval ({r188.state})")
+
+    # An over-limit investment -> s.186 row is UNDETERMINED (needs special resolution).
+    over = InvestmentFacts("CO", Money.crore(3), paid_up_capital=Money.crore(1),
+                           free_reserves=Money.crore(1), securities_premium=Money(0),
+                           existing_aggregate=Money.crore(1))
+    ev186 = Evidence(investments_s186=(over,))
+    r186 = [x for x in build(plain, evidence=ev186)
+            if x.obligation_id == "CA13-S186-LOAN-INVESTMENT"][0]
+    check(r186.state == APPLIES_UNDETERMINED,
+          f"an over-limit investment makes s.186 UNDETERMINED pending SR ({r186.state})")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:

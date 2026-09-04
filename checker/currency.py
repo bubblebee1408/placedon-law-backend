@@ -97,6 +97,13 @@ DEPENDENCIES: tuple[Dependency, ...] = (
     Dependency("CA13-S92-RETURN", "Companies Act 2013 s.92, held verbatim in corpus"),
     Dependency("CA13-S135-CSR",
                "Companies Act 2013 s.135(1) thresholds, stated in the Act itself, not delegated"),
+    Dependency("CA13-S185-LOANS-DIRECTORS",
+               "Companies Act 2013 s.185, held verbatim in corpus"),
+    Dependency("CA13-S186-LOAN-INVESTMENT",
+               "Companies Act 2013 s.186 (the 60%/100% limit is stated in the Act itself)"),
+    Dependency("CA13-S188-RPT",
+               "Companies Act 2013 s.188, held verbatim in corpus; the members'-approval "
+               "threshold is a delegated rule (S-188-RULES) surfaced on the obligation row"),
 )
 
 
