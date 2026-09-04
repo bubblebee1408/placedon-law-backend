@@ -69,7 +69,7 @@ deps, one commit, full runner green before push. Tick when merged.
   EXCLUDE it from the score so no false green. Acceptance: harness runs, scores
   the seed set, and lists the NEEDS_LAWYER gaps as the H-001 ask.
 
-- [ ] **T6 — Wire structural citations into the pack.** When a pack row cites a
+- [x] **T6 — Wire structural citations into the pack.** When a pack row cites a
   provision, attach the structural chunk path + hash behind it (from T2), so the
   evidence pack cites "s.2(85)(i)" not just "s.2(85)". Acceptance: at least the
   small-company row shows a sub-clause-level citation; no bare statutory text

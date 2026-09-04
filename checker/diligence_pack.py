@@ -43,6 +43,7 @@ from datetime import date
 
 from checker.company_profile import CompanyProfile
 from checker import currency
+from checker.obligation_citations import structural_cites
 from checker.obligations import (APPLIES_NOT_SATISFIED, APPLIES_SATISFIED,
                                  APPLIES_UNDETERMINED, CANNOT_DETERMINE,
                                  DOES_NOT_APPLY, Evidence, REGISTER, Row, build)
@@ -188,6 +189,10 @@ def render(pack: DiligencePack) -> str:
             L.append(f" {flag} [{_STATE_LABEL[r.state]}] {r.obligation_id}")
             L.append(f"     duty      : {r.duty}")
             L.append(f"     provision : {r.provision}")
+            _cites = structural_cites(r.obligation_id)
+            if _cites:
+                L.append("     spans     : "
+                         + " · ".join(str(_c) for _c in _cites))
             L.append(f"     basis     : {r.basis}")
             if r.missing_facts:
                 L.append(f"     to settle : {'; '.join(r.missing_facts)}")
@@ -293,6 +298,13 @@ def _test() -> None:
           "the rendered pack carries a law-currency watch section")
     check("G.S.R. 700(E)" in text,
           "...naming the exact instrument to acquire")
+
+    # Structural citations: the small-company row cites its sub-clause limbs
+    # by path + hash (T6), never reproducing the statutory text.
+    check("s.2(85)(i)" in text,
+          "the small-company row cites the sub-clause limb 2(85)(i)")
+    check("sha256" in text.split("s.2(85)(i)")[1][:40],
+          "...with the limb's content hash beside it")
 
     # NOT a certificate, and it says so on its face.
     check("not a certificate of compliance" in text.lower(),

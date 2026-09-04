@@ -56,6 +56,7 @@ suites=(
   checker/prescribed_thresholds.py
   checker/classify.py
   checker/obligations.py
+  checker/obligation_citations.py
   checker/currency.py
   checker/structural_chunk.py
   checker/structural_index.py
