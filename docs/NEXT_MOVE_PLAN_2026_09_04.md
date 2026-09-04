@@ -193,3 +193,13 @@ abstention-first:
 - These deciders are transaction-scoped; wiring them into the obligation register
   / evidence pack (a company-level "do you have RPT/loan controls" row) is the
   natural next step, plus acquiring the s.188 threshold rule.
+
+---
+
+## Decision A taken — retrieval ships on BM25 (2026-09-04)
+
+`checker/chunk_retrieval.py` is the shipped ranker (best/rank/search_section);
+retrieval_eval scores exactly it (0.62); no dependency added. Embeddings (decision
+B) revisited only if real usage shows 0.62 is not enough — and B remains gated on
+the operator naming the backend (local sentence-transformers vs a Voyage/OpenAI
+embedding API), because backend choice is an architecture + cost + privacy call.
