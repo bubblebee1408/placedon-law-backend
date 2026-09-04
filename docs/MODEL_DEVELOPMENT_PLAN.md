@@ -149,6 +149,22 @@ prose by length.
 
 **3.4 Embeddings: off-the-shelf first; a narrow legal-embedding fine-tune is the
 ONE defensible training, and it is optional.**
+
+> **Update 2026-09-04 — measured before adding any dependency.** The disciplined
+> first step ran before embeddings: a zero-dependency BM25 ranker
+> (`checker/lexical_rank.py`). It moved retrieval precision@1 from **0.20 (naive
+> term-overlap) to 0.60** on the eval set, with no package and no network. The two
+> residual misses are genuinely semantic — a question about the small-company
+> *capital limit* retrieves the *definition* of paid-up capital (2(68)) over the
+> 2(85)(i) limb; "first AGM" is indistinguishable from the other s.96 provisos by
+> words alone. So the embedding dependency is now justified by a **specific,
+> measured gap**, not a vague one — but it remains gated on TWO things and neither
+> is mine to decide alone: (a) a dependency governance decision (torch/sentence-
+> transformers or a paid embedding API, against "no new dependency without a
+> stated reason"), and (b) enough eval cases to measure honestly — 0.60 on five
+> cases is a weak signal, and the semantically-hard cases need the H-B lawyer
+> labels to expand the set without overfitting. Tuning further against five cases
+> would be fooling ourselves, so autonomous retrieval work correctly stops here.
 Start with a general embedding model. Later — only after a retrieval eval set
 exists (3.6) — a narrow embedding fine-tune on Indian corporate-law language is
 the single training we would consider (the honest analogue of Harvey's Voyage AI
