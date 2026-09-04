@@ -28,7 +28,21 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from checker.ground_span import select_chunk
+from checker.lexical_rank import BM25
 from checker.structural_index import chunks_for_section
+
+
+def bm25_select(question, chunks):
+    """Rank a section's chunks for a question with BM25; return the top Chunk.
+
+    The dependency-free alternative to the naive term-overlap selector. Returns
+    None when nothing scores above zero, same contract as select_chunk.
+"""
+    if not chunks:
+        return None
+    bm = BM25([(c.path, c.text) for c in chunks])
+    top = bm.top(question)
+    return next((c for c in chunks if c.path == top), None) if top else None
 
 
 @dataclass(frozen=True)
@@ -89,15 +103,19 @@ class EvalResult:
         return self.correct / self.scored if self.scored else 0.0
 
 
-def run(cases: tuple[EvalCase, ...] = CASES) -> EvalResult:
-    """Score the selector on the structural cases; list the lawyer-gated ones."""
+def run(cases: tuple[EvalCase, ...] = CASES, *, selector=select_chunk) -> EvalResult:
+    """Score `selector` on the structural cases; list the lawyer-gated ones.
+
+    selector(question, chunks) -> Chunk|None. Defaults to the naive term-overlap
+    selector (the 0.20 baseline); pass bm25_select for the BM25 ranker.
+"""
     res = EvalResult(scored=0, correct=0)
     for c in cases:
         if c.needs_lawyer or c.expected_path is None:
             res.needs_lawyer.append(f"[s.{c.section}] {c.question} — {c.note}")
             continue
         res.scored += 1
-        picked = select_chunk(c.question, chunks_for_section(c.section))
+        picked = selector(c.question, chunks_for_section(c.section))
         got = picked.path if picked else None
         if got == c.expected_path:
             res.correct += 1
@@ -143,17 +161,24 @@ def _test() -> None:
     check(res.scored + len(res.needs_lawyer) == len(CASES),
           "scored + excluded accounts for every case (nothing silently dropped)")
 
-    # ── precision is MEASURED, not gated ────────────────────────────────────
-    # This is a scaffold: its self-test verifies the measurement tool, it does
-    # NOT assert the retriever is good. Pinning a floor here would either force
-    # tuning the questions to the ranker or fail legitimately -- and the whole
-    # point is to expose the true baseline so the embedding layer (plan §3.4) can
-    # be justified and measured against it. So: assert the ratio is well-formed
-    # and that SOMETHING is retrieved correctly (a total-zero would be a broken
-    # selector regression), and record the number.
-    check(0.0 <= res.precision_at_1 <= 1.0, "precision is a well-formed ratio in [0,1]")
+    # ── precision is MEASURED for two rankers, and the gain is asserted ──────
+    # The self-test still verifies the tool, not a fixed quality bar. But now it
+    # records TWO baselines -- naive term-overlap and dependency-free BM25 -- and
+    # asserts BM25 does not regress below naive, because the whole point of adding
+    # BM25 was to see whether a classical method beats 0.20 before committing to
+    # an embedding dependency. It does (0.20 -> 0.60), and the residual misses are
+    # semantic, which is the measured case for embeddings (see the misses below).
+    naive = run(selector=select_chunk)
+    bm25 = run(selector=bm25_select)
+    check(0.0 <= naive.precision_at_1 <= 1.0 and 0.0 <= bm25.precision_at_1 <= 1.0,
+          "both precisions are well-formed ratios")
+    check(bm25.precision_at_1 >= naive.precision_at_1,
+          f"BM25 does not regress below naive "
+          f"(naive={naive.precision_at_1:.2f}, bm25={bm25.precision_at_1:.2f})")
     check(res.correct >= 1,
           f"the selector gets at least one structural case right (baseline={res.precision_at_1:.2f})")
+    print(f"  [INFO] naive p@1={naive.precision_at_1:.2f}  bm25 p@1={bm25.precision_at_1:.2f}  "
+          f"(residual BM25 misses are the embedding target)")
 
     # The measured baseline is LOW on whole-section lexical retrieval by design of
     # this naive selector -- e.g. "paid-up share capital limit for a small company"
