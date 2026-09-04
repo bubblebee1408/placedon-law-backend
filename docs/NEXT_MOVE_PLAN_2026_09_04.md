@@ -46,7 +46,7 @@ deps, one commit, full runner green before push. Tick when merged.
   both limbs. Guard: must not choke on a section whose HTML is malformed —
   degrade to a chapeau chunk, never raise.
 
-- [ ] **T3 — Retrieval returns structural chunks.** Add a function (do NOT break
+- [x] **T3 — Retrieval returns structural chunks.** Add a function (do NOT break
   existing `retrieve()` tests) that, given a section (and optional path), returns
   the ranked structural chunks, each carrying its citation path + hash. Keep the
   existing admission/withheld-rules discipline. Acceptance: a query naming a
