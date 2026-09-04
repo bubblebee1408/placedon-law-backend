@@ -58,6 +58,7 @@ suites=(
   checker/obligations.py
   checker/currency.py
   checker/structural_chunk.py
+  checker/structural_index.py
   checker/matrix_view.py
   checker/diligence_pack.py
   checker/review_table.py

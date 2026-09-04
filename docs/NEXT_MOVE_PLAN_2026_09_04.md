@@ -38,7 +38,7 @@ deps, one commit, full runner green before push. Tick when merged.
   units (sub-section/proviso/roman sub-clause) with paths + spans + hashes.
   *Done, 21/21, pushed.*
 
-- [ ] **T2 — Structural corpus index.** `checker/structural_index.py`: build a
+- [x] **T2 — Structural corpus index.** `checker/structural_index.py`: build a
   path→chunk index across all ~529 sections (lazy, cached), plus
   `chunk_by_path("2(85)(i)")` and `chunks_for_section("96")`. Acceptance: every
   obligation's governing provision (s.96, s.173, s.149(1), s.149(3), s.137, s.92,
