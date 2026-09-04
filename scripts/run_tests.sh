@@ -64,6 +64,7 @@ suites=(
   checker/s184.py
   checker/s188_threshold.py
   checker/s186.py
+  checker/s180.py
   checker/currency.py
   checker/structural_chunk.py
   checker/structural_index.py
