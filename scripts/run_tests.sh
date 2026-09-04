@@ -61,6 +61,7 @@ suites=(
   checker/structural_index.py
   checker/structural_retrieve.py
   checker/ground_span.py
+  checker/retrieval_eval.py
   checker/matrix_view.py
   checker/diligence_pack.py
   checker/review_table.py

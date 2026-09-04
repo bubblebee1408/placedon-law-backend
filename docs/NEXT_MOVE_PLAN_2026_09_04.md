@@ -61,7 +61,7 @@ deps, one commit, full runner green before push. Tick when merged.
   Match deterministically (path mention, then term overlap); NO model in the
   selection path.
 
-- [ ] **T5 — Retrieval eval harness (scaffold).** `checker/retrieval_eval.py`: a
+- [x] **T5 — Retrieval eval harness (scaffold).** `checker/retrieval_eval.py`: a
   frozen set of (question → expected chunk path) cases with a scorer
   (precision@1 / recall). Seed ONLY the entries derivable without legal judgement
   (e.g. "small company paid-up capital limit" → 2(85)(i); "AGM timing first year"
