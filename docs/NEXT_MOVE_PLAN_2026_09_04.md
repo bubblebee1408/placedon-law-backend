@@ -102,3 +102,41 @@ The autonomous queue (T2–T6) merged and green, OR a blocker recorded and the l
 stopped honestly. The human-gated items (H-A/B/C) are the operator's and are not
 part of today's autonomous completion — the highest-value one, H-A, is a single
 command that unblocks small-company classification the moment the operator is back.
+
+---
+
+## LOOP COMPLETE — 2026-09-04 (end of session)
+
+The autonomous queue T1–T6 is merged, tested, and pushed. The loop stopped
+because only human-gated items remain, exactly as the protocol requires — it did
+not invent further work.
+
+**Shipped this session (all on `engine/entailment`, full runner green at each step):**
+- G.S.R. 700(E): downloaded via the Composio browser tool (both the compliant
+  fetcher and an HTML crawler failed; a real browser reached DSpace), verified,
+  registered PENDING_HUMAN_REVIEW, committed. See [[project_placedon_gazette_acquisition]].
+- Currency engine + pack LAW-CURRENCY WATCH.
+- T1 structural chunker · T2 structural index · T3 structural retrieval ·
+  T4 chunk→E-gate grounding · T5 retrieval eval (baseline p@1=0.20) ·
+  T6 sub-clause span citations in the pack.
+- Model-development plan, primary-source verified.
+
+**The retrieval layer now exists end to end:** a section's text → structural
+chunks (path+hash) → path-addressable index → admission-gated retrieval →
+deterministic span selection → E3–E6 entailment → NOT_ESTABLISHED-or-cited. The
+eval quantified the honest gap: lexical selection is weak over whole sections
+(0.20), which is the measured case FOR the embedding layer — the next real build,
+and the one narrow training the plan endorses.
+
+**What the operator returns to (in priority order):**
+1. **H-A — one command** unblocks small-company classification:
+   `python3 scripts/register_gsr700e.py --attest <id>` (after eyeballing
+   `corpus/sources/gsr700e_2022.pdf`), then `bash scripts/run_tests.sh`. Currency
+   flips 2(85) → CURRENT; classify starts answering.
+2. **H-B** — a lawyer resolves the `NEEDS_LAWYER` cases in `retrieval_eval.py`
+   (the retrieval eval labels) and confirms the obligation rows.
+3. **H-C** — CS review via the validation kit (H-001).
+
+**Next autonomous build, when authorised:** the embedding layer (plan §3.4) to
+beat the 0.20 retrieval baseline — but it wants the H-B lawyer labels first, so
+it is correctly downstream of a human step, not ahead of one.
