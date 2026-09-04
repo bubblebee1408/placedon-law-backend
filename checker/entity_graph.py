@@ -80,12 +80,21 @@ class Relationship:
             raise ValueError(f"a shareholding percent must be in [0,100], got {self.percent}")
 
 
-# A completeness assertion: "every edge of type `rel` OUT OF `entity` is known."
-# It is what lets an existence query answer NO instead of UNKNOWN.
+# A completeness assertion. Direction says which side is complete: OUT = "every
+# edge of type `rel` FROM `entity` is known" (settles "does A relate to ?"); IN =
+# "every edge of type `rel` INTO `entity` is known" (settles "are these ALL the
+# directors of this company?"). It is what lets a query answer NO/complete instead
+# of UNKNOWN.
+class Direction(str, Enum):
+    OUT = "OUT"
+    IN = "IN"
+
+
 @dataclass(frozen=True)
 class Complete:
     entity: str
     rel: Rel
+    direction: Direction = Direction.OUT
 
 
 @dataclass(frozen=True)
@@ -110,18 +119,44 @@ class EntityGraph:
         return EntityGraph(self.entities, self.relationships + (rel,), self.completeness)
 
     def declare_complete(self, entity: str, rel: Rel) -> "EntityGraph":
-        c = Complete(entity, rel)
+        """Assert every OUTgoing edge of `rel` from `entity` is known."""
+        c = Complete(entity, rel, Direction.OUT)
+        if c in self.completeness:
+            return self
+        return EntityGraph(self.entities, self.relationships, self.completeness + (c,))
+
+    def declare_complete_into(self, entity: str, rel: Rel) -> "EntityGraph":
+        """Assert every INcoming edge of `rel` into `entity` is known (e.g. the
+        full set of directors of a company)."""
+        c = Complete(entity, rel, Direction.IN)
         if c in self.completeness:
             return self
         return EntityGraph(self.entities, self.relationships, self.completeness + (c,))
 
     # ── queries ─────────────────────────────────────────────────────────────
-    def _is_complete(self, entity: str, rel: Rel) -> bool:
-        return Complete(entity, rel) in self.completeness
+    def _is_complete(self, entity: str, rel: Rel,
+                     direction: Direction = Direction.OUT) -> bool:
+        return Complete(entity, rel, direction) in self.completeness
+
+    def complete_into(self, entity: str, rel: Rel) -> bool:
+        """Whether the incoming edges of `rel` into `entity` are declared complete."""
+        return self._is_complete(entity, rel, Direction.IN)
 
     def out(self, src: str, rel: Rel) -> list[Relationship]:
         """Known outgoing edges of a type. May be incomplete — see `holds`."""
         return [r for r in self.relationships if r.src == src and r.rel == rel]
+
+    def into(self, dst: str, rel: Rel) -> list[Relationship]:
+        """Known incoming edges of a type. May be incomplete — see `complete_into`."""
+        return [r for r in self.relationships if r.dst == dst and r.rel == rel]
+
+    def directors_of(self, company: str) -> list[str]:
+        """The KNOWN directors of a company (may be incomplete)."""
+        return [r.src for r in self.into(company, Rel.DIRECTOR_OF)]
+
+    def controllers_of(self, company: str) -> list[str]:
+        """The KNOWN entities that control a company (its holding companies)."""
+        return [r.src for r in self.into(company, Rel.CONTROLS)]
 
     def holds(self, src: str, rel: Rel, dst: str) -> Answer:
         """Tri-state: does `src --rel--> dst` hold?
@@ -240,6 +275,23 @@ def _test() -> None:
     check(g.entity_kind("ACME") is Kind.COMPANY and g.entity_kind("P1") is Kind.INDIVIDUAL,
           "entity kinds are recorded")
     check(g.entity_kind("NOBODY") is None, "an unknown entity has no kind, not a default one")
+
+    # ── incoming queries + directional completeness ─────────────────────────
+    from checker.entity_graph import Direction  # noqa: F401 (self-import for clarity)
+    gd = (EntityGraph().with_entity(acme).with_entity(p_dir).with_entity(p_rel)
+          .with_relationship(Relationship("P1", Rel.DIRECTOR_OF, "ACME"))
+          .with_relationship(Relationship("P2", Rel.DIRECTOR_OF, "ACME")))
+    check(set(gd.directors_of("ACME")) == {"P1", "P2"},
+          f"directors_of lists the known directors ({sorted(gd.directors_of('ACME'))})")
+    check(gd.directors_of("HOLDCO") == [], "a company with no known directors lists none")
+    check(len(gd.into("ACME", Rel.DIRECTOR_OF)) == 2, "into() returns incoming edges")
+    check(not gd.complete_into("ACME", Rel.DIRECTOR_OF),
+          "the director list is NOT complete until declared")
+    gdc = gd.declare_complete_into("ACME", Rel.DIRECTOR_OF)
+    check(gdc.complete_into("ACME", Rel.DIRECTOR_OF),
+          "declare_complete_into marks the incoming set complete")
+    check(not gdc._is_complete("ACME", Rel.DIRECTOR_OF),
+          "IN completeness does not leak into OUT completeness (they are distinct)")
 
     # ── no PII fields on the entity ─────────────────────────────────────────
     import dataclasses as _dc
