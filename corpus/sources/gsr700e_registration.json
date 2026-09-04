@@ -1,0 +1,23 @@
+{
+ "instrument_id": "INDIACODE_GSR_700E_DEFINITIONS_AMENDMENT_2022",
+ "title": "G.S.R. 700(E) \u2014 Companies (Specification of Definition Details) Amendment Rules, 2022, dated 15-09-2022",
+ "source_url": "https://indiacode.gov.in/handle/123456789/508916",
+ "bitstream_id": "6d5e9902-44a7-4ee5-975a-1fd7fc5d51a5",
+ "downloaded_at": null,
+ "registered_at": "2026-09-04T11:44:21Z",
+ "acquisition_method": "human_browser",
+ "artifact_sha256": "sha256:bb590caf9ef7e4dd4cf548ae6be32bab14323a3b0aa4cdc4be89157060bf5f49",
+ "stored_text": "corpus/rules/gsr_700e_2022.txt",
+ "stored_text_sha256": "sha256:406f1936d3f3f051a8b4b91ef4d28f919bf0eda4bec0602590b5f84bcabb4d28",
+ "operative_clause": "paid up capital and turnover of the small company shall not exceed rupees four crore and rupees forty crore [F .",
+ "classification": "VERIFIED_INSTRUMENT",
+ "identity_checked_by": null,
+ "identity_checked_at": null,
+ "verbatim_clause_checked_by": null,
+ "verbatim_clause_checked_at": null,
+ "status": "PENDING_HUMAN_REVIEW",
+ "attests_to": [
+  "identity: this file is G.S.R. 700(E) of 15-09-2022, and not the principal 2014 Rules, the 2021 amendment, or a consolidated reprint",
+  "clause: the operative wording recorded here is verbatim from the file, with no repair, normalisation or reflow"
+ ]
+}
