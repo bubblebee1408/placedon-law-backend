@@ -70,6 +70,7 @@ suites=(
   checker/retrieval_eval.py
   checker/chunk_retrieval.py
   checker/corpus_retrieval.py
+  checker/cross_section_eval.py
   checker/matrix_view.py
   checker/diligence_pack.py
   checker/review_table.py
