@@ -88,6 +88,8 @@ class Evidence:
     loans_s185: "tuple | None" = None              # tuple[s185.LoanFacts]
     rpts_s188: "tuple | None" = None               # tuple[s188.TxnFacts]
     investments_s186: "tuple | None" = None        # tuple[s186.InvestmentFacts]
+    borrowings_s180: "tuple | None" = None         # tuple[s180.BorrowingFacts]
+    director_contracts_s184: "tuple | None" = None  # tuple[(director, counterparty)]
 
 
 # A decider answers "was it complied with", given the profile and the evidence.
@@ -563,6 +565,56 @@ def _decide_s186(p: CompanyProfile, ev: "Evidence") -> tuple[bool | None, str]:
     return True, "all supplied loans/investments are within the s.186(2) limit"
 
 
+def _decide_s180(p: CompanyProfile, ev: "Evidence") -> tuple[bool | None, str]:
+    """s.180(1)(c): the Board may borrow past the capital+reserves+premium
+    aggregate only with a special resolution.
+
+    An excess is never NOT_SATISFIED on its own: exceeding the limit is lawful
+    if the members passed the special resolution, and whether they did is not
+    something this system can see. So an excess is UNDETERMINED with the reason
+    named, which is the same discipline s.186 uses for its ceiling.
+    """
+    if ev.borrowings_s180 is None:
+        return None, ("no borrowings supplied: give the company's proposed and existing "
+                      "borrowings, with paid-up capital, free reserves and securities "
+                      "premium, to test the s.180(1)(c) limit")
+    from checker.s180 import (assess, WITHIN_BORROWING_LIMIT, EXEMPT,
+                              EXCEEDS_NEEDS_SPECIAL_RESOLUTION)
+    results = [assess(b) for b in ev.borrowings_s180]
+    exceeds = [r for r in results if r.status == EXCEEDS_NEEDS_SPECIAL_RESOLUTION]
+    if exceeds:
+        return None, ("a borrowing exceeds the s.180(1)(c) aggregate of paid-up capital, "
+                      "free reserves and securities premium; a special resolution is "
+                      "required and its passing is not established")
+    if any(r.status not in (WITHIN_BORROWING_LIMIT, EXEMPT) for r in results):
+        return None, ("a borrowing or balance-sheet figure is unknown, so the "
+                      "s.180(1)(c) limit is not testable")
+    return True, "all supplied borrowings are within the s.180(1)(c) limit"
+
+
+def _decide_s184(p: CompanyProfile, ev: "Evidence") -> tuple[bool | None, str]:
+    """s.184(2): an interested director must disclose and abstain.
+
+    An interested contract is UNDETERMINED, never NOT_SATISFIED: the duty is
+    discharged BY disclosing, and whether the disclosure was made at the Board
+    meeting is a minute-book fact this system does not hold.
+    """
+    if ev.director_contracts_s184 is None:
+        return None, ("no director contracts supplied: give the (director, counterparty) "
+                      "pairs for the company's contracts, with the entity graph, to "
+                      "assess s.184(2)")
+    if ev.entity_graph is None:
+        return None, "an entity graph is needed to assess a director's interest (s.184)"
+    from checker.s184 import assess, NOT_INTERESTED
+    results = [assess(d, c, ev.entity_graph) for d, c in ev.director_contracts_s184]
+    caught = [r for r in results if r.status != NOT_INTERESTED]
+    if caught:
+        return None, (f"{len(caught)} contract(s) engage a director's interest under "
+                      f"s.184(2); whether the interest was disclosed at the Board meeting "
+                      f"and the director abstained is not established")
+    return True, "no supplied contract engages a director's interest under s.184(2)"
+
+
 REGISTER: tuple[Obligation, ...] = (
     Obligation(
         "CA13-S96-AGM",
@@ -721,6 +773,36 @@ REGISTER: tuple[Obligation, ...] = (
                          "this system does not hold",),
         note="s.203 has no Act-stated trigger — the class is entirely prescribed, "
              "so applicability refuses until that rule is acquired and reviewed"),
+    Obligation(
+        "CA13-S180-BORROWING-LIMIT",
+        "Keep borrowings within the s.180(1)(c) limit, or authorise the excess",
+        "Companies Act 2013, s.180(1)(c)",
+        _every_company,
+        evidence_needed=("the company's proposed and existing borrowings, with paid-up "
+                         "share capital, free reserves and securities premium",),
+        decided_by=_decide_s180,
+        note="a Board-power restriction, not a periodic duty: it binds every company "
+             "but can only be tested against the company's actual borrowings",
+        limbs_not_decided=(
+            "s.180(1)(a): sale/lease/disposal of the whole or substantially the whole "
+            "of an undertaking",
+            "s.180(1)(b): investment of compensation received on a merger or amalgamation",
+            "s.180(1)(d): remission or giving of time for a debt due by a director",
+            "whether any required special resolution was in fact passed")),
+    Obligation(
+        "CA13-S184-DIRECTOR-INTEREST",
+        "Ensure an interested director discloses and abstains",
+        "Companies Act 2013, s.184",
+        _every_company,
+        evidence_needed=("the (director, counterparty) pairs for the company's contracts, "
+                         "with the s.184 interest graph",),
+        decided_by=_decide_s184,
+        note="the duty is discharged BY disclosure, so an interested contract is a "
+             "question to answer from the minute book, not a defect on its face",
+        limbs_not_decided=(
+            "whether the disclosure was in fact made at the Board meeting (s.184(2))",
+            "whether the interested director in fact abstained from participating",
+            "s.184(1): the annual general disclosure of interest in Form MBP-1")),
 )
 
 
@@ -1245,6 +1327,63 @@ def _test() -> None:
               f"{oid} is UNDETERMINED without transactions ({r.state})")
         check(bool(r.missing_facts), f"...and {oid} names what to supply")
         check(r.state != APPLIES_SATISFIED, f"...and {oid} never reads compliant from silence")
+
+    # s.180 / s.184: present in the register, and UNDETERMINED from silence.
+    for oid in ("CA13-S180-BORROWING-LIMIT", "CA13-S184-DIRECTOR-INTEREST"):
+        r = [x for x in rows_noev if x.obligation_id == oid][0]
+        check(r.state == APPLIES_UNDETERMINED,
+              f"{oid} is UNDETERMINED without transactions ({r.state})")
+        check(bool(r.missing_facts), f"...and {oid} names what to supply")
+        check(r.state != APPLIES_SATISFIED, f"...and {oid} never reads compliant from silence")
+
+    # s.180: a borrowing past the aggregate is UNDETERMINED, never NOT_SATISFIED --
+    # the excess is lawful with a special resolution, and we cannot see one.
+    from checker.s180 import BorrowingFacts
+    from checker.company_profile import Money as _M
+    over = BorrowingFacts("CO", proposed_borrowing=_M(rupees=90_000_000),
+                          existing_borrowings=_M(rupees=0),
+                          paid_up_capital=_M(rupees=10_000_000),
+                          free_reserves=_M(rupees=10_000_000),
+                          securities_premium=_M(rupees=0),
+                          temporary_bankers_loan=False)
+    r180 = [x for x in build(plain, evidence=Evidence(borrowings_s180=(over,)))
+            if x.obligation_id == "CA13-S180-BORROWING-LIMIT"][0]
+    check(r180.state == APPLIES_UNDETERMINED,
+          f"a borrowing over the s.180 limit is UNDETERMINED, not a defect ({r180.state})")
+    check("special resolution" in r180.basis,
+          "...and the basis names the special resolution that would authorise it")
+
+    # s.180: told there are none -> the arithmetic limb passes, but the row still
+    # does NOT read satisfied, because (a)/(b)/(d) are not modelled. "Everything we
+    # can check passed" is not compliance with the whole of s.180.
+    r180b = [x for x in build(plain, evidence=Evidence(borrowings_s180=()))
+             if x.obligation_id == "CA13-S180-BORROWING-LIMIT"][0]
+    check(r180b.state == APPLIES_UNDETERMINED,
+          f"no borrowings (told) still is not s.180 compliance ({r180b.state})")
+    check(any("s.180(1)(a)" in m for m in r180b.missing_facts),
+          "...and the undecided limbs are named, not silently dropped")
+
+    # s.184: an interested director is UNDETERMINED -- disclosure discharges it.
+    g184 = (EntityGraph().with_entity(Entity("CO", Kind.COMPANY))
+            .with_entity(Entity("D", Kind.INDIVIDUAL)).with_entity(Entity("X", Kind.COMPANY))
+            .with_relationship(Relationship("D", Rel.DIRECTOR_OF, "CO"))
+            .with_relationship(Relationship("D", Rel.DIRECTOR_OF, "X")))
+    r184 = [x for x in build(plain, evidence=Evidence(
+                entity_graph=g184, director_contracts_s184=(("D", "X"),)))
+            if x.obligation_id == "CA13-S184-DIRECTOR-INTEREST"][0]
+    check(r184.state == APPLIES_UNDETERMINED,
+          f"an interested director contract is UNDETERMINED ({r184.state})")
+    check("disclos" in r184.basis, "...and the basis points at the disclosure")
+
+    # s.184: told there are no contracts -> still not satisfied, because whether
+    # the annual MBP-1 disclosure was made (s.184(1)) is not something we hold.
+    r184b = [x for x in build(plain, evidence=Evidence(
+                 entity_graph=g184, director_contracts_s184=()))
+             if x.obligation_id == "CA13-S184-DIRECTOR-INTEREST"][0]
+    check(r184b.state == APPLIES_UNDETERMINED,
+          f"no director contracts (told) still is not s.184 compliance ({r184b.state})")
+    check(any("MBP-1" in m for m in r184b.missing_facts),
+          "...and the unmet s.184(1) annual-disclosure limb is named")
 
     # A PROHIBITED loan to a director -> s.185 row is APPLIES_NOT_SATISFIED.
     g = (EntityGraph().with_entity(Entity("CO", Kind.COMPANY))

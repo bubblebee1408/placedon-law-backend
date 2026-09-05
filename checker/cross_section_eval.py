@@ -73,6 +73,33 @@ CASES: tuple[Case, ...] = (
     Case("scheme of compromise or arrangement with creditors", "230"),
     Case("registrar striking a company's name off the register", "248"),
     Case("punishment for fraud under the companies act", "447"),
+    # ── widened 2026-09-05: 25 sections the eval did not previously reach.
+    # Labels read off each section's title in the corpus, not recalled.
+    Case("can a company be formed with charitable objects", "8"),
+    Case("changing the company's registered office address", "12"),
+    Case("how do we alter the memorandum of association", "13"),
+    Case("procedure to amend the articles of association", "14"),
+    Case("what kinds of share capital may a company have", "43"),
+    Case("which shares carry voting rights at a meeting", "47"),
+    Case("issuing sweat equity shares to employees", "54"),
+    Case("transfer and transmission of securities to a new holder", "56"),
+    Case("how does a limited company alter its share capital", "61"),
+    Case("procedure for reduction of share capital", "66"),
+    Case("maintaining the register of members", "88"),
+    Case("where must the registers be kept and who may inspect them", "94"),
+    Case("can members vote through electronic means", "108"),
+    Case("when must a resolution go through postal ballot", "110"),
+    Case("what books of account must a company keep", "128"),
+    Case("what must the financial statement contain", "129"),
+    Case("powers and duties of the auditor", "143"),
+    Case("appointing an additional or alternate director", "161"),
+    Case("what are the statutory duties of a director", "166"),
+    Case("how does a director resign from the board", "168"),
+    Case("removing a director before the end of the term", "169"),
+    Case("merger and amalgamation of two companies", "232"),
+    Case("relief from oppression and mismanagement", "241"),
+    Case("filing a class action against the company", "245"),
+    Case("when may the tribunal wind up a company", "271"),
 )
 
 

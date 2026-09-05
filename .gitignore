@@ -64,3 +64,5 @@ corpus/benchmark/.reviewer_identities.json
 # Cached CRLs. Retrieved from the issuing CA; integrity comes from their
 # signature, not from us storing them.
 corpus/trust/crl/
+corpus/.dense_cache.pkl
+corpus/.chunk_dense_cache.pkl

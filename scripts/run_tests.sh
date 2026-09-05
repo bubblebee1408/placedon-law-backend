@@ -67,6 +67,15 @@ suites=(
   checker/s186.py
   checker/s180.py
   checker/currency.py
+  checker/chunk_fusion.py
+  checker/fusion.py
+  checker/reranker.py
+  checker/ablation.py
+  checker/dense_index.py
+  checker/ollama_runner.py
+  checker/backtest.py
+  checker/annotation.py
+  checker/extraction_schema.py
   checker/structural_chunk.py
   checker/structural_index.py
   checker/structural_retrieve.py
