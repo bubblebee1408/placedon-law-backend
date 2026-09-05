@@ -42,15 +42,22 @@ Short, honest, and asks for judgement rather than endorsement. Send it as-is.
 >
 > It takes a company's basic facts and produces a compliance matrix — one row
 > per obligation, each saying whether the duty applies, whether it looks met, or
-> what's missing. I'd like to show you six rows and have you tell me which ones a
+> what's missing. I'd like to show you seven rows and have you tell me which ones a
 > real practitioner would call wrong, which refusal is useful and which is just
 > annoying, and what a real matter needs that isn't there.
 >
-> There's a one-page version you can look at first: [validation kit link]. Happy
+> There's a one-page version you can look at first:
+> https://claude.ai/code/artifact/6b731f1a-ee40-46eb-a5e9-797994c07eaf . Happy
 > to do this on a call or in person, whenever suits.
 
-The one-page version is `docs/validation_kit.html` — publish it as an artifact
-(you did once; republish for a fresh link) and paste the URL. It leads with the
+The one-page version is `docs/validation_kit.html`, live at
+**https://claude.ai/code/artifact/6b731f1a-ee40-46eb-a5e9-797994c07eaf** — republished
+2026-09-05 and current with the engine (it had drifted: it described the s.2(85)
+refusal as blocked on G.S.R. 700(E), which stopped being true when that instrument was
+attested). The URL is stable across republishes, so this link can be sent as-is.
+
+**Check before sending:** the artifact is private by default. Open it and share it from
+the page's share menu, or the recipient will get nothing. It leads with the
 ICSI-specimen staleness finding, which is checkable in a minute and establishes
 the problem is real before you ask for anything.
 
