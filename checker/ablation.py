@@ -41,12 +41,23 @@ NOT_RUNNABLE rather than quietly degrading to BM25 and reporting BM25 under a de
 label. If the model dies part-way through a tier, that tier is marked NOT_RUNNABLE with
 the case count it reached — a partial run is not a result.
 
+## No tier is anchored by an example
+
+The first run of this matrix ended V4's prompt with "for example: 185" and V5's with
+three varied examples. gemma3:1b echoed 185 back for unrelated questions, so the
+measured V4->V5 delta was an artefact of the prompt rather than of schema constraint.
+Every tier now shares one format rule that describes the answer's shape with digit
+placeholders and names no real section, and V5 differs from V4 by the schema clause
+alone. `_test()` asserts this by pointing the harness's own answer extractor at each
+tier's prompt: if it can find a section number in the instructions, so can the model.
+
 ## The sample size is part of every number
 
 gemma3:1b on an M1 is slow enough that all 70 cases across four tiers is a long wall
 clock. The harness therefore runs a bounded prefix of the eval, defaults to 20 cases,
 and prints the sample size on every line it emits. An unstated sample is a lie by
-omission, so `render()` states it whether or not anyone asked.
+omission, so `render()` states it whether or not anyone asked. The published run uses
+`--sample=70`, i.e. the whole frozen eval.
 
 Standard library only. No new dependency (CLAUDE.md).
 """
@@ -168,6 +179,44 @@ def build_context(spec: TierSpec, question: str,
     return "\n\n".join(blocks), offered
 
 
+# ── de-anchoring: why no tier's prompt names a real section ─────────────────
+# The first run of this matrix ended V4's prompt with "for example: 185". gemma3:1b
+# then echoed 185 back for unrelated questions — "rules for a private placement offer"
+# -> 185 (gold 42), "how does a company issue further shares" -> 185 (gold 62). V4
+# scored 0.10 and V5 0.45 on IDENTICAL retrieved context, so that delta measured the
+# prompt, not the schema constraint it was supposed to isolate.
+#
+# Replacing one example with three varied real ones does NOT fix it. Measured on
+# gemma3:1b over 6 probe cases, a prompt listing "185 or 188(1)(a) or 2(85)" returned
+# 185 for five of the six. Any real section number in the template is an anchor.
+#
+# So the form is described with digit PLACEHOLDERS and no real section number appears
+# in any tier's template. Every tier now carries the identical format rule; V5 adds the
+# schema clause and nothing else. That is the whole point of the V4-vs-V5 comparison:
+# the two tiers must differ only in schema constraint, never in example exposure.
+_FORMAT_RULE = ("Answer with the section number, written in one of these forms, where "
+                "each N stands for a digit: N, NN, NNN, NNN(N) or N(NN).\n")
+
+# The only thing V5 adds over V4.
+_SCHEMA_RULE = ("Give the section number and NOTHING else — no words, no section "
+                "title, no full stop, no explanation.\n")
+
+_ASK = "Which single section of the Companies Act, 2013 governs this question?\n"
+_CUE = "Section:"
+
+
+def instruction_block(spec: TierSpec) -> str:
+    """The tier's own instruction, carrying no question and no retrieved context.
+
+    Exposed so the anchoring test can inspect exactly what the template contributes,
+    separately from whatever digits the question or the candidate list happen to hold.
+    """
+    body = _ASK + _FORMAT_RULE
+    if spec.schema_constrained:
+        body += _SCHEMA_RULE
+    return body + _CUE
+
+
 def build_prompt(spec: TierSpec, question: str, context: str) -> str:
     head = ("You are answering about the Companies Act, 2013 (India).\n\n"
             f"Question: {question}\n\n")
@@ -175,22 +224,17 @@ def build_prompt(spec: TierSpec, question: str, context: str) -> str:
         head += (context + "\n\nThe correct section is very likely one of the "
                  "candidates above, but you may name another if none of them governs "
                  "the question.\n\n")
-    if spec.schema_constrained:
-        return head + (
-            "Answer with a section reference and NOTHING else — no words, no full "
-            "stop, no explanation. Valid examples: 185 or 188(1)(a) or 2(85).\n"
-            "Answer:")
-    return head + ("Which single section of the Companies Act, 2013 governs this "
-                   "question? Answer with the section number only, for example: 185\n"
-                   "Section number:")
+    return head + instruction_block(spec)
 
 
 def build_repair_prompt(question: str, bad: str) -> str:
+    """Also de-anchored: a repair prompt naming a section number is the same trap."""
     return ("Your previous answer was not a valid section reference.\n"
             f"Question: {question}\n"
             f"You answered: {bad.strip()[:120]!r}\n\n"
-            "Reply with the section number alone. No words, no punctuation, no "
-            "explanation. For example: 185\nAnswer:")
+            "Reply with the section number alone — digits, optionally followed by "
+            "bracketed sub-numbers. No words, no punctuation, no explanation.\n"
+            + _CUE)
 
 
 # ── results ─────────────────────────────────────────────────────────────────
@@ -624,6 +668,38 @@ def _test() -> None:
     check(not died.ran and "after 1 of 3" in died.reason,
           "a model that dies mid-tier yields NOT_RUNNABLE with the case count reached")
     check(died.p_at_1 is None, "...and no partial p@1 is published from it")
+
+    # ── de-anchoring: no tier's prompt may hand the model a number to echo ──
+    # This is the confound that wrecked the first run. A prompt ending "for example:
+    # 185" is not a neutral instruction; a 1B model returns 185. The harness's own
+    # extractor is pointed at the PROMPT here: if it can pull a section number out of
+    # the instructions, so can the model.
+    digitless_q = "how does a company issue further shares to existing shareholders"
+    for spec in TIERS:
+        check(extract_section(build_prompt(spec, digitless_q, "")) is None,
+              f"{spec.tier}: no example section number anywhere in its prompt — the "
+              "harness's own extractor finds none to echo")
+    # The Act's own year is the one number that legitimately appears; nothing else may.
+    check(all(not any(ch.isdigit() for ch in
+                      instruction_block(s).replace("Companies Act, 2013", ""))
+              for s in TIERS),
+          "no tier's instruction block contains any digit but the Act's year: the "
+          "answer form is described with placeholders, never with a real section")
+    check(extract_section(build_repair_prompt("q", "I cannot say.")) is None,
+          "the V5 repair prompt is de-anchored too — a retry naming a number is the "
+          "same trap one turn later")
+    v4s, v5s = TIERS[3], TIERS[4]
+    check(not v4s.schema_constrained and v5s.schema_constrained,
+          "V4 is unconstrained and V5 is schema-constrained — the only intended "
+          "difference between them")
+    p4 = build_prompt(v4s, digitless_q, "ctx")
+    p5 = build_prompt(v5s, digitless_q, "ctx")
+    check(p4 != p5 and p5.replace(_SCHEMA_RULE, "") == p4,
+          "V4 and V5 prompts differ ONLY by the schema clause — identical example "
+          "exposure, so the comparison measures schema constraint and nothing else")
+    check(_FORMAT_RULE in p4 and _FORMAT_RULE in p5
+          and _FORMAT_RULE in build_prompt(TIERS[0], digitless_q, ""),
+          "...and every tier, retrieval or not, carries the identical format rule")
 
     # ── the answer extractor ──
     check(extract_section("Section 185.") == "185", "'Section 185.' -> 185")
