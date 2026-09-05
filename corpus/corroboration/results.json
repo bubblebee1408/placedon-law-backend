@@ -1,0 +1,402 @@
+[
+ {
+  "claim_section": "1225",
+  "verdict": "NO_WITNESS",
+  "prior_wording": "delivery of a copy of the prospectus for registration",
+  "witness_quote": null,
+  "witness_title": "Section 9 in The Companies (Amendment) Act, 2017",
+  "witness_url": "https://indiankanoon.org/doc/168364858/",
+  "note": "amending Act found but it names no matching substitution",
+  "fetched_at": "2026-08-22T15:06:27+00:00"
+ },
+ {
+  "claim_section": "1230",
+  "verdict": "EXACT",
+  "prior_wording": "three lakh rupees, or with both",
+  "witness_quote": "three lakh rupees, or with both",
+  "witness_title": "Act 29 of 2020",
+  "witness_url": "https://indiankanoon.org/doc/69330370/",
+  "note": "matched in the full instrument",
+  "fetched_at": "2026-08-22T15:06:27+00:00"
+ },
+ {
+  "claim_section": "1236",
+  "verdict": "EXACT",
+  "prior_wording": "issued under the common seal of the company",
+  "witness_quote": "issued under the common seal of the company",
+  "witness_title": "Act 21 of 2015",
+  "witness_url": "https://indiankanoon.org/doc/147153123/",
+  "note": "matched in the full instrument",
+  "fetched_at": "2026-08-22T15:06:30+00:00"
+ },
+ {
+  "claim_section": "1237",
+  "verdict": "EXACT",
+  "prior_wording": "provisions of section 43 and sub-section (2) of section 50",
+  "witness_quote": "provisions of section 43 and sub-section (2) of section 50",
+  "witness_title": "Act 1 of 2018",
+  "witness_url": "https://indiankanoon.org/doc/9573987/",
+  "note": "matched in the full instrument",
+  "fetched_at": "2026-08-22T15:06:30+00:00"
+ },
+ {
+  "claim_section": "1252",
+  "verdict": "EXACT",
+  "prior_wording": "of a registered valuer subject to such conditions as may be prescribed",
+  "witness_quote": "of a registered valuer subject to such conditions as may be prescribed",
+  "witness_title": "Act 1 of 2018",
+  "witness_url": "https://indiankanoon.org/doc/9573987/",
+  "note": "matched in the full instrument",
+  "fetched_at": "2026-08-22T15:06:30+00:00"
+ },
+ {
+  "claim_section": "1254",
+  "verdict": "EXACT",
+  "prior_wording": "or five lakh rupees whichever is less",
+  "witness_quote": "or five lakh rupees whichever is less",
+  "witness_title": "Section 12 in The Companies (Amendment) Act, 2020",
+  "witness_url": "https://indiankanoon.org/doc/77323007/",
+  "note": "",
+  "fetched_at": "2026-08-22T15:06:30+00:00"
+ },
+ {
+  "claim_section": "1256",
+  "verdict": "NO_WITNESS",
+  "prior_wording": "is unable, within the meaning of sub-section (2) of section 271, to pay the amount of his debt or claim,",
+  "witness_quote": null,
+  "witness_title": null,
+  "witness_url": null,
+  "note": "2 hits, none an amending Act",
+  "fetched_at": "2026-08-22T15:06:30+00:00"
+ },
+ {
+  "claim_section": "1269",
+  "verdict": "EXACT",
+  "prior_wording": "register the charge within the period specified in section 77",
+  "witness_quote": "register the charge within the period specified in section 77",
+  "witness_title": "Act 1 of 2018",
+  "witness_url": "https://indiankanoon.org/doc/9573987/",
+  "note": "matched in the full instrument",
+  "fetched_at": "2026-08-22T15:06:30+00:00"
+ },
+ {
+  "claim_section": "1283",
+  "verdict": "EXACT",
+  "prior_wording": "punishable with fine which shall not be less than fifty thousand rupees but which may extend to five lakh rupees",
+  "witness_quote": "punishable with fine which shall not be less than fifty thousand rupees but which may extend to five lakh rupees",
+  "witness_title": "Act 29 of 2020",
+  "witness_url": "https://indiankanoon.org/doc/69330370/",
+  "note": "matched in the full instrument",
+  "fetched_at": "2026-08-22T15:06:30+00:00"
+ },
+ {
+  "claim_section": "1296",
+  "verdict": "NO_WITNESS",
+  "prior_wording": "punishable with fine which may extend to five thousand rupees",
+  "witness_quote": null,
+  "witness_title": null,
+  "witness_url": null,
+  "note": "12 hits, none an amending Act",
+  "fetched_at": "2026-08-22T15:06:30+00:00"
+ },
+ {
+  "claim_section": "1314",
+  "verdict": "EXACT",
+  "prior_wording": "transferred by the company to the reserves",
+  "witness_quote": "transferred by the company to the reserves",
+  "witness_title": "Section 32 in The Companies (Amendment) Act, 2017",
+  "witness_url": "https://indiankanoon.org/doc/20661445/",
+  "note": "",
+  "fetched_at": "2026-08-22T15:06:30+00:00"
+ },
+ {
+  "claim_section": "1315",
+  "verdict": "EXACT",
+  "prior_wording": "unpaid or unclaimed dividend has been transferred under sub-section (5) shall also be",
+  "witness_quote": "unpaid or unclaimed dividend has been transferred under sub-section (5) shall also be",
+  "witness_title": "Act 21 of 2015",
+  "witness_url": "https://indiankanoon.org/doc/147153123/",
+  "note": "matched in the full instrument",
+  "fetched_at": "2026-08-22T15:06:30+00:00"
+ },
+ {
+  "claim_section": "1323",
+  "verdict": "EXACT",
+  "prior_wording": "the Appellate Authority constituted under sub-section (6) in such manner as may be prescribed",
+  "witness_quote": "the Appellate Authority constituted under sub-section (6) in such manner as may be prescribed",
+  "witness_title": "Section 35 in The Companies (Amendment) Act, 2017",
+  "witness_url": "https://indiankanoon.org/doc/188867167/",
+  "note": "",
+  "fetched_at": "2026-08-22T15:06:30+00:00"
+ },
+ {
+  "claim_section": "1325",
+  "verdict": "EXACT",
+  "prior_wording": "annual evaluation has been made by the Board of its own performance and that of its committees and individual directors",
+  "witness_quote": "annual evaluation has been made by the Board of its own performance and that of its committees and individual directors",
+  "witness_title": "Act 1 of 2018",
+  "witness_url": "https://indiankanoon.org/doc/9573987/",
+  "note": "matched in the full instrument",
+  "fetched_at": "2026-08-22T15:06:30+00:00"
+ },
+ {
+  "claim_section": "1328",
+  "verdict": "EXACT",
+  "prior_wording": "one thousand rupees for every day during which the failure continues but which shall not be more than ten lakh rupees",
+  "witness_quote": "one thousand rupees for every day during which the failure continues but which shall not be more than ten lakh rupees",
+  "witness_title": "Act 29 of 2020",
+  "witness_url": "https://indiankanoon.org/doc/69330370/",
+  "note": "matched in the full instrument",
+  "fetched_at": "2026-08-22T15:06:30+00:00"
+ },
+ {
+  "claim_section": "1328",
+  "verdict": "NO_WITNESS",
+  "prior_wording": "punishable with imprisonment for a term which may extend to six months or with fine which shall not be less than one lakh rupees but which may extend to five lakh rupees, or with both",
+  "witness_quote": null,
+  "witness_title": null,
+  "witness_url": null,
+  "note": "15 hits, none an amending Act",
+  "fetched_at": "2026-08-22T15:06:30+00:00"
+ },
+ {
+  "claim_section": "1527",
+  "verdict": "NO_WITNESS",
+  "prior_wording": "whether by the Tribunal or voluntarily, or which is subsequently ordered to be wound up by the Tribunal or which subsequently passes a resolution for voluntary winding up",
+  "witness_quote": null,
+  "witness_title": null,
+  "witness_url": null,
+  "note": "4 hits, none an amending Act",
+  "fetched_at": "2026-08-22T15:06:30+00:00"
+ },
+ {
+  "claim_section": "1528",
+  "verdict": "NO_WITNESS",
+  "prior_wording": "or which subsequently passes a resolution for voluntary winding up,",
+  "witness_quote": null,
+  "witness_title": null,
+  "witness_url": null,
+  "note": "8 hits, none an amending Act",
+  "fetched_at": "2026-08-22T15:06:30+00:00"
+ },
+ {
+  "claim_section": "191",
+  "verdict": "NO_WITNESS",
+  "prior_wording": "the Rehabilitation and Insolvency Fund formed under section 269",
+  "witness_quote": null,
+  "witness_title": null,
+  "witness_url": null,
+  "note": "3 hits, none an amending Act",
+  "fetched_at": "2026-08-22T15:06:30+00:00"
+ },
+ {
+  "claim_section": "191",
+  "verdict": "EXACT",
+  "prior_wording": "twenty-five lakh rupees, or with both",
+  "witness_quote": "twenty-five lakh rupees, or with both",
+  "witness_title": "Act 29 of 2020",
+  "witness_url": "https://indiankanoon.org/doc/69330370/",
+  "note": "matched in the full instrument",
+  "fetched_at": "2026-08-22T15:06:30+00:00"
+ },
+ {
+  "claim_section": "49076",
+  "verdict": "EXACT",
+  "prior_wording": "one lakh rupees, or with both",
+  "witness_quote": "one lakh rupees, or with both",
+  "witness_title": "Act 29 of 2020",
+  "witness_url": "https://indiankanoon.org/doc/69330370/",
+  "note": "matched in the full instrument",
+  "fetched_at": "2026-08-22T15:06:30+00:00"
+ },
+ {
+  "claim_section": "49076",
+  "verdict": "NO_WITNESS",
+  "prior_wording": "and with fine which shall not be less than one lakh rupees but which may extend to twentyfive lakh rupees",
+  "witness_quote": null,
+  "witness_title": null,
+  "witness_url": null,
+  "note": "0 hits, none an amending Act",
+  "fetched_at": "2026-08-22T15:06:30+00:00"
+ },
+ {
+  "claim_section": "49096",
+  "verdict": "EXACT",
+  "prior_wording": "five lakh rupees, or with both",
+  "witness_quote": "five lakh rupees, or with both",
+  "witness_title": "Act 29 of 2020",
+  "witness_url": "https://indiankanoon.org/doc/69330370/",
+  "note": "matched in the full instrument",
+  "fetched_at": "2026-08-22T15:06:30+00:00"
+ },
+ {
+  "claim_section": "49104",
+  "verdict": "EXACT",
+  "prior_wording": "shall carry out evaluation of every director's performance",
+  "witness_quote": "shall carry out evaluation of every director's performance",
+  "witness_title": "Act 1 of 2018",
+  "witness_url": "https://indiankanoon.org/doc/9573987/",
+  "note": "matched in the full instrument",
+  "fetched_at": "2026-08-22T15:06:30+00:00"
+ },
+ {
+  "claim_section": "49104",
+  "verdict": "EXACT",
+  "prior_wording": "non-consideration of resolution of any grievance",
+  "witness_quote": "non-consideration of resolution of any grievance",
+  "witness_title": "Act 1 of 2018",
+  "witness_url": "https://indiankanoon.org/doc/9573987/",
+  "note": "matched in the full instrument",
+  "fetched_at": "2026-08-22T15:06:30+00:00"
+ },
+ {
+  "claim_section": "49106",
+  "verdict": "EXACT",
+  "prior_wording": "paid-up share capital and free reserves",
+  "witness_quote": "paid-up share capital and free reserves",
+  "witness_title": "Act 1 of 2018",
+  "witness_url": "https://indiankanoon.org/doc/9573987/",
+  "note": "matched in the full instrument",
+  "fetched_at": "2026-08-22T15:06:30+00:00"
+ },
+ {
+  "claim_section": "49114",
+  "verdict": "EXACT",
+  "prior_wording": "shall be voidable at the option of the Board",
+  "witness_quote": "shall be voidable at the option of the Board",
+  "witness_title": "Act 1 of 2018",
+  "witness_url": "https://indiankanoon.org/doc/9573987/",
+  "note": "matched in the full instrument",
+  "fetched_at": "2026-08-22T15:06:30+00:00"
+ },
+ {
+  "claim_section": "49138",
+  "verdict": "NO_WITNESS",
+  "prior_wording": "If the Director, Additional Director or Assistant Director",
+  "witness_quote": null,
+  "witness_title": null,
+  "witness_url": null,
+  "note": "2 hits, none an amending Act",
+  "fetched_at": "2026-08-22T15:06:30+00:00"
+ },
+ {
+  "claim_section": "49138",
+  "verdict": "NO_WITNESS",
+  "prior_wording": "The Director, Additional Director or Assistant Director of Serious Fraud Investigation Office shall, immediately after arrest of such person under sub-section (8)",
+  "witness_quote": null,
+  "witness_title": null,
+  "witness_url": null,
+  "note": "2 hits, none an amending Act",
+  "fetched_at": "2026-08-22T15:06:30+00:00"
+ },
+ {
+  "claim_section": "49164",
+  "verdict": "NO_WITNESS",
+  "prior_wording": "punishable with fine which shall not be less than twenty-five thousand rupees but which may extend to five lakh rupees",
+  "witness_quote": null,
+  "witness_title": null,
+  "witness_url": null,
+  "note": "0 hits, none an amending Act",
+  "fetched_at": "2026-08-22T15:06:30+00:00"
+ },
+ {
+  "claim_section": "49173",
+  "verdict": "EXACT",
+  "prior_wording": "during or after the valuation of assets",
+  "witness_quote": "during or after the valuation of assets",
+  "witness_title": "Act 1 of 2018",
+  "witness_url": "https://indiankanoon.org/doc/9573987/",
+  "note": "matched in the full instrument",
+  "fetched_at": "2026-08-22T15:06:30+00:00"
+ },
+ {
+  "claim_section": "49198",
+  "verdict": "NO_WITNESS",
+  "prior_wording": "or clause (e) of that sub-section",
+  "witness_quote": null,
+  "witness_title": null,
+  "witness_url": null,
+  "note": "20 hits, none an amending Act",
+  "fetched_at": "2026-08-22T15:06:30+00:00"
+ },
+ {
+  "claim_section": "49242",
+  "verdict": "EXACT",
+  "prior_wording": "fifty thousand rupees, or with both",
+  "witness_quote": "fifty thousand rupees, or with both",
+  "witness_title": "Act 29 of 2020",
+  "witness_url": "https://indiankanoon.org/doc/69330370/",
+  "note": "matched in the full instrument",
+  "fetched_at": "2026-08-22T15:06:30+00:00"
+ },
+ {
+  "claim_section": "49304",
+  "verdict": "EXACT",
+  "prior_wording": "out of which at least three years shall be in the pay scale of Joint Secretary to the Government of India or equivalent or above in that service",
+  "witness_quote": "out of which at least three years shall be in the pay scale of Joint Secretary to the Government of India or equivalent or above in that service",
+  "witness_title": "Act 1 of 2018",
+  "witness_url": "https://indiankanoon.org/doc/9573987/",
+  "note": "matched in the full instrument",
+  "fetched_at": "2026-08-22T15:06:30+00:00"
+ },
+ {
+  "claim_section": "49305",
+  "verdict": "NO_WITNESS",
+  "prior_wording": "for hearing appeals against the orders to the Tribunal",
+  "witness_quote": null,
+  "witness_title": null,
+  "witness_url": null,
+  "note": "6 hits, none an amending Act",
+  "fetched_at": "2026-08-22T15:06:30+00:00"
+ },
+ {
+  "claim_section": "49330",
+  "verdict": "EXACT",
+  "prior_wording": "offences under this Act, by notification",
+  "witness_quote": "offences under this Act, by notification",
+  "witness_title": "Act 29 of 2020",
+  "witness_url": "https://indiankanoon.org/doc/69330370/",
+  "note": "matched in the full instrument",
+  "fetched_at": "2026-08-22T15:06:30+00:00"
+ },
+ {
+  "claim_section": "49333",
+  "verdict": "EXACT",
+  "prior_wording": "deemed to be a Court of Session",
+  "witness_quote": "deemed to be a Court of Session",
+  "witness_title": "Act 1 of 2018",
+  "witness_url": "https://indiankanoon.org/doc/9573987/",
+  "note": "matched in the full instrument",
+  "fetched_at": "2026-08-22T15:06:30+00:00"
+ },
+ {
+  "claim_section": "49336",
+  "verdict": "NO_WITNESS",
+  "prior_wording": "does not exceed five lakh rupees",
+  "witness_quote": null,
+  "witness_title": null,
+  "witness_url": null,
+  "note": "20 hits, none an amending Act",
+  "fetched_at": "2026-08-22T15:06:30+00:00"
+ },
+ {
+  "claim_section": "49349",
+  "verdict": "NO_WITNESS",
+  "prior_wording": "such company and the officer who is in default",
+  "witness_quote": null,
+  "witness_title": null,
+  "witness_url": null,
+  "note": "10 hits, none an amending Act",
+  "fetched_at": "2026-08-22T15:06:30+00:00"
+ },
+ {
+  "claim_section": "49349",
+  "verdict": "NO_WITNESS",
+  "prior_wording": "does not pay the penalty imposed by the adjudicating officer or the Regional Director",
+  "witness_quote": null,
+  "witness_title": null,
+  "witness_url": null,
+  "note": "2 hits, none an amending Act",
+  "fetched_at": "2026-08-22T15:06:30+00:00"
+ }
+]

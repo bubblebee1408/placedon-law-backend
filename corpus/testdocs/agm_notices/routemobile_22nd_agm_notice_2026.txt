@@ -1,0 +1,1425 @@
+# REAL FILED DOCUMENT — Notice of the 22nd Annual General Meeting
+# Issuer: Route Mobile Limited | Small/mid cap, NSE/BSE listed
+# AGM: Wednesday, September 02, 2026
+# https://routemobile.com/wp-content/uploads/2026/08/Notice-of-AGM-2026.pdf
+# Type: AGM notice | Real | 16pp, text-extractable
+# ADVERSARIAL EXTRACTION CASE: heavy letter-spacing in the source PDF extracts as
+#   'NOTICE  i s  h e r e b y  g i v e n' — naive \b-anchored regexes will MISS this.
+#   Keep this file precisely because it breaks token-level matching.
+
+Notice
+NOTICE  i s  h e r e b y  g i v e n  t h a t  t h e  T w e n ty  S e c o n d  
+("22nd") Annual General Meeting (“AGM”) of the 
+members of Route Mobile Limited (“Company”) 
+will be held on Wednesday, September 02, 2026 at 
+3:30 p.m. (IST) through Video Conferencing (“VC”)/
+Other Audio-Visual Means (“OAVM”) to transact the 
+following businesses. 
+ORDINARY BUSINESS:
+1. To receive, consider and adopt:
+ a)  the Audited Standalone Financial Statements 
+of the Company for the financial year ended 
+March 31, 2026, together with the Report of 
+the Directors' and Auditors thereon; and
+ b )  the Audited Consolidated Financial 
+Statements of the Company for the financial 
+year ended March 31, 2026, together with 
+the Report of the Auditors thereon.
+2.  To declare a dividend of H 2/- per equity share of 
+the face value of H 10 each (20%) for the financial 
+year ended March 31, 2026.
+3.  To appoint a director in place of Mr. Rajdipkumar 
+Gupta (DIN: 01272947) who retires by 
+rotation, and being eligible, offers himself for  
+re-appointment.
+4.  Appointment of Statutory Auditors of the 
+Company and fix their remuneration.
+  To consider and, if thought fit, to pass the following 
+resolution as an Ordinary Resolution:
+  “ RESOLVED THAT pursuant to the provisions 
+of Section 139, 142 and all other applicable 
+provisions, if any, of the Companies Act, 2013 
+read with the Companies (Audit and Auditors) 
+Rules, 2014 as amended from time to time,  
+M S K A & Associates LLP, Chartered Accountants 
+(ICAI Firm Registration No. 105047W/W101187), 
+be and are hereby appointed as the Statutory 
+Auditors of the Company in place of retiring 
+Statutory Auditors, Walker Chandiok & Co. LLP, 
+Chartered Accountants (ICAI Firm Registration 
+No. 001076N/N500013), to hold office for a first 
+term of 5 (five) years i.e. from the conclusion of  
+22nd Annual General Meeting until the conclusion 
+of the 27th Annual General Meeting to be held in 
+the calendar year 2031, at such remuneration as 
+may be mutually decided by the Board of Directors 
+of the Company with the Statutory Auditor on 
+recommendation of the Audit Committee.
+  RESOLVED FURTHER THAT  t h e  B o a r d  o f  
+Directors of the Company, be and are hereby 
+authorized to do all such acts, deeds, matters 
+and things as may be necessary, proper and 
+expedient for implementing and giving effect to 
+this resolution.”
+By Order of the Board of Directors
+For Route Mobile Limited
+Tejas Shah
+Company Secretary & Compliance Officer
+ICSI Membership No. A34829
+Date: July 23, 2026
+Place: Mumbai
+Registered Office:
+SanRaj Corporate Park - 4th Dimension, 3rd Floor
+Mind Space, Malad (West), Mumbai – 400 064.
+CIN: L72900MH2004PLC146323
+Email: investors@routemobile.com 
+Website: www.routemobile.com 
+Tel: 022 - 40337676 Fax: 022 – 40337650
+Route Mobile   |   Annual Report 2025-26
+342
+NOTES:
+1.  Pursuant to General Circulars issued by the 
+Ministry of Corporate Affairs (“MCA”)  dated 
+April 8, 2020, April 13, 2020, May 5, 2020, and 
+subsequent circulars issued in this regard, the 
+latest being circular dated September 22, 2025 
+(collectively referred to as “MCA Circulars”), the 
+Company is convening the 22 nd AGM through 
+VC/OAVM without the physical presence of the 
+Members at a common venue and without 
+sending physical copies of the financial 
+statements (including Board’s report, Auditor’s 
+report or other documents required to be 
+attached therewith). Hence, in compliance with 
+the MC A Circulars , the 22nd AGM of the members 
+for the Financial Year (“FY”) 2025-26 will be held 
+through VC/OAVM.
+  In compliance with the MCA and SEBI (Listing 
+Obligations and Disclosure Requirements) 
+Regulations, 2015 (“Listing Regulations”) , the 
+Notice of the AGM alongwith the Annual Report 
+for the FY 2025-26 are being sent through 
+electronic mode (by e-mail) to those Members 
+whose e-mail addresses are registered with the 
+Company/ Depository Participants (“DPs”). The 
+Company shall send the physical copy of the 
+Annual Report for FY 2025-26 only to those 
+Members who specifically request for the same 
+at investors@routemobile.com mentioning their 
+Folio No./DP ID and Client ID. The registered 
+office of the Company shall be deemed venue 
+for the AGM. Since the AGM will be held through 
+VC, the Route Map is not annexed in this Notice. 
+Members may note that the Notice of the AGM 
+and the Annual Report for the FY 2025-26 will 
+also, be available on the Company’s website at 
+www.routemobile.com , websites of the Stock 
+Exchanges, i.e. BSE Limited and the National Stock 
+Exchange of India Limited at www.bseindia.com  
+and www.nseindia.com  respectively. The AGM 
+Notice is also available on the website of National 
+Securities Depository Limited (“NSDL ”) at  
+www.evoting.nsdl.com.
+  Additionally, as per Regulation 36(1)(b) of 
+the Listing Regulations a letter providing the 
+weblink of the Annual Report for FY 2025-26, 
+will be sent to those shareholder(s) who have not 
+registered their email address with the Company/ 
+Depositories/ DPs/ KFin Technologies Limited 
+(“KFintech”).
+  The Company will also be publishing an 
+advertisement in newspapers containing the 
+details about the AGM i.e., date and time of AGM, 
+details for e-voting, availability of notice of AGM 
+at the Company’s website, manner of registering 
+the email IDs of those shareholders who have 
+not registered their email addresses, manner 
+of providing mandate for dividends, and other 
+matters as may be required.
+2.  The information required pursuant to Regulation 
+36(3) of Listing Regulations and Secretarial 
+Standard-2 relating to the Director seeking re-
+appointment is annexed as Appendix 1 . The 
+Explanatory Statement pursuant to Section 102 
+of the Companies Act, 2013 ("Act") in respect of 
+Item No. 4 forms part of this Notice.
+3.  NSDL will be providing facility for voting through 
+remote e-voting, for participation in the AGM 
+through VC/OAVM facility and e-voting during 
+the AGM. The Members will be able to view 
+the proceedings on NSDL e-voting website at  
+www.evoting.nsdl.com.
+4.  A Member logging-in to the VC facility using the 
+remote e-voting credentials shall be considered 
+for record of attendance of such Member at the 
+AGM and such Member attending the AGM shall 
+be counted for the purpose of reckoning the 
+Quorum under Section 103 of the Act. Since 
+this AGM is being held pursuant to the MCA 
+Circular through VC/OAVM, physical attendance 
+of Members has been dispensed with and there 
+is no provision for the appointment of proxies. 
+Accordingly, the facility for appointment of proxies 
+by the Members under Section 105 of the Act will 
+not be available for the AGM and hence the Proxy 
+Form, Attendance Slip etc. are not annexed to this 
+Notice. However, the Body Corporates are entitled 
+to appoint authorised representatives to attend 
+the AGM through VC/OAVM and participate 
+there at and cast their votes through e-voting. 
+Members of the Company under the category of 
+Institutional Investors are encouraged to attend 
+the AGM.
+5.  Members may note that the Board, at its meeting 
+held on May 7 , 2026, has recommended a final 
+dividend of H 2 per equit y share of the f ace value of 
+H 10 each (20%) for the FY 2025-26, subject to the 
+approval of the Members at the AGM. The record 
+date determining the entitlement of members to 
+final dividend for the financial year ended March 
+31, 2026, if approved at the AGM is Tuesday, 
+August 18, 2026.
+343
+Notice
+  If the final dividend, as recommended by the 
+Board of Directors, is approved at the AGM, 
+payment of such dividend subject to deduction 
+of tax at source will be made within 30 days of 
+AGM, as under:
+ a.  To all Beneficial Owners in respect of shares 
+held in dematerialised form as per the data as 
+may be made available by the Depositories, 
+as of close of business hours on Tuesday, 
+August 18, 2026; and
+ b.  To all Members in respect of shares held 
+in physical form after giving effect to valid 
+transmission or transposition requests 
+lodged with the Company as of the close of 
+business hours on Tuesday, August 18, 2026.
+6.  Pursuant to the Finance Act, 2020, dividend 
+income is taxable in the hands of shareholders 
+with effect from April 1, 2020 and the Company 
+is required to deduct TDS from dividend paid to 
+shareholders at the prescribed rates for various 
+categories, the shareholders are requested to 
+refer to the Finance Act, 2020 and amendments 
+thereof. The shareholders are requested to update 
+their PAN with Registrar & Share Transfer Agent 
+(“RTA”) KFintech (in case of shares held in physical 
+mode) and DP (in case of shares held in demat 
+mode).
+ a.  An email communication informing the 
+Shareholders regarding the relevant 
+procedure to be adopted by them to avail 
+the applicable tax rate has been sent by the 
+Company at the registered email IDs of the 
+Shareholders on Tuesday, August 18, 2026 
+In general, to enable compliance with TDS 
+requirements, Members were requested to 
+complete and/or update their Residential 
+Status, Permanent Account Number (“PAN”), 
+Category etc. as per the IT Act with their DPs 
+or in case shares are held in physical form, 
+with KFintech, by sending documents 
+through e-mail by Tuesday, August 18, 2026.
+ b.  For further details and formats of declaration, 
+please refer to ‘General Communication on 
+Tax Deduction’ dated Thursday, July 30, 2026 
+available on Company’s website at https://
+routemobile.com/investors/shareholders-
+communication/. The aforesaid documents 
+such as Form 121 under Income Tax Act, 
+2025 can also be uploaded on the link https://
+ris.kfintech.com/clientservices/investors/
+Templates/TDS_Form- 121.pdf. The aforesaid 
+documents are subject to verification by 
+the Company and in case of ambiguity, the 
+Company reserves its right to deduct the 
+TDS as per the provisions of the Income Tax 
+Act, 2025.
+ c.  SEBI has made it mandatory for all Companies 
+to use the bank account details furnished 
+by the Depositories and the bank account 
+details maintained by the RTA for payment 
+of dividend to Members electronically. 
+The Company has extended the facility of 
+electronic credit of dividend directly to the 
+respective bank accounts of the Member(s) 
+through Electronic Clearing Service (“ECS”)/
+National Electronic Clearing Service (“NECS”)/ 
+Real Time Gross Settlement (“RTGS”)/ Direct 
+Credit/ IMPS/ NEFT etc. The final dividend, 
+if approved by the Members in the ensuing 
+AGM, will be paid within 30 days of the AGM 
+electronically through various online transfer 
+modes to those Members who have updated 
+their bank account details.
+ 7.  Updation of PAN,  KYC and Nomination  
+Details:
+   SEBI vide Master Circular No. SEBI/HO/ 
+MIRSD/ POD- 1/P/CIR/2024/37 dated  
+May 7 , 2024, has prescribed common and 
+simplified norms for processing investor 
+service requests by RTAs and norms for 
+furnishing PAN, KYC (contact details, bank 
+details and specimen signature), and 
+nomination details. As per the said Circular, 
+it is mandatory for the shareholders holding 
+securities in physical form to, inter alia, furnish 
+PAN, KYC, and nomination details. Physical 
+folios wherein PAN, KYC details (including 
+contact details, bank account details and 
+specimen signature) are not updated shall 
+be eligible for lodging grievance or availing 
+service requests only after registration of 
+the required details. Further, any payments 
+including dividend in respect of such folios 
+shall be made only through electronic 
+mode with effect from April 1, 2024, 
+upon registration of the required details. 
+Accordingly, payment of final and special 
+dividend, subject to approval at the AGM, 
+shall be paid to physical holders only after 
+the above details are updated in their folios. 
+Shareholders are requested to complete 
+their KYC by writing to the Company’s RTA, 
+KFintech, at einward.ris@ kfintech.com.
+Route Mobile   |   Annual Report 2025-26
+344
+   Further, SEBI vide Circular No. SEBI/HO/
+MIRSD/POD- 1/P/CIR/2024/81 dated June 
+10, 2024 relaxed the requirements relating 
+to nomination and clarified that: (a) non-
+submission of ‘choice of nomination’ shall 
+not result in freezing of demat accounts 
+or mutual fund folios; (b) securityholders 
+holding securities in physical form shall 
+be eligible to receive payments including 
+dividend, interest or redemption payment 
+and to lodge grievances or avail any service 
+request from the RTA even if ‘choice of 
+nomination’ is not submitted; and (c) 
+payments including dividend, interest or 
+redemption payment withheld by listed 
+companies/RTAs solely for want of ‘choice of 
+nomination’ shall be processed accordingly. 
+However, all new investors/unitholders 
+shall continue to mandatorily provide the 
+‘choice of nomination’ for demat accounts/
+mutual fund folios (except for jointly held 
+demat accounts and mutual fund folios). 
+Shareholders holding shares in physical 
+form who wish to register nomination, opt 
+out of nomination, or cancel/vary an existing 
+nomination may submit the prescribed 
+forms to the RTA.
+   The forms for updation of PAN, KYC, bank 
+details and nomination viz., Forms ISR- 1, 
+ISR-2, ISR-3, SH- 13 and SH- 14, along with 
+the aforesaid SEBI Circulars, are available 
+on the Company’s website at  https://
+routemobile.com/registrar-share-transfer-
+agent/. Members holding shares in physical 
+form are requested to submit the requisite 
+forms along with supporting documents 
+to the Company’s RTA, KFintech, at  
+einward.ris@kfintech.com  a t  t h e  e a r l i est.  
+The Company has also dispatched letters to 
+Members holding shares in physical form in 
+relation to the aforesaid SEBI requirements. 
+Members holding shares in dematerialised 
+form and desirous of updating their PAN, 
+KYC, bank details and nomination are 
+requested to contact their respective DPs.
+ 8.  Updation of mandate for receiving 
+dividend directly in bank account 
+through Electronic Clearing System or 
+any other means in a timely manner:
+   To avoid delay in receiving dividend, Members 
+are requested to update their bank account 
+details with their depositories (where shares 
+are held in dematerialised mode) and with 
+KFintech, Company’s RTA (where shares are 
+held in physical mode) to receive dividend 
+directly into their bank account.
+  Shares held in Physical  Mode:
+  1 .  Through “In Person Verification” (IPV)
+    The authorized person of the RTA shall 
+verify the original documents furnished 
+by the investor and retain copy (ies) with 
+IPV stamping with date and initials.
+  2 .  Through Post
+   Hard copies of self-at tes ted document s .
+  3 .  Through Electronic Mode with e-sign
+    In case the address is already 
+registered with RTA, the Shareholder(s) 
+may send the scanned copies 
+of their KYC documents/ service 
+requests with e-sign at RTA’s email id  
+einward.ris@kfntech.com  with the 
+subject line: R M L  K YC  U p d a t i o n  -  S h a r e s.
+  4.  Members are requested to send 
+the following details/documents 
+to the Company’s RTA, KFintech at  
+einward.ris@kfintech.com
+    Form No. ISR- 1 duly filled and signed 
+by the holders, stating their name, folio 
+number, complete address with pin 
+code, and the following details relating 
+to the bank account in which the 
+dividend is to be received:
+   (i) Name of Bank and Bank Branch;
+   (ii) Bank Account Number;
+   (iii) 11-digit IFSC Code; and
+   (iv) 9-digit MICR Code.
+  Shares held in demat  form:
+   All the eligible shareholders holding shares 
+in demat mode are requested to update 
+with their respective DPs, before Tuesday, 
+August 18, 2026 their correct Bank Account 
+Number, including 9 Digit MICR Code and 11 
+digit IFSC Code, e-mail ID and mobile no(s).
+   Members holding shares in electronic form 
+may please note that their bank details as 
+furnished by the respective Depositories to 
+the RTA will be considered for remittance of 
+dividend as per the applicable regulations 
+of the Depositories and the Company will 
+345
+Notice
+not entertain any direct request from such 
+Members for change/ deletion in such bank 
+details. Further, instructions, if any, already 
+given by them in respect of shares held 
+in physical form, will not be automatically 
+applicable to the dividend paid on shares 
+held in electronic form. Members may, 
+therefore, give instructions to their respective 
+DP regarding bank accounts in which they 
+wish to receive dividend. For Members who 
+are unable to receive the dividend directly 
+in their bank accounts through ECS or any 
+other means, due to non-registration of the 
+Electronic Bank Mandate, the Company shall 
+dispatch the dividend warrant/ Bankers’ 
+cheque/demand draft to such Members, 
+through postal or courier services.
+ 9.  Any person who has not registered his/her 
+e-mail address or has become a Member of 
+the Company after dispatch of this Notice, 
+and therefore annual report and this AGM 
+Notice could not be sent, may write to 
+investors@routemobile.com to receive the 
+copies of the Annual Report of FY 2025-26 
+and AGM Notice.
+ 10. Non-Resident Shareholders:
+   Non-resident shareholders are requested to 
+immediately notify:
+  i)  Indian address for sending all 
+communications, if not provided  
+so far;
+  ii)  Change in their residential status on return 
+to India for permanent settlement; and
+  iii)  Particulars of their Non-resident rupee 
+account, whether repatriable or not, with 
+a bank in India, if not furnished earlier.
+ 11.  Members wishing to claim dividends 
+that remain unclaimed are requested 
+to correspond with the RTA at  
+einward.ris@kfintech.com  or with 
+the Company Secretary by writing at  
+investors@routemobile.com .  Members 
+are requested to note that dividends, if not 
+encashed for a consecutive period of seven 
+(7) years from the date of transfer to Unpaid 
+Dividend Account of the Company, are liable 
+to be transferred to the Investor Education 
+and Protection Fund (“IEPF”). Further, the 
+shares in respect of such unclaimed dividends 
+are also liable to be transferred to the demat 
+account of the IEPF Authority. In view of this, 
+Members/Claimants are requested to claim 
+their dividends from the Company, within 
+the stipulated timeline. The Members whose 
+dividend/shares are transferred to the IEPF 
+may claim the dividend/shares by making an 
+application to the IEPF Authority by following 
+the procedure as detailed in the IEPF Rules 
+and as enumerated on the website of IEPF at 
+https://www.iepf.gov.in/content/iepf/global/
+master/Home/Home.html. In terms of the 
+IEPF Rules, there is no unclaimed or unpaid 
+dividend, and therefore, no details available 
+for the Company requiring any transfer to 
+the IEPF as on date or for uploading on 
+its website.
+ 12.  As per the provisions of Section 72 of the Act, 
+the facility for making nomination is available 
+for the Members in respect of the shares 
+held by them. Members who have not yet 
+registered their nomination are requested to 
+register the same by submitting Form No. SH-
+13. The said form can be downloaded from 
+the Company’s website https://routemobile.
+com/wp-content/uploads/2021/12/Form-
+N o . - S H -13. p d f. Members are requested to 
+submit the said details to their DP in case the 
+shares are held by them in electronic form/ 
+demat mode and to KFintech, in case the 
+shares are held in physical form. If a Member 
+desires to cancel the earlier nomination 
+and record a fresh nomination, he/ she may 
+submit the same in Form SH- 14. Members 
+who are either not desiring to register 
+Nomination or would want to opt out, are 
+requested to fill and submit Form No. ISR-3. 
+The said forms can be downloaded from the 
+Company’s website at https://routemobile.
+com/wp-content/uploads/2021/12/Form-
+ISR-3.pdf. Members are requested to submit 
+the said form to their DP in case the shares 
+are held in electronic form and to the RTA 
+in case the shares are held in physical form, 
+quoting their folio no.
+ 13.  T h e  f o r m a t  o f  t h e  R e g i s t e r  o f  M e m b e r s  
+prescribed by the MCA under the Act 
+requires the Company/ Registrars and 
+Share Transfer Agents to record additional 
+details of Members, including their PAN 
+details, e-mail address, bank details for 
+payment of dividends, etc. Form No. ISR-1 
+for capturing additional details is available on 
+the Company’s website. Members holding 
+Route Mobile   |   Annual Report 2025-26
+346
+shares in physical form are requested to 
+submit the filled-in Form No. ISR- 1 to the 
+RTA. Members holding shares in electronic 
+form are requested to submit the details 
+to their respective DP only and not to the 
+Company or RTA.
+ 14.  In terms of Regulation 40(1) of the Listing 
+Regulations, as amended, securities of 
+listed companies can be transferred only 
+in dematerialised form with effect from  
+April 1, 2019. Members may please 
+note that SEBI has mandated the Listed 
+Companies to issue securities in demat 
+form only while processing service requests 
+viz. Issue of duplicate securities certificate, 
+claim from Unclaimed Suspense Account, 
+Renewal/ Exchange of securities certificate, 
+Endorsement, Sub-division/ Splitting of 
+securities certificate, Consolidation of 
+securities certificates/ folios, Transmission 
+and Transposition. Accordingly, Shareholders 
+are requested to make service requests by 
+submitting a duly filled and signed Form 
+ISR-4, the format of which is available on 
+the Company’s website under the weblink 
+at https://routemobile.com/wp-content/
+uploads/2022/02/Form-ISR-4.pdf. Members 
+holding equity shares of the Company in 
+physical form are requested to kindly get 
+their equity shares converted into demat/
+electronic form to get inherent benefits of 
+dematerialisation and also considering that 
+physical transfer of equity shares/issuance 
+of equity shares in physical form have been 
+disallowed by SEBI. SEBI has mandated that 
+all requests for transfer, transmission and 
+transposition requests shall be processed 
+only in dematerialised form. Members can 
+contact the Company or RTA, for assistance 
+in this regard.
+ 15.  Members are requested to send all 
+communications relating to shares and 
+unclaimed dividends, change of address, 
+bank details, e-mail address etc. to the RTA 
+at the following address: KFin Technologies 
+Limited Selenium Tower-B,Plot No 31 & 
+32, Financial District, Nanakramguda, 
+Serilingampally, Hyderabad, Rangareddy, 
+Telangana, India - 500032. in prescribed 
+Form No. ISR- 1, quoting their folio number 
+and enclosing the self-attested supporting 
+document. If the shares are held in electronic 
+form, then change of address and change in 
+the bank accounts etc. should be furnished 
+to their respective DPs. For permanent 
+registration of their email address, Members 
+are requested to register their email address, 
+in respect of electronic holdings, with their 
+concerned DPs and in respect of physical 
+holdings, with the RTA.
+ 16.  Members holding shares in physical form, 
+in identical order of names, in more than 
+one folio, if any, are requested to send to the 
+Company or KFintech, the details of such 
+folios together with the share certificates for 
+consolidating their holdings in one folio. A 
+consolidated share certificate will be issued 
+to such Members after making requisite 
+changes. Members are requested to use the 
+share transfer Form SH-4 for this purpose.
+ 17.  In case of joint holders, the Member whose 
+name appears as the first holder in the order 
+of names as per the Register of Members 
+of the Company will be entitled to vote at 
+the AGM.
+ 18.  The Register of Directors and Key Managerial 
+Personnel and their shareholding maintained 
+under Section 1 70 of the Act, the Register 
+of Contracts or Arrangements in which the 
+directors are interested, maintained under 
+Section 189 of the Act, and Certificate from 
+Secretarial Auditors of the Company, under 
+SEBI (Share-Based Employee Benefits and 
+Sweat Equity) Regulations, 2021 will be 
+available electronically for inspection by the 
+Members during the AGM. All documents 
+referred to in the Notice will also be available 
+for inspection in the electronic form (scanned 
+copy) without any fee by the Members from 
+the date of circulation of this Notice up to 
+the date of AGM (during business hours 
+except Saturday, Sunday and National 
+Holiday), i.e., September 02, 2026 subject 
+to restrictions, if any, that may be imposed 
+by local authorities. Members seeking to 
+inspect such documents can send an email 
+to investors@routemobile.com . Members 
+seeking any statutory information or any 
+other matter/ documents/ registers, etc. in 
+connection with the AGM of the Company, 
+may please send a request to the Company 
+347
+Notice
+via email at investors@routemobile.com. The 
+same will be available for inspection during 
+the AGM by following the steps mentioned 
+in “Step 1: Access to NSDL e-voting system”.
+ 19.  Submission of Questions/ Queries  
+prior the AGM:
+   Members desiring any additional information 
+with regard to financial statements or 
+any matter to be placed at the AGM are 
+requested to write on the Company’s email-
+id investors@routemobile.com, before 5:00 
+P.M. (IST) August 26, 2026, so as to enable 
+the Management to keep the information 
+ready. Please note that, Member’s questions 
+will be answered only if they continue to hold 
+the shares as on Cut-off Date.
+ 20.  Dispute Resolution:
+   SEBI has established a common Online 
+Dispute Resolution Portal (‘ODR Portal’) 
+for resolution of disputes arising in the 
+Indian Securities Market. Pursuant to this, 
+post exhausting the option to resolve 
+their grievance with the RTA/Company 
+directly and/or through the SEBI SCORES 
+platform, the investors can initiate dispute 
+resolution through the ODR Portal  
+(https://smartodr.in/login ). Link to access 
+ODR Portal is also available on the Company's 
+website at www.routemobile.com.
+ 21.  Voting through electronic means:
+  a.  Pursuant to the provisions of Section 
+108 of the Act read with Rule 20 of 
+the Companies (Management and 
+Administration) Rules, 2014 (as amended) 
+and Secretarial Standards on General 
+Meetings (SS-2) issued by the ICSI and 
+Regulation 44 of Listing Regulations (as 
+amended), the Applicable Circulars, and 
+in terms of SEBI Circular No. SEBI/HO/CFD/ 
+CMD/CIR/P/2020/242 dated December 
+9, 2020 in relation to the ‘e-voting Facility 
+to be provided by Listed Entities’, the 
+Members are provided with the facility 
+to cast their vote electronically, through 
+the e-voting services provided by NSDL 
+on all resolutions set forth in this Notice, 
+from a place other than the venue of the 
+Meeting (‘remote e-voting’). Resolution(s) 
+passed by Members through e-voting is/
+are deemed to have been passed as if it/
+they have been passed at the AGM.
+  b.  Any person holding shares in physical 
+form and non-individual shareholders, 
+who acquires shares of the Company 
+and becomes Member of the Company 
+after the dispatch of this Notice and 
+holding shares as of the Cut-off Date 
+i.e. Wednesday, August 26, 2026 may 
+obtain the login ID and password by 
+sending a request at evoting@nsdl.com.  
+However, if the person is already 
+registered with NSDL for remote 
+e-voting, then the existing user ID and 
+password of the said person can be used 
+for casting vote. If the person forgot his/ 
+her password, the same can be reset by 
+using ‘Forgot user Details/ Password’ or 
+‘Physical user Reset Password’ option 
+available at www.evoting.nsdl.com or 
+by calling on 022 4886 7000. In case of 
+Individual Members holding securities 
+in Demat mode who acquire shares of 
+the Company and becomes a Member 
+of the Company after sending the 
+Notice and holding shares as of the Cut-
+off Wednesday August 26, 2026 may 
+follow steps mentioned in the notes to 
+Notice under ‘Access to NSDL e-voting 
+system’.
+  c.  The Cut-Off Date for determining 
+the eligibility of shareholders to cast 
+vote through e-voting is Wednesday,  
+August 26, 2026.
+  d.  Members are provided with the facility for 
+voting through electronic voting system 
+during the VC/OAVM proceedings at the 
+AGM and Members participating at the 
+AGM, who have not already cast their 
+vote by remote e-voting, are to exercise 
+their right to vote at the AGM.
+ 22.  The instructions for members for 
+remote e-voting and joining general 
+meeting are as under:
+  a .   The Members, whose names appear in 
+the Register of Members / Beneficial 
+Owners as on the Cut-off Date i.e., 
+Wednesday, August 26, 2026 may 
+Route Mobile   |   Annual Report 2025-26
+348
+cast their vote electronically . A 
+person whose name is recorded in the 
+Register of Members or in the Register 
+of Beneficial Owners maintained by the 
+Depositories as on the Cut-off Date only 
+shall be entitled to avail the facility of 
+remote e-voting, as well as voting at the 
+meeting. The voting right of shareholders 
+shall be in proportion to their share 
+in the paid-up equity share capital of 
+the Company as on the Cut-off Date. 
+The remote e-voting period begins 
+on 9:00 A.M. (IST), Sunday, August 
+3 0 ,  2 0 2 6  a n d  e n d s  o n  5 : 0 0  P . M .  
+(IST), Tuesday, September 1, 2026 . 
+The remote e-voting module shall be 
+disabled by NSDL for voting thereafter. 
+Once the vote on a resolution is cast by 
+the Member, the Member shall not be 
+allowed to change it subsequently.
+  b.  If a person was a Member as on the date 
+of dispatch of the notice but has ceased 
+to be a Member as on the Cut-off Date 
+i.e., Wednesday August 26, 2026 he/she 
+shall not be entitled to vote. Such person 
+should treat this Notice for information 
+purpose only.
+  c.  Institutional Investors / Corporate 
+Members (i.e. other than individuals, 
+HUF, NRI etc.), pursuant to Section 113 
+of the Act are required to send scanned 
+copy (PDF/ JPG Format) of the relevant 
+Board Resolution/ Authority letter 
+etc. with attested specimen signature 
+of the duly authorized signatory(ies) 
+who are authorized to attend & vote 
+at the AGM, to the Scrutinizer by 
+e-mail latest by Wednesday, August 
+26, 2026 to dhrumil@dmshah.in  or  
+dhiraj@dmshah.in with a copy marked 
+to evoting@nsdl.com . The scanned 
+image of the above-mentioned 
+documents should be in the naming 
+format “Route Mobile Limited- 22 nd 
+AGM/ SEPTEMBER, 2026”. Corporate 
+Members/ Institutional shareholders 
+(i.e. other than individuals, HUF’s, 
+NRI’s etc.) can also upload their Board 
+Resolution/Power of Attorney/Authority 
+Letter etc. by clicking on “Upload Board 
+Resolution/Authority Letter” displayed 
+under “e-voting” tab in their login.
+  d.  It is strongly recommended not to 
+share your password with any other 
+person and take utmost care to keep 
+your password confidential. Login to 
+the e-voting website will be disabled 
+upon five unsuccessful attempts to 
+key in the correct password. In such 
+an event, you will need to go through 
+the “Forgot User Details/Password?” or 
+“Physical User Reset Password?” option 
+available on www.evoting.nsdl.com  to 
+reset the password.
+  e .   In case of any queries, you may refer the 
+Frequently Asked Questions (FAQs) for 
+Shareholders and e-voting user manual 
+for Shareholders available at the download 
+section  of www.evoting.nsdl.com   
+or call on: 022 - 4886 7000 or send a 
+request to Ms. Pallavi Mahtre, Deputy 
+Vice President at evoting@nsdl.com. 
+  f.  The way to vote electronically on NSDL 
+e-voting system consists of Two Steps” 
+which are mentioned below:
+Step 1: Access to NSDL e-voting system 
+(A)  Login method for e-voting and joining 
+virtual meeting for Individual shareholders 
+holding securities in demat mode: 
+  Pursuant to SEBI Circular no. SEBI/HO/CFD/
+CMD/CIR/P/2020/242 dated December 9, 
+2020, on “e-voting facility provided by Listed 
+Entities”, e-voting process has been enabled 
+to all the individual demat account holders, by 
+way of single login credential, through their 
+demat accounts/websites of Depositories/DPs 
+to increase the efficiency of the voting process. 
+Individual demat account holders would be able 
+to cast their vote without having to register again 
+with the e-voting service provider (“ESP”) thereby 
+not only facilitating seamless authentication but 
+also ease and convenience of participating in 
+e-voting process. 
+  Shareholders are advised to update their mobile 
+number and e-mail ID with their DPs to access 
+e-voting facility.
+349
+Notice
+Type of Members Log-in Method
+For Individual Shareholders 
+holding securities in 
+Dematerialized mode  
+with NSDL.
+1. OTP Based Login
+ I.  For OTP based login click on https://eservices.nsdl.com/SecureWeb/evoting/
+evotinglogin.jsp
+ II.  Enter your 8 - character DP ID, 8 - digit Client Id, PAN, Verification code and 
+generate OTP.
+ III.  Enter the OTP received on your registered email ID/mobile number and click 
+on login.
+ IV.  After successful authentication, you will be redirected to NSDL Depository site 
+wherein you can see e-voting page.
+ V.  Click on Company name or e-voting service provider i.e. NSDL and you will be 
+redirected to e-voting website of NSDL for casting your vote during the remote 
+e-voting period or joining virtual meeting and voting during the meeting.
+2. NSDL IDeAS facility
+ A. User already registered for IDeAS facility:
+  I. Go to URL: https://eservices.nsdl.com
+  II.  Click on the “Beneficial Owner” icon under “Login” available under ‘IDeAS’ 
+section.
+  III.  On the new page, enter existing User ID and Password. Post successful 
+authentication, click on “Access to e-voting”
+  IV.  Click on company name or e-voting service provider i.e., NSDL and you 
+will be re-directed to e-voting service provider website for casting the vote 
+during the remote e-voting period.
+ B. User not registered for IDeAS e-Services
+  I.  To register click on link: https://eservices.nsdl.com (Select “Register Online 
+for IDeAS Portal”) or click at https://eservices.nsdl.com/SecureWeb/
+IdeasDirectReg.jsp.
+  II.  Proceed with completing the required fields.
+3. e-voting website of NSDL:
+ I.  Go to URL: https://www.evoting.nsdl.com/ either on personal computer or on a 
+mobile phone
+ II.   Click on the icon “Login” which is available under ‘Shareholder/Member’ section.
+ III.  Enter User ID (i.e. 16-digit demat account number held with NSDL), Password/ 
+OTP and a Verification Code as shown on the screen.
+ IV.  Post successful authentication, you will be redirected to NSDL Depository site 
+wherein you can see e-voting page.
+ V.  Click on company name or e-voting service provider name and you will be 
+redirected to e-voting service provider website for casting your vote during the 
+remote e-voting period.
+4.  Shareholders/Members can also download NSDL Mobile App “NSDL Speede” facility 
+by scanning the QR code mentioned below for seamless voting experience.
+Route Mobile   |   Annual Report 2025-26
+350
+Type of Members Log-in Method
+For Individual Shareholders 
+holding securities in 
+Dematerialized mode with CDSL.
+1.  Users who have opted for CDSL Easi / Easiest facility, can login through their 
+existing user id and password. Option will be made available to reach e-voting 
+page without any further authentication. The users to login Easi /Easiest are 
+requested to visit CDSL website www.cdslindia.com and click on login icon & New 
+System Myeasi Tab and then user your existing Myeasi username & password.
+2.  After successful login the Easi / Easiest user will be able to see the e-voting option for 
+eligible companies where the evoting is in progress as per the information provided 
+by company. On clicking the evoting option, the user will be able to see e-voting 
+page of the e-voting service provider for casting your vote during the remote 
+e-voting period or joining virtual meeting & voting during the meeting. Additionally, 
+there are also links provided to access the system of all e-voting Service Providers, 
+so that the user can visit the e-voting service providers’ website directly.
+3.  If the user is not registered for Easi/Easiest, option to register is available at CDSL 
+website www.cdslindia.com and click on login & New System Myeasi Tab and then 
+click on registration option.
+4.  Alternatively, the user can directly access e-voting page by providing Demat 
+Account Number and PAN No. from a e-voting link available on www.cdslindia.com  
+home page. The system will authenticate the user by sending OTP on registered Mobile 
+& Email as recorded in the Demat Account. After successful authentication, user will be 
+able to see the e-voting option where the evoting is in progress and also able to directly 
+access the system of all e-voting Service Providers.
+For Individual Shareholders 
+(holding securities in 
+Dematerialized mode) login 
+through their DPs.
+1.  You can also login using the login credentials of your Demat account through your 
+Depository Participant registered with NSDL/CDSL for e-voting facility.
+2.  Upon login, you will be able to see e-voting option. Once you click on e-voting option, 
+you will be redirected to NSDL/CDSL Depository site after successful authentication, 
+wherein you can see e-voting feature.
+3.  Click on company name or e-voting service provider name and you will be redirected 
+to e-voting service provider website for casting your vote during the remote e-voting 
+period.
+Important note: Members who are unable to retrieve User ID/ Password are advised to use Forget User ID and Forget 
+Password option available at respective websites.
+Helpdesk for individual shareholders holding securities in demat mode for any technical issues related to login 
+through depository i.e. NSDL and CDSL:
+Individual shareholders holding 
+securities in demat mode with 
+NSDL
+Members facing any technical issue in login can contact NSDL helpdesk by sending a 
+request at evoting@nsdl.com or call at 022 - 4886 7000
+Individual shareholders holding 
+securities in demat mode with 
+CDSL
+Members facing any technical issue in login can contact CDSL helpdesk by sending a 
+request at helpdesk.evoting@cdslindia.com or contact at toll free no. 1800-21-09911
+B)  Login Method for e-voting and joining virtual meeting for shareholders other than Individual 
+shareholders holding securities in demat mode and shareholders holding securities in physical 
+mode
+1.  Visit the e-voting website of NSDL. Open web browser by typing the following URL: https://www.evoting.nsdl.com/  
+either on a Personal Computer or on a mobile.
+2.  Once the home page of e-voting system is launched, click on the icon “Login” which is available under 
+‘Shareholder/Member’ section.
+3.  A new screen will open. You will have to enter your User ID, your Password/OTP and a Verification Code 
+as shown on the screen. Alternatively, if you are registered for NSDL eservices i.e. IDeAS, you can log-in at 
+https://eservices.nsdl.com/ with your existing IDeAS login. Once you log-in to NSDL eservices after sing your 
+log-in credentials, click on e-voting and you can proceed to Step 2 i.e. Cast your vote electronically.
+351
+Notice
+4. Your User ID details are given below
+ Manner of holding shares 
+i.e. Demat (NSDL or CDSL) or 
+Physical
+Your User ID is:
+a)  For Members who hold 
+shares in demat account 
+with NSDL.
+8 Character DP ID followed by 8 Digit Client ID
+For example, if your DP ID is IN300*** and Client ID is 12****** then your user ID is 
+IN300***12******
+b)  For Members who hold 
+shares in demat account 
+with CDSL.
+16 Digit Beneficiary ID For example, if your Beneficiary ID is 12************** then your user 
+ID is 12**************
+c )  For Members holding 
+shares in Physical Form.
+EVEN Number followed by Folio Number registered with the Company For example, if folio 
+number is 001*** and EVEN is 101456 then user ID is 1456001***
+5.  Password details for shareholders other than 
+Individual shareholders are given below:
+ a)  If you are already registered for e-voting, then 
+you can use your existing password to login 
+and cast your vote.
+ b)  If you are using NSDL e-voting system for 
+the first time, you will need to retrieve the 
+‘initial password’ which was communicated 
+to you by NSDL. Once you retrieve your ‘initial 
+password’, you need to enter the ‘initial 
+password’ and the system will prompt you 
+to change your password.
+ c) How to retrieve your ‘initial password’.
+  i)  If your email ID is registered in your 
+demat account or with the Company, 
+your ‘initial password’ is communicated 
+to you on your email ID. Trace the 
+email sent to you from NSDL from your 
+mailbox. Open the email and open the 
+attachment i.e. a .pdf file. The password 
+to open the .pdf file is your 8 digit client 
+ID for NSDL account, last 8 digits of client 
+ID for CDSL account or folio number for 
+shares held in physical form. The .pdf file 
+contains your ‘User ID’ and your ‘initial 
+password’.
+  ii)  If your email ID is not registered, please 
+follow the steps under the ‘Process for 
+those shareholders whose email ids are 
+not registered’.
+6.  If you are unable to retrieve or have not received 
+the “Initial password” or have forgotten 
+your password:
+ a)  Click on “Forgot User Details/Password?”  
+(If you are holding shares in your demat 
+account with NSDL or CDSL) option is 
+available on www.evoting.nsdl.com.
+ b)  Click on “Physical User Reset Password?” 
+(If you are holding shares in physical mode) 
+option available on www.evoting.nsdl.com.
+ c)  If you are still unable to get the password by 
+aforesaid two options, you can send a request 
+at evoting@nsdl.com  mentioning your 
+demat account number/folio number, your 
+PAN, your name and your registered address.
+ d)  Shareholders can also use the OTP (One Time 
+Password) based login for casting the votes 
+on the e-voting system of NSDL.
+7 .   After entering your password, tick on Agree 
+to ‘Terms and Conditions’ by selecting on the 
+check box.
+8. Now, you will have to click on ‘Login’ button.
+9.  After you click on the ‘Login’ button, Home page 
+of e-voting will open.
+Step 2: Cast your vote electronically and join 
+General Meeting on NSDL e-voting system:
+How to cast your vote electronically and join 
+General Meeting on NSDL e-voting system?
+1.  After successful login at Step 1, you will be able 
+to see the companies “EVEN” in which you are 
+holding shares and whose voting cycle and 
+General Meeting is in active status.
+2.  Select ‘EVEN’ of the Company for which you wish 
+to cast your vote during the remote e-voting 
+Route Mobile   |   Annual Report 2025-26
+352
+period/ during the Meeting. For Joining virtual 
+meeting, you need to click on “VC/OAVM” link 
+placed under “Join Meeting”.
+3.  Now you are ready for e-voting as the Voting 
+page opens.
+4.  Cast your vote by selecting appropriate options 
+i.e. assent or dissent, verify/modify the number 
+of shares for which you wish to cast your vote 
+and click on “Submit”  and also “Confirm” 
+when prompted.
+5.  Upon confirmation, the message “Vote cast 
+successfully”  will be displayed.
+6.  You can also take the printout of the votes cast 
+by you by clicking on the print option on the 
+confirmation page.
+7 .  Once you confirm your vote on the resolution, you 
+will not be allowed to modify your vote.
+23.  Process for those Shareholders whose 
+Email IDS are not Registered with the 
+Depositories For Procuring user ID and 
+Password For E-Voting on the Resolutions 
+Set Out in this Notice:
+ a)  Shareholders/ Members may send a request 
+to evoting@nsdl.com  for procuring User 
+ID and Password for e-voting by providing 
+below mentioned documents:
+  1.  In case shares are held in physical 
+form, please provide Folio No., Name of 
+shareholder, scanned copy of the share 
+certificate (front and back), PAN (self-
+attested scanned copy of PAN Card), 
+Aadhaar Card (self-attested scanned 
+copy of Aadhaar Card).
+  2.  In case shares are held in DEMAT mode, 
+please provide DP ID CLIENT ID (16 digit 
+DP ID + CLIENT ID or 16 digit beneficiary 
+ID), Name, client master or copy of 
+Consolidated Account statement, PAN 
+(self-attested scanned copy of PAN 
+card), Aadhaar (self-attested scanned 
+copy of Aadhaar Card).
+ b)   If you are an Individual shareholder, holding 
+securities in demat mode, you are requested 
+to refer to the login method explained at 
+Step 1 (A) i.e. “Login method for e-voting 
+and joining virtual meeting for Individual 
+shareholders holding securities in demat 
+mode”. In terms of SEBI circular dated 
+December 9, 2020 on ‘e-voting facility 
+provided by Listed Companies’, Individual 
+shareholders holding securities in demat 
+mode are allowed to vote through their 
+demat account/ website of Depositories/ 
+DP’s. Shareholders are required to update 
+their mobile number and email ID correctly 
+in their demat account in order to access 
+e-voting facility.
+24.  Instructions for Members attending the 
+AGM through VC/OAVM are as under
+ a)  Members will be provided with a facility to 
+attend the AGM through VC / OAVM through 
+the NSDL e-voting system. Members may 
+access by following the steps mentioned 
+above for Access to NSDL e-voting system. 
+After successful login, you can see link 
+of “ V C  /  O A V M  l i n k” placed under “ Join 
+Meeting” tab against company name. You 
+are requested to click on VC /OAVM link 
+placed under Join Meeting menu. The link for 
+VC / OAVM will be available in Shareholder/
+Member login where the EVEN of the 
+Company will be displayed.
+   Please note that the members who do not 
+have the User ID and Password for e-voting 
+or have forgotten the User ID and Password 
+may retrieve the same by following the 
+remote e-voting instructions mentioned in 
+this Notice. Further members can also use 
+OTP based login for logging the e-voting 
+system of NSDL.
+ b)  The Members can join the AGM in the VC / 
+OAVM mode 15 minutes before and after the 
+scheduled time of the commencement of the 
+AGM by following the procedure mentioned 
+in the Notice. The facility of participation at 
+the AGM through VC / OAVM will be made 
+available for 1000 Members on first come 
+first served basis. This will not include large 
+Shareholders (Shareholders holding 2% or 
+more shareholding), Promoters, Institutional 
+Investors, Directors and Key Managerial 
+Personnel, the Chairpersons of the Audit 
+Committee, Nomination and Remuneration 
+Committee and Stakeholders Relationship 
+Committee, Auditors etc. who are allowed 
+353
+Notice
+to attend the AGM without restriction on 
+account of first come first served basis.
+ c)  Members are encouraged to join the Meeting 
+through Laptops for better experience. 
+Further, Members will be required to grant 
+access to the web-cam/ camera to enable 
+two-way video conferencing. Further 
+Members will be required to allow Camera 
+and use Internet with a good speed to 
+avoid any disturbance during the meeting. 
+Please note that Participants connecting 
+from Mobile Devices or Tablets or through 
+Laptop connecting via Mobile Hotspot 
+may experience Audio/Video loss due to 
+fluctuation in their respective network. It is 
+therefore recommended to use Stable WiFi 
+or LAN Connection to mitigate any kind of 
+aforesaid glitches.
+ d)  Members who need assistance before or 
+during the AGM, can contact Ms. Pallavi 
+Mahtre, Deputy Vice President, NSDL on 
+email ID: evoting@nsdl.com or call on 022 - 
+4886 7000.
+ e)  Members who would like to express their 
+views or ask questions during the AGM may 
+post their queries in the window ‘Ask Your 
+Question’, by mentioning their name and 
+demat account number/folio number.
+25. Registration as Speaker Shareholder:
+  In addition to the above-mentioned step, the 
+Members may register themselves as a speaker 
+for the AGM to express their views / ask questions 
+during the AGM. Accordingly, the Members may 
+follow the steps as mentioned under “Step 1: 
+Access to NSDL e-voting system” between 
+9:00 A.M. (IST), Sunday, August 30, 2026 and 
+5:00 P.M. (IST), Tuesday, September 1, 2026,  
+i.e. the remote e-voting period. After successful 
+login, Members will be able to register themselves 
+as a speaker shareholder by clicking on the 
+Speaker registration link available against the 
+EVEN of Route Mobile Limited and entering 
+their contact details. Alternatively, Members may 
+preregister themselves by sending a request 
+from their registered email ID mentioning their 
+names, DP ID and Client ID/folio number, PAN and 
+mobile number to investors@routemobile.com.  
+The Company reserves the right to restrict the 
+speakers at the AGM to only those Members 
+who have registered themselves, depending 
+on the availability of the time at the AGM. Those 
+Members who have registered themselves as 
+a speaker will only be allowed to express their 
+views/ask questions during the AGM in relation 
+to the agenda to be transacted at the AGM. Due 
+to limitations of transmission and coordination 
+during the AGM, the Company may have to 
+dispense with or curtail the Speaker Session. 
+Hence, Members are encouraged to send their 
+questions/ queries in advance to the Company at 
+investors@routemobile.com.
+26.  The Instructions for Members for E-Voting 
+on the day of the AGM are as under:
+ (a)  The procedure for e-voting on the day of the 
+AGM is same as the instructions mentioned 
+above for remote e-voting.
+ (b)  The details of the person who may be 
+contacted for any grievances connected 
+with the facility for e-voting on the day of the 
+AGM shall be the same person mentioned for 
+remote e-voting.
+ (c)  Only those Members who are present in 
+the meeting through video conferencing 
+facility and have not cast their vote on the 
+resolutions through remote e-voting, shall 
+be allowed to vote through e-voting system 
+during the meeting/AGM. The Members who 
+have cast their votes by remote e-voting prior 
+to the AGM, may attend and participate in 
+the AGM but they shall not be entitled to cast 
+their vote again at the AGM.
+ (d)  Members can opt for only one mode of voting 
+i.e. either by remote e-voting or voting at the 
+AGM by electronic voting. In case Members 
+Route Mobile   |   Annual Report 2025-26
+354
+cast their votes through both the modes, 
+voting done by remote e-voting shall prevail 
+and the votes cast at the AGM shall be treated 
+as invalid.
+27. Other Information
+ a)  The Board of Directors has appointed 
+Mr. Dhrumil M. Shah (Membership No.: F8021, 
+Certificate of Practice No.: 8978), Partner 
+of Dhrumil M. Shah & Co. LLP, Practicing 
+Company Secretaries, and in his absence 
+Mr. Dhiraj Ravindra Palav (Membership 
+No.: A61639, Certificate of Practice No.: 
+26159), Partner of Dhrumil M. Shah & Co. 
+LLP, Practicing Company Secretaries as the 
+‘Scrutinizer’ to scrutinize the e-voting process 
+in a fair and transparent manner.
+ b)  The Chairman shall, at the AGM, at the end 
+of discussion on the resolutions on which 
+voting is to be held, allow voting with the 
+assistance of scrutiniser, by use of electronic 
+voting for all those Members who are present 
+at the AGM but have not cast their votes by 
+availing the remote e-voting facility. The 
+remote e-voting module during the AGM 
+shall be disabled by NSDL for e-voting 15 
+minutes after the conclusion of the Meeting.
+ c)  The Scrutiniser shall, immediately after 
+the conclusion of the voting at the AGM, 
+first count the votes cast during the AGM, 
+thereafter unblock the votes cast through 
+remote e-voting in the presence of at least 
+two (2) witnesses not in the employment 
+of the Company and provide, not later than 
+two working days of conclusion of the AGM, a 
+consolidated Scrutiniser’s Report of the total 
+votes cast in favour or against, if any, to the 
+Chairman or a person authorised by him in 
+writing, who shall countersign the same and 
+declare the result of the voting forthwith.
+ d)  The results declared along with the 
+Scrutinizer’s Report shall be placed on the 
+Company’s website at www.routemobile.com  
+and on the website of NSDL on  
+www.evoting.nsdl.com immediately after 
+the submission with the Stock Exchanges, 
+where the shares of the Company are listed. 
+Subject to receipt of the requisite number 
+of votes, the resolutions shall be deemed to 
+have been passed on the date of the AGM, i.e., 
+September 02, 2026.
+ e)  The Ministry of Corporate Affairs has taken 
+a ‘Green Initiative in Corporate Governance’ 
+by allowing Companies to send documents 
+to their members in electronic mode. To 
+support this green initiative and to receive 
+communications from the Company in 
+electronic mode, Members who have not 
+registered their e-mail addresses and are 
+holding shares in physical form are requested 
+to contact the RTA of the Company and 
+register their e-mail address. Members 
+holding shares in demat form are requested 
+to contact their DPs. Members may please 
+note that notices, annual reports, etc. will 
+be available on the Company’s website at  
+www.routemobile.com.
+ f)   Pursuant to Regulation 30A (1) of the Listing 
+regulations, the shareholders are hereby 
+requested to promptly inform the Company 
+of any agreements entered into by them 
+or among themselves or with promoters, 
+promoter group entities, related parties, 
+directors, key managerial personnel, and 
+employees of the listed entity or its holding, 
+subsidiary, or associate company or with 
+the listed entity or a third party, which may 
+directly or indirectly impact the management 
+or control of the listed entity, or impose any 
+restriction or create any liability upon the 
+listed entity. Please ensure to provide this 
+information within two working days of 
+entering into or signing such agreements.
+   [Explanation: For the purpose of this clause, 
+the term “directly or indirectly” includes 
+agreements creating obligation on the parties 
+to such agreements to ensure that listed entity 
+shall or shall not act in a particular manner.]
+355
+Notice
+EXPLANATORY STATEMENT PURSUANT TO SECTION 102 OF THE COMPANIES ACT, 2013
+Item No. 4:
+This explanatory statement is provided in accordance 
+with Regulation 36(5) of the SEBI (Listing Obligations 
+and Disclosure Requirements) Regulations, 2015 
+(Listing Regulations”).
+Walker Chandiok & Co. LLP, Chartered Accountants 
+(ICAI Firm Registration No. 001076N/N500013), 
+were re-appointed as the Statutory Auditors at its 
+17th Annual General Meeting (“AGM”) of the Company 
+held on August 5, 2021, for a period of five years i.e., 
+from financial year 2021-22 to financial year 2025-
+26, to hold office till the conclusion of the 22nd AGM 
+of the Company. Their term is set to conclude at the 
+forthcoming 22nd AGM.
+Accordingly, based on the recommendation of the 
+Audit Committee, the Board of Directors vide circular 
+resolution dated May 22, 2026, have approved 
+and recommended, the appointment of M S K A & 
+Associates LLP, Chartered Accountants (ICAI Firm 
+Registration No. 105047W/W101187), as the Statutory 
+Auditors of the Company. M S K A & Associates LLP 
+have consented to their proposed appointment and 
+provided a certificate confirming that they satisfy the 
+criteria provided under Section 14 1 of the Companies 
+Act, 2013 (‘Act’) and that the appointment, if made, 
+will be within the limits prescribed under Section 
+139 of the Act and the applicable rules and the 
+Chartered Accountants Act, 1949, and all applicable 
+rules and regulations. Furthermore, in accordance 
+with the Listing Regulations, they have confirmed 
+that they hold a valid peer review certificate issued by 
+the Peer Review Board of the Institute of Chartered 
+Accountants of India.
+The Board recommends the appointment of  
+M S K A & Associates LLP, Chartered Accountants as 
+Statutory Auditors of the Company for a period of 5 
+(five) consecutive years to hold the office from the 
+conclusion of the ensuing 22nd AGM of the Company 
+till the conclusion of the 27th AGM to be held in the 
+calendar year 2031, subject to the approval of the 
+shareholders of the Company.
+Details as required under Regulation 36(5) of the 
+Listing Regulations are as under:
+• Terms of appointment:
+  Five (5) consecutive years to hold the office from 
+the conclusion of the ensuing 22nd AGM till the 
+conclusion of the 27 th A GM t o be held in the  
+calendar year 2031.
+•  Proposed Statutory audit fee payable to 
+auditors and material change in fee payable:
+  U p  t o  H 1,00,00,000 (Rupees One Crore Only) 
+as statutory audit fees for the year ending  
+March 31, 2027 . The remuneration payable 
+to statutory auditors for the remaining 
+tenure of the proposed appointment will be 
+subsequently determined by the Board as per 
+the recommendation of the Audit Committee. 
+Apart from reduction in annual statutory audit 
+fees there are no other material change.
+•  Basis of recommendation and auditor’s 
+credentials:
+  The recommendation are based on the 
+fulfilment of the eligibility criteria prescribed 
+under the Act.
+  M S K A & Associates LLP (formerly known as 
+M S K A & Associates) established in 1978, is an 
+Indian limited liability partnership firm registered 
+with the Institute of Chartered Accountants of 
+India (ICAI) and the PCAOB (US Public Company 
+Accountancy Oversight Board) having offices 
+across 12 cities in India at Mumbai, Gurugram, 
+Chandigarh, Kolkata, Ahmedabad, Chennai, 
+Goa, Pune, Bengaluru, Kochi, Hyderabad and 
+Coimbatore. The audit firm has a valid peer 
+review certificate.
+ None of the Directors and/ or Key Managerial Personnel 
+of the Company and their relatives is concerned or 
+interested, financially or otherwise, in the resolution 
+set out at Item No. 4 of the Notice.
+The Board recommends the Ordinary Resolution 
+as set out in Item No. 4 of the Notice for approval 
+of Members.
+By Order of the Board of Directors
+For Route Mobile Limited
+Tejas Shah
+Company Secretary & Compliance Officer
+ICSI Membership No. A34829
+Date: July 23, 2026
+Place: Mumbai
+Route Mobile   |   Annual Report 2025-26
+356
+Appendix 1
+DISCLOSURE RELATING TO DIRECTOR PURSUANT TO REGULATION 36(3) OF SECURITIES AND EXCHANGE 
+BOARD OF INDIA (LISTING OBLIGATIONS AND DISCLOSURE REQUIREMENTS) REGULATIONS, 2015 AND 
+SECRETARIAL STANDARD ON GENERAL MEETINGS (SS-2) ARE GIVEN HEREUNDER.
+Name of the Director Mr. Rajdipkumar Gupta
+Director Identification Number 01272947
+Designation and Category of Director Managing Director (Executive)
+Age 50 years
+Date of First Appointment on the Board May 15, 2004
+Qualification Bachelor’s degree in science (Physics) & Master’s diploma in Software  
+Engineering.
+Experience Over 27 years
+Expertise in specific functional Areas All functions of the Company including technology and R&D, M&A, market 
+development, sales and brand management, innovation in service delivery 
+and general administration.
+Remuneration proposed to be paid Being an Executive Director, Mr. Rajdipkumar Gupta will be paid an 
+amount not exceeding H 4,15,00,000/- per annum, (excluding further other 
+perquisites) and an annual increment not exceeding 15% per annum, during 
+the subsequent years. Mr. Gupta will not be entitled to any sitting fees for 
+attending the meetings of the Board/ Committees. Pursuant to Section 
+152 and other applicable provisions of the Act, only the Non Independent 
+Directors would be reckoned for the purpose of retirement by rotation. 
+Hence, in terms of Section 152 of the Companies Act, 2013 (the “Act”) and 
+the Articles of Association of the Company, Mr. Rajdipkumar Gupta, Director, 
+retires by rotation at the forthcoming AGM and being eligible, offers himself 
+for re-appointment.
+Last drawn Remuneration H 2,00,00,004 from Route Mobile Limited and GBP 2,15,000 from Route 
+Mobile (UK) Limited.
+Relationship with other Directors, Manager 
+and other Key Managerial Personnel
+Mr. Rajdipkumar Gupta is not related to any Directors, Manager and other 
+Key Managerial Personnel of Route Mobile Limited.
+Do note that Mr. Sandipkumar Gupta, brother of Mr. Rajdipkumar Gupta, 
+serves as a Non-Executive, Non-Independent Director, on the Board of 
+Proximus Global SA/NV, a public limited company (société anonyme / 
+naamloze vennootschap) incorporated under the laws of Belgium, the 
+holding company of Route Mobile Limited.
+Number of Board Meetings attended during 
+the FY 2025-26
+Seven (7) meetings
+Directorships held in other Companies (as on 
+March 31, 2026)
+1. Shell Inn (International) Private Limited 
+2. Ahaya Supermart Private Limited
+3. Clear Bridge Infraventures Private Limited
+4. RS Prime Finance Private Limited
+5. Khelomore Sports Private Limited
+6. 29 Three Holidays Private Limited
+7 . Cobx Gaming Private Limited
+8. Zon Hotels (Mumbai) Private Limited
+9. Zon Hotels (Varca) Private Limited
+10. Kesri Warriors Private Limited
+11. Sanraj Family Ventures Private Limited
+12. Sanraj Healthcare Private Limited
+13. Route Energy Private Limited
+14. Zon Hotels Private Limited
+Member/ Chairperson of committees of the 
+Other Company
+None
+Names of listed entities from which resigned 
+in the past three years
+None
+No. of shares held:
+(a) Own
+(b) For other persons on a beneficial basis 
+Note:  The Directorship, Committee Memberships and Chairmanships do not include positions in foreign 
+companies, position as advisory board member(s) and position in Companies under Section 8 of the  
+Act, if any.
+357
+Notice

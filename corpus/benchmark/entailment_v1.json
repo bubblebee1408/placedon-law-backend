@@ -1,0 +1,63 @@
+{
+  "benchmark": "entailment spike v1 \u2014 frozen ground truth",
+  "frozen": "2026-08-22",
+  "purpose": "One question: can a checker tell a claim ENTAILED by the provision from one that merely borrows its vocabulary? The lexical verifier in checker/claim_verifier.py cannot, and says so in its own docstring. This file freezes the ground truth so any future entailment checker is measured against labels written before it existed.",
+  "evidence": {
+    "key": "ACT:COMPANIES_ACT_2013:S173",
+    "text": "(1) Every company shall hold the first meeting of the Board of Directors within thirty days of the date of its incorporation and thereafter hold a minimum number of four meetings of its Board of Directors every year in such a manner that not more than one hundred and twenty days shall intervene between two consecutive meetings of the Board: Provided that the Central Government may, by notification, direct that the provisions of this subsection shall not apply in relation to any class or description of companies or shall apply subject to such exceptions, modifications or conditions as may be specified in the notification. (2) The participation of directors in a meeting of the Board may be either in person or through video conferencing or other audio visual means, as may be prescribed, which are capable of recording and recognising the participation of the directors and of recording and storing the proceedings of such meetings along with date and time: Provided that the Central Government may, by notification, specify such matters which shall not be dealt with in a meeting through video conferencing or other audio visual means. <sup>1</sup>[Provided further that where there is quorum"
+  },
+  "note": "NO entailment layer is built. There is no entailment model in this repo and building a pluggable adjudication stage around a stub would be scaffolding pretending to be progress. The fixture is cheap and permanent; the layer waits for a model.",
+  "acceptance": "A checker is worth adopting only if it gets e02, e03 and e04 right WITHOUT losing e01. Raising the lexical threshold cannot achieve this: e01 and e02 both score 0.667, because the borrowed vocabulary IS the provision's.",
+  "cases": [
+    {
+      "id": "e01",
+      "label": "entailed \u2014 restates the provision",
+      "claim": "Every company shall hold the first meeting of the Board of Directors within thirty days of the date of its incorporation.",
+      "claim_type": "LEGAL_TRIGGER",
+      "gold": "SUPPORTED",
+      "lexical_verdict": "LEXICAL_CANDIDATE",
+      "lexical_coverage": 1.0,
+      "lexical_agrees_with_gold": false,
+      "establishes_support": false
+    },
+    {
+      "id": "e02",
+      "label": "NOT entailed \u2014 borrows the vocabulary, invents the obligation",
+      "claim": "Every company shall file a return of each meeting of the Board with the Registrar within thirty days of the meeting.",
+      "claim_type": "PROCEDURAL_REQUIREMENT",
+      "gold": "UNSUPPORTED",
+      "lexical_verdict": "LEXICAL_CANDIDATE",
+      "lexical_coverage": 0.667,
+      "lexical_agrees_with_gold": false,
+      "establishes_support": false
+    },
+    {
+      "id": "e03",
+      "label": "NOT entailed \u2014 inverts the provision",
+      "claim": "A company is not required to hold any meeting of its Board of Directors in its first year.",
+      "claim_type": "LEGAL_TRIGGER",
+      "gold": "UNSUPPORTED",
+      "lexical_verdict": "LEXICAL_CANDIDATE",
+      "lexical_coverage": 0.8,
+      "lexical_agrees_with_gold": false,
+      "establishes_support": false
+    },
+    {
+      "id": "e04",
+      "label": "NOT entailed \u2014 right subject, wrong number",
+      "claim": "Every company shall hold the first meeting of the Board of Directors within ninety days of incorporation.",
+      "claim_type": "LEGAL_TRIGGER",
+      "gold": "UNSUPPORTED",
+      "lexical_verdict": "LEXICAL_CANDIDATE",
+      "lexical_coverage": 1.0,
+      "lexical_agrees_with_gold": false,
+      "establishes_support": false
+    }
+  ],
+  "measured_2026_08_22": {
+    "lexical_agrees_with_gold": "0/4",
+    "diagnosis": "e04 is the decisive case and it is NOT a bug in the coverage metric. The claim swaps 'thirty days' for 'ninety days', and the word 'ninety' appears elsewhere in s.173 -- so every distinctive term of a FALSE statement of law is present in the provision, and coverage is a perfect 1.000. A statute is full of numbers and conditions; a claim can recombine the provision's own words into something it does not say. No threshold on term overlap can separate these, because nothing is missing.",
+    "e03_note": "e03 INVERTS the provision ('not required to hold any meeting') and scores 0.800. checker/claim_verifier.py detects negation only BETWEEN two claims, never between a claim and the provision it cites. That is a narrower gap and might be closable without a model; it is recorded here rather than fixed, because a half-measure that catches simple negation would make the verifier look more capable than it is.",
+    "relabel_note": "Was 1/4 while the lexical path could emit SUPPORTED. It is now 0/4 because that path tops out at LEXICAL_CANDIDATE and establishes_support() is False for it. The change is a sharpening, not a regression: the checker graded e01 (true restatement) and e04 (thirty days changed to ninety) BOTH at coverage 1.000, so the earlier 'correct' answer on e01 was a label attached to a coin flip. 0/4 states what the checker actually establishes about entailment: nothing."
+  }
+}

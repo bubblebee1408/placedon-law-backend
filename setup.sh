@@ -52,7 +52,7 @@ fi
 echo
 python3 scripts/index_codebase.py | head -3
 echo
-python3 scripts/verify.py --fast | tail -3
+./scripts/run_tests.sh | tail -3
 
 cat <<'MD'
 
@@ -67,5 +67,5 @@ Ready.
   /research <topic>   research only, no code
 
   python3 scripts/search_memory.py "<question>"   ask the codebase first
-  python3 scripts/verify.py                       GO / NO-GO
+  ./scripts/run_tests.sh                          every suite
 MD

@@ -1,0 +1,4 @@
+{
+ "deferred": [],
+ "note": "These changes are pending and were NOT applied. The frozen set knowingly diverges from what the current code would produce; label_drift() will keep reporting them and freeze() will keep refusing until a reviewer decides."
+}

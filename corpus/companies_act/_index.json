@@ -1,0 +1,3625 @@
+{
+ "source": "India Code full-Act PDF, arrangement + body alignment",
+ "built_offline": true,
+ "entries": {
+  "1": {
+   "section_number": "1",
+   "title": "Short title, extent, commencement and application",
+   "section_id": "184",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "2": {
+   "section_number": "2",
+   "title": "Definitions",
+   "section_id": "185",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 1)"
+  },
+  "3": {
+   "section_number": "3",
+   "title": "Formation of company",
+   "section_id": "186",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "3A": {
+   "section_number": "3A",
+   "title": "Members severally liable in certain cases",
+   "section_id": "48973",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "4": {
+   "section_number": "4",
+   "title": "Memorandum",
+   "section_id": "187",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "5": {
+   "section_number": "5",
+   "title": "Articles",
+   "section_id": "188",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "6": {
+   "section_number": "6",
+   "title": "Act to override memorandum, articles, etc",
+   "section_id": "189",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "7": {
+   "section_number": "7",
+   "title": "Incorporation of company",
+   "section_id": "190",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "8": {
+   "section_number": "8",
+   "title": "Formation of companies with charitable objects, etc",
+   "section_id": "191",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "9": {
+   "section_number": "9",
+   "title": "Effect of registration",
+   "section_id": "192",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "10": {
+   "section_number": "10",
+   "title": "Effect of memorandum and articles",
+   "section_id": "193",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "10A": {
+   "section_number": "10A",
+   "title": "Commencement of business, etc",
+   "section_id": "49492",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 1)"
+  },
+  "11": {
+   "section_number": "11",
+   "title": "[Omitted.]",
+   "section_id": null,
+   "confidence": "n/a",
+   "method": "omitted in source"
+  },
+  "12": {
+   "section_number": "12",
+   "title": "Registered office of company",
+   "section_id": "195",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "13": {
+   "section_number": "13",
+   "title": "Alteration of memorandum",
+   "section_id": "196",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "14": {
+   "section_number": "14",
+   "title": "Alteration of articles",
+   "section_id": "197",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "15": {
+   "section_number": "15",
+   "title": "Alteration of memorandum or articles to be noted in every copy",
+   "section_id": "198",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "16": {
+   "section_number": "16",
+   "title": "Rectification of name of company",
+   "section_id": "199",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "17": {
+   "section_number": "17",
+   "title": "Copies of memorandum, articles, etc., to be given to members",
+   "section_id": "200",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "18": {
+   "section_number": "18",
+   "title": "Conversion of companies already registered",
+   "section_id": "201",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "19": {
+   "section_number": "19",
+   "title": "Subsidiary company not to hold shares in its holding company",
+   "section_id": "202",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "20": {
+   "section_number": "20",
+   "title": "Service of documents",
+   "section_id": "203",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "21": {
+   "section_number": "21",
+   "title": "Authentication of documents, proceedings and contracts",
+   "section_id": "204",
+   "confidence": "high",
+   "method": "anchored body slice (4/4 probes, runner-up 0)"
+  },
+  "22": {
+   "section_number": "22",
+   "title": "Execution of bills of exchange, etc",
+   "section_id": "205",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 1)"
+  },
+  "23": {
+   "section_number": "23",
+   "title": "Public offer and private placement",
+   "section_id": "206",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "24": {
+   "section_number": "24",
+   "title": "Power of Securities and Exchange Board to regulate issue and transfer of securities, etc",
+   "section_id": "207",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "25": {
+   "section_number": "25",
+   "title": "Document containing offer of securities for sale to be deemed prospectus",
+   "section_id": "208",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "26": {
+   "section_number": "26",
+   "title": "Matters to be stated in prospectus",
+   "section_id": "209",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "27": {
+   "section_number": "27",
+   "title": "Variation in terms of contract or objects in prospectus",
+   "section_id": "210",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "28": {
+   "section_number": "28",
+   "title": "Offer of sale of shares by certain members of company",
+   "section_id": "211",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 1)"
+  },
+  "29": {
+   "section_number": "29",
+   "title": "Public offer of securities to be in dematerialised form",
+   "section_id": "212",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "30": {
+   "section_number": "30",
+   "title": "Advertisement of prospectus",
+   "section_id": "1220",
+   "confidence": "high",
+   "method": "anchored body slice (4/4 probes, runner-up 0)"
+  },
+  "31": {
+   "section_number": "31",
+   "title": "Shelf prospectus",
+   "section_id": "1221",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "32": {
+   "section_number": "32",
+   "title": "Red herring prospectus",
+   "section_id": "1222",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "33": {
+   "section_number": "33",
+   "title": "Issue of application forms for securities",
+   "section_id": "1223",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "34": {
+   "section_number": "34",
+   "title": "Criminal liability for mis-statements in prospectus",
+   "section_id": "1224",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "35": {
+   "section_number": "35",
+   "title": "Civil liability for mis-statements in prospectus",
+   "section_id": "1225",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "36": {
+   "section_number": "36",
+   "title": "Punishment for fraudulently inducing persons to invest money",
+   "section_id": "1226",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "37": {
+   "section_number": "37",
+   "title": "Action by affected persons",
+   "section_id": "1227",
+   "confidence": "high",
+   "method": "anchored body slice (3/3 probes, runner-up 0)"
+  },
+  "38": {
+   "section_number": "38",
+   "title": "Punishment for personation for acquisition, etc., of securities",
+   "section_id": "1228",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "39": {
+   "section_number": "39",
+   "title": "Allotment of securities by company",
+   "section_id": "1229",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "40": {
+   "section_number": "40",
+   "title": "Securities to be dealt with in stock exchanges",
+   "section_id": "1230",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "41": {
+   "section_number": "41",
+   "title": "Global depository receipt",
+   "section_id": "1231",
+   "confidence": "high",
+   "method": "anchored body slice (3/3 probes, runner-up 0)"
+  },
+  "42": {
+   "section_number": "42",
+   "title": "Issue of shares on private placement basis",
+   "section_id": "1232",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "43": {
+   "section_number": "43",
+   "title": "Kinds of share capital",
+   "section_id": "1233",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "44": {
+   "section_number": "44",
+   "title": "Nature of shares or debentures",
+   "section_id": "1234",
+   "confidence": "medium",
+   "method": "anchored body slice (2/2 probes, runner-up 0)"
+  },
+  "45": {
+   "section_number": "45",
+   "title": "Numbering of shares",
+   "section_id": "1235",
+   "confidence": "high",
+   "method": "anchored body slice (4/4 probes, runner-up 0)"
+  },
+  "46": {
+   "section_number": "46",
+   "title": "Certificate of shares",
+   "section_id": "1236",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "47": {
+   "section_number": "47",
+   "title": "Voting rights",
+   "section_id": "1237",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "48": {
+   "section_number": "48",
+   "title": "Variation of shareholders’ rights",
+   "section_id": "1238",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "49": {
+   "section_number": "49",
+   "title": "Calls on shares of same class to be made on uniform basis",
+   "section_id": "1239",
+   "confidence": "high",
+   "method": "anchored body slice (4/4 probes, runner-up 0)"
+  },
+  "50": {
+   "section_number": "50",
+   "title": "Company to accept unpaid share capital, although not called up",
+   "section_id": "1240",
+   "confidence": "high",
+   "method": "anchored body slice (4/4 probes, runner-up 0)"
+  },
+  "51": {
+   "section_number": "51",
+   "title": "Payment of dividend in proportion to amount paid-up",
+   "section_id": "1241",
+   "confidence": "source-confirmed",
+   "method": "india code api"
+  },
+  "52": {
+   "section_number": "52",
+   "title": "Application of premiums received on issue of shares",
+   "section_id": "1242",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "53": {
+   "section_number": "53",
+   "title": "Prohibition on issue of shares at discount",
+   "section_id": "1243",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "54": {
+   "section_number": "54",
+   "title": "Issues of sweat equity shares",
+   "section_id": "1244",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "55": {
+   "section_number": "55",
+   "title": "Issue and redemption of preference shares",
+   "section_id": "1245",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "56": {
+   "section_number": "56",
+   "title": "Transfer and transmission of securities",
+   "section_id": "1246",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 1)"
+  },
+  "57": {
+   "section_number": "57",
+   "title": "Punishment for personation of shareholder",
+   "section_id": "1247",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "58": {
+   "section_number": "58",
+   "title": "Refusal of registration and appeal against refusal",
+   "section_id": "1248",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "59": {
+   "section_number": "59",
+   "title": "Rectification of register of members",
+   "section_id": "1249",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "60": {
+   "section_number": "60",
+   "title": "Publication of authorised, subscribed and paid-up capital",
+   "section_id": "1250",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "61": {
+   "section_number": "61",
+   "title": "Power of limited company to alter its share capital",
+   "section_id": "1251",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "62": {
+   "section_number": "62",
+   "title": "Further issue of share capital",
+   "section_id": "1252",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "63": {
+   "section_number": "63",
+   "title": "Issue of bonus shares",
+   "section_id": "1253",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "64": {
+   "section_number": "64",
+   "title": "Notice to be given to Registrar for alteration of share capital",
+   "section_id": "1254",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "65": {
+   "section_number": "65",
+   "title": "Unlimited company to provide for reserve share capital on conversion into limited company",
+   "section_id": "1255",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "66": {
+   "section_number": "66",
+   "title": "Reduction of share capital",
+   "section_id": "1256",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "67": {
+   "section_number": "67",
+   "title": "Restrictions on purchase by company or giving of loans by it for purchase of its shares",
+   "section_id": "1257",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "68": {
+   "section_number": "68",
+   "title": "Power of company to purchase its own securities",
+   "section_id": "1258",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "69": {
+   "section_number": "69",
+   "title": "Transfer of certain sums to capital redemption reserve account",
+   "section_id": "1259",
+   "confidence": "high",
+   "method": "anchored body slice (3/5 probes, runner-up 0)"
+  },
+  "70": {
+   "section_number": "70",
+   "title": "Prohibition for buy-back in certain circumstances",
+   "section_id": "1260",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "71": {
+   "section_number": "71",
+   "title": "Debentures",
+   "section_id": "1261",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "72": {
+   "section_number": "72",
+   "title": "Power to nominate",
+   "section_id": "1262",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 1)"
+  },
+  "73": {
+   "section_number": "73",
+   "title": "Prohibition on acceptance of deposits from public",
+   "section_id": "1263",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "74": {
+   "section_number": "74",
+   "title": "Repayment of deposits, etc., accepted before commencement of this Act",
+   "section_id": "1264",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 1)"
+  },
+  "75": {
+   "section_number": "75",
+   "title": "Damages for fraud",
+   "section_id": "1265",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "76": {
+   "section_number": "76",
+   "title": "Acceptance of deposits from public by certain companies",
+   "section_id": "1266",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "76A": {
+   "section_number": "76A",
+   "title": "Punishment for contravention of section 73 or section 76",
+   "section_id": "1267",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "77": {
+   "section_number": "77",
+   "title": "Duty to register charges, etc",
+   "section_id": "1268",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 1)"
+  },
+  "78": {
+   "section_number": "78",
+   "title": "Application for registration of charge",
+   "section_id": "1269",
+   "confidence": "high",
+   "method": "anchored body slice (3/5 probes, runner-up 0)"
+  },
+  "79": {
+   "section_number": "79",
+   "title": "Section 77 to apply in certain matters",
+   "section_id": "1270",
+   "confidence": "high",
+   "method": "anchored body slice (4/4 probes, runner-up 0)"
+  },
+  "80": {
+   "section_number": "80",
+   "title": "Date of notice of charge",
+   "section_id": "1271",
+   "confidence": "high",
+   "method": "anchored body slice (4/4 probes, runner-up 0)"
+  },
+  "81": {
+   "section_number": "81",
+   "title": "Register of charges to be kept by Registrar",
+   "section_id": "1272",
+   "confidence": "high",
+   "method": "anchored body slice (4/4 probes, runner-up 0)"
+  },
+  "82": {
+   "section_number": "82",
+   "title": "Company to report satisfaction of charge",
+   "section_id": "1273",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "83": {
+   "section_number": "83",
+   "title": "Power of Registrar to make entries of satisfaction and release in absence of intimation from",
+   "section_id": "1274",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "84": {
+   "section_number": "84",
+   "title": "Intimation of appointment of receiver or manager",
+   "section_id": "1275",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "85": {
+   "section_number": "85",
+   "title": "Company’s register of charges",
+   "section_id": "1276",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "86": {
+   "section_number": "86",
+   "title": "Punishment for contravention",
+   "section_id": "1277",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 1)"
+  },
+  "87": {
+   "section_number": "87",
+   "title": "Rectification by Central Government in Register of charges",
+   "section_id": "1278",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "88": {
+   "section_number": "88",
+   "title": "Register of members, etc",
+   "section_id": "1279",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 1)"
+  },
+  "89": {
+   "section_number": "89",
+   "title": "Declaration in respect of beneficial interest in any share",
+   "section_id": "1280",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "90": {
+   "section_number": "90",
+   "title": "Register of significant beneficial owners in a Company",
+   "section_id": "1281",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "91": {
+   "section_number": "91",
+   "title": "Power to close register of members or debenture holders or other security holders",
+   "section_id": "1282",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "92": {
+   "section_number": "92",
+   "title": "Annual return",
+   "section_id": "1283",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 2)"
+  },
+  "93": {
+   "section_number": "93",
+   "title": "[Omitted.]",
+   "section_id": null,
+   "confidence": "n/a",
+   "method": "omitted in source"
+  },
+  "94": {
+   "section_number": "94",
+   "title": "Place of keeping and inspection of registers, returns, etc",
+   "section_id": "1285",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "95": {
+   "section_number": "95",
+   "title": "Registers, etc., to be evidence",
+   "section_id": "1286",
+   "confidence": "high",
+   "method": "anchored body slice (3/3 probes, runner-up 0)"
+  },
+  "96": {
+   "section_number": "96",
+   "title": "Annual general meeting",
+   "section_id": "1287",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 2)"
+  },
+  "97": {
+   "section_number": "97",
+   "title": "Power of Tribunal to call annual general meeting",
+   "section_id": "1288",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "98": {
+   "section_number": "98",
+   "title": "Power of Tribunal to call meetings of members, etc",
+   "section_id": "1289",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 1)"
+  },
+  "99": {
+   "section_number": "99",
+   "title": "Punishment for default in complying with provisions of sections 96 to 98",
+   "section_id": "1290",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "100": {
+   "section_number": "100",
+   "title": "Calling of extraordinary general meeting",
+   "section_id": "1291",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "101": {
+   "section_number": "101",
+   "title": "Notice of meeting",
+   "section_id": "1292",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "102": {
+   "section_number": "102",
+   "title": "Statement to be annexed to notice",
+   "section_id": "1293",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 1)"
+  },
+  "103": {
+   "section_number": "103",
+   "title": "Quorum for meetings",
+   "section_id": "1294",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "104": {
+   "section_number": "104",
+   "title": "Chairman of meetings",
+   "section_id": "1295",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "105": {
+   "section_number": "105",
+   "title": "Proxies",
+   "section_id": "1296",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "106": {
+   "section_number": "106",
+   "title": "Restriction on voting rights",
+   "section_id": "1297",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 1)"
+  },
+  "107": {
+   "section_number": "107",
+   "title": "Voting by show of hands",
+   "section_id": "1298",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "108": {
+   "section_number": "108",
+   "title": "Voting through electronic means",
+   "section_id": "1299",
+   "confidence": "medium",
+   "method": "anchored body slice (2/2 probes, runner-up 0)"
+  },
+  "109": {
+   "section_number": "109",
+   "title": "Demand for poll",
+   "section_id": "1300",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "110": {
+   "section_number": "110",
+   "title": "Postal ballot",
+   "section_id": "1301",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "111": {
+   "section_number": "111",
+   "title": "Circulation of members’ resolution",
+   "section_id": "1302",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "112": {
+   "section_number": "112",
+   "title": "Representation of President and Governors in meetings",
+   "section_id": "1303",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "113": {
+   "section_number": "113",
+   "title": "Representation of corporations at meeting of companies and of creditors",
+   "section_id": "1304",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "114": {
+   "section_number": "114",
+   "title": "Ordinary and special resolutions",
+   "section_id": "1305",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "115": {
+   "section_number": "115",
+   "title": "Resolutions requiring special notice",
+   "section_id": "1306",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "116": {
+   "section_number": "116",
+   "title": "Resolutions passed at adjourned meeting",
+   "section_id": "1307",
+   "confidence": "high",
+   "method": "anchored body slice (4/4 probes, runner-up 0)"
+  },
+  "117": {
+   "section_number": "117",
+   "title": "Resolutions and agreements to be filed",
+   "section_id": "1308",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "118": {
+   "section_number": "118",
+   "title": "Minutes of proceedings of general meeting, meeting of Board of Directors and other meeting and",
+   "section_id": "1309",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "119": {
+   "section_number": "119",
+   "title": "Inspection of minute-books of general meeting",
+   "section_id": "1310",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "120": {
+   "section_number": "120",
+   "title": "Maintenance and inspection of documents in electronic form",
+   "section_id": "1311",
+   "confidence": "high",
+   "method": "anchored body slice (3/4 probes, runner-up 0)"
+  },
+  "121": {
+   "section_number": "121",
+   "title": "Report on annual general meeting",
+   "section_id": "1312",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "122": {
+   "section_number": "122",
+   "title": "Applicability of this Chapter to One Person Company",
+   "section_id": "1313",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "123": {
+   "section_number": "123",
+   "title": "Declaration of dividend",
+   "section_id": "1314",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "124": {
+   "section_number": "124",
+   "title": "Unpaid Dividend Account",
+   "section_id": "1315",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "125": {
+   "section_number": "125",
+   "title": "Investor Education and Protection Fund",
+   "section_id": "1316",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "126": {
+   "section_number": "126",
+   "title": "Right to dividend, rights shares and bonus shares to be held in abeyance pending registration of",
+   "section_id": "1317",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "127": {
+   "section_number": "127",
+   "title": "Punishment for failure to distribute dividends",
+   "section_id": "1318",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "128": {
+   "section_number": "128",
+   "title": "Books of account, etc., to be kept by company",
+   "section_id": "1319",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "129": {
+   "section_number": "129",
+   "title": "Financial statement",
+   "section_id": "1320",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "129A": {
+   "section_number": "129A",
+   "title": "Periodical financial results",
+   "section_id": "51984",
+   "confidence": "high",
+   "method": "anchored body slice (3/5 probes, runner-up 0)"
+  },
+  "130": {
+   "section_number": "130",
+   "title": "Re-opening of accounts on court’s or Tribunal’s orders",
+   "section_id": "1321",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "131": {
+   "section_number": "131",
+   "title": "Voluntary revision of financial statements or Board’s report",
+   "section_id": "1322",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "132": {
+   "section_number": "132",
+   "title": "Constitution of National Financial Reporting Authority",
+   "section_id": "1323",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 1)"
+  },
+  "133": {
+   "section_number": "133",
+   "title": "Central Government to prescribe accounting standards",
+   "section_id": "1324",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "134": {
+   "section_number": "134",
+   "title": "Financial statement, Board’s report, etc",
+   "section_id": "1325",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 1)"
+  },
+  "135": {
+   "section_number": "135",
+   "title": "Corporate Social Responsibility",
+   "section_id": "1326",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "136": {
+   "section_number": "136",
+   "title": "Right of member to copies of audited financial statement",
+   "section_id": "1327",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "137": {
+   "section_number": "137",
+   "title": "Copy of financial statement to be filed with Registrar",
+   "section_id": "1328",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "138": {
+   "section_number": "138",
+   "title": "Internal Audit",
+   "section_id": "1329",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "139": {
+   "section_number": "139",
+   "title": "Appointment of auditors",
+   "section_id": "1330",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "140": {
+   "section_number": "140",
+   "title": "Removal, resignation of auditor and giving of special notice",
+   "section_id": "1331",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 1)"
+  },
+  "141": {
+   "section_number": "141",
+   "title": "Eligibility, qualifications and disqualifications of auditors",
+   "section_id": "49070",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "142": {
+   "section_number": "142",
+   "title": "Remuneration of auditors",
+   "section_id": "49071",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "143": {
+   "section_number": "143",
+   "title": "Powers and duties of auditors and auditing standards",
+   "section_id": "49072",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "144": {
+   "section_number": "144",
+   "title": "Auditor not to render certain services",
+   "section_id": "49073",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "145": {
+   "section_number": "145",
+   "title": "Auditor to sign audit reports, etc",
+   "section_id": "49074",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "146": {
+   "section_number": "146",
+   "title": "Auditors to attend general meeting",
+   "section_id": "49075",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "147": {
+   "section_number": "147",
+   "title": "Punishment for contravention",
+   "section_id": "49076",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "148": {
+   "section_number": "148",
+   "title": "Central Government to specify audit of items of cost in respect of certain companies",
+   "section_id": "49077",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "149": {
+   "section_number": "149",
+   "title": "Company to have Board of Directors",
+   "section_id": "49078",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 2)"
+  },
+  "150": {
+   "section_number": "150",
+   "title": "Manner of selection of independent directors and maintenance of data bank of independent",
+   "section_id": "49079",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "151": {
+   "section_number": "151",
+   "title": "Appointment of director elected by small shareholders",
+   "section_id": "49080",
+   "confidence": "high",
+   "method": "anchored body slice (3/4 probes, runner-up 0)"
+  },
+  "152": {
+   "section_number": "152",
+   "title": "Appointment of directors",
+   "section_id": "49081",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "153": {
+   "section_number": "153",
+   "title": "Application for allotment of Director Identification Number",
+   "section_id": "49082",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "154": {
+   "section_number": "154",
+   "title": "Allotment of Director Identification Number",
+   "section_id": "49083",
+   "confidence": "high",
+   "method": "anchored body slice (3/3 probes, runner-up 0)"
+  },
+  "155": {
+   "section_number": "155",
+   "title": "Prohibition to obtain more than one Director Identification Number",
+   "section_id": "49084",
+   "confidence": "medium",
+   "method": "anchored body slice (2/2 probes, runner-up 0)"
+  },
+  "156": {
+   "section_number": "156",
+   "title": "Director to intimate Director Identification Number",
+   "section_id": "49085",
+   "confidence": "high",
+   "method": "anchored body slice (3/3 probes, runner-up 0)"
+  },
+  "157": {
+   "section_number": "157",
+   "title": "Company to inform Director Identification Number to Registrar",
+   "section_id": "49086",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "158": {
+   "section_number": "158",
+   "title": "Obligation to indicate Director Identification Number",
+   "section_id": "49087",
+   "confidence": "high",
+   "method": "anchored body slice (4/4 probes, runner-up 0)"
+  },
+  "159": {
+   "section_number": "159",
+   "title": "Penalty for default of certain provisions",
+   "section_id": "49088",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "160": {
+   "section_number": "160",
+   "title": "Right of persons other than retiring directors to stand for directorship",
+   "section_id": "49089",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "161": {
+   "section_number": "161",
+   "title": "Appointment of additional director, alternate director and nominee director",
+   "section_id": "49090",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "162": {
+   "section_number": "162",
+   "title": "Appointment of directors to be voted individually",
+   "section_id": "49091",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "163": {
+   "section_number": "163",
+   "title": "Option to adopt principle of proportional representation for appointment of directors",
+   "section_id": "49092",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "164": {
+   "section_number": "164",
+   "title": "Disqualifications for appointment of director",
+   "section_id": "49093",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "165": {
+   "section_number": "165",
+   "title": "Number of directorships",
+   "section_id": "49094",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "166": {
+   "section_number": "166",
+   "title": "Duties of directors",
+   "section_id": "49095",
+   "confidence": "high",
+   "method": "anchored body slice (3/5 probes, runner-up 0)"
+  },
+  "167": {
+   "section_number": "167",
+   "title": "Vacation of office of director",
+   "section_id": "49096",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 1)"
+  },
+  "168": {
+   "section_number": "168",
+   "title": "Resignation of director",
+   "section_id": "49097",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "169": {
+   "section_number": "169",
+   "title": "Removal of directors",
+   "section_id": "1360",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "170": {
+   "section_number": "170",
+   "title": "Register of directors and key managerial personnel and their shareholding",
+   "section_id": "1361",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "171": {
+   "section_number": "171",
+   "title": "Members’ right to inspect",
+   "section_id": "1362",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "172": {
+   "section_number": "172",
+   "title": "Penalty",
+   "section_id": "49098",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "173": {
+   "section_number": "173",
+   "title": "Meetings of Board",
+   "section_id": "49099",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "174": {
+   "section_number": "174",
+   "title": "Quorum for meetings of Board",
+   "section_id": "49100",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "175": {
+   "section_number": "175",
+   "title": "Passing of resolution by circulation",
+   "section_id": "49101",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "176": {
+   "section_number": "176",
+   "title": "Defects in appointment of directors not to invalidate actions taken",
+   "section_id": "49102",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "177": {
+   "section_number": "177",
+   "title": "Audit committee",
+   "section_id": "49103",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 2)"
+  },
+  "178": {
+   "section_number": "178",
+   "title": "Nomination and Remuneration Committee and Stakeholders Relationship Committee",
+   "section_id": "49104",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 1)"
+  },
+  "179": {
+   "section_number": "179",
+   "title": "Powers of Board",
+   "section_id": "49105",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "180": {
+   "section_number": "180",
+   "title": "Restrictions on powers of Board",
+   "section_id": "49106",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "181": {
+   "section_number": "181",
+   "title": "Company to contribute to bona fide and charitable funds, etc",
+   "section_id": "49107",
+   "confidence": "high",
+   "method": "anchored body slice (3/4 probes, runner-up 0)"
+  },
+  "182": {
+   "section_number": "182",
+   "title": "Prohibitions and restrictions regarding political contributions",
+   "section_id": "49108",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "183": {
+   "section_number": "183",
+   "title": "Power of Board and other persons to make contributions to national defence fund, etc",
+   "section_id": "49109",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "184": {
+   "section_number": "184",
+   "title": "Disclosure of interest by director",
+   "section_id": "49110",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "185": {
+   "section_number": "185",
+   "title": "Loan to directors, etc",
+   "section_id": "49111",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "186": {
+   "section_number": "186",
+   "title": "Loan and investment by company",
+   "section_id": "49112",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 2)"
+  },
+  "187": {
+   "section_number": "187",
+   "title": "Investments of company to be held in its own name",
+   "section_id": "49113",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 1)"
+  },
+  "188": {
+   "section_number": "188",
+   "title": "Related party transactions",
+   "section_id": "49114",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "189": {
+   "section_number": "189",
+   "title": "Register of contracts or arrangements in which directors are interested",
+   "section_id": "49115",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "190": {
+   "section_number": "190",
+   "title": "Contract of employment with managing or whole-time directors",
+   "section_id": "49116",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "191": {
+   "section_number": "191",
+   "title": "Payment to director for loss of office, etc., in connection with transfer of undertaking, property or shares",
+   "section_id": "49117",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 1)"
+  },
+  "192": {
+   "section_number": "192",
+   "title": "Restriction on non-cash transactions involving directors",
+   "section_id": "49118",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "193": {
+   "section_number": "193",
+   "title": "Contract by One Person Company",
+   "section_id": "49119",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 2)"
+  },
+  "194": {
+   "section_number": "194",
+   "title": "[Omitted.]",
+   "section_id": null,
+   "confidence": "n/a",
+   "method": "omitted in source"
+  },
+  "195": {
+   "section_number": "195",
+   "title": "[Omitted.]",
+   "section_id": null,
+   "confidence": "n/a",
+   "method": "omitted in source"
+  },
+  "196": {
+   "section_number": "196",
+   "title": "Appointment of managing director, whole-time director or manager",
+   "section_id": "49122",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "197": {
+   "section_number": "197",
+   "title": "Overall maximum managerial remuneration and managerial remuneration in case of absence or",
+   "section_id": "49123",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "198": {
+   "section_number": "198",
+   "title": "Calculation of profits",
+   "section_id": "49124",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "199": {
+   "section_number": "199",
+   "title": "Recovery of remuneration in certain cases",
+   "section_id": "49125",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "200": {
+   "section_number": "200",
+   "title": "Central Government or company to fix limit with regard to remuneration",
+   "section_id": "49126",
+   "confidence": "high",
+   "method": "anchored body slice (3/5 probes, runner-up 0)"
+  },
+  "201": {
+   "section_number": "201",
+   "title": "Forms of, and procedure in relation to, certain applications",
+   "section_id": "49127",
+   "confidence": "high",
+   "method": "anchored body slice (3/5 probes, runner-up 0)"
+  },
+  "202": {
+   "section_number": "202",
+   "title": "Compensation for loss of office of managing or whole-time director or manager",
+   "section_id": "49128",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "203": {
+   "section_number": "203",
+   "title": "Appointment of key managerial personnel",
+   "section_id": "49129",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 1)"
+  },
+  "204": {
+   "section_number": "204",
+   "title": "Secretarial audit for bigger companies",
+   "section_id": "49130",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "205": {
+   "section_number": "205",
+   "title": "Functions of company secretary",
+   "section_id": "49131",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "206": {
+   "section_number": "206",
+   "title": "Power to call for information, inspect books and conduct inquiries",
+   "section_id": "49132",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "207": {
+   "section_number": "207",
+   "title": "Conduct of inspection and inquiry",
+   "section_id": "49133",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 1)"
+  },
+  "208": {
+   "section_number": "208",
+   "title": "Report on inspection made",
+   "section_id": "49134",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "209": {
+   "section_number": "209",
+   "title": "Search and seizure",
+   "section_id": "49135",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "210": {
+   "section_number": "210",
+   "title": "Investigation into affairs of company",
+   "section_id": "49136",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "211": {
+   "section_number": "211",
+   "title": "Establishment of Serious Fraud Investigation Office",
+   "section_id": "49137",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "212": {
+   "section_number": "212",
+   "title": "Investigation into affairs of company by Serious Fraud Investigation Office",
+   "section_id": "49138",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 1)"
+  },
+  "213": {
+   "section_number": "213",
+   "title": "Investigation into company’s affairs in other cases",
+   "section_id": "49139",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "214": {
+   "section_number": "214",
+   "title": "Security for payment of costs and expenses of investigation",
+   "section_id": "49140",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "215": {
+   "section_number": "215",
+   "title": "Firm, body corporate or association not to be appointed as inspector",
+   "section_id": "49141",
+   "confidence": "source-confirmed",
+   "method": "india code api"
+  },
+  "216": {
+   "section_number": "216",
+   "title": "Investigation of ownership of company",
+   "section_id": "49142",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "217": {
+   "section_number": "217",
+   "title": "Procedure, powers, etc., of inspectors",
+   "section_id": "49143",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 1)"
+  },
+  "218": {
+   "section_number": "218",
+   "title": "Protection of employees during investigation",
+   "section_id": "49144",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 1)"
+  },
+  "219": {
+   "section_number": "219",
+   "title": "Power of inspector to conduct investigation into affairs of related companies, etc",
+   "section_id": "49145",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "220": {
+   "section_number": "220",
+   "title": "Seizure of documents by inspector",
+   "section_id": "49146",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "221": {
+   "section_number": "221",
+   "title": "Freezing of assets of company on inquiry and investigation",
+   "section_id": "49147",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "222": {
+   "section_number": "222",
+   "title": "Imposition of restrictions upon securities",
+   "section_id": "49148",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "223": {
+   "section_number": "223",
+   "title": "Inspector’s report",
+   "section_id": "49149",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "224": {
+   "section_number": "224",
+   "title": "Actions to be taken in pursuance of inspector’s report",
+   "section_id": "49150",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "225": {
+   "section_number": "225",
+   "title": "Expenses of investigation",
+   "section_id": "49151",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "226": {
+   "section_number": "226",
+   "title": "Voluntary winding up of company, etc., not to stop investigation proceedings",
+   "section_id": "49152",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "227": {
+   "section_number": "227",
+   "title": "Legal advisers and bankers not to disclose certain information",
+   "section_id": "49153",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "228": {
+   "section_number": "228",
+   "title": "Investigation, etc., of foreign companies",
+   "section_id": "49154",
+   "confidence": "medium",
+   "method": "anchored body slice (2/2 probes, runner-up 0)"
+  },
+  "229": {
+   "section_number": "229",
+   "title": "Penalty for furnishing false statement, mutilation, destruction of documents",
+   "section_id": "49155",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "230": {
+   "section_number": "230",
+   "title": "Power to compromise or make arrangements with creditors and members",
+   "section_id": "49156",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "231": {
+   "section_number": "231",
+   "title": "Power to Tribunal to enforce compromise or arrangement",
+   "section_id": "49157",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "232": {
+   "section_number": "232",
+   "title": "Merger and amalgamation of companies",
+   "section_id": "49158",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "233": {
+   "section_number": "233",
+   "title": "Merger or amalgamation of certain companies",
+   "section_id": "49159",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "234": {
+   "section_number": "234",
+   "title": "Merger or amalgamation of company with foreign company",
+   "section_id": "49160",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "235": {
+   "section_number": "235",
+   "title": "Power to acquire shares of shareholders dissenting from scheme or contract approved by",
+   "section_id": "49161",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "236": {
+   "section_number": "236",
+   "title": "Purchase of minority shareholding",
+   "section_id": "49162",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "237": {
+   "section_number": "237",
+   "title": "Power of Central Government to provide for amalgamation of companies in public interest",
+   "section_id": "49163",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "238": {
+   "section_number": "238",
+   "title": "Registration of offer of schemes involving transfer of shares",
+   "section_id": "49164",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "239": {
+   "section_number": "239",
+   "title": "Preservation of books and papers of amalgamated companies",
+   "section_id": "49165",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "240": {
+   "section_number": "240",
+   "title": "Liability of officers in respect of offences committed prior to merger, amalgamation, etc",
+   "section_id": "49166",
+   "confidence": "high",
+   "method": "anchored body slice (4/4 probes, runner-up 0)"
+  },
+  "241": {
+   "section_number": "241",
+   "title": "Application to Tribunal for relief in cases of oppression, etc",
+   "section_id": "49167",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 1)"
+  },
+  "242": {
+   "section_number": "242",
+   "title": "Powers of Tribunal",
+   "section_id": "49168",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "243": {
+   "section_number": "243",
+   "title": "Consequence of termination or modification of certain agreements",
+   "section_id": "49169",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "244": {
+   "section_number": "244",
+   "title": "Right to apply under section 241",
+   "section_id": "49170",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "245": {
+   "section_number": "245",
+   "title": "Class action",
+   "section_id": "49171",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 1)"
+  },
+  "246": {
+   "section_number": "246",
+   "title": "Application of certain provisions to proceedings under section 241 or section 245",
+   "section_id": "49172",
+   "confidence": "medium",
+   "method": "anchored body slice (2/2 probes, runner-up 0)"
+  },
+  "247": {
+   "section_number": "247",
+   "title": "Valuation by registered valuers",
+   "section_id": "49173",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "248": {
+   "section_number": "248",
+   "title": "Power of Registrar to remove name of company from register of companies",
+   "section_id": "49174",
+   "confidence": "high",
+   "method": "anchored body slice (3/5 probes, runner-up 0)"
+  },
+  "249": {
+   "section_number": "249",
+   "title": "Restrictions on making application under section 248 in certain situations",
+   "section_id": "49175",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "250": {
+   "section_number": "250",
+   "title": "Effect of company notified as dissolved",
+   "section_id": "49176",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "251": {
+   "section_number": "251",
+   "title": "Fraudulent application for removal of name",
+   "section_id": "49177",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "252": {
+   "section_number": "252",
+   "title": "Appeal to Tribunal",
+   "section_id": "49178",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 2)"
+  },
+  "253": {
+   "section_number": "253",
+   "title": "[Omitted.]",
+   "section_id": null,
+   "confidence": "n/a",
+   "method": "omitted in source"
+  },
+  "254": {
+   "section_number": "254",
+   "title": "[Omitted.]",
+   "section_id": null,
+   "confidence": "n/a",
+   "method": "omitted in source"
+  },
+  "255": {
+   "section_number": "255",
+   "title": "[Omitted.]",
+   "section_id": null,
+   "confidence": "n/a",
+   "method": "omitted in source"
+  },
+  "256": {
+   "section_number": "256",
+   "title": "[Omitted.]",
+   "section_id": null,
+   "confidence": "n/a",
+   "method": "omitted in source"
+  },
+  "257": {
+   "section_number": "257",
+   "title": "[Omitted.]",
+   "section_id": null,
+   "confidence": "n/a",
+   "method": "omitted in source"
+  },
+  "258": {
+   "section_number": "258",
+   "title": "[Omitted.]",
+   "section_id": null,
+   "confidence": "n/a",
+   "method": "omitted in source"
+  },
+  "259": {
+   "section_number": "259",
+   "title": "[Omitted.]",
+   "section_id": null,
+   "confidence": "n/a",
+   "method": "omitted in source"
+  },
+  "260": {
+   "section_number": "260",
+   "title": "[Omitted.]",
+   "section_id": null,
+   "confidence": "n/a",
+   "method": "omitted in source"
+  },
+  "261": {
+   "section_number": "261",
+   "title": "[Omitted.]",
+   "section_id": null,
+   "confidence": "n/a",
+   "method": "omitted in source"
+  },
+  "262": {
+   "section_number": "262",
+   "title": "[Omitted.]",
+   "section_id": null,
+   "confidence": "n/a",
+   "method": "omitted in source"
+  },
+  "263": {
+   "section_number": "263",
+   "title": "[Omitted.]",
+   "section_id": null,
+   "confidence": "n/a",
+   "method": "omitted in source"
+  },
+  "264": {
+   "section_number": "264",
+   "title": "[Omitted.]",
+   "section_id": null,
+   "confidence": "n/a",
+   "method": "omitted in source"
+  },
+  "265": {
+   "section_number": "265",
+   "title": "[Omitted.]",
+   "section_id": null,
+   "confidence": "n/a",
+   "method": "omitted in source"
+  },
+  "266": {
+   "section_number": "266",
+   "title": "[Omitted.]",
+   "section_id": null,
+   "confidence": "n/a",
+   "method": "omitted in source"
+  },
+  "267": {
+   "section_number": "267",
+   "title": "[Omitted.]",
+   "section_id": null,
+   "confidence": "n/a",
+   "method": "omitted in source"
+  },
+  "268": {
+   "section_number": "268",
+   "title": "[Omitted.]",
+   "section_id": null,
+   "confidence": "n/a",
+   "method": "omitted in source"
+  },
+  "269": {
+   "section_number": "269",
+   "title": "[Omitted.]",
+   "section_id": null,
+   "confidence": "n/a",
+   "method": "omitted in source"
+  },
+  "270": {
+   "section_number": "270",
+   "title": "Winding up by Tribunal",
+   "section_id": "49196",
+   "confidence": "medium",
+   "method": "anchored body slice (2/2 probes, runner-up 0)"
+  },
+  "271": {
+   "section_number": "271",
+   "title": "Circumstances in which company may be wound up by Tribunal",
+   "section_id": "49197",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "272": {
+   "section_number": "272",
+   "title": "Petition for winding up",
+   "section_id": "49198",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "273": {
+   "section_number": "273",
+   "title": "Powers of Tribunal",
+   "section_id": "49199",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "274": {
+   "section_number": "274",
+   "title": "Directions for filing statement of affairs",
+   "section_id": "49200",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "275": {
+   "section_number": "275",
+   "title": "Company Liquidators and their appointments",
+   "section_id": "49201",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "276": {
+   "section_number": "276",
+   "title": "Removal and replacement of liquidator",
+   "section_id": "49202",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "277": {
+   "section_number": "277",
+   "title": "Intimation to Company Liquidator, provisional liquidator and Registrar",
+   "section_id": "49203",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "278": {
+   "section_number": "278",
+   "title": "Effect of winding up order",
+   "section_id": "49204",
+   "confidence": "high",
+   "method": "anchored body slice (3/3 probes, runner-up 0)"
+  },
+  "279": {
+   "section_number": "279",
+   "title": "Stay of suits, etc., on winding up order",
+   "section_id": "49205",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "280": {
+   "section_number": "280",
+   "title": "Jurisdiction of Tribunal",
+   "section_id": "49206",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 1)"
+  },
+  "281": {
+   "section_number": "281",
+   "title": "Submission of report by Company Liquidator",
+   "section_id": "49207",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "282": {
+   "section_number": "282",
+   "title": "Directions of Tribunal on report of Company Liquidator",
+   "section_id": "49208",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "283": {
+   "section_number": "283",
+   "title": "Custody of company’s properties",
+   "section_id": "49209",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "284": {
+   "section_number": "284",
+   "title": "Promoters, directors, etc., to cooperate with Company Liquidator",
+   "section_id": "49210",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "285": {
+   "section_number": "285",
+   "title": "Settlement of list of contributories and application of assets",
+   "section_id": "49211",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "286": {
+   "section_number": "286",
+   "title": "Obligations of directors and managers",
+   "section_id": "49212",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "287": {
+   "section_number": "287",
+   "title": "Advisory Committee",
+   "section_id": "49213",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "288": {
+   "section_number": "288",
+   "title": "Submission of periodical reports to Tribunal",
+   "section_id": "49214",
+   "confidence": "high",
+   "method": "anchored body slice (4/4 probes, runner-up 2)"
+  },
+  "289": {
+   "section_number": "289",
+   "title": "[Omitted.]",
+   "section_id": null,
+   "confidence": "n/a",
+   "method": "omitted in source"
+  },
+  "290": {
+   "section_number": "290",
+   "title": "Powers and duties of Company Liquidator",
+   "section_id": "49216",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "291": {
+   "section_number": "291",
+   "title": "Provision for professional assistance to Company Liquidator",
+   "section_id": "49217",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "292": {
+   "section_number": "292",
+   "title": "Exercise and control of Company Liquidator’s powers",
+   "section_id": "49218",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "293": {
+   "section_number": "293",
+   "title": "Books to be kept by Company Liquidator",
+   "section_id": "49219",
+   "confidence": "high",
+   "method": "anchored body slice (4/4 probes, runner-up 0)"
+  },
+  "294": {
+   "section_number": "294",
+   "title": "Audit of Company Liquidator’s accounts",
+   "section_id": "49220",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "295": {
+   "section_number": "295",
+   "title": "Payment of debts by contributory and extent of set-off",
+   "section_id": "49221",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "296": {
+   "section_number": "296",
+   "title": "Power of Tribunal to make calls",
+   "section_id": "49222",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "297": {
+   "section_number": "297",
+   "title": "Adjustment of rights of contributories",
+   "section_id": "49223",
+   "confidence": "medium",
+   "method": "anchored body slice (2/2 probes, runner-up 0)"
+  },
+  "298": {
+   "section_number": "298",
+   "title": "Power to order costs",
+   "section_id": "49224",
+   "confidence": "high",
+   "method": "anchored body slice (4/4 probes, runner-up 0)"
+  },
+  "299": {
+   "section_number": "299",
+   "title": "Power to summon persons suspected of having property of company, etc",
+   "section_id": "49225",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "300": {
+   "section_number": "300",
+   "title": "Power to order examination of promoters, directors, etc",
+   "section_id": "49226",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "301": {
+   "section_number": "301",
+   "title": "Arrest of person trying to leave India or abscond",
+   "section_id": "49227",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "302": {
+   "section_number": "302",
+   "title": "Dissolution of company by Tribunal",
+   "section_id": "49228",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "303": {
+   "section_number": "303",
+   "title": "Appeals from orders made before commencement of Act",
+   "section_id": "49229",
+   "confidence": "high",
+   "method": "anchored body slice (4/4 probes, runner-up 2)"
+  },
+  "304": {
+   "section_number": "304",
+   "title": "[Omitted.]",
+   "section_id": null,
+   "confidence": "n/a",
+   "method": "omitted in source"
+  },
+  "305": {
+   "section_number": "305",
+   "title": "[Omitted.]",
+   "section_id": null,
+   "confidence": "n/a",
+   "method": "omitted in source"
+  },
+  "306": {
+   "section_number": "306",
+   "title": "[Omitted.]",
+   "section_id": null,
+   "confidence": "n/a",
+   "method": "omitted in source"
+  },
+  "307": {
+   "section_number": "307",
+   "title": "[Omitted.]",
+   "section_id": null,
+   "confidence": "n/a",
+   "method": "omitted in source"
+  },
+  "308": {
+   "section_number": "308",
+   "title": "[Omitted.]",
+   "section_id": null,
+   "confidence": "n/a",
+   "method": "omitted in source"
+  },
+  "309": {
+   "section_number": "309",
+   "title": "[Omitted.]",
+   "section_id": null,
+   "confidence": "n/a",
+   "method": "omitted in source"
+  },
+  "310": {
+   "section_number": "310",
+   "title": "[Omitted.]",
+   "section_id": null,
+   "confidence": "n/a",
+   "method": "omitted in source"
+  },
+  "311": {
+   "section_number": "311",
+   "title": "[Omitted.]",
+   "section_id": null,
+   "confidence": "n/a",
+   "method": "omitted in source"
+  },
+  "312": {
+   "section_number": "312",
+   "title": "[Omitted.]",
+   "section_id": null,
+   "confidence": "n/a",
+   "method": "omitted in source"
+  },
+  "313": {
+   "section_number": "313",
+   "title": "[Omitted.]",
+   "section_id": null,
+   "confidence": "n/a",
+   "method": "omitted in source"
+  },
+  "314": {
+   "section_number": "314",
+   "title": "[Omitted.]",
+   "section_id": null,
+   "confidence": "n/a",
+   "method": "omitted in source"
+  },
+  "315": {
+   "section_number": "315",
+   "title": "[Omitted.]",
+   "section_id": null,
+   "confidence": "n/a",
+   "method": "omitted in source"
+  },
+  "316": {
+   "section_number": "316",
+   "title": "[Omitted.]",
+   "section_id": null,
+   "confidence": "n/a",
+   "method": "omitted in source"
+  },
+  "317": {
+   "section_number": "317",
+   "title": "[Omitted.]",
+   "section_id": null,
+   "confidence": "n/a",
+   "method": "omitted in source"
+  },
+  "318": {
+   "section_number": "318",
+   "title": "[Omitted.]",
+   "section_id": null,
+   "confidence": "n/a",
+   "method": "omitted in source"
+  },
+  "319": {
+   "section_number": "319",
+   "title": "[Omitted.]",
+   "section_id": null,
+   "confidence": "n/a",
+   "method": "omitted in source"
+  },
+  "320": {
+   "section_number": "320",
+   "title": "[Omitted.]",
+   "section_id": null,
+   "confidence": "n/a",
+   "method": "omitted in source"
+  },
+  "321": {
+   "section_number": "321",
+   "title": "[Omitted.]",
+   "section_id": null,
+   "confidence": "n/a",
+   "method": "omitted in source"
+  },
+  "322": {
+   "section_number": "322",
+   "title": "[Omitted.]",
+   "section_id": null,
+   "confidence": "n/a",
+   "method": "omitted in source"
+  },
+  "323": {
+   "section_number": "323",
+   "title": "[Omitted.]",
+   "section_id": null,
+   "confidence": "n/a",
+   "method": "omitted in source"
+  },
+  "324": {
+   "section_number": "324",
+   "title": "Debts of all descriptions to be admitted to proof",
+   "section_id": "1515",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 2)"
+  },
+  "325": {
+   "section_number": "325",
+   "title": "[Omitted.]",
+   "section_id": null,
+   "confidence": "n/a",
+   "method": "omitted in source"
+  },
+  "326": {
+   "section_number": "326",
+   "title": "Overriding preferential payments",
+   "section_id": "1517",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "327": {
+   "section_number": "327",
+   "title": "Preferential payments",
+   "section_id": "1518",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "328": {
+   "section_number": "328",
+   "title": "Fraudulent preference",
+   "section_id": "1519",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "329": {
+   "section_number": "329",
+   "title": "Transfers not in good faith to be void",
+   "section_id": "1520",
+   "confidence": "high",
+   "method": "anchored body slice (3/5 probes, runner-up 0)"
+  },
+  "330": {
+   "section_number": "330",
+   "title": "Certain transfers to be void",
+   "section_id": "1521",
+   "confidence": "medium",
+   "method": "anchored body slice (2/2 probes, runner-up 0)"
+  },
+  "331": {
+   "section_number": "331",
+   "title": "Liabilities and rights of certain persons fraudulently preferred",
+   "section_id": "1522",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "332": {
+   "section_number": "332",
+   "title": "Effect of floating charge",
+   "section_id": "1523",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "333": {
+   "section_number": "333",
+   "title": "Disclaimer of onerous property",
+   "section_id": "1524",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "334": {
+   "section_number": "334",
+   "title": "Transfers, etc., after commencement of winding up to be void",
+   "section_id": "1525",
+   "confidence": "high",
+   "method": "anchored body slice (4/4 probes, runner-up 0)"
+  },
+  "335": {
+   "section_number": "335",
+   "title": "Certain attachments, executions, etc., in winding up by Tribunal to be void",
+   "section_id": "1526",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "336": {
+   "section_number": "336",
+   "title": "Offences by officers of companies in liquidation",
+   "section_id": "1527",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "337": {
+   "section_number": "337",
+   "title": "Penalty for frauds by officers",
+   "section_id": "1528",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "338": {
+   "section_number": "338",
+   "title": "Liability where proper accounts not kept",
+   "section_id": "1529",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "339": {
+   "section_number": "339",
+   "title": "Liability for fraudulent conduct of business",
+   "section_id": "1530",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "340": {
+   "section_number": "340",
+   "title": "Power of Tribunal to assess damages against delinquent directors, etc",
+   "section_id": "1531",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "341": {
+   "section_number": "341",
+   "title": "Liability under sections 339 and 340 to extend to partners or directors in firms or companies",
+   "section_id": "1532",
+   "confidence": "high",
+   "method": "anchored body slice (4/4 probes, runner-up 0)"
+  },
+  "342": {
+   "section_number": "342",
+   "title": "Prosecution of delinquent officers and members of company",
+   "section_id": "1533",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "343": {
+   "section_number": "343",
+   "title": "Company Liquidator to exercise certain powers subject to sanction",
+   "section_id": "1534",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "344": {
+   "section_number": "344",
+   "title": "Statement that company is in liquidation",
+   "section_id": "1535",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "345": {
+   "section_number": "345",
+   "title": "Books and papers of company to be evidence",
+   "section_id": "1536",
+   "confidence": "high",
+   "method": "anchored body slice (3/3 probes, runner-up 0)"
+  },
+  "346": {
+   "section_number": "346",
+   "title": "Inspection of books and papers by creditors and contributories",
+   "section_id": "1537",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "347": {
+   "section_number": "347",
+   "title": "Disposal of books and papers of company",
+   "section_id": "49242",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "348": {
+   "section_number": "348",
+   "title": "Information as to pending liquidations",
+   "section_id": "49243",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "349": {
+   "section_number": "349",
+   "title": "Official Liquidator to make payments into public account of India",
+   "section_id": "49244",
+   "confidence": "high",
+   "method": "anchored body slice (3/3 probes, runner-up 0)"
+  },
+  "350": {
+   "section_number": "350",
+   "title": "Company Liquidator to deposit monies into scheduled bank",
+   "section_id": "49245",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "351": {
+   "section_number": "351",
+   "title": "Liquidator not to deposit monies into private banking account",
+   "section_id": "49246",
+   "confidence": "medium",
+   "method": "anchored body slice (2/2 probes, runner-up 0)"
+  },
+  "352": {
+   "section_number": "352",
+   "title": "Company Liquidation Dividend and Undistributed Assets Account",
+   "section_id": "49247",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "353": {
+   "section_number": "353",
+   "title": "Liquidator to make returns, etc",
+   "section_id": "49248",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "354": {
+   "section_number": "354",
+   "title": "Meetings to ascertain wishes of creditors or contributories",
+   "section_id": "49249",
+   "confidence": "high",
+   "method": "anchored body slice (3/5 probes, runner-up 0)"
+  },
+  "355": {
+   "section_number": "355",
+   "title": "Court, tribunal or person, etc., before whom affidavit may be sworn",
+   "section_id": "49250",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "356": {
+   "section_number": "356",
+   "title": "Power of Tribunal to declare dissolution of company void",
+   "section_id": "49251",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "357": {
+   "section_number": "357",
+   "title": "Commencement of winding up by Tribunal",
+   "section_id": "49252",
+   "confidence": "medium",
+   "method": "anchored body slice (2/3 probes, runner-up 0)"
+  },
+  "358": {
+   "section_number": "358",
+   "title": "Exclusion of certain time in computing period of limitation",
+   "section_id": "49253",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "359": {
+   "section_number": "359",
+   "title": "Appointment of Official Liquidator",
+   "section_id": "49254",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "360": {
+   "section_number": "360",
+   "title": "Powers and functions of Official Liquidator",
+   "section_id": "49255",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "361": {
+   "section_number": "361",
+   "title": "Summary procedure for liquidation",
+   "section_id": "49256",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "362": {
+   "section_number": "362",
+   "title": "Sale of assets and recovery of debts due to company",
+   "section_id": "49257",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "363": {
+   "section_number": "363",
+   "title": "Settlement of claims of creditors by Official Liquidator",
+   "section_id": "49258",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "364": {
+   "section_number": "364",
+   "title": "Appeal by creditor",
+   "section_id": "49259",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "365": {
+   "section_number": "365",
+   "title": "Order of dissolution of company",
+   "section_id": "49260",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "366": {
+   "section_number": "366",
+   "title": "Companies capable of being registered",
+   "section_id": "49261",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "367": {
+   "section_number": "367",
+   "title": "Certificate of registration of existing companies",
+   "section_id": "49262",
+   "confidence": "high",
+   "method": "anchored body slice (4/4 probes, runner-up 0)"
+  },
+  "368": {
+   "section_number": "368",
+   "title": "Vesting of property on registration",
+   "section_id": "49263",
+   "confidence": "high",
+   "method": "anchored body slice (4/4 probes, runner-up 0)"
+  },
+  "369": {
+   "section_number": "369",
+   "title": "Saving of existing liabilities",
+   "section_id": "49264",
+   "confidence": "high",
+   "method": "anchored body slice (3/3 probes, runner-up 0)"
+  },
+  "370": {
+   "section_number": "370",
+   "title": "Continuation of pending legal proceedings",
+   "section_id": "49265",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "371": {
+   "section_number": "371",
+   "title": "Effect of registration under this Part",
+   "section_id": "49266",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "372": {
+   "section_number": "372",
+   "title": "Power of Court to stay or restrain proceedings",
+   "section_id": "49267",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "373": {
+   "section_number": "373",
+   "title": "Suits stayed on winding up order",
+   "section_id": "49268",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "374": {
+   "section_number": "374",
+   "title": "Obligations of companies registering under this Part",
+   "section_id": "49269",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "375": {
+   "section_number": "375",
+   "title": "Winding up of unregistered companies",
+   "section_id": "49270",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 1)"
+  },
+  "376": {
+   "section_number": "376",
+   "title": "Power to wind up foreign companies although dissolved",
+   "section_id": "49271",
+   "confidence": "high",
+   "method": "anchored body slice (4/4 probes, runner-up 0)"
+  },
+  "377": {
+   "section_number": "377",
+   "title": "Provisions of Chapter cumulative",
+   "section_id": "49272",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "378": {
+   "section_number": "378",
+   "title": "Saving and construction of enactments conferring power to wind up partnership firm, association",
+   "section_id": "49273",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "378A": {
+   "section_number": "378A",
+   "title": "Definitions",
+   "section_id": "52424",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "378B": {
+   "section_number": "378B",
+   "title": "Objects of producer company",
+   "section_id": "52425",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "378C": {
+   "section_number": "378C",
+   "title": "Formation of Producer Company and its registration",
+   "section_id": "52426",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "378D": {
+   "section_number": "378D",
+   "title": "Membership and voting rights of Members of Producer Company",
+   "section_id": "52427",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "378E": {
+   "section_number": "378E",
+   "title": "Benefits to Members",
+   "section_id": "52428",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "378F": {
+   "section_number": "378F",
+   "title": "Memorandum of Producer Company",
+   "section_id": "52429",
+   "confidence": "source-confirmed",
+   "method": "india code api"
+  },
+  "378H": {
+   "section_number": "378H",
+   "title": "Amendment of memorandum",
+   "section_id": "52431",
+   "confidence": "source-confirmed",
+   "method": "india code api"
+  },
+  "378J": {
+   "section_number": "378J",
+   "title": "Option to inter-State co-operative societies to become Producer Companies",
+   "section_id": "52433",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 1)"
+  },
+  "378K": {
+   "section_number": "378K",
+   "title": "Effect of incorporation of Producer Company",
+   "section_id": "52434",
+   "confidence": "source-confirmed",
+   "method": "india code api"
+  },
+  "378M": {
+   "section_number": "378M",
+   "title": "Concession, etc., to be deemed to have been granted to Producer Company",
+   "section_id": "52436",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "378N": {
+   "section_number": "378N",
+   "title": "Provisions in respect of officers and other employees of inter-State co-operative society",
+   "section_id": "52437",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 3)"
+  },
+  "378P": {
+   "section_number": "378P",
+   "title": "Appointment of directors",
+   "section_id": "52439",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "378Q": {
+   "section_number": "378Q",
+   "title": "Vacation of office by directors",
+   "section_id": "52440",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "378R": {
+   "section_number": "378R",
+   "title": "Powers and functions of Board",
+   "section_id": "52441",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "378S": {
+   "section_number": "378S",
+   "title": "Matters to be transacted at general meeting",
+   "section_id": "52442",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "378T": {
+   "section_number": "378T",
+   "title": "Liability of directors",
+   "section_id": "52443",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "378U": {
+   "section_number": "378U",
+   "title": "Committee of directors",
+   "section_id": "52444",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "378V": {
+   "section_number": "378V",
+   "title": "Meetings of Board and quorum",
+   "section_id": "52445",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "378W": {
+   "section_number": "378W",
+   "title": "Chief Executive and his functions",
+   "section_id": "52446",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "378X": {
+   "section_number": "378X",
+   "title": "Secretary of Producer Company",
+   "section_id": "52447",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "378Y": {
+   "section_number": "378Y",
+   "title": "Quorum",
+   "section_id": "52448",
+   "confidence": "source-confirmed",
+   "method": "india code api"
+  },
+  "378Z": {
+   "section_number": "378Z",
+   "title": "Voting rights",
+   "section_id": "52450",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 3)"
+  },
+  "378ZA": {
+   "section_number": "378ZA",
+   "title": "Annual general meetings",
+   "section_id": "52450",
+   "confidence": "source-confirmed",
+   "method": "india code api"
+  },
+  "378ZB": {
+   "section_number": "378ZB",
+   "title": "Share capital",
+   "section_id": "52451",
+   "confidence": "medium",
+   "method": "anchored body slice (2/3 probes, runner-up 0)"
+  },
+  "378ZC": {
+   "section_number": "378ZC",
+   "title": "Special user rights",
+   "section_id": "52452",
+   "confidence": "high",
+   "method": "anchored body slice (3/5 probes, runner-up 0)"
+  },
+  "378ZD": {
+   "section_number": "378ZD",
+   "title": "Transferability of shares and attendant rights",
+   "section_id": "52453",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "378ZE": {
+   "section_number": "378ZE",
+   "title": "Books of account",
+   "section_id": "52454",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "378ZF": {
+   "section_number": "378ZF",
+   "title": "Internal audit",
+   "section_id": "52455",
+   "confidence": "high",
+   "method": "anchored body slice (3/4 probes, runner-up 0)"
+  },
+  "378ZG": {
+   "section_number": "378ZG",
+   "title": "Duties of auditor under this Chapter",
+   "section_id": "52456",
+   "confidence": "source-confirmed",
+   "method": "india code api"
+  },
+  "378ZJ": {
+   "section_number": "378ZJ",
+   "title": "Issue of bonus shares",
+   "section_id": "52459",
+   "confidence": "high",
+   "method": "anchored body slice (3/4 probes, runner-up 0)"
+  },
+  "378ZK": {
+   "section_number": "378ZK",
+   "title": "Loan, etc., to Members",
+   "section_id": "52460",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "378ZL": {
+   "section_number": "378ZL",
+   "title": "Investment in other companies, formation of subsidiaries, etc",
+   "section_id": "52461",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "378ZM": {
+   "section_number": "378ZM",
+   "title": "Penalty for contravention",
+   "section_id": "52462",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "378ZN": {
+   "section_number": "378ZN",
+   "title": "Amalgamation, merger or division, etc., to form new Producer Companies",
+   "section_id": "52463",
+   "confidence": "source-confirmed",
+   "method": "india code api"
+  },
+  "378ZP": {
+   "section_number": "378ZP",
+   "title": "Strike off name of Producer Company",
+   "section_id": "52465",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "378ZQ": {
+   "section_number": "378ZQ",
+   "title": "Provisions of this Chapter to override other laws",
+   "section_id": "52466",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "378ZR": {
+   "section_number": "378ZR",
+   "title": "Application of provisions relating to private companies",
+   "section_id": "52468",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 3)"
+  },
+  "378ZT": {
+   "section_number": "378ZT",
+   "title": "Power to modify Act in its application to Producer Companies",
+   "section_id": "52469",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "378ZU": {
+   "section_number": "378ZU",
+   "title": "Power to make rules",
+   "section_id": "52470",
+   "confidence": "source-confirmed",
+   "method": "india code api"
+  },
+  "379": {
+   "section_number": "379",
+   "title": "Application of Act to foreign companies",
+   "section_id": "49274",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "380": {
+   "section_number": "380",
+   "title": "Documents, etc., to be delivered to Registrar by foreign companies",
+   "section_id": "49275",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "381": {
+   "section_number": "381",
+   "title": "Accounts of foreign company",
+   "section_id": "49276",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "382": {
+   "section_number": "382",
+   "title": "Display of name, etc., of foreign company",
+   "section_id": "49277",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "383": {
+   "section_number": "383",
+   "title": "Service on foreign company",
+   "section_id": "49278",
+   "confidence": "high",
+   "method": "anchored body slice (4/4 probes, runner-up 0)"
+  },
+  "384": {
+   "section_number": "384",
+   "title": "Debentures, annual return, registration of charges, books of account and their inspection",
+   "section_id": "49279",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "385": {
+   "section_number": "385",
+   "title": "Fee for registration of documents",
+   "section_id": "49280",
+   "confidence": "medium",
+   "method": "anchored body slice (2/2 probes, runner-up 0)"
+  },
+  "386": {
+   "section_number": "386",
+   "title": "Interpretation",
+   "section_id": "49281",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "387": {
+   "section_number": "387",
+   "title": "Dating of prospectus and particulars to be contained therein",
+   "section_id": "49282",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 3)"
+  },
+  "388": {
+   "section_number": "388",
+   "title": "Provisions as to expert’s consent and allotment",
+   "section_id": "49283",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 3)"
+  },
+  "389": {
+   "section_number": "389",
+   "title": "Registration of prospectus",
+   "section_id": "49284",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 2)"
+  },
+  "390": {
+   "section_number": "390",
+   "title": "Offer of Indian Depository Receipts",
+   "section_id": "49285",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 1)"
+  },
+  "391": {
+   "section_number": "391",
+   "title": "Application of sections 34 to 36 and Chapter XX",
+   "section_id": "49286",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "392": {
+   "section_number": "392",
+   "title": "Punishment for contravention",
+   "section_id": "49287",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "393": {
+   "section_number": "393",
+   "title": "Company’s failure to comply with provisions of this Chapter not to affect validity of contracts,",
+   "section_id": "49288",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "394": {
+   "section_number": "394",
+   "title": "Annual reports on Government companies",
+   "section_id": "49289",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "395": {
+   "section_number": "395",
+   "title": "Annual reports where one or more State Governments are members of companies",
+   "section_id": "49290",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "396": {
+   "section_number": "396",
+   "title": "Registration offices",
+   "section_id": "49291",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "397": {
+   "section_number": "397",
+   "title": "Admissibility of certain documents as evidence",
+   "section_id": "49292",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 1)"
+  },
+  "398": {
+   "section_number": "398",
+   "title": "Provisions relating to filing of applications, documents, inspection, etc., in electronic form",
+   "section_id": "49293",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "399": {
+   "section_number": "399",
+   "title": "Inspection, production and evidence of documents kept by Registrar",
+   "section_id": "49294",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "400": {
+   "section_number": "400",
+   "title": "Electronic form to be exclusive, alternative or in addition to physical form",
+   "section_id": "49295",
+   "confidence": "high",
+   "method": "anchored body slice (3/3 probes, runner-up 0)"
+  },
+  "401": {
+   "section_number": "401",
+   "title": "Provision of value added services through electronic form",
+   "section_id": "49296",
+   "confidence": "medium",
+   "method": "anchored body slice (2/2 probes, runner-up 0)"
+  },
+  "402": {
+   "section_number": "402",
+   "title": "Application of provisions of Information Technology Act, 2000",
+   "section_id": "49297",
+   "confidence": "high",
+   "method": "anchored body slice (4/4 probes, runner-up 0)"
+  },
+  "403": {
+   "section_number": "403",
+   "title": "Fee for filing, etc",
+   "section_id": "49298",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "404": {
+   "section_number": "404",
+   "title": "Fees, etc., to be credited into public account",
+   "section_id": "49299",
+   "confidence": "high",
+   "method": "anchored body slice (4/4 probes, runner-up 0)"
+  },
+  "405": {
+   "section_number": "405",
+   "title": "Power of Central Government to direct companies to furnish information or statistics",
+   "section_id": "49300",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "406": {
+   "section_number": "406",
+   "title": "Provision relating to Nidhis and its application, etc",
+   "section_id": "49301",
+   "confidence": "medium",
+   "method": "anchored body slice (2/5 probes, runner-up 0)"
+  },
+  "407": {
+   "section_number": "407",
+   "title": "Definitions",
+   "section_id": "49302",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "408": {
+   "section_number": "408",
+   "title": "Constitution of National Company Law Tribunal",
+   "section_id": "49303",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 1)"
+  },
+  "409": {
+   "section_number": "409",
+   "title": "Qualification of President and Members of Tribunal",
+   "section_id": "49304",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 1)"
+  },
+  "410": {
+   "section_number": "410",
+   "title": "Constitution of Appellate Tribunal",
+   "section_id": "49305",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 1)"
+  },
+  "411": {
+   "section_number": "411",
+   "title": "Qualifications of Chairperson and members of Appellate Tribunal",
+   "section_id": "49306",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "412": {
+   "section_number": "412",
+   "title": "Selection of Members of Tribunal and Appellate Tribunal",
+   "section_id": "49307",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "413": {
+   "section_number": "413",
+   "title": "Term of office of President, Chairperson and other Members",
+   "section_id": "49308",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "414": {
+   "section_number": "414",
+   "title": "Salary, allowances and other terms and conditions of service of Members",
+   "section_id": "49309",
+   "confidence": "high",
+   "method": "anchored body slice (4/4 probes, runner-up 0)"
+  },
+  "415": {
+   "section_number": "415",
+   "title": "Acting President and Chairperson of Tribunal or Appellate Tribunal",
+   "section_id": "49310",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "416": {
+   "section_number": "416",
+   "title": "Resignation of Members",
+   "section_id": "49311",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "417": {
+   "section_number": "417",
+   "title": "Removal of Members",
+   "section_id": "49312",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "417A": {
+   "section_number": "417A",
+   "title": "Qualifications, terms and conditions of service of Chairperson and Member",
+   "section_id": "48977",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "418": {
+   "section_number": "418",
+   "title": "Staff of Tribunal and Appellate Tribunal",
+   "section_id": "49313",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 4)"
+  },
+  "419": {
+   "section_number": "419",
+   "title": "Benches of Tribunal",
+   "section_id": "49314",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "420": {
+   "section_number": "420",
+   "title": "Orders of Tribunal",
+   "section_id": "49315",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "421": {
+   "section_number": "421",
+   "title": "Appeal from orders of Tribunal",
+   "section_id": "49316",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "422": {
+   "section_number": "422",
+   "title": "Expeditious disposal by Tribunal and Appellate Tribunal",
+   "section_id": "49317",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "423": {
+   "section_number": "423",
+   "title": "Appeal to Supreme Court",
+   "section_id": "49318",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "424": {
+   "section_number": "424",
+   "title": "Procedure before Tribunal and Appellate Tribunal",
+   "section_id": "49319",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "425": {
+   "section_number": "425",
+   "title": "Power to punish for contempt",
+   "section_id": "49320",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "426": {
+   "section_number": "426",
+   "title": "Delegation of powers",
+   "section_id": "49321",
+   "confidence": "high",
+   "method": "anchored body slice (4/4 probes, runner-up 0)"
+  },
+  "427": {
+   "section_number": "427",
+   "title": "President, Members, officers, etc., to be public servants",
+   "section_id": "49322",
+   "confidence": "high",
+   "method": "anchored body slice (3/3 probes, runner-up 0)"
+  },
+  "428": {
+   "section_number": "428",
+   "title": "Protection of action taken in good faith",
+   "section_id": "49323",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "429": {
+   "section_number": "429",
+   "title": "Power to seek assistance of Chief Metropolitan Magistrate, etc",
+   "section_id": "49324",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "430": {
+   "section_number": "430",
+   "title": "Civil court not to have jurisdiction",
+   "section_id": "49325",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "431": {
+   "section_number": "431",
+   "title": "Vacancy in Tribunal or Appellate Tribunal not to invalidate acts or proceedings",
+   "section_id": "49326",
+   "confidence": "high",
+   "method": "anchored body slice (3/3 probes, runner-up 0)"
+  },
+  "432": {
+   "section_number": "432",
+   "title": "Right to legal representation",
+   "section_id": "49327",
+   "confidence": "high",
+   "method": "anchored body slice (4/4 probes, runner-up 0)"
+  },
+  "433": {
+   "section_number": "433",
+   "title": "Limitation",
+   "section_id": "49328",
+   "confidence": "medium",
+   "method": "anchored body slice (2/2 probes, runner-up 0)"
+  },
+  "434": {
+   "section_number": "434",
+   "title": "Transfer of certain pending proceedings",
+   "section_id": "49329",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "435": {
+   "section_number": "435",
+   "title": "Establishment of Special Courts",
+   "section_id": "49330",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "436": {
+   "section_number": "436",
+   "title": "Offences triable by Special Courts",
+   "section_id": "49331",
+   "confidence": "high",
+   "method": "anchored body slice (3/5 probes, runner-up 1)"
+  },
+  "437": {
+   "section_number": "437",
+   "title": "Appeal and revision",
+   "section_id": "49332",
+   "confidence": "high",
+   "method": "anchored body slice (3/4 probes, runner-up 0)"
+  },
+  "438": {
+   "section_number": "438",
+   "title": "Application of Code to proceedings before Special Court",
+   "section_id": "49333",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "439": {
+   "section_number": "439",
+   "title": "Offences to be non-cognizable",
+   "section_id": "49334",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 1)"
+  },
+  "440": {
+   "section_number": "440",
+   "title": "Transitional provisions",
+   "section_id": "49335",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 1)"
+  },
+  "441": {
+   "section_number": "441",
+   "title": "Compounding of certain offences",
+   "section_id": "49336",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 1)"
+  },
+  "442": {
+   "section_number": "442",
+   "title": "Mediation and Conciliation Panel",
+   "section_id": "49337",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "443": {
+   "section_number": "443",
+   "title": "Power of Central Government to appoint company prosecutors",
+   "section_id": "49338",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 1)"
+  },
+  "444": {
+   "section_number": "444",
+   "title": "Appeal against acquittal",
+   "section_id": "49339",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 1)"
+  },
+  "445": {
+   "section_number": "445",
+   "title": "Compensation for accusation without reasonable cause",
+   "section_id": "49340",
+   "confidence": "high",
+   "method": "anchored body slice (3/3 probes, runner-up 0)"
+  },
+  "446": {
+   "section_number": "446",
+   "title": "Application of fines",
+   "section_id": "49341",
+   "confidence": "high",
+   "method": "anchored body slice (3/3 probes, runner-up 0)"
+  },
+  "446A": {
+   "section_number": "446A",
+   "title": "Factors for determining level of punishment",
+   "section_id": "48978",
+   "confidence": "high",
+   "method": "anchored body slice (4/4 probes, runner-up 0)"
+  },
+  "446B": {
+   "section_number": "446B",
+   "title": "Lesser penalties for certain companies",
+   "section_id": "48979",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "447": {
+   "section_number": "447",
+   "title": "Punishment for fraud",
+   "section_id": "49342",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "448": {
+   "section_number": "448",
+   "title": "Punishment for false statement",
+   "section_id": "49343",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "449": {
+   "section_number": "449",
+   "title": "Punishment for false evidence",
+   "section_id": "49344",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "450": {
+   "section_number": "450",
+   "title": "Punishment where no specific penalty or punishment is provided",
+   "section_id": "49345",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "451": {
+   "section_number": "451",
+   "title": "Punishment in case of repeated default",
+   "section_id": "49346",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "452": {
+   "section_number": "452",
+   "title": "Punishment for wrongful withholding of property",
+   "section_id": "49347",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "453": {
+   "section_number": "453",
+   "title": "Punishment for improper use of “Limited” or “Private Limited”",
+   "section_id": "49348",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "454": {
+   "section_number": "454",
+   "title": "Adjudication of penalties",
+   "section_id": "49349",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 1)"
+  },
+  "454A": {
+   "section_number": "454A",
+   "title": "Penalty for repeated default",
+   "section_id": "49493",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "455": {
+   "section_number": "455",
+   "title": "Dormant company",
+   "section_id": "49350",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "456": {
+   "section_number": "456",
+   "title": "Protection of action taken in good faith",
+   "section_id": "49351",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "457": {
+   "section_number": "457",
+   "title": "Non-disclosure of information in certain cases",
+   "section_id": "49352",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 1)"
+  },
+  "458": {
+   "section_number": "458",
+   "title": "Delegation by Central Government of its powers and functions",
+   "section_id": "49353",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "459": {
+   "section_number": "459",
+   "title": "Powers of Central Government of Tribunal to accord approval, etc., subject to conditions and to",
+   "section_id": "49354",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "460": {
+   "section_number": "460",
+   "title": "Condonation of delay in certain cases",
+   "section_id": "49355",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "461": {
+   "section_number": "461",
+   "title": "Annual report by Central Government",
+   "section_id": "49356",
+   "confidence": "high",
+   "method": "anchored body slice (3/3 probes, runner-up 0)"
+  },
+  "462": {
+   "section_number": "462",
+   "title": "Power to exempt class or classes of companies from provisions of this Act",
+   "section_id": "49357",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "463": {
+   "section_number": "463",
+   "title": "Power of court to grant relief in certain cases",
+   "section_id": "49358",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "464": {
+   "section_number": "464",
+   "title": "Prohibition of association or partnership of persons exceeding certain number",
+   "section_id": "49359",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "465": {
+   "section_number": "465",
+   "title": "Repeal of certain enactments and savings",
+   "section_id": "49360",
+   "confidence": "high",
+   "method": "anchored body slice (3/5 probes, runner-up 0)"
+  },
+  "466": {
+   "section_number": "466",
+   "title": "Dissolution of Company Law Board and consequential provisions",
+   "section_id": "49361",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "467": {
+   "section_number": "467",
+   "title": "Power of Central Government to amend Schedules",
+   "section_id": "49362",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "468": {
+   "section_number": "468",
+   "title": "Power of Central Government to make rules relating to winding up",
+   "section_id": "49363",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  },
+  "469": {
+   "section_number": "469",
+   "title": "Power of Central Government to make rules",
+   "section_id": "49364",
+   "confidence": "high",
+   "method": "anchored body slice (4/5 probes, runner-up 0)"
+  },
+  "470": {
+   "section_number": "470",
+   "title": "Power to remove difficulties",
+   "section_id": "49365",
+   "confidence": "high",
+   "method": "anchored body slice (5/5 probes, runner-up 0)"
+  }
+ }
+}

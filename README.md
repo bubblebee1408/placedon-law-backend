@@ -1,94 +1,74 @@
 # placedon-law-backend
 
-PoSH Act compliance checking for Indian SMEs. FastAPI, deterministic Python, no model in the
-decision path.
+Verified legal evidence for **Indian corporate law** — the Companies Act 2013.
+Deterministic Python. No language model in any decision path.
 
-Part of a three-repo split:
+> The model may propose. The system must verify. The reviewer decides.
 
-| Repo | Holds |
-|---|---|
-| **placedon-law-backend** | this one — the API, the corpus, the verification suite |
-| placedon-law-frontend | the Next.js app |
-| placedon-law-research | plans, decisions, research notes |
+The PoSH Act product this repository began as has been retired; see
+`docs/RETIRED_POSH.md`. What remains is the corporate stack.
 
-## The one design decision everything else follows from
+## What it does today
 
-**The model never decides whether a law applies.** `applicability.py` decides, deterministically,
-from the company's answers. The model — when one is used at all — only explains a decision that
-has already been made, and `checker/verifier.py` rejects any citation or number that does not
-appear in the source text.
+Given what a company **is** — class, incorporation date, directors, capital,
+turnover — it produces a compliance matrix: one row per obligation the Act
+imposes, each row saying whether the duty attaches, whether it was met, or
+exactly what is missing.
 
-That inversion makes model choice a **cost lever, not a correctness lever**. A cheaper model
-produces a worse explanation, never a wrong obligation.
-
-It is also the reason for the corpus. *"Every employer employing 10 or more employees shall
-constitute an Internal Committee"* is a sentence that appears in a great deal of Indian HR
-writing. It is **not in the PoSH Act**. It reached five generated documents and one of our own
-code comments before the verbatim corpus caught it.
-
-## State
-
-```
-corpus/provisions/posh_act_2013.json   30 sections, byte-verified against India Code
-corpus/rules/                          14 PoSH Rules provisions, cross-verified 9/9
-corpus/reference/                      31 District Officers
-verified_by                            null on every single one
-inference spend, all time              Rs 0.00
-```
-
-`verified_by` means *a lawyer has checked our reading of this section*. Nothing this repository
-can do sets it. `scripts/check_transcription.py` proves the text is a faithful transcription and
-deliberately does not touch that field — transcription and interpretation are different claims,
-and conflating them is the failure this project has refused eight times.
-
-Because it is null everywhere, **the Q&A path abstains on every question it is asked.** That is
-the designed state, not an outage.
-
-## Run it
+Rows come from the law, not from documents. A company that has uploaded nothing
+still gets a full matrix, and the rows with no document behind them are the ones
+that matter most.
 
 ```bash
-pip install -r requirements.txt
-uvicorn checker.app:app --reload        # http://localhost:8000
-python3 scripts/verify.py               # 39 checks, GO/NO-GO
-python3 scripts/verify.py --fast        # skip the per-module suites (~2s)
+python3 scripts/serve_matrix.py        # http://127.0.0.1:8014
 ```
 
-## The verification ratchet
+No API key, no network, no dependencies outside the standard library.
 
-`scripts/verify.py` is the checklist — not a markdown file beside the code, which drifts from
-what runs within about two weeks and becomes a record of intentions.
+## What it refuses to do
 
-Every check carries `because=`: the specific incident that bought it. Some of what is in there:
-
-- A citation enforcer that failed open, because `"s.27".startswith("s.2")` is `True`, so every
-  fabricated citation passed.
-- Sub-sections added to the corpus that **nothing read** — the lawyer pack still printed the
-  full 5,570-character s.2. Dead data reports a win it did not deliver.
-- Two checks of my own that passed while asserting nothing, found by a review agent.
-- A stylesheet whose seven-state epistemic ramp was hue-coded green/amber/red, collapsing an
-  ordinal ladder into three categories.
-
-Do not delete a check because it has never fired. A check that never fires is a bug that never
-came back.
-
-The frontend half of the suite lives in `placedon-law-frontend`, because a check belongs in the
-repo containing its subject. A check that cannot see its subject either crashes or — worse —
-skips quietly. The `--fast` run here asserts on its own registry size for that reason.
+- It never claims an obligation was complied with unless every limb of that
+  provision has been decided. Where limbs remain undecided it says so.
+- It never serves a statutory threshold it has not properly acquired. The
+  small-company test currently **refuses**, naming G.S.R. 700(E) as the missing
+  instrument.
+- It never repairs a defective government source. Four transcription defects in
+  the official text are recorded in `docs/SOURCE_DEFECTS.md` and preserved
+  verbatim.
+- It makes no accuracy claim. No practising lawyer has reviewed any output, and
+  there is no real-document benchmark.
 
 ## Layout
 
 ```
-checker/          the API, the epistemic lattice, document generators, the citation enforcer
-corpus/           statutory text. Read by 21 files; it is a runtime dependency, not reference
-scripts/          ingestion, transcription checks, the review pack, verify.py
-applicability.py  the deterministic decision. Not a model call
-jurisdiction.py   district > state > national resolution, with a refusable state fallback
-backend/          budget guard
-api/              Vercel entry point
+checker/company_profile.py      company facts; unknown is never zero
+checker/classify.py             s.2(85) small-company status, with refusal
+checker/prescribed_thresholds.py  dated thresholds, state derived from evidence
+checker/obligations.py          the obligation register — matrix rows
+checker/matrix_view.py          the HTTP surface, no dependencies
+checker/cascade.py              the E3-E6 deterministic verifier
+checker/metric_policy.py        the release gate
+checker/model_adapter.py        the only place an LLM may be called (stubbed)
+corpus/companies_act/           529 sections, hash-stamped
+corpus/benchmark/               the frozen benchmark and its governance
+docs/                           plans, analyses, source defects, retractions
+research/TASKS.md               the open ledger — what is blocked and on whom
 ```
 
-## What this deliberately does not do
+## Running
 
-No risk scores, no confidence percentages, no "verified against India Code" badge. Each has been
-proposed and refused — a displayed confidence number needs a labelled validation set, and there
-is none. Abstention is a designed state with its own rendering, not an error path.
+```bash
+./scripts/run_tests.sh                 # every suite, self-testing, not pytest
+python3 scripts/slice_s96.py           # the AGM slice, end to end
+python3 scripts/slice_s173.py          # the board-meeting slice
+python3 scripts/serve_matrix.py        # the compliance matrix
+```
+
+Each module tests itself and prints `[PASS]` / `[FAIL]` and `N/N passed`. There
+is no pytest and no third-party test dependency.
+
+## Status
+
+The verification machinery is substantial and the product is small. Read
+`docs/FAILURE_MODES.md` before believing anything here works, and
+`docs/PLAN_TWO_MONTH.md` for where it goes next.

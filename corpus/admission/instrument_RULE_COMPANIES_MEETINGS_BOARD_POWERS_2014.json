@@ -1,0 +1,45 @@
+{
+  "target_type": "INSTRUMENT",
+  "target_id": "RULE:COMPANIES_MEETINGS_BOARD_POWERS_2014",
+  "state": "HUMAN_REVIEW_PENDING",
+  "production_usable": false,
+  "restricted_use": false,
+  "restriction_codes": [],
+  "open_review_items": [
+    "ri-board_rules_2014-001"
+  ],
+  "history": [
+    {
+      "event_type": "STATE_CHANGE",
+      "actor": "system",
+      "at": "2026-08-21T00:00:00Z",
+      "before": "DISCOVERED",
+      "after": "ACQUIRED",
+      "reason": "downloaded from eGazette, content id 159201"
+    },
+    {
+      "event_type": "STATE_CHANGE",
+      "actor": "system",
+      "at": "2026-08-21T00:00:00Z",
+      "before": "ACQUIRED",
+      "after": "TECHNICALLY_VERIFIED",
+      "reason": "VERIFIED_PRINCIPAL by scripts/acquire_rules.py"
+    },
+    {
+      "event_type": "STATE_CHANGE",
+      "actor": "system",
+      "at": "2026-08-21T00:00:00Z",
+      "before": "TECHNICALLY_VERIFIED",
+      "after": "STRUCTURED",
+      "reason": "parsed into 15 rules with page provenance"
+    },
+    {
+      "event_type": "STATE_CHANGE",
+      "actor": "system",
+      "at": "2026-08-21T00:00:00Z",
+      "before": "STRUCTURED",
+      "after": "HUMAN_REVIEW_PENDING",
+      "reason": "nobody has read this against the gazette"
+    }
+  ]
+}

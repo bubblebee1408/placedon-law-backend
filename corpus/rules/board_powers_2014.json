@@ -1,0 +1,532 @@
+{
+  "instrument_id": "COMPANIES_MEETINGS_BOARD_POWERS_2014",
+  "short_title": "The Companies (Meetings of Board and its Powers) Rules, 2014",
+  "gazette": "G.S.R. 240(E)",
+  "gazette_date": "2014-03-31",
+  "source_artifact": "corpus/sources/companies_meetings_board_powers_rules_2014.pdf",
+  "source_artifact_sha256": "b8b2e01b3d151ee038215c81d4fb10d802e4b84b8762ac385c2347417597167c",
+  "extractor": "checker/pdf_text.py",
+  "pages": 22,
+  "status": "UNREVIEWED",
+  "production_usable": false,
+  "made_under": [
+    {
+      "to_section": "ACT:COMPANIES_ACT_2013:S173",
+      "relation": "MADE_UNDER",
+      "evidence_text": "sections 173, 175, 177, 178, 179, 184, 185, 186, 187, 188, 189 and section 191 read with section 469",
+      "confidence": "HIGH",
+      "review_status": "PENDING_HUMAN_REVIEW"
+    },
+    {
+      "to_section": "ACT:COMPANIES_ACT_2013:S175",
+      "relation": "MADE_UNDER",
+      "evidence_text": "sections 173, 175, 177, 178, 179, 184, 185, 186, 187, 188, 189 and section 191 read with section 469",
+      "confidence": "HIGH",
+      "review_status": "PENDING_HUMAN_REVIEW"
+    },
+    {
+      "to_section": "ACT:COMPANIES_ACT_2013:S177",
+      "relation": "MADE_UNDER",
+      "evidence_text": "sections 173, 175, 177, 178, 179, 184, 185, 186, 187, 188, 189 and section 191 read with section 469",
+      "confidence": "HIGH",
+      "review_status": "PENDING_HUMAN_REVIEW"
+    },
+    {
+      "to_section": "ACT:COMPANIES_ACT_2013:S178",
+      "relation": "MADE_UNDER",
+      "evidence_text": "sections 173, 175, 177, 178, 179, 184, 185, 186, 187, 188, 189 and section 191 read with section 469",
+      "confidence": "HIGH",
+      "review_status": "PENDING_HUMAN_REVIEW"
+    },
+    {
+      "to_section": "ACT:COMPANIES_ACT_2013:S179",
+      "relation": "MADE_UNDER",
+      "evidence_text": "sections 173, 175, 177, 178, 179, 184, 185, 186, 187, 188, 189 and section 191 read with section 469",
+      "confidence": "HIGH",
+      "review_status": "PENDING_HUMAN_REVIEW"
+    },
+    {
+      "to_section": "ACT:COMPANIES_ACT_2013:S184",
+      "relation": "MADE_UNDER",
+      "evidence_text": "sections 173, 175, 177, 178, 179, 184, 185, 186, 187, 188, 189 and section 191 read with section 469",
+      "confidence": "HIGH",
+      "review_status": "PENDING_HUMAN_REVIEW"
+    },
+    {
+      "to_section": "ACT:COMPANIES_ACT_2013:S185",
+      "relation": "MADE_UNDER",
+      "evidence_text": "sections 173, 175, 177, 178, 179, 184, 185, 186, 187, 188, 189 and section 191 read with section 469",
+      "confidence": "HIGH",
+      "review_status": "PENDING_HUMAN_REVIEW"
+    },
+    {
+      "to_section": "ACT:COMPANIES_ACT_2013:S186",
+      "relation": "MADE_UNDER",
+      "evidence_text": "sections 173, 175, 177, 178, 179, 184, 185, 186, 187, 188, 189 and section 191 read with section 469",
+      "confidence": "HIGH",
+      "review_status": "PENDING_HUMAN_REVIEW"
+    },
+    {
+      "to_section": "ACT:COMPANIES_ACT_2013:S187",
+      "relation": "MADE_UNDER",
+      "evidence_text": "sections 173, 175, 177, 178, 179, 184, 185, 186, 187, 188, 189 and section 191 read with section 469",
+      "confidence": "HIGH",
+      "review_status": "PENDING_HUMAN_REVIEW"
+    },
+    {
+      "to_section": "ACT:COMPANIES_ACT_2013:S188",
+      "relation": "MADE_UNDER",
+      "evidence_text": "sections 173, 175, 177, 178, 179, 184, 185, 186, 187, 188, 189 and section 191 read with section 469",
+      "confidence": "HIGH",
+      "review_status": "PENDING_HUMAN_REVIEW"
+    },
+    {
+      "to_section": "ACT:COMPANIES_ACT_2013:S189",
+      "relation": "MADE_UNDER",
+      "evidence_text": "sections 173, 175, 177, 178, 179, 184, 185, 186, 187, 188, 189 and section 191 read with section 469",
+      "confidence": "HIGH",
+      "review_status": "PENDING_HUMAN_REVIEW"
+    },
+    {
+      "to_section": "ACT:COMPANIES_ACT_2013:S191",
+      "relation": "MADE_UNDER",
+      "evidence_text": "sections 173, 175, 177, 178, 179, 184, 185, 186, 187, 188, 189 and section 191 read with section 469",
+      "confidence": "HIGH",
+      "review_status": "PENDING_HUMAN_REVIEW"
+    },
+    {
+      "to_section": "ACT:COMPANIES_ACT_2013:S469",
+      "relation": "MADE_UNDER",
+      "evidence_text": "sections 173, 175, 177, 178, 179, 184, 185, 186, 187, 188, 189 and section 191 read with section 469",
+      "confidence": "HIGH",
+      "review_status": "PENDING_HUMAN_REVIEW"
+    }
+  ],
+  "rules": [
+    {
+      "rule_id": "RULE:COMPANIES_MEETINGS_BOARD_POWERS_2014:R1",
+      "instrument_id": "COMPANIES_MEETINGS_BOARD_POWERS_2014",
+      "rule_number": "1",
+      "heading": "Short title and commencement",
+      "text_raw": "(1) These rules may be called the Companies (Meetings of Board an d its Powers) Rules, 2014. (2) They shall come into force on the 1 st day of April, 2014.",
+      "text_reading": "(1) These rules may be called the Companies (Meetings of Board and its Powers) Rules, 2014. (2) They shall come into force on the 1 st day of April, 2014.",
+      "page_start": 13,
+      "page_end": 13,
+      "sub_rules": [
+        "1",
+        "2"
+      ],
+      "act_links": [],
+      "status": "UNREVIEWED",
+      "source_artifact_sha256": "b8b2e01b3d151ee038215c81d4fb10d802e4b84b8762ac385c2347417597167c",
+      "warnings": [
+        "6 word(s) still split by extraction -- read text_raw against pages 13-13"
+      ]
+    },
+    {
+      "rule_id": "RULE:COMPANIES_MEETINGS_BOARD_POWERS_2014:R2",
+      "instrument_id": "COMPANIES_MEETINGS_BOARD_POWERS_2014",
+      "rule_number": "2",
+      "heading": "Definitions",
+      "text_raw": "(1) In these rules, unless the context otherwise re quires, (a) Act means the Companies Act, 2013; (b) Annexure means the Annexure appended to thes e rules; (c) Fees means the fees as specified in the Compa nies (Registration Offices and Fees) Rules, 2014; (d) Form or e-Form means a form set forth in Annexure to these rules which shall be used for the matter to which it relates; (e) section means the section of the Ac t. (2) Words and expressions used in these rules but not defined and defined in the Act or in the Compan ies (Specification of Definitions Details) Rules, 2014, shall have the same meanings respectively assigned to them in the Act or in the said Rules.",
+      "text_reading": "(1) In these rules, unless the context otherwise re quires, (a) Act means the Companies Act, 2013; (b) Annexure means the Annexure appended to these rules; (c) Fees means the fees as specified in the Compa nies (Registration Offices and Fees) Rules, 2014; (d) Form or e-Form means a form set forth in Annexure to these rules which shall be used for the matter to which it relates; (e) section means the section of the Act. (2) Words and expressions used in these rules but not defined and defined in the Act or in the Compan ies (Specification of Definitions Details) Rules, 2014, shall have the same meanings respectively assigned to them in the Act or in the said Rules.",
+      "page_start": 13,
+      "page_end": 13,
+      "sub_rules": [
+        "1",
+        "2"
+      ],
+      "act_links": [],
+      "status": "UNREVIEWED",
+      "source_artifact_sha256": "b8b2e01b3d151ee038215c81d4fb10d802e4b84b8762ac385c2347417597167c",
+      "warnings": [
+        "33 word(s) still split by extraction -- read text_raw against pages 13-13"
+      ]
+    },
+    {
+      "rule_id": "RULE:COMPANIES_MEETINGS_BOARD_POWERS_2014:R3",
+      "instrument_id": "COMPANIES_MEETINGS_BOARD_POWERS_2014",
+      "rule_number": "3",
+      "heading": "Meetings of Board through video conferencing or other audio visual means",
+      "text_raw": "A company shall comply with the following procedure, for convening and conduct ing the Board meetings through video conferencing o r other audio visual means. (1) Every Company shall make necessary arrangemen ts to avoid failure of video or audio visual connec tion. (2) The Chairperson of the meeting and the company secretary, if any, shall take due and reasonable ca re- (a) to safeguard the integrity of the meeting by ensuring sufficient security and identification pro cedures; \n\u0006\u0004 THE GAZETTE OF INDIA : EXTRAORDINARY [P ART IIS EC \u0001 (b) to ensure availability of proper video confer encing or other audio visual equipment or facilitie s for providing transmission of the communications for e ffective participation of the directors and other a uthorised participants at the Board meeting; (c) to record proceedings and prepare the minutes of the meeting; (d) to store for safekeeping and marking the tape recording(s) or other electronic recording mechanis m as part of the records of the company at least before the t ime of completion of audit of that particular year. (e) to ensure that no person other than the conc erned director are attending or have access to the proceedings of the meeting through video conferencing mode or othe r audio visual means; and (f) to ensure that participants attending the meeti ng through audio visual means are able to hear and see the other participants clearly during the course of the meeti ng: Provided that the persons, who are differently able d, may make request to the Board to allow a person to accompany him. (3) (a) The notice of the meeting shall be sent t o all the directors in accordance with the provisio ns of sub-section (3) of section 173 of the Act. (b) The notice of the meeting shall inform the dir ectors regarding the option available to them to pa rticipate through video conferencing mode or other audio visu al means, and shall provide all the necessary infor mation to enable the directors to participate through video c onferencing mode or other audio visual means. (c) A director intending to participate through vi deo conferencing or audio visual means shall commun icate his intention to the Chairperson or the company sec retary of the company. (d) If the director intends to participate through video conferencing or other audio visual means, he shall give prior intimation to that effect sufficiently in advance s o that company is able to make suitable arrangement s in this behalf. (e ) The director, who desire, to participate may intimate his intention of participation through the electronic mode at the beginning of the calendar year and such decl aration shall be valid for one calendar year. (f) In the absence of any intimation under clause (c), it shall be assumed that the director shall a ttend the meeting in person. (4) At the commencement of the meeting, a roll cal l shall be taken by the Chairperson when every dire ctor participating through video conferencing or other a udio visual means shall state, for the record, the following namely:- (a) name; (b) the location from where he is participating; (c) that he has received the agenda and all the rel evant material for the meeting; and (d) that no one other than the concerned director is attending or having access to the proceedings o f the meeting at the location mentioned in clause (b); (5) (a) After the roll call, the Chairperson or the Company Secretary shall inform the Board about the names of persons other than the directors who are present fo r the said meeting at the request or with the permi ssion of the Chairperson and confirm that the required quorum i s complete. Explanation. - A director participating in a meeting through vid eo conferencing or other audio visual means shall be counted for the purpose of quorum, unless he is to be excluded for any items of business under any provisions of the Act or the rules. (b) The Chairpersonshall ensure that the required q uorum is present throughout the meeting. (6) With respect to every meeting conducted throug h video conferencing or other audio visual means au thorised under these rules, the scheduled venue of the meeti ng as set forth in the notice convening the meeting , which shall be in India, shall be deemed to be the place of the said meeting and all recordings of the proceedings at the meeting shall be deemed to be made at such place. (7) The statutory registers which are required to be placed in the Board meeting as per the provisio ns of the Act shall be placed at the scheduled venue of the meeti ng and where such registers are required to be sign ed by the directors, the same shall be deemed to have been si gned by the directors participating through electro nic mode, if they have given their consent to this effect and it is so recorded in the minutes of the meeting. (8) (a) Every participant shall identify himself fo r the record before speaking on any item of busines s on the agenda. (b) If a statement of a director in the meeting thr ough video conferencing or other audio visual means is interrupted or garbled, the Chairperson or Company Secretary shall request for a repeat or reiteration by the Director. \n¹Hkkx II µ[k.M 3( i )º \u0001 Hkkjr dk jkti=k % vlk/kj.k \u0006\u0005\u0001 \u0001 \u0001 (9) If a motion is objected to and there is a need to p ut it to vote, the Chairperson shall call the roll and note the vote of each director who shall identify himsel f while casting his vote. (10) From the commencement of the meeting and unti l the conclusion of such meeting, no person other t han the Chairperson, Directors, Company Secretary and any o ther person whose presence is required by the Board shall be allowed access to the place where any director is a ttending the meeting either physically or through v ideo conferencing without the permission of the Board. (11) (a) At the end of discussion on each agenda item, the Chairperson of the meeting shall announc e the summary of the decision taken on such item along wi th names of the directors, if any, who dissented fr om the decision taken by majority. (b) The minutes shall disclose the particulars of t he directors who attended the meeting through video conferencing or other audio visual means. (12) (a) The draft minutes of the meeting shall be circulated among all the directors within fifteen days of the meeting either in writing or in electronic mode as may be decided by the Board. (b) Every director who attended the meeting, wheth er personally or through video conferencing or othe r audio visual means, shall confirm or give his comments in writing, about the accuracy of recording of the pr oceedings of that particular meeting in the draft minutes, withi n seven days or some reasonable time as decided by the Board, after receipt of the draft minutes failing which hi s approval shall be presumed. (c) After completion of the meeting, the minutes shall be entered in the minute book as specified un der section 118 of the Act and signed by the Chairperson. Explanation .-For the purposes of this rule, video conferencin g or other audio visual means means audio- visual electronic communication facility employed which en ables all the persons participating in a meeting to communicate concurrently with each other without an intermediary and to participate effectively in the meeting.",
+      "text_reading": "A company shall comply with the following procedure, for convening and conduct ing the Board meetings through video conferencingo r other audio visual means. (1) Every Company shall make necessary arrangemen ts to avoid failure of video or audio visual connec tion. (2) The Chairperson of the meeting and the company secretary, if any, shall take due and reasonable ca re- (a) to safeguard the integrity of the meeting by ensuring sufficient security and identification pro cedures; \u0006\u0004 THE GAZETTE OF INDIA : EXTRAORDINARY [P ART IIS EC \u0001 (b) to ensure availability of proper video confer encing or other audio visual equipment or facilities for providing transmission of the communications fore ffective participation of the directors and other a uthorised participants at the Board meeting; (c) to record proceedings and prepare the minutes of the meeting; (d) to store for safekeeping and marking the tape recording(s) or other electronic recording mechanism as part of the records of the company at least before thet ime of completion of audit of that particular year. (e) to ensure that no person other than the conc erned director are attending or have access to the proceedings of the meeting through video conferencing mode or other audio visual means; and (f) to ensure that participants attending the meeti ng through audio visual means are able to hear and see the other participants clearly during the course of the meeti ng: Provided that the persons, who are differently abled, may make request to the Board to allow a person to accompany him. (3) (a) The notice of the meeting shall be sentt o all the directors in accordance with the provisio ns of sub-section (3) of section 173 of the Act. (b) The notice of the meeting shall inform the dir ectors regarding the option available to them to pa rticipate through video conferencing mode or other audio visu al means, and shall provide all the necessary infor mation to enable the directors to participate through videoc onferencing mode or other audio visual means. (c) A director intending to participate through vi deo conferencing or audio visual means shall commun icate his intention to the Chairperson or the company sec retary of the company. (d) If the director intends to participate through video conferencing or other audio visual means, he shall give prior intimation to that effect sufficiently in advances o that company is able to make suitable arrangements in this behalf. (e ) The director, who desire, to participate may intimate his intention of participation through the electronic mode at the beginning of the calendar year and such decl aration shall be valid for one calendar year. (f) In the absence of any intimation under clause (c), it shall be assumed that the director shall a ttend the meeting in person. (4) At the commencement of the meeting, a roll call shall be taken by the Chairperson when every dire ctor participating through video conferencing or other a udio visual means shall state, for the record, the following namely:- (a) name; (b) the location from where he is participating; (c) that he has received the agenda and all the rel evant material for the meeting; and (d) that no one other than the concerned director is attending or having access to the proceedingso f the meeting at the location mentioned in clause (b); (5) (a) After the roll call, the Chairperson or the Company Secretary shall inform the Board about the names of persons other than the directors who are present for the said meeting at the request or with the permi ssion of the Chairperson and confirm that the required quorum i s complete. Explanation. - A director participating in a meeting through vid eo conferencing or other audio visual means shall be counted for the purpose of quorum, unless he is to be excluded for any items of business under any provisions of the Act or the rules. (b) The Chairpersonshall ensure that the requiredq uorum is present throughout the meeting. (6) With respect to every meeting conducted through video conferencing or other audio visual means au thorised under these rules, the scheduled venue of the meeti ng as set forth in the notice convening the meeting , which shall be in India, shall be deemed to be the place of the said meeting and all recordings of the proceedings at the meeting shall be deemed to be made at such place. (7) The statutory registers which are required to be placed in the Board meeting as per the provisio ns of the Act shall be placed at the scheduled venue of the meeti ng and where such registers are required to be sign ed by the directors, the same shall be deemed to have been si gned by the directors participating through electro nic mode, if they have given their consent to this effect and it is so recorded in the minutes of the meeting. (8) (a) Every participant shall identify himself for the record before speaking on any item of business on the agenda. (b) If a statement of a director in the meeting thr ough video conferencing or other audio visual means is interrupted or garbled, the Chairperson or Company Secretary shall request for a repeat or reiteration by the Director. ¹Hkkx II µ[k.M 3( i )º \u0001 Hkkjr dk jkti=k % vlk/kj.k \u0006\u0005\u0001 \u0001 \u0001 (9) If a motion is objected to and there is a need top ut it to vote, the Chairperson shall call the roll and note the vote of each director who shall identify himself while casting his vote. (10) From the commencement of the meeting and until the conclusion of such meeting, no person othert han the Chairperson, Directors, Company Secretary and anyo ther person whose presence is required by the Board shall be allowed access to the place where any director is a ttending the meeting either physically or throughv ideo conferencing without the permission of the Board. (11) (a) At the end of discussion on each agenda item, the Chairperson of the meeting shall announce the summary of the decision taken on such item along wi th names of the directors, if any, who dissented fr om the decision taken by majority. (b) The minutes shall disclose the particulars oft he directors who attended the meeting through video conferencing or other audio visual means. (12) (a) The draft minutes of the meeting shall be circulated among all the directors within fifteen days of the meeting either in writing or in electronic mode as may be decided by the Board. (b) Every director who attended the meeting, wheth er personally or through video conferencing or other audio visual means, shall confirm or give his comments in writing, about the accuracy of recording of the pr oceedings of that particular meeting in the draft minutes, within seven days or some reasonable time as decided by the Board, after receipt of the draft minutes failing which his approval shall be presumed. (c) After completion of the meeting, the minutes shall be entered in the minute book as specified un der section 118 of the Act and signed by the Chairperson. Explanation .-For the purposes of this rule, video conferencing or other audio visual means means audio- visual electronic communication facility employed which en ables all the persons participating in a meeting to communicate concurrently with each other without an intermediary and to participate effectively in the meeting.",
+      "page_start": 13,
+      "page_end": 15,
+      "sub_rules": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6"
+      ],
+      "act_links": [
+        {
+          "to_section": "ACT:COMPANIES_ACT_2013:S118",
+          "relation": "REFERS_TO",
+          "evidence_text": "etion of the meeting, the minutes shall be entered in the minute book as specified un der section 118 of the Act and signed by the Chairperson",
+          "confidence": "HIGH",
+          "review_status": "PENDING_HUMAN_REVIEW"
+        },
+        {
+          "to_section": "ACT:COMPANIES_ACT_2013:S173",
+          "relation": "REFERS_TO",
+          "evidence_text": "all be sentt o all the directors in accordance with the provisio ns of sub-section (3) of section 173 of the Act",
+          "confidence": "HIGH",
+          "review_status": "PENDING_HUMAN_REVIEW"
+        }
+      ],
+      "status": "UNREVIEWED",
+      "source_artifact_sha256": "b8b2e01b3d151ee038215c81d4fb10d802e4b84b8762ac385c2347417597167c",
+      "warnings": [
+        "321 word(s) still split by extraction -- read text_raw against pages 13-15"
+      ]
+    },
+    {
+      "rule_id": "RULE:COMPANIES_MEETINGS_BOARD_POWERS_2014:R4",
+      "instrument_id": "COMPANIES_MEETINGS_BOARD_POWERS_2014",
+      "rule_number": "4",
+      "heading": "Matters not to be dealt with in a meeting through video conferencing or other audio visual means",
+      "text_raw": "(1) The following matters shall not be dealt with in any me eting held through video conferencing or other audi o visual means.- \u0001\u0002\u0003 the approval of the annual financial statements; \u0001\u0002\u0002\u0003 the approval of the Boards report; \u0001\u0002\u0002\u0002\u0003 the approval of the prospectus; \u0001\u0002\u0004\u0003 the Audit Committee Meetings for consideration of a ccounts; and \u0001\u0004\u0003 the approval of the matter relating to amalgamation , merger, demerger, acquisition and takeover.",
+      "text_reading": "(1) The following matters shall not be dealt with in any me eting held through video conferencing or other audio visual means.- \u0001\u0002\u0003 the approval of the annual financial statements; \u0001\u0002\u0002\u0003 the approval of the Boards report; \u0001\u0002\u0002\u0002\u0003 the approval of the prospectus; \u0001\u0002\u0004\u0003 the Audit Committee Meetings for consideration of a ccounts; and \u0001\u0004\u0003 the approval of the matter relating to amalgamation , merger, demerger, acquisition and takeover.",
+      "page_start": 15,
+      "page_end": 15,
+      "sub_rules": [
+        "1"
+      ],
+      "act_links": [],
+      "status": "UNREVIEWED",
+      "source_artifact_sha256": "b8b2e01b3d151ee038215c81d4fb10d802e4b84b8762ac385c2347417597167c",
+      "warnings": [
+        "12 word(s) still split by extraction -- read text_raw against pages 15-15"
+      ]
+    },
+    {
+      "rule_id": "RULE:COMPANIES_MEETINGS_BOARD_POWERS_2014:R5",
+      "instrument_id": "COMPANIES_MEETINGS_BOARD_POWERS_2014",
+      "rule_number": "5",
+      "heading": "Passing of resolution by circulation",
+      "text_raw": "A resolution in draft form may be circulated to th e directors together with the necessary papers for seeking their approva l, by electronic means which may include E-mail or fax.",
+      "text_reading": "A resolution in draft form may be circulated to the directors together with the necessary papers for seeking their approval, by electronic means which may includeE-mail or fax.",
+      "page_start": 15,
+      "page_end": 15,
+      "sub_rules": [],
+      "act_links": [],
+      "status": "UNREVIEWED",
+      "source_artifact_sha256": "b8b2e01b3d151ee038215c81d4fb10d802e4b84b8762ac385c2347417597167c",
+      "warnings": [
+        "7 word(s) still split by extraction -- read text_raw against pages 15-15"
+      ]
+    },
+    {
+      "rule_id": "RULE:COMPANIES_MEETINGS_BOARD_POWERS_2014:R6",
+      "instrument_id": "COMPANIES_MEETINGS_BOARD_POWERS_2014",
+      "rule_number": "6",
+      "heading": "Committees of the Board",
+      "text_raw": "The Board of directors of every listed companies an d the following classes of companies shall constitute an Audit Committee and a Nomination and Remuneration Committee of the Board - (i) all public companies with a paid up capital of ten crore rupees or more; (ii) all public companies having turnover of one h undred crore rupees or more; (iii) all public companies, having in aggregate, ou tstanding loans or borrowings or debentures or depo sits exceeding fifty crore rupees or more. Explanation. - The paid up share capital or turnover or outstan ding loans, or borrowings or debentures or deposits , as the case may be, as existing on the date of last au dited Financial Statements shall be taken into acco unt for the purposes of this rule.",
+      "text_reading": "The Board of directors of every listed companies and the following classes of companies shall constitute an Audit Committee and a Nomination and Remuneration Committee of the Board - (i) all public companies with a paid up capital of ten crore rupees or more; (ii) all public companies having turnover of oneh undred crore rupees or more; (iii) all public companies, having in aggregate, ou tstanding loans or borrowings or debentures or depo sits exceeding fifty crore rupees or more. Explanation. - The paid up share capital or turnover or outstan ding loans, or borrowings or debentures or deposits , as the case may be, as existing on the date of last au dited Financial Statements shall be taken into acco unt for the purposes of this rule.",
+      "page_start": 15,
+      "page_end": 15,
+      "sub_rules": [],
+      "act_links": [],
+      "status": "UNREVIEWED",
+      "source_artifact_sha256": "b8b2e01b3d151ee038215c81d4fb10d802e4b84b8762ac385c2347417597167c",
+      "warnings": [
+        "33 word(s) still split by extraction -- read text_raw against pages 15-15"
+      ]
+    },
+    {
+      "rule_id": "RULE:COMPANIES_MEETINGS_BOARD_POWERS_2014:R7",
+      "instrument_id": "COMPANIES_MEETINGS_BOARD_POWERS_2014",
+      "rule_number": "7",
+      "heading": "Establishment of vigil mechanism",
+      "text_raw": "(1) Every listed company and the companies belongin g to the following class or classes shall establish a vigil mechanism for their directors and employees to report their g enuine concerns or grievances- (a) the Companies which accept deposits from the pu blic; (b) the Companies which have borrowed money from ba nks and public financial institutions in excess of fifty crore rupees. (2) The companies which are required to constitute an audit committee shall oversee the vigil mechanis m through the committee and if any of the members of the comm ittee have a conflict of interest in a given case, they should recuse themselves and the others on the committee w ould deal with the matter on hand. (3) In case of other companies, the Board of direct ors shall nominate a director to play the role of a udit committee for the purpose of vigil mechanism to whom other di rectors and employees may report their concerns. \n\u0006\b THE GAZETTE OF INDIA : EXTRAORDINARY [P ART IIS EC \u0001 (4) The vigil mechanism shall provide for adequate safeguards against victimisation of employees and d irectors who avail of the vigil mechanism and also provide f or direct access to the Chairperson of the Audit Co mmittee or the director nominated to play the role of Audit Co mmittee, as the case may be, in exceptional cases. (5) In case of repeated frivolous complaints being filed by a director or an employee, the audit commi ttee or the director nominated to play the role of audit commit tee may take suitable action against the concerned director or employee including reprimand.",
+      "text_reading": "(1) Every listed company and the companies belonging to the following class or classes shall establish a vigil mechanism for their directors and employees to report theirg enuine concerns or grievances- (a) the Companies which accept deposits from the pu blic; (b) the Companies which have borrowed money from ba nks and public financial institutions in excess of fifty crore rupees. (2) The companies which are required to constitute an audit committee shall oversee the vigil mechanism through the committee and if any of the members of the comm ittee have a conflict of interest in a given case, they should recuse themselves and the others on the committeew ould deal with the matter on hand. (3) In case of other companies, the Board of direct ors shall nominate a director to play the role of a udit committee for the purpose of vigil mechanism to whom other di rectors and employees may report their concerns. \u0006\b THE GAZETTE OF INDIA : EXTRAORDINARY [P ART IIS EC \u0001 (4) The vigil mechanism shall provide for adequate safeguards against victimisation of employees andd irectors who avail of the vigil mechanism and also providef or direct access to the Chairperson of the Audit Co mmittee or the director nominated to play the role of Audit Co mmittee, as the case may be, in exceptional cases. (5) In case of repeated frivolous complaints being filed by a director or an employee, the audit commi ttee or the director nominated to play the role of audit commit tee may take suitable action against the concerned director or employee including reprimand.",
+      "page_start": 15,
+      "page_end": 16,
+      "sub_rules": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5"
+      ],
+      "act_links": [],
+      "status": "UNREVIEWED",
+      "source_artifact_sha256": "b8b2e01b3d151ee038215c81d4fb10d802e4b84b8762ac385c2347417597167c",
+      "warnings": [
+        "66 word(s) still split by extraction -- read text_raw against pages 15-16"
+      ]
+    },
+    {
+      "rule_id": "RULE:COMPANIES_MEETINGS_BOARD_POWERS_2014:R8",
+      "instrument_id": "COMPANIES_MEETINGS_BOARD_POWERS_2014",
+      "rule_number": "8",
+      "heading": "Powers of Board",
+      "text_raw": "In addition to the powers specified under sub-secti on (3) of section 179 of the Act, the following powers shall also be exercised by the Boa rd of Directors only by means of resolutions passed at meetings of the Board.- (1) to make political contributions; (2) to appoint or remove key managerial personnel (KMP) ; (3) to take note of appointment(s) or removal(s) of one level below the Key Management Personnel; (4) to appoint internal auditors and secretarial audito r; (5) to take note of the disclosure of directors intere st and shareholding; (6) to buy, sell investments held by the company (other than trade investments), constituting five percent or more of the paid up share capital and free reserves of the investee company; (7) to invite or accept or renew public deposits and re lated matters; (8) to review or change the terms and conditions of pub lic deposit; (9) to approve quarterly, half yearly and annual financ ial statements or financial results as the case may be.",
+      "text_reading": "In addition to the powers specified under sub-secti on (3) of section 179 of the Act, the following powers shall also be exercised by the Boa rd of Directors only by means of resolutions passed at meetings of the Board.- (1) to make political contributions; (2) to appoint or remove key managerial personnel (KMP) ; (3) to take note of appointment(s) or removal(s) of one level below the Key Management Personnel; (4) to appoint internal auditors and secretarial auditor; (5) to take note of the disclosure of directors intere st and shareholding; (6) to buy, sell investments held by the company (other than trade investments), constituting five percent or more of the paid up share capital and free reserves of the investee company; (7) to invite or accept or renew public deposits and re lated matters; (8) to review or change the terms and conditions of pub lic deposit; (9) to approve quarterly, half yearly and annual financ ial statements or financial results as the case may be.",
+      "page_start": 16,
+      "page_end": 16,
+      "sub_rules": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9"
+      ],
+      "act_links": [
+        {
+          "to_section": "ACT:COMPANIES_ACT_2013:S179",
+          "relation": "REFERS_TO",
+          "evidence_text": "In addition to the powers specified under sub-secti on (3) of section 179 of the Act, the following powers shall also be exercised by",
+          "confidence": "HIGH",
+          "review_status": "PENDING_HUMAN_REVIEW"
+        }
+      ],
+      "status": "UNREVIEWED",
+      "source_artifact_sha256": "b8b2e01b3d151ee038215c81d4fb10d802e4b84b8762ac385c2347417597167c",
+      "warnings": [
+        "39 word(s) still split by extraction -- read text_raw against pages 16-16"
+      ]
+    },
+    {
+      "rule_id": "RULE:COMPANIES_MEETINGS_BOARD_POWERS_2014:R9",
+      "instrument_id": "COMPANIES_MEETINGS_BOARD_POWERS_2014",
+      "rule_number": "9",
+      "heading": "Disclosures by a director of his interest",
+      "text_raw": "(1) Every director shall disclose his concern or in terest in any company or companies or bodies corporate (including shareholding interest), firms or other association of individuals, by giving a notice in writing in Form MBP 1. (2) It shall be the duty of the director giving no tice of interest to cause it to be disclosed at the meeting held immediately after the date of the notice. (3) All notices shall be kept at the registered off ice and such notices shall be preserved for a perio d of eight years from the end of the financial year to which it rela tes and shall be kept in the custody of the company secretary of the company or any other person authorised by the B oard for the purpose.",
+      "text_reading": "(1) Every director shall disclose his concern or in terest in any company or companies or bodies corporate (including shareholding interest), firms or other association of individuals, by giving a notice in writing in Form MBP 1. (2) It shall be the duty of the director giving no tice of interest to cause it to be disclosed at the meeting held immediately after the date of the notice. (3) All notices shall be kept at the registered off ice and such notices shall be preserved for a period of eight years from the end of the financial year to which it rela tes and shall be kept in the custody of the company secretary of the company or any other person authorised by theB oard for the purpose.",
+      "page_start": 16,
+      "page_end": 16,
+      "sub_rules": [
+        "1",
+        "2",
+        "3"
+      ],
+      "act_links": [],
+      "status": "UNREVIEWED",
+      "source_artifact_sha256": "b8b2e01b3d151ee038215c81d4fb10d802e4b84b8762ac385c2347417597167c",
+      "warnings": [
+        "39 word(s) still split by extraction -- read text_raw against pages 16-16"
+      ]
+    },
+    {
+      "rule_id": "RULE:COMPANIES_MEETINGS_BOARD_POWERS_2014:R10",
+      "instrument_id": "COMPANIES_MEETINGS_BOARD_POWERS_2014",
+      "rule_number": "10",
+      "heading": "Loans to Director etc. under section 185",
+      "text_raw": "(1) Any loan made by a holding company to its wholl y owned subsidiary company or any guarantee given or securi ty provided by a holding company in respect of any loan made to its wholly owned subsidiary company is exem pted from the requirements under this section; and (2) Any guarantee given or security provided by a holding company in respect of loan made by any ban k or financial institution to its subsidiary company is exempted from the requirements under this section: Provided that such loans made under sub-rule(1) an d (2) are utilised by the subsidiary company for it s principle business activities.",
+      "text_reading": "(1) Any loan made by a holding company to its wholly owned subsidiary company or any guarantee given or securi ty provided by a holding company in respect of any loan made to its wholly owned subsidiary company is exem pted from the requirements under this section; and (2) Any guarantee given or security provided by a holding company in respect of loan made by any bank or financial institution to its subsidiary company is exempted from the requirements under this section: Provided that such loans made under sub-rule(1) and (2) are utilised by the subsidiary company for its principle business activities.",
+      "page_start": 16,
+      "page_end": 16,
+      "sub_rules": [
+        "1",
+        "2"
+      ],
+      "act_links": [
+        {
+          "to_section": "ACT:COMPANIES_ACT_2013:S185",
+          "relation": "REFERS_TO",
+          "evidence_text": "",
+          "confidence": "LOW",
+          "review_status": "PENDING_HUMAN_REVIEW"
+        }
+      ],
+      "status": "UNREVIEWED",
+      "source_artifact_sha256": "b8b2e01b3d151ee038215c81d4fb10d802e4b84b8762ac385c2347417597167c",
+      "warnings": [
+        "22 word(s) still split by extraction -- read text_raw against pages 16-16"
+      ]
+    },
+    {
+      "rule_id": "RULE:COMPANIES_MEETINGS_BOARD_POWERS_2014:R11",
+      "instrument_id": "COMPANIES_MEETINGS_BOARD_POWERS_2014",
+      "rule_number": "11",
+      "heading": "Loan and investment by a company under section 186 of the Act",
+      "text_raw": "(1) Where a loan or guarantee is given or where a security has been provided by a company to its wholly owned subsidiary company or a joint v enture company, or acquisition is made by a holding compan y, by way of subscription, purchase or otherwise of , the securities of its wholly owned subsidiary company, the requirement of sub-section (3) of section 186 s hall not apply: Provided that the company shall disclose the detai ls of such loans or guarantee or security or acquis ition in the financial statement as provided under sub-section ( 4) of section 186. (2) For the purposes of clause (a) of sub-section ( 11) of section 186, the expression business of fin ancing of companies shall include, with regard to a Non-Bank ing Financial Company registered with the Reserve B ank of India, business of giving of any loan to a person or providing any guaranty or security for due repay ment of any loan availed by any person in the ordinary course o f its business. (3) No company registered under section 12 of the S ecurities and Exchange Board of India Act, 1992 and also covered under such class or classes of companies wh ich may be notified by the Central Government in consultation with the Securities and Exchange Board , shall take any inter-corporate loan or deposits, in excess of the limits specified under the regulations applicab le to such company, pursuant to which it has obtain ed certificate of registration from the Securities and Exchange Bo ard of India.",
+      "text_reading": "(1) Where a loan or guarantee is given or where a security has been provided by a company to its wholly owned subsidiary company or a jointv enture company, or acquisition is made by a holding company, by way of subscription, purchase or otherwise of , the securities of its wholly owned subsidiary company, the requirement of sub-section (3) of section 186 s hall not apply: Provided that the company shall disclose the detai ls of such loans or guarantee or security or acquis ition in the financial statement as provided under sub-section ( 4) of section 186. (2) For the purposes of clause (a) of sub-section ( 11) of section 186, the expression business of fin ancing of companies shall include, with regard to a Non-Bank ing Financial Company registered with the ReserveB ank of India, business of giving of any loan to a person or providing any guaranty or security for due repay ment of any loan availed by any person in the ordinary courseo f its business. (3) No company registered under section 12 of theS ecurities and Exchange Board of India Act, 1992 and also covered under such class or classes of companies wh ich may be notified by the Central Government in consultation with the Securities and Exchange Board , shall take any inter-corporate loan or deposits, in excess of the limits specified under the regulations applicab le to such company, pursuant to which it has obtain ed certificate of registration from the Securities and Exchange Bo ard of India.",
+      "page_start": 16,
+      "page_end": 16,
+      "sub_rules": [
+        "1",
+        "2",
+        "3"
+      ],
+      "act_links": [
+        {
+          "to_section": "ACT:COMPANIES_ACT_2013:S12",
+          "relation": "REFERS_TO",
+          "evidence_text": "(3) No company registered under section 12 of theS ecurities and Exchange Board of India Act, 1992 and",
+          "confidence": "HIGH",
+          "review_status": "PENDING_HUMAN_REVIEW"
+        },
+        {
+          "to_section": "ACT:COMPANIES_ACT_2013:S186",
+          "relation": "REFERS_TO",
+          "evidence_text": "securities of its wholly owned subsidiary company, the requirement of sub-section (3) of section 186 s hall not apply: Provided that the company shall disclose",
+          "confidence": "HIGH",
+          "review_status": "PENDING_HUMAN_REVIEW"
+        }
+      ],
+      "status": "UNREVIEWED",
+      "source_artifact_sha256": "b8b2e01b3d151ee038215c81d4fb10d802e4b84b8762ac385c2347417597167c",
+      "warnings": [
+        "66 word(s) still split by extraction -- read text_raw against pages 16-16"
+      ]
+    },
+    {
+      "rule_id": "RULE:COMPANIES_MEETINGS_BOARD_POWERS_2014:R12",
+      "instrument_id": "COMPANIES_MEETINGS_BOARD_POWERS_2014",
+      "rule_number": "12",
+      "heading": "Register",
+      "text_raw": "(1) Every company giving loan or giving guarantee or providing security or making an acquisition of securities shall, from the date of its incorporatio n, maintain a register in Form MBP 2 and enter ther ein separately, the particulars of loans and guarantees given, secu rities provided and acquisitions made as aforesaid. \n¹Hkkx II µ[k.M 3( i )º \u0001 Hkkjr dk jkti=k % vlk/kj.k \u0006\t\u0001 \u0001 \u0001 (2) The entries in the register shall be made chron ologically in respect of each such transaction with in seven days of making such loan or giving guarantee or providi ng security or making acquisition. (3) The register shall be kept at the registered of fice of the company and the register shall be prese rved permanently and shall be kept in the custody of the company secretary of the company or any other pers on authorised by the Board for the purpose. (4) The entries in the register (either manual or e lectronic) shall be authenticated by the company se cretary of the company or by any other person authorised by the Bo ard for the purpose. (5) For the purpose of sub-rule (4), theregister ca n be maintained either manually or in electronic mo de. (6) Theextracts from the register maintained under sub-section (9) of section 186 may be furnished to any member of the company on payment of such fee as may be pre scribed in the Articles of the company which shall not exceed ten rupees for each page.",
+      "text_reading": "(1) Every company giving loan or giving guarantee or providing security or making an acquisition of securities shall, from the date of its incorporation, maintain a register in Form MBP 2 and enter ther ein separately, the particulars of loans and guarantees given, secu rities provided and acquisitions made as aforesaid. ¹Hkkx II µ[k.M 3( i )º \u0001 Hkkjr dk jkti=k % vlk/kj.k \u0006 \u0001 \u0001 \u0001 (2) The entries in the register shall be made chron ologically in respect of each such transaction with in seven days of making such loan or giving guarantee or providi ng security or making acquisition. (3) The register shall be kept at the registered of fice of the company and the register shall be prese rved permanently and shall be kept in the custody of the company secretary of the company or any other pers on authorised by the Board for the purpose. (4) The entries in the register (either manual ore lectronic) shall be authenticated by the company se cretary of the company or by any other person authorised by the Bo ard for the purpose. (5) For the purpose of sub-rule (4), theregister can be maintained either manually or in electronic mo de. (6) Theextracts from the register maintained under sub-section (9) of section 186 may be furnished to any member of the company on payment of such fee as may be pre scribed in the Articles of the company which shall not exceed ten rupees for each page.",
+      "page_start": 16,
+      "page_end": 17,
+      "sub_rules": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "9"
+      ],
+      "act_links": [
+        {
+          "to_section": "ACT:COMPANIES_ACT_2013:S186",
+          "relation": "REFERS_TO",
+          "evidence_text": "(6) Theextracts from the register maintained under sub-section (9) of section 186 may be furnished to any member of the company on payment of",
+          "confidence": "HIGH",
+          "review_status": "PENDING_HUMAN_REVIEW"
+        }
+      ],
+      "status": "UNREVIEWED",
+      "source_artifact_sha256": "b8b2e01b3d151ee038215c81d4fb10d802e4b84b8762ac385c2347417597167c",
+      "warnings": [
+        "70 word(s) still split by extraction -- read text_raw against pages 16-17"
+      ]
+    },
+    {
+      "rule_id": "RULE:COMPANIES_MEETINGS_BOARD_POWERS_2014:R13",
+      "instrument_id": "COMPANIES_MEETINGS_BOARD_POWERS_2014",
+      "rule_number": "13",
+      "heading": "Special Resolution",
+      "text_raw": "(1) Where the aggregate of the loans and investment so far made, the amount for which guarantee or security so far provided to or in all other bodies corporate along with the investment, l oan, guarantee or security proposed to be made or given by the Boa rd, exceed the limits specified under section 186, no investment or loan shall be made or guarantee shall be given or security shall be provided unless prev iously authorised by a special resolution passed in a gene ral meeting. Explanation. - For the purpose of this sub-rule, it is clarified t hat it would sufficient compliance if such special resolution is passed within one year from the date of notification of this section. (2) A resolution passed at a general meeting in te rms of sub-section (3) of section 186 to give any l oan or guarantee or investment or providing any security o r the acquisition under sub section (2) of section 186 shall specify the total amount up to which the Board of D irectors are authorised to give such loan or guaran tee, to provide such security or make such acquisition: Provided, that the company shall disclose to the members in the financ ial statement the full particulars in accordance with the provision of sub-section (4) of section 186.",
+      "text_reading": "(1) Where the aggregate of the loans and investment so far made, the amount for which guarantee or security so far provided to or in all other bodies corporate along with the investment, l oan, guarantee or security proposed to be made or given by the Boa rd, exceed the limits specified under section 186, no investment or loan shall be made or guarantee shall be given or security shall be provided unless prev iously authorised by a special resolution passed in a gene ral meeting. Explanation. - For the purpose of this sub-rule, it is clarifiedt hat it would sufficient compliance if such special resolution is passed within one year from the date of notification of this section. (2) A resolution passed at a general meeting in te rms of sub-section (3) of section 186 to give anyl oan or guarantee or investment or providing any securityo r the acquisition under sub section (2) of section 186 shall specify the total amount up to which the Board ofD irectors are authorised to give such loan or guaran tee, to provide such security or make such acquisition: Provided, that the company shall disclose to the members in the financ ial statement the full particulars in accordance with the provision of sub-section (4) of section 186.",
+      "page_start": 17,
+      "page_end": 17,
+      "sub_rules": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "act_links": [
+        {
+          "to_section": "ACT:COMPANIES_ACT_2013:S186",
+          "relation": "REFERS_TO",
+          "evidence_text": "or security proposed to be made or given by the Boa rd, exceed the limits specified under section 186, no investment or loan shall be made or guarantee shall be",
+          "confidence": "HIGH",
+          "review_status": "PENDING_HUMAN_REVIEW"
+        }
+      ],
+      "status": "UNREVIEWED",
+      "source_artifact_sha256": "b8b2e01b3d151ee038215c81d4fb10d802e4b84b8762ac385c2347417597167c",
+      "warnings": [
+        "60 word(s) still split by extraction -- read text_raw against pages 17-17"
+      ]
+    },
+    {
+      "rule_id": "RULE:COMPANIES_MEETINGS_BOARD_POWERS_2014:R14",
+      "instrument_id": "COMPANIES_MEETINGS_BOARD_POWERS_2014",
+      "rule_number": "14",
+      "heading": "Investments of company to be held in its own na me",
+      "text_raw": "(1) Every company shall, from the date of its registration, maintain a register in Form MBP3 and enter therein, chronologically, the particulars of investments in shares or other securities beneficially held by the company but which are not held in its own name and the company shall also record the reasons for not holdi ng the investments in its own name and the relation ship or contract under which the investment is held in the name of any other person. (2) The company shall also record whether such inve stments are held in a third partys name for the ti me being or otherwise. (3) The register shall be maintained at the regist ered office of the company. The register shall be p reserved permanently and shall be kept in the custody of the company secretary of the company or if there is no company secretary, any director or any other officer author ised by the Board for the purpose. (4) The entries in the register shall be authentic ated by the company secretary of the company or by any other person authorised by the Board for the purpose.",
+      "text_reading": "(1) Every company shall, from the date of its registration, maintain a register in Form MBP3 and enter therein, chronologically, the particulars of investments in shares or other securities beneficially held by the company but which are not held in its own name and the company shall also record the reasons for not holdi ng the investments in its own name and the relation ship or contract under which the investment is held in the name of any other person. (2) The company shall also record whether such inve stments are held in a third partys name for the ti me being or otherwise. (3) The register shall be maintained at the regist ered office of the company. The register shall bep reserved permanently and shall be kept in the custody of the company secretary of the company or if there is no company secretary, any director or any other officer author ised by the Board for the purpose. (4) The entries in the register shall be authentic ated by the company secretary of the company or by any other person authorised by the Board for the purpose.",
+      "page_start": 17,
+      "page_end": 17,
+      "sub_rules": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "act_links": [],
+      "status": "UNREVIEWED",
+      "source_artifact_sha256": "b8b2e01b3d151ee038215c81d4fb10d802e4b84b8762ac385c2347417597167c",
+      "warnings": [
+        "51 word(s) still split by extraction -- read text_raw against pages 17-17"
+      ]
+    },
+    {
+      "rule_id": "RULE:COMPANIES_MEETINGS_BOARD_POWERS_2014:R15",
+      "instrument_id": "COMPANIES_MEETINGS_BOARD_POWERS_2014",
+      "rule_number": "15",
+      "heading": "Contract or arrangement with a related party",
+      "text_raw": "A company shall enter into any contract or arrangemen t with a related party subject to the following conditions, namely:- (1) The agenda of the Board meeting at which the re solution is proposed to be moved shall disclose- (a) the name of the related party and nature of relatio nship; (b) the nature, duration of the contract and particular s of the contract or arrangement; (c) the material terms of the contract or arrangement i ncluding the value, if any; (d) any advance paid or received for the contrac t or arrangement, if any; (e) themanner of determining the pricing and other commercial terms, both included as part of contrac t and not considered as part of the contract; (f) whether all factors relevant to the contract ha ve been considered, if not, the details of factors not considered with the rationale for not considering those factor s; and (g) any other information relevant or important for th e Board to take a decision on the proposed transact ion. (2) Where any director is interested in any contrac t or arrangement with a related party, such directo r shall not be present at the meeting during discussions on the su bject matter of the resolution relating to such con tract or arrangement- (3) For the purposes of first proviso to sub-sectio n (1) of section 188, except with the prior approva l of the company by a special resolution- \n\u0006\n THE GAZETTE OF INDIA : EXTRAORDINARY [P ART IIS EC \u0001 (i) a company having a paid-up share capital of ten crore rupeesor more shall not enter into a contrac t or arrangement with any related party; or (ii) a company shall not enter into a transaction o r transactions, where the transaction or transacti ons to be entered into (a) as contracts or arrangements with respect to c lauses (a) to (e) of sub-section (1) of section 188 with criteria, as mentioned below (i) sale, purchase or supply of any goods or materi als directly or through appointment of agents excee ding twenty five percent.of the annual turnover as mentioned in clause (a) and clause (e) respectively of sub-sect ion (1) of section 188; (ii) selling or otherwise disposing of, or buying, property of any kind directly or through appointmen t of agents exceeding ten percent of net worth as mentioned in clause (b) and clause (e) respectively of sub-secti on (1) of section 188; (iii) leasing of property of any kind exceeding ten percent of the net worth or exceeding ten percen t of turnoveras mentioned in clause (c) of sub-section (1) of secti on 188; (iv) availing or rendering of any services directly or through appointment of agents exceeding ten per cent of the net worth as mentioned in clause (d) and clause (e) of sub-section (1) of section 188; (b) appointment to any office or place of profit in the company, its subsidiary company or associate c ompany at a monthly remuneration exceeding two and half lakh ru pees as mentioned in clause (f) of sub-section (1) of section 188; or (c) remuneration for underwriting the subscription of any securities or derivatives thereof of the com pany exceeding one percent of the net worth as mentioned in clause (g) of sub-section (1) of section 188. Explanation.- (1) The Turnover or Net Worth referred in the abov e sub-rules shall be on the basis of the Audited Financial Statement of the preceding Financial year . (2) In case of wholly owned subsidiary, the special resolution passed by the holding company shall be sufficient for the purpose of entering into the transactions between wholly owned subsidiary and holding company . (3) The explanatory statement to be annexed to the notice of a general meeting convened pursuant to se ction 101 shall contain the following particulars namely:- (a) name of the related party ; (b) name of the director or key managerial personnel wh o is related, if any; (c) nature of relationship; (d) nature, material terms, monetary value and particul ars of the contract or arrangement; (e) any other information relevant or important for th e members to take a decision on the proposed resolution. 16. Register of contracts or arrangements in which directors are interested. (1) Every company shall maintain one or more registers in Form MBP 4, and s hall enter therein the particulars of (a) company or companies or bodies corporate, firm s or other association of individuals, in which any director has any concern or interest, as mentioned under sub-sec tion (1) of section 184: Provided that the particulars of the company or com panies or bodies corporate in which a director hims elf together with any other director holds two percent or less o f the paid-up share capital would not be required t o be entered in the register; (b) contracts or arrangements with a body corporat e or firm or other entity as mentioned under sub-se ction (2) of section 184, in which any director is, directly or indirectly, concerned or interested; and (c) contracts or arrangements with a related party with respect to transactions to which section 188 applies. (2) The entries in the register shall be made at o nce, whenever there is a cause to make entry, in ch ronological order and shall be authenticated by the company sec retary of the company or by any other person author ised by the Board for the purpose. (3) The register shall be kept at the registered o ffice of the company and the register shall be pres erved permanently and shall be kept in the custody of the company secretary of the company or any other pers on authorised by the Board for the purpose. (4) The company shall provide extracts from such re gister to a member of the company on his request, w ithin seven days from the date on which such request is m ade upon the payment of such fee as may be specifie d in the articles of the company but not exceeding ten rupee s per page. 17. Payment to director for loss of office, etc. in connection with transfer of undertaking, property or shares. (1)No director of a company shall receive any paym ent by way of compensation in connection with any \n¹Hkkx II µ[k.M 3( i )º \u0001 Hkkjr dk jkti=k % vlk/kj.k \u0006\u000b\u0001 \u0001 \u0001 event mentioned in sub-section (1) of section 191 unless the following particulars are disclosed to t he members of the company and they pass a resolution at a general meeting approving the payment of such amount  (a) name of the director; (b) amount proposed to be paid; (c) event due to which compensation become payable; (d) date of Board meeting recommending such payment; (e) basis for the amount determined; (f) reason or justification for the payment; (g) manner of payment - whether payable in cash or otherwise and how; (h) sources of payment; and (i) any other relevant particulars as the Board may think fit. (2) Any payment made by a company by way of compens ation for the loss of office or as a consideration for retirement from office or in connection with such loss or reti rement, to a managing director or whole time direct or or manager of the company shall not exceed the limit as set out u nder section 202. (3) No payment shall be made to the managing direct or or whole time director or manager of the company by way of compensation for the loss of office or as considera tion for retirement from office (other than notice pay and statutory payments in accordance with the terms of appointmen t of such director or manager, as applicable) or in connection with such loss or retirement if  (a) the company is in default in repayment of publi c deposits or payment of interest thereon; (b) the company is in default in redemption of debe ntures or payment of interest thereon; (c) the company is in default in repayment of any liability, secured or unsecured, payable to any bank, public financial institution or any other financial instit ution; (d) the company is in default in payment of any due s towards income tax, VAT, excise duty, service tax or any other tax or duty, by whatever name called, pay able to the Central Government or any State Governm ent, statutory authority or local authority (other than in cases where the company has disputed the liabili ty to pay such dues); (e) there are outstanding statutory dues to the em ployees or workmen of the company which have not be en paid by the company (other than in cases where the company has disputed the liability to pay such dues ); and (f) the company has not paid dividend on pref erence shares or not redeemed preference shares on due date. Explanation : Pending notification of sub-section (1) of section 247 of the Act and finalisation of qualifications and experience of valuers, valuation of stocks, sha res, debentures, securities etc. will be conducted by an independent merchant banker who is registered with the Securities and Exchange Board of India or an in dependent chartered accountant in practice having a minimum e xperience of ten years. FORM MBP - 1 Notice of interest by director To The Board of Directors ..Limited Dear Sir(s) I, .............., son/daughter/spouse of ., r esident of .., being a director in the company hereby give notice of my interest or concern in the follow ing company or companies, bodies corporate, firms o r other association of individuals:- \n\u0002\f THE GAZETTE OF INDIA : EXTRAORDINARY [P ART IIS EC \u0001 I. Sl. No. Names of the Companies/bodies corporate/ firms/ association of individuals Nature of interest or concern / Change in interest or concern Shareholding Date on which interest or concern arose / changed Signature: MD/Director/Secretary/Whole time Director Place: Date: \u0001\u0002\u0003\u0004\u0005\u0006\u0007\b\u0005\t\u0005\n\u0005 \u000b\f\r\u000e\u000f\u0010\f\u0003\u0005\u0002\u0011\u0005\u0012\u0002\u0013\u0014\u000f\u0015\u0005\r\u0016\u0013\u0003\u0013\u0014\u0010\f\f\u0015\u0005\u000f\f\u0017\u0016\u0003\u000e\u0010\u0018\u0005\u0013\u0014\u0019\u0005\u0005\u0013\u0017\u001a\u0016\u000e\u000f\u000e \u0010\u000e\u0002\u0014\u0005\u0004\u0013\u0019\f\u0005\u001b\u0018\u0005\u0010\u001c\f\u0005\u0017\u0002\u0004\u001d\u0013\u0014\u0018\u0005 \u0001\u0002\u0003\u0004\u0005\u0003\u0006\u0007\b\t\b\n\t\u0005\u000b\f\b\r\n\u0007\u000e\u000f\u0010\u0011\u0012\u0013\t\u0014\t\u0004\u0003\u0015\u000b\t\u000e\u0016\u0011\u000e\u0013\u0017 Nature of transaction (whether loan/ guarantee/ security/acquisition) Date of making loan/acquisition / giving guarantee/ providing security Name and address of the person or body corporate to whom it is made or given or whose securities have been acquired (Listed/Unlisted entities) Amount of loan/ security/acquisition/ guarantee Time period for which it is made/ given (1) (2) (3) (4) (5) Purpose of loan/acquisition/ guarantee/ security % of loan/acquisition/ exposure on guarantee/ security provided to the paid up capital, free reserves and securities premium account and % of free reserves and securities premium Date of passing Board resolution Date of passing special resolution, if required For loans Rate of interest Date of maturity \n¹Hkkx II µ[k.M 3( i )º \u0001 Hkkjr dk jkti=k % vlk/kj.k \u0002\u0006\u0001 \u0001 \u0001 (6) (7) (8) (9) (10) (11) For acquisitions Number and kind of securities Nominal value and paid up value Cost of acquisition (in case of securities how the purchased price was arrived at) Date of selling of investment Selling price (how the price was arrived at) Signatures and Remarks (12) (13) (14) (15) (16) (17) \u0005 \u0005 Signature: MD/Director/Secretary/Whole time Director Place: Date: \u0001 \u0001 \u0005 Form MBP - 3 Register of investments not held in its own name b y the company S. No. Date of the board resolution authorising such investment Date of investment Name of the person/ depository in whose name investment is held Address and E-mail id of person / depository in whose name investment is held Purpose of investment (1) (2) (3) (4) (5) (6) Name of the company or body corporate in which investment is made Class of securities Number of securities Client ID / DP No. Face value of securities Paid up value of securities (7) (8) (9) (10) (11) (12) Cost of acquisition Date of disposal Number of securities disposed off Sale consideration Balance securities left, if any Remarks, if any (13) (14) (15) (16) (17) (18) \u0001 \u0002\u0003\u0004\u0005\u0006\u0007\b\t\n\u000b\u0001 \f\r\u000e\r\u0003\t\n\u000f\u0007\u0010\t\u000e\u0002\n\u000f\t\n\u0007\u0006\t\u0011\u000e\u0012\u0013\u0010\u0014\n\u0001\u0007\u0003\u0015\n\u0001\r\u0003\t\n\u000f\u0007\u0010\t\u0001 \n\u0002\u0002 THE GAZETTE OF INDIA : EXTRAORDINARY [P ART IIS EC \u0001 Form MBP - 4 Register of contracts with related party and contra cts and Bodies etc. in which directors are interested A. Contracts or agreements with any related party unde r section 188 or in which any director is concerned or interested under sub- section (2) of s ection 184 Date of contract / arrangement Name of the party with which contract is entered into Name of the interested director Relation with director/ company/ Nature of concern or interest Principal terms and conditions Whether the transaction is at arms length basis (1) (2) (3) (4) (5) (6) Date of approval at the meeting of the Board Details of voting on such resolution Date of the next meeting at which register was placed for signature No. of Directors present in the meeting Directors voting in favour Directors voting against Directors remaining neutral (7) (8) (9) (10) (11) (12) Reference of specific items  (a) to (g) under sub-section (1) of section 188 Amount of contract or arrangement. Date of share holders approval if any Signature Remarks, if any (13) (14) (15) (16) (17) . \u0001 B. Name of the bodies corporate, firms or other ass ociation of individuals as mentioned under sub-sect ion (1) of section 184, in which any director is having any co ncern or interest Names of the Companies /bodies corporate/ firms/ association of individuals Name of the interested director Nature of interest or concern / Change in interest or concern Shareholding (if any) Date on which interest or concern arose / changed \u0001 Signature: MD/Director/Secretary/Whole time Director Place : Date : RENUKA KUMAR, Jt. Secy. Printed by the Manager, Government of India Press, Ring Road, Mayapuri, New Delhi-110064 and Published by the Controller of Publications, Del hi-110054. \u0001",
+      "text_reading": "A company shall enter into any contract or arrangement with a related party subject to the following conditions, namely:- (1) The agenda of the Board meeting at which the re solution is proposed to be moved shall disclose- (a) the name of the related party and nature of relatio nship; (b) the nature, duration of the contract and particulars of the contract or arrangement; (c) the material terms of the contract or arrangement i ncluding the value, if any; (d) any advance paid or received for the contract or arrangement, if any; (e) themanner of determining the pricing and other commercial terms, both included as part of contract and not considered as part of the contract; (f) whether all factors relevant to the contract ha ve been considered, if not, the details of factors not considered with the rationale for not considering those factors; and (g) any other information relevant or important for the Board to take a decision on the proposed transact ion. (2) Where any director is interested in any contract or arrangement with a related party, such director shall not be present at the meeting during discussions on the su bject matter of the resolution relating to such con tract or arrangement- (3) For the purposes of first proviso to sub-section (1) of section 188, except with the prior approval of the company by a special resolution- \u0006 THE GAZETTE OF INDIA : EXTRAORDINARY [P ART IIS EC \u0001 (i) a company having a paid-up share capital of ten crore rupeesor more shall not enter into a contract or arrangement with any related party; or (ii) a company shall not enter into a transactiono r transactions, where the transaction or transacti ons to be entered into (a) as contracts or arrangements with respect toc lauses (a) to (e) of sub-section (1) of section 188 with criteria, as mentioned below (i) sale, purchase or supply of any goods or materi als directly or through appointment of agents excee ding twenty five percent.of the annual turnover as mentioned in clause (a) and clause (e) respectively of sub-sect ion (1) of section 188; (ii) selling or otherwise disposing of, or buying, property of any kind directly or through appointment of agents exceeding ten percent of net worth as mentioned in clause (b) and clause (e) respectively of sub-secti on (1) of section 188; (iii) leasing of property of any kind exceeding ten percent of the net worth or exceeding ten percent of turnoveras mentioned in clause (c) of sub-section (1) of secti on 188; (iv) availing or rendering of any services directly or through appointment of agents exceeding ten per cent of the net worth as mentioned in clause (d) and clause (e) of sub-section (1) of section 188; (b) appointment to any office or place of profit in the company, its subsidiary company or associatec ompany at a monthly remuneration exceeding two and half lakh ru pees as mentioned in clause (f) of sub-section (1) of section 188; or (c) remuneration for underwriting the subscription of any securities or derivatives thereof of the com pany exceeding one percent of the net worth as mentioned in clause (g) of sub-section (1) of section 188. Explanation.- (1) The Turnover or Net Worth referred in the above sub-rules shall be on the basis of the Audited Financial Statement of the preceding Financial year . (2) In case of wholly owned subsidiary, the special resolution passed by the holding company shall be sufficient for the purpose of entering into the transactions between wholly owned subsidiary and holding company . (3) The explanatory statement to be annexed to the notice of a general meeting convened pursuant to se ction 101 shall contain the following particulars namely:- (a) name of the related party ; (b) name of the director or key managerial personnel who is related, if any; (c) nature of relationship; (d) nature, material terms, monetary value and particul ars of the contract or arrangement; (e) any other information relevant or important for the members to take a decision on the proposed resolution. 16. Register of contracts or arrangements in which directors are interested. (1) Every company shall maintain one or more registers in Form MBP 4, ands hall enter therein the particulars of (a) company or companies or bodies corporate, firms or other association of individuals, in which any director has any concern or interest, as mentioned under sub-sec tion (1) of section 184: Provided that the particulars of the company or com panies or bodies corporate in which a director hims elf together with any other director holds two percent or lesso f the paid-up share capital would not be requiredt o be entered in the register; (b) contracts or arrangements with a body corporate or firm or other entity as mentioned under sub-se ction (2) of section 184, in which any director is, directly or indirectly, concerned or interested; and (c) contracts or arrangements with a related party with respect to transactions to which section 188 applies. (2) The entries in the register shall be made ato nce, whenever there is a cause to make entry, in ch ronological order and shall be authenticated by the company sec retary of the company or by any other person author ised by the Board for the purpose. (3) The register shall be kept at the registeredo ffice of the company and the register shall be pres erved permanently and shall be kept in the custody of the company secretary of the company or any other pers on authorised by the Board for the purpose. (4) The company shall provide extracts from such re gister to a member of the company on his request, w ithin seven days from the date on which such request ism ade upon the payment of such fee as may be specified in the articles of the company but not exceeding ten rupees per page. 17. Payment to director for loss of office, etc. in connection with transfer of undertaking, property or shares. (1)No director of a company shall receive any paym ent by way of compensation in connection with any ¹Hkkx II µ[k.M 3( i )º \u0001 Hkkjr dk jkti=k % vlk/kj.k \u0006 \u0001 \u0001 \u0001 event mentioned in sub-section (1) of section 191 unless the following particulars are disclosed tot he members of the company and they pass a resolution at a general meeting approving the payment of such amount  (a) name of the director; (b) amount proposed to be paid; (c) event due to which compensation become payable; (d) date of Board meeting recommending such payment; (e) basis for the amount determined; (f) reason or justification for the payment; (g) manner of payment - whether payable in cash or otherwise and how; (h) sources of payment; and (i) any other relevant particulars as the Board may think fit. (2) Any payment made by a company by way of compens ation for the loss of office or as a consideration for retirement from office or in connection with such loss or reti rement, to a managing director or whole time direct or or manager of the company shall not exceed the limit as set outu nder section 202. (3) No payment shall be made to the managing direct or or whole time director or manager of the company by way of compensation for the loss of office or as considera tion for retirement from office (other than notice pay and statutory payments in accordance with the terms of appointment of such director or manager, as applicable) or in connection with such loss or retirement if  (a) the company is in default in repayment of public deposits or payment of interest thereon; (b) the company is in default in redemption of debe ntures or payment of interest thereon; (c) the company is in default in repayment of any liability, secured or unsecured, payable to any bank, public financial institution or any other financial instit ution; (d) the company is in default in payment of any dues towards income tax, VAT, excise duty, service tax or any other tax or duty, by whatever name called, pay able to the Central Government or any State Governm ent, statutory authority or local authority (other than in cases where the company has disputed the liabili ty to pay such dues); (e) there are outstanding statutory dues to the em ployees or workmen of the company which have not be en paid by the company (other than in cases where the company has disputed the liability to pay such dues ); and (f) the company has not paid dividend on pref erence shares or not redeemed preference shares on due date. Explanation : Pending notification of sub-section (1) of section 247 of the Act and finalisation of qualifications and experience of valuers, valuation of stocks, sha res, debentures, securities etc. will be conducted by an independent merchant banker who is registered with the Securities and Exchange Board of India or an in dependent chartered accountant in practice having a minimume xperience of ten years. FORM MBP - 1 Notice of interest by director To The Board of Directors ..Limited Dear Sir(s) I, .............., son/daughter/spouse of ., r esident of .., being a director in the company hereby give notice of my interest or concern in the follow ing company or companies, bodies corporate, firmso r other association of individuals:- \u0002 THE GAZETTE OF INDIA : EXTRAORDINARY [P ART IIS EC \u0001 I. Sl. No. Names of the Companies/bodies corporate/ firms/ association of individuals Nature of interest or concern / Change in interest or concern Shareholding Date on which interest or concern arose / changed Signature: MD/Director/Secretary/Whole time Director Place: Date: \u0001\u0002\u0003\u0004\u0005\u0006\u0007\b\u0005 \u0005 \u0005 \u000e\u000f\u0010 \u0003\u0005\u0002\u0011\u0005\u0012\u0002\u0013\u0014\u000f\u0015\u0005 \u0016\u0013\u0003\u0013\u0014\u0010 \u0015\u0005\u000f \u0017\u0016\u0003\u000e\u0010\u0018\u0005\u0013\u0014\u0019\u0005\u0005\u0013\u0017\u001a\u0016\u000e\u000f\u000e \u0010\u000e\u0002\u0014\u0005\u0004\u0013\u0019 \u0005\u001b\u0018\u0005\u0010 \u0005\u0017\u0002\u0004 \u0013\u0014\u0018\u0005 \u0001\u0002\u0003\u0004\u0005\u0003\u0006\u0007\b \b \u0005 \b \u0007\u000e\u000f\u0010\u0011\u0012\u0013 \u0014 \u0004\u0003\u0015 \u000e\u0016\u0011\u000e\u0013\u0017 Nature of transaction (whether loan/ guarantee/ security/acquisition) Date of making loan/acquisition / giving guarantee/ providing security Name and address of the person or body corporate to whom it is made or given or whose securities have been acquired (Listed/Unlisted entities) Amount of loan/ security/acquisition/ guarantee Time period for which it is made/ given (1) (2) (3) (4) (5) Purpose of loan/acquisition/ guarantee/ security % of loan/acquisition/ exposure on guarantee/ security provided to the paid up capital, free reserves and securities premium account and % of free reserves and securities premium Date of passing Board resolution Date of passing special resolution, if required For loans Rate of interest Date of maturity ¹Hkkx II µ[k.M 3( i )º \u0001 Hkkjr dk jkti=k % vlk/kj.k \u0002\u0006\u0001 \u0001 \u0001 (6) (7) (8) (9) (10) (11) For acquisitions Number and kind of securities Nominal value and paid up value Cost of acquisition (in case of securities how the purchased price was arrived at) Date of selling of investment Selling price (how the price was arrived at) Signatures and Remarks (12) (13) (14) (15) (16) (17) \u0005 \u0005 Signature: MD/Director/Secretary/Whole time Director Place: Date: \u0001 \u0001 \u0005 Form MBP - 3 Register of investments not held in its own nameb y the companyS. No. Date of the board resolution authorising such investment Date of investment Name of the person/ depository in whose name investment is held Address andE-mail id of person / depository in whose name investment is held Purpose of investment (1) (2) (3) (4) (5) (6) Name of the company or body corporate in which investment is made Class of securities Number of securities Client ID / DP No. Face value of securities Paid up value of securities (7) (8) (9) (10) (11) (12) Cost of acquisition Date of disposal Number of securities disposed off Sale consideration Balance securities left, if any Remarks, if any (13) (14) (15) (16) (17) (18) \u0001 \u0002\u0003\u0004\u0005\u0006\u0007\b \u0001 \u000e \u0003 \u000f\u0007\u0010 \u000e\u0002 \u000f \u0007\u0006 \u0011\u000e\u0012\u0013\u0010\u0014 \u0001\u0007\u0003\u0015 \u0001 \u0003 \u000f\u0007\u0010 \u0001 \u0002\u0002 THE GAZETTE OF INDIA : EXTRAORDINARY [P ART IIS EC \u0001 Form MBP - 4 Register of contracts with related party and contra cts and Bodies etc. in which directors are interested A. Contracts or agreements with any related party under section 188 or in which any director is concerned or interested under sub- section (2) ofs ection 184 Date of contract / arrangement Name of the party with which contract is entered into Name of the interested director Relation with director/ company/ Nature of concern or interest Principal terms and conditions Whether the transaction is at arms length basis (1) (2) (3) (4) (5) (6) Date of approval at the meeting of the Board Details of voting on such resolution Date of the next meeting at which register was placed for signature No. of Directors present in the meeting Directors voting in favour Directors voting against Directors remaining neutral (7) (8) (9) (10) (11) (12) Reference of specific items  (a) to (g) under sub-section (1) of section 188 Amount of contract or arrangement. Date of share holders approval if any Signature Remarks, if any (13) (14) (15) (16) (17) . \u0001 B. Name of the bodies corporate, firms or other ass ociation of individuals as mentioned under sub-sect ion (1) of section 184, in which any director is having any co ncern or interest Names of the Companies /bodies corporate/ firms/ association of individuals Name of the interested director Nature of interest or concern / Change in interest or concern Shareholding (if any) Date on which interest or concern arose / changed \u0001 Signature: MD/Director/Secretary/Whole time Director Place : Date : RENUKA KUMAR, Jt. Secy. Printed by the Manager, Government of India Press, Ring Road, Mayapuri, New Delhi-110064 and Published by the Controller of Publications, Del hi-110054. \u0001",
+      "page_start": 17,
+      "page_end": 22,
+      "sub_rules": [
+        "1",
+        "2",
+        "3"
+      ],
+      "act_links": [
+        {
+          "to_section": "ACT:COMPANIES_ACT_2013:S101",
+          "relation": "REFERS_TO",
+          "evidence_text": "",
+          "confidence": "LOW",
+          "review_status": "PENDING_HUMAN_REVIEW"
+        },
+        {
+          "to_section": "ACT:COMPANIES_ACT_2013:S184",
+          "relation": "REFERS_TO",
+          "evidence_text": "in which any director has any concern or interest, as mentioned under sub-sec tion (1) of section 184: Provided that the particulars of the company or com panies",
+          "confidence": "HIGH",
+          "review_status": "PENDING_HUMAN_REVIEW"
+        },
+        {
+          "to_section": "ACT:COMPANIES_ACT_2013:S188",
+          "relation": "REFERS_TO",
+          "evidence_text": "uch con tract or arrangement- (3) For the purposes of first proviso to sub-section (1) of section 188, except with the prior approval of the company by a special",
+          "confidence": "HIGH",
+          "review_status": "PENDING_HUMAN_REVIEW"
+        },
+        {
+          "to_section": "ACT:COMPANIES_ACT_2013:S191",
+          "relation": "REFERS_TO",
+          "evidence_text": "k \u0006 \u0001 \u0001 \u0001 event mentioned in sub-section (1) of section 191 unless the following particulars are disclosed tot he membe",
+          "confidence": "HIGH",
+          "review_status": "PENDING_HUMAN_REVIEW"
+        },
+        {
+          "to_section": "ACT:COMPANIES_ACT_2013:S202",
+          "relation": "REFERS_TO",
+          "evidence_text": "hole time direct or or manager of the company shall not exceed the limit as set outu nder section 202",
+          "confidence": "HIGH",
+          "review_status": "PENDING_HUMAN_REVIEW"
+        },
+        {
+          "to_section": "ACT:COMPANIES_ACT_2013:S247",
+          "relation": "REFERS_TO",
+          "evidence_text": "Explanation : Pending notification of sub-section (1) of section 247 of the Act and finalisation of qualifications and experienc",
+          "confidence": "HIGH",
+          "review_status": "PENDING_HUMAN_REVIEW"
+        }
+      ],
+      "status": "UNREVIEWED",
+      "source_artifact_sha256": "b8b2e01b3d151ee038215c81d4fb10d802e4b84b8762ac385c2347417597167c",
+      "warnings": [
+        "body runs to end-of-document and contains Annexure/Form matter -- the operative text ends earlier; a reviewer must set the boundary",
+        "557 word(s) still split by extraction -- read text_raw against pages 17-22"
+      ]
+    }
+  ]
+}

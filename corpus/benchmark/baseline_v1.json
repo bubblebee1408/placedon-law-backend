@@ -1,0 +1,215 @@
+{
+  "benchmark": "grounded-generation baseline v1",
+  "frozen": "2026-08-21",
+  "note": "Labels were written BEFORE any run. Do not edit a case to make a run pass; add a new case and freeze it. No Rules-linked cases exist because all 30 review items are open, and a case built on unreviewed law would bake unreviewed law into the definition of correct. expect_withheld_rule was added on 2026-08-21 as a NEW metric dimension; no existing gold decision was altered.",
+  "cases": [
+    {
+      "id": "b01",
+      "query": "s.173",
+      "question": "Does the Act require the Board to meet?",
+      "expect_decision_in": [
+        "INSUFFICIENT_FACTS",
+        "APPLIES"
+      ],
+      "expect_abstain": false,
+      "expect_evidence": [
+        "ACT:COMPANIES_ACT_2013:S173"
+      ],
+      "kind": "act-only",
+      "expect_withheld_rule": false
+    },
+    {
+      "id": "b02",
+      "query": "s.188",
+      "question": "Is Board approval needed for a related party transaction?",
+      "expect_decision_in": [
+        "INSUFFICIENT_FACTS",
+        "APPLIES"
+      ],
+      "expect_abstain": false,
+      "expect_evidence": [
+        "ACT:COMPANIES_ACT_2013:S188"
+      ],
+      "kind": "act-only",
+      "expect_withheld_rule": false
+    },
+    {
+      "id": "b03",
+      "query": "s.174",
+      "question": "What is the quorum for a Board meeting?",
+      "expect_decision_in": [
+        "INSUFFICIENT_FACTS",
+        "APPLIES"
+      ],
+      "expect_abstain": false,
+      "expect_evidence": [
+        "ACT:COMPANIES_ACT_2013:S174"
+      ],
+      "kind": "act-only",
+      "expect_withheld_rule": false
+    },
+    {
+      "id": "b04",
+      "query": "related party transactions",
+      "question": "Which provision governs related party transactions?",
+      "expect_decision_in": [
+        "INSUFFICIENT_FACTS",
+        "APPLIES"
+      ],
+      "expect_abstain": false,
+      "expect_evidence": [
+        "ACT:COMPANIES_ACT_2013:S188"
+      ],
+      "kind": "concept-search",
+      "expect_withheld_rule": true
+    },
+    {
+      "id": "b05",
+      "query": "quorum for board meetings",
+      "question": "What quorum applies?",
+      "expect_decision_in": [
+        "INSUFFICIENT_FACTS",
+        "APPLIES"
+      ],
+      "expect_abstain": false,
+      "expect_evidence": [
+        "ACT:COMPANIES_ACT_2013:S174"
+      ],
+      "kind": "concept-search",
+      "expect_withheld_rule": true
+    },
+    {
+      "id": "b06",
+      "query": "s.16",
+      "question": "What penalty applies for failing to rectify a company name?",
+      "expect_decision_in": [
+        "INSUFFICIENT_EVIDENCE"
+      ],
+      "expect_abstain": true,
+      "expect_evidence": [],
+      "kind": "suspended-source",
+      "why": "SD-002: the corpus carries pre-amendment text; the section is SUSPENDED",
+      "expect_withheld_rule": false
+    },
+    {
+      "id": "b07",
+      "query": "s.124",
+      "question": "What is the penalty under the unpaid dividend provisions?",
+      "expect_decision_in": [
+        "INSUFFICIENT_EVIDENCE"
+      ],
+      "expect_abstain": true,
+      "expect_evidence": [],
+      "kind": "suspended-source",
+      "why": "SD-002",
+      "expect_withheld_rule": false
+    },
+    {
+      "id": "b08",
+      "query": "s.329",
+      "question": "Are transfers not in good faith void?",
+      "expect_decision_in": [
+        "INSUFFICIENT_EVIDENCE"
+      ],
+      "expect_abstain": true,
+      "expect_evidence": [],
+      "kind": "suspended-source",
+      "why": "SD-002",
+      "expect_withheld_rule": false
+    },
+    {
+      "id": "b09",
+      "query": "rule 4",
+      "question": "What matters may not be dealt with by video conferencing?",
+      "expect_decision_in": [
+        "INSUFFICIENT_EVIDENCE"
+      ],
+      "expect_abstain": true,
+      "expect_evidence": [],
+      "kind": "review-gated",
+      "why": "the Rules are parsed but all 30 review items are open",
+      "expect_withheld_rule": true
+    },
+    {
+      "id": "b10",
+      "query": "r.15",
+      "question": "What are the conditions for a related party contract under the Rules?",
+      "expect_decision_in": [
+        "INSUFFICIENT_EVIDENCE"
+      ],
+      "expect_abstain": true,
+      "expect_evidence": [],
+      "kind": "review-gated",
+      "why": "unreviewed Rules",
+      "expect_withheld_rule": true
+    },
+    {
+      "id": "b11",
+      "query": "s.1",
+      "question": "What is the short title of the Act?",
+      "expect_decision_in": [
+        "INSUFFICIENT_FACTS",
+        "APPLIES"
+      ],
+      "expect_abstain": false,
+      "expect_evidence": [
+        "ACT:COMPANIES_ACT_2013:S1"
+      ],
+      "kind": "defect-limited",
+      "why": "SD-001: servable, but the editorial tail is restricted",
+      "expect_withheld_rule": false
+    },
+    {
+      "id": "b12",
+      "query": "s.9999",
+      "question": "Does section 9999 apply?",
+      "expect_decision_in": [
+        "INSUFFICIENT_EVIDENCE"
+      ],
+      "expect_abstain": true,
+      "expect_evidence": [],
+      "kind": "nonexistent",
+      "expect_withheld_rule": false
+    },
+    {
+      "id": "b13",
+      "query": "what colour is the sky",
+      "question": "Does any provision apply?",
+      "expect_decision_in": [
+        "INSUFFICIENT_EVIDENCE"
+      ],
+      "expect_abstain": true,
+      "expect_evidence": [],
+      "kind": "out-of-domain",
+      "expect_withheld_rule": false
+    },
+    {
+      "id": "b14",
+      "query": "section 11",
+      "question": "What does section 11 require?",
+      "expect_decision_in": [
+        "INSUFFICIENT_EVIDENCE"
+      ],
+      "expect_abstain": true,
+      "expect_evidence": [],
+      "kind": "omitted-in-source",
+      "expect_withheld_rule": false
+    },
+    {
+      "id": "b15",
+      "query": "contract or arrangement with a related party",
+      "question": "What conditions apply to a related party contract?",
+      "expect_decision_in": [
+        "INSUFFICIENT_FACTS",
+        "APPLIES"
+      ],
+      "expect_abstain": false,
+      "expect_evidence": [
+        "ACT:COMPANIES_ACT_2013:S188"
+      ],
+      "kind": "mixed-pack",
+      "expect_withheld_rule": true,
+      "why": "the Act section is admissible; the Rules on the same subject are parsed but unreviewed and must be REPORTED as withheld, never served and never approximated from the Act"
+    }
+  ]
+}

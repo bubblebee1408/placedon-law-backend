@@ -1,0 +1,118 @@
+{
+ "authorised": false,
+ "blocked": [
+  {
+   "decision": "BLOCKED_PENDING_SOURCE_CORRECTION",
+   "pair_id": "v2-174-1-rule-pos",
+   "reason": "Supersedes the ACCEPT. The proposal's legal content is not in question \u2014 it states both limbs and preserves 'whichever is higher'. It is blocked because its source span carries the SD-004 transcription defect 'of a company hall be one-third', and a span that is defective cannot serve as clean gold evidence. The defective text is preserved exactly as served and must not be repaired to 'shall be'. Unblocks on any of: an independent authoritative witness; a verified corrected transcription attached alongside the preserved original; or reclassification as PARTIAL.",
+   "source_defect": [
+    "s.174(1) reads 'of a company hall be one-third'; apparent intent 'shall be' [cosmetic \u2014 does not change legal effect]"
+   ]
+  }
+ ],
+ "checks": [
+  {
+   "detail": "every limb of the claim is present in s.174 as held",
+   "name": "1 source span validated against the held provision",
+   "passed": true
+  },
+  {
+   "detail": "s.174(1) span, 300 chars, carries both limbs and the selector",
+   "name": "1b the sub-section span carries the whole rule",
+   "passed": true
+  },
+  {
+   "detail": "'whichever is higher' sits in sub-section (1); the resubmission claims (1); source_id companies-act-2013-s174",
+   "name": "2 provision and sub-section mapping",
+   "passed": true
+  },
+  {
+   "detail": "resubmission sha256:35b7d2ddae70afbe\u2026; decision pins sha256:35b7d2ddae70afbe\u2026",
+   "name": "3 source and resubmission hashes",
+   "passed": true
+  },
+  {
+   "detail": "computed sha256:99e58c080c552137\u2026 vs frozen sha256:99e58c080c552137\u2026",
+   "name": "3b the span hash matches the frozen s.174(1) fixtures",
+   "passed": true
+  },
+  {
+   "detail": "v2-174-1-neg present, label NOT_ENTAILED, claim unchanged",
+   "name": "4 the existing negative fixture is unchanged",
+   "passed": true
+  },
+  {
+   "detail": "neither sent-back duplicate is in the frozen set",
+   "name": "5 the sent-back duplicates remain excluded",
+   "passed": true
+  },
+  {
+   "detail": "approved_pairs.jsonl is byte-identical before and after validation",
+   "name": "6 no gold label changed during validation",
+   "passed": true
+  }
+ ],
+ "decision_record": {
+  "applied": false,
+  "changes_benchmark_fixture": false,
+  "decided_at": "2026-08-31T09:04:38Z",
+  "decision": "BLOCKED_PENDING_SOURCE_CORRECTION",
+  "proposal_id": "v2-174-1-rule-pos",
+  "reason": "Supersedes the ACCEPT. The proposal's legal content is not in question \u2014 it states both limbs and preserves 'whichever is higher'. It is blocked because its source span carries the SD-004 transcription defect 'of a company hall be one-third', and a span that is defective cannot serve as clean gold evidence. The defective text is preserved exactly as served and must not be repaired to 'shall be'. Unblocks on any of: an independent authoritative witness; a verified corrected transcription attached alongside the preserved original; or reclassification as PARTIAL.",
+  "recorded_at": "2026-08-31T09:04:38Z",
+  "reviewer_id": "reviewer-01",
+  "software_commit": "340db682a280c095c81209df43a85d66623661a2",
+  "source_state_read_at": "2026-08-31T09:04:38Z",
+  "supersedes": "v2-p174-qbind-0,v2-p174-qbind-1",
+  "supersedes_decision": "v2-174-1-rule-pos@2026-08-31T08:46:03Z",
+  "table_sha256": "sha256:35b7d2ddae70afbe6b595680d91a798ad3062639529fcb1ee15837a30cbb85fe",
+  "working_tree_dirty": true
+ },
+ "diff": [
+  "- v2-p101-qbind-0  was ENTAILED",
+  "- v2-p101-qbind-1  was ENTAILED"
+ ],
+ "files_changed": [
+  "corpus/benchmark/approved_pairs.jsonl",
+  "corpus/benchmark/manifest.json"
+ ],
+ "label_changes": [
+  {
+   "claim": "Section 101 sets twenty-one days as the length of clear notice required to call a general meeting, subject to the statutory shorter-notice consent requirement.",
+   "new_label": null,
+   "old_label": "ENTAILED",
+   "pair_id": "v2-p101-qbind-0",
+   "reason": "It restores the shorter-notice consent requirement but omits the delegated-rule qualifier concerning the prescribed manner."
+  },
+  {
+   "claim": "Where shorter notice is given for an annual general meeting, section 101 requires the consent of not less than ninety-five per cent of the members entitled to vote at that meeting.",
+   "new_label": null,
+   "old_label": "ENTAILED",
+   "pair_id": "v2-p101-qbind-1",
+   "reason": "Same omission: the replacement preserves the 95% consent condition but does not carry the separate prescribed-manner qualifier."
+  }
+ ],
+ "mechanically_valid": true,
+ "pair_count_after": 69,
+ "pair_count_before": 71,
+ "provenance": {
+  "held_provision_chars": 1691,
+  "resubmission_sha256": "sha256:35b7d2ddae70afbe6b595680d91a798ad3062639529fcb1ee15837a30cbb85fe",
+  "section": "174",
+  "source_id": "companies-act-2013-s174",
+  "source_span_chars": 300,
+  "source_span_sha256": "sha256:99e58c080c552137d3481870ebeb8f4e1bcab8b43983a07cd8facd585ea63da7",
+  "subsection": "1",
+  "supersedes": [
+   "v2-p174-qbind-0",
+   "v2-p174-qbind-1"
+  ],
+  "supersedes_original": [
+   "v2-p174-bind-0",
+   "v2-p174-bind-1"
+  ],
+  "transcription_warnings": [
+   "s.174(1) reads 'of a company hall be one-third'; apparent intent 'shall be' [cosmetic \u2014 does not change legal effect]"
+  ]
+ }
+}

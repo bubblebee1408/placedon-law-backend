@@ -1,0 +1,61 @@
+{
+ "authorised_by": "user",
+ "decided_at": "2026-09-02T16:13:08Z",
+ "files": {
+  "approved_pairs.jsonl": "sha256:c23a45e3691d7cb78df6c972cfac0fbc6bc62a27c10dfeeab46f5da8b6857100",
+  "manifest.json": "sha256:bc2201842c5330870f5c96d9bf2b6a196d3af84bb95507ce6a964830d2439d68",
+  "v2-to-v3-promotion.json": "sha256:5e5d801b29e616e0a5e10fc9215683c02cf68a7d20ad87ce345085fbe7c5bf59",
+  "v2-to-v3.json": "sha256:2fefc10fd997c3a508c52f5e76b4cb18cb5f0d3ad747cd4143be4227f51749f1"
+ },
+ "gate_result": {
+  "abstention": 0.0,
+  "buckets": {
+   "dropped_qualifier": {
+    "f1": null,
+    "f1_meaningful": false,
+    "fa": 0,
+    "fa_meaningful": true,
+    "n": 9,
+    "neg": 9,
+    "pos": 0
+   },
+   "paraphrase": {
+    "f1": 0.64,
+    "f1_meaningful": true,
+    "fa": 0,
+    "fa_meaningful": false,
+    "n": 15,
+    "neg": 0,
+    "pos": 15
+   },
+   "wrong_binding": {
+    "f1": 0.6,
+    "f1_meaningful": true,
+    "fa": 2,
+    "fa_meaningful": true,
+    "n": 43,
+    "neg": 38,
+    "pos": 5
+   }
+  },
+  "f1": 0.62,
+  "false_accepts": 2,
+  "passed": true,
+  "rows_scored": 67
+ },
+ "provenance": {
+  "benchmark_sha256": "sha256:c23a45e3691d7cb78df6c972cfac0fbc6bc62a27c10dfeeab46f5da8b6857100",
+  "benchmark_version": "v3",
+  "checker_commit": "dee8985365509eaf51e2d62ff96676c2688a30b8",
+  "corpus_version": "sha256:6809b8c83c436cc37c8bc9964128dd20",
+  "law_effective_date": null,
+  "profile_schema_version": "company-profile-v1",
+  "rules_version": "sha256:a715f0b619df8ebc2bec3efbc7653a3b",
+  "run_timestamp": "2026-09-02T16:13:08Z",
+  "runtime_version": "python-3.12.7",
+  "working_tree_dirty": true
+ },
+ "release_id": "2026-09-02-v3",
+ "what_this_does_not_establish": "v3 is an internally consistent benchmark artifact of constructed examples drawn from a limited legal corpus, labelled by one non-lawyer. It is not evidence of legal accuracy, statutory coverage, or production readiness. Two of its three buckets cannot measure the axis the gate reports for them: dropped_qualifier holds no positives, so its F1 is undefined; paraphrase holds no negatives, so its false-accept count is vacuous. No score from it may be compared with any score taken before it, because those were measured on a generator rather than on a named artifact.",
+ "what_this_establishes": "That the verifier cascade, run against a named and hash-verified artifact, did not regress on four axes: false accepts, F1, abstention, and per-bucket reporting."
+}

@@ -1,0 +1,171 @@
+{
+ "v2-101-1-pos": {
+  "label": "ENTAILED",
+  "label_source": "INFERRED_FROM_APPROVAL",
+  "migration_note": "migrated by the F4 repair. This reviewer recorded APPROVAL of a claim proposed as entailed; they were never asked 'is this entailed, yes or no'. The label is inferred from the approval and must not be counted as an independent human judgement that the claim holds.",
+  "note": "Approved after review of source span, claim, qualifier inventory and rationale. Fail-closed convention applied: each positive carries its material qualifiers.",
+  "reviewed_at": "2026-08-26T10:39:22+00:00",
+  "reviewer": "reviewer-01",
+  "status": "APPROVED"
+ },
+ "v2-103-1-pos": {
+  "label": "ENTAILED",
+  "label_source": "INFERRED_FROM_APPROVAL",
+  "migration_note": "migrated by the F4 repair. This reviewer recorded APPROVAL of a claim proposed as entailed; they were never asked 'is this entailed, yes or no'. The label is inferred from the approval and must not be counted as an independent human judgement that the claim holds.",
+  "note": "Approved after review of source span, claim, qualifier inventory and rationale. Fail-closed convention applied: each positive carries its material qualifiers.",
+  "reviewed_at": "2026-08-26T10:39:22+00:00",
+  "reviewer": "reviewer-01",
+  "status": "APPROVED"
+ },
+ "v2-103-2-pos": {
+  "label": "ENTAILED",
+  "label_source": "INFERRED_FROM_APPROVAL",
+  "migration_note": "migrated by the F4 repair. This reviewer recorded APPROVAL of a claim proposed as entailed; they were never asked 'is this entailed, yes or no'. The label is inferred from the approval and must not be counted as an independent human judgement that the claim holds.",
+  "note": "Approved after review of source span, claim, qualifier inventory and rationale. Fail-closed convention applied: each positive carries its material qualifiers.",
+  "reviewed_at": "2026-08-26T10:39:22+00:00",
+  "reviewer": "reviewer-01",
+  "status": "APPROVED"
+ },
+ "v2-173-1-pos": {
+  "label": "ENTAILED",
+  "label_source": "INFERRED_FROM_APPROVAL",
+  "migration_note": "migrated by the F4 repair. This reviewer recorded APPROVAL of a claim proposed as entailed; they were never asked 'is this entailed, yes or no'. The label is inferred from the approval and must not be counted as an independent human judgement that the claim holds.",
+  "note": "Approved after review of source span, claim, qualifier inventory and rationale. Fail-closed convention applied: each positive carries its material qualifiers.",
+  "reviewed_at": "2026-08-26T10:39:22+00:00",
+  "reviewer": "reviewer-01",
+  "status": "APPROVED"
+ },
+ "v2-173-1b-pos": {
+  "label": "ENTAILED",
+  "label_source": "INFERRED_FROM_APPROVAL",
+  "migration_note": "migrated by the F4 repair. This reviewer recorded APPROVAL of a claim proposed as entailed; they were never asked 'is this entailed, yes or no'. The label is inferred from the approval and must not be counted as an independent human judgement that the claim holds.",
+  "note": "Approved after review of source span, claim, qualifier inventory and rationale. Fail-closed convention applied: each positive carries its material qualifiers.",
+  "reviewed_at": "2026-08-26T10:39:22+00:00",
+  "reviewer": "reviewer-01",
+  "status": "APPROVED"
+ },
+ "v2-173-2-pos": {
+  "note": "Wording converted a conferred statutory power into an assertion that the power had been exercised ('has barred'). s.173(2) confers a power to specify by notification; whether any notification exists is a separate fact not held in this corpus. Superseded by v2-173-2-pos-r2.",
+  "reviewed_at": "2026-08-26T11:19:52+00:00",
+  "reviewer": "reviewer-01",
+  "status": "REJECTED"
+ },
+ "v2-173-2-pos-r2": {
+  "label": "ENTAILED",
+  "label_source": "INFERRED_FROM_APPROVAL",
+  "migration_note": "migrated by the F4 repair. This reviewer recorded APPROVAL of a claim proposed as entailed; they were never asked 'is this entailed, yes or no'. The label is inferred from the approval and must not be counted as an independent human judgement that the claim holds.",
+  "note": "Approved after side-by-side review of original claim, replacement, source span, qualifier inventory and transformation. Qualified positives under the fail-closed convention.",
+  "reviewed_at": "2026-08-26T11:26:22+00:00",
+  "reviewer": "reviewer-01",
+  "status": "APPROVED"
+ },
+ "v2-174-1-pos": {
+  "label": "ENTAILED",
+  "label_source": "INFERRED_FROM_APPROVAL",
+  "migration_note": "migrated by the F4 repair. This reviewer recorded APPROVAL of a claim proposed as entailed; they were never asked 'is this entailed, yes or no'. The label is inferred from the approval and must not be counted as an independent human judgement that the claim holds.",
+  "note": "Approved after review of source span, claim, qualifier inventory and rationale. Fail-closed convention applied: each positive carries its material qualifiers.",
+  "reviewed_at": "2026-08-26T10:39:22+00:00",
+  "reviewer": "reviewer-01",
+  "status": "APPROVED"
+ },
+ "v2-174-2-pos": {
+  "label": "ENTAILED",
+  "label_source": "INFERRED_FROM_APPROVAL",
+  "migration_note": "migrated by the F4 repair. This reviewer recorded APPROVAL of a claim proposed as entailed; they were never asked 'is this entailed, yes or no'. The label is inferred from the approval and must not be counted as an independent human judgement that the claim holds.",
+  "note": "Approved after review of source span, claim, qualifier inventory and rationale. Fail-closed convention applied: each positive carries its material qualifiers.",
+  "reviewed_at": "2026-08-26T10:39:22+00:00",
+  "reviewer": "reviewer-01",
+  "status": "APPROVED"
+ },
+ "v2-p101-qbind-0": {
+  "history": [
+   {
+    "note": "Approved after side-by-side review of original claim, replacement, source span, qualifier inventory and transformation. Qualified positives under the fail-closed convention.",
+    "reviewed_at": "2026-08-26T11:26:22+00:00",
+    "reviewer": "reviewer-01",
+    "status": "APPROVED"
+   }
+  ],
+  "note": "Section 101 qualifier omissions identified during review; previously frozen ENTAILED pairs must be retracted. Both state the rule while omitting the s.101(1) prescribed-manner delegated-rule qualifier.",
+  "reviewed_at": "2026-08-31T14:23:19+00:00",
+  "reviewer": "reviewer-01",
+  "status": "REJECTED"
+ },
+ "v2-p101-qbind-1": {
+  "history": [
+   {
+    "note": "Approved after side-by-side review of original claim, replacement, source span, qualifier inventory and transformation. Qualified positives under the fail-closed convention.",
+    "reviewed_at": "2026-08-26T11:26:22+00:00",
+    "reviewer": "reviewer-01",
+    "status": "APPROVED"
+   }
+  ],
+  "note": "Section 101 qualifier omissions identified during review; previously frozen ENTAILED pairs must be retracted. Both state the rule while omitting the s.101(1) prescribed-manner delegated-rule qualifier.",
+  "reviewed_at": "2026-08-31T14:23:19+00:00",
+  "reviewer": "reviewer-01",
+  "status": "REJECTED"
+ },
+ "v2-p103-qbind-0": {
+  "label": "ENTAILED",
+  "label_source": "INFERRED_FROM_APPROVAL",
+  "migration_note": "migrated by the F4 repair. This reviewer recorded APPROVAL of a claim proposed as entailed; they were never asked 'is this entailed, yes or no'. The label is inferred from the approval and must not be counted as an independent human judgement that the claim holds.",
+  "note": "Approved after side-by-side review of original claim, replacement, source span, qualifier inventory and transformation. Qualified positives under the fail-closed convention.",
+  "reviewed_at": "2026-08-26T11:26:22+00:00",
+  "reviewer": "reviewer-01",
+  "status": "APPROVED"
+ },
+ "v2-p103-qbind-1": {
+  "label": "ENTAILED",
+  "label_source": "INFERRED_FROM_APPROVAL",
+  "migration_note": "migrated by the F4 repair. This reviewer recorded APPROVAL of a claim proposed as entailed; they were never asked 'is this entailed, yes or no'. The label is inferred from the approval and must not be counted as an independent human judgement that the claim holds.",
+  "note": "Approved after side-by-side review of original claim, replacement, source span, qualifier inventory and transformation. Qualified positives under the fail-closed convention.",
+  "reviewed_at": "2026-08-26T11:26:22+00:00",
+  "reviewer": "reviewer-01",
+  "status": "APPROVED"
+ },
+ "v2-p103-qbind-2": {
+  "label": "ENTAILED",
+  "label_source": "INFERRED_FROM_APPROVAL",
+  "migration_note": "migrated by the F4 repair. This reviewer recorded APPROVAL of a claim proposed as entailed; they were never asked 'is this entailed, yes or no'. The label is inferred from the approval and must not be counted as an independent human judgement that the claim holds.",
+  "note": "Approved after side-by-side review of original claim, replacement, source span, qualifier inventory and transformation. Qualified positives under the fail-closed convention.",
+  "reviewed_at": "2026-08-26T11:26:22+00:00",
+  "reviewer": "reviewer-01",
+  "status": "APPROVED"
+ },
+ "v2-p103-qbind-3": {
+  "label": "ENTAILED",
+  "label_source": "INFERRED_FROM_APPROVAL",
+  "migration_note": "migrated by the F4 repair. This reviewer recorded APPROVAL of a claim proposed as entailed; they were never asked 'is this entailed, yes or no'. The label is inferred from the approval and must not be counted as an independent human judgement that the claim holds.",
+  "note": "Approved after side-by-side review of original claim, replacement, source span, qualifier inventory and transformation. Qualified positives under the fail-closed convention.",
+  "reviewed_at": "2026-08-26T11:26:22+00:00",
+  "reviewer": "reviewer-01",
+  "status": "APPROVED"
+ },
+ "v2-p173-qbind-0": {
+  "label": "ENTAILED",
+  "label_source": "INFERRED_FROM_APPROVAL",
+  "migration_note": "migrated by the F4 repair. This reviewer recorded APPROVAL of a claim proposed as entailed; they were never asked 'is this entailed, yes or no'. The label is inferred from the approval and must not be counted as an independent human judgement that the claim holds.",
+  "note": "Approved after side-by-side review of original claim, replacement, source span, qualifier inventory and transformation. Qualified positives under the fail-closed convention.",
+  "reviewed_at": "2026-08-26T11:26:22+00:00",
+  "reviewer": "reviewer-01",
+  "status": "APPROVED"
+ },
+ "v2-p173-qbind-1": {
+  "label": "ENTAILED",
+  "label_source": "INFERRED_FROM_APPROVAL",
+  "migration_note": "migrated by the F4 repair. This reviewer recorded APPROVAL of a claim proposed as entailed; they were never asked 'is this entailed, yes or no'. The label is inferred from the approval and must not be counted as an independent human judgement that the claim holds.",
+  "note": "Approved after side-by-side review of original claim, replacement, source span, qualifier inventory and transformation. Qualified positives under the fail-closed convention.",
+  "reviewed_at": "2026-08-26T11:26:22+00:00",
+  "reviewer": "reviewer-01",
+  "status": "APPROVED"
+ },
+ "v2-p173-qbind-2": {
+  "label": "ENTAILED",
+  "label_source": "INFERRED_FROM_APPROVAL",
+  "migration_note": "migrated by the F4 repair. This reviewer recorded APPROVAL of a claim proposed as entailed; they were never asked 'is this entailed, yes or no'. The label is inferred from the approval and must not be counted as an independent human judgement that the claim holds.",
+  "note": "Approved after side-by-side review of original claim, replacement, source span, qualifier inventory and transformation. Qualified positives under the fail-closed convention.",
+  "reviewed_at": "2026-08-26T11:26:22+00:00",
+  "reviewer": "reviewer-01",
+  "status": "APPROVED"
+ }
+}

@@ -1,0 +1,372 @@
+{
+  "summary": {
+    "model": "stub",
+    "cases": 15,
+    "decision_accuracy": 1.0,
+    "abstention_correctness": 1.0,
+    "evidence_recall": 1.0,
+    "evidence_precision_mean": 0.867,
+    "gradable_claims": 7,
+    "unsupported_claim_rate": 0.0,
+    "claims_rejected_at_parse": 0,
+    "withheld_rule_reporting": 1.0,
+    "measures": "the harness, not model quality -- the default model is a stub"
+  },
+  "cases": [
+    {
+      "id": "b01",
+      "kind": "act-only",
+      "query": "s.173",
+      "decision": "INSUFFICIENT_FACTS",
+      "route": "exact",
+      "decision_ok": true,
+      "abstain_ok": true,
+      "evidence_recall_ok": true,
+      "evidence_precision": 1.0,
+      "evidence_got": [
+        "ACT:COMPANIES_ACT_2013:S173"
+      ],
+      "evidence_want": [
+        "ACT:COMPANIES_ACT_2013:S173"
+      ],
+      "claims": 2,
+      "gradable_claims": 1,
+      "unsupported_claims": 0,
+      "rejected_claims": 0,
+      "verdicts": [
+        "SUPPORTED",
+        "MISSING"
+      ],
+      "withheld_rule_reported": false,
+      "withheld_rule_ok": true
+    },
+    {
+      "id": "b02",
+      "kind": "act-only",
+      "query": "s.188",
+      "decision": "INSUFFICIENT_FACTS",
+      "route": "exact",
+      "decision_ok": true,
+      "abstain_ok": true,
+      "evidence_recall_ok": true,
+      "evidence_precision": 1.0,
+      "evidence_got": [
+        "ACT:COMPANIES_ACT_2013:S188"
+      ],
+      "evidence_want": [
+        "ACT:COMPANIES_ACT_2013:S188"
+      ],
+      "claims": 2,
+      "gradable_claims": 1,
+      "unsupported_claims": 0,
+      "rejected_claims": 0,
+      "verdicts": [
+        "SUPPORTED",
+        "MISSING"
+      ],
+      "withheld_rule_reported": false,
+      "withheld_rule_ok": true
+    },
+    {
+      "id": "b03",
+      "kind": "act-only",
+      "query": "s.174",
+      "decision": "INSUFFICIENT_FACTS",
+      "route": "exact",
+      "decision_ok": true,
+      "abstain_ok": true,
+      "evidence_recall_ok": true,
+      "evidence_precision": 1.0,
+      "evidence_got": [
+        "ACT:COMPANIES_ACT_2013:S174"
+      ],
+      "evidence_want": [
+        "ACT:COMPANIES_ACT_2013:S174"
+      ],
+      "claims": 2,
+      "gradable_claims": 1,
+      "unsupported_claims": 0,
+      "rejected_claims": 0,
+      "verdicts": [
+        "SUPPORTED",
+        "MISSING"
+      ],
+      "withheld_rule_reported": false,
+      "withheld_rule_ok": true
+    },
+    {
+      "id": "b04",
+      "kind": "concept-search",
+      "query": "related party transactions",
+      "decision": "INSUFFICIENT_FACTS",
+      "route": "search",
+      "decision_ok": true,
+      "abstain_ok": true,
+      "evidence_recall_ok": true,
+      "evidence_precision": 0.333,
+      "evidence_got": [
+        "ACT:COMPANIES_ACT_2013:S164",
+        "ACT:COMPANIES_ACT_2013:S177",
+        "ACT:COMPANIES_ACT_2013:S188"
+      ],
+      "evidence_want": [
+        "ACT:COMPANIES_ACT_2013:S188"
+      ],
+      "claims": 2,
+      "gradable_claims": 1,
+      "unsupported_claims": 0,
+      "rejected_claims": 0,
+      "verdicts": [
+        "SUPPORTED",
+        "MISSING"
+      ],
+      "withheld_rule_reported": true,
+      "withheld_rule_ok": true
+    },
+    {
+      "id": "b05",
+      "kind": "concept-search",
+      "query": "quorum for board meetings",
+      "decision": "INSUFFICIENT_FACTS",
+      "route": "search",
+      "decision_ok": true,
+      "abstain_ok": true,
+      "evidence_recall_ok": true,
+      "evidence_precision": 0.333,
+      "evidence_got": [
+        "ACT:COMPANIES_ACT_2013:S103",
+        "ACT:COMPANIES_ACT_2013:S174",
+        "ACT:COMPANIES_ACT_2013:S378V"
+      ],
+      "evidence_want": [
+        "ACT:COMPANIES_ACT_2013:S174"
+      ],
+      "claims": 2,
+      "gradable_claims": 1,
+      "unsupported_claims": 0,
+      "rejected_claims": 0,
+      "verdicts": [
+        "SUPPORTED",
+        "MISSING"
+      ],
+      "withheld_rule_reported": true,
+      "withheld_rule_ok": true
+    },
+    {
+      "id": "b06",
+      "kind": "suspended-source",
+      "query": "s.16",
+      "decision": "INSUFFICIENT_EVIDENCE",
+      "route": "abstain",
+      "decision_ok": true,
+      "abstain_ok": true,
+      "evidence_recall_ok": true,
+      "evidence_precision": 1.0,
+      "evidence_got": [],
+      "evidence_want": [],
+      "claims": 0,
+      "gradable_claims": 0,
+      "unsupported_claims": 0,
+      "rejected_claims": 0,
+      "verdicts": [],
+      "withheld_rule_reported": false,
+      "withheld_rule_ok": true
+    },
+    {
+      "id": "b07",
+      "kind": "suspended-source",
+      "query": "s.124",
+      "decision": "INSUFFICIENT_EVIDENCE",
+      "route": "abstain",
+      "decision_ok": true,
+      "abstain_ok": true,
+      "evidence_recall_ok": true,
+      "evidence_precision": 1.0,
+      "evidence_got": [],
+      "evidence_want": [],
+      "claims": 0,
+      "gradable_claims": 0,
+      "unsupported_claims": 0,
+      "rejected_claims": 0,
+      "verdicts": [],
+      "withheld_rule_reported": false,
+      "withheld_rule_ok": true
+    },
+    {
+      "id": "b08",
+      "kind": "suspended-source",
+      "query": "s.329",
+      "decision": "INSUFFICIENT_EVIDENCE",
+      "route": "abstain",
+      "decision_ok": true,
+      "abstain_ok": true,
+      "evidence_recall_ok": true,
+      "evidence_precision": 1.0,
+      "evidence_got": [],
+      "evidence_want": [],
+      "claims": 0,
+      "gradable_claims": 0,
+      "unsupported_claims": 0,
+      "rejected_claims": 0,
+      "verdicts": [],
+      "withheld_rule_reported": false,
+      "withheld_rule_ok": true
+    },
+    {
+      "id": "b09",
+      "kind": "review-gated",
+      "query": "rule 4",
+      "decision": "INSUFFICIENT_EVIDENCE",
+      "route": "abstain",
+      "decision_ok": true,
+      "abstain_ok": true,
+      "evidence_recall_ok": true,
+      "evidence_precision": 1.0,
+      "evidence_got": [],
+      "evidence_want": [],
+      "claims": 0,
+      "gradable_claims": 0,
+      "unsupported_claims": 0,
+      "rejected_claims": 0,
+      "verdicts": [],
+      "withheld_rule_reported": true,
+      "withheld_rule_ok": true
+    },
+    {
+      "id": "b10",
+      "kind": "review-gated",
+      "query": "r.15",
+      "decision": "INSUFFICIENT_EVIDENCE",
+      "route": "abstain",
+      "decision_ok": true,
+      "abstain_ok": true,
+      "evidence_recall_ok": true,
+      "evidence_precision": 1.0,
+      "evidence_got": [],
+      "evidence_want": [],
+      "claims": 0,
+      "gradable_claims": 0,
+      "unsupported_claims": 0,
+      "rejected_claims": 0,
+      "verdicts": [],
+      "withheld_rule_reported": true,
+      "withheld_rule_ok": true
+    },
+    {
+      "id": "b11",
+      "kind": "defect-limited",
+      "query": "s.1",
+      "decision": "INSUFFICIENT_FACTS",
+      "route": "exact",
+      "decision_ok": true,
+      "abstain_ok": true,
+      "evidence_recall_ok": true,
+      "evidence_precision": 1.0,
+      "evidence_got": [
+        "ACT:COMPANIES_ACT_2013:S1"
+      ],
+      "evidence_want": [
+        "ACT:COMPANIES_ACT_2013:S1"
+      ],
+      "claims": 2,
+      "gradable_claims": 1,
+      "unsupported_claims": 0,
+      "rejected_claims": 0,
+      "verdicts": [
+        "SUPPORTED",
+        "MISSING"
+      ],
+      "withheld_rule_reported": false,
+      "withheld_rule_ok": true
+    },
+    {
+      "id": "b12",
+      "kind": "nonexistent",
+      "query": "s.9999",
+      "decision": "INSUFFICIENT_EVIDENCE",
+      "route": "abstain",
+      "decision_ok": true,
+      "abstain_ok": true,
+      "evidence_recall_ok": true,
+      "evidence_precision": 1.0,
+      "evidence_got": [],
+      "evidence_want": [],
+      "claims": 0,
+      "gradable_claims": 0,
+      "unsupported_claims": 0,
+      "rejected_claims": 0,
+      "verdicts": [],
+      "withheld_rule_reported": false,
+      "withheld_rule_ok": true
+    },
+    {
+      "id": "b13",
+      "kind": "out-of-domain",
+      "query": "what colour is the sky",
+      "decision": "INSUFFICIENT_EVIDENCE",
+      "route": "abstain",
+      "decision_ok": true,
+      "abstain_ok": true,
+      "evidence_recall_ok": true,
+      "evidence_precision": 1.0,
+      "evidence_got": [],
+      "evidence_want": [],
+      "claims": 0,
+      "gradable_claims": 0,
+      "unsupported_claims": 0,
+      "rejected_claims": 0,
+      "verdicts": [],
+      "withheld_rule_reported": false,
+      "withheld_rule_ok": true
+    },
+    {
+      "id": "b14",
+      "kind": "omitted-in-source",
+      "query": "section 11",
+      "decision": "INSUFFICIENT_EVIDENCE",
+      "route": "abstain",
+      "decision_ok": true,
+      "abstain_ok": true,
+      "evidence_recall_ok": true,
+      "evidence_precision": 1.0,
+      "evidence_got": [],
+      "evidence_want": [],
+      "claims": 0,
+      "gradable_claims": 0,
+      "unsupported_claims": 0,
+      "rejected_claims": 0,
+      "verdicts": [],
+      "withheld_rule_reported": false,
+      "withheld_rule_ok": true
+    },
+    {
+      "id": "b15",
+      "kind": "mixed-pack",
+      "query": "contract or arrangement with a related party",
+      "decision": "INSUFFICIENT_FACTS",
+      "route": "search",
+      "decision_ok": true,
+      "abstain_ok": true,
+      "evidence_recall_ok": true,
+      "evidence_precision": 0.333,
+      "evidence_got": [
+        "ACT:COMPANIES_ACT_2013:S134",
+        "ACT:COMPANIES_ACT_2013:S188",
+        "ACT:COMPANIES_ACT_2013:S2"
+      ],
+      "evidence_want": [
+        "ACT:COMPANIES_ACT_2013:S188"
+      ],
+      "claims": 2,
+      "gradable_claims": 1,
+      "unsupported_claims": 0,
+      "rejected_claims": 0,
+      "verdicts": [
+        "SUPPORTED",
+        "MISSING"
+      ],
+      "withheld_rule_reported": true,
+      "withheld_rule_ok": true
+    }
+  ]
+}

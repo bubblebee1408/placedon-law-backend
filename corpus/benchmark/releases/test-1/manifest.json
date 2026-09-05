@@ -1,0 +1,52 @@
+{
+ "benchmark_version": "1.0.0",
+ "description": "human-reviewed, corpus-derived benchmark for selected Indian corporate-law proposition types",
+ "excluded_labels": [
+  "INVALID_FIXTURE",
+  "PENDING_REVIEW",
+  "UNRESOLVED",
+  "SOURCE_MISSING",
+  "CONTRADICTORY"
+ ],
+ "fixture_hashes": {
+  "approved_pairs.jsonl": "c23a45e3691d7cb78df6c972cfac0fbc6bc62a27c10dfeeab46f5da8b6857100",
+  "invalid_fixtures.jsonl": "6b6d4e31503600c3ec91f43d4b32dcffeb84ffad069574393b1a3933baf00d94",
+  "pending_reviews.jsonl": "1c6bf3de00be9a8b9032f6847bf514288433c488241943693677219effcbd2a0",
+  "rejected_pairs.jsonl": "d9af9258474635ba4101885631803cfe799a937a81110412f1a3bd1e9ba06850"
+ },
+ "invalid_fixture_count": 11,
+ "label_basis_counts": {
+  "CONSTRUCTED": 52,
+  "HUMAN_JUDGED": 15
+ },
+ "label_counts": {
+  "ENTAILED": 20,
+  "NOT_ENTAILED": 47
+ },
+ "not_a_claim_of": "This benchmark does not measure general legal grounding. It is derived from selected provisions of one Act, its negatives are constructed, and its positives were written and reviewed by one reviewer.",
+ "pair_count": 67,
+ "pending_review_count": 4,
+ "rejected_count": 3,
+ "review_timestamps": [
+  "2026-08-26T10:39:22+00:00",
+  "2026-08-26T11:26:22+00:00"
+ ],
+ "reviewer_ids": [
+  "reviewer-01"
+ ],
+ "software_commit": "dee8985365509eaf51e2d62ff96676c2688a30b8",
+ "source_ids": [
+  "companies-act-2013-s101",
+  "companies-act-2013-s103",
+  "companies-act-2013-s173",
+  "companies-act-2013-s174",
+  "companies-act-2013-s96"
+ ],
+ "source_span_hashes": {
+  "companies-act-2013-s101": "sha256:8b63965692f28c157133e9b873018f3ee0b8325f49b047163fe4cf57ccab84cc",
+  "companies-act-2013-s103": "sha256:fb37f5002083be65c6e1d338b8e95aa9ba7f0b8b17e28fe23811affc8b3bb602",
+  "companies-act-2013-s173": "sha256:1e268aed56f953b7ed799f0ab64192e9e74e7f03d20caf32938352e5957b4db9",
+  "companies-act-2013-s174": "sha256:a7de8e6b55882a6e414a3dc801665ae8ee218c054db5a0b73fa9eafb33dba0ff",
+  "companies-act-2013-s96": "sha256:28bd2b518d0628904d23c4c242456e5609e4e22f089ac9d5a0b415f27c76249a"
+ }
+}

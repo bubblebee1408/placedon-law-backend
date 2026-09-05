@@ -1,0 +1,16 @@
+# REAL FILED DOCUMENT — Directors' Report, clause 31 'SECRETARIAL STANDARDS'
+# Issuer: Tata Elxsi Limited | FY 2025-26
+# https://d1y69b020rytqm.cloudfront.net/PDF/Annual-Reports/June2026/Annual-Report-FY-2025-26.pdf
+# Type: board report extract | Real | Tests T2.1
+# CONTRAST CASE: hedged wording ('devised proper systems to ensure compliance')
+#   vs Tata Consumer's flat assertion ('has complied with all the applicable
+#   Secretarial Standards'). A T2.1 check keyed only to 'has complied' will MISS this.
+
+31. SECRETARIAL STANDARDS
+  The Company has devised proper systems to
+ensure compliance with the provisions of all
+applicable Secretarial Standards issued by the
+Institute of Company Secretaries of India and
+that such systems are adequate and operating
+effectively.
+32. OTHER DISCLOSURES AND AFFIRMATIONS

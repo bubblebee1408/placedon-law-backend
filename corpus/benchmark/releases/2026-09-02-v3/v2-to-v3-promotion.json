@@ -1,0 +1,39 @@
+{
+ "adjudication_record": "corpus/benchmark/corrections/v2-to-v3.json",
+ "authorisation_text": "approve promoting v3 to restore the release gate.",
+ "authorised_by": "user",
+ "byte_identical_to_reviewed_candidate": true,
+ "comparable_with_any_earlier_score": false,
+ "executed_at": "2026-09-02T15:31:04Z",
+ "executed_by": "reviewer-01",
+ "from_version": "v2",
+ "gate_after": {
+  "abstention": 0.0,
+  "f1": 0.62,
+  "false_accepts": 2,
+  "passed": true
+ },
+ "label_changes": [
+  {
+   "new": "INVALID_FIXTURE",
+   "old": "ENTAILED",
+   "pair_id": "v2-p174-bind-0"
+  },
+  {
+   "new": "INVALID_FIXTURE",
+   "old": "ENTAILED",
+   "pair_id": "v2-p174-bind-1"
+  }
+ ],
+ "label_corrections": 2,
+ "operation": "BENCHMARK_PROMOTION",
+ "pairs_after": 67,
+ "pairs_before": 69,
+ "promoted_sha256": "c23a45e3691d7cb78df6c972cfac0fbc6bc62a27c10dfeeab46f5da8b6857100",
+ "single_reviewer": true,
+ "single_reviewer_caveat": "both label corrections were adjudicated by one non-lawyer reviewer. The arithmetic is unambiguous, but a second reviewer on relabelled items remains open as a governance gap.",
+ "span_corrections": 19,
+ "to_version": "v3",
+ "v2_archive_intact": true,
+ "why_not_comparable": "two gold labels moved and the pair set changed size. Separately, the last figure quoted before this promotion (FA 2, F1 0.58) was measured on the GENERATOR rather than on v2, so it never measured the archived benchmark at all. F1 0.58 -> 0.62 must not be reported as an improvement."
+}

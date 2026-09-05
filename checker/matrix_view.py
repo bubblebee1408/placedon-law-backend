@@ -1,0 +1,630 @@
+"""The first Companies Act surface: a compliance matrix a person can open.
+
+Everything in this repo until now has been reachable only from a Python prompt.
+The only HTTP surface that exists belongs to the abandoned PoSH product. This is
+the route that makes the corporate work usable, and it is deliberately the
+smallest thing that is genuinely useful.
+
+## No dependencies, and no model
+
+`handle()` is a pure function: parameters in, (status, content type, body) out.
+It imports nothing outside the standard library and this repo, so Stage 1 runs
+with no API key, no framework and no network. That is not minimalism for its own
+sake — Stage 1 is what every later stage degrades to when the budget is
+exhausted, so it has to be a complete correct product on its own.
+
+## Unknown must survive the form
+
+A web form is where "unknown" usually dies: a select box defaults to something,
+a number field defaults to zero, and by the time the value reaches the engine
+nobody can tell what the user actually said. Every field here therefore has an
+explicit "not known" option that maps to None, and a field left out entirely
+stays None. For a threshold shaped "does not exceed X", zero is the strongest
+possible pass, so a defaulted zero would silently convert ignorance into a
+favourable answer.
+
+## What it may not show
+
+s.52(1)(q)(ii): Act text may only ever be served together with original matter.
+This page renders our analysis, our citations and our refusals. It never renders
+a provision's text as its own content, and there is a test asserting the card
+carries no bare statutory extract.
+"""
+from __future__ import annotations
+
+import html
+from datetime import date
+from urllib.parse import parse_qs
+
+from checker.company_profile import CompanyProfile, Figure, Money
+from checker.obligations import (CANNOT_DETERMINE, DOES_NOT_APPLY, Evidence,
+                                 build, REGISTER)
+from checker.diligence_pack import build_pack, render as render_pack
+
+UNKNOWN = ""            # what the form submits for "not known"
+
+# Deterministic default so handle() has no wall-clock dependency; the server
+# passes a real timestamp via _GENERATED_AT before each request.
+_GENERATED_AT = "generated_at not set by the caller"
+
+_CLASSES = ("private", "public", "opc")
+
+_TRISTATE = {"yes": True, "no": False, UNKNOWN: None}
+
+
+class InputError(ValueError):
+    """The submitted facts could not be read. Nothing is guessed."""
+
+
+def _tri(params: dict, name: str) -> bool | None:
+    raw = (params.get(name) or [UNKNOWN])[0].strip().lower()
+    if raw not in _TRISTATE:
+        raise InputError(f"{name}: expected yes, no, or blank for not known")
+    return _TRISTATE[raw]
+
+
+def _money(params: dict, name: str, fy: str | None) -> Figure | None:
+    """A rupee figure in CRORE, bound to a financial year. Blank stays None."""
+    raw = (params.get(name) or [UNKNOWN])[0].strip()
+    if not raw:
+        return None
+    if fy is None:
+        raise InputError(
+            f"{name}: a figure needs the financial year it speaks to — "
+            "s.2(85)(ii) asks for the immediately preceding year specifically")
+    try:
+        crore = float(raw)
+    except ValueError:
+        raise InputError(f"{name}: {raw!r} is not a number of crore") from None
+    if crore < 0:
+        raise InputError(f"{name}: a negative amount is not a figure")
+    return Figure(Money.crore(crore), fy)
+
+
+def parse_profile(params: dict) -> CompanyProfile:
+    """Build a profile from form parameters. Unknown stays unknown."""
+    cls = (params.get("company_class") or [UNKNOWN])[0].strip().lower()
+    if cls not in _CLASSES:
+        raise InputError(f"company_class: {cls!r} is not one of "
+                         f"{', '.join(_CLASSES)}")
+
+    inc_raw = (params.get("incorporation_date") or [UNKNOWN])[0].strip()
+    if not inc_raw:
+        raise InputError("incorporation_date is required — several deadlines "
+                         "run from it")
+    try:
+        inc = date.fromisoformat(inc_raw)
+    except ValueError:
+        raise InputError(f"incorporation_date: {inc_raw!r} is not YYYY-MM-DD") from None
+
+    as_of_raw = (params.get("as_of") or [UNKNOWN])[0].strip()
+    try:
+        as_of = date.fromisoformat(as_of_raw) if as_of_raw else date.today()
+    except ValueError:
+        raise InputError(f"as_of: {as_of_raw!r} is not YYYY-MM-DD") from None
+
+    fy = (params.get("financial_year") or [UNKNOWN])[0].strip() or None
+
+    dc_raw = (params.get("director_count") or [UNKNOWN])[0].strip()
+    try:
+        dc = int(dc_raw) if dc_raw else None
+    except ValueError:
+        raise InputError(f"director_count: {dc_raw!r} is not a whole number") from None
+
+    return CompanyProfile(
+        company_class=cls,                      # type: ignore[arg-type]
+        incorporation_date=inc, as_of=as_of,
+        latest_financial_year=fy,
+        director_count=dc,
+        is_listed=_tri(params, "is_listed"),
+        is_section_8=_tri(params, "is_section_8"),
+        is_holding_company=_tri(params, "is_holding_company"),
+        is_subsidiary_company=_tri(params, "is_subsidiary_company"),
+        governed_by_special_act=_tri(params, "governed_by_special_act"),
+        paid_up_capital=_money(params, "paid_up_capital_crore", fy),
+        turnover=_money(params, "turnover_crore", fy),
+        net_worth=_money(params, "net_worth_crore", fy),
+        net_profit=_money(params, "net_profit_crore", fy),
+    )
+
+
+_E = html.escape
+
+_STYLE = """
+:root{--ink:#14171d;--soft:#4a515e;--faint:#767e8c;--rule:#dde1e7;
+--bg:#f5f6f8;--card:#fff;--good:#1f6f4a;--warn:#8a6410;--bad:#a33232;
+--accent:#24407a}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+font:16px/1.6 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:60rem;margin:0 auto;padding:2rem 1rem 5rem}
+h1{font:600 1.9rem/1.15 "Iowan Old Style",Palatino,Georgia,serif;margin:0 0 .3rem}
+.sub{color:var(--soft);margin:0 0 1.6rem}
+form{background:var(--card);border:1px solid var(--rule);border-radius:6px;
+padding:1.2rem;margin-bottom:1.6rem}
+fieldset{border:0;padding:0;margin:0 0 1rem}
+legend{font:500 .7rem/1 ui-monospace,monospace;letter-spacing:.1em;
+text-transform:uppercase;color:var(--faint);padding:0 0 .5rem}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(13rem,1fr));gap:.8rem}
+label{display:block;font-size:.82rem;color:var(--soft);margin-bottom:.2rem}
+input,select{width:100%;padding:.4rem .5rem;border:1px solid var(--rule);
+border-radius:4px;font:inherit;font-size:.9rem;background:#fff;color:var(--ink)}
+button{background:var(--accent);color:#fff;border:0;border-radius:4px;
+padding:.55rem 1.1rem;font:inherit;font-weight:600;cursor:pointer}
+.row{background:var(--card);border:1px solid var(--rule);border-left:4px solid var(--rule);
+border-radius:6px;padding:1rem 1.2rem;margin-bottom:.9rem}
+.row.attn{border-left-color:var(--warn)}
+.row.no{border-left-color:var(--faint);opacity:.85}
+.id{font:600 .8rem ui-monospace,monospace;color:var(--faint)}
+.duty{font-weight:600;margin:.15rem 0 .4rem}
+.state{display:inline-block;font:500 .68rem ui-monospace,monospace;
+letter-spacing:.06em;padding:.15rem .45rem;border-radius:3px}
+.s-APPLIES_UNDETERMINED{background:#f6eedc;color:var(--warn)}
+.s-CANNOT_DETERMINE{background:#f7e7e7;color:var(--bad)}
+.s-DOES_NOT_APPLY{background:#eff1f4;color:var(--faint)}
+.s-APPLIES_NOT_SATISFIED{background:#f7e7e7;color:var(--bad)}
+.s-APPLIES_SATISFIED{background:#e3f0e9;color:var(--good)}
+dl{margin:.6rem 0 0;font-size:.88rem}
+dt{font:500 .68rem ui-monospace,monospace;letter-spacing:.06em;
+text-transform:uppercase;color:var(--faint);margin-top:.5rem}
+dd{margin:.1rem 0 0;color:var(--soft)}
+.blocked{color:var(--bad);font-weight:600}
+.err{background:#f7e7e7;border-left:4px solid var(--bad);padding:.8rem 1rem;
+border-radius:0 4px 4px 0;margin-bottom:1.2rem}
+footer{margin-top:2rem;padding-top:1.2rem;border-top:1px solid var(--rule);
+color:var(--faint);font-size:.85rem}
+pre.pack{background:var(--card);border:1px solid var(--rule);border-radius:6px;
+padding:1.2rem;overflow-x:auto;font:.8rem/1.5 ui-monospace,Menlo,Consolas,monospace;
+color:var(--ink);white-space:pre-wrap;word-break:break-word}
+"""
+
+
+def _field(label: str, name: str, value: str = "", kind: str = "text") -> str:
+    return (f'<div><label for="{name}">{_E(label)}</label>'
+            f'<input id="{name}" name="{name}" type="{kind}" value="{_E(value)}"></div>')
+
+
+def _tri_field(label: str, name: str, value: str = "") -> str:
+    opts = "".join(
+        f'<option value="{v}"{" selected" if v == value else ""}>{_E(t)}</option>'
+        for v, t in ((UNKNOWN, "not known"), ("yes", "yes"), ("no", "no")))
+    return (f'<div><label for="{name}">{_E(label)}</label>'
+            f'<select id="{name}" name="{name}">{opts}</select></div>')
+
+
+def _form(params: dict, action: str = "/matrix") -> str:
+    g = lambda k: (params.get(k) or [""])[0]  # noqa: E731
+    cls = g("company_class")
+    cls_opts = "".join(
+        f'<option value="{c}"{" selected" if c == cls else ""}>{c}</option>'
+        for c in _CLASSES)
+    return f"""<form method="post" action="{action}">
+<fieldset><legend>the company</legend><div class="grid">
+<div><label for="company_class">company class</label>
+<select id="company_class" name="company_class">{cls_opts}</select></div>
+{_field("incorporation date", "incorporation_date", g("incorporation_date"), "date")}
+{_field("as of", "as_of", g("as_of"), "date")}
+{_field("financial year (e.g. 2024-25)", "financial_year", g("financial_year"))}
+{_field("number of directors", "director_count", g("director_count"))}
+</div></fieldset>
+<fieldset><legend>status — leave as “not known” if you are not sure</legend><div class="grid">
+{_tri_field("listed", "is_listed", g("is_listed"))}
+{_tri_field("registered under s.8", "is_section_8", g("is_section_8"))}
+{_tri_field("holding company", "is_holding_company", g("is_holding_company"))}
+{_tri_field("subsidiary company", "is_subsidiary_company", g("is_subsidiary_company"))}
+{_tri_field("governed by a special Act", "governed_by_special_act",
+            g("governed_by_special_act"))}
+</div></fieldset>
+<fieldset><legend>figures, in crore — blank means not known</legend><div class="grid">
+{_field("paid-up share capital (crore)", "paid_up_capital_crore",
+        g("paid_up_capital_crore"))}
+{_field("turnover, preceding FY (crore)", "turnover_crore", g("turnover_crore"))}
+{_field("net worth (crore)", "net_worth_crore", g("net_worth_crore"))}
+{_field("net profit, preceding FY (crore)", "net_profit_crore", g("net_profit_crore"))}
+</div></fieldset>
+<fieldset><legend>what happened — blank means you have not told us; write
+“none” if there were none</legend><div class="grid">
+{_field("AGM dates (comma separated)", "agm_dates", g("agm_dates"))}
+{_field("board meeting dates (comma separated)", "board_meetings",
+        g("board_meetings"))}
+{_field("calendar year those meetings belong to", "calendar_year",
+        g("calendar_year"))}
+{_field("financial year end (YYYY-MM-DD)", "financial_year_end",
+        g("financial_year_end"), "date")}
+{_field("first financial year end, if this is the first AGM",
+        "first_financial_year_end", g("first_financial_year_end"), "date")}
+{_field("date AOC-4 was filed", "aoc4_filed_on", g("aoc4_filed_on"), "date")}
+{_field("date the annual return was filed", "annual_return_filed_on",
+        g("annual_return_filed_on"), "date")}
+{_field("days in India this FY, most-present director",
+        "resident_director_days", g("resident_director_days"))}
+{_tri_field("incorporated during this financial year",
+            "incorporated_this_financial_year",
+            g("incorporated_this_financial_year"))}
+{_field("total board strength", "total_board_strength",
+        g("total_board_strength"))}
+{_tri_field("special resolution passed for more than 15 directors",
+            "special_resolution_for_excess_directors",
+            g("special_resolution_for_excess_directors"))}
+</div></fieldset>
+<button type="submit">Build the matrix</button></form>"""
+
+
+def _dates(params: dict, name: str) -> tuple[date, ...] | None:
+    """A comma-separated date list. Absent stays None; "none" means none held.
+
+    The two are different answers and the form must be able to say both. A user
+    who has not told us about AGMs is not the same as a user telling us there
+    were none, and only the second is a finding.
+    """
+    raw = (params.get(name) or [UNKNOWN])[0].strip()
+    if not raw:
+        return None
+    if raw.lower() in ("none", "no", "nil"):
+        return ()
+    out = []
+    for piece in raw.replace(";", ",").split(","):
+        piece = piece.strip()
+        if not piece:
+            continue
+        try:
+            out.append(date.fromisoformat(piece))
+        except ValueError:
+            raise InputError(
+                f"{name}: {piece!r} is not YYYY-MM-DD. Separate several dates "
+                f"with commas, or write 'none' if there were none.") from None
+    return tuple(out)
+
+
+def _int(params: dict, name: str) -> int | None:
+    raw = (params.get(name) or [UNKNOWN])[0].strip()
+    if not raw:
+        return None
+    try:
+        return int(raw)
+    except ValueError:
+        raise InputError(f"{name}: {raw!r} is not a whole number") from None
+
+
+def _one_date(params: dict, name: str) -> date | None:
+    raw = (params.get(name) or [UNKNOWN])[0].strip()
+    if not raw:
+        return None
+    try:
+        return date.fromisoformat(raw)
+    except ValueError:
+        raise InputError(f"{name}: {raw!r} is not YYYY-MM-DD") from None
+
+
+def parse_evidence(params: dict) -> Evidence:
+    """What the user says happened. Blank stays unknown."""
+    yr_raw = (params.get("calendar_year") or [UNKNOWN])[0].strip()
+    try:
+        yr = int(yr_raw) if yr_raw else None
+    except ValueError:
+        raise InputError(f"calendar_year: {yr_raw!r} is not a year") from None
+
+    bs_raw = (params.get("total_board_strength") or [UNKNOWN])[0].strip()
+    try:
+        bs = int(bs_raw) if bs_raw else None
+    except ValueError:
+        raise InputError(
+            f"total_board_strength: {bs_raw!r} is not a whole number") from None
+
+    return Evidence(agm_dates=_dates(params, "agm_dates"),
+                    board_meetings=_dates(params, "board_meetings"),
+                    calendar_year=yr, total_board_strength=bs,
+                    special_resolution_for_excess_directors=_tri(
+                        params, "special_resolution_for_excess_directors"),
+                    financial_year_end=_one_date(params, "financial_year_end"),
+                    first_financial_year_end=_one_date(
+                        params, "first_financial_year_end"),
+                    aoc4_filed_on=_one_date(params, "aoc4_filed_on"),
+                    annual_return_filed_on=_one_date(
+                        params, "annual_return_filed_on"),
+                    resident_director_days=_int(params, "resident_director_days"),
+                    incorporated_this_financial_year=_tri(
+                        params, "incorporated_this_financial_year"))
+
+
+def _rows_html(profile: CompanyProfile, evidence: Evidence | None = None) -> str:
+    out = []
+    for r in build(profile, evidence=evidence):
+        cls = "no" if r.state == DOES_NOT_APPLY else ("attn" if r.needs_attention else "")
+        parts = [f'<div class="row {cls}"><div class="id">{_E(r.obligation_id)}</div>',
+                 f'<div class="duty">{_E(r.duty)}</div>',
+                 f'<span class="state s-{_E(r.state)}">{_E(r.state)}</span>',
+                 "<dl>",
+                 f"<dt>provision</dt><dd>{_E(r.provision)}</dd>",
+                 f"<dt>basis</dt><dd>{_E(r.basis)}</dd>"]
+        if r.missing_facts:
+            parts.append("<dt>what would settle it</dt><dd>"
+                         + _E("; ".join(r.missing_facts)) + "</dd>")
+        if r.blocked_by:
+            parts.append('<dt>blocked</dt><dd class="blocked">'
+                         + _E(r.blocked_by)
+                         + " — a source this system has not properly acquired</dd>")
+        parts.append("</dl></div>")
+        out.append("".join(parts))
+    return "".join(out)
+
+
+def _pack_html(profile: CompanyProfile, evidence: Evidence, generated_at: str) -> str:
+    pack = build_pack(profile, evidence, generated_at=generated_at)
+    # The pack's own text renderer is the source of truth; the page shows it
+    # verbatim in a <pre> so what a reader sees on screen is byte-identical to
+    # what they would hand to counsel. No second formatting to drift from it.
+    text = render_pack(pack)
+    n = len(pack.unverified())
+    banner = (f'<p class=sub>{len(pack.not_satisfied)} not satisfied · '
+              f'{len(pack.undetermined) + len(pack.cannot_determine)} unresolved · '
+              f'{n} item{"s" if n != 1 else ""} to verify. '
+              f'This is a record, not a certificate — read the foot of the pack '
+              f'for what it does not establish.</p>')
+    return (banner + f'<pre class="pack">{_E(text)}</pre>')
+
+
+def _page(body: str) -> str:
+    return (f"<!doctype html><html lang=en><head><meta charset=utf-8>"
+            f'<meta name=viewport content="width=device-width,initial-scale=1">'
+            f"<title>Compliance matrix — Companies Act 2013</title>"
+            f"<style>{_STYLE}</style></head><body><div class=wrap>{body}"
+            f"<footer>No language model was consulted. Every line above is a "
+            f"provision, a fact you supplied, or arithmetic on the two. "
+            f"Nothing here states that an obligation was complied with — "
+            f"establishing that needs the documents.</footer>"
+            f"</div></body></html>")
+
+
+def handle(path: str, query: str = "", body: str = "") -> tuple[int, str, str]:
+    """Route. Pure: no I/O, no globals, no model. (status, content-type, body).
+
+    Facts arrive in the POST body, never the query string. They are a company's
+    paid-up capital, turnover, meeting dates and compliance defaults, and a query
+    string travels into server logs, browser history and Referer headers on
+    every onward link. On a serverless host those logs belong to a third party.
+    The form is POST for that reason and the query string is read only so a bare
+    GET still serves the empty form.
+    """
+    params = parse_qs(body or query, keep_blank_values=True)
+
+    if path not in ("/", "/matrix", "/pack"):
+        return 404, "text/html; charset=utf-8", _page(
+            "<h1>Not found</h1><p class=sub>There is no page at that address.</p>")
+
+    if path == "/pack":
+        head = ('<h1>Pre-diligence evidence pack</h1><p class=sub>The same '
+                'obligations as the matrix, rendered as a dated, cited record a '
+                'reader can hand to diligence counsel — with an explicit list of '
+                'what could not be verified. It reports; it does not draft.</p>')
+    else:
+        head = ("<h1>Compliance matrix</h1><p class=sub>Companies Act 2013. "
+                "Obligations are generated from what the company <em>is</em>, "
+                "not from documents you upload — so a company that has filed "
+                "nothing still gets a full matrix.</p>")
+
+    if path == "/" or not params.get("company_class"):
+        # The form action follows the path, so submitting from /pack returns a
+        # pack and from /matrix returns the matrix.
+        action = "/pack" if path == "/pack" else "/matrix"
+        return 200, "text/html; charset=utf-8", _page(head + _form(params, action))
+
+    try:
+        profile = parse_profile(params)
+        evidence = parse_evidence(params)
+    except InputError as e:
+        action = path if path in ("/matrix", "/pack") else "/matrix"
+        return 400, "text/html; charset=utf-8", _page(
+            head + f'<div class="err">{_E(str(e))}</div>' + _form(params, action))
+
+    if path == "/pack":
+        return 200, "text/html; charset=utf-8", _page(
+            head + _form(params, "/pack")
+            + _pack_html(profile, evidence, _GENERATED_AT))
+    return 200, "text/html; charset=utf-8", _page(
+        head + _form(params, "/matrix") + _rows_html(profile, evidence))
+
+
+def _test() -> None:
+    ok = fail = 0
+
+    def check(cond: bool, label: str) -> None:
+        nonlocal ok, fail
+        if cond:
+            ok += 1
+            print(f"  [PASS] {label}")
+        else:
+            fail += 1
+            print(f"  [FAIL] {label}")
+
+    print("matrix_view")
+
+    st, ct, body = handle("/")
+    check(st == 200 and "text/html" in ct, f"the root serves a page ({st})")
+    check("<form" in body, "...with the form")
+    check(body.count("not known") >= 5,
+          "every status field offers 'not known' as its default")
+
+    st4, _, _ = handle("/nope")
+    check(st4 == 404, f"an unknown path 404s ({st4})")
+
+    q = ("company_class=private&incorporation_date=2019-06-01&as_of=2026-08-31"
+         "&financial_year=2024-25&paid_up_capital_crore=2&turnover_crore=30"
+         "&is_holding_company=no&is_subsidiary_company=no&is_section_8=no"
+         "&governed_by_special_act=no")
+    # Build under the forced-unacquired state so the blocked-row assertion is
+    # deterministic (once 700(E) is attested the small-company row resolves).
+    # Loaded dynamically so production import purity (stdlib + checker only,
+    # asserted below) is preserved — the stub is a test-only concern.
+    import importlib
+    _reg = importlib.import_module("scripts.register_gsr700e")
+    with _reg.stub_registration(None):
+        st2, _, page = handle("/matrix", q)
+    check(st2 == 200, f"a filled form builds the matrix ({st2})")
+    check("CA13-S96-AGM" in page and "CA13-S173-BOARD" in page,
+          "...and renders the obligation rows")
+    check("S-002" in page and "not properly acquired" in page,
+          "a row blocked on an unacquired source says so on the page")
+    check("No language model was consulted" in page,
+          "the page states no model was consulted")
+    check("compl" in page.lower() and "needs the documents" in page,
+          "...and that it does not claim compliance")
+
+    # Unknown must survive the round trip.
+    q_unknown = ("company_class=private&incorporation_date=2019-06-01"
+                 "&financial_year=2024-25")
+    p = parse_profile(parse_qs(q_unknown, keep_blank_values=True))
+    check(p.turnover is None, "a blank figure stays None, never 0")
+    check(p.is_section_8 is None, "an unanswered status stays None, never False")
+    check(p.director_count is None, "a blank count stays None")
+
+    # And a zeroed figure is a real answer, distinct from blank.
+    p0 = parse_profile(parse_qs(q_unknown + "&turnover_crore=0",
+                                keep_blank_values=True))
+    check(p0.turnover is not None and p0.turnover.amount.rupees == 0,
+          "an explicit zero is recorded as zero, not as unknown")
+
+    # Crore scaling must survive the form.
+    p2 = parse_profile(parse_qs(q_unknown + "&paid_up_capital_crore=4",
+                                keep_blank_values=True))
+    check(p2.paid_up_capital.amount.rupees == 40_000_000,
+          f"4 in the crore field is 40,000,000 rupees "
+          f"({p2.paid_up_capital.amount.rupees})")
+
+    # Bad input refuses and says why, without losing what was typed.
+    st3, _, err = handle("/matrix", "company_class=private&incorporation_date=oops")
+    check(st3 == 400, f"an unreadable date is a 400 ({st3})")
+    check("YYYY-MM-DD" in err, "...and the message says the expected form")
+    check("<form" in err, "...and the form comes back so nothing is retyped")
+
+    st5, _, err2 = handle("/matrix", "company_class=llp&incorporation_date=2019-06-01")
+    check(st5 == 400 and "company_class" in err2,
+          "an unsupported company class refuses rather than guessing")
+
+    # A figure with no financial year cannot be accepted: s.2(85)(ii) is
+    # specific about which year it means.
+    st6, _, err3 = handle("/matrix", "company_class=private&"
+                                     "incorporation_date=2019-06-01&turnover_crore=30")
+    check(st6 == 400 and "financial year" in err3,
+          "a figure without its financial year is refused")
+
+    # Injection: user input must never reach the page unescaped.
+    st7, _, evil = handle("/matrix", "company_class=%3Cscript%3E&"
+                                     "incorporation_date=2019-06-01")
+    check("<script>" not in evil, "user input is escaped, not injected")
+    check("&lt;script&gt;" in evil, "...and appears escaped in the message")
+
+    # s.52(1)(q)(ii): the page must not serve statutory text as its content.
+    _, _, full = handle("/matrix", q)
+    for phrase in ("Every company shall hold", "paid-up share capital of which",
+                   "shall be the quorum"):
+        if phrase in full:
+            check(False, f"the page served bare statutory text: {phrase!r}")
+            break
+    else:
+        check(True, "the card cites provisions but serves no bare statutory text")
+
+    # ── evidence reaches the page and resolves rows ─────────────────────────
+    # Match the rendered badge, not the stylesheet: the CSS defines a class per
+    # state, so a bare substring search finds every state on every page.
+    def shown(page: str, state: str) -> bool:
+        return f">{state}</span>" in page
+
+    q_ev = q + "&agm_dates=2024-08-20,2025-09-15"
+    _, _, pg = handle("/matrix", q_ev)
+    check(shown(pg, "APPLIES_UNDETERMINED") and "fifteen-month limit" in pg,
+          "supplied AGM dates resolve the gap limb without claiming compliance")
+
+    q_bad = q + "&agm_dates=2024-08-20,2025-12-30"
+    _, _, pg2 = handle("/matrix", q_bad)
+    check(shown(pg2, "APPLIES_NOT_SATISFIED"),
+          "a gap beyond fifteen months shows as not satisfied")
+
+    # "none" and blank are different answers, and the form must express both.
+    _, _, pg3 = handle("/matrix", q + "&agm_dates=none")
+    check(shown(pg3, "APPLIES_NOT_SATISFIED"),
+          "'none' means no AGM was held — a finding")
+    _, _, pg4 = handle("/matrix", q)
+    check(not shown(pg4, "APPLIES_SATISFIED")
+          and not shown(pg4, "APPLIES_NOT_SATISFIED"),
+          "saying nothing resolves nothing")
+
+    ev = parse_evidence(parse_qs("agm_dates=none", keep_blank_values=True))
+    check(ev.agm_dates == (), "'none' parses to an empty tuple")
+    ev2 = parse_evidence(parse_qs("", keep_blank_values=True))
+    check(ev2.agm_dates is None, "...and blank parses to None, not to empty")
+
+    st8, _, err4 = handle("/matrix", q + "&agm_dates=20-08-2024")
+    check(st8 == 400 and "YYYY-MM-DD" in err4,
+          "a misformatted date refuses and says the expected form")
+    check("commas" in err4, "...and explains how to give several")
+
+    # ── /pack route: the evidence pack, same facts, same POST discipline ────
+    import checker.matrix_view as _mv
+    _mv._GENERATED_AT = "2026-09-04T00:00:00Z"
+    sp, _, ppg = handle("/pack", "", q)
+    check(sp == 200 and "EVIDENCE PACK" in ppg,
+          f"the /pack route renders the evidence pack ({sp})")
+    check("reports; it does not draft" in ppg.lower()
+          or "it does not draft" in ppg.lower(),
+          "the pack page states it reports rather than drafts")
+    check("could not be verified" in ppg.lower() or "WHAT COULD NOT" in ppg,
+          "the pack surfaces its unverified section")
+
+    # The pack is shown inside a <pre>, so it is served verbatim rather than
+    # re-formatted into HTML rows. The byte-identical property against the pack
+    # renderer is proven in diligence_pack's own suite; here it is enough that
+    # the page does not rebuild it.
+    import re as _re
+    _pre = _re.search(r'<pre class="pack">(.*?)</pre>', ppg, _re.S)
+    check(_pre is not None and "PRE-DILIGENCE EVIDENCE PACK" in _pre.group(1),
+          "the pack is served verbatim inside a <pre>, not reformatted")
+    check("<div class=\"row" not in _pre.group(1),
+          "...and the matrix row markup is not mixed into the pack text")
+
+    # An empty /pack GET serves the form, and it posts back to /pack.
+    ep, _, epg = handle("/pack")
+    check(ep == 200 and 'action="/pack"' in epg,
+          "an empty /pack serves a form that posts back to /pack")
+    _, _, mform = handle("/matrix")
+    check('action="/matrix"' in mform, "the matrix form posts to /matrix")
+
+    # A bad input on /pack returns to the /pack form, not the matrix.
+    sb, _, bpg = handle("/pack", "", "company_class=private&incorporation_date=bad")
+    check(sb == 400 and 'action="/pack"' in bpg,
+          "a bad /pack submission returns to the /pack form")
+
+    # Company facts must travel in the body, never the URL.
+    check('method="post"' in body, "the form posts rather than gets")
+    st9, _, pg9 = handle("/matrix", "", q)
+    check(st9 == 200 and "CA13-S96-AGM" in pg9,
+          "facts supplied in the body build the matrix")
+    check(handle("/")[0] == 200, "a bare GET still serves the empty form")
+
+    # No dependency outside the standard library and this repo. Parsed from the
+    # module's own import statements rather than searched for as text, because a
+    # string search finds the search string itself.
+    import ast
+    import checker.matrix_view as mod
+    tree = ast.parse(open(mod.__file__).read())
+    roots = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            roots.update(a.name.split(".")[0] for a in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
+            roots.add(node.module.split(".")[0])
+    import sys
+    third_party = {r for r in roots
+                   if r not in sys.stdlib_module_names and r != "checker"}
+    check(not third_party,
+          f"no third-party import — Stage 1 runs with nothing installed "
+          f"({third_party or 'clean'})")
+    check("checker" in roots, "...and it does use this repo's own engine")
+
+    print(f"\n{ok}/{ok + fail} passed")
+    if fail:
+        raise SystemExit(1)
+
+
+if __name__ == "__main__":
+    _test()

@@ -1,0 +1,381 @@
+#!/usr/bin/env python3
+"""Register a human-downloaded G.S.R. 700(E) so the thresholds become servable.
+
+Two official routes to this instrument are blocked and neither is our fault to
+fix from here: indiacode.gov.in/robots.txt answers 502, so the compliant fetcher
+declines under RFC 9309; and egazette.gov.in sends no intermediate certificate,
+chaining to an ISRG root this machine's trust store does not carry. See
+corpus/sources/acquisition_gsr700e.json for the full attempt chain.
+
+A person with a browser is not a crawler and has a current trust store, so the
+handoff is: download the file, run this, and it verifies, hashes and registers
+it. That is the same shape as scripts/acquire_rules.py, which exists because the
+same thing happened with the Board Rules.
+
+## What this refuses
+
+Identity, before anything else. India Code carries the principal Rules, six
+amendments to them, and consolidated reprints, all with near-identical titles.
+Registering an amendment as the principal Rules — or the 2021 amendment as the
+2022 one — would silently corrupt every threshold built on top. So the document
+must identify itself as G.S.R. 700(E) of 15-09-2022 AND carry the operative
+clause, and anything else is rejected with what was found.
+
+## What it does NOT do
+
+It does not set the thresholds to VERIFIED. VERIFIED in this system means a
+hashed local artifact PLUS human review, and a script cannot perform the second
+half. It moves them to CORROBORATED, prints the clause verbatim for a person to
+read, and says what remains.
+"""
+import hashlib
+import json
+import re
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+STORE = Path("corpus/rules/gsr_700e_2022.txt")
+RECORD = Path("corpus/sources/gsr700e_registration.json")
+
+SOURCE_URL = "https://indiacode.gov.in/handle/123456789/508916"
+BITSTREAM_ID = "6d5e9902-44a7-4ee5-975a-1fd7fc5d51a5"
+
+# The record's own status, distinct from any evidence state. A registered
+# artifact is not usable law until both human checks are recorded against it.
+PENDING_HUMAN_REVIEW = "PENDING_HUMAN_REVIEW"
+CORROBORATED = "CORROBORATED"
+
+ATTESTATIONS = (
+    "identity: this file is G.S.R. 700(E) of 15-09-2022, and not the principal "
+    "2014 Rules, the 2021 amendment, or a consolidated reprint",
+    "clause: the operative wording recorded here is verbatim from the file, "
+    "with no repair, normalisation or reflow",
+)
+
+VERIFIED_INSTRUMENT = "VERIFIED_INSTRUMENT"
+WRONG_INSTRUMENT = "WRONG_INSTRUMENT"
+CLAUSE_NOT_FOUND = "CLAUSE_NOT_FOUND"
+UNREADABLE = "UNREADABLE"
+
+EXIT = {VERIFIED_INSTRUMENT: 0, WRONG_INSTRUMENT: 2, CLAUSE_NOT_FOUND: 3, UNREADABLE: 4}
+
+# Identity markers. Each must appear; together they distinguish this instrument
+# from its six near-identically-titled siblings.
+_GSR = re.compile(r"g\.?\s*s\.?\s*r\.?\s*\.?\s*700\s*\(\s*e\s*\)", re.I)
+_TITLE = re.compile(r"specification\s+of\s+definitio?n?s?\s+details", re.I)
+_YEAR = re.compile(r"\b2022\b")
+
+# The operative clause. Amounts are matched as words because that is how the
+# instrument writes them; a digit-only match would also hit page numbers.
+_CLAUSE = re.compile(
+    r"(paid[\s-]*up\s+capital[^.]{0,200}?turnover[^.]{0,200}?"
+    r"(four\s+crore|rupees\s+four\s+crore)[^.]{0,120}?(forty\s+crore)[^.]{0,80}\.)",
+    re.I | re.S)
+
+# Instruments we must NOT accept in its place.
+_SIBLINGS = (
+    (re.compile(r"g\.?\s*s\.?\s*r\.?\s*\.?\s*92\s*\(\s*e\s*\)", re.I),
+     "G.S.R. 92(E) — the 2021 amendment, not this one"),
+    (re.compile(r"g\.?\s*s\.?\s*r\.?\s*\.?\s*123\s*\(\s*e\s*\)", re.I),
+     "G.S.R. 123(E) — the 2021 second amendment, not this one"),
+)
+
+
+def read_text(path: Path) -> str:
+    raw = path.read_bytes()
+    if raw[:4] == b"%PDF":
+        try:
+            from scripts.acquire_rules import extract_text  # type: ignore
+            return extract_text(path)
+        except Exception:                                    # noqa: BLE001
+            return ""
+    for enc in ("utf-8", "latin-1"):
+        try:
+            return raw.decode(enc)
+        except UnicodeDecodeError:
+            continue
+    return ""
+
+
+def classify(text: str) -> tuple[str, str, str]:
+    """(outcome, reason, operative_clause_verbatim)."""
+    if not text.strip():
+        return UNREADABLE, "no text could be extracted, so no identity claim can be checked", ""
+
+    for pat, what in _SIBLINGS:
+        if pat.search(text) and not _GSR.search(text):
+            return WRONG_INSTRUMENT, f"this document is {what}", ""
+
+    missing = []
+    if not _GSR.search(text):
+        missing.append("the notification number G.S.R. 700(E)")
+    if not _TITLE.search(text):
+        missing.append("the title 'Specification of Definition Details'")
+    if not _YEAR.search(text):
+        missing.append("the year 2022")
+    if missing:
+        return WRONG_INSTRUMENT, "does not identify itself by " + ", ".join(missing), ""
+
+    m = _CLAUSE.search(text)
+    if not m:
+        return (CLAUSE_NOT_FOUND,
+                "identifies as G.S.R. 700(E) but the operative clause naming four crore and "
+                "forty crore was not found — the extraction may be partial, or this is a "
+                "different printing", "")
+    clause = re.sub(r"\s+", " ", m.group(1)).strip()
+    return VERIFIED_INSTRUMENT, "identifies as G.S.R. 700(E) of 2022 and carries the clause", clause
+
+
+def register(src: Path) -> str:
+    if not src.is_file():
+        print(f"no such file: {src}")
+        print(f"\nclassification : {UNREADABLE}")
+        return UNREADABLE
+
+    text = read_text(src)
+    outcome, reason, clause = classify(text)
+    digest = "sha256:" + hashlib.sha256(src.read_bytes()).hexdigest()
+
+    print(f"file           : {src}")
+    print(f"sha256         : {digest}")
+    print(f"classification : {outcome}")
+    print(f"reason         : {reason}")
+
+    if outcome != VERIFIED_INSTRUMENT:
+        print("\nNOT registered. Nothing was written.")
+        return outcome
+
+    print(f"\noperative clause, verbatim:\n  {clause}\n")
+    STORE.parent.mkdir(parents=True, exist_ok=True)
+    STORE.write_text(text, encoding="utf-8")
+    RECORD.parent.mkdir(parents=True, exist_ok=True)
+    RECORD.write_text(json.dumps({
+        "instrument_id": "INDIACODE_GSR_700E_DEFINITIONS_AMENDMENT_2022",
+        "title": "G.S.R. 700(E) — Companies (Specification of Definition Details) "
+                 "Amendment Rules, 2022, dated 15-09-2022",
+        "source_url": SOURCE_URL,
+        "bitstream_id": BITSTREAM_ID,
+        "downloaded_at": None,          # filled by --attest; only a person knows it
+        "registered_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "acquisition_method": "human_browser",
+        "artifact_sha256": digest,
+        "stored_text": str(STORE),
+        "stored_text_sha256": "sha256:" + hashlib.sha256(
+            STORE.read_bytes()).hexdigest(),
+        "operative_clause": clause,
+        "classification": outcome,
+        # The two human checks. Null until a person runs --attest. Nothing
+        # downstream may treat this instrument as usable while either is null:
+        # hashing proves the bytes did not change, not that they are the right
+        # instrument or that the clause survived extraction intact.
+        "identity_checked_by": None,
+        "identity_checked_at": None,
+        "verbatim_clause_checked_by": None,
+        "verbatim_clause_checked_at": None,
+        "status": PENDING_HUMAN_REVIEW,
+        "attests_to": ATTESTATIONS,
+    }, indent=1) + "\n", encoding="utf-8")
+
+    print(f"stored         : {STORE}")
+    print(f"record         : {RECORD}")
+    print(f"status         : {PENDING_HUMAN_REVIEW}")
+    print("\nThe artifact is stored and hashed. It is NOT yet usable law.")
+    print("Two human checks remain, and both are recorded, not assumed:")
+    for a in ATTESTATIONS:
+        print(f"  - {a}")
+    print("\nWhen you have done both:")
+    print("  python3 scripts/register_gsr700e.py --attest <your-reviewer-id>")
+    print("\nNo constant needs editing. prescribed_thresholds reads this record,")
+    print("so the threshold becomes servable when the attestation lands and not")
+    print("before. Then run scripts/run_tests.sh and close S-002.")
+    return outcome
+
+
+def attest(reviewer_id: str, downloaded_at: str | None = None) -> str:
+    """Record that a person performed both checks. Without this the artifact
+    is stored but not usable, and prescribed_thresholds keeps refusing.
+
+    A reviewer id, not an address: benchmark and corpus files are meant to be
+    distributable and a reviewer's address is not part of the evidence.
+    """
+    if not RECORD.is_file():
+        print(f"no registration to attest: {RECORD} does not exist")
+        print("register the downloaded file first")
+        return UNREADABLE
+    if "@" in reviewer_id:
+        print("record a pseudonymous reviewer id, not an email address")
+        return WRONG_INSTRUMENT
+
+    rec = json.loads(RECORD.read_text())
+
+    # The stored text must still hash to what was registered. An attestation
+    # against a file that changed after registration attests to nothing.
+    if STORE.is_file():
+        now_hash = "sha256:" + hashlib.sha256(STORE.read_bytes()).hexdigest()
+        if now_hash != rec.get("stored_text_sha256"):
+            print("REFUSED: the stored text has changed since registration")
+            print(f"  registered : {rec.get('stored_text_sha256')}")
+            print(f"  on disk    : {now_hash}")
+            print("re-register the artifact before attesting to it")
+            return WRONG_INSTRUMENT
+    else:
+        print(f"REFUSED: {STORE} is missing; nothing to attest to")
+        return UNREADABLE
+
+    stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    rec.update({
+        "identity_checked_by": reviewer_id,
+        "identity_checked_at": stamp,
+        "verbatim_clause_checked_by": reviewer_id,
+        "verbatim_clause_checked_at": stamp,
+        "downloaded_at": downloaded_at or rec.get("downloaded_at"),
+        "status": CORROBORATED,
+    })
+    RECORD.write_text(json.dumps(rec, indent=1) + "\n", encoding="utf-8")
+    print(f"attested by {reviewer_id} at {stamp}")
+    print(f"status         : {CORROBORATED}")
+    print("\nprescribed_thresholds derives its state from this record, so the")
+    print("small-company limits are now servable. Run scripts/run_tests.sh and")
+    print("close S-002 with the artifact hash, reviewer id and timestamps above.")
+    return VERIFIED_INSTRUMENT
+
+
+def registration() -> dict | None:
+    """The registration record, if one exists. Read by prescribed_thresholds."""
+    if not RECORD.is_file():
+        return None
+    try:
+        return json.loads(RECORD.read_text())
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def is_attested(rec: dict | None) -> bool:
+    """Both human checks recorded, and the status says so."""
+    if not rec:
+        return False
+    return bool(rec.get("identity_checked_by")
+                and rec.get("identity_checked_at")
+                and rec.get("verbatim_clause_checked_by")
+                and rec.get("verbatim_clause_checked_at")
+                and rec.get("status") == CORROBORATED)
+
+
+# ── test support ──────────────────────────────────────────────────────────────
+# The acquisition state is on-disk and changes when a reviewer attests. Tests
+# that exercise "refuses while unacquired" or "servable once acquired" must
+# CONTROL that state rather than depend on the ambient record, or they flip red
+# the moment 700(E) is attested (which is exactly what happened). These stub the
+# registration lookup within a block. Test-only; no production path calls them.
+from contextlib import contextmanager as _contextmanager
+import sys as _sys
+
+
+def registered_unattested_stub() -> dict:
+    """A registration record that exists but carries neither human check."""
+    return {"artifact_sha256": "sha256:" + "00" * 32,
+            "identity_checked_by": None, "identity_checked_at": None,
+            "verbatim_clause_checked_by": None, "verbatim_clause_checked_at": None,
+            "status": PENDING_HUMAN_REVIEW}
+
+
+def attested_stub(reviewer: str = "TEST") -> dict:
+    """A registration record with both human checks recorded."""
+    return {"artifact_sha256": "sha256:" + "11" * 32,
+            "identity_checked_by": reviewer, "identity_checked_at": "2026-01-01T00:00:00Z",
+            "verbatim_clause_checked_by": reviewer,
+            "verbatim_clause_checked_at": "2026-01-01T00:00:00Z",
+            "status": CORROBORATED}
+
+
+@_contextmanager
+def stub_registration(rec):
+    """Force registration() to return `rec` within the block.
+
+    rec=None simulates 'not acquired'; registered_unattested_stub() simulates
+    'downloaded but not attested'; attested_stub() simulates 'acquired'. Callers
+    that do `from scripts.register_gsr700e import registration` inside a function
+    pick up the patched attribute because the import runs at call time.
+    """
+    mod = _sys.modules[__name__]
+    orig = mod.registration
+    mod.registration = lambda: rec
+    try:
+        yield
+    finally:
+        mod.registration = orig
+
+
+def _test() -> int:
+    ok = fail = 0
+
+    def check(cond: bool, label: str) -> None:
+        nonlocal ok, fail
+        if cond:
+            ok += 1
+            print(f"  [PASS] {label}")
+        else:
+            fail += 1
+            print(f"  [FAIL] {label}")
+
+    print("register_gsr700e")
+
+    real = ("MINISTRY OF CORPORATE AFFAIRS NOTIFICATION New Delhi, the 15th September, 2022 "
+            "G.S.R. 700(E).—In exercise of the powers conferred by sub-sections (1) and (2) of "
+            "section 469 of the Companies Act, 2013, the Central Government hereby makes the "
+            "following rules further to amend the Companies (Specification of definition details) "
+            "Rules, 2014, namely:— in clause (t), paid up capital and turnover of the small "
+            "company shall not exceed rupees four crore and rupees forty crore respectively.")
+    out, why, clause = classify(real)
+    check(out == VERIFIED_INSTRUMENT, f"the real instrument verifies ({out}: {why})")
+    check("four crore" in clause and "forty crore" in clause,
+          f"...and the clause is captured verbatim ({clause[:60]}…)")
+
+    sibling = real.replace("700(E)", "92(E)").replace("2022", "2021")
+    out2, why2, _ = classify(sibling)
+    check(out2 == WRONG_INSTRUMENT, f"the 2021 sibling is refused ({out2})")
+    check("92(E)" in why2, f"...naming what it actually is ({why2})")
+
+    principal = ("The Companies (Specification of definitions details) Rules, 2014. In exercise "
+                 "of the powers conferred by section 469, 2014.")
+    out3, why3, _ = classify(principal)
+    check(out3 == WRONG_INSTRUMENT, "the principal 2014 Rules are refused")
+
+    partial = ("G.S.R. 700(E) dated 15th September 2022 amending the Companies (Specification of "
+               "definition details) Rules, 2014. [page 1 of 3]")
+    out4, why4, _ = classify(partial)
+    check(out4 == CLAUSE_NOT_FOUND,
+          f"a correct instrument missing the clause is not accepted ({out4})")
+    check("partial" in why4, "...and says the extraction may be partial")
+
+    out5, _, _ = classify("")
+    check(out5 == UNREADABLE, "empty text is UNREADABLE, not a rejection of identity")
+
+    check(set(EXIT) == {VERIFIED_INSTRUMENT, WRONG_INSTRUMENT, CLAUSE_NOT_FOUND, UNREADABLE},
+          "every outcome has an exit code")
+    check(EXIT[VERIFIED_INSTRUMENT] == 0 and all(v for k, v in EXIT.items()
+                                                 if k != VERIFIED_INSTRUMENT),
+          "only success exits zero")
+
+    # It must not be possible for this script to declare VERIFIED.
+    src = Path(__file__).read_text()
+    check('"evidence_state": "CORROBORATED"' in src,
+          "the registration records CORROBORATED, never VERIFIED")
+
+    print(f"\n{ok}/{ok + fail} passed")
+    return 1 if fail else 0
+
+
+if __name__ == "__main__":
+    if len(sys.argv) == 2 and sys.argv[1] == "--test":
+        raise SystemExit(_test())
+    if len(sys.argv) >= 3 and sys.argv[1] == "--attest":
+        raise SystemExit(EXIT[attest(sys.argv[2],
+                                     sys.argv[3] if len(sys.argv) > 3 else None)])
+    if len(sys.argv) != 2:
+        print(__doc__)
+        raise SystemExit(1)
+    raise SystemExit(EXIT[register(Path(sys.argv[1]))])

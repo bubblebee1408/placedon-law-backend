@@ -1,0 +1,547 @@
+{
+  "what": "India Code JSON corpus vs India Code full-Act PDF",
+  "independence": "PARTIAL - same publisher, two delivery paths. Cannot detect an error present in India Code's own source.",
+  "circularity_note": "The index was built by matching the first ~320 chars. Only the tail figure below is an independent check.",
+  "sections_compared": 464,
+  "independent_tail_chars": 518409,
+  "metric": "one-sided: fraction of the JSON record found in the PDF slice",
+  "median_record_coverage": 1.0,
+  "agree_after_structural": 407,
+  "unexplained_sections": [
+    {
+      "section": "16",
+      "id": "199",
+      "ratio": 0.8824,
+      "unexplained_chars": 497,
+      "samples": [
+        "47of1999",
+        "six",
+        "three"
+      ]
+    },
+    {
+      "section": "124",
+      "id": "1315",
+      "ratio": 0.9629,
+      "unexplained_chars": 379,
+      "samples": [
+        "suc",
+        "pun",
+        "wi"
+      ]
+    },
+    {
+      "section": "378ZR",
+      "id": "52468",
+      "ratio": 0.9996,
+      "unexplained_chars": 375,
+      "samples": [
+        "378zrapplicationofprovisionsrelatingtoprivatecompaniesallthelimitationsrestrictionsandprovisionsofthisactotherthanthoses"
+      ]
+    },
+    {
+      "section": "186",
+      "id": "49112",
+      "ratio": 0.9998,
+      "unexplained_chars": 328,
+      "samples": [
+        "2andacompanywillbedeemedtobeprincipallyengagedinthebusinessofacquisitionofsharesdebenturesorothersecuritiesifitsassetsin"
+      ]
+    },
+    {
+      "section": "236",
+      "id": "49162",
+      "ratio": 0.9362,
+      "unexplained_chars": 296,
+      "samples": [
+        "2companywhosesharesarebeing",
+        "ed",
+        "1companywhosesharesarebeing"
+      ]
+    },
+    {
+      "section": "1",
+      "id": "184",
+      "ratio": 0.8808,
+      "unexplained_chars": 155,
+      "samples": [
+        "eanyothercompanygovernedbyanyspecialactforthetimebeinginforceexceptinsofarasthesaidprovisionsareinconsistentwiththeprovi",
+        "tobedeleted"
+      ]
+    },
+    {
+      "section": "247",
+      "id": "49173",
+      "ratio": 0.9533,
+      "unexplained_chars": 148,
+      "samples": [
+        "pun",
+        "3l",
+        "sh"
+      ]
+    },
+    {
+      "section": "139",
+      "id": "1330",
+      "ratio": 0.999,
+      "unexplained_chars": 140,
+      "samples": [
+        "aperiodwhichshallnotbelaterthanthedateofthefirstannualgeneralmeetingofthecompanyheldwithintheperiodspecifiedundersubsect"
+      ]
+    },
+    {
+      "section": "129",
+      "id": "1320",
+      "ratio": 1.0,
+      "unexplained_chars": 119,
+      "samples": [
+        "orassociatecompanies",
+        "andassociatecompanies",
+        "andinaccordancewithapplicableaccountingstandards"
+      ]
+    },
+    {
+      "section": "67",
+      "id": "1257",
+      "ratio": 1.0,
+      "unexplained_chars": 73,
+      "samples": [
+        "67restrictiononpurchasebycompanyorgivingofloansbyitforpurchaseofitsshares"
+      ]
+    },
+    {
+      "section": "143",
+      "id": "49072",
+      "ratio": 0.9962,
+      "unexplained_chars": 65,
+      "samples": [
+        "offraud",
+        "suchamounto",
+        "mo"
+      ]
+    },
+    {
+      "section": "22",
+      "id": "205",
+      "ratio": 0.9956,
+      "unexplained_chars": 61,
+      "samples": [
+        "4chapteriiiprospectusandallotmentofsecuritiespartipublicoffer"
+      ]
+    },
+    {
+      "section": "2",
+      "id": "185",
+      "ratio": 0.9986,
+      "unexplained_chars": 58,
+      "samples": [
+        "chapteriiincorporationofcompanyandmattersincidentalthereto"
+      ]
+    },
+    {
+      "section": "329",
+      "id": "1520",
+      "ratio": 0.8729,
+      "unexplained_chars": 58,
+      "samples": [
+        "unde",
+        "ep",
+        "is"
+      ]
+    },
+    {
+      "section": "468",
+      "id": "49363",
+      "ratio": 1.0,
+      "unexplained_chars": 58,
+      "samples": [
+        "468powersofcentralgovernmenttomakerulesrelatingtowindingup"
+      ]
+    },
+    {
+      "section": "227",
+      "id": "49153",
+      "ratio": 1.0,
+      "unexplained_chars": 57,
+      "samples": [
+        "227legaladvisorsandbankersnottodisclosecertaininformation"
+      ]
+    },
+    {
+      "section": "365",
+      "id": "49260",
+      "ratio": 1.0,
+      "unexplained_chars": 56,
+      "samples": [
+        "chapterxxiparticompaniesauthorisedtoregisterunderthisact"
+      ]
+    },
+    {
+      "section": "378A",
+      "id": "52424",
+      "ratio": 0.9996,
+      "unexplained_chars": 56,
+      "samples": [
+        "202partiiincorporationofproducercompaniesandothermatters"
+      ]
+    },
+    {
+      "section": "74",
+      "id": "1264",
+      "ratio": 0.9876,
+      "unexplained_chars": 55,
+      "samples": [
+        "on",
+        "thre",
+        "onorbe"
+      ]
+    },
+    {
+      "section": "356",
+      "id": "49251",
+      "ratio": 1.0,
+      "unexplained_chars": 52,
+      "samples": [
+        "356powersoftribunaltodeclaredissolutionofcompanyvoid"
+      ]
+    },
+    {
+      "section": "404",
+      "id": "49299",
+      "ratio": 1.0,
+      "unexplained_chars": 51,
+      "samples": [
+        "chapterxxvcompaniestofurnishinformationorstatistics"
+      ]
+    },
+    {
+      "section": "136",
+      "id": "1327",
+      "ratio": 0.9988,
+      "unexplained_chars": 50,
+      "samples": [
+        "36rightofmembertocopiesofauditedfinancialstatement"
+      ]
+    },
+    {
+      "section": "229",
+      "id": "49155",
+      "ratio": 0.9969,
+      "unexplained_chars": 50,
+      "samples": [
+        "ly",
+        "chapterxvcompromisesarrangementsandamalgamations"
+      ]
+    },
+    {
+      "section": "231",
+      "id": "49157",
+      "ratio": 1.0,
+      "unexplained_chars": 50,
+      "samples": [
+        "231poweroftribunaltoenforcecompromiseorarrangement"
+      ]
+    },
+    {
+      "section": "148",
+      "id": "49077",
+      "ratio": 0.9989,
+      "unexplained_chars": 48,
+      "samples": [
+        "chapterxiappointmentandqualificationsofdirectors"
+      ]
+    },
+    {
+      "section": "240",
+      "id": "49166",
+      "ratio": 1.0,
+      "unexplained_chars": 48,
+      "samples": [
+        "chapterxvipreventionofoppressionandmismanagement"
+      ]
+    },
+    {
+      "section": "378",
+      "id": "49273",
+      "ratio": 1.0,
+      "unexplained_chars": 45,
+      "samples": [
+        "1chapterxxiaproducercompaniespartipreliminary"
+      ]
+    },
+    {
+      "section": "205",
+      "id": "49131",
+      "ratio": 1.0,
+      "unexplained_chars": 43,
+      "samples": [
+        "chapterxivinspectioninquiryandinvestigation"
+      ]
+    },
+    {
+      "section": "72",
+      "id": "1262",
+      "ratio": 1.0,
+      "unexplained_chars": 39,
+      "samples": [
+        "chaptervacceptanceofdepositsbycompanies"
+      ]
+    },
+    {
+      "section": "374",
+      "id": "49269",
+      "ratio": 1.0,
+      "unexplained_chars": 38,
+      "samples": [
+        "partiiwindingupofunregisteredcompanies"
+      ]
+    },
+    {
+      "section": "87",
+      "id": "1278",
+      "ratio": 0.9988,
+      "unexplained_chars": 37,
+      "samples": [
+        "chapterviimanagementandadministration"
+      ]
+    },
+    {
+      "section": "378ZM",
+      "id": "52462",
+      "ratio": 0.999,
+      "unexplained_chars": 37,
+      "samples": [
+        "217partixamalgamationmergerordivision"
+      ]
+    },
+    {
+      "section": "395",
+      "id": "49290",
+      "ratio": 1.0,
+      "unexplained_chars": 37,
+      "samples": [
+        "chapterxxivregistrationofficesandfees"
+      ]
+    },
+    {
+      "section": "134",
+      "id": "1325",
+      "ratio": 0.9989,
+      "unexplained_chars": 36,
+      "samples": [
+        "34financialstatementboardsreportetc2"
+      ]
+    },
+    {
+      "section": "378ZJ",
+      "id": "52459",
+      "ratio": 0.9963,
+      "unexplained_chars": 35,
+      "samples": [
+        "partviiloanstomembersandinvestments"
+      ]
+    },
+    {
+      "section": "42",
+      "id": "1232",
+      "ratio": 0.9998,
+      "unexplained_chars": 34,
+      "samples": [
+        "chapterivsharecapitalanddebentures"
+      ]
+    },
+    {
+      "section": "378Z",
+      "id": "52450",
+      "ratio": 0.9997,
+      "unexplained_chars": 33,
+      "samples": [
+        "partvsharecapitalandmembersrights"
+      ]
+    },
+    {
+      "section": "48",
+      "id": "1238",
+      "ratio": 1.0,
+      "unexplained_chars": 32,
+      "samples": [
+        "48variationsofshareholdersrights"
+      ]
+    },
+    {
+      "section": "78",
+      "id": "1269",
+      "ratio": 0.9912,
+      "unexplained_chars": 31,
+      "samples": [
+        "ofthirtyday",
+        "referredtoinsubs",
+        "on1o"
+      ]
+    },
+    {
+      "section": "246",
+      "id": "49172",
+      "ratio": 1.0,
+      "unexplained_chars": 31,
+      "samples": [
+        "165chapterxviiregisteredvaluers"
+      ]
+    },
+    {
+      "section": "76A",
+      "id": "1267",
+      "ratio": 1.0,
+      "unexplained_chars": 30,
+      "samples": [
+        "chapterviregistrationofcharges"
+      ]
+    },
+    {
+      "section": "378ZD",
+      "id": "52453",
+      "ratio": 0.9992,
+      "unexplained_chars": 29,
+      "samples": [
+        "partvifinanceaccountsandaudit"
+      ]
+    },
+    {
+      "section": "127",
+      "id": "1318",
+      "ratio": 1.0,
+      "unexplained_chars": 28,
+      "samples": [
+        "chapterixaccountsofcompanies"
+      ]
+    },
+    {
+      "section": "270",
+      "id": "49196",
+      "ratio": 1.0,
+      "unexplained_chars": 27,
+      "samples": [
+        "partiwindingupbythetribunal"
+      ]
+    },
+    {
+      "section": "54",
+      "id": "1244",
+      "ratio": 1.0,
+      "unexplained_chars": 26,
+      "samples": [
+        "54issueofsweatequityshares"
+      ]
+    },
+    {
+      "section": "358",
+      "id": "49253",
+      "ratio": 1.0,
+      "unexplained_chars": 25,
+      "samples": [
+        "partivofficialliquidators"
+      ]
+    },
+    {
+      "section": "138",
+      "id": "1329",
+      "ratio": 1.0,
+      "unexplained_chars": 24,
+      "samples": [
+        "chapterxauditandauditors"
+      ]
+    },
+    {
+      "section": "446B",
+      "id": "48979",
+      "ratio": 0.9989,
+      "unexplained_chars": 24,
+      "samples": [
+        "chapterxxixmiscellaneous"
+      ]
+    },
+    {
+      "section": "41",
+      "id": "1231",
+      "ratio": 1.0,
+      "unexplained_chars": 22,
+      "samples": [
+        "partiiprivateplacement"
+      ]
+    },
+    {
+      "section": "378ZL",
+      "id": "52461",
+      "ratio": 0.9994,
+      "unexplained_chars": 17,
+      "samples": [
+        "partviiipenalties"
+      ]
+    },
+    {
+      "section": "405",
+      "id": "49300",
+      "ratio": 1.0,
+      "unexplained_chars": 17,
+      "samples": [
+        "chapterxxvinidhis"
+      ]
+    },
+    {
+      "section": "436",
+      "id": "49331",
+      "ratio": 0.9996,
+      "unexplained_chars": 12,
+      "samples": [
+        "edordesignat"
+      ]
+    },
+    {
+      "section": "465",
+      "id": "49360",
+      "ratio": 0.9447,
+      "unexplained_chars": 11,
+      "samples": [
+        "also",
+        "further"
+      ]
+    },
+    {
+      "section": "117",
+      "id": "1308",
+      "ratio": 0.9978,
+      "unexplained_chars": 7,
+      "samples": [
+        "2of1934"
+      ]
+    },
+    {
+      "section": "454",
+      "id": "49349",
+      "ratio": 0.9974,
+      "unexplained_chars": 4,
+      "samples": [
+        "ecas"
+      ]
+    },
+    {
+      "section": "150",
+      "id": "49079",
+      "ratio": 0.9991,
+      "unexplained_chars": 2,
+      "samples": [
+        "y",
+        "e"
+      ]
+    },
+    {
+      "section": "184",
+      "id": "49110",
+      "ratio": 0.9991,
+      "unexplained_chars": 2,
+      "samples": [
+        "br"
+      ]
+    }
+  ]
+}

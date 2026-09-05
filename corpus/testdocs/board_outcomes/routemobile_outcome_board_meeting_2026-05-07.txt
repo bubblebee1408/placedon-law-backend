@@ -1,0 +1,1467 @@
+# REAL FILED DOCUMENT — Outcome of Board Meeting (SEBI LODR Reg. 30 disclosure)
+# Issuer: Route Mobile Limited | Small/mid cap, NSE/BSE listed
+# Board meeting date: May 7, 2026
+# https://routemobile.com/wp-content/uploads/2026/05/Outcome-of-Board-Meeting-May-07-2026.pdf
+# Type: board resolution / meeting outcome filing | Real | text-extractable, no OCR needed
+# 22pp — ADVERSARIAL: contains an auditor's report using 'Conclude on the appropriateness...' unrelated to meeting conclusion. Tests _CONCLUDED false-positive risk.
+
+Ref	No:
+ RML/2026-27/670 
+Date: May 07, 2026 
+To 
+BSE	Limited         National	Stock	Exchange	of	India	Limited 
+Scrip	Code:	543228 Symbol:	ROUTE	
+Sub:	Outcome	of	Board	Meeting	held	on	May	07,	2026	
+Dear
+ Sir/Madam, 
+Pursuant to the Regulation 30 read with Schedule III and 33 of the SEBI (Listing Obligations and Disclosure 
+Requirements), Regulations, 2015 (“Listing Regulations”) and other regulations, if applicable, we hereby inform you 
+that the Board of Directors of Route Mobile Li mited (“the Company”) at its Meeting held today i.e. May 07, 2026 has 
+inter	alia,	approved the following matters:  
+1. Audited	Financial	Results:
+The Board of Directors (“Board”) has approved the Audited Standalone and Consolidated Financial Results of
+the Company for the quarter and year ended March 31, 2026 and Audited Standalone and Consolidated Financial 
+Statements for the year ended March 31, 2026, along with Auditors’ Report thereon. The said results were
+reviewed by the Audit Committee at its meeting held today and based on its recommendation approved by the
+Board.
+A copy of the said Financial Results along with Auditors’ Report for quarter and year ended March 31, 2026, are
+enclosed herewith as Annexure	1. The extract of the results will be published in the newspapers in compliance
+with the Listing Regulations. The above information is also being made available on the website of the Company 
+at www.routemobile.com.
+2. Unmo
+dified	Opinion:
+The Statutory Auditors of the Company, Walker Chandiok & Co LLP, Chartered Accountants, have issued an Audit 
+Report with unmodified opinion on the Annual Audi ted Financial Results of the Company (Standalone and
+Consolidated) for the financial year ended March 31, 2026. This declaration is being made pursuant to
+Regulation 33(3)(d) of the Listing Regulations.
+3. Dividend:
+The Board has recommended a final dividend of ₹2 per equity share of ₹10/- each (20%) for the Financial Year
+2025-26, subject to the shareholders’ approval at the en suing Annual General Meeting. Accordingly, the sa id
+dividend, if approved, by the shareholders at the ensuing Annual General Meeting of the Company, will be paid
+within 30 days from the date of Annual General Meeting, subject to deduction of tax at source. The Record Date
+for the purpose of the Final Dividend and the Date of Annual General Meeting for the financial year 2025-2 6
+shall be intimated in due course.
+The total dividend for the financial year ended March 31, 2026, aggregates to ₹11/- (Rupees Eleven Only) per 
+equity share of the face value of ₹10/-  each (Rupees Ten Only) including the 1st interim dividend of ₹3 (Rupees 
+Three Only) per equity share as approved by the Board of Directors at their meeting held on July 17, 2025, 2nd
+interim d
+ividend of ₹3 (Rupees Three Only) per equity share as approved by the Board of Directors at thei r
+meeting held on November 03, 2025 and 3 rd interim dividend of ₹3 (Rupees Three Only) per equity share as
+approved by the Board of Directors at their meeting held on February 09, 2026.
+4. Lapse	of	Stock	Options	granted	to	an	employee:
+The Board of Directors at its meeting held today, noted and took on record lapse of 2,500 (Two Thousand Five
+Hundred) Stock Options granted under the Route Mobile ESOP Plan 2017 to eligible employees of the Company 
+pursuant to the lapse of such options.
+5. Var
+iation	in	the	object/	terms	of	utilisation	of	the	Initial	Public	Offering	(“IPO”)	proceeds:
+Based on the recommendation of the Audit Committee, the Board of Directors has approved a propos ed
+va
+riation in objects/ terms of utilisation of the IPO proceeds subject to receipt of the shareholders’ approval.
+The particulars of the proposed variation in the objects for which the Prospectus was issued are as follows: 
+Sr 
+No. 
+Original objects of 
+the IPO as stated in 
+the Prospectus 
+Total 
+amount 
+raised 
+Amount 
+unutilized as on 
+March, 31 2026 
+Details of variation Revised amount 
+after variation 
+1 Purchase of office 
+premises in Mumbai 
+₹650 
+million 
+₹650 million General Corporate purpose ₹650 million 
+6. Re‐appo
+intment	of	Internal	Auditor:
+Based on the recommendation of the Audit Committee, the Board has approved re-appointment of Mr. Nicolas
+Le
+comte, Internal Audit Manager, Proximus S.A. as the Internal Auditor of the Company for the financial year
+2026-27.
+Th
+e details of the aforesaid disclosure as required under Regulation 30 of Listing Regulations read with SE BI
+Circular No. H
+O/49/14/14(7)2025-CFD-POD2/I/3762/2026 dated January 30, 2026 are given in Annexure	2.
+7. Appointment	of	Senior	Management	Personnel:	
+Based on the recommendation of the Nomination and Renumeration Committee, the Board of Directors has
+approved the appointment of Mr. Alyque Sequeira, Executive Advisor to CEO and Mr. Gaurav Jhunjunwala, AGM- 
+Legal as Senior Management Personnel of the Company with effect from May 07, 2026. 
+The details of the aforesaid disclosure as required under Regulation 30 of Listing Regulations read with SE BI
+Circular No. H
+O/49/14/14(7)2025-CFD-POD2/I/3762/2026 dated January 30, 2026 are given in Annexure	2.
+Please note that in terms of the Company’s internal Code of Conduct for Regulating, Monitoring and Reporting of 
+Trades of Route Mobile Limited ('Company') read with applicable provisions of the SEBI (Prohibition of Insider 
+Trading) Regulations, 2015 as amended, the window for trading in Securities of the Company by the Designated 
+Persons of the Company will open on Sunday, May 10, 2026. 
+The meeting of the Board of Directors commenced at 6:20 P.M. IST and concluded at 8:50 P.M. IST. 
+You are requested to take the above information on record. 
+Thanking You, 
+Yours faithfully, 
+For Route	Mobile	Limited	
+Tejas	Shah	
+Company Secretary & Compliance Officer 
+ICSI Membership No.: A34829 
+Encl: as above 
+Walker Chandiok & Co LLP 
+42nd Floor,  
+Building Commerz III, 
+International Business Park, 
+Oberoi Garden City,  
+Off Western Express Highway, 
+Goregaon (East),  
+Mumbai-400063 
+T +91 22 6626 2699 
+ 
+Chartered Accountants 
+Offices in Ahmedabad, Bengaluru, Bhubaneswar, Chandigarh, Chennai, Dehradun, Goa, Gurugram, Guwahati, Hyderabad, Indore, Kochi, Kolkata, 
+Mumbai, New Delhi, Noida and Pune 
+Walker Chandiok & Co LLP is registered with 
+limited liability with identification number AAC-
+2085 and has its registered office at L-41, 
+Connaught Circus, Outer Circle, New Delhi, 
+110001, India 
+Ind
+ependent Auditor’s Report on Consolidated Annual Financial Results of the Company Pursuant 
+to the Regulation 33 of the SEBI  (Listing Obligations and Disclosure Requirements) Regulations, 
+2015 (as amended)  
+To the Board of Directors of Route Mobile Limited 
+Opinion 
+1.
+We have audited the accompanying consolidated annu al financial results (‘the Statement’) of Route Mobile
+Limited  (‘the Holding Company’) and its subsidiaries (the Holding Co mpany and its subsidiaries together
+referred to as ‘the Group’), for the year ended 31 March 2026, attached herewith, being submitted by th e
+Hol
+ding Company pursuant to the requirements of Regulation 33 of the SEBI (Listing Obligations an d
+Dis
+closure Requirements) Regulations, 2015 (as amended) (‘Listing Regulations’).
+2.
+In our opinion and to the best of our information and according to the explanations given to us and based on
+the consideration of the reports of other auditors on separate audited financial statements of the subsidiaries,
+as referred to in paragraph 13 below, the Statement:
+(i) includes the annual financial results of the entities listed in Annexure 1;
+(ii) presents financial results in accordance with the requirements of Regulation 33 of the Listing Regulations;
+and
+(iii) gives a true and fair view in conformity with the recognition and measurement principles laid down in the
+applicable Indian Accounting Standards (‘Ind AS’) prescribed under section 133 of the Companies Act,
+2013 (‘the Act’) read with the Companies (India n Accounting Standards) Rules, 2015, and other
+accounting principles generally accepted in India, of the consolidated net profit after tax and other
+comprehensive income and other financial information of the Group for the year ended 31 March 2026.
+Basis for Opinion 
+3.
+We conducted our audit in accordance with the Standards on Auditing specified under section 143(10) of the
+Act. Our responsibilities under those standards are further described in the Auditor’s Responsibilities for the
+Audit of the Statement section of our report. We are independent of the Group, in accordance with the Code
+of Ethics issued by the Institute of Chartered Accountants of India (‘the ICAI’) together with the ethical
+requirements that are relevant to our audit of the cons olidated financial results under the provisions of the
+Act, and the rules thereunder, and we have fulfilled our other ethical responsibilities in accordance with these
+requirements and the Code of Ethics. We believe that the audit evidence obtained by us together with th e
+aud
+it evidence obtained by the other auditors in terms of their reports referred to in paragraph 13 of the Other
+Matter
+s section below, is sufficient and appropriate to provide a basis for our opinion.
+Annexure 1
+Independent Auditor’s Report on Consolidated Annual Financial Results of Route Mobile Limited 
+Pursuant to the Regulation 33 of the SEBI  ( Listing Obligations and Disclosure Requirements) 
+Regulations, 2015 (as amended) (cont’d) 
+ 
+ 
+   
+   
+Chartered Accountants 
+ 
+Offices in Ahmedabad, Bengaluru, Bhubaneswar, Chandigarh, Chennai, Dehradun, Goa, Gurugram, Guwahati, Hyderabad, Indore, Kochi, Kolkata, 
+Mumbai, New Delhi, Noida and Pune  
+Walker Chandiok & Co LLP is registered with 
+limited liability with identification number AAC-2085 
+and has its registered office at L -41, Connaught 
+Circus, Outer Circle, New Delhi, 110001, India 
+ 
+ 
+Emphasis of Matters 
+ 
+4. We draw attention to: 
+ 
+a) note 9 to the accompanying Statement, which de scribes a partial arbitratio n award was rendered in 
+favour of the vendor in an ongoing arbitration between one of the subsidiaries and its vendor. Thereafter, 
+the parties executed a settlement agreement, pursuant  to which all outstanding claims were mutually 
+withdrawn. 
+ 
+During the current year, the management has writte n off the remaining net advance receivable from 
+such vendor amounting to ₹ 107.96 crores which has been presented as an exceptional item. 
+ 
+The above matter has also been reported as an emphasis of ma tter in the audit report dated 
+                 
+7 May 2026 issued by other firm of chartered accoun tants on the financial results of the subsidiary for 
+the year ended 31 March 2026. 
+ 
+b) note 10 to the accompanying Statement, which desc ribes that a vendor of one of the subsidiaries has 
+ceased its business operations during the current year and based on the significant uncertainty in 
+recovering the advance given to such vendor, the management has written off the same amounting to 
+₹ 27.91 crores and presented such expense as an exceptional item. 
+ 
+Our conclusion is not modified in respect of these matters. 
+ 
+Responsibilities of Management and Those Charged with Governance for the Statement  
+ 
+5. The Statement has been prepared on the basis of th e consolidated annual financial statements and has 
+been approved by the Holding Company's Board of Directors. The Holding Company’s Board of Directors is 
+responsible for the preparation and presentation of th e Statement that gives a true and fair view of the 
+consolidated net profit and other comprehensive inco me, and other financial information of the Group in 
+accordance with the Ind AS prescribed under section 133 of the Act read with the Companies (Indian 
+Accounting Standards) Rules, 2015 and other accounti ng principles generally accepted in India and in 
+compliance with Regulation 33 of the Listing Regulations. The Holding Company’s Board of Directors is also 
+responsible for ensuring accuracy of  records including financial inform ation considered necessary for the 
+preparation of the Statement. Further, in terms of the provisions of the Act, the respective Board of Directors 
+of the companies included in the Group, covered under the Act, are responsible for maintenance of adequate 
+accounting records in accordance with the provisions of the Act, for safeguarding of the assets of the Group, 
+and for preventing and detecting frauds and other irre gularities; selection and application of appropriate 
+accounting policies; making judgments and estimate s that are reasonable and prudent; and design, 
+implementation and maintenance of adequate internal fi nancial controls, that were operating effectively, for 
+ensuring the accuracy and completeness of the accounting records, relevant to the preparation and 
+presentation of the financial results, that give a true  and fair view and are free from material misstatement, 
+whether due to fraud or error. These financial results ha ve been used for the purpose of preparation of the 
+Statement by the Directors of the Holding Company, as aforesaid. 
+ 
+6. In preparing the Statement, the respective Board of Directors of the companies included in the Group, are 
+responsible for assessing the ability of the Group, to continue as a going concern, disclosing, as applicable, 
+matters related to going concern and using the going concern basis of accounting, unless the respective 
+Board of Directors either intends to liquidate the Group or to cease operations, or has no realistic alternative 
+but to do so. 
+ 
+7. Those respective Board of Directors are also responsible for overseeing the financial reporting process of 
+the companies included in the Group. 
+ 
+ 
+ 
+ 
+ 
+ 
+Independent Auditor’s Report on Consolidated Annual Financial Results of Route Mobile Limited 
+Pursuant to the Regulation 33 of the SEBI  ( Listing Obligations and Disclosure Requirements) 
+Regulations, 2015 (as amended) (cont’d) 
+ 
+ 
+   
+   
+Chartered Accountants 
+ 
+Offices in Ahmedabad, Bengaluru, Bhubaneswar, Chandigarh, Chennai, Dehradun, Goa, Gurugram, Guwahati, Hyderabad, Indore, Kochi, Kolkata, 
+Mumbai, New Delhi, Noida and Pune  
+Walker Chandiok & Co LLP is registered with 
+limited liability with identification number AAC-2085 
+and has its registered office at L -41, Connaught 
+Circus, Outer Circle, New Delhi, 110001, India 
+ 
+ 
+Auditor’s Responsibilities for the Audit of the Statement 
+ 
+8. Our objectives are to obtain reasonable assurance about whether the Statement as a whole is free from 
+material misstatement, whether due to fraud or error, and to issue an auditor’s report that includes our 
+opinion. Reasonable assurance is a high level of assurance but is not a guarantee that an audit conducted 
+in accordance with Standards on Auditing specified under section 143(10) of the Act will always detect a 
+material misstatement, when it exists. Misstatements  can arise from fraud or error, and are considered 
+material if, individually, or in the aggregate, they co uld reasonably be expected to influence the economic 
+decisions of users taken on the basis of this Statement. 
+ 
+9. As part of an audit in accordance with the Standard s on Auditing specified under section 143(10) of the Act, 
+we exercise professional judgment and maintain professional skepticism throughout the audit. We also: 
+x Identify and assess the risks of material misstatemen t of the Statement, whether due to fraud or error, 
+design and perform audit procedures responsive to those risks, and obtain audit evidence that is 
+sufficient and appropriate to provide a basis for our opinion. The risk of not detecting a material 
+misstatement resulting from fraud is higher than fo r one resulting from error, as fraud may involve 
+collusion, forgery, intentional omissions, misrepresentations, or the override of internal control; 
+x Obtain an understanding of internal control relevant to the audit in order to design audit procedures that 
+are appropriate in the circumstances. Under section 143(3) (i) of the Act, we are also responsible for 
+expressing our opinion on whether the Holding Compan y has adequate internal financial controls with 
+reference to financial statements in place and the operating effectiveness of such controls; 
+x Evaluate the appropriateness of accounting poli cies used and the reasonableness of accounting 
+estimates and related disclosures made by the Board of Directors; 
+x Conclude on the appropriateness of Board of Direct ors use of the going concern basis of accounting 
+and, based on the audit evidence obtained, whether a material uncertainty exists related to events or 
+conditions that may cast significant doubt on the ability of the Group, to continue as a going concern. If 
+we conclude that a material uncertainty exists, we are required to draw attention in our auditor’s report 
+to the related disclosures in the Statement or, if such disclosures are inadequate, to modify our opinion. 
+Our conclusions are based on the audit evidence ob tained up to the date of our auditor’s report. 
+However, future events or conditions may cause the Group to cease to continue as a going concern; 
+x Evaluate the overall presentation, structure and cont ent of the Statement, including the disclosures, and 
+whether the Statement represents the underlying tran sactions and events in a manner that achieves 
+fair presentation; and 
+x Obtain sufficient appropriate audit evidence rega rding the financial statements of the entities or 
+business activities within the Group, to express an  opinion on the Statement. We are responsible for 
+the direction, supervision and performance of the audit of financial information of such entities included 
+in the Statement, of which we are the independent auditors. For the other entities included in the 
+Statement, which have been audited by the other auditors, such othe r auditors remain responsible for 
+the direction, supervision and performance of the audits carried out by them. We remain solely 
+responsible for our audit opinion.  
+ 
+10. We communicate with those charged with governance of the Holding Company and such other entities 
+included in the Statement, of which we are the inde pendent auditors, regarding, among other matters, the 
+planned scope and timing of the audit and significant au dit findings, including any significant deficiencies in 
+internal control that we identify during our audit. 
+ 
+11. We also provide those charged with governance with a statement that we have complied with relevant ethical 
+requirements regarding independence, and to communic ate with them all relationships and other matters 
+that may reasonably be thought to bear on our independence, and where applicable, related safeguards. 
+ 
+ 
+Independent Auditor’s Report on Consolidated Annual Financial Results of Route Mobile Limited 
+Pursuant to the Regulation 33 of the SEBI  ( Listing Obligations and Disclosure Requirements) 
+Regulations, 2015 (as amended) (cont’d) 
+ 
+ 
+   
+   
+Chartered Accountants 
+ 
+Offices in Ahmedabad, Bengaluru, Bhubaneswar, Chandigarh, Chennai, Dehradun, Goa, Gurugram, Guwahati, Hyderabad, Indore, Kochi, Kolkata, 
+Mumbai, New Delhi, Noida and Pune  
+Walker Chandiok & Co LLP is registered with 
+limited liability with identification number AAC-2085 
+and has its registered office at L -41, Connaught 
+Circus, Outer Circle, New Delhi, 110001, India 
+ 
+ 
+12. We also performed procedures in accordance with ci rcular issued by the SEBI under Regulation 33 (8) of 
+the Listing Regulations, to the extent applicable. 
+ 
+Other Matters 
+ 
+13. We did not audit the annual financial statements of 33 subsidiaries included in the Statement whose financial 
+information reflects total assets of ₹ 1,887.74 crores as at 31 March 2026, total revenues of ₹ 2,381.05 
+crores, total net profit after tax of ₹ 270.36 crores, total comprehensive income of ₹ 270.31 crores and net 
+cash outflow of ₹ 30.49 crores for the year ended on that date, as considered in the Statement. These annual 
+financial statements have been audited by other audito rs whose audit reports have been furnished to us by 
+the management, and our opinion in so far as it relate s to the amounts and disclosures included in respect 
+of these subsidiaries is based solely on the audit reports of such other auditors and the procedures performed 
+by us as stated in paragraph 12 above.  
+ 
+Further, of these subsidiaries, 19 subsidiaries, are located outside India, whose annual financial statements 
+have been prepared in accordance with accounting principles generally accepted in their respective 
+countries, and which have been audited by other auditors under auditing standards applicable in their 
+respective countries. The Holding Company’s management has converted the financial statements of such 
+subsidiaries from accounting princi ples generally accepted in their respective countries to accounting 
+principles generally accepted in India. We have audited these conversion adjustments made by the Holding 
+Company’s management. Our opinion, in so far as it relates to the amounts and disclosures included in 
+respect of these subsidiaries located outside India, is based on the report of other auditors and the 
+conversion adjustments prepared by the management of the Holding Company and audited by us. 
+ 
+Our opinion is not modified in respect of these matters with respect to our reliance on the work done by 
+and the reports of the other auditors. 
+ 
+14. The Statement includes the consolidated financial results for the quarter ended 31 March 2026, being the 
+balancing figures between the audited consolidated figu res in respect of the full financial year and the 
+published unaudited year-to-date consolidated figures up  to the third quarter of the current financial year, 
+which were subject to limited review by us. 
+ 
+ 
+ 
+ 
+ 
+ 
+For Walker Chandiok & Co LLP  
+Chartered Accountants 
+Firm Registration No.: 001076N/N500013 
+ 
+ 
+ 
+ 
+Rajni Mundra  
+Partner    
+Membership No. 058644 
+UDIN: 26058644RKBSSM9973 
+ 
+Place: Mumbai 
+Date: 7 May 2026  
+ 
+Rajni 
+Mundra
+Digitally signed 
+by Rajni Mundra 
+Date: 2026.05.07 
+22:10:26 +05'30'
+Annexure 1 to the Independent Auditor’s Repor t on Consolidated Annual Financial Results of 
+Route Mobile Limited Pursuant to the Regula tion 33 of the SEBI (Listing Obligations and 
+Disclosure Requirements) Regulations, 2015 (as amended) 
+ 
+ 
+ 
+ 
+   
+   
+Chartered Accountants 
+Offices in Ahmedabad, Bengaluru, Chandigarh, Chennai, Dehradun, Goa, Gurugram, Guwahati, Hyderabad, Indore, Kochi, Kolkata, 
+Mumbai, New Delhi, Noida and Pune 
+ 
+Walker Chandiok & Co LLP is registered with 
+limited liability with identification number 
+AAC-2085 and has its registered office at L-41, 
+Connaught Circus, Outer Circle, New Delhi, 
+110001, India
+ 
+ 
+Annexure 1  
+ 
+List of subsidiaries included in the Statement 
+ 
+1.    365Squared Limited. 
+2.    Call 2 Connect India Private Limited.  
+3.    Estratec S.A.S. 
+4.    Elibom Colombia S.A.S. 
+5.    M.R. Messaging FZE. 
+6.    Masiv Chile SpA. 
+7.    Masivian Peru S.A.C. 
+8.    Masivian S.A.S. 
+9.    Mobilelink Telecomunicaciones SpA. 
+10. MR Messaging (Holding) Limited. 
+11. MR Messaging Limited. 
+12. MR Messaging South Africa (Proprietary) Limited. 
+13. PT. Route Mobile Indonesia. 
+14. Route Connect (Kenya) Limited. 
+15. Route Connect Private Limited. 
+16. Route Ledger Technologies Private Limited (Formerly known as Sphere Edge Consulting 
+(India) Private Limited). 
+17. Route Mobile (Bangladesh) Limited. 
+18. Route Mobile (UK) Limited. 
+19. Route Mobile Arabia Telecom. 
+20. Route Mobile Communication services Co. (Fo rmerly known as Interteleco International for 
+Modem Communication services). 
+21. Route Mobile INC. 
+22. Route Mobile LLC. 
+23. Route Mobile Lanka (Private) Limited. 
+24. Route Mobile Limited (Ghana). 
+25. Route Mobile Malta Limited. 
+26. Route Mobile Mexico S De RL De CV. 
+27. Route Mobile Nepal Private Limited. 
+28. Route Mobile Pte. Ltd. 
+29. Route Mobile Uganda Limited. 
+30. Route SMS Solutions Zambia Limi ted. (until 29 January 2026) 
+31. Routesms Solutions FZE. 
+32. Routesms Solution Nigeria Ltd. 
+33. Send Clean INC. 
+34. Send Clean Private Limited (Formerly known as Cellent Technologies (India) Pvt. Ltd.). 
+35. Trusense Identity Limited (until 17 June 2025). 
+ 
+ 
+ 
+ 
+ 
+(₹ in crores except earnings per share)
+ 31.03.2026
+(Refer note 3) 
+ 31.12.2025
+(Unaudited) 
+ 31.03.2025
+(Refer note 3) 
+ 31.03.2026
+(Audited) 
+ 31.03.2025
+(Audited) 
+1 Income
+Revenue from operations 1,130.90               1,107.06              1,175.00              4,408.21            4,575.62               
+Other income 27.85                    12.87                   12.11                   54.09                 46.79                   
+Total income 1,158.75               1,119.93              1,187.11               4,462.30           4,622.41              
+2 Expenses
+Purchase of messaging services 866.99                  835.83                 948.58                 3,400.90           3,624.72               
+Employee benefits expense 74.86                    73.74                   59.99                   288.85               260.04                   
+Finance costs 1.20                    1.42                     8.10                     10.82                 40.91                    
+Depreciation and amortisation expense 23.61                    22.63                   22.22                   91.61                 89.08                    
+Other expenses 52.82                    51.10                   44.54                   181.21               163.10                  
+Total expenses 1,019.48               984.72                1,083.43              3,973.39           4,177.85               
+3 Profit before exceptional item and tax (1-2) 139.27                 135.21                 103.68                 488.91               444.56                 
+4 Exceptional item (Refer note 8, 9 and 10) -                       -                      (24.73)                 (135.87)             (18.45)                   
+5 Profit before tax (3+4) 139.27                 135.21                 78.95                  353.04              426.11                 
+6 Tax expense
+Current tax 32.56                    32.39                   21.47                   115.65               104.90                  
+Deferred tax (benefit)/ charge (7.72)                    0.26                     (2.80)                   (19.55)               (12.72)                  
+24.84                  32.65                  18.67                   96.10                 92.18                   
+7 Profit for the period/ year (5-6) 114.43                  102.56                 60.28                  256.94              333.93                 
+8 Other comprehensive income
+(i) Items that will not be reclassified to profit or loss
+Re-measurement of defined benefit plans (0.16)                    -* (0.60)                    (0.97)                  (1.64)                    
+Income-tax effect on above 0.04                     -* 0.15                     0.24                   0.41                     
+Sub total (0.12)                    -* (0.45)                   (0.73)                 (1.23)                     
+(ii) Items that will be reclassified to profit or loss
+   Foreign currency translation reserve 53.92                   21.53                   24.46                   171.91               24.92                    
+   Income-tax effect on above -                      -                      -                      -                    -                        
+Sub total 53.92                  21.53                   24.46                  171.91               24.92                    
+Total other comprehensive income (net of tax) 53.80                   21.53                   24.01                   171.18               23.69                   
+9 Total comprehensive income for the period/year (7+8) 168.23                 124.09                 84.29                  428.12               357.62                 
+10 Profit/(loss) attributable to:
+Owners of the Parent 109.32                  97.70                   56.58                   239.02               318.85                  
+Non-controlling interest 5.11                     4.86                     3.70                     17.92                 15.08                   
+114.43                 102.56                 60.28                  256.94              333.93                 
+Other comprehensive income attributable to:
+Owners of the Parent 52.20                    21.10                   24.08                   166.94               23.02                   
+Non-controlling interest 1.60                     0.43                     (0.07)                   4.24                   0.67                     
+53.80                  21.53                   24.01                   171.18               23.69                   
+Total comprehensive income attributable to:
+Owners of the Parent 161.52                  118.80                 80.66                   405.96               
+341.87                  
+Non-controlling interest 6.71                     5.29                     3.63                     22.16                 15.75                   
+168.23                124.09                 84.29                  428.12               357.62                 
+11 Paid-up equity share capital (face value of ₹ 10/- each) 63.00                   63.00                   63.00                   63.00                 63.00                    
+12 Other equity 2,706.59           2,369.00               
+13 Earnings per share (face value of ₹ 10/- each) (not annualised except for the 
+year ended 31 March 2026 and 31 March 2025)
+Basic (in ₹ ) 17.35                   15.51                   8.98                     37.94                 50.69                    
+Diluted (in ₹ ) 17.35                    15.51                   8.98                     37.94                 50.69                    
+*Rounded off to Nil
+ROUTE MOBILE LIMITED
+Registered office : SanRaj Corporate Park - 4th Dimension, 3rd Floor, Mind Space, Malad (West), Mumbai 400 064, Maharashtra, India
+Corporate Identity Number: L72900MH2004PLC146323, Website : www.routemobile.com
+A. STATEMENT OF CONSOLIDATED FINANCIAL RESULTS FOR THE QUARTER AND YEAR ENDED 31 MARCH 2026
+Sr. No. Particulars
+Quarter ended Year ended
+RAJDIPKUM
+AR 
+CHANDRAKA
+NT GUPTA
+Digitally signed by 
+RAJDIPKUMAR 
+CHANDRAKANT 
+GUPTA 
+Date: 2026.05.07 
+21:58:14 +05'30'
+B. SEGMENT RESULTS FOR THE QUARTER AND YEAR ENDED 31 MARCH 2026
+(₹ in crores)
+ 31.03.2026
+(Refer note 3) 
+ 31.12.2025
+(Unaudited) 
+ 31.03.2025
+(Refer note 3) 
+ 31.03.2026
+(Audited) 
+ 31.03.2025
+(Audited) 
+Segment revenue 
+ -India 263.29              225.95              242.76              934.39              947.79             
+ -Overseas 1,028.66           1,038.47           978.98              4,129.31          4,234.38          
+ -Inter-segment revenue (161.05)             (157.36)             (46.74)               (655.49)            (606.55)            
+Total revenue from operations 1,130.90          1,107.06           1,175.00           4,408.21          4,575.62         
+Segment results 
+ -India 19.43                24.33                41.98                69.20                111.86             
+ -Overseas 93.33                103.21              54.65                375.96              326.26             
+ -Inter-segment (0.14)                (0.16)                3.04                  0.48                  0.56                 
+Segment results before other income, finance costs, 
+exceptional item and tax 112.62             127.38             99.67               445.64             438.68            
+Add : Other income 27.85                9.25                  12.11               54.09                46.79                
+Less : Finance costs 1.20                 1.42                  8.10                  10.82               40.91               
+Profit before exceptional item and tax 139.27            135.21              103.68             488.91             444.56            
+Less : Exceptional item (net) -                  -                   (24.73)              (135.87)            (18.45)              
+Profit before tax 139.27            135.21              78.95               353.04             426.11             
+ Segment assets  
+ -India 1,642.30           1,662.71           1,779.10           1,642.30           1,779.10          
+ -Overseas 2,595.01           2,571.47           3,077.36           2,595.01           3,077.36          
+ -Inter-segment assets (681.08)             (770.89)             (1,030.74)         (681.08)             (1,030.74)         
+ Total  3,556.23          3,463.29          3,825.72          3,556.23          3,825.72          
+ Segment liabilities  
+ -India 283.91              320.57              482.14              283.91              482.14             
+ -Overseas 1,103.52           1,214.98           1,882.32           1,103.52           1,882.32          
+ -Inter-segment liabilities (652.82)             (744.49)             (1,002.82)         (652.82)             (1,002.82)         
+ Total 734.61             791.06             1,361.64           734.61             1,361.64           
+Quarter ended
+Particulars
+(This space has been intentionally left blank)
+Year ended
+RAJDIPKUM
+AR 
+CHANDRAK
+ANT GUPTA
+Digitally signed 
+by RAJDIPKUMAR 
+CHANDRAKANT 
+GUPTA 
+Date: 2026.05.07 
+21:58:30 +05'30'
+C. CONSOLIDATED BALANCE SHEET
+(₹ in crores)
+31.03.2026
+(Audited)
+31.03.2025
+(Audited)
+Assets
+Non-current assets
+Property, plant and equipment 30.40                            34.25                            
+Capital work-in-progress 1.53                              0.11                              
+Right-of-use assets 41.25                            24.38                            
+Goodwill 545.68                          490.95                          
+Other intangible assets 272.40                          268.01                          
+Intangible assets under development 6.24                              32.36                            
+Financial assets
+Other financial assets 17.40                            22.24                            
+Deferred tax assets (net) 24.75                            13.55                            
+Income-tax assets (net) 53.57                            47.78                            
+Other non-current assets 16.08                            156.03                          
+Total non- current assets 1,009.30                      1,089.66                       
+Current assets
+Financial assets
+Investments 16.99                            16.07                            
+Trade receivables 909.40                          932.77                          
+Cash and cash equivalents 880.12                          850.40                          
+Bank balances other than cash and cash equivalents 508.55                          482.33                          
+Other financial assets 28.37                            132.04                          
+Other current assets 203.50                          322.45                          
+Total current assets 2,546.93                      2,736.06                       
+Total assets 3,556.23                      3,825.72                       
+Equity and liabilities
+Equity
+Equity share capital
+63.00                            63.00                            
+Other equity 2,706.59                       2,369.00                       
+Equity attributable to owners of the Parent 2,769.59                      2,432.00                       
+Non-controlling interest 52.03                            32.08                            
+Total equity 2,821.62                      2,464.08                       
+Liabilities
+Non-current liabilities
+Financial liabilities
+Lease liabilities 25.38                            16.16                            
+Other financial liabilities 1.93                              1.76                              
+Provisions 9.51                              7.62                              
+Deferred tax liabilities (net) 36.66                            41.54                            
+Total non-current liabilities 73.48                           67.08                           
+Financial liabilities
+Borrowings -                               440.96                          
+Lease liabilities 16.60                            11.05                            
+Trade payables
+-Total outstanding dues of micro enterprises and small enterprises 1.31                              0.92                              
+-Total outstanding dues of creditors other than micro enterprises and small enterprises 495.49                          683.51                           
+Other financial liabilities 20.51                            27.65                             
+Other current liabilities 52.43                            23.78                            
+Provisions 8.16                              32.48                            
+Current tax liabilities (net) 66.63                            74.21                            
+Total current liabilities 661.13                          1,294.56                       
+Total liabilities 734.61                         1,361.64                       
+Total equity and liabilities 3,556.23                       3,825.72                        
+Particulars
+As at
+RAJDIPKUM
+AR 
+CHANDRAK
+ANT GUPTA
+Digitally signed by 
+RAJDIPKUMAR 
+CHANDRAKANT GUPTA 
+Date: 2026.05.07 
+21:58:49 +05'30'
+(₹ in crores)
+Particulars
+ Year ended
+31.03.2026
+(Audited) 
+ Year ended
+31.03.2025
+(Audited) 
+A CASH FLOW FROM OPERATING ACTIVITIES
+Profit before tax 353.04                         426.11                           
+Adjustments for :
+Depreciation and amortisation expense 91.61                             
+89.08                             
+Trade receivable written off 11.84                            5.14                               
+Interest income on fixed deposits (36.26)                           (29.87)                            
+Interest on income tax-refund (0.02)                             (0.07)                             
+Exceptional item 135.87                          18.45                             
+Provision for expected credit loss 5.49                              0.76                               
+Interest expenses on financial liability measured at amortised cost -                                1.33                               
+Interest on borrowings from bank 4.92                              33.12                             
+Interest on lease liability 2.42                              3.00                               
+Other borrowing cost 1.22                              1.94                               
+Unrealised foreign exchange loss (net) 1.48                              9.34                               
+Net gain arising on financial assets designated as fair value through profit and loss (0.92)                              (1.20)                             
+Gain on extinguishment of lease liabilities (net) (0.11)                              (0.33)                             
+Liabilities no longer payable, written back (0.76)                              (1.61)                             
+Employee stock option expense 1.01                              3.11                               
+Loss/(gain) on disposal of property, plant and equipment 2.45                               (0.56)                             
+Operating profit before working capital changes 573.28                          557.74                          
+Adjustments for working capital
+Decrease in trade receivables 8.38                              
+127.99                           
+Decrease in financial assets and other assets 226.31                           11.07                             
+(Decrease)/ increase in trade payables, provisions and other liabilities (97.80)                            4.13                               
+Cash generated from operating activities 710.17                           700.93                          
+Direct taxes paid (net) (129.01)                         (98.45)                            
+Net cash generated from operating activities (A) 581.16                           602.48                          
+B CASH FLOW FROM INVESTING ACTIVITIES
+Purchase of property, plant and equipment and other intangible assets including capital work-in-
+progress and intangible assets under development
+(26.44)                           (21.32)                            
+Proceeds from disposal of property, plant and equipment *- 2.20                                
+Payment of purchase consideration for business combination (8.32)                              (16.41)                            
+Investment in bank deposits (500.42)                         (1,706.34)                       
+Bank deposits matured 480.62                          1,464.80                        
+Interest received 40.54                            16.93                              
+Net cash used in investing activities (B) (14.02)                           (260.14)                         
+C CASH FLOW FROM FINANCING ACTIVITIES
+Repayment of non-current borrowings (138.21)                          (218.92)                          
+Dividend paid (71.52)                           (74.17)                            
+Proceeds from current borrowings -                               597.80                           
+Repayment of current borrowings (net) (299.02)                          (296.48)                          
+Proceeds from issue of equity shares 0.17                              6.81                               
+Payment of interest portion of lease liabilities (2.42)                              (3.00)                             
+Principal repayment of lease liabilities ( 14.34)                           (10.17)                            
+Interest paid (9.87)                             (35.66)                            
+Net cash used in financing activities (C) (535.21)                         (33.79)                           
+Net increase in cash and cash equivalents (A+B+C) 31.93                             308.55                          
+Cash and cash equivalents at the beginning of the period 850.40                          542.25                          
+Effect of currency fluctuations on cash and cash equivalents (2.21)                              (0.40)                             
+Cash and cash equivalents at the end of the period 880.12                           850.40                          
+Cash and cash equivalents as per consolidated financial statements 880.12                           850.40                           
+Note: 
+D. CONSOLIDATED STATEMENT OF CASH FLOWS
+The Consolidated statement of cash flows has been prepared under the indirect method as set out in Indian Accounting Standard (Ind AS) 7, 'Statement 
+of Cash Flows'.
+RAJDIPKUMAR 
+CHANDRAKANT 
+GUPTA
+Digitally signed by RAJDIPKUMAR 
+CHANDRAKANT GUPTA 
+Date: 2026.05.07 21:59:27 +05'30'
+E. NOTES TO THE AUDITED CONSOLIDATED FINANCIAL RESULTS
+1) 
+2)
+3)
+4)
+(₹ in crores)
+Objects of the issue as per Prospectus
+Utilisation 
+planned as per 
+the Prospectus
+Utilisation 
+upto
+31.03.2026
+Unutilised 
+amounts as on 
+31.03.2026
+Repayment or pre-payment, in full or part, of certain borrowings of 
+the Holding Company
+36.50                  36.50               -                      
+Acquisitions and other strategic initiatives 83.00                   83.00               -                      
+Purchase of office premises in Mumbai 65.00                   -                  65.00                 
+General corporate purposes 55.50                  55.50               -                      
+Net utilisation 240.00                 175.00             65.00                  
+5)
+6)
+7)
+(₹ in crores)
+31.03.2026 31.12.2025 31.03.2 025 31.03.2026 31.03.2025
+Net foreign exchange (gain)/ loss                  (18.15)                (3.62)                    0.83              (14.76)                 (7.97)
+8)
+9)
+The Group has presented net foreign exchange gain under "Other income" and net foreign exchange loss under "Other expenses". The table below shows the amount of net
+foreign exchange gain or loss in each of the periods/ year presented:
+Particulars Quarter ended Year ended
+During the year ended 31 March 2026, the Holding Company has allotted 5,500 (31 March 2025 : 209,050)  fully paid-up equity shares of face value of ₹ 10 each pursuant to 
+exercise of stock options by its eligible employees vide the Route Mobile Limited Employee Stock Option Plan 2017.
+Funds amounting to ₹ 867.50 crores raised by the Holding Company pursuant to a Qualified Institutional Placement (QIP) in the previous years are being duly utilised as per
+the objects stated in the placement document and the unutilised amount from t he aforementioned QIP has been temporarily invested in fixed deposits wi th scheduled
+commercial banks as at 31 March 2026.
+Exceptional items for the year ended 31 March 2025 includes recognition of impairment loss of goodwill pertaining to a step down subsidiary, write off of an amount
+receivable from a Mobile Network Operator (MNO) and loss incurred towards non fulfilment of a short term contract with the said MNO and adjustment of th e fair value
+gain of the contingent consideration pertaining to acquisition of a subsidiary in previous years.
+(This space has been intentionally left blank)
+One of the subsidiaries in the Group had entered into an agreement in an earlier year to purchase minimum guaranteed SMS volume from a vendor and paid an amount of ₹
+196.61 crores as advance in respect of the committed volume for first two years. As at 31 March 2024, the management had evaluated the contract to be oner ous as
+stipulated under Ind AS 37, Provisions, Contingent Liabilities a nd Contingent Assets, and had accordingly recorded a provision of ₹ 26.70 crores in this respect towards
+doubtful recovery of the advance. Further, owing to significant adverse ma rket conditions, the management had re-estimated a significantly lower v olume of business to be
+generated from the said contract over the remaining extended contract perio d and had invoked their rights under the contract to re-negotiate the term so ft h ec o n t r a c tf o r
+the balance net advance vide a letter dated 14 November 2024 which, however , did not materialize and on 24 March 2025, the management had invoked arbitr ation
+proceedings against the vendor for good faith negotiations and revisions of the SMS volume and revenue commitments and breach by the vendor of its certain obligations as
+per the terms of the agreement. Subsequently, on 7 April 2025, the vendor had also filed a counter claim against the said subsidiary alleging violation of certain terms of the
+agreement without providing any basis or calculation for the counter claims.
+Thereafter, the vendor terminated the agreement after additional negotiations failed. An arbitration hearing was held in September 2025 regarding the vendor’s preliminary
+application with respect to management’s claim. Based on the discussions held at that hearing and cessation of the services, the management, in consu ltation with their legal
+counsel, wrote off the remaining net advance of ₹ 107.96 crores and presented as an exceptional item in the consolidated financial results.
+Subsequently, a partial award dated 18 November 2025 was received from the Sin gapore International Arbitration Centre which adversely affected the subsidiary's claim as it
+stated that the minimum committed volumes were not subject to adjustment thro ughout the commitment period and relieved the vendor of any obligation t or e f u n d
+prepayments made for the first two years. Post the above order, both the parties have executed a settlement agreement dated 19 February 2026 withdrawi ng all their
+respective claims and counterclaims. 
+The consolidated financial results of Route Mobile Limited (the 'Holding Com pany') and its 35 subsidiaries (together referred to as the 'Group') has been prepared in
+accordance with the recognition and measurement principles laid down in the applicable Indian Accounting Standards prescribed under section 133 of the Companies Act,
+2013 read with the Companies (Indian Accounting St andards) Rules, 2015, other accounting principles generally accepted in India and in accordance w ith the requirements
+of Regulation 33 of the SEBI (Listing Obligations and Disclosure Requirements) Regulations, 2015 (as amended).
+The utilisation of the Holding Company's initial public offer (IPO) proceeds has been summarised below :
+The figures for the quarters ended 31 March 2026 and 31 March 2025 represents the balancing figures between audited figures in respect of the full finan cial year and
+published unaudited year to date figures upto nine months of the respective financial year.
+The consolidated financial results for the year ended 31 March 2026 has bee n reviewed by the Audit Committee and approved by the Board of Directors of th e Holding
+Company at their respective meetings held on 07 May 2026 and have been audited by the statutory auditors of the Holding Company.
+a) IPO proceeds which remained unutilised as at 31 March 2026 have been temporarily invested in bank deposits with scheduled commercial banks.
+RAJDIPKUMAR 
+CHANDRAKAN
+T GUPTA
+Digitally signed by 
+RAJDIPKUMAR 
+CHANDRAKANT 
+GUPTA 
+Date: 2026.05.07 
+21:59:45 +05'30'
+E. NOTES TO THE AUDITED CONSOLIDATED FINANCIAL RESULTS
+10)
+11)
+12)
+13)
+For and on behalf of the Board of Directors
+Place : Paddington, London Rajdipkumar Gupta
+Date : 07 May 2026 Managing Director
+Figures of the previous periods/year have been re- grouped/re-classified, wherever considered nec essary to make them comparable with the figures o ft h ec u r r e n t
+period/year. However, the impact of the same is not material to these financial results.
+The Board of Directors of the Holding Company have recommended a final dividend @ 20% (₹ 2 per share of face value ₹ 10 each) for the financial year 2025-26 subject to
+necessary approval by the shareholders in the ensuing Annual General Meeting of the Holding Company.
+Effective 21 November 2025, the Government of India has consolidated multip le existing labour legislations into a unified framework comprising of f our Labour Codes -
+The Code on Wages, 2019, The Industrial Relations Code, 2020, The Code on Soc ial Security, 2020 and The Occupational Safety, Health and Working Condit ions Code,
+2020. Per evaluation done by the management, on the basis of the information and guidance available as on date, the aforementioned legislations do not have any material
+impact on the Group.
+One of the subsidiaries in the Group had entered into an agreement to purchase messaging services from a vendor during the previous financial year and a na d v a n c e
+amounting to ₹ 27.91 crores was extended in the ordinary course of business for procurement of the aforementioned services. During the year, the management has re-
+evaluated the vendor’s credibility in the absence of communication or confi rmation from the vendor regarding project commencement and as an outcome of such
+assessment, the management determined that the vendor has ceased its business operation.  
+Based on significant uncertainty in recovering the outstanding amount, the subsidiary has written off such advance amounting to ₹ 27.91 crores and such expense has been
+presented as an exceptional item in these consolidated financial results. The management is currently exploring its options for the recovery of such advance.
+RAJDIPKUM
+AR 
+CHANDRAK
+ANT GUPTA
+Digitally signed by 
+RAJDIPKUMAR 
+CHANDRAKANT 
+GUPTA 
+Date: 2026.05.07 
+22:00:00 +05'30'
+ 
+ 
+ 
+Walker Chandiok & Co LLP 
+42nd Floor,  
+Building Commerz III, 
+International Business Park, 
+Oberoi Garden City,  
+Off Western Express Highway, 
+Goregaon (East),  
+Mumbai-400063 
+T +91 22 6626 2699 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+   
+   
+Chartered Accountants 
+ 
+Offices in Ahmedabad, Bengaluru, Bhubaneswar, Chandigarh, Chennai, Dehradun, Goa, Gurugram, Guwahati, Hyderabad, Indore, 
+Kochi, Kolkata, Mumbai, New Delhi, Noida and Pune 
+ 
+Walker Chandiok & Co LLP is registered 
+with limited liability with identification 
+number AAC-2085 and has its registered 
+office at L-41, Connaught Circus, Outer 
+Circle, New Delhi, 110001, India 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+Independent Auditor’s Report on St andalone Annual Financial Results of the Company Pursuant to the 
+Regulation 33 of the SEBI  ( Listing Obligations and Disclosure Re quirements) Regulations, 2015 (as 
+amended) 
+ 
+ 
+To the Board of Directors of Route Mobile Limited 
+Opinion 
+1. We have audited the accompanying standalone annual financial results (‘the Statement’) of Route Mobile 
+Limited (‘the Company’) for the year ended 31 March 2026, atta ched herewith, being submitted by the 
+Company pursuant to the requirements of Regulation 33   of the SEBI (Listing Obligations and Disclosure 
+Requirements) Regulations, 2015 (as amended) (‘Listing Regulations’). 
+ 
+2. In our opinion and to the best of our information and according to the explanations given to us, the Statement: 
+ 
+(i) presents financial results in accordance with the requ irements of Regulation 33 of the Listing Regulations, 
+and 
+ 
+(ii) gives a true and fair view in conformity with the recognition and measurement principles laid down in the 
+applicable Indian Accounting Standards (‘Ind AS’) specified under section 133 of the Companies Act, 2013 
+(‘the Act’), read with the Companies (Indian Accounting Standards) Ru les, 2015, and other accounting 
+principles generally accepted in India, of the stan dalone net profit after tax and other comprehensive 
+income and other financial information of the Company for the year ended 31 March 2026. 
+ 
+Basis for Opinion 
+ 
+3. We conducted our audit in accordance with the Standa rds on Auditing specified under section 143(10) of the 
+Act. Our responsibilities under those standards are furt her described in the Auditor’s Responsibilities for the 
+Audit of the Statement section of our report. We ar e independent of the Company in accordance with the 
+Code of Ethics issued by the Institute of Chartered Accoun tants of India (‘the ICAI’) together with the ethical 
+requirements that are relevant to our audit of the financial results under the provisions of the Act and the rules 
+thereunder, and we have fulfilled our other ethical responsibilities in accordance with these requirements and 
+the Code of Ethics. We believe that the audit evidence obtained by us, is sufficient and appropriate to provide 
+a basis for our opinion. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+Independent Auditor’s Report on Standalone Annual Financial Results of Route Mobile Limited Pursuant 
+to the Regulation 33 of the SEBI  (Listing Obligations and Disclosure Requirements) Regulations, 2015 (as 
+amended) (cont’d) 
+ 
+ 
+   
+   
+Chartered Accountants 
+ 
+Offices in Ahmedabad, Bengaluru, Bhubaneswar, Chandigarh, Chennai, Dehradun, Goa, Gurugram, Guwahati, Hyderabad, Indore, 
+Kochi, Kolkata, Mumbai, New Delhi, Noida and Pune 
+ 
+Walker Chandiok & Co LLP is registered with 
+limited liability with identification number 
+AAC-2085 and has its registered office at L-
+41, Connaught Circus, Outer Circle, New 
+Delhi, 110001, India 
+Responsibilities of Management and Those Charged with Governance for the Statement 
+ 
+4. This Statement has been prepared on the basis of the standalone annual financial statements and has been 
+approved by the Company's Board of Directors. The Company’s Board of Directors is responsible for the 
+preparation and presentation of the Statement that give s a true and fair view of the net profit and other 
+comprehensive income and other financial information  of the Company in accordance with the Ind AS 
+specified under section 133 of the Act, read with the Companies (Indian Accounting Standards) Rules, 2015 
+and other accounting principles generally accepted in India, and in compliance with Regulation 33 of the 
+Listing Regulations. This responsibility also includ es maintenance of adequate accounting records in 
+accordance with the provisions of the Act for safeguardi ng of the assets of the Company and for preventing 
+and detecting frauds and other irregu larities; selection and application of  appropriate accounting policies; 
+making judgments and estimates that are reasonable and prudent; and design, implementation and 
+maintenance of adequate internal financial controls that were operating effectively for ensuring the accuracy 
+and completeness of the accounting records, relevant to the preparation and presentation of the Statement 
+that gives a true and fair view and is free from material misstatement, whether due to fraud or error.  
+ 
+5. In preparing the Statement, the Board of Directors is responsible for assessing the Company’s ability to 
+continue as a going concern, disclosing, as applicable, matters related to going concern, and using the going 
+concern basis of accounting unless the Board of Directors either intends to liquidate the Company or to cease 
+operations, or has no realistic alternative but to do so. 
+  
+6. The Board of Directors is also responsible for overseeing the Company’s financial reporting process. 
+ 
+Auditor’s Responsibilities for the Audit of the Statement 
+ 
+7. Our objectives are to obtain reasonable assurance about whether the Statement as a whole is free from 
+material misstatement, whether due to fraud or error, and to issue an auditor’s report that includes our 
+opinion. Reasonable assurance is a high level of assu rance but is not a guarantee that an audit conducted 
+in accordance with Standards on Auditing, specified under section 143(10) of the Act, will always detect a 
+material misstatement when it exists. Misstatements can arise from fraud or error and are considered material 
+if, individually or in the aggregate, they could reasonably be expected to influence the economic decisions of 
+users taken on the basis of this Statement.  
+ 
+8. As part of an audit in accordance with the Standards on Auditing, specified under section 143(10) of the Act, 
+we exercise professional judgment and maintain professional skepticism throughout the audit. We also:  
+ 
+x Identify and assess the risks of material misstatemen t of the Statement, whether due to fraud or error, 
+design and perform audit procedures responsive to those risks, and obtain audit evidence that is sufficient 
+and appropriate to provide a basis for our opinion. The risk of not detecting a material misstatement 
+resulting from fraud is higher than for one resulting from error, as fraud may involve collusion, forgery, 
+intentional omissions, misrepresentations, or the override of internal control; 
+x Obtain an understanding of internal control relevant to the audit in order to design audit procedures that 
+are appropriate in the circumstances. Under section 14 3(3) (i) of the Act, we are also responsible for 
+expressing our opinion on whether the Company has in place an adequate internal financial controls with 
+reference to financial statements and the operating effectiveness of such controls;  
+x Evaluate the appropriateness of accounting po licies used and the reasonableness of accounting 
+estimates and related disclosures made by the Board of Directors; 
+x Conclude on the appropriateness of the Board of Directors’ use of the going concern basis of accounting 
+and, based on the audit evidence obtained, whether a material uncertainty exists related to events or 
+conditions that may cast significant doubt on the Company’s ability to continue as a going concern. If we 
+conclude that a material uncertainty exists, we are required to draw attention in our auditor’s report to the 
+related disclosures in the Statement or, if such disclosures are inadequate, to modify our opinion. Our 
+conclusions are based on the audit evidence obtained  up to the date of our auditor’s report. However, 
+future events or conditions may cause the Company to cease to continue as a going concern; and 
+x Evaluate the overall presentation, structure and cont ent of the Statement, including the disclosures, and 
+whether the Statement represents the underlying transactions and events in a manner that achieves fair 
+presentation.  
+ 
+ 
+ 
+ 
+Independent Auditor’s Report on Standalone Annual Financial Results of Route Mobile Limited Pursuant 
+to the Regulation 33 of the SEBI  (Listing Obligations and Disclosure Requirements) Regulations, 2015 (as 
+amended) (cont’d) 
+ 
+ 
+   
+   
+Chartered Accountants 
+ 
+Offices in Ahmedabad, Bengaluru, Bhubaneswar, Chandigarh, Chennai, Dehradun, Goa, Gurugram, Guwahati, Hyderabad, Indore, 
+Kochi, Kolkata, Mumbai, New Delhi, Noida and Pune 
+ 
+Walker Chandiok & Co LLP is registered with 
+limited liability with identification number 
+AAC-2085 and has its registered office at L-
+41, Connaught Circus, Outer Circle, New 
+Delhi, 110001, India 
+ 
+ 
+9. We communicate with those charged with governance  regarding, among other matters, the planned scope 
+and timing of the audit and significant audit findings, in cluding any significant deficiencies in internal control 
+that we identify during our audit.  
+ 
+10. We also provide those charged with governance with a statement that we have complied with relevant ethical 
+requirements regarding independence, and to communic ate with them all relationships and other matters 
+that may reasonably be thought to bear on our independence, and where applicable, related safeguards. 
+ 
+Other Matter 
+ 
+11. The Statement includes the financial results for the quarter ended 31 March 2026, being the balancing figures 
+between the audited figures in respect of the full fi nancial year and the published unaudited year-to-date 
+figures up to the third quarter of the current financial year, which were subject to limited review by us. 
+ 
+ 
+ 
+ 
+ 
+For Walker Chandiok & Co LLP  
+Chartered Accountants 
+Firm Registration No.: 001076N/N500013 
+ 
+ 
+ 
+ 
+Rajni Mundra 
+Partner    
+Membership No. 058644 
+UDIN: 26058644CYPJZH3792 
+  
+Place: Mumbai 
+Date: 7 May 2026  
+ 
+Rajni 
+Mundra
+Digitally signed 
+by Rajni Mundra 
+Date: 2026.05.07 
+22:12:11 +05'30'
+(₹ in crores except earnings per share)
+ 31.03.2026
+(Refer note 3) 
+ 31.12.2025
+(Unaudited) 
+ 31.03.2025
+(Refer note 3) 
+ 31.03.2026
+(Audited) 
+ 31.03.2025
+(Audited) 
+1 Income
+Revenue from operations 220.94                185.94                 208.38                769.87                832.21              
+Other income 29.91                  21.48                   23.09                  111.52                96.38                
+Total income 250.85               207.42                 231.47                881.39                928.59             
+2 Expenses
+Purchase of messaging services 155.54                126.35                 133.66                541.11                587.81              
+Employee benefits expense 19.94                  21.72                   18.30                  88.97                  83.11                 
+Finance costs 0.28                    0.39                     0.39                    1.44                    1.67                  
+Depreciation and amortisation expense 3.68                    3.45                     3.47                    14.24                  15.18                 
+Other expenses 16.29                  14.85                   13.06                  55.85                  40.70                
+Total expenses 195.73                166.76                 168.88                701.61                728.47              
+3 Profit before exceptional item and tax (1-2) 55.12                 40.66                   62.59                 179.78                200.12             
+4 Exceptional item (refer note 9) -                     -                      28.08                 -                     28.08                
+5 Profit before tax (3-4) 55.12                 40.66                   34.51                 179.78                172.04             
+6 Tax expense
+Current tax 14.49                  10.47                   8.78                    45.58                  40.92                
+Deferred tax (benefit)/ charge (0.42)                  (0.20)                    (0.03)                  (0.58)                  0.10                 
+14.07                 10.27                   8.75                    45.00                  41.02                
+7 Profit for the period/ year (5-6) 41.05                 30.39                   25.76                 134.78                131.02              
+8 Other comprehensive income
+Items that will not be reclassified to profit or loss
+Re-measurements of defined benefit plans 0.10                    *- (0.45)                  (0.76)                  (1.33)                 
+Income-tax effect of the above (0.02)                  *- 0.11                    0.19                    0.34                 
+Total other comprehensive income (net of tax) 0.08                   *- (0.34)                  (0.57)                  (0.99)                
+9 Total comprehensive income for the period/ year (7+8) 41.13                  30.39                   25.42                 134.21                130.03             
+10 Paid-up equity share capital (face value of ₹ 10/- each) 63.00                 63.00                   63.00                  63.00                  63.00                 
+11 Other equity 1,262.17            1,196.34           
+12 Earnings per share (face value of ₹ 10/- each) (not annualised except for 
+the year ended 31 March 2026 and 31 March 2025)
+Basic (in ₹) 6.52                   4.82                     4.09                    21.39                  20.83                 
+Diluted (in ₹) 6.52                   4.82                     4.09                    21.39                  20.83                 
+*Rounded off to Nil
+Sr. No.
+ROUTE MOBILE LIMITED
+                          Registered office : SanRaj Corporate Park - 4th Dimension, 3rd Floor, Mind Space, Malad (West), Mumba i 400 064, Maharashtra, India
+                          Corporate Identity Number: L72900MH2004PLC146323 , Website : www.routemobile.com
+A. STATEMENT OF STANDALONE FINANCIAL RESULTS FOR THE QUARTER AND YEAR ENDED 31 MARCH 2026
+Particulars
+Quarter ended  Year ended 
+RAJDIPKUM
+AR 
+CHANDRAK
+ANT GUPTA
+Digitally signed 
+by RAJDIPKUMAR 
+CHANDRAKANT 
+GUPTA 
+Date: 2026.05.07 
+21:56:57 +05'30'
+B. STANDALONE BALANCE SHEET
+(₹ in crores)
+31.03.2026
+(Audited)
+31.03.2025
+(Audited)
+I Assets
+1 Non-current assets
+Property, plant and equipment 15.51                    17.96                   
+Capital work-in-progress *- 0.11                    
+Right-of-use assets 11.09                    4.78                    
+Goodwill 10.29                    10.29                   
+Other intangible assets 10.87                    14.05                   
+Intangible assets under development 0.67                      -                       
+Financial assets
+Investment in subsidiaries 38.51                    38.07                   
+Loans 186.60                  246.23                 
+Other financial assets 37.98                    26.49                   
+Deferred tax assets (net) 7.79                      7.29                    
+Income-tax assets (net) 27.43                    20.53                   
+Other non-current assets 5.70                      8.49                    
+Total non-current assets 352.44                 394.29                
+2 Current assets
+Financial assets
+Investments 16.99                    16.07                   
+Trade receivables 241.36                  252.69                 
+Cash and cash equivalents 247.03                  242.06                 
+Bank balances other than cash and cash equivalents 458.55                  408.78                 
+Loans 94.70                    242.28                 
+Other financial assets 33.68                    35.46                   
+Other current assets 50.98                    77.29                   
+Total current assets 1,143.29               1,274.63             
+Total assets 1,495.73                1,668.92             
+II Equity and liabilities
+1 Equity
+Equity share capital 63.00                     63.00                   
+Other equity 1,262.17                1,196.34              
+1,325.17               1,259.34             
+Liabilities
+2 Non-current liabilities
+Financial liabilities
+Lease liabilities 5.22                      1.66                    
+Provisions 8.21                      7.07                    
+Total non-current liabilites 13.43                    8.73                    
+3 Current liabilities
+Financial liabilities
+Lease liabilities 6.01                      4.35                    
+Trade payables
+-Total outstanding dues of micro enterprises and small enterprises 0.75                      0.48                    
+-Total outstanding dues of creditors other than micro enterprises and small 
+enterprises 118.74                  370.58                 
+Other financial liabilities 6.20                      9.04                     
+Other current liabilities 5.71                      9.62                    
+Provisions 1.95                      1.65                    
+Current tax liabilities (net) 17.77                    5.13                    
+Total current liabilites 157.13                  400.85                
+Total liabilities 170.56                  409.58                
+Total equity and liabilities 1,495.73                1,668.92              
+* Rounded off to Nil
+Particulars
+As at
+RAJDIPKUMAR 
+CHANDRAKAN
+T GUPTA
+Digitally signed by 
+RAJDIPKUMAR 
+CHANDRAKANT GUPTA 
+Date: 2026.05.07 
+21:57:12 +05'30'
+C. STANDALONE STATEMENT OF CASH FLOWS
+(₹ in crores)
+Particulars
+ Year ended 
+31.03.2026
+(Audited) 
+ Year ended 
+31.03.2025
+(Audited) 
+A. CASH FLOW FROM OPERATING ACTIVITIES
+Profit before tax 179.78                    172.04                    
+Adjustments for :
+Depreciation and amortisation expense 14.24                       15.18                       
+Interest on lease liability 0.63                         0.88                         
+Trade receivables written off 4.14                         2.02                         
+Interest income on bank deposits (31.26)                      (25.12)                      
+Interest income on loan to subsidiary companies (30.93)                      (40.71)                      
+Net gain arising on financial asset measured at fair value through profit and loss (0.92)                        (1.21)                       
+Exceptional item -                          28.08                       
+Dividend received from subsidiary companies (2.46)                       (9.63)                       
+Provision/ (reversal) for expected credit loss 2.18                         (1.36)                       
+Interest income on financial asset measured at amortised cost (0.22)                        (0.19)                       
+Other borrowing cost 0.80                         0.76                         
+Unrealised foreign exchange gain (net) (42.80)                      (11.97)                      
+Employee stock option expense charge 0.58                         1.85                         
+Profit on disposal of property, plant and equipment -                          (0.56)                       
+Liabilities no longer required, written back *- -                           
+Gain on extinguishment of lease liabilities (net) (0.11)                       (0.16)                       
+Operating profit before working capital changes 93.65                      129.90                    
+Adjustments for working capital:
+Increase in trade receivables 5.13                         2.14                         
+Decrease/ (increase) in financial assets and other assets 28.58                        (34.72)                      
+(Decrease)/ increase in trade payables, provisions and other liabilities (258.69)                     205.23                     
+Cash (used in)/ generated from operating activities (131.33)                    302.55                    
+Direct taxes paid (net) (39.84)                      (44.35)                      
+Net cash (used in)/ generated from operating activities (171.17)                    258.20                    
+B. CASH FLOW FROM INVESTING ACTIVITIES
+ Purchase of property, plant and equipment and intangible assets including capital work-in-progress (4.49)                       (6.01)                        
+ Proceeds from disposal of property, plant and equipment -                          1.90                          
+ Investment in bank deposits (448.53)                    (1,636.33)                 
+ Bank deposits matured 405.08                     1,395.97                  
+ Loans given to subsidiaries (18.95)                      (9.85)                        
+ Repayment of loans given to subsidiaries 266.42                     110.15                      
+ Interest received on loan given to subsidiaries 16.26                       54.72                        
+ Interest received  33.69                       12.89                        
+ Dividend received 2.46                         9.63                          
+Net cash generated/ (used in) from investing activities 251.94                     (66.93)                      
+C. CASH FLOW FROM FINANCING ACTIVITIES
+Proceeds from issue of equity shares 0.17                         6.80                          
+Interest paid (0.80)                       (0.76)                        
+Payment of interest portion of lease liabilities (0.63)                       (0.88)                        
+Principal repayment of lease liabilities (5.47)                       (4.15)                        
+Dividend paid (69.30)                      (69.23)                       
+ Net cash used in financing activities (76.03)                     (68.22)                      
+Net increase in cash and cash equivalents (A+B+C) 4.74                         123.05                    
+Opening balance of cash and cash equivalents 242.06                     118.63                      
+Effect of currency fluctuations on cash and cash equivalents 0.23                          0.38                          
+Closing balance of cash and cash equivalents 247.03                    242.06                     
+Cash and cash equivalents as per financial statements 247.03                     242.06                     
+* Rounded off to Nil
+(i) The standalone statement of cash flows has been prepared under the indirect method as set out in Indian Accounting Standard (Ind AS) 7, 'Statement of Cash 
+Flows'.
+Note: 
+RAJDIPKUMAR 
+CHANDRAKAN
+T GUPTA
+Digitally signed by 
+RAJDIPKUMAR 
+CHANDRAKANT GUPTA 
+Date: 2026.05.07 
+21:57:30 +05'30'
+D. NOTES TO THE AUDITED STANDALONE FINANCIAL RESULTS
+1)
+2)
+3)
+4)
+(₹ in crores)
+Objects of the issue as per Prospectus
+Utilisation 
+planned as per 
+the Prospectus
+Utilisation 
+upto
+31.03.2026
+Unutilised 
+amounts as at 
+31.03.2026
+Repayment or pre-payment, in full or part, of certain 
+borrowings of the Company
+36.50                   36.50               -                      
+Acquisitions and other strategic initiatives 83.00                    83.00               -                      
+Purchase of office premises in Mumbai 65.00                    -                  65.00                 
+General corporate purposes 55.50                    55.50               -                      
+Net utilisation 240.00                  175.00            65.00                  
+5)
+6)
+7)
+8)
+(₹ in crores)
+31.03.2026 31.12.2025 31. 03.2025 31.03.2026 31.03.2025
+Dividend declared by subsidiary companies                          -                      -                          -                 2.46               9.63 
+9)
+10)
+11)
+12)
+For and on behalf of the Board of Directors
+Place : Paddington, London Rajdipkumar Gupta
+Date : 07 May 2026 Managing Director
+Exceptional item for the quarter and year ended 31 Ma rch 2025 pertains to write off of an amount receivable from a Mobile Network Operator (MNO) and loss
+incurred towards non fulfilment of a short term contract with the said MNO.
+The standalone financial results of Route Mobile Limited (the 'Company') h as been prepared in accordance with the recognition and measurement princ iples laid
+down in the applicable Indian Accounting Standards specified under section 133 of the Companies Act, 2013 (the 'Act') read with the Companies (Indian Accounting
+Standards) Rules, 2015, other accounting principles generally accepted in India and in accordance with the requirements of Regulation 33 of the SEBI (Listing
+Obligations and Disclosure Requirements) Regulations, 2015 (as amended) ('SEBI LODR').
+Quarter ended Year ended
+The figures for the quarters ended 31 March 2026 and 31 March 2025 represents the balancing figures between audited figures in respect of the full finan cial year and
+the published unaudited year to date figures upto nine months of the respective financial year.
+In accordance with Ind AS 108, ‘Operating Segments’, the Company has opted to present segment information along with its consolidated financial results.
+During the year ended 31 March 2026, the Company has alloted 5,500 (31 March 2025: 209,050) fully paid-up equity share of face value of ₹ 10 each pursuant to
+exercise of stock options by its eligible employees vide Route Mobile Limited Employee Stock Option Plan 2017.
+The standalone financial results for the year ended 31 March 2026 has been reviewed by the Audit Committee and approved by the Board of Directors at thei r
+respective meetings held on 07 May 2026 and have been audited by the statutory auditors of the Company.
+The utilisation of the Company's initial public offer (IPO) proceeds has been summarised below:
+Effective 21 November 2025, the Government of India has consolidated multip le existing labour legislations into a unified framework comprising of f our Labour
+Codes - The Code on Wages, 2019, The Industrial Relations Code, 2020, The Code on Social Security, 2020 and The Occupational Safety, Health and Working
+Conditions Code, 2020. Per evaluation done by the management, on the basis of t he information and guidance available as on date, the aforementioned le gislations
+do not have any material impact on the Company. 
+Figures of the previous periods/year have been re-grouped/re-classified, wherever considered necessary to make them comparable with the current p eriod/year,
+however, the impact of the same is not material to the financial results.
+The Board of Directors have recommended a final dividend @ 20% ( ₹ 2 per share of face value ₹ 10 each), for the financial year 2025-26 subject to necessary
+approval by the shareholders in the ensuing Annual General Meeting of the Company.
+Other income, inter alia , includes dividend declared by the subsidiary companies of Route Mobile Limited:
+a) IPO proceeds which remained unutilised as at 31 March 2026 have been temporarily invested in bank deposits with scheduled commercial banks.
+Funds amounting to ₹ 867.50 crores raised by the Company pursuant to a Qualified Institutional Placement (QIP) in the previous years are being duly utilised as per
+the objects stated in the placement document and the unutilised amount from the aforementioned QIP has been temporarily invested in fixed deposits wi th
+scheduled commercial banks as at 31 March 2026.
+Particulars
+RAJDIPKUMAR 
+CHANDRAKAN
+T GUPTA
+Digitally signed by 
+RAJDIPKUMAR 
+CHANDRAKANT GUPTA 
+Date: 2026.05.07 21:57:58 
++05'30'
+ 
+	
+Annexure	2	
+	
+The	details	as	required	under	Regulation	30	of	the	SEBI	(Listing	Obligations	and	Disclosure	Requirements)	
+Regulations,	2015	read	with	applicable	circulars	are	given	below:	
+	
+Sr.	
+No.	
+Particulars	 Details	
+1 Reason for Change 
+viz. appointment, re-
+appointment, 
+resignation, 
+removal, death or 
+otherwise 
+Appointment of Mr. Alyque 
+Sequeira, Executive Advisor to CEO 
+as Senior Management Personnel of 
+the Company. 
+Appointment of Mr. Gaurav 
+Jhunjunwala, AGM- Legal as 
+Senior Management 
+Personnel of the Company. 
+Re-appointment of   
+Mr. Nicolas Lecomte, 
+Internal Audit 
+Manager, Proximus 
+S.A. as the Internal 
+Auditor of the 
+Company for FY 
+2026-27. 
+2 Date of appointment 
+/reappointment/ 
+Cessation (as 
+applicable) and term 
+of appointment 
+/reappointment 
+May 07, 2026 May 07, 2026 May 07, 2026 
+3 Brief profile (in case 
+of appointment) 
+Alyque Sequeira is a strategic 
+product leader and Executive 
+Advisor to the CEO at Route Mobile, 
+with nearly 20 years of experience 
+in telecommunications and CPaaS. 
+He is known for transforming 
+service-oriented organizations into 
+scalable, product-driven businesses 
+and for translating executive vision 
+into successful public market 
+outcomes, including IPOs. In his 
+current role, he serves as a key 
+advisor to the CEO and has also 
+supported leadership at Proximus 
+Global, helping align product 
+strategy with long-term growth 
+objectives. At Route Mobile, he 
+founded the Product Organization 
+and led the development of flagship 
+initiatives such as OCEAN, an omni-
+channel API platform, and RAPID, a 
+developer enablement program. He 
+has played a pivotal role in driving 
+product-led growth strategies that 
+contributed to IPO success, while 
+also leading the global expansion of 
+TruSense, an identity and fraud 
+mitigation solution, across India, 
+Colombia, and Peru. His technical 
+expertise includes building and 
+scaling API ecosystems for 
+WhatsApp Business, RCS, Google 
+Business Messaging, and voice 
+platforms. Prior to his current role, 
+Alyque held senior product 
+leadership positions at Vodafone 
+Idea, Netcore Solutions, Paytm 
+Gaurav Deendayal 
+Jhunjhunwala serves as an 
+Assistant General Manager-
+Legal at Route Mobile 
+Limited. He is a law graduate 
+(LL.B.) and qualified 
+Company Secretary with 
+over 14 years of experience 
+in corporate legal advisory, 
+contract management, IP 
+Management and capital 
+market transactions. He has 
+expertise in advising on 
+complex legal, regulatory, 
+contract drafting and 
+negotiation, cross-border 
+transactions, intellectual 
+property management, and 
+regulatory liaison with 
+authorities such as law 
+enforcement agencies. 
+Mr. Nicolas Lecomte 
+is a 53 years Belgian 
+Citizen, holding a 
+Master in Business 
+from Mons 
+University, followed 
+one extra year 
+specialization in 
+Finance, Accounting 
+and Audit. He has 
+worked for Arthur 
+Andersen, he joined 
+Proximus for 14 
+years in different 
+Finance function 
+(Finance Controller, 
+CFO of subsidiary, 
+M&A (operations). 
+He has been Internal 
+Audit manager for 13 
+years within 
+Proximus Group. He 
+is a Certified Internal 
+Auditor (IIA) and 
+Certified Fraud 
+Examiner (CFE) He is 
+also a Board Member 
+of Belgian Chapter of 
+the Institute of 
+Internal Auditors 
+(IIA Bel). 
+ 
+(One97 Communications), and 
+Reliance Communications. 
+4 Disclosure of 
+relationships 
+between Directors 
+(in case of 
+appointment of a 
+Director) 
+Not Applicable Not Applicable Not Applicable

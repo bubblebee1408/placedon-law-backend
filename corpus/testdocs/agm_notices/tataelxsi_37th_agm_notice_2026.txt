@@ -1,0 +1,1565 @@
+# REAL FILED DOCUMENT — Notice of the 37th Annual General Meeting
+# Issuer: Tata Elxsi Limited | Mid cap design/tech, NSE/BSE listed
+# Extracted from: Integrated Annual Report FY 2025-26, pp.39-98
+# https://d1y69b020rytqm.cloudfront.net/PDF/Annual-Reports/June2026/Annual-Report-FY-2025-26.pdf
+# Type: AGM notice | Real | Text-extractable, no OCR needed
+# NOTE: source PDF uses ligature glyphs — 'benefit' extracts as 'beneﬁt' (U+FB01).
+#   A second adversarial extraction case for token-level regexes.
+
+Notice of the Thirty Seventh (37th) Annual General Meeting
+Notice is hereby given that the Thirty Seventh (37 th)
+Annual General Meeting (‘AGM’) of Tata Elxsi Limited
+(‘the Company’) will be held on Wednesday,
+June 24, 2026, at 10:30 A.M. (IST), through Video
+Conferencing (‘VC’) or Other Audio Visual Means
+(‘OAVM’) to transact the following business:
+ORDINARY BUSINESS
+Item No. 1 - Adoption of the Audited Financial
+Statements
+To receive, consider and adopt the Audited Financial
+Statements of the Company for the ﬁnancial year ended
+March 31, 2026, together with the Reports of the
+Board of Directors and the Auditors thereon.
+Item No. 2 - Declaration of Dividend
+To declare a dividend of /uni20B9 75/- per Equity Share of
+face value of /uni20B9 10 each for the ﬁnancial year ended
+March 31, 2026.
+Item No. 3 - Appointment of Mr. Ankur Verma
+(DIN: 07972892), who retires by rotation
+To appoint a Director in place of Mr. Ankur Verma
+(DIN: 07972892), Non-Executive, Non-Independent
+Director, who retires by rotation and being eligible,
+offers himself for re-appointment.
+SPECIAL BUSINESS
+Item No. 4 – Approval of Material Related Party
+Transactions with Jaguar Land Rover Limited, UK
+for FY 2026-27
+To consider and, if thought ﬁt, to pass the following
+resolution as an Ordinary Resolution:
+“RESOLVED THAT  pursuant to Regulation 23(4)
+and other applicable Regulations of the Securities
+and Exchange Board of India (Listing Obligations
+and Disclosure Requirements) Regulations, 2015,
+(‘SEBI Listing Regulations’), the applicable provisions
+of the Companies Act, 2013 (‘Act’), if any, read with
+related rules, if any, each as amended from time to
+time, and the Company’s Policy on Related Party
+Transaction(s) and based on the recommendation of
+the Audit Committee and the Board of Directors of the
+Company (hereinafter referred to as the ‘Board’), the
+approval of the Members, be and is hereby accorded
+to the Board (which term shall be deemed to include
+any Committee constituted/empowered/to be
+constituted by the Board from time to time to exercise
+its powers conferred by this Resolution) to enter into,
+contract(s)/arrangement(s)/transaction(s) (whether
+by way of an individual transaction or in a series of
+transactions either taken together or otherwise) with
+Jaguar Land Rover Limited, UK (‘JLR’), a related party
+within the meaning of Section 2(76) of the Act and
+Regulation 2(1)(zb) of the SEBI Listing Regulations, on
+such terms and conditions as may be agreed between
+the Company and JLR and as may be deemed
+ﬁt by the Board, for an aggregate value of up to
+/uni20B9 1,200 crore (Rupees One Thousand Two Hundred crore
+only) to be entered during the FY 2026-27, subject
+to
+such contract(s)/arrangement(s)/transaction(s) being
+carried out at arm’s length and in the ordinary course
+of business of the Company.
+RESOLVED FURTHER THAT the Board, be and is
+hereby authorised, to do and perform all such acts,
+deeds, matters and things, as may be necessary,
+including ﬁnalising the terms and conditions,
+methods and modes in respect thereof and
+ﬁnalising and executing necessary documents,
+including contract(s), scheme(s), agreement(s) and
+such other documents, ﬁle applications and make
+representations in respect thereof and seek approval
+from relevant authorities, including Governmental/
+regulatory authorities, as applicable, in this regard
+and deal with any matters, take necessary steps as the
+Board may, in its absolute discretion deem necessary,
+desirable or expedient, to give effect to this resolution
+and to settle any question that may arise in this regard
+and incidental thereto, without being required to
+seek any further consent or approval of the Members
+or otherwise to the end and intent that the Members
+shall be deemed to have given their approval thereto
+expressly by the authority of this resolution.
+RESOLVED FURTHER THAT the Board, be and is
+hereby authorised to delegate all or any of the powers
+herein conferred, to any Director(s) or Chief Financial
+Tata Elxsi37th Integrated Report 2025-26
+Notice 76
+Notice of the Thirty Seventh (37th) Annual General Meeting (Contd.)
+Ofﬁcer or Company Secretary or any other Ofﬁcer(s),
+Authorised Representative(s) of the Company, to
+do all such acts and take such steps, as may be
+considered necessary or expedient, to give effect to
+the aforesaid resolution(s).
+Date: April 21, 2026 By Order of the Board of Directors
+Place: Bengaluru Sneha V
+Company Secretary & Compliance Ofﬁcer
+Registered Ofﬁce: Membership No.: A51279
+Tata Elxsi Limited
+ITPB Road, Whiteﬁeld, Bangalore - 560048
+E-mail: investors@tataelxsi.com
+Website: www.tataelxsi.com
+CIN: L85110KA1989PLC009968
+RESOLVED FURTHER THAT all actions taken
+by the Board or any person so authorised by the
+Board, in connection with any matter referred to or
+contemplated in any of the foregoing resolutions, be
+and are hereby approved, ratiﬁed and conﬁrmed in
+all respects.”
+Tata Elxsi37th Integrated Report 2025-26
+Notice77
+NOTES:
+1. The Ministry of Corporate Affairs (“MCA”) permitted
+companies to conduct AGM through Video
+Conferencing or Other Audio Visual Means
+(‘VC/OAVM’), without physical presence of Members
+at a common venue. In compliance with General
+Circular Nos. 14/2020 dated April 08, 2020, 17/2020
+dated April 13, 2020, 20/2020 dated May 05, 2020 and
+subsequent circulars issued in this regard, the latest
+being 03/2025 dated September 22, 2025 (collectively
+referred to as “MCA Circulars)”, other applicable
+circulars and notiﬁcations issued (including any
+statutory modiﬁcations or re-enactment thereof)
+for the time being in force and as amended from
+time to time and the provisions of the Companies
+Act, 2013 (“Act”), SEBI (Listing Obligations and
+Disclosure Requirements) Regulations, 2015 (“SEBI
+Listing Regulations”), the 37
+th AGM of the Company
+is being held through VC/OAVM without the physical
+presence of Members at a common venue. The
+deemed venue for 37
+th AGM will be the Registered
+Ofﬁce of the Company.
+2. The Explanatory Statement pursuant to
+Section 102 of the Companies Act, 2013 (“Act”) setting
+out the material facts concerning the business with
+respect to Item No. 4 forms part of this Notice.
+ The relevant information with respect to Item
+No. 3  pursuant to Regulation 36(3) of the SEBI
+Listing Regulations and Secretarial Standard-2
+(“SS-2”) on General Meetings issued by the
+Institute of Company Secretaries of India, in
+respect of Director seeking re-appointment at
+this AGM is annexed to this Notice.
+3. A Member entitled to attend and vote at the
+AGM is entitled to appoint a proxy to attend and
+vote on his/her behalf and the proxy need not
+be a Member of the Company. Since this AGM is
+being held through VC/OAVM, the requirement
+of physical attendance of Members has been
+dispensed with. The facility for appointment
+of proxies by Members will not be available for
+this AGM and hence, the proxy form, attendance
+slip and route map of AGM are not annexed to
+this Notice.
+4. Institutional Investors/Corporate Members:
+ Institutional Investors/Corporate Members
+(i.e. other than individuals, HUFs, NRIs, etc.)
+who are intending to appoint their authorised
+representatives pursuant to Sections 112 or 113 of
+the Act, as the case may be, to attend the AGM
+and vote through e-Voting, are requested that
+certiﬁed copy of the Board Resolution/Power of
+Attorney/Authority Letter are:
+   sent to the Scrutiniser by e-mail at
+scrutinisers@mmjc.in with a copy marked
+to evoting@nsdl.com or
+   uploaded by clicking on the “Upload Board
+Resolution/Authority Letter” displayed
+under the “e-Voting” tab in their login.
+5. The Members attending the AGM
+through VC/OAVM will be counted for the
+purpose of reckoning the quorum under
+Section 103 of the Act.
+6. In case of joint holders, the Member whose name
+appears as the ﬁrst holder in the order of names
+as per the Register of Members of the Company as
+on the cut-off date i.e., Wednesday, June 17, 2026,
+will be entitled to vote at the AGM.
+7. Dispatch of Annual Report:
+ The Notice of this AGM along with the Integrated
+Annual Report for FY 2025-26 is being sent only
+through electronic mode to those Members
+whose e-mail addresses are registered with the
+Company/Registrar & Transfer Agent (“RTA”)/
+Depository Participants (“DP”). A letter is being
+sent to the shareholders whose email addresses
+are not registered, providing the web-link &
+QR code of Company’s website from where the
+Integrated Annual Report can be accessed. For
+obtaining the physical copy of the Integrated
+Annual Report for FY 2025-26, the Members may
+send requests to the Company’s investors email-id
+
+viz. investors@tataelxsi.com, mentioning their
+Folio No./DP ID and Client ID.
+Notice of the Thirty Seventh (37th) Annual General Meeting (Contd.)
+Tata Elxsi37th Integrated Report 2025-26
+Notice 78
+ The Notice along with the Integrated Annual
+Report for FY 2025-26 is also available on the
+Company’s website at
+www.tataelxsi.com,
+websites of the  Stock Exchanges, i.e. BSE Limited
+and National Stock Exchange of India Limited
+at
+www.bseindia.com and www.nseindia.com
+respectively and on the website of NSDL at
+www.evoting.nsdl.com.
+8. Record Date for payment of Dividend
+for FY 2025-26:
+ The Record date ﬁxed for determining the
+entitlement of Members to dividend for the
+ﬁnancial year ended March 31, 2026, if approved
+at the AGM is Wednesday, June 10, 2026 . The
+Register of Members and Share Transfer Books of
+the Company will remain closed from Thursday,
+June 11, 2026 to Wednesday, June 24, 2026
+(both dates inclusive).
+9. Dividend:
+ The dividend, as recommended by the Board of
+Directors, if approved at this AGM, will be paid
+subject to deduction of tax at source (TDS), only
+through electronic mode as under:
+ i)  Shares held in electronic form: To all
+Beneﬁcial Owners as per the details
+made available by the Depositories, as of
+close of business hours on Wednesday,
+June 10, 2026; and
+ ii)  Shares held in physical form: To all Members
+after giving effect to valid transmission or
+transposition requests lodged with the
+Company, if any, as of close of business
+hours on Wednesday, June 10, 2026.
+ Mandatory Electronic Payment of Dividend:
+  With effect from November 18, 2025, dividends
+shall be processed only in electronic mode,
+and payment through dividend warrants or
+cheques has been discontinued.  The payments
+of Dividend shall be subject to the following:
+  Dividend to Members holding shares in
+Physical form:
+Folios of Members should be KYC compliant
+to receive the dividends directly in their
+bank accounts through National Automated
+Clearing System or any other electronic mode
+of remittance. Members are requested to send
+the following documents to the Company’s RTA
+at MUFG Intime India Private Limited, C-101,
+1st Floor, 247 Park, Lal Bahadur Shastri Marg,
+Vikhroli (West), Mumbai - 400 083, on or before
+the record date i.e. Wednesday, June 10, 2026:
+ i)  Form ISR-1 duly ﬁlled and signed by the
+holders stating their name, contact details,
+folio number, complete address with pin
+code and the bank account details;
+ ii)  Original copy of cheque bearing the name
+of the Member or ﬁrst holder, in case shares
+are held jointly;
+ iii)  Self-attested copy of the PAN Card of
+all holders;
+ iv)  Self-attested copy of any document (such
+as Aadhaar Card, Driving License, Election
+Identity Card, Passport) in support of the
+address of the Member as registered with
+the Company;
+ v)  Form ISR 2 duly ﬁlled and signed. The
+signature of holders should be attested
+by the Banker.
+ vi)  Form SH 13 – Nomination Form or Form
+ISR-3 – to opt out from Nomination.
+The above Investor Service Request Forms
+(ISR) are available on the Company’s website at
+https://www.tataelxsi.com/kyc-updation or RTA’s
+website at https://web.in.mpms.mufg.com/KYC-
+downloads.html.
+  Dividend to Members holding shares in
+electronic form:
+ Members may please note that their bank
+details as furnished by the respective Depository
+Participants (“DPs”) to the Company will be
+Notice of the Thirty Seventh (37th) Annual General Meeting (Contd.)
+Tata Elxsi37th Integrated Report 2025-26
+Notice79
+considered for remittance of dividends as per
+the applicable regulations and the Company will
+not be able to accede to any direct request for
+change/addition/deletion of such bank details.
+ Accordingly, the Members are requested to
+ensure that correct/latest complete bank details
+are updated against their demat account with
+their respective DPs.
+ Instructions, if any, already given by Members in
+respect of shares held in physical form, will not
+be automatically applied to the dividend paid on
+shares held in electronic form.
+10. Tax Deducted at Source (“TDS”) on dividend:
+ Dividend income is taxable in the hands of
+Members w.e.f. April 01, 2020, in accordance with
+Finance Act, 2020, and the Company is required
+to deduct TDS from the dividend to be paid to
+the Members as per rates prescribed under the
+Income Tax Act, 2025 (“IT Act”).
+
+Members are requested to update their Residential
+Status, PAN details and Category with:
+ i)  the DP (if shares are held in electronic form) or
+ ii)  the Company/RTA (if shares are held in
+physical form)
+  Please send documents mentioned below to
+csgexemptforms2627@in.mpms.mufg.com on
+or before Wednesday, June 10, 2026, to enable
+the Company to determine the appropriate TDS/
+withholding tax rate and provide exemption, if
+applicable. Alternatively, Members may submit
+the tax exemption documents by uploading
+here.
+  Members may also refer the email sent to their
+registered email address for more details on
+submission of exemption documents.
+ Key documents to be submitted/uploaded as per Income Tax Rules, 2026:
+Category of Shareholder Document(s) to be submitted/uploaded
+Resident individual shareholders with
+PAN* and whose income does not exceed
+maximum amount not chargeable to tax
+or who is not liable to pay income tax
+i. Form 121** (erstwhile Form No. 15G or Form No. 15H)
+Non-resident shareholders [including
+Foreign Portfolio Investors (FPIs)] who
+can avail beneﬁcial rates under tax treaty
+between India and their country of
+tax residence
+ii. No Permanent Establishment Declaration
+iii. Beneﬁcial Ownership Declaration
+iv. Tax Residency Certiﬁcate
+v. Copy of electronically ﬁled Form 41 (erstwhile Form 10F)
+vi. Any other document which may be required
+ *If PAN is incorrect/invalid/inoperative then tax will be deducted at higher rates and credit of TDS will not be
+available. (Section 397 of the Income Tax Act, 2025)
+11. Unclaimed Dividend and Investor Education
+and Protection Fund (IEPF):
+ Dividends, if not encashed for a period of seven
+consecutive years from the date of transfer to
+Unpaid Dividend Account of the Company, are
+liable to be transferred to the IEPF Account. The
+shares in respect of such unclaimed dividends
+are also liable to be transferred to the demat
+account of the IEPF Authority. In view of this,
+Members/Claimants are requested to claim
+their dividends from the Company within the
+stipulated timeline.
+ The Members whose unclaimed dividends and/
+or shares have been transferred to IEPF may write
+to the Company/RTA and submit the required
+documents for issue of Entitlement Letter. The
+Members may then make an application to the
+IEPF Authority in web Form IEPF-5 (available on
+Notice of the Thirty Seventh (37th) Annual General Meeting (Contd.)
+Tata Elxsi37th Integrated Report 2025-26
+Notice 80
+www.iepf.gov.in) by attaching the Entitlement
+Letter and other requisite documents.
+ For further details, please refer to Corporate
+Governance Report, which forms part of the
+Integrated Annual Report, and the Company’s
+website at
+www.tataelxsi.com.
+12. Details of Members:
+ Members are requested to intimate changes,
+if any, about their name, postal address,
+e-mail address, telephone/mobile numbers,
+PAN, power of attorney registration, Bank
+Mandate details, etc. to their DPs in case the
+shares are held in electronic form and to the RTA/
+Company in case the shares are held in physical
+form, in prescribed Form No. ISR-1, quoting their
+folio number and enclosing the self-attested
+supporting documents. Further, Members may
+note that SEBI has mandated the submission of
+PAN by every participant in the securities market.
+ To prevent fraudulent transactions, Members
+are advised (i) to exercise due diligence and
+notify the Company of any change in address
+or demise of any Member as soon as possible
+(ii) not to leave their demat account(s) dormant
+for long and (iii) to obtain periodic statement
+of holdings from the concerned DPs and verify
+from time to time.
+13. Nomination facility:
+ The facility for making nomination is available
+to the Members in respect of the shares held
+by them. Members who have not yet registered
+their nominations are requested to register the
+same by submitting Form SH-13.
+ If a Member desires to opt-out or cancel the earlier
+nomination and record a fresh nomination, the
+Member may submit the requisite application in
+Form ISR-3 or Form SH-14, as the case may be, to
+the Company/RTA.
+ The said forms can be downloaded from the
+Company’s/RTA’s website at https://www.tataelxsi.
+com/faqs-and-forms or https://web.in.mpms.
+mufg.com/KYC-downloads.html. Members are
+requested to submit the said form to their DPs,
+in case the shares are held in electronic form,
+quoting their DP ID/Client ID and to the RTA, in
+case the shares are held in physical form, quoting
+their folio no(s).
+14. Dematerialisation of shares:
+ The listed companies are mandated to issue
+securities in dematerialised form only while
+processing service requests viz. Issue of duplicate
+securities certiﬁcate; claim from unclaimed
+suspense account; renewal/exchange of
+securities certiﬁcate; endorsement; sub-division/
+splitting of securities certiﬁcate; consolidation
+of securities certiﬁcates/folios; transmission
+and transposition. Accordingly, Members
+are requested to make service requests by
+submitting a duly ﬁlled and signed Form ISR-4,
+the format of which is available on the Company’s
+website at
+https://www.tataelxsi.com/faqs-and-
+forms and RTA’s website at https://web.in.mpms.
+mufg.com/KYC-downloads.html. It may be
+noted that any service request can be processed
+only after the folio is KYC compliant.
+ Further, all requests for transfer of securities
+including transmission and transposition
+requests shall be processed only in dematerialised
+form. In view of the same and to eliminate all
+risks associated with physical shares and avail
+various beneﬁts of dematerialisation, Members
+are advised to dematerialise the shares held by
+them in physical form. Members can contact the
+Company or the RTA for assistance in this regard.
+15. Consolidation of share certiﬁcates:
+ Members holding shares in physical form, in
+identical order of names, in more than one
+folio are requested to send to the Company or
+RTA, the details of such folios together with the
+share certiﬁcates and self-attested copies of the
+PAN card of the holders for consolidating their
+holdings in one folio. Requests for consolidation
+of share certiﬁcates shall be processed in
+dematerialised form only.
+Notice of the Thirty Seventh (37th) Annual General Meeting (Contd.)
+Tata Elxsi37th Integrated Report 2025-26
+Notice81
+16. The following documents will be available
+electronically for inspection by the Members
+before as well as during this AGM:
+ (i)  the Register of Directors and Key Managerial
+Personnel and their Shareholding;
+ (ii)  the Register of Contracts or Arrangements
+in which the directors are interested; and
+ (iii)  relevant documents referred to in the Notice
+or Statement.
+ Members desiring inspection, may send their
+request in writing to the Company from their
+registered e-mail address by mentioning
+their name, DP ID and Client ID/Folio No. and
+Mobile No. at
+investors@tataelxsi.com up to the
+date of AGM.
+17. RTA has implemented below investor initiatives
+as part of their constant endeavor to enhance
+investor servicing:
+ a.  ‘SWAYAM’ is a secure, user-friendly web-
+based application developed by our RTA, that
+empowers investors to effortlessly access
+various services. Investors are requested to
+get registered on this application which can
+be accessed at
+https://in.mpms.mufg.com/
+Swayam_info.html.
+ b.  ‘iDIA’ is a Chatbot developed by our RTA
+that utilises conversational technology to
+provide investors with a round-the-clock
+intuitive platform to ask questions and get
+information about queries. Talk to iDIA by
+logging in to
+https://in.mpms.mufg.com/.
+ c.  FAQs –The FAQ section on the RTA’s
+website has very detailed answers to almost
+all probable investor queries. Please visit
+https://web.in.mpms.mufg.com/faq.html
+to ﬁnd answers to your queries related
+to securities.
+18. Special window for re-lodgement of physical
+share transfer requests:
+ Members who had submitted transfer deeds for
+physical shares before April 01, 2019, and whose
+requests were rejected, returned, or remained
+unprocessed due to deﬁciencies, have been provided
+a special relodgement window till February 04, 2027,
+to re-lodge the transfer requests.
+ Transfers would be approved if all the requisite
+documents are in place. Transfer under this window
+will be credited only in dematerialised form and
+will carry a one year lock-in period from the date
+of transfer registration. Members can contact the
+Company or the RTA for assistance in this regard.
+  The Company has communicated the opening
+of this special window through newspaper
+advertisements and stock exchanges.
+19. Simpliﬁcation of Procedure for Issuance of Duplicate Share Certiﬁcates:
+ SEBI has simpliﬁed the process for issuing duplicate share certiﬁcates. The documentation requirements
+have been standardised as below:
+Documentation Requirements for Issuance of
+Duplicate Share Certiﬁcates
+Undertaking on
+plain paper
+(no notarisation required).
+Value up to /uni20B9 10,000
+Requirement:
+Requirement: Single
+Afﬁdavit-cum-
+Indemnity Bond
+Value above /uni20B9 10,000
+and up to /uni20B9 10 lakhs
+Afﬁdavit-cum-Indemnity
+Bond along with FIR/
+Police Complaint
+Value above /uni20B9 10 lakhs
+Requirement:
+Notice of the Thirty Seventh (37th) Annual General Meeting (Contd.)
+Tata Elxsi37th Integrated Report 2025-26
+Notice 82
+ Members are informed that with effect from
+April 2, 2026, SEBI has dispensed with the
+requirement of issuance of a Letter of Conﬁrmation
+(LOC) by the Company/RTA while processing
+investor service requests. Accordingly, securities
+will be credited directly to the shareholder’s demat
+account upon submission of valid demat account
+details along with the latest Client Master List. The
+Members must provide a Client Master List, not older
+than 2 months, attested by their DP, for getting the
+securities credited directly in their demat account.
+20. Dispute Resolution:
+ SEBI has made available an online dispute
+resolution mechanism through the SMART ODR
+Portal for the investors to raise disputes arising
+in the Indian Securities Market. Post exhausting
+the option to resolve their grievance with the
+RTA/Company directly and/or through the SEBI
+SCORES platform, the investors can initiate
+dispute resolution through the SMART ODR
+Portal (
+https://smartodr.in/login) and the same
+can also be accessed through the Company’s
+website at
+www.tataelxsi.com.
+21. Process for those Members whose e-mail
+addresses are not registered with the DPs/
+RTA/Company to register e-mail addresses
+for receiving the AGM Notice and to procure
+the user id and password for e-Voting on the
+resolutions set out in this AGM Notice:
+ a)  Registration of E-mail addresses with
+RTA for receiving AGM Notice and
+e-Voting details:
+   The Company has made special
+arrangements with RTA and NSDL for
+registration of e-mail addresses of those
+Members whose e-mail addresses are not
+registered with the Company/DPs to receive
+this Notice and cast votes electronically.
+Members are required to follow the below
+procedure on or before 5.00 p.m. (IST) on
+Wednesday, June 10, 2026:
+  i.  Visit the  https://web.in.mpms.mufg.
+com/EmailReg/Email_Register.html.
+  ii.  Select the Name of the Company from
+the dropdown: Tata Elxsi Limited;
+  iii.  Enter the DP ID & Client ID/Folio
+Number, Name of the Member and PAN
+details. Members holding shares in the
+physical form need to additionally enter
+one of the share certiﬁcate(s) numbers;
+  iv.  Enter your Mobile No. and E-mail address
+and click on the Continue button;
+  v.  The system will send OTP on Mobile
+and e-mail address;
+  vi.  Upload a self-attested copy of your PAN
+card and Address proof viz Aadhaar
+Card, passport or front and back side of
+share certiﬁcate in case of Physical folio;
+  vii.  Enter the OTP received on your Mobile
+and e-mail address;
+  viii.  The system will then conﬁrm the e-mail
+address for receiving this Notice of AGM.
+   After the successful submission of the
+e-mail address, NSDL will e-mail a copy of
+Notice of AGM with the e-Voting user ID and
+password. In case of any queries, Members
+may write to
+evoting@nsdl.com.
+ b)  Registration of e-mail address
+permanently with Company/DP:
+   Members are requested to register the
+e-mail with their concerned DPs, in respect
+of electronic holding and with RTA, in
+respect of physical holding, by submitting
+the Form No. ISR 1 duly ﬁlled and signed
+by the holders. Further, those Members
+who have already registered their e-mail
+addresses are requested to keep their
+e-mail addresses validated/updated with
+their DPs/Company/RTA to enable servicing
+of notices/documents/Annual Reports and
+other communications electronically to
+their e-mail address in the future.
+Notice of the Thirty Seventh (37th) Annual General Meeting (Contd.)
+Tata Elxsi37th Integrated Report 2025-26
+Notice83
+   Alternatively, Members may send a request
+to evoting@nsdl.com for procuring user
+id and password for e-Voting by providing
+Demat account number/Folio number
+and scanned copy of the Share Certiﬁcate
+(front and Back) or client master, or copy
+of consolidated account statement, self-
+attested copy of PAN card, self-attested copy
+of Aadhaar Card.
+22. Electronic copies of all the documents referred to
+in the accompanying Notice of the AGM and the
+Explanatory Statement shall be made available
+for inspection up to the date of the AGM i.e.
+June 24, 2026. Members desiring inspection
+of statutory registers and other relevant
+documents may send their request in writing to
+the Company at
+investors@tataelxsi.com.
+VOTING THROUGH ELECTRONIC MEANS
+1. In compliance with provisions of Section 108
+of the Companies Act, 2013, Rule 20 of the
+Companies (Management and Administration)
+Rules, 2014, as amended,
+the General Circular
+No. 03/2025 dated September 22, 2025 issued by
+the Ministry of Corporate Affairs and Regulation
+44 of the SEBI (Listing Obligations and Disclosure
+Requirements),
+Regulations 2015, the Company is
+pleased to provide Members the facility to exercise
+their right to vote on resolutions proposed to be
+considered at the Annual General Meeting (‘AGM’)
+by electronic means (by using the electronic
+voting system provided by NSDL) either by:
+ (i) remote e-Voting prior to the AGM; or
+ (ii) e-Voting during the AGM.
+2. The remote e-Voting period (for e-Voting prior to
+the AGM) commences on Saturday, June 20, 2026,
+at 09:00 A.M. (IST) and ends on  Tuesday,
+June 23, 2026, at 05:00 P.M. (IST) . The remote
+e-Voting module shall be disabled by NSDL for
+voting thereafter. The Members of the Company,
+holding shares either in physical form or in
+dematerialised form, as on the cut-off date of
+Wednesday, June 17, 2026  may cast their vote
+by remote e-Voting. The voting right of Members
+shall be in proportion to their share in the
+paid-up equity share capital of the Company as on the
+cut-off date, being Wednesday, June 17, 2026 .
+Once the vote on a resolution is cast by the
+Member, the Member shall not be allowed to
+change it subsequently or cast a vote again.
+3. The Board of Directors have appointed
+Mr. Vaibhav Dandawate (CP No.: 29747) or failing
+him Mrs. Deepti Kulkarni (CP No: 22502), who
+are not in the employment of the Company, as
+the Scrutiniser to scrutinise the voting at the
+AGM and remote e-Voting process in a fair and
+transparent manner.
+4. The facility for e-Voting shall also be made
+available during the AGM, and Members
+attending the AGM through VC/OAVM, who have
+not already cast their vote by remote e-Voting,
+may exercise their right to vote during the AGM
+through the NSDL portal.
+5.
+The Members who have cast their vote by
+remote e-Voting prior to the AGM can also
+participate through VC/OAVM but shall not be
+entitled to cast their vote through e-voting again.
+6. Any person, who acquires shares of the Company
+and becomes a Member of the Company after
+dispatch of the Notice and holding shares as of
+the cut-off date i.e. Wednesday, June 17, 2026,
+may obtain the login ID and password by sending
+a request at
+evoting@nsdl.com.
+The procedure to login to e-Voting is
+detailed
+ hereunder:
+STEP 1: ACCESSING THE NSDL E/hyphen.caseVOTING SYSTEM:
+A.  Login method for e-Voting and joining virtual
+meeting for Individual shareholders holding
+securities in demat mode
+
+In terms of SEBI circular dated December 09, 2020
+on e-Voting facility provided by Listed Companies,
+Individual shareholders holding securities in
+demat mode are allowed to vote through their
+demat account maintained with Depositories
+Notice of the Thirty Seventh (37th) Annual General Meeting (Contd.)
+Tata Elxsi37th Integrated Report 2025-26
+Notice 84
+and Depository Participants. Shareholders are advised to update their mobile number and email Id in their
+demat accounts in order to access e-Voting facility.
+Type of
+shareholders
+Login Method
+Individual
+Shareholders
+holding
+securities
+in demat
+mode with NSDL
+1.  For OTP based login you can click on https://eservices.nsdl.com/SecureWeb/evoting/
+evotinglogin.jsp. You will have to enter your 8-digit DP ID, 8-digit Client Id, PAN No.,
+Veriﬁcation code and generate OTP. Enter the OTP received on registered email
+id/mobile number and click on login. After successful authentication, you will be
+redirected to NSDL Depository site wherein you can see e-Voting page. Click on
+company name or e-Voting service provider i.e. NSDL and you will be redirected to
+e-Voting website of NSDL for casting your vote during the remote e-Voting period or
+joining virtual meeting & voting during the meeting.
+2.  Existing IDeAS user can visit the e-Services website of NSDL viz.
+https://eservices.
+nsdl.com either on a Personal Computer or on a mobile. On the e-Services home
+page click on the “Beneﬁcial Owner” icon under “Login” which is available under
+‘IDeAS’ section, this will prompt you to enter your existing User ID and Password. After
+successful authentication, you will be able to see e-Voting services under Value added
+services. Click on “Access to e-Voting” under e-Voting services and you will be able
+to see e-Voting page. Click on company name or e-Voting service provider i.e. NSDL
+and you will be re-directed to e-Voting website of NSDL for casting your vote during
+the remote e-Voting period or joining virtual meeting & voting during the meeting.
+3.  If you are not registered for IDeAS e-Services, option to register is available at
+https://eservices.nsdl.com.  Select “Register Online for IDeAS Portal”  or click at
+https://eservices.nsdl.com/SecureWeb/IdeasDirectReg.jsp.
+4.  Visit the e-Voting website of NSDL. Open web browser by typing the following URL:
+https://www.evoting.nsdl.com/ either on a Personal Computer or on a mobile. Once the
+home page of e-Voting system is launched, click on the icon “Login” which is available
+under ‘Shareholder/Member’ section. A new screen will open. You will have to enter
+your User ID (i.e. your sixteen-digit demat account number hold with NSDL), Password/
+OTP and a Veriﬁcation Code as shown on the screen. After successful authentication,
+you will be redirected to NSDL Depository site wherein you can see e-Voting page. Click
+on company name or e-Voting service provider i.e. NSDL and you will be redirected
+to e-Voting website of NSDL for casting your vote during the remote e-Voting period
+or joining virtual meeting & voting during the meeting.
+5. Shareholders/Members can also download NSDL Mobile App “NSDL Speede” facility
+by scanning the QR code mentioned below for seamless voting experience.
+.
+Notice of the Thirty Seventh (37th) Annual General Meeting (Contd.)
+Tata Elxsi37th Integrated Report 2025-26
+Notice85
+Type of
+shareholders
+Login Method
+Individual
+Shareholders
+holding
+securities
+in demat
+mode with CDSL
+1.  Users who have opted for CDSL Easi / Easiest facility, can login through their existing
+user id and password. Option will be made available to reach e-Voting page without
+any further authentication. The users to login Easi /Easiest are requested to visit
+CDSL website
+www.cdslindia.com and click on login icon & New System Myeasi Tab
+and then user your existing my easi username & password.
+2.  After successful login the Easi / Easiest user will be able to see the  e-Voting option
+for eligible companies where the evoting is in progress as per the information
+provided by company. On clicking the evoting option, the user will be able to see
+e-Voting page of the e-Voting service provider for casting your vote during the
+remote e-Voting period or joining virtual meeting & voting during the meeting.
+Additionally, there is also links provided to access the system of all e-Voting Service
+Providers, so that the user can visit the e-Voting service providers’ website directly.
+3.  If the user is not registered for Easi/Easiest, option to register is available at CDSL
+website
+ www.cdslindia.com and click on login & New System Myeasi Tab and then
+click on registration option.
+4.  Alternatively, the user can directly access e-Voting page by providing Demat
+Account Number and PAN No. from a e-Voting link available on www.cdslindia.com
+home page. The system will authenticate the user by sending OTP on registered
+Mobile & Email as recorded in the Demat Account. After successful authentication,
+user will be able to see the e-Voting option where the evoting is in progress and also
+able to directly access the system of all e-Voting Service Providers.
+Individual
+Shareholders
+(holding
+securities in
+demat mode)
+login through
+their depository
+participants
+1.  You can also login using the login credentials of your demat account through your
+Depository Participant registered with NSDL/CDSL for  e-Voting facility.
+2.  Upon logging in, you will be able to see e-Voting option. Click on  e-Voting option,
+you will be redirected to NSDL/CDSL Depository site after successful authentication,
+wherein you can see e-Voting feature.
+3.  Click on company name or e-Voting service provider i.e. NSDL and you will be
+redirected to e-Voting website of NSDL for casting your vote during the remote
+e-Voting period or joining virtual meeting & voting during the meeting.
+  Important note: Members who are unable to retrieve User ID/ Password are advised to use Forget User ID
+and Forget Password option available at above mentioned website.
+Notice of the Thirty Seventh (37th) Annual General Meeting (Contd.)
+Tata Elxsi37th Integrated Report 2025-26
+Notice 86
+ Helpdesk for Individual Shareholders holding securities in demat mode for any technical issues
+related to login through Depository i.e. NSDL and CDSL.
+Login type Helpdesk details
+Individual Shareholders
+holding securities in demat
+mode with NSDL
+Members facing any technical issue in login can contact NSDL helpdesk by
+sending a request at
+evoting@nsdl.com or call at 022 - 4886 7000.
+Individual Shareholders
+holding securities in demat
+mode with CDSL
+Members facing any technical issue in login can contact CDSL helpdesk by
+sending a request at
+helpdesk.evoting@cdslindia.com or contact at toll free
+no. 1800-21-09911.
+B.  Login Method for e-Voting and joining virtual meeting for shareholders other than Individual
+shareholders holding securities in demat mode and shareholders holding securities in physical mode:
+ How to Log-in to NSDL e-Voting website?
+ 1.  Visit the e-Voting website of NSDL. Open web browser by typing the following URL: https://www.evoting.
+nsdl.com/ either on a Personal Computer or on a mobile.
+ 2.  Once the home page of e-Voting system is launched, click on the icon “Login” which is available under
+‘Shareholder/Member’ section.
+ 3.  A new screen will open. You will have to enter your User ID, your Password/OTP and a Veriﬁcation Code
+as shown on the screen.
+   Alternatively, if you are registered for NSDL eservices i.e. IDEAS, you can log-in at https://eservices.
+nsdl.com/ with your existing IDEAS login. Once you log-in to NSDL eservices after using your log-in
+credentials, click on e-Voting and you can proceed to Step 2 i.e. Cast your vote electronically.
+ 4. Your User ID details are given below:
+Manner of holding shares
+i.e. Demat (NSDL or CDSL) or Physical
+ Your User ID is:
+a)  For Members who hold shares in
+demat account with NSDL
+8 Character DP ID followed by 8 Digit Client ID
+For example if your DP ID is IN300*** and Client ID is 12******
+then your user ID is IN300***12******.
+b)  For Members who hold shares in
+demat account with CDSL
+16 Digit Beneﬁciary ID
+For example if your Beneﬁciary ID is 12************** then your
+user ID is 12**************
+c)  For Members holding shares in
+Physical Form
+EVEN Number followed by Folio Number registered
+with the Company
+For example if folio number is 001*** and EVEN is 101456 then
+user ID is 101456001***
+ 5. Password details for shareholders other than Individual shareholders are given below:
+  a.  If you have already registered for e-Voting, then you can use your existing password to login and
+cast your vote.
+  b.  If you are using NSDL e-Voting system for the ﬁrst time, you will need to retrieve the ‘initial password’
+which was communicated to you. Once you retrieve your ‘initial password’, you need to enter the
+‘initial password’ and the system will force you to change your password.
+Notice of the Thirty Seventh (37th) Annual General Meeting (Contd.)
+Tata Elxsi37th Integrated Report 2025-26
+Notice87
+  c. How to retrieve your ‘initial password’?
+   i.  If your email ID is registered in
+your demat account or with the
+Company, your ‘initial password’
+is communicated to you on your
+email ID. Trace the email sent to
+you from NSDL from your mailbox.
+Open the email and open the
+attachment i.e. a .pdf ﬁle. Open
+the .pdf ﬁle. The password to open
+the .pdf ﬁle is your 8 digit client ID
+for NSDL account, last 8 digits of
+client ID for CDSL account or folio
+number for shares held in physical
+form. The .pdf ﬁle contains your
+‘User ID’ and your ‘initial password’.
+   ii.  If your email ID is not registered,
+please follow steps mentioned
+below in process for those
+shareholders whose email ids
+are not registered.
+ 6.  If you are unable to retrieve or have not
+received the “Initial password” or have
+forgotten your password:
+  a.  Click on “Forgot User Details/Password?”
+(If you are holding shares in your demat
+account with NSDL or CDSL) option
+available on
+www.evoting.nsdl.com.
+  b.  “Physical User Reset Password?”
+(If you are holding shares in
+physical mode) option available on
+www.evoting.nsdl.com.
+  c.  If you are still unable to get the password
+by aforesaid two options, you can send a
+request at
+evoting@nsdl.com mentioning
+your demat account number/folio
+number, your PAN, your name and your
+registered address etc.
+  d.  Members can also use the OTP (One
+Time Password) based login for
+casting the votes on the e-Voting
+system of NSDL.
+ 7.  After entering your password, tick on Agree
+to “Terms and Conditions” by selecting on
+the check box.
+ 8. Now, you will have to click on “Login” button.
+ 9.  After you click on the “Login” button, Home
+page of e-Voting will open.
+STEP 2: CAST YOUR VOTE ELECTRONICALLY AND
+JOIN GENERAL MEETING ON NSDL  E/hyphen.caseVOTING
+SYSTEM:
+1.  After successful login at Step 1, you will be able
+to see all the companies “EVEN” in which you
+are holding shares and whose voting cycle and
+General Meeting is in active status.
+2.  For joining the virtual meeting, you need to click
+on “VC/OAVM” link placed under “Join Meeting”.
+3.  Select “EVEN” of Tata Elxsi Limited - 139332
+(EVEN) for which you wish to cast your vote
+during the remote e-Voting period or casting
+your vote during the AGM.
+4.  Now you are ready for e-Voting as the
+Voting page opens.
+5.  Cast your vote by selecting appropriate options
+i.e. assent or dissent, verify/modify the number
+of shares for which you wish to cast your vote
+and click on “Submit” and also “Conﬁrm”
+when prompted.
+6.  Upon conﬁrmation, the message “Vote cast
+successfully” will be displayed.
+7.  You can also take the printout of the votes cast
+by you by clicking on the print option on the
+conﬁrmation page.
+8.  Once you conﬁrm your vote on the resolution,
+you will not be allowed to modify your vote.
+GENERAL GUIDELINES FOR MEMBERS
+1.  Institutional shareholders and Corporate
+Members (i.e. other than individuals, HUF,
+NRI etc.) are requested to send scanned copy
+(PDF/ JPG Format) of the relevant Board
+Resolution/ Authority letter etc. who are
+authorised to vote, to the Scrutiniser by e-mail to
+Notice of the Thirty Seventh (37th) Annual General Meeting (Contd.)
+Tata Elxsi37th Integrated Report 2025-26
+Notice 88
+scrutinisers@mmjc.in with a copy marked to
+evoting@nsdl.com. Institutional shareholders
+(i.e. other than individuals, HUF, NRI etc.) can
+also upload their Board Resolution / Power of
+Attorney / Authority Letter etc. by clicking on
+“Upload Board Resolution / Authority Letter”
+displayed under “e-Voting” tab in their login.
+2.  It is strongly recommended not to share your
+password with any other person and take utmost
+care to keep your password conﬁdential. Login
+to the e-voting website will be disabled upon
+ﬁve unsuccessful attempts to key in the correct
+password. In such an event, you will need to go
+through the “Forgot User Details/Password?” or
+“Physical User Reset Password?” option available
+on
+www.evoting.nsdl.com to reset the password.
+3.  In case of any queries, you may refer the Frequently
+Asked Questions (FAQs) for Shareholders and
+e-voting user manual for Shareholders available
+at the download section of
+www.evoting.nsdl.com
+or call on 022 - 4886 7000 or send a request at
+evoting@nsdl.com.
+Process for those shareholders whose email
+ids are not registered with the depositories for
+procuring user id and password and registration
+of email ids for e-voting for the resolutions set out
+in this Notice:
+1.  In case shares are held in physical mode please
+provide Folio No., Name of shareholder, scanned
+copy of the share certiﬁcate (front and back),
+PAN (self-attested scanned copy of PAN card),
+AADHAR (self-attested scanned copy of Aadhar
+Card) by email to
+investors@tataelxsi.com.
+2.  In case shares are held in demat mode, please
+provide DPID-CLID (16-digit DPID + CLID or
+16-digit beneﬁciary ID), Name, client master
+or copy of Consolidated Account statement,
+PAN (self-attested scanned copy of PAN card),
+AADHAR (self-attested scanned copy of Aadhar
+Card) to
+investors@tataelxsi.com. If you are an
+Individual shareholder holding securities in
+demat mode, you are requested to refer to the
+login method explained at step 1 (A) i.e. Login
+method for e-Voting and joining virtual
+meeting for Individual shareholders holding
+securities in demat mode.
+3.  Alternatively, shareholder/members may send a
+request to
+evoting@nsdl.com for procuring user
+id and password for e-voting by providing above
+mentioned documents.
+4.  In terms of SEBI circular dated December 09, 2020
+on e-Voting facility provided by Listed Companies,
+Individual shareholders holding securities in
+demat mode are allowed to vote through their
+demat account maintained with Depositories
+and Depository Participants. Shareholders are
+required to update their mobile number and
+email ID correctly in their demat account in order
+to access e-Voting facility.
+OTHER INSTRUCTIONS
+1.  The voting rights of Members shall be in
+proportion to their shares in the paid-up equity
+share capital of the Company as on the cut-off
+date i.e. Wednesday, June 17, 2026.  A person,
+whose name is recorded in the Register of
+Members or in the Register of Beneﬁcial Owners
+maintained by the Depositories as on the Cut-Off
+date only shall be entitled to avail the facility of
+voting, either through remote e-voting or voting
+at the AGM through electronic voting system
+or poll paper.
+2.  Any person, who acquires shares of the Company
+and becomes a Member of the Company after
+mailing of the Notice and holding shares as of the
+cut-off date, may obtain the login ID and password
+by sending a request at
+evoting@nsdl.com.
+However, if he/she is already registered with NSDL
+for remote e-voting then he/she can use his/her
+existing User ID and password for casting the vote.
+3.  The Scrutiniser shall, immediately upon
+conclusion of voting at the AGM, ﬁrst count
+the votes cast during the Meeting, thereafter,
+unblock the votes cast through remote e-voting,
+in the presence of at least two witnesses who
+Notice of the Thirty Seventh (37th) Annual General Meeting (Contd.)
+Tata Elxsi37th Integrated Report 2025-26
+Notice89
+are not in the employment of the Company.
+The Scrutiniser shall then prepare and submit,
+within forty-eight (48) hours of the conclusion
+of the AGM, a consolidated Scrutiniser’s Report
+of the total votes cast in favour of or against, if
+any, to the Chairman of the Meeting or to a
+person authorised by him in writing, who shall
+countersign the same.
+4.  The result declared along with the Scrutiniser’s
+Report shall be placed on the Company’s website
+www.tataelxsi.com and on the website of NSDL
+www.evoting.nsdl.com. The Company shall
+simultaneously forward the results to National
+Stock Exchange of India Limited and BSE Limited,
+where the shares of the Company are listed.
+INSTRUCTIONS FOR MEMBERS FOR E/hyphen.caseVOTING ON
+THE DAY OF THE AGM:
+1.  The procedure for e-Voting on the day of the
+AGM is same as the instructions mentioned
+above for remote e-voting.
+2.  Only those Members who are present in the
+AGM through VC/OAVM facility and have not
+casted their vote on the Resolutions through
+remote e-Voting and are otherwise not barred
+from doing so, shall be eligible to vote through
+e-Voting system in the AGM.
+3.  Members who have voted through remote
+e-Voting will be eligible to attend the
+AGM. However, they will not be eligible to
+vote at the AGM.
+4.  The details of the person who may be contacted
+for any grievances connected with the facility for
+e-Voting on the day of the EGM/AGM shall be the
+same person mentioned for Remote e-voting.
+INSTRUCTIONS FOR MEMBERS ATTENDING THE
+AGM THROUGH VC/slash.caseOAVM:
+1.  Members will be able to attend the AGM
+through VC/OAVM or view the live webcast of the
+AGM provided by NSDL at
+https://www.evoting.
+nsdl.com by using their remote e-voting login
+credentials and selecting the EVEN i.e., 139332 for
+Company’s AGM.
+  Please note that the Members who do not have
+the User ID and Password for e-voting or have
+forgotten the User ID and Password may retrieve
+the same by following the remote e-voting
+instructions mentioned in the Notice to avoid
+last minute rush.
+2.  Members are encouraged to join the Meeting
+through Laptops for better experience.
+3.  Members will be required to allow Camera and
+use Internet with a good speed to avoid any
+disturbance during the meeting.
+4.  Please note that participants connecting from
+Mobile Devices or Tablets or through Laptop
+connecting via Mobile Hotspot may experience
+Audio/Video loss due to ﬂuctuation in their
+respective network. It is therefore recommended
+to use Stable Wi-Fi or LAN connection to mitigate
+any kind of aforesaid glitches.
+Notice of the Thirty Seventh (37th) Annual General Meeting (Contd.)
+Tata Elxsi37th Integrated Report 2025-26
+Notice 90
+5.  Members who would like to express their views
+or ask questions during the AGM may register
+themselves as a speaker by sending their request
+from their registered email address, mentioning
+their name, DP ID and Client ID/folio number,
+PAN, mobile number at
+ telagm@tataelxsi.com
+between Monday, June 15, 2026 (09:00 a.m. IST)
+to Wednesday, June 17, 2026 (06:00 p.m. IST).
+The facility to express views/ask questions during
+the AGM shall be restricted only to those members
+who have pre-registered themselves as speakers.
+The Company reserves the right to restrict the
+number of speakers depending on the availability
+of time for the AGM.
+Date: April 21, 2026 By Order of the Board of Directors
+Place: Bengaluru Sneha V
+Company Secretary & Compliance Ofﬁcer
+Registered Ofﬁce: Membership No.: A51279
+Tata Elxsi Limited
+ITPB Road, Whiteﬁeld, Bangalore - 560048
+E-mail: investors@tataelxsi.com
+Website: www.tataelxsi.com
+CIN: L85110KA1989PLC009968
+Notice of the Thirty Seventh (37th) Annual General Meeting (Contd.)
+Tata Elxsi37th Integrated Report 2025-26
+Notice91
+The following Statement sets out all material facts
+relating to the Resolution(s) mentioned under Item
+No. 4 of the accompanying Notice.
+Item No. 4:
+In terms of Regulation 23 of the SEBI (Listing
+Obligations and Disclosure Requirements)
+Regulations, 2015, (‘SEBI Listing Regulations’), as
+amended, any transaction with a related party shall
+be considered material, if the transaction(s) entered
+into/to be entered into individually or taken together
+with the previous transactions during a ﬁnancial year
+exceeds threshold mentioned under the SEBI Listing
+Regulations, and shall require prior approval of
+shareholders by means of an ordinary resolution. The
+said limits are applicable, even if the transactions are
+in the ordinary course of business of the concerned
+company and on an arm’s length basis.
+Tata Sons Private Limited, Promoter of Tata Elxsi
+Limited (‘the Company’), holds equity shares of more
+than twenty percent (20%) in Tata Motors Limited,
+making Tata Motors Limited as a member of the
+Promoter Group of Tata Elxsi Limited pursuant to
+Regulation 2(1)(pp) of SEBI (Issue of Capital and
+Disclosure Requirements) Regulations, 2018, as
+amended. Further, Tata Motors Limited is also
+classiﬁed as an Associate Company of Tata Sons
+Private Limited.
+Jaguar Land Rover Limited, UK, (‘JLR’) is a subsidiary
+of Tata Motors Limited. JLR is engaged in the business
+of motor vehicle manufacturing that designs,
+engineers, produces, and sells luxury cars and SUVs
+under the Jaguar and Land Rover brands. JLR is a
+related party to Tata Elxsi Limited within the meaning
+of Section 2(76) of the Companies Act, 2013 read
+with Regulation 2(1)(zb) of SEBI Listing Regulations,
+considering its association with the promoter group
+member and related party, Tata Motors Limited.
+Background and details of the transactions
+The Members of the Company at their 36 th AGM
+held on June 25, 2025, inter alia, accorded approval
+vide ordinary resolution for entering into Material
+Related Party Transactions with Jaguar Land Rover
+Limited, UK (‘JLR’), for an aggregate amount up to
+/uni20B9 1,200 crore (Rupees One Thousand Two Hundred
+crore Only) for FY 2025-26. During FY 2025-26, the
+Company had entered into transactions with JLR
+amounting to /uni20B9 845.85 crore.
+The Management has provided the Audit Committee
+all relevant information in accordance with the SEBI
+Master Circular dated January 30, 2026. The Audit
+Committee considered the details, as required,
+including the material terms and rationale for limits
+with JLR for FY 2026-27 and after due deliberation
+granted its approval for an aggregate maximum
+value of /uni20B9 1,200 crore for transactions with JLR for
+FY 2026-27. The proposed transaction amounts
+approximately 32% of the annual turnover of the
+Company for FY 2025-26. The Audit Committee noted
+that the said transactions shall continue to be at
+arm’s length pricing basis and in the ordinary course
+of business.
+The Board is of the opinion that the Resolution stated
+in the accompanying Notice as Item No. 4 is in the
+best interest of the Company and its Members and,
+hence, recommends the Resolution for approval by
+the Members of the Company.
+Notice of the Thirty Seventh (37th) Annual General Meeting (Contd.)
+EXPLANATORY STATEMENT PURSUANT TO SECTION 102 OF THE COMPANIES ACT, 2013
+Tata Elxsi37th Integrated Report 2025-26
+Notice 92
+Notice of the Thirty Seventh (37th) Annual General Meeting (Contd.)
+Details of the Material Related Party Transaction(s) proposed to be entered between the Company and
+JLR, including the information pursuant to Industry Standards on “Minimum information to be provided
+to the Audit Committee and Shareholders for approval of Related Party Transactions” read with SEBI
+Circular and applicable provisions of the Companies Act, 2013, if any, and as placed before the Audit
+Committee for consideration while seeking prior approval of the proposed RPT(s), are provided below:
+PART/uni00A0A: DETAILS OF THE RELATED PARTY AND TRANSACTIONS WITH THE RELATED PARTY
+A(1) - Basic/uni00A0details/uni00A0of/uni00A0the/uni00A0related/uni00A0party
+S.
+No.
+Particulars of the information Information provided by the management
+1. Name of the related party Jaguar Land Rover Limited
+2. Country of incorporation of the related party United Kingdom
+3. Nature of business of the related party Motor vehicle manufacturer that designs, engineers,
+produces, and sells luxury cars and SUVs under the Jaguar
+and Land Rover brands
+A(2) - Relationship/uni00A0and/uni00A0ownership/uni00A0of/uni00A0the/uni00A0related/uni00A0party
+S.
+No.
+Particulars of the information Information provided by
+the management
+1. Relationship between the listed entity and the related party – including nature
+of its concern (ﬁnancial or otherwise) and the following:
+ Shareholding of the listed entity, whether direct or indirect, in the
+related party
+  Where the related party is a partnership ﬁrm or a sole proprietorship
+concern or a body corporate without share capital, then capital
+contribution, if any, made by the listed entity
+ Shareholding of the related party, whether direct or indirect, in the
+listed entity
+Explanation: Indirect shareholding shall mean shareholding held through any
+person, over which the listed entity / related party has control.
+While calculating indirect shareholding, shareholding held by relatives shall
+also be considered.
+Tata Sons Private Limited
+is the promoter of
+Tata Elxsi Limited. Tata
+Motors Limited, being
+an associate of Tata Sons
+Private Limited, is part of
+the promoter group of
+Tata Elxsi Limited. Jaguar
+Land Rover Limited (JLR),
+UK, is a subsidiary of Tata
+Motors Limited; hence,
+JLR is a related party to
+Tata Elxsi Limited.
+A(3) - Details/uni00A0of/uni00A0previous/uni00A0transactions/uni00A0with/uni00A0the/uni00A0related/uni00A0party
+S.
+No.
+Particulars of the information Information
+provided by
+the management
+1. Total amount of all the transactions undertaken by the listed entity with the related party during the last
+ﬁnancial year.
+S.
+No.
+Nature of Transactions FY 2025-26
+(` in crore)
+1 Services rendered 845.85
+Explanation: Details need to be disclosed separately for listed entity and its subsidiary.
+Tata Elxsi37th Integrated Report 2025-26
+Notice93
+Notice of the Thirty Seventh (37th) Annual General Meeting (Contd.)
+S.
+No.
+Particulars of the information Information
+provided by
+the management
+2. Total amount of all the transactions undertaken by the listed entity with the related
+party in the current ﬁnancial year up to the quarter immediately preceding the
+quarter in which the approval is sought. (` in crore)
+Same as above
+Sr. No. (A)(3)(1)
+3. Any default, if any, made by a related party concerning any obligation undertaken
+by it under a transaction or arrangement entered into with the listed entity or its
+subsidiary during the last ﬁnancial year.
+No
+A(4) - Amount of the proposed transaction(s)
+S.
+No.
+Particulars of the information Information
+provided by
+the management
+1. Amount of the proposed transactions being placed for approval in the meeting of the
+Audit Committee/ shareholders. (` in crore)
+up to
+` 1,200 crore
+2. Whether the proposed transactions taken together with the transactions undertaken
+with the related party during the current ﬁnancial year would render the proposed
+transaction a material RPT?
+Yes
+3. Value of the proposed transactions as a percentage of the listed entity’s annual
+consolidated turnover for the immediately preceding ﬁnancial year.
+31.94%
+4. Value of the proposed transactions as a percentage of subsidiary’s annual standalone
+turnover for the immediately preceding ﬁnancial year (in case of a transaction
+involving the subsidiary and where the listed entity is not a party to the transaction).
+Not applicable
+5.
+Value of the proposed transactions as a percentage of the related party’s annual consolidated
+turnover (if consolidated turnover is not available, calculation to be made on standalone
+turnover of related party) for the immediately preceding ﬁnancial year, if available.
+0.42%
+6. Financial performance of the related party for the immediately preceding ﬁnancial year:
+Particulars FY 2025-26 ( ` in crore)*
+Turnover 2,85,672.68
+Proﬁt After Tax (3,042.39)
+Net worth 1,00,548.4
+*On consolidated basis.
+Explanations: The above information is to be given on standalone basis. If standalone is not available,
+provide on consolidated basis.
+A(5) - Basic/uni00A0details/uni00A0of/uni00A0the/uni00A0proposed/uni00A0transaction
+S.
+No.
+Particulars of the information Information provided by
+the management
+1. Speciﬁc type of the proposed transaction (e.g. sale of goods/services,
+purchase of goods/services, giving loan, borrowing etc.)
+Services provided
+2. Details of each type of the proposed transaction Software services
+3. Tenure of the proposed transaction (tenure in number of years or
+months to be speciﬁed).
+Not exceeding one (1) year
+Tata Elxsi37th Integrated Report 2025-26
+Notice 94
+Notice of the Thirty Seventh (37th) Annual General Meeting (Contd.)
+S.
+No.
+Particulars of the information Information provided by
+the management
+4. Whether omnibus approval is being sought? Yes
+5. Value of the proposed transaction during a ﬁnancial year.
+If the proposed transaction will be executed over more than one
+ﬁnancial year, provide estimated break-up ﬁnancial year-wise.
+` 1,200 crore
+6. Justiﬁcation as to why the RPTs proposed to be entered into are in
+the interest of the listed entity.
+Tata Elxsi and JLR share a strategic
+ﬁt and alignment in terms of vision,
+values, and goals and are committed
+to creating customer centric,
+sustainable, and futuristic solutions
+for the automotive industry.
+7. Details of the promoter(s)/ director(s) / key managerial personnel
+of the listed entity who have interest in the transaction, whether
+directly or indirectly.
+Explanation: Indirect interest shall mean interest held through any
+person over which an individual has control.
+a. Name of the director / KMP
+b.  Shareholding of the director / KMP, whether direct or indirect,
+in the related party
+Not applicable
+8. A copy of the valuation or other external party report, if any, shall be
+placed before the Audit Committee.
+Not applicable
+9. Other information relevant for decision making. None
+PART/uni00A0B: APPLICABLE TO SPECIFIC TYPE OF RPTs
+B(1) - Disclosure/uni00A0only/uni00A0in/uni00A0case/uni00A0of/uni00A0transactions/uni00A0relating/uni00A0to/uni00A0sale,/uni00A0purchase/uni00A0or/uni00A0supply/uni00A0of/uni00A0goods/uni00A0or/uni00A0services or
+any other similar business  transaction/uni00A0and/uni00A0trade/uni00A0advances
+S.
+No.
+Particulars of the information Information provided by
+the management
+1. Bidding or other process, if any, applied for choosing a party for sale,
+purchase or supply of goods or services.
+The Company participates in
+bidding for customer contracts
+together with partners, and
+partners are selected based
+on the relevant business
+requirements.
+2. Basis of determination of price. Market Price
+3. In case of Trade advance (of upto 365 days or such period for which such
+advances are extended as per normal trade practice) , if any, proposed
+to be extended to the related party in relation to the transaction, specify
+the following:
+a. Amount of Trade advance
+b. Tenure
+c. Whether same is self-liquidating?
+Not applicable
+Tata Elxsi37th Integrated Report 2025-26
+Notice95
+Notice of the Thirty Seventh (37th) Annual General Meeting (Contd.)
+Other disclosures
+1. Justiﬁcation as to why the proposed transaction is in the interest of the
+listed entity, basis for determination of price and other material terms and
+conditions of RPT.
+Same as Sr. No. (A)(5)(6)
+2. Audit Committee has reviewed the certiﬁcates provided by the CEO/
+Managing Director/ Whole Time Director/ Manager and CFO of the Listed
+Entity as required under the RPT Industry Standards.
+Yes
+3. Material RPT or any material modiﬁcation thereto, has been approved
+by the Audit Committee and the Board of Directors recommends the
+proposed transaction to the shareholders for approval.
+Yes
+4. Provide web-link and QR Code, through which shareholders can access
+the valuation report or other reports of external party, if any, considered by
+Audit Committee while approving the RPT.
+Not applicable
+5. The Audit Committee and Board of Directors, while providing information
+to the shareholders, have redacted the commercial secrets and such
+other information that would affect competitive position of listed entity
+and afﬁrm that, in its assessment, the redacted disclosures still provides
+all the necessary information to the public shareholders for informed
+decision-making.
+Members have been provided
+with all relevant information
+needed to make informed
+decisions through this notice.
+6. Any other information that may be relevant. Nil
+None of the Directors, Key Managerial Personnel and/or their respective relatives are in any manner concerned
+or interested, ﬁnancially or otherwise, in the Resolution set out at Item No. 4 of the accompanying Notice.
+Based on the recommendation of the Audit Committee, the Board of Directors recommends the
+Resolution at Item No. 4 of the accompanying Notice for approval by the Members of the Company by way of
+an Ordinary Resolution.
+The Members may note that, in terms of the provisions of the SEBI Listing Regulations, no Related Party shall
+vote to approve this Ordinary Resolution, irrespective of whether such entity is a Related Party to the particular
+transaction(s) or otherwise.
+Date: April 21, 2026 By Order of the Board of Directors
+Place: Bengaluru Sneha V
+Company Secretary & Compliance Ofﬁcer
+Registered Ofﬁce: Membership No.: A51279
+Tata Elxsi Limited
+ITPB Road, Whiteﬁeld, Bangalore - 560048
+E-mail: investors@tataelxsi.com
+Website: www.tataelxsi.com
+CIN: L85110KA1989PLC009968
+Tata Elxsi37th Integrated Report 2025-26
+Notice 96
+Disclosure on appointment/re-appointment of Director pursuant to Secretarial Standard-2 on General
+Meetings and Regulation 36 of SEBI (Listing Obligations and Disclosure Requirements) Regulations, 2015.
+Name Mr. Ankur Verma
+DIN 07972892
+Designation Non-Executive Non-Independent Director
+Date of Birth (Age) March 25, 1976 (50 years)
+Date of appointment on the
+Board (initial)
+August 01, 2018
+Qualiﬁcations B.E. in Mechanical Engineering; PGDM from IIM, Calcutta
+Brief Resume Mr. Ankur Verma, a B.E. in Mechanical Engineering and PGDM from IIM,
+Calcutta has around 25 years of experience in Investment Banking, Capital
+Markets and Corporate Strategy.
+At present, Mr. Verma is Group Chief Strategy Ofﬁcer at Tata Sons Private
+Limited, where he has responsibilities in strategy, corporate ﬁnance and
+mergers and acquisitions. Previously, he was Managing Director (Investment
+Banking Division) in Bank of America Merrill Lynch, and also Group Manager
+& Head, Business Planning in Infosys Technologies Limited – Corporate
+Planning Group.
+He currently serves on the boards of several Tata group companies including
+Tata Autocomp Systems Limited, Tata Elxsi Limited, Tata Play Limited, Tata
+1MG Technologies Private Limited, Tata Unistore Limited, Supermarket
+Grocery Supplies Private Limited, Tata Communications Limited, Inﬁniti Retail
+Limited, Tata Electronics Private Limited, Tata Digital Private Limited and Tata
+Capital Limited.
+Expertise in speciﬁc
+functional areas
+ Investment Banking
+ Capital Markets Corporate Strategy
+Terms and Conditions of
+re-appointment
+Proposed to be re-appointed as Non-Executive Non-Independent Director,
+liable to retire by rotation.
+Shareholding in Tata Elxsi
+Limited as on March 31, 2026
+Nil
+Relationship with Directors/
+KMP of Tata Elxsi Limited
+No inter-se relationship with Directors and KMP’s of Tata Elxsi Limited
+Attendance at Board/
+Committee Meetings
+during FY 2025-26
+Number of meetings held Number of meetings attended
+11 10
+Remuneration drawn
+for FY 2025-26
+/uni20B9 4,00,000/- (Sitting fees paid for attending the Board and Committee Meetings)
+Details of remuneration
+sought to be paid
+Mr. Ankur Verma shall be paid sitting fees for attending the Board and
+Committee meetings.
+Notice of the Thirty Seventh (37th) Annual General Meeting (Contd.)
+Tata Elxsi37th Integrated Report 2025-26
+Notice97
+Directorship, Committee
+Chairmanship/Membership
+in other public companies
+(excluding foreign companies)
+Directorship:
+ Tata Communications Limited
+ Tata Capital Limited
+ Tata Autocomp Systems Limited
+ Tata Play Limited
+ Inﬁniti Retail Limited
+ Tata Unistore Limited
+Committee Membership:
+Tata Communications Limited
+ Member - Audit Committee
+ Member - Stakeholders Relationship Committee
+Tata Capital Limited
+ Member - Audit Committee
+ Member - Stakeholders Relationship Committee
+Tata AutoComp Systems Limited
+ Member - Audit Committee
+ Member - Nomination and Remuneration Committee
+Tata Play Limited
+ Chairman  - Risk Management Committee
+ Member - Audit Committee
+Inﬁniti Retail Limited
+ Member - Audit Committee
+ Member - Risk Management Committee
+ Member - Nomination and Remuneration Committee
+Tata Unistore Limited
+ Chairman - Audit Committee
+Details of listed companies
+from which the appointee has
+resigned during the last three
+ﬁnancial years
+Ceased to be the Non Executive Non Independent Director of
+Tata Teleservices (Maharashtra) Limited w.e.f. August 07, 2025.
+Notice of the Thirty Seventh (37th) Annual General Meeting (Contd.)
+Tata Elxsi37th Integrated Report 2025-26
+Notice 98
+TO THE MEMBERS OF TATA ELXSI LIMITED
+ The Board of Directors (the “Board”) are pleased to present the Integrated Annual Report on the business and
+operations of the Company along with the audited ﬁnancial statements for the ﬁnancial year ended March 31, 2026.
+1. FINANCIAL SUMMARY
+  The highlights of ﬁnancial performance of the Company for the ﬁnancial year ended March 31, 2026, are
+summarised hereunder:
+/uni20B9 in crore
+Particulars FY 2025-26 FY 2024-25
+Revenue from operations 3,757.42 3,729.05
+Other income (Net) 183.98 179.31
+Total Income 3,941.40 3,908.36
+Proﬁt before ﬁnancial expenses, depreciation and tax 935.14 1,152.26
+Less: Financial expenses 16.23 18.98
+  Depreciation/Amortisation 93.80 104.87
+Proﬁt before tax
+825.11 1,028.40
+Tax expenses 196.68 243.47
+Proﬁt  after tax for the year 628.43 784.94
+Other Comprehensive income 6.49 (4.77)
+Net Proﬁt for the year 634.92 780.17
+Add: Proﬁt brought forward 2,586.73 2,277.06
+Less: Dividend 467.13 435.94
+  Transfer to General Reserve 10.00 10.00
+Balance Proﬁt  carried to Balance Sheet 2,754.82 2,568.73

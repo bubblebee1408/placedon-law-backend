@@ -1,0 +1,139 @@
+#!/usr/bin/env bash
+# Run every self-testing module.
+#
+# Exists because these modules import as `checker.x` but are run as files, so a bare
+# `python3 checker/as_of.py` dies with ModuleNotFoundError. That looked like a silent pass in an
+# ad-hoc loop once -- the suite had not run at all. PYTHONPATH is set here so it cannot recur.
+set -uo pipefail
+cd "$(dirname "$0")/.."
+export PYTHONPATH="$PWD"
+
+suites=(
+  checker/acquisition_log.py
+  checker/amendment.py
+  checker/as_of.py
+  checker/derived_date.py
+  checker/claim_schema.py
+  checker/legal_ref.py
+  checker/admission.py
+  checker/review_queue.py
+  checker/pdf_text.py
+  checker/legal_retrieval.py
+  checker/text_search.py
+  checker/evidence_pack.py
+  checker/retrieve.py
+  checker/model_adapter.py
+  checker/claim_verifier.py
+  checker/redteam.py
+  checker/provenance.py
+  checker/section_index.py
+  checker/mvp_freeze.py
+  checker/ss/defects.py
+  applicability.py
+  checker/assessment.py
+  checker/attribution.py
+  checker/agm.py
+  checker/timeline.py
+  checker/robots.py
+  checker/corroborate.py
+  checker/asn1.py
+  checker/pdf_signature.py
+  checker/trust.py
+  checker/entail_mine.py
+  checker/benchmark_freeze.py
+  checker/entail_baseline.py
+  checker/entail_paraphrase.py
+  checker/span_inventory.py
+  checker/commencement.py
+  checker/witness_span.py
+  checker/s96_slice.py
+  checker/eval_taxonomy.py
+  checker/entail_binding.py
+  checker/entail_role.py
+  checker/entail_qualifier.py
+  checker/cascade.py
+  checker/company_profile.py
+  checker/prescribed_thresholds.py
+  checker/classify.py
+  checker/obligations.py
+  checker/obligation_citations.py
+  checker/entity_graph.py
+  checker/corporate_data.py
+  checker/mca_aggregator.py
+  checker/s185.py
+  checker/s188.py
+  checker/s184.py
+  checker/s188_threshold.py
+  checker/s186.py
+  checker/s180.py
+  checker/currency.py
+  checker/chunk_fusion.py
+  checker/fusion.py
+  checker/reranker.py
+  checker/ablation.py
+  checker/dense_index.py
+  checker/ollama_runner.py
+  checker/backtest.py
+  checker/annotation.py
+  checker/extraction_schema.py
+  checker/structural_chunk.py
+  checker/structural_index.py
+  checker/structural_retrieve.py
+  checker/ground_span.py
+  checker/lexical_rank.py
+  checker/retrieval_eval.py
+  checker/chunk_retrieval.py
+  checker/corpus_retrieval.py
+  checker/cross_section_eval.py
+  checker/api.py
+  checker/matrix_view.py
+  checker/diligence_pack.py
+  checker/review_table.py
+  checker/review_record.py
+  checker/resubmission.py
+  checker/promotion_preview.py
+  checker/scoped_retraction.py
+  checker/metric_policy.py
+  checker/s173_slice.py
+  checker/grounding_policy.py
+  checker/entail_pairs_v2.py
+  checker/reviews.py
+  checker/fixture_rebuild.py
+  checker/benchmark_v2_freeze.py
+  checker/benchmark_versions.py
+  checker/release_record.py
+  checker/paraphrase_negatives.py
+  checker/revocation.py
+  checker/doc_verification.py
+  checker/provenance_slots.py
+  checker/drafting.py
+  checker/matter.py
+)
+
+# --test flag rather than a bare run: this one takes a PDF argument in normal use.
+extra=("scripts/acquire_rules.py --test" "scripts/register_gsr700e.py --test" "scripts/register_s188_rule15.py --test" "scripts/benchmark_refreeze_request.py --test" "scripts/parse_board_rules.py --test" "scripts/baseline_eval.py --test" "scripts/review.py --test" "scripts/review_brief.py --check" "scripts/slice_s96.py --test" "scripts/slice_s173.py --test" "scripts/serve_matrix.py --test" "scripts/serve_api.py --test" "scripts/record_interview.py --test" "scripts/verify_document.py --test" "scripts/verify_section_index.py --test" "scripts/resolve_missing_sections.py --test" "scripts/prove_temporal.py --test" "scripts/batch1_omissions.py --test" "scripts/batch1_review.py --test" "scripts/find_commencement.py --test")
+
+fails=0
+for s in "${suites[@]}"; do
+  [ -f "$s" ] || { printf '%-28s %s\n' "$s" "MISSING"; fails=$((fails+1)); continue; }
+  out=$(python3 "$s" 2>&1); rc=$?
+  res=$(printf '%s' "$out" | grep -oE '[0-9]+/[0-9]+ passed' | tail -1)
+  if [ $rc -ne 0 ]; then
+    printf '%-28s FAIL  %s\n' "$s" "${res:-no result line}"
+    printf '%s\n' "$out" | grep -E '^\[FAIL\]|Error|Traceback' | head -4 | sed 's/^/      /'
+    fails=$((fails+1))
+  else
+    printf '%-28s ok    %s\n' "$s" "${res:-(no count)}"
+  fi
+done
+
+for e in "${extra[@]}"; do
+  out=$(python3 $e 2>&1); rc=$?
+  res=$(printf '%s' "$out" | grep -oE '[0-9]+/[0-9]+ passed' | tail -1)
+  if [ $rc -ne 0 ]; then printf '%-28s FAIL  %s\n' "${e%% *}" "$res"; fails=$((fails+1))
+  else printf '%-28s ok    %s\n' "${e%% *}" "$res"; fi
+done
+
+echo
+[ $fails -eq 0 ] && echo "all suites green" || echo "$fails suite(s) failing"
+exit $fails
