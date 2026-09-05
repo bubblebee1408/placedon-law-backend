@@ -37,11 +37,11 @@ reason, because a matrix with an invented row is worse than a matrix with a gap.
 
 ## Queue
 
-- [ ] **M1 — Dense embedding index.** `checker/dense_index.py`: embed all ~474 section
+- [x] **M1 — Dense embedding index.** `checker/dense_index.py`: embed all ~474 section
       headings+text with a local sentence-transformers model, cache to disk, expose
       `search(query, k)`. Must degrade to a clear refusal if the model cannot load —
       never silently fall back to BM25 and report a dense number.
-- [ ] **M2 — Measure dense vs BM25 on the frozen eval.** Run `cross_section_eval`'s 70
+- [x] **M2 — Measure dense vs BM25 on the frozen eval.** Run `cross_section_eval`'s 70
       cases through dense retrieval. Record p@1 and recall@5 beside BM25's 0.71/0.91.
       Report the honest delta whichever way it goes. Do NOT tune.
 - [ ] **M3 — RRF fusion.** `checker/fusion.py`: Reciprocal Rank Fusion over BM25 and
@@ -69,3 +69,26 @@ reason, because a matrix with an invented row is worse than a matrix with a gap.
 
 - 2026-09-05 — environment measured; fine-tune cancelled on hardware grounds; decision B
   unblocked because its stated blocker (new dependency) is already resolved.
+
+## M2 RESULT — measured 2026-09-05 on the frozen 70-case eval
+
+| retriever | p@1 | recall@5 |
+|---|---|---|
+| BM25 (`corpus_retrieval`) | 0.71 | 0.91 |
+| Dense (`dense_index`, MiniLM-L6) | **0.73** | **0.96** |
+| delta | +0.01 | **+0.04** |
+
+Dense wins, but the p@1 gap is one case — noise on n=70. **The recall@5 gap is the real
+finding, and the disjoint error sets are the bigger one:**
+
+- BM25 misses that dense gets right (11): 13, 14, 42, 73, 129, 134, 137, 139, 164, 169, 271
+- Dense misses that BM25 gets right (8): 8, 88, 110, 118, 123, 152, 179, 230
+- Both miss (9): 47, 62, 77, 94, 101, 135, 180, 232, 248
+
+The two retrievers fail on almost disjoint sets. That is the textbook precondition for
+Reciprocal Rank Fusion, and it means M3 should beat both rather than landing between
+them. It also retroactively justifies decision A: BM25 alone was not wrong, it was
+half the signal.
+
+Note the honest limit: 9 cases defeat both retrievers. Fusion cannot rescue those, and
+they are the ceiling on any purely-retrieval improvement.
