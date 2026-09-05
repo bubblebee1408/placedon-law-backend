@@ -67,6 +67,7 @@ suites=(
   checker/s186.py
   checker/s180.py
   checker/currency.py
+  checker/dense_index.py
   checker/ollama_runner.py
   checker/backtest.py
   checker/annotation.py
