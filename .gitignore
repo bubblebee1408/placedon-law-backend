@@ -65,3 +65,4 @@ corpus/benchmark/.reviewer_identities.json
 # signature, not from us storing them.
 corpus/trust/crl/
 corpus/.dense_cache.pkl
+corpus/.chunk_dense_cache.pkl
