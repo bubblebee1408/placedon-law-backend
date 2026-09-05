@@ -67,6 +67,7 @@ suites=(
   checker/s186.py
   checker/s180.py
   checker/currency.py
+  checker/extraction_schema.py
   checker/structural_chunk.py
   checker/structural_index.py
   checker/structural_retrieve.py
