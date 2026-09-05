@@ -177,3 +177,162 @@ not slides.* The most "Bloomberg" thing to do next is not to draw a bigger diagr
 it is to put the verified memo this engine *already produces* in front of one
 Company Secretary and let them tell us where it is wrong. The architecture here is
 the map for after that conversation, not instead of it.
+
+---
+
+# Appendix A — the four Bloomberg mechanics, tested one by one against India
+
+Added 2026-09-04 (later same day), after a longer source transcript surfaced the
+*specific* mechanics behind Bloomberg Law rather than the vision. The body above
+answered "should we build this." This appendix answers the sharper question:
+**which of Bloomberg's actual mechanics can exist in India at all?**
+
+The transcript named four. They do not fare equally, and the spread is the finding.
+
+| # | Bloomberg mechanic | How it works there | Indian verdict |
+|---|---|---|---|
+| 1 | **Draft Analyzer** — clause benchmarking | Semantic index over ~2.3M agreements filed to SEC EDGAR; redlines a draft against market standard | **NO DATA SUBSTRATE.** Not "hard" — absent |
+| 2 | **Points of Law** — ML-extracted holdings + treatment mapping | NLP over judicial opinions; tracks how later courts treat one proposition | Buildable, but it is the auto-labeling trap (§3.2) *and* off-wedge |
+| 3 | **Docket analytics** — judge grant/deny rates | Structured scrape of PACER | Off-wedge, and legally fraught in India |
+| 4 | **Corporate entity graph** — LEI-keyed hierarchy fused to legal risk | Terminal infrastructure; subsidiaries, debt, filings under one identity | **Transfers cleanly — and is already built here** |
+
+## A.1 Draft Analyzer has no Indian equivalent, and this is the real answer
+
+The transcript's "why Bloomberg won't come to India" list gives four reasons
+(fragmentation, the SCC citation monopoly, price sensitivity, regulatory opacity).
+All four are about *distribution and cost*. They miss the structural one:
+
+**Bloomberg Law's highest-value corporate feature is powered by a filing regime
+India does not have.** EDGAR obliges US registrants to file material agreements as
+full-text exhibits — which is why an index of 2.3M contracts can exist at all.
+India has no counterpart. MCA21 holds forms and financial statements, not commercial
+agreements. SEBI LODR is a **particulars-disclosure** regime, not a filing regime.
+
+### Status: PARTIALLY_VERIFIED (checked 2026-09-05)
+
+The claim was carried as UNVERIFIED and has now been checked against the
+regulators' own text. **It holds.** Two corrections and one evidence-quality
+caveat are recorded below; nothing overturns the conclusion.
+
+**The evidentiary anchor.** SEBI Master Circular
+SEBI/HO/CFD/CFD-PoD-1/P/CIR/2023/123 (13 Jul 2023), Annexure I, sets out the
+particulars a listed entity must disclose for a covered agreement. The operative
+words are:
+
+> "significant terms of the agreement **(in brief)**"
+
+The required list is names of parties, purpose, shareholding, significant terms
+in brief, promoter-group relationship, RPT status, issue price where shares are
+involved, and — on amendment or termination — name, nature, date and impact.
+**Nowhere is the executed instrument itself filed, attached, or hosted.**
+Reg 30A extends the duty to the company's *website*, but to the same particulars
+list — not to the document.
+
+Contrast the US rule at the level of the text. 17 CFR 229.601 (Reg S-K Item
+601(b)(10)) requires that "every contract not made in the ordinary course of
+business that is material to the registrant" be **filed as an exhibit**. That is
+a document-filing mandate. SEBI's is a summary-disclosure mandate. The two
+regimes are categorically different, and only the first produces a corpus.
+
+**Correction 1 — Reg 30A is broader than stated above.** The earlier draft called
+it "certain shareholder/family agreements." Clause 5A in fact reaches *any*
+agreement among shareholders, promoters, promoter-group entities, related
+parties, directors, KMP or employees — of the listed entity or its holding,
+subsidiary or associate — whether among themselves, with the entity, or with a
+third party, which impacts management or control or imposes a restriction or
+liability on the entity, **whether or not the listed entity is a party to it**.
+This is materially wider coverage than described. It *strengthens* the
+conclusion rather than weakening it: even this expansive duty stops at terms in
+brief.
+
+**Correction 2 — one genuine full-text exception exists: MCA charge filings.**
+Forms CHG-1/CHG-9 under s.77 require the charge instrument itself — mortgage
+deed, hypothecation deed, pledge agreement — as a mandatory attachment, and it
+enters the public MCA record. So the flat statement "no full-text commercial
+agreement is ever public in India" is too strong. The correct statement is
+narrower and survives: the exception covers **secured-lending instruments only**.
+No commercial contracts, licences, JVs or supply agreements attach to AOC-4 or
+MGT-7, which carry financial statements and annual returns. A lender-security
+corpus is not a commercial-contract corpus, and cannot support clause
+benchmarking of the sort Draft Analyzer performs.
+
+> **UNVERIFIED — scale of the charge-filing exception.** No primary MCA/RoC count
+> of charges filed per year was obtained. Do not cite a scale figure for this
+> until one is pulled from MCA/RoC directly.
+>
+> **UNRESOLVED — NCLT scheme-of-arrangement filings** were not checked at all;
+> full agreement text may surface there as court exhibits. Volumes make this
+> marginal to the corpus argument either way, but it is unchecked, not cleared.
+
+**Evidence quality — read this before the claim is used externally.** The SEBI
+consultation/board memorandum was fetched directly from sebi.gov.in (primary).
+Two anchors are **primary-adjacent, not primary-confirmed**: the circular's
+Annexure I text came from an exchange (MSEI) mirror of the SEBI circular rather
+than a sebi.gov.in-hosted PDF located directly, and the Item 601(b)(10) text came
+from Cornell LII because ecfr.gov returned a bot-verification wall — which was
+recorded as blocked and **not** bypassed, per the source policy. Both are
+verbatim reproductions rather than paraphrase, but neither is the regulator's own
+host. Status stays PARTIALLY_VERIFIED until both are re-anchored.
+
+If it holds, the consequence is decision-useful: **clause benchmarking is not a
+product an Indian entrant can lose to a better-funded rival — it is a product no
+one can build**, because the corpus is not public. Nobody should spend a month
+discovering this empirically. It also reframes the wedge: with no market-standard
+contract corpus, *the statute itself is the only dense, public, authoritative
+corpus in Indian corporate law* — which is precisely the one this repo is built on.
+
+## A.2 Two of four are off-wedge, and we already declined them
+
+Mechanics 2 and 3 are **litigation** products. Placedon's wedge is corporate
+compliance. `docs/NON_GOALS.md` already refuses automated legal advice and general
+chat; predictive judicial analytics is a further step in the same wrong direction.
+Mechanic 2 additionally requires exactly the model-authoritative labeling that §3.2
+rejects. Both stay out. Case law enters only as Stage 3 — Indian Kanoon under
+attribution terms, as a *linked, source-attributed* signal, never as prediction.
+
+## A.3 Mechanic 4 is the one that transfers — and India's identity keys are better
+
+The entity graph is the transferable pillar, and India's anchors are *stronger*
+than Bloomberg's for this purpose. LEI is voluntary-ish and concentrated in
+financial counterparties. **CIN and DIN are mandatory and universal** for every
+registered company and director. An identity spine that Bloomberg had to assemble
+is, in India, issued by statute.
+
+That is `entity_graph.py` (built) + `corporate_data.py` (the licensed L1 seam,
+built) + the s.185/186/188 deciders (built). **Of Bloomberg's four pillars, the
+only one that both transfers and sits on our wedge is the one already standing.**
+
+## A.4 A correction to the transcript that changes strategy
+
+The transcript asserts the SCC citation monopoly is a barrier foreign entrants
+cannot cross. That is now false: **Harvey signed SCC Online in Jan 2026** (recorded
+in the project's own competitive notes). A foreign entrant has already crossed it.
+
+So "Bloomberg is not here" is *not* evidence that the barrier holds. Of the four
+reasons, only **price sensitivity** is durable — and it cuts against us too, which
+is why the published-price, flat-rate position (not enterprise relationship sales)
+remains the right one. Do not treat Bloomberg's absence as a moat. It is a
+statement about Bloomberg's priorities, not about the market's defensibility.
+
+## A.5 On forking `bilawalsidhu/gods-eye-view` to build this
+
+Technically possible; strategically near-zero for this product. The repo is a
+WebGL/Cesium client plus a Node proxy over telemetry APIs (ADS-B, AIS, TLE, USGS).
+None of it touches statute text, entity resolution, provenance, or entailment —
+i.e. none of it touches the half of this problem that is actually hard. The one
+reusable idea is its rate-governor/cache proxy pattern, which is a small amount of
+code we do not currently need.
+
+Forking it would also import a *frontend* stack into a repo whose stated virtue is
+"no dependencies outside the standard library." That is a real cost for no wedge
+gain. §3.3 stands: if the spatial product is wanted, it is a separate bet with a
+separate buyer. (If it is ever pursued: check the upstream licence first — it was
+not verified here.)
+
+## A.6 What this appendix does not change
+
+Nothing in the queue. The blocking item is still **H-C: one Company Secretary
+reacting to the evidence pack that already exists.** Four mechanics analysed, three
+declined, one already built — and the bottleneck is unchanged and human. This
+appendix exists to stop the same vision being re-litigated a third time, not to
+authorise new building ahead of the validation gate.
