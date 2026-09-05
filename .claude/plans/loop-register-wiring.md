@@ -40,7 +40,7 @@ out to be already done — checked, not assumed:
 
 ## The autonomous queue
 
-- [ ] **A1 — s.180 and s.184 as company-level register rows.**
+- [x] **A1 — s.180 and s.184 as company-level register rows.**
   Both are transaction-scoped deciders with no row in the obligation register, so
   a company with no documents is never told these controls exist. Mirror the
   established `decided_by=` pattern used for s.185/186/188.
