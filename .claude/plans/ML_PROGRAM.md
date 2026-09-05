@@ -44,14 +44,14 @@ reason, because a matrix with an invented row is worse than a matrix with a gap.
 - [x] **M2 — Measure dense vs BM25 on the frozen eval.** Run `cross_section_eval`'s 70
       cases through dense retrieval. Record p@1 and recall@5 beside BM25's 0.71/0.91.
       Report the honest delta whichever way it goes. Do NOT tune.
-- [ ] **M3 — RRF fusion.** `checker/fusion.py`: Reciprocal Rank Fusion over BM25 and
+- [x] **M3 — RRF fusion.** `checker/fusion.py`: Reciprocal Rank Fusion over BM25 and
       dense rank lists. Measure fused p@1/recall@5. RRF fuses ranks, never scores.
-- [ ] **M4 — Learned reranker (the perceptron).** A from-scratch linear model trained on
+- [x] **M4 — Learned reranker (the perceptron).** A from-scratch linear model trained on
       the eval's own labels over interpretable features (BM25 rank, dense rank, heading
       overlap, section-number literal match). Cross-validated so the reported number is
       not the training score. Every weight must be inspectable — a black-box reranker in
       a system whose thesis is auditability would be a contradiction.
-- [ ] **M5 — Ablation harness.** `checker/ablation.py`: run V1/V2/V4/V5 end to end and
+- [x] **M5 — Ablation harness.** `checker/ablation.py`: run V1/V2/V4/V5 end to end and
       emit the table, with V3 explicitly NOT_RUNNABLE and the reason attached.
 - [ ] **M6 — Push.** Plan + results to the business-plan repo.
 
@@ -92,3 +92,28 @@ half the signal.
 
 Note the honest limit: 9 cases defeat both retrievers. Fusion cannot rescue those, and
 they are the ceiling on any purely-retrieval improvement.
+
+## PROGRAM RESULT — 2026-09-05
+
+| retriever / tier | p@1 | recall@5 |
+|---|---|---|
+| BM25 (was shipped) | 0.71 | 0.91 |
+| Dense (MiniLM-L6) | 0.73 | 0.96 |
+| **RRF fusion** | **0.80** | **0.97** |
+| Learned reranker (held-out, 7-fold) | 0.83 ± 0.10 | 0.96 |
+| gemma3:1b, best tier (V5, n=20) | 0.45 | — |
+| gemma3:1b, no retrieval (V1) | 0.00 | — |
+
+**Adopt: fusion.** 0.80 with zero regressions, no training, no fitted parameter,
+k=60 published. It is the only component here that is a clean, cheap win.
+
+**Do not adopt: the reranker.** 0.83 sits inside one fold-std (0.10) of 0.80, so at
+n=70 it is not distinguishable from fusion, and it is slightly worse on recall@5. It
+would add fitted parameters — a permanent overfitting and maintenance liability — for
+a gain we cannot demonstrate. Kept as evidence for the decision, wired into nothing.
+
+**Do not adopt: any model in the answer path.** A 1B model handed the right section in
+context 90% of the time scored 0.00. Retrieval is the system.
+
+Remaining and correctly untouched: **H-B** (lawyer resolves NEEDS_LAWYER labels) and
+**H-C** (a practising CS reacts to the evidence pack). No result above moves either.
