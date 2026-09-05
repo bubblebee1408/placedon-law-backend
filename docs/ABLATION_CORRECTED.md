@@ -60,11 +60,20 @@ honest claim.
 
 ## llama3 is not usable on this hardware
 
-`llama3` (4.7 GB) exceeded **600 seconds** to load and answer a single query on 8 GB
-unified memory, against `gemma3:1b`'s 1.0-1.6 s/query. A 70-case run across four tiers is
-not feasible. Recorded as measured infeasibility, not as a result: **whether a larger
-model would beat fusion's 0.80 remains untested here**, and this hardware cannot settle
-it.
+Measured precisely, not estimated:
+
+- `llama3` (4.7 GB) **loaded in 292 s** and answered a trivial probe (`"reply ok"`).
+- The **first real query** — a Companies Act question — **timed out at 900 s**.
+
+Against `gemma3:1b`'s 1.0-1.6 s/query, that is roughly a 600x difference, and it is a
+memory-pressure cliff rather than a slope: 4.7 GB of weights on 8 GB of unified memory
+leaves nothing for the KV cache, so a real prompt thrashes where a two-token probe does
+not. A full matrix is ~280 queries; at 900 s each that is over 70 hours.
+
+Recorded as **measured infeasibility, not a result**. Whether a larger model would beat
+fusion's 0.80 remains **untested**, and this hardware cannot settle it. Note the probe
+succeeding while the real query failed is exactly the trap this project guards against —
+a cheap health check that passes tells you nothing about whether the system works.
 
 ## Caveats
 
