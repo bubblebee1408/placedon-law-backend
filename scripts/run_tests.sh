@@ -12,6 +12,7 @@ suites=(
   checker/acquisition_log.py
   checker/amendment.py
   checker/as_of.py
+  checker/event_log.py
   checker/derived_date.py
   checker/claim_schema.py
   checker/legal_ref.py

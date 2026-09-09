@@ -164,10 +164,111 @@ def compliance_pack(payload: dict, *, generated_at: str) -> dict:
     }
 
 
+def _query(raw: str) -> dict[str, str]:
+    """Parse a query string. Unknown keys are the caller's business; we only read
+    the ones we document, and a malformed value fails closed at the reader."""
+    from urllib.parse import parse_qsl
+    return dict(parse_qsl(raw, keep_blank_values=False))
+
+
+def _event_json(e) -> dict:
+    return {
+        "id": e.id,
+        "at": e.at.isoformat(),
+        "known_at": e.known_at.isoformat(),
+        "kind": e.kind,
+        "subtype": e.subtype,
+        "title": e.title,
+        "output_class": e.output_class,
+        "currency_state": e.currency_state,
+        "obligation_id": e.obligation_id,
+        "consequence": e.consequence,
+        "verified_by": e.verified_by,
+        "source": {"instrument": e.source.instrument,
+                   "as_at": e.source.as_at.isoformat() if e.source.as_at else None,
+                   "sha256": e.source.sha256,
+                   "url": e.source.url},
+    }
+
+
+# v0 serves LAW-CHANGE events only. Company-fact events (directors, charges,
+# status) need the licensed registry feed, so the response says so rather than
+# implying an empty company history means a company with no history.
+_V0_SCOPE = ("law_change_only — company-fact events require the licensed registry "
+             "feed and are not served in v0; an absence here is not evidence that "
+             "nothing happened to this company")
+
+
+def _events_route(cin: str, qs: dict, *, generated_at: str) -> tuple[int, dict]:
+    from checker.event_log import events_for
+    as_of = _date(qs, "as_of") or date.fromisoformat(generated_at[:10])
+    since = _date(qs, "since")
+    if since is not None and since > as_of:
+        raise BadRequest(f"'since' ({since}) is after 'as_of' ({as_of})")
+    kind = qs.get("kind")
+    if kind is not None and kind not in ("law", "company"):
+        raise BadRequest(f"'kind' must be 'law' or 'company', got {kind!r}")
+    klass = qs.get("class")
+    _CLASSES = {"fact": "VERIFIED_FACT", "consequence": "DETERMINISTIC_CONSEQUENCE",
+                "signal": "SIGNAL"}
+    if klass is not None and klass not in _CLASSES:
+        raise BadRequest(f"'class' must be one of {sorted(_CLASSES)}, got {klass!r}")
+
+    events = events_for(as_of, since=since)
+    if kind == "company":
+        events = []
+    if klass is not None:
+        events = [e for e in events if e.output_class == _CLASSES[klass]]
+    return 200, {
+        "cin": cin,
+        "as_of": as_of.isoformat(),
+        "since": since.isoformat() if since else None,
+        "generated_at": generated_at,
+        "scope": _V0_SCOPE,
+        "events": [_event_json(e) for e in events],
+        "no_model": True,
+    }
+
+
 def handle(method: str, path: str, body: dict | None, *, generated_at: str
            ) -> tuple[int, dict]:
     """Route one request. Pure: no I/O. Returns (status, response dict)."""
-    path = path.split("?", 1)[0].rstrip("/") or "/"
+    raw_path, _, raw_qs = path.partition("?")
+    qs = _query(raw_qs)
+    path = raw_path.rstrip("/") or "/"
+    parts = [p for p in path.split("/") if p]
+
+    # GET /v1/company/{cin}/events[/{event_id}]
+    if method == "GET" and len(parts) in (4, 5) and parts[:2] == ["v1", "company"] \
+            and parts[3] == "events":
+        cin = parts[2]
+        try:
+            if len(parts) == 4:
+                return _events_route(cin, qs, generated_at=generated_at)
+            from checker.event_log import event_by_id
+            as_of = _date(qs, "as_of") or date.fromisoformat(generated_at[:10])
+            since = _date(qs, "since")
+            ev = event_by_id(parts[4], as_of, since=since)
+            if ev is None:
+                return 404, {"error": "not_found",
+                             "detail": f"no event {parts[4]!r} at as_of {as_of.isoformat()}"}
+            return 200, {"cin": cin, "as_of": as_of.isoformat(),
+                         "generated_at": generated_at, "event": _event_json(ev),
+                         "no_model": True}
+        except BadRequest as e:
+            return 400, {"error": "bad_request", "detail": str(e)}
+
+    # GET /v1/instruments/{fragment}/affected
+    if method == "GET" and len(parts) == 4 and parts[0] == "v1" \
+            and parts[1] == "instruments" and parts[3] == "affected":
+        from urllib.parse import unquote
+        from checker.event_log import affected_by
+        fragment = unquote(parts[2])
+        if not fragment.strip():
+            return 400, {"error": "bad_request", "detail": "empty instrument fragment"}
+        return 200, {"instrument": fragment, "generated_at": generated_at,
+                     "obligations": affected_by(fragment), "no_model": True}
+
     if method == "GET" and path == "/v1/health":
         from checker.release_record import provenance, ProvenanceError
         try:
@@ -185,7 +286,10 @@ def handle(method: str, path: str, body: dict | None, *, generated_at: str
             return 400, {"error": "bad_request", "detail": str(e)}
     return 404, {"error": "not_found",
                  "detail": f"no route for {method} {path}",
-                 "routes": ["GET /v1/health", "POST /v1/compliance-pack"]}
+                 "routes": ["GET /v1/health", "POST /v1/compliance-pack",
+                            "GET /v1/company/{cin}/events",
+                            "GET /v1/company/{cin}/events/{event_id}",
+                            "GET /v1/instruments/{fragment}/affected"]}
 
 
 def _test() -> None:
@@ -256,6 +360,48 @@ def _test() -> None:
     check(st == 400 and "ISO date" in body["detail"], "a malformed date is a 400")
 
     # ── unknown route -> 404 with the route list ────────────────────────────
+    # ── the event log routes ─────────────────────────────────────────────────
+    st, b = handle("GET", "/v1/company/U74999DL2015PTC000001/events"
+                          "?as_of=2026-09-09&since=2025-01-01", None, generated_at=GEN)
+    check(st == 200, f"the event stream serves ({st})")
+    check(bool(b["events"]), f"...and carries events ({len(b['events'])})")
+    check(all(e["source"]["instrument"] for e in b["events"]),
+          "...every one naming its source")
+    check([e["at"] for e in b["events"]] == sorted([e["at"] for e in b["events"]], reverse=True),
+          "...newest first")
+    check("law_change_only" in b["scope"],
+          "...and the response says v0 serves law-change events only, so an absence "
+          "is not read as 'nothing happened to this company'")
+
+    ev_id = b["events"][0]["id"]
+    st2, b2 = handle("GET", f"/v1/company/X/events/{ev_id}?as_of=2026-09-09&since=2025-01-01",
+                     None, generated_at=GEN)
+    check(st2 == 200 and b2["event"]["id"] == ev_id, f"one event fetches by id ({st2})")
+    st3, _ = handle("GET", "/v1/company/X/events/nosuchevent?as_of=2026-09-09",
+                    None, generated_at=GEN)
+    check(st3 == 404, f"an unknown event id is 404, not an empty event ({st3})")
+
+    # fails closed on every malformed input rather than guessing
+    st4, b4 = handle("GET", "/v1/company/X/events?as_of=notadate", None, generated_at=GEN)
+    check(st4 == 400 and "ISO date" in b4["detail"], f"a malformed as_of is 400 ({st4})")
+    st5, _ = handle("GET", "/v1/company/X/events?as_of=2024-01-01&since=2026-01-01",
+                    None, generated_at=GEN)
+    check(st5 == 400, f"a since after as_of is 400, not an empty list ({st5})")
+    st6, _ = handle("GET", "/v1/company/X/events?class=bogus", None, generated_at=GEN)
+    check(st6 == 400, f"an unknown class filter is 400 ({st6})")
+
+    st7, b7 = handle("GET", "/v1/company/X/events?as_of=2026-09-09&since=2025-01-01&class=signal",
+                     None, generated_at=GEN)
+    check(st7 == 200 and all(e["output_class"] == "SIGNAL" for e in b7["events"]),
+          "the class filter selects exactly that output class")
+
+    st8, b8 = handle("GET", "/v1/instruments/880(E)/affected", None, generated_at=GEN)
+    check(st8 == 200 and b8["obligations"] == ["CA13-S2-85-SMALL"],
+          f"the reverse index names the obligations an instrument moves ({b8.get('obligations')})")
+
+    st9, _ = handle("GET", "/v1/company/X/events", {"as_of": "x"}, generated_at=GEN)
+    check(st9 == 200, "a GET ignores a body rather than failing on it")
+
     st, body = handle("GET", "/v1/nope", None, generated_at=GEN)
     check(st == 404 and "routes" in body, "an unknown route 404s and lists the routes")
 
