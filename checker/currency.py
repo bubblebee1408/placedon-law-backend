@@ -61,6 +61,11 @@ class Dependency:
     obligation_id: str
     basis: str
     threshold_keys: tuple[str, ...] = ()
+    # Delegated rules this obligation's answer needs that are NOT amounts in the
+    # threshold chain. s.177/s.188/s.203 each turn on a Rule we may not hold, and
+    # without naming it here the obligation reported CURRENT -- a claim we had
+    # read law we had never opened. Same defect class as G.S.R. 880(E).
+    rule_ids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -103,13 +108,16 @@ DEPENDENCIES: tuple[Dependency, ...] = (
                "Companies Act 2013 s.186 (the 60%/100% limit is stated in the Act itself)"),
     Dependency("CA13-S188-RPT",
                "Companies Act 2013 s.188, held verbatim in corpus; the members'-approval "
-               "threshold is a delegated rule (S-188-RULES) surfaced on the obligation row"),
+               "threshold is a delegated rule (S-188-RULES) surfaced on the obligation row",
+               rule_ids=("S-188-RULES",)),
     Dependency("CA13-S177-AUDIT-CTTE",
                "Companies Act 2013 s.177, held verbatim; the prescribed class (Rule 6) is a "
-               "delegated rule (S-177-RULES) surfaced on the obligation row"),
+               "delegated rule (S-177-RULES) surfaced on the obligation row",
+               rule_ids=("S-177-RULES",)),
     Dependency("CA13-S203-KMP",
                "Companies Act 2013 s.203, held verbatim; the prescribed KMP class is a "
-               "delegated rule (S-203-RULES) surfaced on the obligation row"),
+               "delegated rule (S-203-RULES) surfaced on the obligation row",
+               rule_ids=("S-203-RULES",)),
     Dependency("CA13-S180-BORROWING-LIMIT",
                "Companies Act 2013 s.180(1)(c), held verbatim in corpus; the limit is the "
                "aggregate of paid-up capital, free reserves and securities premium, stated "
@@ -160,12 +168,30 @@ def _currency_of_key(key: str, as_of: date) -> Finding:
                    t.instrument)
 
 
+def _rule_findings(rule_ids: tuple[str, ...]) -> list[Finding]:
+    """A delegated rule we cannot use makes the obligation's basis UNACQUIRED."""
+    if not rule_ids:
+        return []
+    from checker.staleness import rule_usable      # lazy: staleness imports us
+    out = []
+    for rid in rule_ids:
+        usable, why = rule_usable(rid)
+        if not usable:
+            out.append(Finding("", UNACQUIRED, f"{rid}: {why}", rid))
+    return out
+
+
 def currency_of(dep: Dependency, as_of: date) -> Finding:
-    """The currency of one obligation. Worst of its keys; CURRENT if Act-only."""
-    if not dep.threshold_keys:
+    """The currency of one obligation: the worst of everything its answer rests on.
+
+    That is its prescribed amounts AND any delegated rule it needs. An obligation
+    with neither rests only on Act text we hold verbatim, and is CURRENT.
+    """
+    findings = [_currency_of_key(k, as_of) for k in dep.threshold_keys]
+    findings += _rule_findings(dep.rule_ids)
+    if not findings:
         return Finding(dep.obligation_id, CURRENT, dep.basis, None)
-    per_key = [_currency_of_key(k, as_of) for k in dep.threshold_keys]
-    worst = max(per_key, key=lambda f: _SEVERITY[f.status])
+    worst = max(findings, key=lambda f: _SEVERITY[f.status])
     return Finding(dep.obligation_id, worst.status, f"{dep.basis}: {worst.detail}", worst.instrument)
 
 
