@@ -110,6 +110,13 @@ DEPENDENCIES: tuple[Dependency, ...] = (
     Dependency("CA13-S203-KMP",
                "Companies Act 2013 s.203, held verbatim; the prescribed KMP class is a "
                "delegated rule (S-203-RULES) surfaced on the obligation row"),
+    Dependency("CA13-S180-BORROWING-LIMIT",
+               "Companies Act 2013 s.180(1)(c), held verbatim in corpus; the limit is the "
+               "aggregate of paid-up capital, free reserves and securities premium, stated "
+               "in the Act itself and not prescribed by rule"),
+    Dependency("CA13-S184-DIRECTOR-INTEREST",
+               "Companies Act 2013 s.184, held verbatim in corpus; the >2% shareholding and "
+               "partner/owner/member limbs are stated in s.184(2) itself, not prescribed by rule"),
 )
 
 
@@ -227,6 +234,14 @@ def _test() -> None:
           "...and exactly the register's obligations, no more")
     severities = [_SEVERITY[f.status] for f in rep]
     check(severities == sorted(severities, reverse=True), "worst findings sort first")
+
+    # ── every obligation DECLARES a basis. An obligation added to the register
+    # without a Dependency here reports UNDECLARED: the map catching its own gap.
+    # That is the right behaviour, but it must never be the resting state -- an
+    # UNDECLARED row is a hole in our map, not a finding about a company.
+    undeclared = [f.obligation_id for f in rep if f.status == UNDECLARED]
+    check(not undeclared,
+          f"every obligation declares a currency basis (undeclared: {undeclared})")
 
     # ── the small-company duty rests on G.S.R. 700(E): UNACQUIRED when the Rule
     # is not attested. Forced via the stub so this does not depend on the live
