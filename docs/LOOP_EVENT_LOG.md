@@ -63,7 +63,7 @@ the persistent bitemporal store (v2).
 
 ## 2. Queue
 
-- [ ] **T0 — Declare the currency basis for s.180 and s.184.**
+- [x] **T0 — Declare the currency basis for s.180 and s.184.**
   Add two `Dependency` rows to `checker/currency.py`. Both rest on Act text held verbatim
   (no delegated rule), so both are Act-only dependencies — same shape as s.185/s.186.
   *Check (write first, must FAIL before): `currency.report(any date)` returns **zero**
