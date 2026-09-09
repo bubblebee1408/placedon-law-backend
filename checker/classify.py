@@ -221,6 +221,7 @@ def _test() -> None:
     # ── the headline: no answer while the thresholds are unacquired. Forced
     # via the stub so it does not depend on the live 700(E) attestation state. ─
     import scripts.register_gsr700e as _reg
+    from checker.prescribed_thresholds import all_acquired as _all_acquired
     with _reg.stub_registration(None):
         r, tr = small_company(small)
         check(r is Result.INSUFFICIENT_DATA,
@@ -229,7 +230,7 @@ def _test() -> None:
               "...and the trace names the acquisition gap")
 
     # ── and a definite answer once the thresholds are acquired ──────────────
-    with _reg.stub_registration(_reg.attested_stub()):
+    with _all_acquired():
         r_ok, _ = small_company(small)
         check(r_ok is Result.APPLIES,
               f"with acquired thresholds a small company is classified ({r_ok})")

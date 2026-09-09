@@ -155,6 +155,7 @@ def _test() -> int:
     # behaviour deterministically, independent of the live 700(E) attestation.
     import importlib
     _reg = importlib.import_module("scripts.register_gsr700e")
+    from checker.prescribed_thresholds import all_acquired as _all_acquired
     p = CompanyProfile(company_class="private",
                        paid_up_capital=Figure(Money.crore(2), "2024-25"),
                        turnover=Figure(Money.crore(30), "2024-25"), **common)
@@ -165,7 +166,7 @@ def _test() -> int:
     check("servable" in why2 or "S-002" in why2,
           f"...naming the acquisition gap ({why2[:70]})")
     # ...and resolves once the Rule is attested.
-    with _reg.stub_registration(_reg.attested_stub()):
+    with _all_acquired():
         cls3, _ = regime_for(p)
     check(cls3 != "UNRESOLVED",
           f"the regime resolves once 700(E) is attested ({cls3})")

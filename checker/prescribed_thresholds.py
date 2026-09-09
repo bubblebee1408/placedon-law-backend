@@ -37,8 +37,9 @@ answer today, and it is a better one than a confident number nobody verified.
 """
 from __future__ import annotations
 
+from contextlib import contextmanager as _contextmanager
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 
 from checker.company_profile import Money
 from checker.provenance import CORROBORATED, SERVABLE, UNRESOLVED, VERIFIED
@@ -83,6 +84,10 @@ class ThresholdUnavailable(LookupError):
 
 
 _INDIA_CODE = "https://indiacode.gov.in/handle/123456789"
+# The India Code handle for 880(E) is UNRESOLVED -- not looked up from a primary
+# host, and inventing one would be a fabricated citation. The person who
+# downloads it records the real source in the registration record.
+SOURCE_880 = "UNRESOLVED — see scripts/register_gsr880e.py"
 
 # The Act's own limbs. These ARE in our corpus verbatim, so they are usable --
 # but note what they are: the floor below which no prescription is needed, and
@@ -148,20 +153,74 @@ def _prescribed_state() -> tuple[str, str]:
         f"{rec.get('artifact_sha256', '?')[:23]}…")
 
 
+def _prescribed_state_880() -> tuple[str, str]:
+    """(evidence state, note) for the 2025 amounts. Derived, never asserted.
+
+    Same shape as _prescribed_state, for the instrument that SUPERSEDED 700(E).
+    """
+    try:
+        from scripts.register_gsr880e import registration, is_attested
+    except ImportError:                                     # pragma: no cover
+        return UNRESOLVED, "the registration module could not be imported"
+
+    rec = registration()
+    if rec is None:
+        return UNRESOLVED, (
+            "no registration on record. G.S.R. 880(E) of 01-12-2025 raises the "
+            "small-company limits, and its existence is known only from secondary "
+            "reporting, which may not be served. Acquire under S-003: download the "
+            "Gazette artifact in a browser, then scripts/register_gsr880e.py.")
+    if not is_attested(rec):
+        missing = [k for k in ("identity_checked_by", "verbatim_clause_checked_by")
+                   if not rec.get(k)]
+        return UNRESOLVED, (
+            f"artifact registered ({rec.get('artifact_sha256', '?')[:23]}…) but not "
+            f"attested: {', '.join(missing) or 'status is not CORROBORATED'}. Run "
+            "scripts/register_gsr880e.py --attest <reviewer-id>.")
+    return CORROBORATED, (
+        f"registered and attested by {rec['identity_checked_by']} at "
+        f"{rec['identity_checked_at']}; artifact "
+        f"{rec.get('artifact_sha256', '?')[:23]}…")
+
+
+# The date G.S.R. 880(E) took effect, and therefore the day after which the 2022
+# amounts are no longer the operative prescription. Recording this is what stops
+# the engine serving a superseded figure as current -- see the note below.
+_GSR880_FROM = date(2025, 12, 1)
+
+
 # The prescribed amounts. Their state is DERIVED, never asserted here.
+#
+# Two instruments, in sequence, and the boundary between them is load-bearing.
+# 700(E)'s records once carried effective_to=None, which asserts "still in force
+# so far as we know". That stopped being true on 01-12-2025 and the engine went
+# on serving Rs 4 crore as CURRENT -- the exact failure this system exists to
+# prevent. effective_to now closes the 2022 window, so for any date from
+# 01-12-2025 the only record covering it is 880(E), which is not servable until a
+# person acquires and attests it. The engine therefore REFUSES rather than
+# serving either the superseded figure or an unverified new one.
 def _prescribed() -> tuple[Threshold, ...]:
     state, note = _prescribed_state()
+    state880, note880 = _prescribed_state_880()
+    _2022 = ("G.S.R. 700(E), Companies (Specification of Definition Details) "
+             "Amendment Rules, 2022, dated 15-09-2022")
+    _2025 = ("G.S.R. 880(E), Companies (Specification of Definition Details) "
+             "Amendment Rules, 2025, dated 01-12-2025")
+    superseded = " Superseded by G.S.R. 880(E) with effect from 01-12-2025."
     return (
         Threshold("small_company.paid_up_capital.prescribed", Money.crore(4),
-                  date(2022, 9, 15), None,
-                  "G.S.R. 700(E), Companies (Specification of Definition Details) "
-                  "Amendment Rules, 2022, dated 15-09-2022",
-                  f"{_INDIA_CODE}/508916", state, note),
+                  date(2022, 9, 15), _GSR880_FROM - timedelta(days=1),
+                  _2022, f"{_INDIA_CODE}/508916", state, note + superseded),
         Threshold("small_company.turnover.prescribed", Money.crore(40),
-                  date(2022, 9, 15), None,
-                  "G.S.R. 700(E), Companies (Specification of Definition Details) "
-                  "Amendment Rules, 2022, dated 15-09-2022",
-                  f"{_INDIA_CODE}/508916", state, note),
+                  date(2022, 9, 15), _GSR880_FROM - timedelta(days=1),
+                  _2022, f"{_INDIA_CODE}/508916", state, note + superseded),
+        # The 2025 amounts are a CLAIM PENDING ATTESTATION, not a fact. They are
+        # here so the artifact can be checked against them (register_gsr880e's
+        # clause regex requires these words), and they are unservable until it is.
+        Threshold("small_company.paid_up_capital.prescribed", Money.crore(10),
+                  _GSR880_FROM, None, _2025, SOURCE_880, state880, note880),
+        Threshold("small_company.turnover.prescribed", Money.crore(100),
+                  _GSR880_FROM, None, _2025, SOURCE_880, state880, note880),
     )
 
 
@@ -197,6 +256,24 @@ def operative_small_company_limits(as_of: date) -> tuple[Money, Money]:
     return cap.amount, turn.amount
 
 
+# ── test support ──────────────────────────────────────────────────────────────
+@_contextmanager
+def all_acquired():
+    """Stub EVERY instrument in the prescribed chain as acquired and attested.
+
+    Tests that mean "the thresholds are available" must control the whole chain,
+    not one instrument. Stubbing only 700(E) used to be enough; once 880(E)
+    superseded it on 01-12-2025, a test that stubbed 700(E) and asked about a
+    2026 date was asking about an instrument it had not stubbed -- which is how
+    the supersession bug hid. One helper, so the next amendment updates one place.
+    """
+    import scripts.register_gsr700e as _r700
+    import scripts.register_gsr880e as _r880
+    with _r700.stub_registration(_r700.attested_stub()), \
+         _r880.stub_registration(_r880.attested_stub()):
+        yield
+
+
 def _test() -> None:
     ok = fail = 0
 
@@ -224,25 +301,54 @@ def _test() -> None:
     # behaviour that matches the ACTUAL current state -- so this test stays green
     # both before the artifact is acquired and after it is attested, rather than
     # pinning to a transient "robots 502 / not yet acquired" moment.
-    rec = held("small_company.paid_up_capital.prescribed", today)
-    check(len(rec) == 1, "the prescribed capital amount is on record")
+    # Two instruments in sequence. Inside the 2022 window the 700(E) amounts are
+    # the record; from 01-12-2025 they are superseded by 880(E).
+    in_2022 = date(2024, 6, 1)
+    rec = held("small_company.paid_up_capital.prescribed", in_2022)
+    check(len(rec) == 1, "one prescribed capital amount covers a 2024 date")
     check(rec[0].amount == Money.crore(4), f"...as ₹4 crore ({rec[0].amount})")
     check(bool(rec[0].note.strip()),
           "...with its current acquisition status stated in the note")
 
     from scripts.register_gsr700e import registration as _live_reg, is_attested as _live_att
     if _live_att(_live_reg()):
-        cap, turn = operative_small_company_limits(today)
+        cap, turn = operative_small_company_limits(in_2022)
         check(cap == Money.crore(4) and turn == Money.crore(40),
-              "the live artifact is attested, so the limits are servable")
+              "700(E) is attested, so the 2022-window limits are servable")
     else:
         check(not rec[0].servable,
               "the live artifact is not yet attested, so the amount is not servable")
         try:
-            operative_small_company_limits(today)
+            operative_small_company_limits(in_2022)
             check(False, "small-company limits are refused while unattested")
         except ThresholdUnavailable:
             check(True, "small-company limits are refused while unattested")
+
+    # ── the supersession boundary. This is the one correctness property: never
+    # serve a figure a later instrument replaced. Before 880(E) commenced the
+    # 2022 amounts stand; on and after it, NOTHING is served until a person
+    # acquires and attests the new instrument. It must not fall back to ₹4 crore.
+    day_before = _GSR880_FROM - timedelta(days=1)
+    covering_before = held("small_company.paid_up_capital.prescribed", day_before)
+    check([t.amount for t in covering_before] == [Money.crore(4)],
+          f"the day before 880(E), ₹4 crore is the only record ({covering_before and covering_before[0].amount})")
+
+    covering_after = held("small_company.paid_up_capital.prescribed", _GSR880_FROM)
+    check([t.instrument for t in covering_after] and
+          all("880(E)" in t.instrument for t in covering_after),
+          "from 01-12-2025 only G.S.R. 880(E) covers the date")
+    check(not any(t.servable for t in covering_after),
+          "...and it is not servable, because it is not acquired")
+    try:
+        operative_small_company_limits(_GSR880_FROM)
+        check(False, "on 880(E)'s commencement the limits are REFUSED, not guessed")
+    except ThresholdUnavailable as e:
+        check("880(E)" in str(e),
+              "on 880(E)'s commencement the limits are refused, naming the instrument to acquire")
+    # the failure mode this whole change exists to prevent
+    check(not any(t.amount == Money.crore(4) and t.servable
+                  for t in held("small_company.paid_up_capital.prescribed", date(2026, 9, 9))),
+          "the superseded ₹4 crore figure is never servable on a 2026 date")
 
     # It must not silently fall back to the Act's floor.
     import inspect
@@ -292,7 +398,7 @@ def _test() -> None:
         check(st == UNRESOLVED, f"a registered but unattested artifact stays refused ({st})")
         check("not attested" in note, f"...and the note says why ({note[:60]}…)")
         try:
-            operative_small_company_limits(today)
+            operative_small_company_limits(in_2022)
             check(False, "...and the limits are still unavailable")
         except ThresholdUnavailable:
             check(True, "...and the limits are still unavailable")
@@ -306,9 +412,9 @@ def _test() -> None:
         st2, note2 = _prescribed_state()
         check(st2 == CORROBORATED, f"an attested artifact makes them servable ({st2})")
         check("reviewer-01" in note2, "...and the note names the attesting reviewer")
-        cap, turn = operative_small_company_limits(today)
+        cap, turn = operative_small_company_limits(in_2022)
         check(cap == Money.crore(4) and turn == Money.crore(40),
-              f"...and the limits come through ({cap} / {turn})")
+              f"...and the limits come through, inside 700(E)'s window ({cap} / {turn})")
 
     # A partial attestation is not an attestation.
     half = dict(attested, verbatim_clause_checked_by=None)
@@ -321,6 +427,34 @@ def _test() -> None:
         st4, note4 = _prescribed_state()
         check(st4 == UNRESOLVED, "no registration means no servable threshold")
         check("S-002" in note4, "...and the note names the open task")
+
+    # ── the 2025 instrument is gated exactly the same way ────────────────────
+    import scripts.register_gsr880e as reg880
+    with reg880.stub_registration(None):
+        st5, note5 = _prescribed_state_880()
+        check(st5 == UNRESOLVED, f"880(E) unacquired is UNRESOLVED ({st5})")
+        check("S-003" in note5, "...and the note names the open acquisition task")
+        try:
+            operative_small_company_limits(date(2026, 9, 9))
+            check(False, "a 2026 date is refused while 880(E) is unacquired")
+        except ThresholdUnavailable:
+            check(True, "a 2026 date is refused while 880(E) is unacquired")
+
+    with reg880.stub_registration(reg880.registered_unattested_stub()):
+        st6, _ = _prescribed_state_880()
+        check(st6 == UNRESOLVED, "downloading 880(E) without attesting is not enough")
+
+    with reg880.stub_registration(reg880.attested_stub("reviewer-880")):
+        st7, note7 = _prescribed_state_880()
+        check(st7 == CORROBORATED, f"an attested 880(E) becomes servable ({st7})")
+        check("reviewer-880" in note7, "...and names the attesting reviewer")
+        cap25, turn25 = operative_small_company_limits(date(2026, 9, 9))
+        check(cap25 == Money.crore(10) and turn25 == Money.crore(100),
+              f"...and the 2025 limits then come through ({cap25} / {turn25})")
+        # and the old figure still governs its own past
+        cap22, _ = operative_small_company_limits(in_2022)
+        check(cap22 == Money.crore(4),
+              f"...while a 2024 date still gets the 2022 figure ({cap22})")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:

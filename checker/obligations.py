@@ -954,6 +954,7 @@ def _test() -> None:
     # Forced unacquired via the stub so this does not depend on the live 700(E)
     # attestation state (once attested, this row resolves instead of blocking).
     import scripts.register_gsr700e as _reg
+    from checker.prescribed_thresholds import all_acquired as _all_acquired
     priv = CompanyProfile(company_class="private",
                           paid_up_capital=Figure(Money.crore(2), "2024-25"),
                           turnover=Figure(Money.crore(30), "2024-25"), **common)
@@ -964,7 +965,7 @@ def _test() -> None:
         check(small.blocked_by == "S-002",
               f"...and the row names the blocking task ({small.blocked_by!r})")
     # ...and resolves once the Rule is attested.
-    with _reg.stub_registration(_reg.attested_stub()):
+    with _all_acquired():
         small_ok = [r for r in build(priv) if r.obligation_id == "CA13-S2-85-SMALL"][0]
         check(small_ok.state != CANNOT_DETERMINE,
               f"small-company status resolves once 700(E) is attested ({small_ok.state})")

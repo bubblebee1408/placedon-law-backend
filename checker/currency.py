@@ -252,18 +252,53 @@ def _test() -> None:
         small = [f for f in rep_unacq if f.obligation_id == "CA13-S2-85-SMALL"][0]
         check(small.status == UNACQUIRED,
               f"small-company currency is UNACQUIRED while 700(E) is unacquired ({small.status})")
-        check(small.instrument and "700(E)" in small.instrument,
-              f"...and names the instrument to acquire ({small.instrument})")
+        check(small.instrument and "880(E)" in small.instrument,
+              f"...and names the instrument to acquire — the one governing THIS "
+              f"date, not the one it superseded ({small.instrument})")
         check(small.needs_action, "...and is flagged as needing action")
         check(small in stale(today), "...and appears on the stale/alert list")
 
-    # ── and CURRENT once the Rule is attested ───────────────────────────────
-    with _reg.stub_registration(_reg.attested_stub()):
+    # ── and CURRENT once the whole chain is attested ────────────────────────
+    from checker.prescribed_thresholds import all_acquired as _all_acquired
+    with _all_acquired():
         small_c = [f for f in report(today)
                    if f.obligation_id == "CA13-S2-85-SMALL"][0]
         check(small_c.status == CURRENT,
               f"small-company currency is CURRENT once 700(E) is attested ({small_c.status})")
         check(not small_c.needs_action, "...and no longer needs action")
+
+    # ── REGRESSION GUARD: attesting the SUPERSEDED instrument must not make a
+    # later date current. This is the bug that shipped: 700(E) was attested, its
+    # record said effective_to=None, and the engine reported CURRENT on a 2026
+    # date while G.S.R. 880(E) had governed since 01-12-2025. Serving superseded
+    # law as current is the one failure this system exists to prevent.
+    import scripts.register_gsr880e as _reg880
+    with _reg.stub_registration(_reg.attested_stub()), _reg880.stub_registration(None):
+        f2026 = [f for f in report(date(2026, 9, 9))
+                 if f.obligation_id == "CA13-S2-85-SMALL"][0]
+        check(f2026.status != CURRENT,
+              f"an attested 700(E) does NOT make a 2026 date current ({f2026.status})")
+        check("880(E)" in (f2026.instrument or ""),
+              f"...and the finding names 880(E) as what must be acquired ({f2026.instrument})")
+        # The status alone is too weak to be a guard: with the bug present the
+        # status reads SUPERSEDED, which is != CURRENT and would let this pass
+        # while the engine went on SERVING ₹4 crore. What must be true is that
+        # the superseded amount is not served at all. A company with ₹6 crore
+        # capital is small under 880(E) and not small under 700(E) -- serving the
+        # old figure is a wrong answer, not a cautious one.
+        from checker.prescribed_thresholds import (
+            operative_small_company_limits as _limits, ThresholdUnavailable as _TU)
+        try:
+            served = _limits(date(2026, 9, 9))
+            check(False, f"the superseded limits must not be served ({served})")
+        except _TU as e:
+            check("880(E)" in str(e),
+                  "the superseded limits are refused, naming the instrument to acquire")
+        # while its own window is still answered correctly
+        f2024 = [f for f in report(date(2024, 6, 1))
+                 if f.obligation_id == "CA13-S2-85-SMALL"][0]
+        check(f2024.status == CURRENT,
+              f"...and 700(E) still makes its OWN window current ({f2024.status})")
 
     # ── an Act-only obligation is CURRENT ────────────────────────────────────
     agm = [f for f in rep if f.obligation_id == "CA13-S96-AGM"][0]
@@ -310,7 +345,7 @@ def _test() -> None:
                 "verbatim_clause_checked_by": "reviewer-01",
                 "verbatim_clause_checked_at": "2026-08-31T00:00:00Z",
                 "status": "CORROBORATED"}
-    with mock.patch.object(sreg, "registration", lambda: attested):
+    with mock.patch.object(sreg, "registration", lambda: attested), _all_acquired():
         small2 = [f for f in report(today) if f.obligation_id == "CA13-S2-85-SMALL"][0]
         check(small2.status == CURRENT,
               f"once 700(E) is attested the small-company duty is CURRENT ({small2.status})")

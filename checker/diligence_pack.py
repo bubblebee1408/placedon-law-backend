@@ -263,6 +263,7 @@ def _test() -> None:
     # law-currency-watch assertions are deterministic and do not depend on the
     # live 700(E) attestation (which flips this row to CURRENT once attested).
     import scripts.register_gsr700e as _reg
+    from checker.prescribed_thresholds import all_acquired as _all_acquired
     with _reg.stub_registration(None):
         pack = build_pack(prof, ev, generated_at="2026-09-04T00:00:00Z")
 
@@ -294,18 +295,20 @@ def _test() -> None:
 
     text = render(pack)
 
-    # Currency: the small-company row rests on G.S.R. 700(E), unacquired, so the
-    # pack must carry a LAW-CURRENCY WATCH naming the instrument to acquire.
+    # Currency: the small-company row rests on the instrument governing the pack's
+    # own as-of date -- G.S.R. 880(E) since 01-12-2025 -- and while that is
+    # unacquired the pack must carry a LAW-CURRENCY WATCH naming it. Asserting
+    # "700(E)" here would re-pin the test to the superseded instrument.
     cf_ids = {f.obligation_id for f in pack.currency_flags}
     check("CA13-S2-85-SMALL" in cf_ids,
           f"the small-company row is flagged as resting on non-current law ({cf_ids})")
     check("LAW-CURRENCY WATCH" in text,
           "the rendered pack carries a law-currency watch section")
-    check("G.S.R. 700(E)" in text,
-          "...naming the exact instrument to acquire")
+    check("G.S.R. 880(E)" in text,
+          "...naming the exact instrument to acquire, which is the one governing this date")
 
     # Once 700(E) is attested, the small-company row leaves the currency watch.
-    with _reg.stub_registration(_reg.attested_stub()):
+    with _all_acquired():
         pack_ok = build_pack(prof, ev, generated_at="2026-09-04T00:00:00Z")
     check("CA13-S2-85-SMALL" not in {f.obligation_id for f in pack_ok.currency_flags},
           "an attested 700(E) clears the small-company row from the currency watch")
