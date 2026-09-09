@@ -226,8 +226,9 @@ def _test() -> None:
         r, tr = small_company(small)
         check(r is Result.INSUFFICIENT_DATA,
               f"with no acquired thresholds the arithmetic is refused ({r})")
-        check("not servable" in tr.render() or "S-002" in tr.render(),
-              "...and the trace names the acquisition gap")
+        check("cannot yet rely on" in tr.render() or "no instrument on record" in tr.render(),
+              "...and the trace names the acquisition gap, in words a reader "
+              "outside this codebase can act on")
 
     # ── and a definite answer once the thresholds are acquired ──────────────
     with _all_acquired():
@@ -313,7 +314,8 @@ def _test() -> None:
           "a missing figure is reported as a missing figure")
     with _reg.stub_registration(None):      # no limits acquired: missing LIMIT
         _, tr14 = small_company(small)
-    check("limit is not available" in tr14.render() or "not servable" in tr14.render(),
+    check("limit is not available" in tr14.render() or "cannot yet rely on" in tr14.render()
+          or "no instrument on record" in tr14.render(),
           "a missing limit is reported as a missing limit")
 
     # ── an OPC is a private company for this purpose ────────────────────────

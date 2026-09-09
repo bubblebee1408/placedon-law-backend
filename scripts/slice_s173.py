@@ -163,8 +163,8 @@ def _test() -> int:
         cls2, why2 = regime_for(p)
     check(cls2 == "UNRESOLVED",
           f"the regime refuses while G.S.R. 700(E) is unacquired ({cls2})")
-    check("servable" in why2 or "S-002" in why2,
-          f"...naming the acquisition gap ({why2[:70]})")
+    check("cannot yet rely on" in why2 or "no instrument on record" in why2,
+          f"...naming the acquisition gap in reader-facing words ({why2[:70]})")
     # ...and resolves once the Rule is attested.
     with _all_acquired():
         cls3, _ = regime_for(p)
