@@ -827,8 +827,14 @@ def build(profile: CompanyProfile,
 
         if verdict is Result.INSUFFICIENT_DATA:
             import re as _re
-            _m = _re.search(r"S-\d{3}-RULES|S-002", basis)
-            blocked = _m.group(0) if _m else ("S-002" if "servable" in basis else "")
+            # The blocker is whichever acquisition task the basis itself names.
+            # This was pinned to S-002, which stopped being the answer the moment
+            # G.S.R. 880(E) superseded 700(E): the row went on reporting a task
+            # that was already complete, sending a reader to acquire an instrument
+            # we already hold. A blocker tag that names the wrong task is worse
+            # than none -- it looks actionable and wastes the action.
+            _m = _re.search(r"S-\d{3}(?:-RULES)?", basis)
+            blocked = _m.group(0) if _m else ""
             # What THIS obligation needs to be decided -- its own evidence_needed
             # -- not every unknown field on the profile. Dumping all unknowns
             # buried the one fact that mattered under a dozen that did not, which
@@ -962,8 +968,12 @@ def _test() -> None:
         small = [r for r in build(priv) if r.obligation_id == "CA13-S2-85-SMALL"][0]
         check(small.state == CANNOT_DETERMINE,
               f"small-company status refuses while the Rule is unacquired ({small.state})")
-        check(small.blocked_by == "S-002",
-              f"...and the row names the blocking task ({small.blocked_by!r})")
+        check(small.blocked_by == "S-003",
+              f"...and names the task actually blocking it — S-003, the instrument "
+              f"governing this date, not the one it superseded ({small.blocked_by!r})")
+        check(small.blocked_by in small.basis,
+              "...and that task is named in the row's own basis, so the tag cannot "
+              "drift from the evidence behind it")
     # ...and resolves once the Rule is attested.
     with _all_acquired():
         small_ok = [r for r in build(priv) if r.obligation_id == "CA13-S2-85-SMALL"][0]
