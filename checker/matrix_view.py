@@ -463,7 +463,7 @@ def _test() -> None:
     check(st2 == 200, f"a filled form builds the matrix ({st2})")
     check("CA13-S96-AGM" in page and "CA13-S173-BOARD" in page,
           "...and renders the obligation rows")
-    check("S-002" in page and "not properly acquired" in page,
+    check("S-003" in page and "not properly acquired" in page,
           "a row blocked on an unacquired source says so on the page")
     check("No language model was consulted" in page,
           "the page states no model was consulted")

@@ -290,7 +290,7 @@ def _test() -> None:
           "each unverified row names what would settle it")
 
     # A blocked row surfaces its source, not a bare refusal.
-    check(any("S-002" in (r.blocked_by or "") for r in pack.rows),
+    check(any("S-003" in (r.blocked_by or "") for r in pack.rows),
           "the small-company row names the instrument it waits on")
 
     text = render(pack)
