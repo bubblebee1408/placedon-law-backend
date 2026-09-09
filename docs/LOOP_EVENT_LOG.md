@@ -45,12 +45,27 @@ The spec's own golden fixture (§8) asks for the chain **₹50L → ₹2cr → �
   **SUPERSEDED**. That is precisely the one failure the spec names as unacceptable (§8):
   *never render `CURRENT` on a superseded instrument.*
 
-**The loop must not resolve this.** Acquiring a Gazette instrument is browser-gated, hash-recorded
-and **human-attested** (`--attest`), exactly like G.S.R. 700(E) was. A loop that types in a
-threshold defeats the two-human-check design the product is built on. Recorded as **H-D**, §5.
+### F-2, RESOLVED 2026-09-09 — the instrument is real and the bug was live
 
-Until H-D is cleared, the v0 fixture uses the **single instrument actually on record**, and the
-₹10cr claim is carried as UNVERIFIED — not coded, not assumed.
+Checked whether 880(E) *exists* (research, not acquisition — the loop may read, it may not
+attest). **It exists.** G.S.R. 880(E), Companies (Specification of Definition Details) Amendment
+Rules 2025, dated **01-12-2025**, raises the limits to **₹10 crore / ₹100 crore**, in force from
+publication. So the engine *was* serving ₹4 crore as CURRENT on every date after 01-12-2025.
+
+Fixed in `172ba86`, without typing the new law into the answer path:
+
+- 700(E)'s window now closes 30-11-2025 — its figures still answer their own period, nothing later;
+- 880(E) is the governing record from 01-12-2025, **unservable** until acquired and attested;
+- so every prescribed small-company amount from 01-12-2025 is **REFUSED**, naming the instrument
+  to acquire — it does not fall back to the superseded figure. Falling back is not the cautious
+  answer: a company with ₹6 crore capital is small under 880(E) and not small under 700(E).
+
+₹10cr/₹100cr sit in `prescribed_thresholds` as a **claim to be checked, not a fact**. Their only
+provenance is secondary reporting, which may not be served; `register_gsr880e.py`'s clause regex
+requires the downloaded Gazette artifact to carry those words and refuses loudly otherwise.
+
+**H-D is now the highest-priority human task** (§6): download the artifact and attest it. Until
+then the engine refuses today's small-company classification — correct, and visibly incomplete.
 
 ## 1. Scope of this loop
 
@@ -70,7 +85,7 @@ the persistent bitemporal store (v2).
   `UNDECLARED` findings, and `len(report()) == len(REGISTER) == 15`.*
   *Mutation: delete one Dependency again — the check must go red.*
 
-- [ ] **T1 — `checker/event_log.py`: the `Event` type.**
+- [x] **T1 — `checker/event_log.py`: the `Event` type.**
   Frozen dataclass per spec §2.3 with `EventKind`, `OutputClass`, `CurrencyState`; bitemporal
   `at` (valid time) vs `known_at` (transaction time); `source` carrying instrument ref + sha256;
   `verified_by is None ⇒ OutputClass.SIGNAL`, enforced in `__post_init__`, never a hidden fact.
@@ -78,7 +93,7 @@ the persistent bitemporal store (v2).
   *Check: an Event with `verified_by=None` and `output_class=VERIFIED_FACT` **raises**;
   re-deriving an identical event yields an identical `id`.*
 
-- [ ] **T2 — Law-change event derivation.**
+- [x] **T2 — Law-change event derivation.**
   `events_for(as_of, since=None) -> list[Event]` mapping `currency.report/stale` onto Events:
   `CURRENT`→ no event · `SUPERSEDED`→ `OBLIGATION_SUPERSEDED` · `UNACQUIRED`→ `BASIS_UNACQUIRED`
   · `NOT_YET_IN_FORCE`→ `OBLIGATION_NOW_IN_FORCE` (dated to commencement) · a threshold whose
@@ -88,7 +103,7 @@ the persistent bitemporal store (v2).
   `THRESHOLD_MOVED` event citing G.S.R. 700(E) dated 2022-09-15; as_of 2022-09-14 does not.
   No event is ever emitted without a source.*
 
-- [ ] **T3 — Wire the read API.**
+- [x] **T3 — Wire the read API.**
   Extend `checker/api.handle()` (pure function, no server) with
   `GET /v1/company/{cin}/events?as_of=&since=&kind=&class=`, `GET /v1/company/{cin}/events/{id}`,
   `GET /v1/instruments/{gsr}/affected`. Fails closed on a bad date or unknown route, same shape as
@@ -96,7 +111,7 @@ the persistent bitemporal store (v2).
   *Check: a malformed `as_of` returns 400, not a guess; an unknown event id returns 404;
   `/v1/instruments/700/affected` returns `CA13-S2-85-SMALL`.*
 
-- [ ] **T4 — The one correctness metric, as a test that can fail.**
+- [x] **T4 — The one correctness metric, as a test that can fail.**
   *Never render `CURRENT` on a superseded instrument.* Assert it directly, then **mutation-test
   it**: register a synthetic newer unservable instrument in a fixture and confirm the event log
   flips to `OBLIGATION_SUPERSEDED` and the API stops saying CURRENT.
@@ -138,10 +153,32 @@ Stop and report when **any** is true:
 
 ## 6. Human-gated — NOT in this loop
 
-- **H-D — acquire G.S.R. 92(E) and verify whether G.S.R. 880(E) (₹10cr, 2025) exists and is in
-  force.** See F-2. If 880(E) is real, the engine is serving a superseded figure as CURRENT today
-  and this is the highest-priority correctness item in the project. Route: browser download →
-  `scripts/register_*.py` → human `--attest`.
+- **H-D — acquire and attest G.S.R. 880(E).** Confirmed real (F-2); the engine now refuses
+  today's small-company classification until it is held. One command after the download:
+  `python3 scripts/register_gsr880e.py <file>` then `--attest <reviewer-id>`. This is the
+  highest-priority human task in the project after H-C.
+- **H-E — acquire G.S.R. 92(E) (2021, ₹2cr)**, optional. Without it, point-in-time queries in the
+  2021 window refuse rather than answer. Correct, but incomplete.
 - **H-B** — a lawyer resolves the `NEEDS_LAWYER` retrieval labels.
 - **H-C** — a practising Company Secretary reacts to the evidence pack (`docs/H001_OUTREACH.md`).
   Still the highest-value open item in the project; no autonomous work moves it.
+
+
+## 7. Outcome — loop closed 2026-09-09
+
+All five queue items done, committed, pushed; full suite green throughout.
+
+| Commit | What |
+|---|---|
+| `6ec53f3` | T0 — s.180/s.184 currency basis declared; the UNDECLARED gap closed |
+| `172ba86` | **F-2 — the supersession bug.** 700(E) window closed, 880(E) staged unservable, five suites corrected, guard mutation-tested twice |
+| `2a3101e` | T1–T4 — `event_log.py` and the three read routes |
+
+**The finding worth carrying forward:** the loop's first regression guard *survived its own
+mutation*. It asserted the currency status was not `CURRENT`; with the bug reintroduced the status
+read `SUPERSEDED`, which satisfied it, while the engine went on serving ₹4 crore. A check that
+survives its own mutation is decoration. It now asserts the amount is **refused**, and fails with
+the served figures named. Step 6 of §3 is the step that caught it.
+
+**Not built, deliberately:** the timeline UI (design work, and it lives in the public repo),
+subscriptions/push, company-fact events, and the persistent bitemporal store — all correctly v1/v2.
