@@ -76,6 +76,7 @@ suites=(
   checker/s180.py
   checker/currency.py
   checker/corpus_currency.py
+  checker/lattice.py
   checker/chunk_fusion.py
   checker/fusion.py
   checker/reranker.py

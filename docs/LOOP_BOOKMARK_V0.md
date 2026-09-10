@@ -98,7 +98,7 @@ timeline UI (design work, other repo).
   *Mutation: inject a synthetic 2025 amendment record into a fixture — the gap flag
   must clear. If it does not, the check is reading a constant, not the corpus.*
 
-- [ ] **T1 — `checker/lattice.py`: the ordinal algebra, extracted.** ~90 LOC.
+- [x] **T1 — `checker/lattice.py`: the ordinal algebra, extracted.** ~90 LOC.
   One implementation of totally-ordered states + weakest-link composition + the
   **witness** (which input produced the result), so `currency` and `staleness` stop
   each growing a private `_SEVERITY`. Pure refactor; behaviour must not move.
