@@ -24,18 +24,20 @@ from datetime import date
 from pathlib import Path
 
 from checker.amendment import PLAUSIBLE_YEARS, parse_footnote
+from checker.lattice import Lattice
 
 ROOT = Path(__file__).resolve().parent.parent
 CORPUS = ROOT / "corpus" / "companies_act"
 
 # Ordered weakest -> strongest concern, so findings compose by weakest link the
-# way currency._SEVERITY does. Extracted into lattice.py at T1.
+# way currency does. The order lives in lattice.Lattice; see checker/lattice.py.
 # The GAP axis: how far our newest held amendment is from the date asked about.
 FRESH = "FRESH"                  # the ledger reaches this date
 AGEING = "AGEING"                # no amendment held for over a year
 STALE = "STALE"                  # no amendment held for over GAP_STALE_YEARS
 STATES = (FRESH, AGEING, STALE)
-_SEVERITY = {s: i for i, s in enumerate(STATES)}
+_LATTICE = Lattice("corpus_currency", STATES)
+_SEVERITY = {s: _LATTICE.rank(s) for s in STATES}
 
 # `implausible` is a SEPARATE axis and is deliberately NOT on the ladder above.
 # A held record with a date outside the Act's lifetime says something about one

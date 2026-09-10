@@ -32,6 +32,7 @@ from datetime import date
 from pathlib import Path
 
 from checker import currency
+from checker.lattice import Lattice
 
 # ── acquisition states of an external instrument ──────────────────────────────
 HELD_ATTESTED = "HELD_ATTESTED"        # artifact held, both human checks recorded
@@ -48,7 +49,9 @@ REFUSED_DISCLOSED = "REFUSED_DISCLOSED"    # not usable, and we say so on the ro
 CLAIMED_CURRENT_UNHELD = "CLAIMED_CURRENT_UNHELD"   # currency says CURRENT, rule unusable
 SERVED_UNWATCHED = "SERVED_UNWATCHED"      # we serve from it and no successor could land
 
-_SEVERITY = {OK: 0, REFUSED_DISCLOSED: 1, CLAIMED_CURRENT_UNHELD: 2, SERVED_UNWATCHED: 3}
+_LATTICE = Lattice("staleness",
+                   (OK, REFUSED_DISCLOSED, CLAIMED_CURRENT_UNHELD, SERVED_UNWATCHED))
+_SEVERITY = {s: _LATTICE.rank(s) for s in _LATTICE.states}
 NEEDS_ACTION = (CLAIMED_CURRENT_UNHELD, SERVED_UNWATCHED)
 
 

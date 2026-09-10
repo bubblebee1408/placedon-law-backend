@@ -14,6 +14,7 @@ suites=(
   checker/as_of.py
   checker/bundles.py
   checker/reasoning.py
+  checker/shadow.py
   checker/session.py
   checker/document_extract.py
   checker/pit_bench.py
