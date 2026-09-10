@@ -88,7 +88,7 @@ timeline UI (design work, other repo).
 
 ## 2. Queue
 
-- [ ] **T0 — `checker/corpus_currency.py`: measure D-1, do not close it.**
+- [x] **T0 — `checker/corpus_currency.py`: measure D-1, do not close it.**
   Report, per section and for the corpus as a whole, the latest amendment year we
   hold and the gap between it and a supplied `as_of`. Assert against the **ingested
   corpus**, never constants (house rule). Emits a finding shaped like

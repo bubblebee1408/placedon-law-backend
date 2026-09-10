@@ -229,14 +229,29 @@ fabrication"* — is the standard any new proposal must meet.
 The audit's arithmetic is now reproducible as an instrument rather than an anecdote:
 
 ```
-    ECE_floor(p, n) = sqrt( 2 p (1-p) / (pi n) )
+    ECE_floor(p, n) = E|k/n - p|,  k ~ Binomial(n, p)      <- compute EXACTLY
     n_min(p, eps)   = ceil( 8 p (1-p) / (pi eps^2) )
 
-    ECE_floor(0.90, 20) = 0.0535    <- a PERFECT model fails a target of 0.05
-    ECE_floor(0.10,  6) = 0.0977
+    ECE_floor(0.90, 20) = 0.0513    <- a PERFECT model fails a target of 0.05
+    ECE_floor(0.10,  6) = 0.1063
     n_min(0.50, 0.05)   = 255
     Wilson(19, 20)      = [0.764, 0.991]
 ```
+
+**Use the exact binomial sum, not the normal approximation.** The closed form
+`sqrt(2p(1-p)/(pi n))` is convenient and wrong in the direction that matters:
+
+| n, p | exact | normal approx | error |
+|---|---|---|---|
+| 20, 0.90 | 0.0513 | 0.0535 | +0.0022 (overstates) |
+| **6, 0.10** | **0.1063** | **0.0977** | **-0.0086 (UNDERSTATES)** |
+| 20, 0.50 | 0.0881 | 0.0892 | +0.0011 |
+| 49, 0.90 | 0.0340 | 0.0342 | +0.0002 |
+
+At n=6 the approximation understates the floor by 9%, making a hopeless target
+look merely difficult — and small n is the only regime where this instrument is
+ever consulted. `comb()` is in `math`; the exact sum costs nothing and cannot
+mislead in the unsafe direction.
 
 Applied to this corpus, two findings decide the layer:
 
