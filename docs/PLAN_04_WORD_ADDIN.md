@@ -93,6 +93,58 @@ them.
 - Send the document anywhere it does not need to go. The narration model (role 17)
   sees only the evidence pack, never the client's document body.
 
+## Verified implementation detail
+
+Researched against Microsoft Learn, 2026-09-10. Four findings change the spec.
+
+**1. Use the XML manifest, not the unified JSON one.** The unified manifest is
+real, but it is **not supported on non-subscription Word** (perpetual/LTSC), and
+the Microsoft 365 admin center's "upload add-in from file" flow accepts **only**
+the XML manifest — a unified-manifest add-in needs the separate Integrated Apps
+path. For an enterprise legal team on mixed Office versions, XML has the reach.
+
+**2. Comments, not highlighting — this is the important one.**
+`Range.insertComment()` (WordApi 1.5) anchors an annotation to a range while
+living in a **separate comment part** of the `.docx`: the body text and its
+formatting are untouched. `font.highlightColor` by contrast is a genuine
+formatting edit to existing runs — it shows up under Track Changes and in a
+version diff.
+
+Since v1 must not modify the document, **comments are the mechanism.** They also
+happen to be better product: reviewable, resolvable, and already the surface a
+lawyer uses for exactly this.
+
+There is no overlay/annotation layer independent of the document object model —
+anything visible is either a range property or a comment. So this is not one
+option among several; it is the only non-destructive one.
+
+**3. CORS applies exactly as on a normal web page.** The task pane is a webview
+(WebView2 on Windows, WKWebView on Mac, a sandboxed iframe on the web) under the
+same-origin policy. Our backend must send `Access-Control-Allow-Origin` for the
+add-in's origin, or the pane must call a same-origin proxy. Not a surprise, but
+it means the API is not optional infrastructure — it is the only way in.
+
+**4. macOS sideloading is a file copy, and the usual CLI does not work.**
+Drop the manifest in
+`~/Library/Containers/com.microsoft.Word/Data/Documents/wef`, restart Word, then
+**Home → Add-ins**. `office-addin-dev-settings` — which several Yeoman templates
+assume — is **not supported on Mac**, which matters because the dev machine is one.
+
+**Requirement sets:** WordApi **1.1** for `body.text`, `body.paragraphs`,
+`body.contentControls` and `search()`; **1.3** for document properties
+(`creationDate`, `lastSaveTime` — the document's own date, which this whole
+feature turns on); **1.5** for `insertComment`. 1.5 reaches Word Windows 2302+,
+Mac 16.70+ and the web — broad enough.
+
+**Auth:** Nested App Authentication (NAA) + MSAL.js is Microsoft's current
+recommendation; the older `getAccessToken()` SSO is marked legacy. For a single
+design partner, ship with our own token first and layer NAA later — Microsoft
+tells developers to keep a fallback path regardless.
+
+**One correction to an earlier claim:** admin-deployed add-ins take **24–72 hours**
+to appear on users' ribbons. Still far faster than AppSource review, but "live the
+same week" is the honest phrasing, not "live the same day."
+
 ## Build shape
 
 - **Frontend:** Office.js task pane, hosted as a static page over HTTPS.
