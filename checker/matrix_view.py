@@ -458,7 +458,8 @@ def _test() -> None:
     # asserted below) is preserved — the stub is a test-only concern.
     import importlib
     _reg = importlib.import_module("scripts.register_gsr700e")
-    with _reg.stub_registration(None):
+    from checker.prescribed_thresholds import none_acquired as _none_acquired
+    with _none_acquired():
         st2, _, page = handle("/matrix", q)
     check(st2 == 200, f"a filled form builds the matrix ({st2})")
     check("CA13-S96-AGM" in page and "CA13-S173-BOARD" in page,

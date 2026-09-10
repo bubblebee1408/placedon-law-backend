@@ -273,7 +273,8 @@ def _test() -> None:
     # is not attested. Forced via the stub so this does not depend on the live
     # on-disk attestation state (which flips once a reviewer attests 700(E)).
     import scripts.register_gsr700e as _reg
-    with _reg.stub_registration(None):
+    from checker.prescribed_thresholds import none_acquired as _none_acquired
+    with _none_acquired():
         rep_unacq = report(today)
         small = [f for f in rep_unacq if f.obligation_id == "CA13-S2-85-SMALL"][0]
         check(small.status == UNACQUIRED,

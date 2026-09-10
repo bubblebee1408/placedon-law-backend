@@ -156,10 +156,11 @@ def _test() -> int:
     import importlib
     _reg = importlib.import_module("scripts.register_gsr700e")
     from checker.prescribed_thresholds import all_acquired as _all_acquired
+    from checker.prescribed_thresholds import none_acquired as _none_acquired
     p = CompanyProfile(company_class="private",
                        paid_up_capital=Figure(Money.crore(2), "2024-25"),
                        turnover=Figure(Money.crore(30), "2024-25"), **common)
-    with _reg.stub_registration(None):
+    with _none_acquired():
         cls2, why2 = regime_for(p)
     check(cls2 == "UNRESOLVED",
           f"the regime refuses while G.S.R. 700(E) is unacquired ({cls2})")
@@ -193,7 +194,7 @@ def _test() -> int:
     import io
     from contextlib import redirect_stdout
     buf = io.StringIO()
-    with _reg.stub_registration(None), redirect_stdout(buf):
+    with _none_acquired(), redirect_stdout(buf):
         main()
     out = buf.getvalue()
     check("MATTER:" in out and out.count("MATTER:") == 3,

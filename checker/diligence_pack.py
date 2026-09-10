@@ -264,7 +264,8 @@ def _test() -> None:
     # live 700(E) attestation (which flips this row to CURRENT once attested).
     import scripts.register_gsr700e as _reg
     from checker.prescribed_thresholds import all_acquired as _all_acquired
-    with _reg.stub_registration(None):
+    from checker.prescribed_thresholds import none_acquired as _none_acquired
+    with _none_acquired():
         pack = build_pack(prof, ev, generated_at="2026-09-04T00:00:00Z")
 
     check(len(pack.rows) == len(REGISTER),

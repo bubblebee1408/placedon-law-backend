@@ -296,6 +296,25 @@ def all_acquired():
         yield
 
 
+@_contextmanager
+def none_acquired():
+    """Stub EVERY instrument in the prescribed chain as NOT acquired.
+
+    The mirror of all_acquired(), and needed for the same reason. A test meaning
+    "the engine refuses while the law is unheld" must control the whole chain: on
+    2026-09-10, stubbing only 700(E) leaves 880(E) attested on disk, so the row
+    resolves and the test asserts the opposite of what it says. That is not
+    hypothetical -- it is what happened to nine suites the moment 880(E) was
+    attested, exactly as it happened when 700(E) was.
+
+    Two helpers, one for each direction, so the next amendment updates one place.
+    """
+    import scripts.register_gsr700e as _r700
+    import scripts.register_gsr880e as _r880
+    with _r700.stub_registration(None), _r880.stub_registration(None):
+        yield
+
+
 def _test() -> None:
     ok = fail = 0
 
@@ -359,14 +378,23 @@ def _test() -> None:
     check([t.instrument for t in covering_after] and
           all("880(E)" in t.instrument for t in covering_after),
           "from 01-12-2025 only G.S.R. 880(E) covers the date")
-    check(not any(t.servable for t in covering_after),
-          "...and it is not servable, because it is not acquired")
-    try:
-        operative_small_company_limits(_GSR880_FROM)
-        check(False, "on 880(E)'s commencement the limits are REFUSED, not guessed")
-    except ThresholdUnavailable as e:
-        check("880(E)" in str(e),
-              "on 880(E)'s commencement the limits are refused, naming the instrument to acquire")
+    # These two are about what happens while the instrument is UNHELD, so they
+    # must control that state. Asserting it against the ambient record made them
+    # flip red the moment 880(E) was attested -- the same way the 700(E) tests
+    # flipped when it was attested, and for the same reason.
+    with none_acquired():
+        covering_unheld = held("small_company.paid_up_capital.prescribed", _GSR880_FROM)
+        check(not any(t.servable for t in covering_unheld),
+              "...and while unheld it is not servable")
+        try:
+            operative_small_company_limits(_GSR880_FROM)
+            check(False, "while unheld, the limits are REFUSED, not guessed")
+        except ThresholdUnavailable as e:
+            check("880(E)" in str(e),
+                  "while unheld, the limits are refused, naming the instrument to acquire")
+    # ...and now that it IS attested, the same date answers.
+    check(operative_small_company_limits(_GSR880_FROM)[0] == Money.crore(10),
+          "once attested, 880(E)'s commencement date serves ₹10 crore")
     # the failure mode this whole change exists to prevent
     check(not any(t.amount == Money.crore(4) and t.servable
                   for t in held("small_company.paid_up_capital.prescribed", date(2026, 9, 9))),

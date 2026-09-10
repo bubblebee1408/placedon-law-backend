@@ -222,7 +222,8 @@ def _test() -> None:
     # via the stub so it does not depend on the live 700(E) attestation state. ─
     import scripts.register_gsr700e as _reg
     from checker.prescribed_thresholds import all_acquired as _all_acquired
-    with _reg.stub_registration(None):
+    from checker.prescribed_thresholds import none_acquired as _none_acquired
+    with _none_acquired():
         r, tr = small_company(small)
         check(r is Result.INSUFFICIENT_DATA,
               f"with no acquired thresholds the arithmetic is refused ({r})")
@@ -312,7 +313,7 @@ def _test() -> None:
     _, tr13 = small_company(no_turn, limits=LIMITS)
     check("not on the profile" in tr13.render(),
           "a missing figure is reported as a missing figure")
-    with _reg.stub_registration(None):      # no limits acquired: missing LIMIT
+    with _none_acquired():      # no limits acquired: missing LIMIT
         _, tr14 = small_company(small)
     check("limit is not available" in tr14.render() or "cannot yet rely on" in tr14.render()
           or "no instrument on record" in tr14.render(),

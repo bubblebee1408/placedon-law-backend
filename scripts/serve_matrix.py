@@ -144,7 +144,8 @@ def _test() -> int:
         # (ThreadingHTTPServer in a daemon thread), so the stub reaches the
         # handler, and the request below is synchronous within the block.
         import scripts.register_gsr700e as _reg
-        with _reg.stub_registration(None):
+        from checker.prescribed_thresholds import none_acquired as _none_acquired
+        with _none_acquired():
             c.request("GET", "/matrix?company_class=private&"
                              "incorporation_date=2019-06-01&financial_year=2024-25&"
                              "paid_up_capital_crore=2&turnover_crore=30")

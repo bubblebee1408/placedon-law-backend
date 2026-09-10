@@ -961,10 +961,11 @@ def _test() -> None:
     # attestation state (once attested, this row resolves instead of blocking).
     import scripts.register_gsr700e as _reg
     from checker.prescribed_thresholds import all_acquired as _all_acquired
+    from checker.prescribed_thresholds import none_acquired as _none_acquired
     priv = CompanyProfile(company_class="private",
                           paid_up_capital=Figure(Money.crore(2), "2024-25"),
                           turnover=Figure(Money.crore(30), "2024-25"), **common)
-    with _reg.stub_registration(None):
+    with _none_acquired():
         small = [r for r in build(priv) if r.obligation_id == "CA13-S2-85-SMALL"][0]
         check(small.state == CANNOT_DETERMINE,
               f"small-company status refuses while the Rule is unacquired ({small.state})")
@@ -1086,7 +1087,7 @@ def _test() -> None:
     priv_ev = CompanyProfile(company_class="private",
                              paid_up_capital=Figure(Money.crore(2), "2024-25"),
                              turnover=Figure(Money.crore(30), "2024-25"), **common)
-    with _reg.stub_registration(None):
+    with _none_acquired():
         b4 = [r for r in build(priv_ev, evidence=three)
               if r.obligation_id == "CA13-S173-BOARD"][0]
         check(b4.state == APPLIES_UNDETERMINED,

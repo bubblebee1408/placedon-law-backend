@@ -129,43 +129,47 @@ Built 2026-09-10, on the Indian equivalent of the French versioned-corpus design
 Nine dated cases, every date a boundary of an instrument on disk or a point
 inside one. Deterministic scoring, no LLM judge.
 
-| System | Accuracy | Wrong answer | Wrong refusal |
+| Arm | Accuracy | Wrong answer | Wrong refusal |
 |---|---|---|---|
-| **Placedon (date-conditioned)** | **1.00** | **0** | **0** |
-| Baseline: latest servable figure | 0.44 | **5 of 9** | 0 |
-| Placedon, once 880(E) is attested | 1.00 | 0 | 0 |
+| **Placedon, holding both instruments** | **1.00** | **0** | **0** |
+| Baseline: latest figure, ignoring the date | 0.33 | **6 of 9** | 0 |
+| Placedon, holding neither (abstention arm) | 0.22 | **0** | 7 |
 
-The baseline is not a straw man. It models a tool with no currency layer, which
-is what four of the most-read Indian compliance sites were doing nine months
-after G.S.R. 880(E). Its five failures are the interesting output:
+**Ground truth is the law on each date, decided by each instrument's own
+commencement — not by what we hold.** That separation is the whole design, and the
+first version of this benchmark got it wrong: the cases encoded *"we cannot serve
+this"* as the law, so the moment G.S.R. 880(E) was attested the benchmark scored a
+**correct** engine at 0.67. A benchmark whose expected answers move when you
+acquire an instrument is measuring your holdings, not the law. Acquisition state
+now lives in the harness, and a test asserts the expectations are identical under
+both states.
 
-- **C1, C7** — served ₹4 crore and ₹40 crore for a date *before the instrument
-  setting them existed*. Answering a question about 2022 with a 2022 figure looks
-  right until the date is a day earlier.
-- **C5, C6, C9** — served the superseded figure on dates 880(E) governs. **C6 is
-  today.**
+The baseline's failure is symmetric, which is the point: it serves today's ₹10
+crore for a 2024 date just as readily as it served ₹4 crore for today's. One
+figure for every date across a four-year span.
 
-Four outcomes, never two, and never netted off: a system that refuses everything
-scores 0.56 here, not 1.00, because `WRONG_REFUSAL` is counted. Abstention cannot
-buy a good score.
+The third arm is what stops this being a vanity metric. With neither instrument
+held the engine invents nothing — **0 wrong answers** — but it scores **0.22**,
+because seven correct answers were knowable and it could not give them. Refusing
+is right and it is not free. A product whose pitch is "we refuse" needs a
+benchmark that charges it for refusing.
 
-The benchmark is mutation-tested against itself: a system with no currency layer
-must score below 1.00, and a system that abstains on everything must be
-penalised. Both assertions are in the suite.
+Mutation-tested both ways: a system with no currency layer must score below 1.00,
+and a system that abstains on everything must be penalised.
 
-**Honest limit:** the corpus holds one prescribed chain across two instruments.
-Nine cases is a narrow test, and the right reading is "the mechanism works on
-what we hold" — not a coverage claim. The set grows with each acquisition, and
-the scorer is frozen so a later run is comparable to this one.
+**Honest limit:** nine cases over one prescribed chain is a mechanism test, not a
+coverage claim. The set grows with each acquisition; the scorer is frozen so a
+later run is comparable.
 
 ## What we can claim today, and what we cannot
 
 **Can:** the engine refuses where it cannot verify, the refusals name the
 instrument, and we found three real staleness defects in our own shipped code.
 
-**Can, as of 2026-09-10:** 1.00 on nine dated point-in-time cases, against a
-no-currency-layer baseline at 0.44 — with the four-outcome breakdown, the case
-list, and the mutation tests published alongside it.
+**Can, as of 2026-09-10:** 1.00 on nine dated point-in-time cases while holding
+both instruments, against a no-currency-layer baseline at 0.33 — with the
+four-outcome breakdown, the case list, both acquisition arms, and the mutation
+tests published alongside it.
 
 **Cannot:** generalise that. Nine cases over one prescribed chain is a mechanism
 test, not a coverage claim, and there is still no external Indian benchmark to be

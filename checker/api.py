@@ -312,12 +312,22 @@ def document_check(payload: dict, *, generated_at: str) -> dict:
                                   "reference": None})
             continue
 
-        moved = was.status == currency.CURRENT and now.status != currency.CURRENT
-        if moved:
+        # What counts as "moved" is a CHANGE OF GOVERNING INSTRUMENT, not a
+        # degraded status. Comparing status alone worked only while the newer
+        # instrument was unheld: once G.S.R. 880(E) was attested, both dates read
+        # CURRENT and the check stopped firing on precisely the case the feature
+        # exists for -- a 2024 document resting on a limit that has since moved.
+        # Holding the new instrument makes the answer BETTER (we can say what it
+        # moved to), so it must not make the detection worse.
+        instrument_changed = (was.instrument or "") != (now.instrument or "")
+        degraded = was.status == currency.CURRENT and now.status != currency.CURRENT
+        if instrument_changed or degraded:
             superseded.append({
                 "obligation_id": oid, "duty": row.duty, "provision": row.provision,
                 "was_at_document_date": was.status,
                 "is_at_read_date": now.status,
+                "governed_then": was.instrument,
+                "governs_now": now.instrument,
                 "instrument": now.instrument,
                 "detail": now.detail,
                 "reference": (rows_now.get(oid).blocked_by or None
@@ -491,6 +501,7 @@ def _test() -> None:
 
     # ── unknown route -> 404 with the route list ────────────────────────────
     # ── F1: the document currency check ──────────────────────────────────────
+    from checker.prescribed_thresholds import none_acquired as _none_acq_early
     _doc = {"company_class": "private", "incorporation_date": "2015-04-01",
             "is_listed": False, "paid_up_capital_rupees": 60000000,
             "turnover_rupees": 550000000, "financial_year": "2024-25",
@@ -505,13 +516,33 @@ def _test() -> None:
     sup = b["superseded"]
     check(len(sup) == 1 and sup[0]["obligation_id"] == "CA13-S2-85-SMALL",
           f"a 2024 document's small-company basis is flagged as moved ({[x['obligation_id'] for x in sup]})")
-    check(sup[0]["was_at_document_date"] == "CURRENT" and sup[0]["is_at_read_date"] != "CURRENT",
-          "...stating both what it was then and what it is now")
-    check("880(E)" in (sup[0]["instrument"] or ""),
-          f"...and naming the instrument that moved it ({sup[0]['instrument']})")
-    check(sup[0]["reference"] == "S-003",
-          f"...with the acquisition reference read from the READ date, not the "
-          f"document date, where nothing was blocked yet ({sup[0]['reference']!r})")
+    check("700(E)" in (sup[0]["governed_then"] or ""),
+          f"...naming the instrument that governed when it was written ({sup[0]['governed_then']})")
+    check("880(E)" in (sup[0]["governs_now"] or ""),
+          f"...and the one that governs now ({sup[0]['governs_now']})")
+
+    # REGRESSION GUARD. "Moved" must mean the GOVERNING INSTRUMENT CHANGED, not
+    # that the currency status degraded. Comparing status alone worked only while
+    # 880(E) was unheld: the moment it was attested, both dates read CURRENT and
+    # the check stopped firing on exactly the case this feature exists for.
+    # Acquiring an instrument makes the answer better; it must never make the
+    # detection worse.
+    check(sup[0]["was_at_document_date"] == "CURRENT"
+          and sup[0]["is_at_read_date"] == "CURRENT",
+          "...and it is flagged even though BOTH dates read CURRENT, because the "
+          "instrument changed")
+
+    # while the instrument is unheld, the same document still flags -- for the
+    # other reason -- and names the acquisition task.
+    from checker.prescribed_thresholds import none_acquired as _none_acq
+    with _none_acq():
+        _, bu = handle("POST", "/v1/document-check",
+                       {**_doc, "document_date": "2024-06-01", "as_of": "2026-09-10"},
+                       generated_at=GEN)
+        supu = [r for r in bu["superseded"] if r["obligation_id"] == "CA13-S2-85-SMALL"]
+        check(supu and supu[0]["reference"] == "S-003",
+              f"while unheld, the same row flags and names the acquisition task "
+              f"({supu[0]['reference'] if supu else None!r})")
 
     # Read the same document before the instrument commenced: nothing has moved.
     st, b2 = handle("POST", "/v1/document-check",
@@ -527,9 +558,20 @@ def _test() -> None:
                     generated_at=GEN)
     check(not b3["superseded"],
           "a document written after the change is not reported as superseded")
-    already = [r for r in b3["cannot_verify"] if r.get("already_open_at_document_date")]
-    check(any(r["obligation_id"] == "CA13-S2-85-SMALL" for r in already),
-          "...it is an open gap, marked as already open at the document's date")
+    # Nothing moved under its author, and the instrument is held, so the row simply
+    # answers. The "already open" path below is what happens when it is NOT held --
+    # and it must be exercised under a stub, or it asserts whatever is on disk.
+    check(any(r["obligation_id"] == "CA13-S2-85-SMALL" for r in b3["verified"]),
+          "...it simply answers, because we hold the instrument that governs it")
+    with _none_acq_early():
+        _, b3u = handle("POST", "/v1/document-check",
+                        {**_doc, "document_date": "2026-01-01", "as_of": "2026-09-10"},
+                        generated_at=GEN)
+        already = [r for r in b3u["cannot_verify"] if r.get("already_open_at_document_date")]
+        check(any(r["obligation_id"] == "CA13-S2-85-SMALL" for r in already),
+              "...and while unheld it is an open gap, marked as already open at "
+              "the document's date -- not as a supersession, because nothing "
+              "moved under its author")
 
     # Fails closed on inputs rather than guessing.
     st, b4 = handle("POST", "/v1/document-check", {**_doc, "paid_up_capital": 6,
