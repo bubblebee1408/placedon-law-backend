@@ -1,15 +1,23 @@
 """Tool bundles: capabilities the system declares, and refuses to fake.
 
-Harvey's engineering shift was from hand-coded orchestration to modular "tool
-bundles" -- self-contained units, each owning its own instructions, that a
-manager layer selects between. The value is decoupling: a team can add a bundle
-without touching the ones already shipped.
+The modular "tool bundle" shape -- self-contained units, each owning its own
+instructions, that a manager layer selects between -- is reported of Harvey's
+architecture in secondary write-ups. The value of the shape is decoupling: a team
+can add a bundle without touching the ones already shipped, and that holds
+whoever first described it.
 
-That part transfers. One part must not.
+**Provenance note.** The attribution is SECONDARY. Harvey's own blog and research
+listings were checked and carry no post describing tool bundles or the
+leave-one-out gate below; the nearest is a LangChain-co-authored post on
+cost-efficient rubric scoring, which describes neither. So the ideas here are
+adopted on their merits and on the measured evidence cited below -- not on
+"Harvey does it", which could not be verified.
+
+The shape transfers. One part of the reported design must not.
 
 ## The adaptation, and why it is not optional
 
-In Harvey's description, a **manager agent** -- an LLM -- decides which tool to
+In the reported design a **manager agent** -- an LLM -- decides which tool to
 use. Routing a *task type* is a fair job for a model: "is this a document check
 or a research question" is not a legal question. But a model that picks a bundle
 is one design slip from a model that picks an answer, and this system's whole
@@ -23,14 +31,29 @@ registry will serve.
 
 ## Leave-one-out, made executable
 
-Harvey's eval gate removes a tool and checks the agent says "I cannot do that"
-rather than guessing. That is the abstention discipline applied to orchestration,
-and it is the single most valuable idea in their architecture for us, because the
-failure it catches -- a system hallucinating a capability it does not have -- is
-the orchestration-layer version of serving law we never read.
+Withdraw a tool and check the system says "I cannot do that" rather than guessing.
+This is the abstention discipline applied to orchestration, and the failure it
+catches -- a system hallucinating a capability it does not have -- is the
+orchestration-layer form of serving law we never read.
 
-`missing_capability_refuses()` implements it: withdraw each bundle in turn and
-assert the router refuses rather than substituting. It runs in the suite.
+It is not adopted on anyone's say-so. It is adopted because the failure is
+measured and common:
+
+  * ToolEmu (arXiv 2309.15817), 36 tools over 144 scenarios: **even the safest
+    agent tested failed 23.9% of the time**, and 68.8% of flagged failures were
+    validated as plausible in the real world.
+  * Gorilla (arXiv 2305.15334): LLMs hallucinate API calls to functions that do
+    not exist; retrieval-augmented finetuning mitigates but does not solve it.
+  * CAR-bench (arXiv 2601.22027): agents "frequently violate policies or fabricate
+    information to satisfy user requests" under real-world uncertainty.
+  * Large Legal Fictions (arXiv 2401.01301): models "cannot always predict when
+    they are producing legal hallucinations" -- poor self-knowledge of error.
+
+A router that substitutes a neighbouring capability is that failure, in our
+system, with a real tool's output attached to lend it credibility.
+
+`missing_capability_refuses()` implements the gate: withdraw each bundle in turn
+and assert the router refuses rather than substituting. It runs in the suite.
 
 ## Honesty about models
 
