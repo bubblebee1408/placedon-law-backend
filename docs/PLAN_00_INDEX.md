@@ -1,6 +1,6 @@
 # The plan — index and claim status
 
-Written 2026-09-09, against the engine at this commit. Six documents, each one
+Written 2026-09-09, against the engine at this commit. Seven documents, each one
 scoped so a reader can tell what is **built**, what is **measured**, what is
 **researched-and-sourced**, and what is **still a hypothesis**.
 
@@ -15,6 +15,7 @@ status marker. Nothing is asserted because it sounds right.
 | [PLAN_04_WORD_ADDIN](PLAN_04_WORD_ADDIN.md) | The v1 product surface | Distribution path verified | Effort estimate is inference |
 | [PLAN_05_ROADMAP](PLAN_05_ROADMAP.md) | Sequence, gates, Bloomberg scoped | Gates are falsifiable | Demand is n=1 |
 | [PLAN_06_EVALUATION](PLAN_06_EVALUATION.md) | How to be believed | Static RAG = 0%, traced | No Indian benchmark exists yet |
+| [PLAN_07_TENANCY_AND_PRICING](PLAN_07_TENANCY_AND_PRICING.md) | Isolation, zero retention, what to charge for | The retention rule is quoted from a shipped system | Indian deal sizes not found |
 | [FEATURES](FEATURES.md) | **The canonical feature list.** If it is not there, it is not planned | 7 of 10 have a built engine | F8 unbuilt and risky |
 
 ## The one-paragraph version

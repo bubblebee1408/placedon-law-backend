@@ -109,6 +109,62 @@ Steps 4 and 6 are the ones no competitor found in this research performs.
 | A rule we never read | `staleness` invariant | Confident answers on law we do not hold |
 | Unreadable document page | OCR confidence gate (role 13) | A half-read date entered as fact |
 
+## What the orchestration evidence actually supports
+
+Researched 2026-09-10. Three findings, and two of them argue *against* the
+fashionable answer.
+
+**1. Routing between models is a cost play, not an accuracy play.** Every router
+with hard numbers targets *retaining* 90–95% of the strongest model's quality
+more cheaply — RouteLLM (arXiv 2406.18665, ICLR 2025) gets >2x cost reduction at
+90–95% of GPT-4 quality; Hybrid LLM (arXiv 2404.14618) cuts large-model calls up
+to 40% with no quality drop. **Neither beats the best model on accuracy, by
+design.** The one method that does exceed GPT-4 accuracy, FrugalGPT (arXiv
+2305.05176, ~4% at equal cost), does it with a multi-call cascade and a scoring
+function — a compound system, not a router.
+
+So a multi-model router earns its place here only if cost becomes a constraint.
+It is not a quality mechanism, and proposing one as though it were would be
+building the wrong thing.
+
+**2. Multi-agent decomposition has a serious negative literature.** This is not
+folklore:
+
+- **MAST** (arXiv 2503.13657) — 1,600+ annotated traces across 7 open-source
+  multi-agent frameworks, 14 failure modes, inter-annotator κ=0.88. Its motivating
+  finding: performance gains on popular benchmarks are **"often minimal"** against
+  the complexity and cost added.
+- **Beyond Consensus** (arXiv 2608.30373) — a **single judge beat multi-agent
+  debate** on human alignment across six LLM judges; ablation isolates asymmetric
+  role prompting introducing a downward bias that debate fails to correct.
+- **More Capable, Less Cooperative** (arXiv 2604.07821) — capability does not
+  predict cooperation: o3 reached **17%** of optimal collective performance where
+  the weaker o3-mini reached **50%**.
+
+The widely-circulated industry essay against multi-agent systems (Cognition,
+"Don't Build Multi-Agents") is, by its own framing, **anecdotal with no
+benchmarks** — the papers above are the real evidence, and they point the same way.
+
+**3. Capability honesty is measurably bad, which is what justifies the gate.**
+ToolEmu (arXiv 2309.15817): the safest agent tested still failed **23.9%** of the
+time. Large Legal Fictions (arXiv 2401.01301): **58%** hallucination for GPT-4 and
+**88%** for Llama 2 on verifiable questions, and models "cannot always predict when
+they are producing legal hallucinations." Training for abstention helps but does
+not solve it — +10.3pp precision (arXiv 2607.10738).
+
+### What this means for the 20 roles above
+
+It supports them, and it sharpens why only nine touch a model. The evidence points
+to **a single strong model behind retrieval, verification and abstention**, over an
+orchestrated swarm — unless decomposition is *measured* to help on our task, which
+it has not been. Tier 0 is not a limitation we are working around; it is the
+configuration the literature supports.
+
+DSPy (arXiv 2310.03714) reports large gains (>25% and >65% over few-shot on the
+authors' pipelines) but they are **self-reported on their own tasks and metrics**,
+with no independent replication found. Promising; not something to build a
+correctness-critical path on before validating against our own eval.
+
 ## Open architectural questions
 
 - **Role 19 (query planner) is the riskiest addition.** A planner that decomposes
