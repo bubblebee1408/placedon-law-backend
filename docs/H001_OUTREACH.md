@@ -13,7 +13,7 @@ Everything you need is built. What remains is sending one message.
 
 A **practising Company Secretary**, not a lawyer, and here is the uncomfortable
 reason the project has been avoiding: `PRODUCT_SCOPE.md` says "lawyer, not CS",
-yet every well-evidenced workflow in `WORKFLOW_BACKLOG_INDIA.md` is CS work, and
+yet every well-evidenced workflow in `FEATURES.md` is CS work, and
 the one company-side interview named CS unprompted (`R-011`, open). This review
 is also the cheapest way to settle that contradiction. Pick a CS.
 

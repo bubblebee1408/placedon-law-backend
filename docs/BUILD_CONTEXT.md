@@ -41,7 +41,7 @@ Enforced in three places: `scripts/build_register.py` refuses `--record` without
 Magesh et al., *Hallucination-Free?* (Stanford RegLab, JELS 2025) is Tier 1: Lexis+ AI hallucinates
 >17% and Westlaw ~33% on exactly the retrieve-then-generate architecture, which is why ours does
 not generate the decision. LoRA and any other fine-tuning are **NEVER** at present — no labelled
-data, no training set, and the corpus solves the problem for nothing. See `docs/TECHNICAL_PLAN.md`.
+data, no training set, and the corpus solves the problem for nothing. See `docs/PLAN_01_ARCHITECTURE.md`.
 
 ## Failure is loud
 

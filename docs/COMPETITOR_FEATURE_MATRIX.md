@@ -98,7 +98,7 @@ machinery exists but no product surface does. `NONE` means it does not exist.
 
 | Capability | Legora | Harvey | Spellbook | Placedon | Note |
 |---|---|---|---|---|---|
-| Multi-step agent execution | Agent | Agents | Associate | **NONE** | `AGENT_ARCHITECTURE_PLAN.md` designs it; `model_adapter` is stubbed |
+| Multi-step agent execution | Agent | Agents | Associate | **NONE** | `PLAN_01_ARCHITECTURE.md` designs it; `model_adapter` is stubbed |
 | Bulk document workspace | — | Vault | multi-doc | **NONE** | no UI of any kind exists |
 | Cross-org shared workspace | Portal | Spaces | not listed | **NONE** | |
 | Tabular / grid review | Tabular Review | Contract Intelligence | Compare | **PARTIAL** | `review_table.py` builds a traceable grid; axes are documents × rules, not documents × questions |

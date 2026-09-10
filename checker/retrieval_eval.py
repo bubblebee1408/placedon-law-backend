@@ -1,6 +1,6 @@
 """A retrieval eval set for structural chunk selection — with an honest boundary.
 
-T5 in docs/NEXT_MOVE_PLAN_2026_09_04.md. MODEL_DEVELOPMENT_PLAN §6 step 1: "you
+T5 in docs/LOOP_EVENT_LOG.md. MODEL_DEVELOPMENT_PLAN §6 step 1: "you
 cannot improve retrieval you cannot measure." This is the measurement — a frozen
 set of (question → expected chunk path) cases and a precision@1 scorer over the
 deterministic selector (`ground_span.select_chunk`).

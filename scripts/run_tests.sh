@@ -12,6 +12,10 @@ suites=(
   checker/acquisition_log.py
   checker/amendment.py
   checker/as_of.py
+  checker/document_extract.py
+  checker/pit_bench.py
+  checker/event_log.py
+  checker/staleness.py
   checker/derived_date.py
   checker/claim_schema.py
   checker/legal_ref.py
@@ -111,7 +115,7 @@ suites=(
 )
 
 # --test flag rather than a bare run: this one takes a PDF argument in normal use.
-extra=("scripts/acquire_rules.py --test" "scripts/register_gsr700e.py --test" "scripts/register_s188_rule15.py --test" "scripts/benchmark_refreeze_request.py --test" "scripts/parse_board_rules.py --test" "scripts/baseline_eval.py --test" "scripts/review.py --test" "scripts/review_brief.py --check" "scripts/slice_s96.py --test" "scripts/slice_s173.py --test" "scripts/serve_matrix.py --test" "scripts/serve_api.py --test" "scripts/record_interview.py --test" "scripts/verify_document.py --test" "scripts/verify_section_index.py --test" "scripts/resolve_missing_sections.py --test" "scripts/prove_temporal.py --test" "scripts/batch1_omissions.py --test" "scripts/batch1_review.py --test" "scripts/find_commencement.py --test")
+extra=("scripts/acquire_rules.py --test" "scripts/register_gsr700e.py --test" "scripts/register_gsr880e.py --test" "scripts/register_s188_rule15.py --test" "scripts/benchmark_refreeze_request.py --test" "scripts/parse_board_rules.py --test" "scripts/baseline_eval.py --test" "scripts/review.py --test" "scripts/review_brief.py --check" "scripts/slice_s96.py --test" "scripts/slice_s173.py --test" "scripts/serve_matrix.py --test" "scripts/serve_api.py --test" "scripts/record_interview.py --test" "scripts/verify_document.py --test" "scripts/verify_section_index.py --test" "scripts/resolve_missing_sections.py --test" "scripts/prove_temporal.py --test" "scripts/batch1_omissions.py --test" "scripts/batch1_review.py --test" "scripts/find_commencement.py --test")
 
 fails=0
 for s in "${suites[@]}"; do

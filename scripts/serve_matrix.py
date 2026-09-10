@@ -152,7 +152,7 @@ def _test() -> int:
             page = r2.read().decode()
         check(r2.status == 200, f"the matrix route serves ({r2.status})")
         check("CA13-S96-AGM" in page, "...and renders obligation rows")
-        check("S-002" in page, "...including the blocked row")
+        check("S-003" in page, "...including the blocked row")
 
         # Facts in the body, not the URL.
         payload = ("company_class=private&incorporation_date=2019-06-01&"

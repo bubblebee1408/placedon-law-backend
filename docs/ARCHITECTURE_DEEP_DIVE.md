@@ -113,7 +113,7 @@ is the one place our architecture is unambiguously ahead, and it is ahead
 **OPEN:** fixed graph or model-chosen plan.
 
 **Does it help a lawyer on our problem?** The orchestration helps; the
-*model-chosen plan* is where we diverge hard. `docs/AGENT_ARCHITECTURE_PLAN.md`
+*model-chosen plan* is where we diverge hard. `docs/PLAN_01_ARCHITECTURE.md`
 argues the planner must be deterministic, because a model choosing the next step
 is a model choosing which law applies — the one decision `applicability.py`
 exists to keep away from a model. On contracts that risk is smaller; the law

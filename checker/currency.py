@@ -61,6 +61,11 @@ class Dependency:
     obligation_id: str
     basis: str
     threshold_keys: tuple[str, ...] = ()
+    # Delegated rules this obligation's answer needs that are NOT amounts in the
+    # threshold chain. s.177/s.188/s.203 each turn on a Rule we may not hold, and
+    # without naming it here the obligation reported CURRENT -- a claim we had
+    # read law we had never opened. Same defect class as G.S.R. 880(E).
+    rule_ids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -103,13 +108,16 @@ DEPENDENCIES: tuple[Dependency, ...] = (
                "Companies Act 2013 s.186 (the 60%/100% limit is stated in the Act itself)"),
     Dependency("CA13-S188-RPT",
                "Companies Act 2013 s.188, held verbatim in corpus; the members'-approval "
-               "threshold is a delegated rule (S-188-RULES) surfaced on the obligation row"),
+               "threshold is a delegated rule (S-188-RULES) surfaced on the obligation row",
+               rule_ids=("S-188-RULES",)),
     Dependency("CA13-S177-AUDIT-CTTE",
                "Companies Act 2013 s.177, held verbatim; the prescribed class (Rule 6) is a "
-               "delegated rule (S-177-RULES) surfaced on the obligation row"),
+               "delegated rule (S-177-RULES) surfaced on the obligation row",
+               rule_ids=("S-177-RULES",)),
     Dependency("CA13-S203-KMP",
                "Companies Act 2013 s.203, held verbatim; the prescribed KMP class is a "
-               "delegated rule (S-203-RULES) surfaced on the obligation row"),
+               "delegated rule (S-203-RULES) surfaced on the obligation row",
+               rule_ids=("S-203-RULES",)),
     Dependency("CA13-S180-BORROWING-LIMIT",
                "Companies Act 2013 s.180(1)(c), held verbatim in corpus; the limit is the "
                "aggregate of paid-up capital, free reserves and securities premium, stated "
@@ -160,12 +168,30 @@ def _currency_of_key(key: str, as_of: date) -> Finding:
                    t.instrument)
 
 
+def _rule_findings(rule_ids: tuple[str, ...]) -> list[Finding]:
+    """A delegated rule we cannot use makes the obligation's basis UNACQUIRED."""
+    if not rule_ids:
+        return []
+    from checker.staleness import rule_usable      # lazy: staleness imports us
+    out = []
+    for rid in rule_ids:
+        usable, why = rule_usable(rid)
+        if not usable:
+            out.append(Finding("", UNACQUIRED, f"{rid}: {why}", rid))
+    return out
+
+
 def currency_of(dep: Dependency, as_of: date) -> Finding:
-    """The currency of one obligation. Worst of its keys; CURRENT if Act-only."""
-    if not dep.threshold_keys:
+    """The currency of one obligation: the worst of everything its answer rests on.
+
+    That is its prescribed amounts AND any delegated rule it needs. An obligation
+    with neither rests only on Act text we hold verbatim, and is CURRENT.
+    """
+    findings = [_currency_of_key(k, as_of) for k in dep.threshold_keys]
+    findings += _rule_findings(dep.rule_ids)
+    if not findings:
         return Finding(dep.obligation_id, CURRENT, dep.basis, None)
-    per_key = [_currency_of_key(k, as_of) for k in dep.threshold_keys]
-    worst = max(per_key, key=lambda f: _SEVERITY[f.status])
+    worst = max(findings, key=lambda f: _SEVERITY[f.status])
     return Finding(dep.obligation_id, worst.status, f"{dep.basis}: {worst.detail}", worst.instrument)
 
 
@@ -252,18 +278,53 @@ def _test() -> None:
         small = [f for f in rep_unacq if f.obligation_id == "CA13-S2-85-SMALL"][0]
         check(small.status == UNACQUIRED,
               f"small-company currency is UNACQUIRED while 700(E) is unacquired ({small.status})")
-        check(small.instrument and "700(E)" in small.instrument,
-              f"...and names the instrument to acquire ({small.instrument})")
+        check(small.instrument and "880(E)" in small.instrument,
+              f"...and names the instrument to acquire — the one governing THIS "
+              f"date, not the one it superseded ({small.instrument})")
         check(small.needs_action, "...and is flagged as needing action")
         check(small in stale(today), "...and appears on the stale/alert list")
 
-    # ── and CURRENT once the Rule is attested ───────────────────────────────
-    with _reg.stub_registration(_reg.attested_stub()):
+    # ── and CURRENT once the whole chain is attested ────────────────────────
+    from checker.prescribed_thresholds import all_acquired as _all_acquired
+    with _all_acquired():
         small_c = [f for f in report(today)
                    if f.obligation_id == "CA13-S2-85-SMALL"][0]
         check(small_c.status == CURRENT,
               f"small-company currency is CURRENT once 700(E) is attested ({small_c.status})")
         check(not small_c.needs_action, "...and no longer needs action")
+
+    # ── REGRESSION GUARD: attesting the SUPERSEDED instrument must not make a
+    # later date current. This is the bug that shipped: 700(E) was attested, its
+    # record said effective_to=None, and the engine reported CURRENT on a 2026
+    # date while G.S.R. 880(E) had governed since 01-12-2025. Serving superseded
+    # law as current is the one failure this system exists to prevent.
+    import scripts.register_gsr880e as _reg880
+    with _reg.stub_registration(_reg.attested_stub()), _reg880.stub_registration(None):
+        f2026 = [f for f in report(date(2026, 9, 9))
+                 if f.obligation_id == "CA13-S2-85-SMALL"][0]
+        check(f2026.status != CURRENT,
+              f"an attested 700(E) does NOT make a 2026 date current ({f2026.status})")
+        check("880(E)" in (f2026.instrument or ""),
+              f"...and the finding names 880(E) as what must be acquired ({f2026.instrument})")
+        # The status alone is too weak to be a guard: with the bug present the
+        # status reads SUPERSEDED, which is != CURRENT and would let this pass
+        # while the engine went on SERVING ₹4 crore. What must be true is that
+        # the superseded amount is not served at all. A company with ₹6 crore
+        # capital is small under 880(E) and not small under 700(E) -- serving the
+        # old figure is a wrong answer, not a cautious one.
+        from checker.prescribed_thresholds import (
+            operative_small_company_limits as _limits, ThresholdUnavailable as _TU)
+        try:
+            served = _limits(date(2026, 9, 9))
+            check(False, f"the superseded limits must not be served ({served})")
+        except _TU as e:
+            check("880(E)" in str(e),
+                  "the superseded limits are refused, naming the instrument to acquire")
+        # while its own window is still answered correctly
+        f2024 = [f for f in report(date(2024, 6, 1))
+                 if f.obligation_id == "CA13-S2-85-SMALL"][0]
+        check(f2024.status == CURRENT,
+              f"...and 700(E) still makes its OWN window current ({f2024.status})")
 
     # ── an Act-only obligation is CURRENT ────────────────────────────────────
     agm = [f for f in rep if f.obligation_id == "CA13-S96-AGM"][0]
@@ -310,7 +371,7 @@ def _test() -> None:
                 "verbatim_clause_checked_by": "reviewer-01",
                 "verbatim_clause_checked_at": "2026-08-31T00:00:00Z",
                 "status": "CORROBORATED"}
-    with mock.patch.object(sreg, "registration", lambda: attested):
+    with mock.patch.object(sreg, "registration", lambda: attested), _all_acquired():
         small2 = [f for f in report(today) if f.obligation_id == "CA13-S2-85-SMALL"][0]
         check(small2.status == CURRENT,
               f"once 700(E) is attested the small-company duty is CURRENT ({small2.status})")

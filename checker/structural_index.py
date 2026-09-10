@@ -1,6 +1,6 @@
 """Path-addressable access to the statute's structural chunks.
 
-T2 in docs/NEXT_MOVE_PLAN_2026_09_04.md. `structural_chunk.chunk_section` turns
+T2 in docs/LOOP_EVENT_LOG.md. `structural_chunk.chunk_section` turns
 one section's text into chunks; this layer sits over the corpus so a caller can
 ask for "2(85)(i)" or "every chunk of s.96" without knowing where the section
 JSON lives or how to clean its HTML.

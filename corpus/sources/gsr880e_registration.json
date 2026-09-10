@@ -1,0 +1,25 @@
+{
+ "instrument_id": "GSR_880E_DEFINITIONS_AMENDMENT_2025",
+ "title": "G.S.R. 880(E) \u2014 Companies (Specification of Definition Details) Amendment Rules, 2025, dated 01-12-2025",
+ "source_url": "https://www.mca.gov.in/content/mca/global/en/acts-rules/ebooks/rules.html",
+ "bitstream_id": null,
+ "downloaded_from": null,
+ "downloaded_at": null,
+ "registered_at": "2026-09-09T09:35:25Z",
+ "acquisition_method": "human_browser",
+ "artifact_sha256": "sha256:44faa58ca500e7581e6612dc64baa586474adaf292734a7134c6c857d330a031",
+ "stored_text": "corpus/rules/gsr_880e_2025.txt",
+ "stored_text_sha256": "sha256:ead93e59892b367029b13aba755184b21ce90c5a85bcaec085b95385616cb0cf",
+ "operative_clause": "paid up capital and turnover of the small company s hall not exceed rupees ten crores and rupees one hundred crores respectively.",
+ "classification": "VERIFIED_INSTRUMENT",
+ "identity_checked_by": null,
+ "identity_checked_at": null,
+ "verbatim_clause_checked_by": null,
+ "verbatim_clause_checked_at": null,
+ "status": "PENDING_HUMAN_REVIEW",
+ "attests_to": [
+  "identity: this file is G.S.R. 880(E) of 01-12-2025, and not the principal 2014 Rules, the 2021 amendments, or the 2022 amendment G.S.R. 700(E)",
+  "clause: the operative wording recorded here is verbatim from the file, with no repair, normalisation or reflow",
+  "source: the URL and date this artifact was downloaded from are recorded, and the host was the Gazette or India Code, not a commentary site"
+ ]
+}

@@ -1,6 +1,6 @@
 """Chunk a statute section on its OWN structure, not on a token window.
 
-The model-development plan (docs/MODEL_DEVELOPMENT_PLAN.md §3.3) makes the case:
+The model-development plan (docs/PLAN_02_MODEL_TRAINING.md §3.3) makes the case:
 generic RAG splits text into fixed blocks (512 tokens, "tokens 4096-4608"); the
 Companies Act carries its own index — section -> sub-section -> clause -> proviso
 -> sub-clause — and a retrieval that returns "s.2(85)(i), the paid-up-capital
