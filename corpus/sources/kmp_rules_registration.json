@@ -1,0 +1,52 @@
+{
+ "instrument_id": "GSR_249E_MANAGERIAL_PERSONNEL_RULES_2014",
+ "title": "G.S.R. 249(E) \u2014 Companies (Appointment and Remuneration of Managerial Personnel) Rules, 2014, dated 31-03-2014 (PRINCIPAL)",
+ "source_url": "https://indiacode.gov.in/server/api/core/bitstreams/835c8cda-3dae-490a-836f-1e0171af2bd6/content",
+ "india_code_handle": "https://indiacode.gov.in/handle/123456789/508693",
+ "acquisition_method": "india_code_dspace_api",
+ "registered_at": "2026-09-10T08:00:22Z",
+ "artifact_sha256": "sha256:0c0b29fd00aae9c056833d3527e546fdacf5549e59efad2357fd40346c17ba31",
+ "stored_text": "corpus/rules/kmp_rules_2014.txt",
+ "stored_text_sha256": "sha256:bdd7e416183478ad6059c3105ea2a56ca3ddbc8bc185d2e556965860c768c21a",
+ "operative_clause_rule_8": "8. Appointment of Key Managerial Personnel. - Every listed company and every other public company having a paid-up share capital of tencrore rupees or more shall have whole-time key managerial personnel.",
+ "classification": "VERIFIED_INSTRUMENT",
+ "is_principal": true,
+ "chain_resolved": false,
+ "known_unacquired_amendments": [
+  {
+   "issued": "2014-06-09",
+   "title": "Amendment Rules 2014",
+   "handle": "123456789/508688"
+  },
+  {
+   "issued": "2016-03-30",
+   "title": "Amendment Rules 2016",
+   "handle": "123456789/508634"
+  },
+  {
+   "issued": "2018-09-12",
+   "title": "Amendment Rules 2018",
+   "handle": "123456789/508752"
+  },
+  {
+   "issued": "2020-01-06",
+   "title": "Amendment Rules 2020",
+   "handle": "123456789/508811"
+  },
+  {
+   "issued": "2023-01-19",
+   "title": "G.S.R. 41(E), Amendment Rules 2023",
+   "handle": "123456789/508923"
+  }
+ ],
+ "identity_checked_by": null,
+ "identity_checked_at": null,
+ "verbatim_clause_checked_by": null,
+ "verbatim_clause_checked_at": null,
+ "status": "PENDING_HUMAN_REVIEW",
+ "attests_to": [
+  "identity: this file is G.S.R. 249(E) of 31-03-2014, the PRINCIPAL Companies (Appointment and Remuneration of Managerial Personnel) Rules, 2014 -- not one of its amendment rules",
+  "clause: the Rule 8 wording recorded here is verbatim from the file, with no repair, normalisation or reflow",
+  "chain: the reviewer understands that attesting this does NOT make s.203 servable, because five later amendments to these Rules are unacquired"
+ ]
+}
