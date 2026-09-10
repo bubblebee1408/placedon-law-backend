@@ -13,6 +13,7 @@ suites=(
   checker/amendment.py
   checker/as_of.py
   checker/document_extract.py
+  checker/pit_bench.py
   checker/event_log.py
   checker/staleness.py
   checker/derived_date.py
