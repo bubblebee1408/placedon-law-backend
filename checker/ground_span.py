@@ -1,6 +1,6 @@
 """Ground a model-proposed claim against a retrieved structural chunk.
 
-T4 in docs/NEXT_MOVE_PLAN_2026_09_04.md — the "model proposes, the system
+T4 in docs/LOOP_EVENT_LOG.md — the "model proposes, the system
 verifies" seam (MODEL_DEVELOPMENT_PLAN §3.5). A language model may propose a
 claim about the law. Before that claim can appear anywhere, it must be ENTAILED
 by a retrieved statutory span, or it is NOT_ESTABLISHED. This module does exactly

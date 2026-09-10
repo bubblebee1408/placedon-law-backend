@@ -125,7 +125,7 @@ the persistent bitemporal store (v2).
 3. build the smallest thing that makes it pass
 4. run the FULL suite: ./scripts/run_tests.sh  -> "all suites green"
 5. register any new module in scripts/run_tests.sh
-6. mutation-test the check (step 5 of docs/LOOP.md) -- break what it exists to catch
+6. mutation-test the check (step 5 of docs/LOOP_EVENT_LOG.md) -- break what it exists to catch
 7. one commit, message says WHY; push to a loop branch
 8. tick the box here and commit this file too
 ```

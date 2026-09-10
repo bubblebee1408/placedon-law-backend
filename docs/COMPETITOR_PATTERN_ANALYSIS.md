@@ -14,7 +14,7 @@ Three rules govern the writing, and they are the repo's own:
 
 1. `CLAUDE.md`: *"No unsupported product, market, legal, or competitor claims."* and *"If evidence
    is incomplete, write OPEN or UNVERIFIED. Do not guess."*
-2. `docs/TECHNICAL_PLAN.md` §2 already retired one competitor claim of exactly this shape —
+2. `docs/PLAN_01_ARCHITECTURE.md` §2 already retired one competitor claim of exactly this shape —
    *"Harvey uses OpenAI GPT-4 + proprietary RAG + human-in-the-loop"* → **"Unverified. Do not repeat
    it to an investor."** This document must not reintroduce it by restating it more fluently.
 3. `checker/model_adapter.py`, prompt rule 1: *"Your own knowledge ... is NOT evidence here and must
@@ -51,7 +51,7 @@ they survive scepticism by default.
 | L4 | Features named "tabular review" and "Workflows" | **PLAUSIBLE BUT UNVERIFIED** | Feature *names* are the most checkable class of claim here — they either appear on a product page or they do not. Both names are also generic enough to be guessed from the category. Verify by name, not by inference. |
 | L5 | RAG: chunking, embeddings, vector DB | **PUBLISHED GENERAL TECHNIQUE** (attribution unverified) | Retrieval-augmented generation is Lewis et al., NeurIPS 2020. Dense passage retrieval is Karpukhin et al., EMNLP 2020. The technique is public and we may reason from it freely. That *this vendor* uses it is an unsourced guess — and it is the single most guessable architectural claim anyone can make about a 2026 legal-AI product, which is precisely why its presence in the document carries near-zero information. |
 | L6 | Hybrid dense + sparse (BM25) retrieval with a reranker | **PUBLISHED GENERAL TECHNIQUE** (attribution unverified) | BM25 is Robertson & Walker 1994; the idf half is Spärck Jones 1972 — both already cited in `checker/retrieval.py`. Hybrid sparse+dense fusion and cross-encoder reranking are standard IR practice (e.g. Nogueira & Cho 2019 on BERT rerankers; reciprocal-rank fusion for combining runs). Reason from the technique. Do not attribute. |
-| L7 | Multi-agent loop: Orchestrator → Extraction → Analysis → **Critic**, with self-correction | **SUSPICIOUS — LIKELY FABRICATED** *(as a description of their internals)*; the underlying pattern is **PUBLISHED GENERAL TECHNIQUE** | Two things are tangled. (a) Self-critique / self-refinement loops are published — Self-Refine (Madaan et al. 2023), Reflexion (Shinn et al. 2023), CRITIC (Gou et al. 2023), and Self-RAG (Asai et al. 2023), which `docs/TECHNICAL_PLAN.md` already flagged for overstated gains. (b) The specific four-stage pipeline with those four node names is **exactly what an outside observer would guess**, and that is the tell. It is the canonical textbook decomposition, not a leaked design. Any real system's stage list is idiosyncratic — it carries the scars of its failures (ours does: E3/E4/E5/E6 are named after the *error shapes* they were built to catch, and no one could guess them from outside). A stage list with no scars was not observed; it was inferred. |
+| L7 | Multi-agent loop: Orchestrator → Extraction → Analysis → **Critic**, with self-correction | **SUSPICIOUS — LIKELY FABRICATED** *(as a description of their internals)*; the underlying pattern is **PUBLISHED GENERAL TECHNIQUE** | Two things are tangled. (a) Self-critique / self-refinement loops are published — Self-Refine (Madaan et al. 2023), Reflexion (Shinn et al. 2023), CRITIC (Gou et al. 2023), and Self-RAG (Asai et al. 2023), which `docs/PLAN_01_ARCHITECTURE.md` already flagged for overstated gains. (b) The specific four-stage pipeline with those four node names is **exactly what an outside observer would guess**, and that is the tell. It is the canonical textbook decomposition, not a leaked design. Any real system's stage list is idiosyncratic — it carries the scars of its failures (ours does: E3/E4/E5/E6 are named after the *error shapes* they were built to catch, and no one could guess them from outside). A stage list with no scars was not observed; it was inferred. |
 | L8 | Sentence-level citations hyperlinked to source coordinates | **PUBLISHED GENERAL TECHNIQUE** (attribution unverified) | Span-grounded attribution is a public research area — attributed QA / AIS (Rashkin et al. 2021), ALCE (Gao et al. 2023). Offset-anchored citation is ordinary engineering. Whether this vendor does it sentence-level or paragraph-level is exactly the sort of detail a guesser upgrades and a user could disprove in one screenshot. |
 | L9 | Word / Outlook add-ins | **PLAUSIBLE BUT UNVERIFIED** | Directly checkable on a Microsoft AppSource listing when web returns. Low-risk claim; also see §4 — the pattern's *relevance* to us is the real question, not its truth. |
 | L10 | Integrations with Box / iManage / NetDocuments | **PLAUSIBLE BUT UNVERIFIED** | These are the three named DMS vendors anyone would list for the Anglo-American legal market; producing the list requires no knowledge of the product. Verifiable from an integrations page. |
@@ -88,7 +88,7 @@ AI's publicly released line ran k1.5 and K2. "K3" is the *next integer*. Increme
 version of a real product is the single most common way a fabricated claim about a fast-moving field
 gets generated: the name is right-shaped, right-branded, and requires no knowledge. Compare the
 failure class already recorded in this repo — `docs/PROVIDER_DECISION.md` and
-`docs/TECHNICAL_PLAN.md` caught three separate documents naming `claude-3-5-sonnet-20241022`
+`docs/PLAN_01_ARCHITECTURE.md` caught three separate documents naming `claude-3-5-sonnet-20241022`
 (retired), `@anthropics/claude-code` (404, wrong scope) and a shut-down Gemini 1.5. Identifiers rot
 and identifiers get invented; both produce a plausible string that fails on first contact with
 reality. K3 may well exist by now. That is not the point — the point is that the claim gives us no
@@ -212,7 +212,7 @@ sections** (the PoSH corpus) and explicitly concedes the opposite at 500:
 The Companies Act corpus is **527 ingested sections, 474 mapped**. By `retrieval.py`'s own stated
 threshold, its argument has **expired**. Anyone citing `retrieval.py` to refuse embeddings on the
 Companies Act is citing a document that says the reverse. This should be corrected wherever it is
-repeated — including in `docs/TECHNICAL_PLAN.md` §2, whose table cites the 30-section arithmetic
+repeated — including in `docs/PLAN_01_ARCHITECTURE.md` §2, whose table cites the 30-section arithmetic
 against a blueprint that was indexing the Act.
 
 The refusal is still correct, but it stands on `checker/text_search.py`'s reasoning, which is a
@@ -491,7 +491,7 @@ against primary literature rather than any vendor:
 - Attributed generation / span-level citation — Rashkin et al. 2021 (AIS); Gao et al. 2023 (ALCE).
   **This is P11, our clearest gap.**
 - Self-correction loops — Self-Refine (Madaan et al. 2023), Reflexion (Shinn et al. 2023), CRITIC
-  (Gou et al. 2023), Self-RAG (Asai et al. 2023). Note `docs/TECHNICAL_PLAN.md` already flagged a
+  (Gou et al. 2023), Self-RAG (Asai et al. 2023). Note `docs/PLAN_01_ARCHITECTURE.md` already flagged a
   "Self-RAG reduces hallucination by 40%" claim as unverified-as-stated — **re-read the paper's
   actual reported gains before anyone cites a number.**
 - Asynchronous RL — A3C, Mnih et al., ICML 2016, plus current async RLHF/RLVR infrastructure work.

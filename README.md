@@ -71,4 +71,4 @@ is no pytest and no third-party test dependency.
 
 The verification machinery is substantial and the product is small. Read
 `docs/FAILURE_MODES.md` before believing anything here works, and
-`docs/PLAN_TWO_MONTH.md` for where it goes next.
+`docs/PLAN_05_ROADMAP.md` for where it goes next.

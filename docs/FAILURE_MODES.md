@@ -16,10 +16,10 @@ No web search (exhausted). No code was changed.
 
 ## 0. What this project has already named, so I do not repeat it
 
-Credit where it is due, because it changes what is worth writing. `docs/BUILD_PLAN_PRODUCT.md`
+Credit where it is due, because it changes what is worth writing. `docs/PLAN_05_ROADMAP.md`
 §1.5 already states, in the project's own words, that the product is nearly nonexistent, that
 `model_adapter.py` is stubbed, and that two of three benchmark buckets are structurally incapable
-of measuring the axis the gate protects. `docs/WORKFLOW_BACKLOG_INDIA.md` §0 already states zero
+of measuring the axis the gate protects. `docs/FEATURES.md` §0 already states zero
 evidenced frequency, zero CS interviews, the OCR contradiction, and the segment conflict.
 `docs/SOURCE_DEFECTS.md` already records SD-001…SD-004 honestly, including one retraction of its
 own accusation against a government publisher.
@@ -335,7 +335,7 @@ Consequences, in order of severity:
    permanent until the fixture schema changes.
 2. The review governance layer — `review_record.py`, `scoped_retraction.py`,
    `benchmark_v2_freeze.py`, `promotion_preview.py`, `resubmission.py`, described in
-   `BUILD_PLAN_PRODUCT.md` as "more complete than anything user-facing" — is elaborate
+   `PLAN_05_ROADMAP.md` as "more complete than anything user-facing" — is elaborate
    append-only machinery around a decision with **one reachable outcome**. It is provenance for a
    constant.
 3. The 15 HUMAN_JUDGED labels are the entire human contribution to the benchmark. All 15 are
@@ -473,7 +473,7 @@ At what refusal rate does a user stop? I will not pretend to know, and nobody in
 either — zero practitioners have seen this. But the relevant comparison is not "refusal vs wrong
 answer". It is **"refusal vs the ten minutes of typing that produced it"**. The form has twelve
 fields. Twelve fields in, one row of arithmetic out. That is the number to test, and it is
-testable this week with the five conversations `BUILD_PLAN_PRODUCT.md` §8 already specifies.
+testable this week with the five conversations `PLAN_05_ROADMAP.md` §8 already specifies.
 
 ---
 
@@ -493,7 +493,7 @@ before you reach the Rules. **Nowhere on the surface does it say how many obliga
 that four is a sample.** "N of 4 rows need attention" reads as a denominator. A practitioner
 seeing "0 of 4 rows need attention" has been handed something that looks like a clean bill.
 
-This is the project's own Stage 1 kill criterion, stated in `BUILD_PLAN_PRODUCT.md` §8: *"it looks
+This is the project's own Stage 1 kill criterion, stated in `PLAN_05_ROADMAP.md` §8: *"it looks
 complete and is not, which is worse than obviously thin."* The product as written triggers its own
 kill criterion at the level of the page copy, before any practitioner sees it.
 
@@ -539,7 +539,7 @@ Ranked by my estimate of what actually happens:
    figures they typed were used for nothing.
 5. **No persistence.** `handle()` is a pure function with no store. Every matrix must be retyped
    from scratch, every session. The fifteen-month AGM limb inherently requires last year's data,
-   and there is nowhere to put it. `BUILD_PLAN_PRODUCT.md` puts persistence in Stage 2; but the
+   and there is nowhere to put it. `PLAN_05_ROADMAP.md` puts persistence in Stage 2; but the
    AGM row's whole value depends on state, so Stage 1's flagship obligation is the one Stage 1
    cannot serve.
 
@@ -572,7 +572,7 @@ strength of a table.
 `docs/PRODUCT_SCOPE.md`, locked 20 Aug: primary customer is a corporate lawyer, explicitly *"not a
 product aimed primarily at Company Secretaries"*.
 
-`docs/WORKFLOW_BACKLOG_INDIA.md` §on the do-not-build list: *"Anything targeted at a Company
+`docs/FEATURES.md` §on the do-not-build list: *"Anything targeted at a Company
 Secretary before `R-011` closes."*
 
 `checker/obligations.py:REGISTER` — the four obligations actually built: s.96 AGM, s.173 board
@@ -580,7 +580,7 @@ meetings, s.149 board composition, s.2(85) small-company classification.
 
 **All four are Company Secretary work.** AGM convening, board-meeting calendars, board composition
 and company classification are the CS's statutory function; s.203 makes it so for companies above
-the threshold. `WORKFLOW_BACKLOG_INDIA.md` already says this of the workflow layer — *"Every
+the threshold. `FEATURES.md` already says this of the workflow layer — *"Every
 workflow in this backlog with strong in-repo evidence is Company Secretary work"* — but nobody has
 stated the consequence: **the repository is currently in breach of its own do-not-build rule, and
 has been since the register was written.** The segment conflict is no longer a planning question;
@@ -613,7 +613,7 @@ willingness to pay: **0, 0, 0**.
 The usual criticism is "four interviews is too few". That is not the sharpest version. The sharpest
 version is:
 
-**Of four interviews, zero were with the declared buyer** (`WORKFLOW_BACKLOG_INDIA.md` §0.1: "Of
+**Of four interviews, zero were with the declared buyer** (`FEATURES.md` §0.1: "Of
 those, corporate lawyers: 0"). The four are property/family, general practice, one senior
 generalist, and one company-side decision-maker. The segment decision of 20 Aug — the one that
 demoted a segment with a public member directory, a documented enforcement corpus and a growing
@@ -793,11 +793,11 @@ An hour.
 
 ### Scale, OCR, multi-state, listed `[ALREADY NAMED, partly]`
 
-- **OCR:** assumption 12 in `BUILD_PLAN_PRODUCT.md` §9 already says "UNVERIFIED and probably false".
+- **OCR:** assumption 12 in `PLAN_05_ROADMAP.md` §9 already says "UNVERIFIED and probably false".
   The marginal attack: Stage 1 needs no documents, so the risk is deferred — but so is every
   document-side validation, and Stage 4's kill criterion depends on OCR error rates nobody has
   measured. The project has arranged its build order so the largest untested assumption is tested
-  last. Twenty documents in the format they actually arrive in, per `WORKFLOW_BACKLOG_INDIA.md`,
+  last. Twenty documents in the format they actually arrive in, per `FEATURES.md`,
   settles it in a week and should be moved ahead of Stage 2.
 - **Multi-state:** the Companies Act is central, so state variation is genuinely a non-issue here.
   Sound. Move on.
@@ -838,7 +838,7 @@ section is complete, and the three that are only here are the ones I would act o
 | N11 | **The register has no denominator.** "N of 4 rows need attention" reads as a complete matrix of the Act. The page says "full matrix". | F6 |
 | N12 | **Nothing retries a blocked acquisition.** Fail-closed policy, fail-forever process. | F15 |
 | N13 | **The self-test suite passes on dead branches.** F5's `check(state in (SATISFIED, UNDETERMINED))` is green on an unreachable disjunct; the s.52 guard is green on three literals. 78 green suites is a weaker signal than it reads as. | below |
-| N14 | **Self-documented weakness is discharging the cost of fixing it.** Every finding in `BUILD_PLAN_PRODUCT.md` §1.5 has been true and written down since 1 September, and none has moved. The docs are becoming a place where problems go to be acknowledged. | below |
+| N14 | **Self-documented weakness is discharging the cost of fixing it.** Every finding in `PLAN_05_ROADMAP.md` §1.5 has been true and written down since 1 September, and none has moved. The docs are becoming a place where problems go to be acknowledged. | below |
 
 ### N13 — the suite is green on branches that cannot execute
 
@@ -864,8 +864,8 @@ disjunction over states must assert which disjunct held.
 
 ### N14 — the documentation is absorbing the work
 
-`docs/` holds 46 files and roughly 500KB of prose. `BUILD_PLAN_PRODUCT.md` alone is 52KB;
-`WORKFLOW_BACKLOG_INDIA.md` 62KB; `FEATURE_PLAN_INDIA.md` 52KB; `AGENT_ARCHITECTURE_PLAN.md` 48KB.
+`docs/` holds 46 files and roughly 500KB of prose. `PLAN_05_ROADMAP.md` alone is 52KB;
+`FEATURES.md` 62KB; `FEATURES.md` 52KB; `PLAN_01_ARCHITECTURE.md` 48KB.
 All four were written in the last week of August. All four are good.
 
 Set against them: `research/TASKS.md` has **1 completed row since 22 August** and four rows blocked
@@ -873,7 +873,7 @@ on the founder, one of which (S-002) is a single file download that gates half t
 
 The failure mode is not "too much documentation". It is specific and it is the reason this analysis
 exists: **a project that writes down its weaknesses in high-quality prose gets most of the
-psychological reward of having addressed them.** `BUILD_PLAN_PRODUCT.md` §1.5 is a better statement
+psychological reward of having addressed them.** `PLAN_05_ROADMAP.md` §1.5 is a better statement
 of this project's problems than most external reviews would produce. It was written on 1 September.
 The s.96 row still returns green on a live default; the gate still scores 67 rows against a
 manifest of 69; `is_listed` is still unread. None of those is in any document — which is the test

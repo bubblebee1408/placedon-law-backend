@@ -1,5 +1,5 @@
 """
-DerivedDate — the problem TECHNICAL_PLAN_CORPORATE.md §0 identified as the hardest one.
+DerivedDate — the problem PLAN_01_ARCHITECTURE.md §0 identified as the hardest one.
 
 A due date is a number that does not appear in the statute. s.96 says an AGM must be held
 "within six months from the date of closing of the financial year". For a 31 March 2026 year-end
@@ -180,7 +180,7 @@ def _test() -> None:
         else:
             fail += 1; print(f"[FAIL] {label}")
 
-    # The canonical case from TECHNICAL_PLAN_CORPORATE.md §0.
+    # The canonical case from PLAN_01_ARCHITECTURE.md §0.
     agm = derive(anchor=date(2026, 3, 31), anchor_label="close of the financial year",
                  source_text="within a period of six months, from the date of closing of the financial year",
                  citation="s.96(1), Companies Act 2013")

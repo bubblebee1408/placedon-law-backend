@@ -1,6 +1,6 @@
 """Which structural spans each obligation rests on — path + hash, never text.
 
-T6 in docs/NEXT_MOVE_PLAN_2026_09_04.md. An obligation row today cites a provision
+T6 in docs/LOOP_EVENT_LOG.md. An obligation row today cites a provision
 at section granularity ("s.2(85)"). The structural layer (structural_index) lets
 it cite the exact limb ("s.2(85)(i)"), and carry that limb's content hash, so a
 diligence reader can see precisely which sub-clause a finding stands on and check

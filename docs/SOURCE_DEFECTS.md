@@ -88,7 +88,7 @@ corpus record by the PDF is **1.0000**; 456 of 464 sections are at or above 0.99
 
 **Does not establish:** that either rendering is *correct*. Both come from India Code. A defect
 present in their own source appears identically in both and is invisible to this check. Genuine
-independence still needs a different publisher — see `docs/NEXT_PHASE_PLAN.md` P0.
+independence still needs a different publisher — see `docs/PLAN_05_ROADMAP.md` P0.
 
 **Residual:** 57 sections carry differences not explained by heading, page number, or footnote.
 Sampling their character: mostly word fragments from PDF hyphenation and line breaks, short runs,

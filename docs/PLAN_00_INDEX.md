@@ -15,6 +15,7 @@ status marker. Nothing is asserted because it sounds right.
 | [PLAN_04_WORD_ADDIN](PLAN_04_WORD_ADDIN.md) | The v1 product surface | Distribution path verified | Effort estimate is inference |
 | [PLAN_05_ROADMAP](PLAN_05_ROADMAP.md) | Sequence, gates, Bloomberg scoped | Gates are falsifiable | Demand is n=1 |
 | [PLAN_06_EVALUATION](PLAN_06_EVALUATION.md) | How to be believed | Static RAG = 0%, traced | No Indian benchmark exists yet |
+| [FEATURES](FEATURES.md) | **The canonical feature list.** If it is not there, it is not planned | 7 of 10 have a built engine | F8 unbuilt and risky |
 
 ## The one-paragraph version
 
@@ -50,3 +51,33 @@ Stated first, because a plan that cannot be wrong is not a plan.
 
 None of these is answerable by building more. All four are answerable in ten
 conversations.
+
+## What was deleted, and where it went
+
+38 superseded documents were removed rather than left to rot: 19 planning and
+roadmap documents in `docs/`, and 19 completed loop runbooks in `.claude/plans/`.
+Git history keeps all of them — `git log --diff-filter=D --name-only` finds any
+of it — but a repository where five documents each claim to be the roadmap has no
+roadmap.
+
+| Deleted | Superseded by |
+|---|---|
+| `FEATURE_PLAN_INDIA`, `WORKFLOW_BACKLOG_INDIA` | [FEATURES](FEATURES.md) |
+| `ROADMAP`, `BUILD_ROADMAP`, `BUILD_PLAN_PRODUCT`, `BUILD_PLAN_2026_08`, `PLAN_TWO_MONTH`, `NEXT_PHASE_PLAN` | [PLAN_05_ROADMAP](PLAN_05_ROADMAP.md) |
+| `TECHNICAL_PLAN`, `TECHNICAL_PLAN_CORPORATE`, `ARCHITECTURE`, `AGENT_ARCHITECTURE_PLAN` | [PLAN_01_ARCHITECTURE](PLAN_01_ARCHITECTURE.md) |
+| `ML_PLAN`, `MODEL_DEVELOPMENT_PLAN` | [PLAN_02_MODEL_TRAINING](PLAN_02_MODEL_TRAINING.md) |
+| `WEEK2_RULE_INGESTION_PLAN` | [PLAN_03_DATA_SOURCES](PLAN_03_DATA_SOURCES.md) |
+| `LOOP`, `NEXT_MOVE_PLAN_2026_09_04` | [LOOP_EVENT_LOG](LOOP_EVENT_LOG.md) |
+| `SONNET_ERA_REVIEW`, `PLAN_REVIEW_KIMI_2026_08_22` | reviews of external PDFs; nothing depended on them |
+| 19 × `.claude/plans/loop-*.md` | completed loops, Aug 12 – Sep 5 |
+
+Every reference to a deleted document — **including seven code docstrings** — was
+repointed to its successor rather than left dangling. Full suite green after.
+
+**Deliberately kept**, because they are evidence or policy rather than plans:
+`RETRACTIONS` (known-invalid results), `SOURCE_DEFECTS`, `SOURCE_POLICY`,
+`SOURCE_PROVENANCE_POLICY`, `ACQUISITION_POLICY`, `CLAIMS_LEDGER`,
+`TEMPORAL_PROOF`, `CORROBORATION`, `BENCHMARK_GOVERNANCE`, `METRIC_POLICY`,
+`H001_OUTREACH`, `SESSION_BUILD_LOG_2026_09`, `RETIRED_POSH` (a decision record —
+deleting those is how a team re-litigates settled questions), and the measured
+results under `.claude/plans/`.

@@ -60,10 +60,10 @@ commits, all pushed to branch `engine/entailment`, full test suite green through
 ## 6. Strategy & plans (grounded, not speculative)
 
 - `docs/TECHNICAL_PLAN_EVIDENCED_2026_09.md` — competitor architecture from **primary sources fetched live** (Harvey/Legora/Spellbook — none trains a foundation model).
-- `docs/MODEL_DEVELOPMENT_PLAN.md` — the model approach (rent + verify, not train); primary-source-verified.
+- `docs/PLAN_02_MODEL_TRAINING.md` — the model approach (rent + verify, not train); primary-source-verified.
 - `docs/BLOOMBERG_FOR_INDIA_ANALYSIS.md` — the vision analysis + the three lines not to cross (no scraping, no LLM-as-truth, no scope-creep globe).
-- `docs/BUILD_ROADMAP.md` — the master roadmap (from a 4-agent decomposition); critical path = get one CS to react.
-- `docs/NEXT_MOVE_PLAN_2026_09_04.md` — the autonomous-loop runbook.
+- `docs/PLAN_05_ROADMAP.md` — the master roadmap (from a 4-agent decomposition); critical path = get one CS to react.
+- `docs/LOOP_EVENT_LOG.md` — the autonomous-loop runbook.
 
 ---
 

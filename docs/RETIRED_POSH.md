@@ -40,7 +40,7 @@ tools that the Companies Act corpus can use.
 
 ## What this costs
 
-`provision_graph.py` is gone, and `FEATURE_PLAN_INDIA.md` proposed sourcing a
+`provision_graph.py` is gone, and `FEATURES.md` proposed sourcing a
 matrix column's `depends_on` from it. That module was bound to the PoSH corpus
 at module level, so it could not have served the Companies Act without being
 rewritten. A corporate provision graph is a new piece of work, not a salvage.
