@@ -133,7 +133,7 @@ timeline UI (design work, other repo).
   *Mutation: make `may_release` return `allowed=True` unconditionally — at least
   three suites must go red. If fewer do, the gate is not load-bearing yet.*
 
-- [ ] **T5 — `checker/licence.py`: Axis D.**
+- [x] **T5 — `checker/licence.py`: Axis D.**
   Per-feed capability sets `{INTERNAL_ONLY, MAY_SHOW, MAY_STORE, MAY_DERIVE,
   EMBARGOED}` — a frozenset, **not** a ladder. Default for an unregistered feed is
   the **empty** set: may not even be computed with. Human-recorded contract
