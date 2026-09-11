@@ -107,7 +107,7 @@ timeline UI (design work, other repo).
   *Mutation: change `max` to `min` → returns `CURRENT`, check goes red. Second
   mutation: drop the witness → red on the name.*
 
-- [ ] **T2 — `checker/interval.py`: Wilson, exact binomial, McNemar, seeded
+- [x] **T2 — `checker/interval.py`: Wilson, exact binomial, McNemar, seeded
   bootstrap.** ~110 LOC, stdlib only. Every proportion this repo already reports
   gets an honest error bar.
   *Check: `wilson(19, 20) == (0.764, 0.991)` to three decimals — the L-15 audit's
