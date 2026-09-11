@@ -142,7 +142,7 @@ timeline UI (design work, other repo).
   naming the licence as the reason — not a 500, not a blank.*
   *Mutation: default an unknown feed to `{MAY_SHOW}` → the refusal test goes red.*
 
-- [ ] **T6 — `checker/calibration_contract.py`: the module that settles it.** ~170 LOC.
+- [x] **T6 — `checker/calibration_contract.py`: the module that settles it.** ~170 LOC.
   `TrackRecord`, `ece_floor(p,n)`, `n_min(p,eps)` from PLAN_08 §6, the state
   lattice (reusing T1, not a second scheme), and `render_number()` which raises
   unless the record is SERVABLE.

@@ -80,6 +80,7 @@ suites=(
   checker/interval.py
   checker/release.py
   checker/licence.py
+  checker/calibration_contract.py
   checker/chunk_fusion.py
   checker/fusion.py
   checker/reranker.py
