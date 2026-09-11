@@ -8,6 +8,15 @@ Ten features, three phases. Each one names what it does, what exists today, and
 what is missing — because "planned" and "built" are different words and this
 repository does not blur them.
 
+**Scope note.** These features operate across the whole of Indian corporate-law
+compliance — Companies Act, LLP Act, SEBI, FEMA, IBC, competition, stamp duty,
+DPDP — not the Companies Act alone. `checker/scope.py` is the register and the
+authority. Today one of those nine bodies is held; the rest are DECLARED, which
+means a question there is refused with the body named and the gap stated. Every
+feature below inherits that: **F2's matrix has fifteen rows because that is what
+the Companies Act corpus supports, not because fifteen is the whole of corporate
+law.**
+
 ---
 
 ## Phase 1 — the wedge

@@ -1,7 +1,15 @@
 # placedon-law-backend
 
-Verified legal evidence for **Indian corporate law** — the Companies Act 2013.
+Verified legal evidence for **compliance across Indian corporate law**.
 Deterministic Python. No language model in any decision path.
+
+Scope is the whole of Indian corporate-law compliance — Companies Act, LLP Act,
+SEBI regulations, FEMA and the FDI rules, IBC, competition, stamp duty and the
+DPDP Act. **Today one of those nine bodies is actually held.** `checker/scope.py`
+is the register, and the distinction it enforces is the point: a body we have
+declared but not acquired *refuses and says what it would need*, which is not the
+same answer as "no obligation applies". Run `python3 checker/scope.py` for the
+current map.
 
 > The model may propose. The system must verify. The reviewer decides.
 

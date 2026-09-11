@@ -4,8 +4,16 @@
 Placedon — an India-first legal intelligence and audit platform.
 
 ## Current focus
-An **evidence-backed audit layer for Indian corporate documents**, starting with the Companies Act
-2013 and related compliance workflows. Not a general legal chatbot. Not a foundation-model project.
+An **evidence-backed audit layer for Indian corporate documents**, across the whole of
+corporate-law compliance. Not a general legal chatbot. Not a foundation-model project.
+
+**Scope is declared in `checker/scope.py`, and that file is the authority.** Nine bodies of law are
+in scope; one (Companies Act 2013) is held. The other eight are DECLARED, which is an active
+refusal — a question there is answered with the body of law, what it covers, and what we would have
+to acquire. Never with silence, because silence would read as "no obligation found".
+
+**The invariant, tested:** no obligation may exist in the register for a body that is not held.
+That is what stops the widened scope from producing answers decided against law nobody acquired.
 
 ## The wedge
 Given a corporate document, determine whether it is:

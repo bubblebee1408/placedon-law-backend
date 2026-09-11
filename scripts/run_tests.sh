@@ -15,6 +15,7 @@ suites=(
   checker/bundles.py
   checker/reasoning.py
   checker/shadow.py
+  checker/scope.py
   checker/session.py
   checker/document_extract.py
   checker/pit_bench.py
