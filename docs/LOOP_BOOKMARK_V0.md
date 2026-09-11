@@ -224,8 +224,32 @@ Stop and report when **any** is true:
 - **H-G — the AIS budget decision.** Omit vessel tracking, or fund it honestly at
   ~$2,000/month minimum. There is no third option that is global, real-time and
   redistribution-clean. PLAN_08 §5 recommends omitting it.
-- **H-D2 — acquire the missing 2024–2026 amendments** once T0 measures the gap.
-  Browser download → `scripts/register_*.py` → human `--attest`.
+- **H-D2 — acquire the missing 2024–2026 amendments.** T0 has now measured the gap,
+  so this is concrete. `corpus_currency.report()` says the newest amendment we hold
+  takes effect **2023-10-30** (a staggered commencement under Act 29 of 2020), and
+  the ledger carries **nothing after it**.
+
+  What to look for: any Companies Act 2013 amendment Act, or any S.O. commencement
+  notification under one, **effective after 2023-10-30**. No instrument number is
+  written here on purpose — none has been read off an official document by us, and
+  guessing one is how a fabricated citation enters. Search India Code and the
+  eGazette; whatever is found is what gets registered.
+
+  The 19 instruments already held, newest first, so a search can skip them:
+  Act 29 of 2020 (to 2023-10-30) · Act 1 of 2018 · Act 22 of 2019 · S.O. 768(E) ·
+  S.O. 3400(E) · S.O. 2042(E) · Act 7 of 2017 · S.O. 3676(E) · Act 31 of 2016 ·
+  Act 21 of 2015 · S.O. 1226(E) · S.O. 1227(E) · S.O. 504(E) · S.O. 2226(E) ·
+  S.O. 1894(E) · S.O. 1820(E) · S.O. 1177(E) · S.O. 2264(E) · Act 8 of 1961.
+
+  Route: browser download → a `scripts/register_*.py` modelled on
+  `register_gsr880e.py` → human `--attest`. **If the search finds nothing, that is
+  a real and valuable result**: record it, and `corpus_currency` should then say the
+  Act has not moved rather than that our ledger is behind. Those are different
+  facts and the module currently cannot tell them apart, by design.
+
+  One more thing T0 surfaced: a held record carries `w.e.f. 5017-05-26`, outside
+  the Act's plausible lifetime. It is flagged and excluded, never repaired. Worth a
+  look while the Gazette is open — it is a real defect in a source we rely on.
 - **H-B** — a lawyer resolves the `NEEDS_LAWYER` retrieval labels.
 - **H-C** — a practising Company Secretary reacts to the evidence pack
   (`docs/H001_OUTREACH.md`). **Still the highest-value open item in the project**,
