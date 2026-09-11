@@ -26,9 +26,13 @@ Audits the document open in front of the lawyer against the law in force **on th
 document's date** — flags superseded figures, names the instrument that moved
 them, and refuses what it cannot verify.
 
-- **Status:** SPECCED, not built. Full spec in [PLAN_04_WORD_ADDIN](PLAN_04_WORD_ADDIN.md).
+- **Status:** **BACKEND BUILT.** `POST /v1/document-check` is live and tested
+  (`checker/api.py`), and `checker/document_extract.py` grounds an extractor's
+  proposals against the document. Full spec in [PLAN_04_WORD_ADDIN](PLAN_04_WORD_ADDIN.md).
 - **Reuses:** `obligations` · `as_of` · `currency` · `staleness` · `api.handle`
-- **Missing:** the Office.js task pane, one API route.
+- **Missing:** the Office.js task pane. **Only the UI** — the route this file
+  previously listed as missing had already shipped a day before the claim was
+  written, which a review caught.
 - **Why first:** it needs no MCA data, no Gazette feed, no OCR, and no citator —
   every blocker the research found applies to other products, not this one.
 
@@ -40,8 +44,9 @@ uploaded nothing still gets a full matrix.
 - **Status:** BUILT. `obligations.py` (1,448 lines), live at `POST /v1/compliance-pack`,
   HTML via `matrix_view.py`.
 - **Missing:** a facts-in form a non-engineer would use.
-- **Caveat that matters:** 4 of 15 rows currently refuse — s.2(85), s.177, s.188,
-  s.203 — because the delegated rules behind them are unheld or unreviewed.
+- **Caveat that matters:** **2 of 15 rows refuse** on an unheld rule — s.177
+  (Rule 6, held but unread) and s.203 (chain traced, unconfirmed). s.2(85) now
+  answers, because G.S.R. 880(E) was attested on 2026-09-10.
 
 ### F3 · Evidence Pack / Verified Report
 The matrix as a dated, cited, hash-stamped document a CFO can hand to diligence
