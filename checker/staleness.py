@@ -37,7 +37,8 @@ from checker.lattice import Lattice
 # ── acquisition states of an external instrument ──────────────────────────────
 HELD_ATTESTED = "HELD_ATTESTED"        # artifact held, both human checks recorded
 HELD_UNREVIEWED = "HELD_UNREVIEWED"    # artifact held, nobody has reviewed it
-CHAIN_UNRESOLVED = "CHAIN_UNRESOLVED"  # principal instrument held; later amendments are not
+CHAIN_UNRESOLVED = "CHAIN_UNRESOLVED"  # principal held; later amendments are not
+CHAIN_TRACED = "CHAIN_TRACED"          # whole chain held and its effects read; awaiting a reader
 STAGED = "STAGED"                      # registered for review, refuses until attested
 NOT_HELD = "NOT_HELD"                  # we do not have it at all
 
@@ -99,7 +100,9 @@ def _acquisition_state(dep: RuleDependency) -> str:
         # Attested or not, the principal Rules alone cannot serve s.203 while five
         # later amendments are unacquired. Any one of them may have moved Rule 8's
         # threshold -- which is exactly how a superseded figure reaches a user.
-        return HELD_ATTESTED if is_servable(rec) else CHAIN_UNRESOLVED
+        if is_servable(rec):
+            return HELD_ATTESTED
+        return CHAIN_TRACED if rec.get("chain_traced") else CHAIN_UNRESOLVED
     if dep.rule_id == "S-003":
         from scripts.register_gsr880e import registration, is_attested
         rec = registration()
@@ -154,11 +157,11 @@ DEPENDENCIES: tuple[RuleDependency, ...] = (
         "Personnel) Rules, 2014 — Rule 8, the prescribed KMP class",
         ("CA13-S203-KMP",), "corpus/rules/kmp_rules_2014.txt",
         supersession_watched=True,
-        note="the PRINCIPAL Rules are held (Rule 8: paid-up capital of ten crore "
-             "rupees or more). Five later amendments — 2014, 2016, 2018, 2020 and "
-             "G.S.R. 41(E) of 2023 — are known and unacquired, and any one may have "
-             "moved that threshold, so the chain is unresolved and s.203 stays "
-             "refused"),
+        note="the principal Rules and all five amendments are held, and the chain "
+             "is traced: Rule 8 was NEVER amended, so its ten-crore threshold stands "
+             "as enacted. Rule 8A was inserted in 2014 and substituted by G.S.R. "
+             "13(E) of 2020. s.203 still refuses because a reader must confirm the "
+             "resulting text and that rule 8A belongs to the s.203 class"),
 )
 
 
