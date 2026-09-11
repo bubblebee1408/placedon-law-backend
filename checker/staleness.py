@@ -277,15 +277,25 @@ def _test() -> None:
           f"nothing we serve from is unwatched ({[f.rule_id for f in served]})")
 
     # ── the states are derived from disk, not asserted ────────────────────────
+    # The point of this block is that stubbing does not LEAK -- whatever the real
+    # state is, it must come back. It used to assert the real state equals
+    # NOT_HELD, which quietly became false the day a human attested G.S.R. 880(E),
+    # and the suite could not see it because this module had no SystemExit. So the
+    # real state is now captured from disk and compared to itself.
     import scripts.register_gsr880e as r880
+    before = [f for f in assess(today) if f.rule_id == "S-003"][0].acquisition
     with r880.stub_registration(r880.attested_stub()):
         f880 = [f for f in assess(today) if f.rule_id == "S-003"][0]
         check(f880.acquisition == HELD_ATTESTED,
               f"attesting 880(E) changes its assessed state ({f880.acquisition})")
         check(f880.exposure == OK, f"...and clears its exposure ({f880.exposure})")
-    f880_now = [f for f in assess(today) if f.rule_id == "S-003"][0]
-    check(f880_now.acquisition == NOT_HELD,
-          f"...and the real state is restored afterwards ({f880_now.acquisition})")
+    with r880.stub_registration(None):
+        f_none = [f for f in assess(today) if f.rule_id == "S-003"][0]
+        check(f_none.acquisition == NOT_HELD,
+              f"...and with no registration at all it is NOT_HELD ({f_none.acquisition})")
+    f880_now = [f for f in assess(today) if f.rule_id == "S-003"][0].acquisition
+    check(f880_now == before,
+          f"...and the real state is restored afterwards ({f880_now}, was {before})")
 
     # ── the honest limitation is stated, not implied ──────────────────────────
     check("Discovery of a successor is human." in report_text(today),
@@ -293,6 +303,8 @@ def _test() -> None:
     check(bool(unwatched()), "the unwatched list is populated, not empty by construction")
 
     print(f"\n{ok}/{ok + fail} passed")
+    if fail:
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

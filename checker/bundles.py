@@ -296,6 +296,8 @@ def _test() -> None:
           "every bundle declares its required inputs")
 
     print(f"\n{ok}/{ok + fail} passed")
+    if fail:
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

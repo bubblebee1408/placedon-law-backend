@@ -279,6 +279,8 @@ def _test() -> None:
     check(str(probe) in str(caught), f"...and names the file that appeared ({caught})")
 
     print(f"\n{ok}/{ok + fail} passed")
+    if fail:
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

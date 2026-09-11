@@ -123,6 +123,19 @@ suites=(
 # --test flag rather than a bare run: this one takes a PDF argument in normal use.
 extra=("scripts/acquire_rules.py --test" "scripts/register_gsr700e.py --test" "scripts/register_gsr880e.py --test" "scripts/register_kmp_rules.py --test" "scripts/register_s188_rule15.py --test" "scripts/benchmark_refreeze_request.py --test" "scripts/parse_board_rules.py --test" "scripts/baseline_eval.py --test" "scripts/review.py --test" "scripts/review_brief.py --check" "scripts/slice_s96.py --test" "scripts/slice_s173.py --test" "scripts/serve_matrix.py --test" "scripts/serve_api.py --test" "scripts/record_interview.py --test" "scripts/verify_document.py --test" "scripts/verify_section_index.py --test" "scripts/resolve_missing_sections.py --test" "scripts/prove_temporal.py --test" "scripts/batch1_omissions.py --test" "scripts/batch1_review.py --test" "scripts/find_commencement.py --test")
 
+# A module that prints "9/10 passed" has failed, whatever its exit code says.
+# Eight modules once defined _test() without `raise SystemExit(1)`, so their
+# failures never reached the exit code and the sweep printed "all suites green"
+# over four failing checks. Comparing the counts is defence in depth: the next
+# module to forget the raise cannot hide behind a zero exit.
+count_mismatch() {            # $1 = "N/M passed" (may be empty)
+  case "$1" in
+    *" passed") n=${1%%/*}; m=${1#*/}; m=${m%% *}
+                [ "$n" = "$m" ] && return 1 || return 0 ;;
+    *) return 1 ;;            # no count line: handled separately, not a mismatch
+  esac
+}
+
 fails=0
 for s in "${suites[@]}"; do
   [ -f "$s" ] || { printf '%-28s %s\n' "$s" "MISSING"; fails=$((fails+1)); continue; }
@@ -131,6 +144,10 @@ for s in "${suites[@]}"; do
   if [ $rc -ne 0 ]; then
     printf '%-28s FAIL  %s\n' "$s" "${res:-no result line}"
     printf '%s\n' "$out" | grep -E '^\[FAIL\]|Error|Traceback' | head -4 | sed 's/^/      /'
+    fails=$((fails+1))
+  elif count_mismatch "$res"; then
+    printf '%-28s FAIL  %s  (exit 0 but checks failed)\n' "$s" "$res"
+    printf '%s\n' "$out" | grep -E '^\s*\[FAIL\]' | head -4 | sed 's/^/      /'
     fails=$((fails+1))
   else
     printf '%-28s ok    %s\n' "$s" "${res:-(no count)}"
@@ -141,6 +158,8 @@ for e in "${extra[@]}"; do
   out=$(python3 $e 2>&1); rc=$?
   res=$(printf '%s' "$out" | grep -oE '[0-9]+/[0-9]+ passed' | tail -1)
   if [ $rc -ne 0 ]; then printf '%-28s FAIL  %s\n' "${e%% *}" "$res"; fails=$((fails+1))
+  elif count_mismatch "$res"; then
+    printf '%-28s FAIL  %s  (exit 0 but checks failed)\n' "${e%% *}" "$res"; fails=$((fails+1))
   else printf '%-28s ok    %s\n' "${e%% *}" "$res"; fi
 done
 

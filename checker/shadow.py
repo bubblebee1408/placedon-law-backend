@@ -337,6 +337,8 @@ def _test() -> None:
     check(len(opened) >= 1, "each shadow case opens and closes a session")
 
     print(f"\n{ok}/{ok + fail} passed")
+    if fail:
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

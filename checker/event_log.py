@@ -270,6 +270,14 @@ def _test() -> None:
     check(other.id != signal.id, "...and a different date is a different event")
 
     # ── the golden fixture: the s.2(85) supersession, on the record we hold ──
+    # Both halves are pinned with the stub context managers rather than read off
+    # disk. These checks previously asserted the unacquired behaviour against the
+    # LIVE acquisition state, and silently became wrong the day a human attested
+    # G.S.R. 880(E) -- asserting a world that had changed under them. A test that
+    # means "while unacquired" must SAY so, not hope.
+    from checker.prescribed_thresholds import all_acquired as _all_acq
+    from checker.prescribed_thresholds import none_acquired as _none_acq
+
     evs = events_for(date(2026, 9, 9), since=date(2025, 1, 1))
     moved = [e for e in evs if e.subtype == THRESHOLD_MOVED]
     check(bool(moved), f"a threshold that moved in the window produces an event ({len(moved)})")
@@ -277,10 +285,24 @@ def _test() -> None:
           "...and it is G.S.R. 880(E), the instrument that moved them")
     check(all(e.at == date(2025, 12, 1) for e in moved),
           "...dated to the instrument's own commencement, not to the query")
-    check(all(e.output_class == SIGNAL and e.verified_by is None for e in moved),
-          "...and while unacquired it is a SIGNAL, not a fact")
-    check(all("REFUSED" in (e.consequence or "") for e in moved),
-          "...whose consequence says the amount is refused, not that it changed to a figure")
+
+    with _none_acq():
+        unacq_moved = [e for e in events_for(date(2026, 9, 9), since=date(2025, 1, 1))
+                       if e.subtype == THRESHOLD_MOVED]
+        check(bool(unacq_moved) and all(e.output_class == SIGNAL and e.verified_by is None
+                                        for e in unacq_moved),
+              "while UNACQUIRED the moved threshold is a SIGNAL, not a fact")
+        check(all("REFUSED" in (e.consequence or "") for e in unacq_moved),
+              "...whose consequence says the amount is refused, not that it changed to a figure")
+
+    with _all_acq():
+        acq_moved = [e for e in events_for(date(2026, 9, 9), since=date(2025, 1, 1))
+                     if e.subtype == THRESHOLD_MOVED]
+        check(bool(acq_moved) and all(e.output_class == VERIFIED_FACT and e.verified_by
+                                      for e in acq_moved),
+              "...and once ATTESTED the same event becomes a VERIFIED_FACT with a verifier")
+        check(all("REFUSED" not in (e.consequence or "") for e in acq_moved),
+              "...whose consequence now states the amount rather than refusing it")
 
     # every event names a source: the rule with no exception
     check(all(e.source.instrument.strip() for e in evs),
@@ -293,11 +315,21 @@ def _test() -> None:
           "the day before it commenced, 880(E) produces no threshold event")
 
     # ── an obligation resting on unacquired law is surfaced, not hidden ──────
-    unacq = [e for e in evs if e.subtype == BASIS_UNACQUIRED]
-    check(any(e.obligation_id == "CA13-S2-85-SMALL" for e in unacq),
-          "the small-company duty is surfaced as resting on unacquired law")
-    check(all(e.output_class == SIGNAL for e in unacq),
-          "...as a SIGNAL, because no one has verified it")
+    # Pinned, for the same reason as above: whether s.2(85) currently rests on
+    # unacquired law is a fact about the disk, not about this behaviour.
+    with _none_acq():
+        unacq = [e for e in events_for(date(2026, 9, 9), since=date(2025, 1, 1))
+                 if e.subtype == BASIS_UNACQUIRED]
+        check(any(e.obligation_id == "CA13-S2-85-SMALL" for e in unacq),
+              "the small-company duty is surfaced as resting on unacquired law")
+        check(all(e.output_class == SIGNAL for e in unacq),
+              "...as a SIGNAL, because no one has verified it")
+    with _all_acq():
+        still = [e for e in events_for(date(2026, 9, 9), since=date(2025, 1, 1))
+                 if e.subtype == BASIS_UNACQUIRED
+                 and e.obligation_id == "CA13-S2-85-SMALL"]
+        check(not still,
+              "...and once attested it no longer reports its basis as unacquired")
 
     # ── T0's guarantee, asserted here too: no holes in our own map ───────────
     check(not [e for e in evs if e.subtype == BASIS_UNDECLARED],
@@ -340,6 +372,8 @@ def _test() -> None:
     check(True, "no unverified event claims a current basis, across the 880(E) boundary")
 
     print(f"\n{ok}/{ok + fail} passed")
+    if fail:
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":
