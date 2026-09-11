@@ -121,7 +121,7 @@ timeline UI (design work, other repo).
   *Check: the docstring no longer claims dense beats BM25; a test asserts
   `mcnemar(11, 8)` ≈ 0.648 so the correction is anchored to arithmetic, not taste.*
 
-- [ ] **T4 — `checker/release.py`: ONE release gate, then migrate all six sites.**
+- [x] **T4 — `checker/release.py`: ONE release gate, then migrate all six sites.**
   `may_release(*, evidence_state, licence, output_class, ring) -> Release`, where
   `Release` is frozen `(allowed: bool, reason: str)` — never a bare bool, because
   the reason is what the caller must show when it refuses.

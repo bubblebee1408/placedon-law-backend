@@ -41,6 +41,7 @@ from contextlib import contextmanager as _contextmanager
 from dataclasses import dataclass
 from datetime import date, timedelta
 
+from checker import release
 from checker.company_profile import Money
 from checker.provenance import CORROBORATED, SERVABLE, UNRESOLVED, VERIFIED
 
@@ -63,7 +64,10 @@ class Threshold:
 
     @property
     def servable(self) -> bool:
-        return self.state in SERVABLE
+        # Routed through the single gate. The property stays because callers read
+        # it; what changed is that the DECISION now lives in exactly one place.
+        return release.may_release(evidence_state=self.state,
+                                   what=self.key).allowed
 
     def covers(self, as_of: date) -> bool:
         if as_of < self.effective_from:
