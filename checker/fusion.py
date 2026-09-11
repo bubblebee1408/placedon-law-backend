@@ -1,10 +1,22 @@
 """Reciprocal Rank Fusion over BM25 and dense retrieval — M3.
 
 M2 measured the two retrievers on the frozen 70-case cross-section eval and found
-BM25 at p@1 0.71 / recall@5 0.91 and dense (MiniLM-L6) at 0.73 / 0.96 — but the
-finding that matters is that their error sets are almost disjoint: 11 cases only
-dense gets, 8 cases only BM25 gets, 9 neither gets. Two retrievers that fail on
-different queries are the textbook precondition for rank fusion.
+BM25 at p@1 0.71 / recall@5 0.91 and dense (MiniLM-L6) at 0.73 / 0.96.
+
+**Those two p@1 figures are not distinguishable at this n, and printing them side
+by side invites an ordering the sample cannot support.** The 11/8 discordant split
+below is exactly a McNemar test: `interval.mcnemar(11, 8)` = **0.648**, and the
+Wilson intervals overlap almost entirely ([0.60, 0.81] for BM25 at 50/70,
+[0.61, 0.82] for dense at 51/70). So "dense is the better retriever" is not a
+finding here. It may be true; 70 cases cannot say. Recorded explicitly so that
+nobody re-derives the comparative from the same two numbers later.
+
+The finding that matters never depended on that ordering: their error sets are
+almost disjoint — 11 cases only dense gets, 8 cases only BM25 gets, 9 neither
+gets. Two retrievers that fail on *different* queries are the textbook
+precondition for rank fusion, and that argument is structural rather than
+statistical. Fusion is justified by the disjointness, not by either retriever
+winning.
 
 ## Why RRF, and why it fuses ranks and never scores
 

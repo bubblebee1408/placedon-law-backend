@@ -115,7 +115,7 @@ timeline UI (design work, other repo).
   *Mutation: substitute the Wald form → `(0.854, 1.046)`, which both misses the
   value and exceeds 1.0. Red.*
 
-- [ ] **T3 — Correct `fusion.py`'s docstring (D-2), using T2's McNemar.**
+- [x] **T3 — Correct `fusion.py`'s docstring (D-2), using T2's McNemar.**
   One sentence. Keep the near-disjoint-error-sets argument; remove the unestablished
   comparative. Record the p-value in the docstring so nobody re-asserts it.
   *Check: the docstring no longer claims dense beats BM25; a test asserts
