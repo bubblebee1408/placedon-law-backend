@@ -13,6 +13,7 @@ suites=(
   checker/amendment.py
   checker/as_of.py
   checker/anthropic_model.py
+  checker/gemini_model.py
   checker/bundles.py
   checker/reasoning.py
   checker/shadow.py
