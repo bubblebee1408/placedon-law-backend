@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Placedon — currency check</title>
+<script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+<style>
+  :root{--ink:#0A0A0A;--parch:#F5F3EF;--slate:#475569;--caution:#8B4513;--rule:#D8D4CC}
+  *{box-sizing:border-box}
+  body{margin:0;font:13px/1.5 -apple-system,"Segoe UI",Helvetica,Arial,sans-serif;
+       color:var(--ink);background:var(--parch)}
+  header{padding:14px 16px 10px;border-bottom:1px solid var(--rule)}
+  h1{margin:0;font-size:14px;letter-spacing:.02em}
+  .sub{color:var(--slate);font-size:11px;margin-top:3px}
+  main{padding:12px 16px 24px}
+  button{font:inherit;padding:8px 14px;border:1px solid var(--ink);background:var(--ink);
+         color:#fff;border-radius:3px;cursor:pointer}
+  button:disabled{opacity:.45;cursor:default}
+  .meta{font-size:11px;color:var(--slate);margin:10px 0}
+  section{margin-top:18px}
+  h2{font-size:11px;text-transform:uppercase;letter-spacing:.08em;margin:0 0 6px;
+     color:var(--slate)}
+  .row{border-left:3px solid var(--rule);padding:8px 10px;margin-bottom:8px;background:#fff}
+  .row.superseded{border-left-color:var(--caution)}
+  .row.cannot{border-left-color:var(--slate)}
+  .row.ok{border-left-color:#7a9a7a}
+  .duty{font-weight:600}
+  .prov{font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--slate)}
+  .detail{margin-top:4px;font-size:12px}
+  .ref{font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--caution)}
+  .empty{color:var(--slate);font-size:12px;font-style:italic}
+  .err{border-left:3px solid var(--caution);padding:8px 10px;background:#fff;font-size:12px}
+  details summary{cursor:pointer;font-size:11px;color:var(--slate)}
+</style>
+</head>
+<body>
+<header>
+  <h1>Currency check</h1>
+  <div class="sub">Is the law this document relies on still the law?</div>
+</header>
+<main>
+  <button id="run" disabled>Check this document</button>
+  <div class="meta" id="meta">Loading Office…</div>
+  <div id="out"></div>
+</main>
+<script src="taskpane.js"></script>
+</body>
+</html>

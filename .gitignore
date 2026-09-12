@@ -66,3 +66,4 @@ corpus/benchmark/.reviewer_identities.json
 corpus/trust/crl/
 corpus/.dense_cache.pkl
 corpus/.chunk_dense_cache.pkl
+addin/localhost.pem
