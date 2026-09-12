@@ -1,8 +1,22 @@
-"""Is our AMENDMENT record current? -- the currency map, turned on ourselves.
+"""Is the ACT's amendment ledger current? -- the currency map, turned on ourselves.
+
+## Read the scope before the verdict
+
+This module measures ONE thing: the footnote ledger of the Companies Act 2013 as
+we hold it. It does NOT measure delegated legislation. Rules, and the G.S.R./S.O.
+instruments that amend them, are tracked by `staleness.py` against the S-00x rule
+register, and by `prescribed_thresholds` for the amounts they prescribe.
+
+That distinction is load-bearing, because the two move at different speeds and
+have done exactly that. The Act's ledger has not moved since 2023-10-30, while
+several sets of Rules were amended through 2025 -- including G.S.R. 880(E), which
+this repo holds and a human attested. A reader who took STALE to mean "we are
+behind on everything" would have it backwards: the Act specifically is the thing
+that has not moved. So the finding carries a `scope` and the note says so.
 
 `currency.py` asks whether the law behind an obligation is still the law. This
-module asks the question one layer up: **is the amendment ledger we hold complete
-enough to answer that at all?**
+module asks the question one layer up: **is the Act's amendment ledger we hold
+complete enough to answer that at all?**
 
 The distinction is the whole reason this file exists. `as_of.py` returns fidelity
 EXACT when every span it knows about is accounted for -- but EXACT means "every
@@ -50,6 +64,35 @@ _SEVERITY = {s: _LATTICE.rank(s) for s in STATES}
 GAP_AGEING_DAYS = 365
 GAP_STALE_YEARS = 2
 
+# What this module measures. Stated on the finding so a verdict cannot be read
+# wider than the evidence behind it.
+SCOPE = "companies_act_2013_amendment_ledger"
+
+# ── UNVERIFIED leads, recorded so they are not re-researched ──────────────────
+# Gathered 2026-09-11 from SECONDARY reporting (news, commentary, aggregators).
+# None has been read off an official document by us. This is a search hint for
+# whoever retrieves the files, and a thing to CHECK against the Gazette -- never
+# a thing to assert. Same status and same reason as provenance.PRINCIPAL_RULES_LEAD.
+#
+# Their existence is also the evidence for the scope note above: the Act stood
+# still through 2025 while its Rules did not.
+AMENDMENT_LEADS = (
+    ("Corporate Laws (Amendment) Bill, 2026", "Bill No. 85 of 2026",
+     "107 clauses, amends the Companies Act 2013 AND the LLP Act 2008. Introduced "
+     "23-03-2026; PRS confirms it was still before a 31-member Joint Committee in "
+     "July 2026. NOT LAW, so it is not an amendment and must not enter the ledger. "
+     "Recorded because it is the largest scheduled disruption to this corpus, and "
+     "nothing in the engine watches pending legislation -- see staleness.py, "
+     "'Discovery of a successor is human.'"),
+    ("Companies (Accounts) Amendment Rules, 2025", "reported as G.S.R. 317(E), 19-05-2025",
+     "delegated legislation, not an Act amendment; belongs to the rule register"),
+    ("Companies (Accounts) Second Amendment Rules, 2025", "reported dated 30-05-2025",
+     "delegated legislation; belongs to the rule register"),
+    ("Companies (Compromises, Arrangements and Amalgamations) Amendment Rules, 2025",
+     "reported dated 04-09-2025",
+     "reported to widen fast-track mergers under s.233; delegated legislation"),
+)
+
 
 @dataclass(frozen=True)
 class CorpusFinding:
@@ -61,6 +104,7 @@ class CorpusFinding:
     amendments_parsed: int
     implausible: int
     note: str
+    scope: str = SCOPE
 
     @property
     def needs_action(self) -> bool:
@@ -98,7 +142,8 @@ def report(as_of: date) -> CorpusFinding:
             STALE, None, None, sections, amendments, implausible,
             "no amendment with a usable effective date is held at all. Acquire the "
             "Act's amendment history from India Code or the Gazette before relying "
-            "on any point-in-time reconstruction.")
+            "on any point-in-time reconstruction. (Scope: the Act's own ledger. "
+            "Rules are tracked by staleness.py, not here.)")
 
     gap = (as_of - newest).days
     if gap < 0:
@@ -120,7 +165,11 @@ def report(as_of: date) -> CorpusFinding:
         note += ("Either the Act has not moved since, or our footnote ledger is "
                  "stale -- this module cannot tell which, and must not guess. "
                  "Acquire the amendment history from India Code or the Gazette "
-                 "and register it; do not type it in.")
+                 "and register it; do not type it in. NOTE THE SCOPE: this counts "
+                 "amendments to the ACT only. Rules moved through 2025 and are "
+                 "tracked by staleness.py against the rule register, so a stale "
+                 "Act ledger does not mean we are behind on delegated legislation "
+                 "-- see AMENDMENT_LEADS.")
     if implausible:
         note += (f" {implausible} held record(s) carry a w.e.f. date outside "
                  f"{PLAUSIBLE_YEARS} and are preserved, flagged, and excluded from "
@@ -157,6 +206,24 @@ def _test() -> None:
           f"...and the gap is stated in days, not implied ({f.gap_days})")
     check("acquire" in f.note.lower() or "gazette" in f.note.lower(),
           "the note names what a person must do, rather than only complaining")
+
+    # ── the SCOPE is stated, so a verdict cannot be read wider than its evidence
+    check(f.scope == SCOPE, f"the finding declares what it measured ({f.scope})")
+    check("ACT only" in f.note or "Act's own ledger" in f.note,
+          "...and the note says the Rules are tracked elsewhere")
+    check("staleness" in f.note,
+          "...naming the module that does track them, not just disclaiming")
+
+    # ── leads are recorded as leads, and never as facts ──────────────────────
+    check(len(AMENDMENT_LEADS) >= 4, f"the 2026 research is recorded ({len(AMENDMENT_LEADS)} leads)")
+    bill = [l for l in AMENDMENT_LEADS if "Bill" in l[0]][0]
+    check("NOT LAW" in bill[2],
+          "the pending 107-clause Bill is recorded as NOT LAW, so it cannot enter the ledger")
+    check(all("reported" in l[1].lower() or "Bill No" in l[1] for l in AMENDMENT_LEADS),
+          "...and every lead is marked as reported, never as read off an instrument")
+    held = {i for _, i, _ in AMENDMENT_LEADS}
+    check(not any("880(E)" in i for i in held),
+          "an instrument we already hold and attested is not carried as an open lead")
 
     # The implausible record (year 5017) is a KNOWN source defect. It must be
     # counted and surfaced, never silently dropped -- CLAUDE.md: never repair a
