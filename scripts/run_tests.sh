@@ -78,6 +78,7 @@ suites=(
   checker/currency.py
   checker/corpus_currency.py
   checker/lattice.py
+  checker/rings.py
   checker/interval.py
   checker/release.py
   checker/licence.py

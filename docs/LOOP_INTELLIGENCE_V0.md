@@ -51,7 +51,7 @@ Recorded so the exclusions are visible rather than quietly skipped:
 
 ## 1. Queue
 
-- [ ] **U0 — `checker/rings.py`: the firewall, enforced by AST.**
+- [x] **U0 — `checker/rings.py`: the firewall, enforced by AST.**
   Declare every module's ring (0 legal core, 1 bookmark, 2 observation, 3 inference).
   `_test()` walks each Ring 0 module's AST and fails on an import from a higher
   ring. **Install it now, while there is nothing to violate it** — a firewall added
