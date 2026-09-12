@@ -4,7 +4,7 @@
 repository.** Those were deleted rather than left to rot; the tombstone list is in
 [PLAN_00_INDEX](PLAN_00_INDEX.md). If a feature is not here, it is not planned.
 
-Ten features, three phases. Each one names what it does, what exists today, and
+Eleven features, three phases. Each one names what it does, what exists today, and
 what is missing — because "planned" and "built" are different words and this
 repository does not blur them.
 
@@ -134,6 +134,27 @@ Every value in a draft is typed by where it came from: `TEMPLATE_TEXT` ·
 - **NON_GOAL boundary:** a free-text document generator is barred. We win on
   provenance, not prose.
 
+
+### F11 · MCA Master Data Strip
+Reconciles the document being drafted against the company's registry record —
+capital headroom per class, encumbrance warranties against the index of charges,
+and the status of a signatory's DIN — and states, for every figure, how far back a
+lawful unfiled event could reach and in which direction.
+
+- **Status:** **ENGINE BUILT, DATA NOT WIRED.** `checker/mca_snapshot.py` (blindness,
+  8 windows quoted from the corpus), `checker/mca_reconcile.py` (three rules, and a
+  constructor that refuses legal conclusions), `checker/buyer_sim.py` (ten buyer
+  questions, `OVERCLAIMED: 0`). Analysis and simulation results:
+  [PLAN_09](PLAN_09_MCA_MASTER_DATA_STRIP.md).
+- **This does not reverse the retirement of the Verified Company Card below.** That
+  row said the *data* sits behind a contract, and it still does —
+  `corporate_data.LicensedAggregatorProvider` refuses, and there is no scraping path.
+  What changed is that the engine, the refusals and the buyer simulation cost nothing
+  to build and are now green, so the day a contract exists the feature is a wiring job.
+- **Missing:** a contracted aggregator; multi-CIN resolution for deal documents (the
+  one `GAP` the simulation produced); the two delegated rules that would bound
+  paid-up capital and DIN status.
+
 ---
 
 ## Cut, and why
@@ -151,11 +172,18 @@ Every value in a draft is typed by where it came from: `TEMPLATE_TEXT` ·
 
 ## The honest summary
 
-**Seven of ten have a built engine.** What is missing is mostly *surface* — UI,
+**Eight of eleven have a built engine.** What is missing is mostly *surface* — UI,
 endpoints, model wiring — not core logic.
 
-Two real exceptions: **F8 is genuinely unbuilt and genuinely risky**, and **F1 —
-the one to ship first — is specced but not started.**
+**F1 has shipped its surface**: the Word add-in exists, loads, and answers through
+a real check (`addin/`, commit `a04a60d`). This summary said "specced but not
+started" for a day after it was built — the second time this file has lagged the
+code, which is why the status line of every feature above now names a file or a
+commit rather than a mood.
+
+Two real exceptions remain: **F8 is genuinely unbuilt and genuinely risky**, and
+**F11's engine is green but has no data behind it** and will not until an
+aggregator contract exists.
 
 And one thing gates the demo quality of F1, F2 and F3 at once: **four obligations
 refuse** because their delegated rules are unheld. Clearing those takes the matrix

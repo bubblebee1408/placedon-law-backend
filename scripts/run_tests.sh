@@ -72,6 +72,9 @@ suites=(
   checker/entity_graph.py
   checker/corporate_data.py
   checker/mca_aggregator.py
+  checker/mca_snapshot.py
+  checker/mca_reconcile.py
+  checker/buyer_sim.py
   checker/s185.py
   checker/s188.py
   checker/s184.py
