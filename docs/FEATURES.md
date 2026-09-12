@@ -151,9 +151,10 @@ lawful unfiled event could reach and in which direction.
   `corporate_data.LicensedAggregatorProvider` refuses, and there is no scraping path.
   What changed is that the engine, the refusals and the buyer simulation cost nothing
   to build and are now green, so the day a contract exists the feature is a wiring job.
-- **Missing:** a contracted aggregator; multi-CIN resolution for deal documents (the
-  one `GAP` the simulation produced); the two delegated rules that would bound
-  paid-up capital and DIN status.
+- **Missing:** a contracted aggregator; the two delegated rules that would bound
+  paid-up capital and DIN status. The simulation's one `GAP` — which company on a
+  four-party SPA the bar is about — was closed by `checker/party_resolution.py`:
+  a CIN is never a party, a role is, and each rule declares the role it needs.
 
 ---
 

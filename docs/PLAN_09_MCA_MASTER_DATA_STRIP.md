@@ -1,7 +1,7 @@
 # PLAN 09 — The MCA Master Data Strip: analysis, simulation, and what it changed
 
 **Date:** 2026-09-12 · **Status:** engine built and green; live data not wired (by design)
-**Code:** `checker/mca_snapshot.py`, `checker/mca_reconcile.py`, `checker/buyer_sim.py`
+**Code:** `checker/mca_snapshot.py`, `checker/mca_reconcile.py`, `checker/party_resolution.py`, `checker/buyer_sim.py`
 **Run it:** `PYTHONPATH=$PWD python3 checker/buyer_sim.py`
 
 ---
@@ -112,13 +112,13 @@ Only `OVERCLAIMED` must be zero; a `GAP` is a roadmap item.
   Q3  M&A partner        ANSWERED           YES        YES
   Q4  General counsel    ANSWERED           no         YES
   Q5  In-house legal     ANSWERED           no         -
-  Q6  M&A partner        GAP                no         -
+  Q6  M&A partner        ANSWERED           no         -
   Q7  General counsel    ANSWERED           no         YES
   Q8  In-house legal     REFUSED_CORRECTLY  no         YES
   Q9  M&A partner        ANSWERED           no         YES
   Q10 General counsel    ANSWERED           no         YES
 
-  {'REFUSED_CORRECTLY': 3, 'ANSWERED': 6, 'GAP': 1}
+  {'REFUSED_CORRECTLY': 3, 'ANSWERED': 7}
   spec cells stating a legal conclusion:        2/10
   spec cells rendering a blind field as settled: 8/8
 ```
@@ -137,10 +137,23 @@ rule reaches `{CONFLICTS, DOCUMENT_SILENT, REGISTRY_SILENT, UNRESOLVABLE}` and *
 relied on. That is a property of the code, not a promise in a contract — and if someone
 later adds an `AGREES` path, this test fails.
 
-**Q6 is the honest gap.** A buy-side SPA names four CINs — target, seller, acquirer, holdco.
-The spec pins one "Active CIN" to the bar and nothing in the code decides which party the
-document is about. Reconciling the target's capital against the acquirer's register would be
-a confident wrong answer. No code was written to paper over it.
+**Q6 was the honest gap, and it is now closed.** A buy-side SPA names four CINs — target,
+seller, acquirer, holdco — and the spec pins one "Active CIN" to the bar. The correction in
+`checker/party_resolution.py` is that *pinning a CIN is the wrong question*: *a CIN is never
+a party, a role is*, and each rule needs a different role. Capital headroom runs against the
+**issuer**. The encumbrance warranty runs against the **target**. DIN reliance runs against
+the **executing entity**. On the same four-party document that is two different companies
+and one refusal — because nothing in it says who is executing, and the rule names the missing
+role rather than reaching for whichever CIN came first.
+
+Three further refusals fall out of the same file:
+
+- **A role with no span is `UNGROUNDED`.** `document_extract` already refuses a field the
+  document does not support; identity gets the same discipline.
+- **Two evidenced targets is `AMBIGUOUS`**, never first-wins.
+- **A scanned CIN is reported, never repaired.** `U722OOKA2O21PTC145892` — zeros read as the
+  letter O — is recognised as scanner damage, the correct candidate is *named*, and the raw
+  value is returned unusable. Repairing it would be a lookup against a different company.
 
 ---
 
@@ -161,6 +174,11 @@ It was run **before** any UI existed, and it changed the engine four times:
 4. **Capital headroom stopped returning `AGREES`.** Against an unbounded-blind issued
    figure, "it fits" is a claim we cannot make. This is the rule refusing to be usefully
    dishonest, and it converts an acquisition task into a measurable upgrade.
+5. **Then it produced a module.** Q6 was left as a `GAP` rather than papered over, and
+   `party_resolution.py` was written to answer it — 23 checks, and the harness moved Q6 to
+   `ANSWERED` on its own. That is the loop this harness exists for: the simulation names the
+   hole, the hole gets code, the harness proves it rather than a note in a document claiming
+   it was fixed.
 
 ---
 
@@ -202,7 +220,11 @@ Three concrete changes this forces:
   direction of error stated (`mca_snapshot.assess`).
 - Run the three reconciliation rules — capital headroom per class, encumbrance warranty,
   DIN reliance — and produce findings that cannot contain a legal conclusion.
-- Run the ten-question buyer simulation end to end and show `OVERCLAIMED: 0`.
+- Resolve which company each rule runs against on a multi-party deal document, and refuse
+  when the document does not say (`party_resolution.subjects`).
+- Check a CIN's structure, flag scanner damage without repairing it, and catch a CIN whose
+  incorporation year post-dates the document.
+- Run the ten-question buyer simulation end to end and show `OVERCLAIMED: 0`, no `GAP`.
 - Demonstrate all of it inside Word through the add-in (`addin/`), against a real document
   with a real document date.
 
@@ -213,14 +235,13 @@ Three concrete changes this forces:
 | A contracted MCA aggregator | Live snapshots. The provider still refuses; there is no scraping path. | A commercial agreement — out of reach at ₹2,000 |
 | Prospectus and Allotment Rules 2014, r.12 | A bound on paid-up capital; turns Q7/Q4 from `UNRESOLVABLE` into `AGREES` | Acquisition + human attestation |
 | Directors Rules 2014, r.12A | Any statement about DIN deactivation beyond "the register says so" | Acquisition + human attestation |
-| Multi-CIN resolution (Q6) | Any use on an SPA rather than a single-company document | Design, then code — the first roadmap item |
 | ~20 real documents | Extraction accuracy on Indian capital clauses; the whole HIGH-tier claim | Legwork, not money |
 
-**The order I would do them in:** Q6 first, because it is free and it is the difference
-between "works on a board resolution" and "works on a deal". Then the two rules, because
-each one converts a refusal into an answer and that is a demonstration a buyer understands.
-The aggregator last, because until a lawyer has reacted to the refusals, live data is an
-expensive way to be wrong faster.
+**Q6 is done** — `party_resolution.py`, the difference between "works on a board
+resolution" and "works on a deal". Of what is left, the two delegated rules come next,
+because each converts a refusal into an answer and that is a demonstration a buyer
+understands. The aggregator comes last: until a lawyer has reacted to the refusals, live
+data is an expensive way to be wrong faster.
 
 ---
 
