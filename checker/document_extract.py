@@ -365,6 +365,8 @@ def _test() -> None:
     check("auditor_name" not in g5.to_payload(), "...and never reaches the payload")
 
     print(f"\n{ok}/{ok + fail} passed")
+    if fail:
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

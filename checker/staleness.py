@@ -32,11 +32,13 @@ from datetime import date
 from pathlib import Path
 
 from checker import currency
+from checker.lattice import Lattice
 
 # ── acquisition states of an external instrument ──────────────────────────────
 HELD_ATTESTED = "HELD_ATTESTED"        # artifact held, both human checks recorded
 HELD_UNREVIEWED = "HELD_UNREVIEWED"    # artifact held, nobody has reviewed it
-CHAIN_UNRESOLVED = "CHAIN_UNRESOLVED"  # principal instrument held; later amendments are not
+CHAIN_UNRESOLVED = "CHAIN_UNRESOLVED"  # principal held; later amendments are not
+CHAIN_TRACED = "CHAIN_TRACED"          # whole chain held and its effects read; awaiting a reader
 STAGED = "STAGED"                      # registered for review, refuses until attested
 NOT_HELD = "NOT_HELD"                  # we do not have it at all
 
@@ -48,7 +50,9 @@ REFUSED_DISCLOSED = "REFUSED_DISCLOSED"    # not usable, and we say so on the ro
 CLAIMED_CURRENT_UNHELD = "CLAIMED_CURRENT_UNHELD"   # currency says CURRENT, rule unusable
 SERVED_UNWATCHED = "SERVED_UNWATCHED"      # we serve from it and no successor could land
 
-_SEVERITY = {OK: 0, REFUSED_DISCLOSED: 1, CLAIMED_CURRENT_UNHELD: 2, SERVED_UNWATCHED: 3}
+_LATTICE = Lattice("staleness",
+                   (OK, REFUSED_DISCLOSED, CLAIMED_CURRENT_UNHELD, SERVED_UNWATCHED))
+_SEVERITY = {s: _LATTICE.rank(s) for s in _LATTICE.states}
 NEEDS_ACTION = (CLAIMED_CURRENT_UNHELD, SERVED_UNWATCHED)
 
 
@@ -96,7 +100,9 @@ def _acquisition_state(dep: RuleDependency) -> str:
         # Attested or not, the principal Rules alone cannot serve s.203 while five
         # later amendments are unacquired. Any one of them may have moved Rule 8's
         # threshold -- which is exactly how a superseded figure reaches a user.
-        return HELD_ATTESTED if is_servable(rec) else CHAIN_UNRESOLVED
+        if is_servable(rec):
+            return HELD_ATTESTED
+        return CHAIN_TRACED if rec.get("chain_traced") else CHAIN_UNRESOLVED
     if dep.rule_id == "S-003":
         from scripts.register_gsr880e import registration, is_attested
         rec = registration()
@@ -151,11 +157,11 @@ DEPENDENCIES: tuple[RuleDependency, ...] = (
         "Personnel) Rules, 2014 — Rule 8, the prescribed KMP class",
         ("CA13-S203-KMP",), "corpus/rules/kmp_rules_2014.txt",
         supersession_watched=True,
-        note="the PRINCIPAL Rules are held (Rule 8: paid-up capital of ten crore "
-             "rupees or more). Five later amendments — 2014, 2016, 2018, 2020 and "
-             "G.S.R. 41(E) of 2023 — are known and unacquired, and any one may have "
-             "moved that threshold, so the chain is unresolved and s.203 stays "
-             "refused"),
+        note="the principal Rules and all five amendments are held, and the chain "
+             "is traced: Rule 8 was NEVER amended, so its ten-crore threshold stands "
+             "as enacted. Rule 8A was inserted in 2014 and substituted by G.S.R. "
+             "13(E) of 2020. s.203 still refuses because a reader must confirm the "
+             "resulting text and that rule 8A belongs to the s.203 class"),
 )
 
 
@@ -274,15 +280,25 @@ def _test() -> None:
           f"nothing we serve from is unwatched ({[f.rule_id for f in served]})")
 
     # ── the states are derived from disk, not asserted ────────────────────────
+    # The point of this block is that stubbing does not LEAK -- whatever the real
+    # state is, it must come back. It used to assert the real state equals
+    # NOT_HELD, which quietly became false the day a human attested G.S.R. 880(E),
+    # and the suite could not see it because this module had no SystemExit. So the
+    # real state is now captured from disk and compared to itself.
     import scripts.register_gsr880e as r880
+    before = [f for f in assess(today) if f.rule_id == "S-003"][0].acquisition
     with r880.stub_registration(r880.attested_stub()):
         f880 = [f for f in assess(today) if f.rule_id == "S-003"][0]
         check(f880.acquisition == HELD_ATTESTED,
               f"attesting 880(E) changes its assessed state ({f880.acquisition})")
         check(f880.exposure == OK, f"...and clears its exposure ({f880.exposure})")
-    f880_now = [f for f in assess(today) if f.rule_id == "S-003"][0]
-    check(f880_now.acquisition == NOT_HELD,
-          f"...and the real state is restored afterwards ({f880_now.acquisition})")
+    with r880.stub_registration(None):
+        f_none = [f for f in assess(today) if f.rule_id == "S-003"][0]
+        check(f_none.acquisition == NOT_HELD,
+              f"...and with no registration at all it is NOT_HELD ({f_none.acquisition})")
+    f880_now = [f for f in assess(today) if f.rule_id == "S-003"][0].acquisition
+    check(f880_now == before,
+          f"...and the real state is restored afterwards ({f880_now}, was {before})")
 
     # ── the honest limitation is stated, not implied ──────────────────────────
     check("Discovery of a successor is human." in report_text(today),
@@ -290,6 +306,8 @@ def _test() -> None:
     check(bool(unwatched()), "the unwatched list is populated, not empty by construction")
 
     print(f"\n{ok}/{ok + fail} passed")
+    if fail:
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":
