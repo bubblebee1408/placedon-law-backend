@@ -222,13 +222,18 @@ record(
         "BACKWARDS across two thousand documents on my server, or do I open each "
         "Word file one by one like a clerk?",
         ENGINEERING, UNANSWERED,
-        our_answer="One document at a time. She is right that this is the "
-                   "difference between a demo and a tool, and she said it more "
-                   "precisely than our own roadmap does.",
+        our_answer="Built. It runs an instrument backwards over a folder and "
+                   "returns a read-these queue. Two of my own defects surfaced "
+                   "only when it met real documents: it ignored the PDF extractor "
+                   "this repo already has (37 of 48 falsely unreadable), and it "
+                   "took the first date in the text -- which on a board-outcome "
+                   "letter is the quarter end, not the meeting date.",
         what_would_settle_it="folder-level sweep with an exportable affected-list",
-        action="build the backward sweep: given an instrument, list every document "
-               "in a folder that relied on the superseded position (this is F8, "
-               "and event_log.affected_by is already the query)"),
+        action="DONE 13-09-2026: checker/sweep.py + scripts/sweep_folder.py. On "
+               "the repo's own 48 real documents it narrows to 4 to read. It says "
+               "IN_WINDOW rather than 'affected', because sending her to read "
+               "sixty files that never mention capital is how a tool gets switched "
+               "off in week two"),
 
     # ---- EVIDENCE: a number only we can produce ---------------------------
     Objection(
