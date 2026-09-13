@@ -68,6 +68,13 @@ class ModelRefused(RuntimeError):
     """The model returned something that is not a parseable proposal."""
 
 
+# A key in .env must reach a fresh process; `export` at a prompt does not
+# survive the shell that ran it. checker.env never overwrites a real
+# environment variable, so deployment still wins.
+from checker.env import load as _load_env  # noqa: E402
+_load_env()
+
+
 def available() -> bool:
     if not os.getenv("ANTHROPIC_API_KEY"):
         return False

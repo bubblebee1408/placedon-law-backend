@@ -52,7 +52,14 @@ import urllib.request
 from checker.anthropic_model import ModelRefused, ModelUnavailable, _parse
 from checker.reasoning import Proposal
 
-FLASH = "gemini-2.5-flash"
+# Pinned to an exact version, never to `gemini-flash-latest`: an alias that moves
+# underneath a benchmark makes every recorded number unreproducible.
+#
+# 2.5-flash was the original pin and is now DEAD for new API keys -- the /models
+# endpoint still lists it, but generateContent returns 404 saying it "is no longer
+# available to new users". Measured 14-09-2026 on a fresh key. A capability list
+# that advertises what the call refuses is worth knowing about.
+FLASH = "gemini-3.6-flash"
 FLASH_LITE = "gemini-2.5-flash-lite"
 
 _ENDPOINT = ("https://generativelanguage.googleapis.com/v1beta/models/"
@@ -69,6 +76,13 @@ RATE_NOTE = ("Free tier is Flash and Flash-Lite only (Pro lost it April 2026). "
 from checker.anthropic_model import _EXTRACT_SYSTEM
 from checker.prompt_safety import (UNTRUSTED_CLAUSE, carries_clause,
                                    contains_untrusted_block, wrap_untrusted)
+
+
+# A key in .env must reach a fresh process; `export` at a prompt does not
+# survive the shell that ran it. checker.env never overwrites a real
+# environment variable, so deployment still wins.
+from checker.env import load as _load_env  # noqa: E402
+_load_env()
 
 
 def available() -> bool:
@@ -91,7 +105,22 @@ def _post(model: str, payload: dict, timeout: int = 90) -> dict:
         url, data=json.dumps(payload).encode("utf-8"),
         headers={"Content-Type": "application/json"}, method="POST")
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:
+        # A VERIFYING context, reused from robots.py rather than re-derived.
+        # python.org builds on macOS ship a CA path that does not exist until the
+        # bundled Install Certificates.command is run, so urllib fails where curl
+        # works. The tempting fix is ssl._create_unverified_context(); for a
+        # project whose whole claim is authenticated sources it is the wrong one,
+        # because an unverified endpoint cannot be distinguished from anyone able
+        # to answer on its behalf. robots.ssl_context() hunts for a real trust
+        # store and returns None when the machine has none -- and we fail closed
+        # on that rather than falling back.
+        from checker.robots import ssl_context
+        ctx = ssl_context()
+        if ctx is None:
+            raise ModelUnavailable(
+                "no CA trust store on this machine, so the API endpoint cannot be "
+                "authenticated. Refusing to call it unverified.")
+        with urllib.request.urlopen(req, timeout=timeout, context=ctx) as r:
             return json.loads(r.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
         body = e.read().decode("utf-8", "replace")[:300]
