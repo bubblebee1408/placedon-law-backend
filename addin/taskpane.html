@@ -32,6 +32,19 @@
   .empty{color:var(--slate);font-size:12px;font-style:italic}
   .err{border-left:3px solid var(--caution);padding:8px 10px;background:#fff;font-size:12px}
   details summary{cursor:pointer;font-size:11px;color:var(--slate)}
+  hr{border:0;border-top:1px solid var(--rule);margin:22px 0 0}
+  .chip{display:block;background:#fff;border:1px solid var(--rule);border-left:3px solid var(--slate);
+        padding:6px 9px;margin-bottom:6px}
+  .chip .k{font-size:11px;color:var(--slate);text-transform:uppercase;letter-spacing:.06em}
+  .chip .v{font-weight:600;font-size:14px}
+  .chip .b{font-size:11px;color:var(--caution);margin-top:3px;line-height:1.4}
+  .cin{font-family:ui-monospace,Menlo,monospace;font-size:11px}
+  .cin.bad{color:var(--caution)}
+  .who{font-size:12px;margin-bottom:4px}
+  .who .r{display:inline-block;min-width:112px;color:var(--slate);font-size:11px;
+          text-transform:uppercase;letter-spacing:.05em}
+  .head{font-weight:600;font-size:13px;margin-bottom:8px}
+  .head.blocking{color:var(--caution)}
 </style>
 </head>
 <body>
@@ -43,6 +56,20 @@
   <button id="run" disabled>Check this document</button>
   <div class="meta" id="meta">Loading Office…</div>
   <div id="out"></div>
+
+  <hr>
+  <section>
+    <h2>Register strip</h2>
+    <div class="sub" style="margin-bottom:10px">Who is this document about, and what
+      does the register say? No register is wired — paste one to reconcile against it.</div>
+    <button id="runstrip" disabled>Read the parties</button>
+    <details style="margin-top:10px">
+      <summary>Paste a register (optional)</summary>
+      <textarea id="reg" rows="6" style="width:100%;font:11px ui-monospace,Menlo,monospace;
+        margin-top:6px" placeholder='[{"cin":"U72200KA2021PTC145892","fetched_at":"2026-09-12","source":"portal, hand-entered","values":{"charges":[],"authorised_capital":50000000},"classes":[{"name":"equity","nominal_per_share":10,"authorised_rupees":40000000,"issued_rupees":32000000}]}]'></textarea>
+    </details>
+    <div id="stripout"></div>
+  </section>
 </main>
 <script src="taskpane.js"></script>
 </body>

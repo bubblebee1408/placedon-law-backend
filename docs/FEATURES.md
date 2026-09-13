@@ -141,10 +141,14 @@ capital headroom per class, encumbrance warranties against the index of charges,
 and the status of a signatory's DIN — and states, for every figure, how far back a
 lawful unfiled event could reach and in which direction.
 
-- **Status:** **ENGINE BUILT, DATA NOT WIRED.** `checker/mca_snapshot.py` (blindness,
+- **Status:** **BUILT AND SERVED, DATA NOT WIRED.** `POST /v1/mca-strip` is live
+  and tested, and the Word pane renders it (`addin/taskpane.html`, "Register strip").
+  Registers are supplied by the caller while no aggregator is contracted. `checker/mca_snapshot.py` (blindness,
   8 windows quoted from the corpus), `checker/mca_reconcile.py` (three rules, and a
-  constructor that refuses legal conclusions), `checker/buyer_sim.py` (ten buyer
-  questions, `OVERCLAIMED: 0`). Analysis and simulation results:
+  constructor that refuses legal conclusions), `checker/party_resolution.py` (roles,
+  and a CIN check that reports scanner damage without repairing it),
+  `checker/mca_strip.py` (a chip cannot be constructed without its blindness),
+  `checker/buyer_sim.py` (ten buyer questions, `OVERCLAIMED: 0`). Analysis and simulation results:
   [PLAN_09](PLAN_09_MCA_MASTER_DATA_STRIP.md).
 - **This does not reverse the retirement of the Verified Company Card below.** That
   row said the *data* sits behind a contract, and it still does —

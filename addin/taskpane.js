@@ -25,6 +25,7 @@ Office.onReady((info) => {
   }
   officeReady = true;
   document.getElementById("run").disabled = false;
+  document.getElementById("runstrip").disabled = false;
   meta.textContent = "Ready.";
 });
 
@@ -152,4 +153,147 @@ const truncate = (s, n) => { s = s || ""; return s.length > n ? s.slice(0, n) + 
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+/* ── the register strip ────────────────────────────────────────────────────
+ *
+ * Runs with no register at all, and that is the point: with no contracted
+ * aggregator the strip's first job is identity -- which companies this document
+ * names, whether their CINs survive the scanner, and which of them each rule
+ * would need. Everything else is a refusal that says what is missing.
+ *
+ * Roles are read from defined terms only. "the Company" is deliberately NOT
+ * mapped: in a share purchase agreement it is usually the target and in a board
+ * resolution it is the executing entity, and guessing between them is the
+ * failure this whole strip exists to avoid. An unmapped term becomes
+ * NAMED_PARTY, which no rule asks for -- so a deal document refuses and names
+ * the role it needs, while a single-company document resolves under a verdict
+ * that says the assumption was used.
+ */
+const STRIP_API = "https://localhost:3000/v1/mca-strip";
+
+/* Loose on the character classes a scanner confuses, so a damaged CIN is FOUND
+ * and reported rather than silently missed. The backend decides if it parses. */
+const CIN_RE = /\b[LU][0-9OISBZGQ]{5}[A-Z]{2}[0-9OISBZGQ]{4}[A-Z]{3}[0-9OISBZGQ]{6}\b/gi;
+
+const ROLE_TERMS = {
+  target: "TARGET", "target company": "TARGET",
+  purchaser: "ACQUIRER", acquirer: "ACQUIRER", buyer: "ACQUIRER", investor: "ACQUIRER",
+  seller: "SELLER", vendor: "SELLER", promoter: "SELLER",
+  issuer: "ISSUER", guarantor: "GUARANTOR"
+};
+
+document.getElementById("runstrip").addEventListener("click", runStrip);
+
+async function runStrip() {
+  const btn = document.getElementById("runstrip");
+  const out = document.getElementById("stripout");
+  btn.disabled = true; out.innerHTML = "";
+  try {
+    const doc = await readDocument();
+    const parties = findParties(doc.text);
+    if (!parties.length) {
+      out.innerHTML = `<div class="err">No CIN found in this document. The strip
+        identifies companies by CIN; without one there is nothing to reconcile
+        against a register.</div>`;
+      return;
+    }
+    let registers = [];
+    const raw = (document.getElementById("reg").value || "").trim();
+    if (raw) {
+      try { registers = JSON.parse(raw); }
+      catch (e) { throw new Error(`the pasted register is not valid JSON: ${e.message}`); }
+    }
+    const res = await fetch(STRIP_API, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        document_date: doc.documentDate || null,
+        parties, registers,
+        document: documentFacts(doc.text)
+      })
+    });
+    if (!res.ok) throw new Error(`backend ${res.status}: ${(await res.text()).slice(0, 200)}`);
+    renderStrip(await res.json());
+  } catch (e) {
+    out.innerHTML = `<div class="err"><b>Could not read the parties.</b>
+      ${escapeHtml(String(e.message || e))}<br><br>Nothing was changed in your document.</div>`;
+  } finally { btn.disabled = false; }
+}
+
+function findParties(text) {
+  const seen = new Set(); const out = [];
+  let m;
+  CIN_RE.lastIndex = 0;
+  while ((m = CIN_RE.exec(text)) !== null) {
+    const cin = m[0].toUpperCase();
+    // Look forward for the defined term this company is given.
+    const after = text.slice(m.index, m.index + 400);
+    const term = after.match(/\(\s*(?:the\s+)?["“'‘]?([A-Za-z][A-Za-z ]{2,24}?)["”'’]?\s*\)/);
+    const role = term ? ROLE_TERMS[term[1].trim().toLowerCase()] : null;
+    const key = cin + "|" + (role || "NAMED_PARTY");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ cin, role: role || "NAMED_PARTY",
+               span: (term ? term[0] : m[0]).slice(0, 120) });
+  }
+  return out;
+}
+
+/* Only what the draft itself says. Every value is optional; a field we cannot
+ * read becomes a refusal downstream, never a default. */
+function documentFacts(text) {
+  const f = {};
+  const allot = text.match(/allot(?:ment of)?\s+([\d,]{3,})\s+equity shares/i);
+  if (allot) { f.allotment_shares = parseInt(allot[1].replace(/,/g, ""), 10);
+               f.allotment_class = "equity"; }
+  if (/\b(?:free from|free of)\s+(?:all\s+)?(?:encumbrances?|charges?|liens?)/i.test(text)
+      || /\bunencumbered\b/i.test(text)) f.states_unencumbered = true;
+  const din = text.match(/\bDIN[:\s]*([0-9]{8})\b/i);
+  if (din) f.signatory_din = din[1];
+  return f;
+}
+
+function renderStrip(r) {
+  const out = document.getElementById("stripout");
+  const sev = (r.severity || "").toLowerCase();
+  let html = `<div class="head ${sev === "blocking" ? "blocking" : ""}">${escapeHtml(r.headline)}</div>`;
+
+  html += (r.cins || []).map(c => {
+    const bad = !c.usable;
+    return `<div class="who"><span class="cin ${bad ? "bad" : ""}">${escapeHtml(c.raw)}</span>
+      ${bad ? `<br><span class="b" style="color:var(--caution)">${escapeHtml(c.issues.join("; "))}</span>` : ""}</div>`;
+  }).join("");
+
+  html += `<h2 style="margin-top:14px">Who each check runs against</h2>`;
+  html += Object.entries(r.subjects || {}).map(([rule, s]) =>
+    `<div class="who"><span class="r">${escapeHtml(rule.replace(/_/g, " "))}</span>
+     ${s.cin ? `<span class="cin">${escapeHtml(s.cin)}</span> <span style="color:var(--slate)">(${escapeHtml(s.role || "")})</span>`
+              : `<span style="color:var(--caution)">${escapeHtml(s.verdict)}</span>`}</div>`
+  ).join("");
+
+  if ((r.chips || []).length) {
+    html += `<h2 style="margin-top:14px">Register</h2>` + r.chips.map(c =>
+      `<div class="chip"><div class="k">${escapeHtml(c.label)}</div>
+       <div class="v">${escapeHtml(c.value)}</div>
+       <div class="b">${escapeHtml(c.blindness)}</div></div>`).join("");
+  }
+
+  if ((r.findings || []).length) {
+    html += `<h2 style="margin-top:14px">Findings</h2>` + r.findings.map(f =>
+      `<div class="row ${f.severity === "BLOCKING" ? "superseded" : "cannot"}">
+       <div class="duty">${escapeHtml(f.headline)}</div>
+       <div class="detail">${escapeHtml(f.question)}</div>
+       ${f.citations.length ? `<div class="ref">${escapeHtml(f.citations.join(" · "))}</div>` : ""}
+       ${f.blindness ? `<div class="b" style="font-size:11px;color:var(--slate);margin-top:4px">${escapeHtml(f.blindness)}</div>` : ""}
+       </div>`).join("");
+  }
+
+  if ((r.not_run || []).length) {
+    html += `<h2 style="margin-top:14px">Not run (${r.not_run.length})</h2>` +
+      r.not_run.map(u => `<div class="row cannot"><div class="detail">${escapeHtml(u)}</div></div>`).join("");
+  }
+
+  html += `<div class="meta" style="margin-top:14px">Registry data is graded
+    <b>${escapeHtml(r.evidence_grade)}</b>. ${(r.does_not_establish || []).map(escapeHtml).join(" · ")}</div>`;
+  out.innerHTML = html;
 }

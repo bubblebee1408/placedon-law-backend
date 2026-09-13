@@ -153,7 +153,12 @@ ACQUIRER = "ACQUIRER"
 SELLER = "SELLER"
 GUARANTOR = "GUARANTOR"
 EXECUTING_ENTITY = "EXECUTING_ENTITY"
-ROLES = (ISSUER, TARGET, ACQUIRER, SELLER, GUARANTOR, EXECUTING_ENTITY)
+# A company the document names without giving it a role any rule needs. No rule
+# asks for it, so on a multi-party document it produces ROLE_ABSENT with the
+# candidates listed -- and on a single-company document it is the one party the
+# sole-party path resolves, under a verdict that says the assumption was used.
+NAMED_PARTY = "NAMED_PARTY"
+ROLES = (ISSUER, TARGET, ACQUIRER, SELLER, GUARANTOR, EXECUTING_ENTITY, NAMED_PARTY)
 
 # Which role each reconciliation rule needs. This table is the whole correction.
 RULE_NEEDS: dict[str, str] = {
@@ -360,6 +365,18 @@ def _test() -> None:
     check(resolve("capital_headroom", (Party(scanned, SELLER, span="x"),),
                   document_date=DOC_DATE).verdict == UNUSABLE_CIN,
           "a sole party with an OCR-damaged CIN refuses rather than resolving")
+
+    # ── a company named with no role any rule needs ──────────────────────────
+    named = (Party(TARGET_CIN, NAMED_PARTY, span="the Company"),)
+    check(resolve("din_reliance", named, document_date=DOC_DATE).verdict
+          == RESOLVED_SOLE_PARTY,
+          "one company named with no role resolves under the visible assumption")
+    two_named = (Party(TARGET_CIN, NAMED_PARTY, span="the Company"),
+                 Party(ACQ_CIN, NAMED_PARTY, span="the Investor"))
+    r3 = resolve("din_reliance", two_named, document_date=DOC_DATE)
+    check(r3.verdict == ROLE_ABSENT and len(r3.candidates) == 2,
+          f"...and two of them refuse with both listed, because no rule asks for "
+          f"NAMED_PARTY ({r3.verdict})")
 
     # ── a rule that does not declare its role cannot run ─────────────────────
     check(resolve("some_new_rule", good).verdict == UNKNOWN_RULE,

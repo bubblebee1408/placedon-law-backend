@@ -1,7 +1,8 @@
 # PLAN 09 — The MCA Master Data Strip: analysis, simulation, and what it changed
 
 **Date:** 2026-09-12 · **Status:** engine built and green; live data not wired (by design)
-**Code:** `checker/mca_snapshot.py`, `checker/mca_reconcile.py`, `checker/party_resolution.py`, `checker/buyer_sim.py`
+**Code:** `checker/mca_snapshot.py`, `checker/mca_reconcile.py`, `checker/party_resolution.py`, `checker/mca_strip.py`, `checker/buyer_sim.py`
+**Surface:** `POST /v1/mca-strip` · the Register strip section of `addin/taskpane.html`
 **Run it:** `PYTHONPATH=$PWD python3 checker/buyer_sim.py`
 
 ---
@@ -174,7 +175,14 @@ It was run **before** any UI existed, and it changed the engine four times:
 4. **Capital headroom stopped returning `AGREES`.** Against an unbounded-blind issued
    figure, "it fits" is a claim we cannot make. This is the rule refusing to be usefully
    dishonest, and it converts an acquisition task into a measurable upgrade.
-5. **Then it produced a module.** Q6 was left as a `GAP` rather than papered over, and
+5. **The strip's headline was an all-clear over an empty run.** Proved end to end
+   through the real server, a deal document with a damaged CIN and no register held
+   returned *"nothing conflicts; 0 fields the register cannot settle"* — calm, and
+   completely false, because **no check had run at all**. That is Q10's failure in a
+   new hat: the reader sees quiet and infers a clean result. The headline now leads
+   with *"no check ran — 3 could not, for want of a subject or a register"*, and a
+   partial run names how many did not.
+6. **Then it produced a module.** Q6 was left as a `GAP` rather than papered over, and
    `party_resolution.py` was written to answer it — 23 checks, and the harness moved Q6 to
    `ANSWERED` on its own. That is the loop this harness exists for: the simulation names the
    hole, the hole gets code, the harness proves it rather than a note in a document claiming
@@ -225,6 +233,10 @@ Three concrete changes this forces:
 - Check a CIN's structure, flag scanner damage without repairing it, and catch a CIN whose
   incorporation year post-dates the document.
 - Run the ten-question buyer simulation end to end and show `OVERCLAIMED: 0`, no `GAP`.
+- **Serve all of it.** `POST /v1/mca-strip` returns chips, subjects, findings and a
+  `not_run` list, and the Word pane renders them. Registers are supplied by the caller
+  — pasted, or hand-entered from the portal — which is the honest boundary while no
+  aggregator is contracted, and changes only where the payload comes from later.
 - Demonstrate all of it inside Word through the add-in (`addin/`), against a real document
   with a real document date.
 

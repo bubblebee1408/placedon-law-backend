@@ -62,3 +62,37 @@ users' ribbons.
   `checker/gemini_model.py`) exists and is tested, but has not been wired here
   until its leak rate is measured at zero.
 - **Self-signed certificate** is for development only.
+
+---
+
+## The Register strip
+
+A second section in the pane, below the currency check. It answers a different
+question: **who is this document about, and what does the register say?**
+
+It runs with **no register wired at all**, and that is the point. With no contracted
+aggregator the strip's first job is identity:
+
+- every CIN in the document, structurally checked — a scanner-damaged
+  `U722OOKA2O21PTC145892` is reported as `SUSPECT_OCR` with the correct candidate
+  **named and not adopted**, because a silently corrected CIN is a lookup against a
+  different company;
+- which company each rule would run against, since they differ — capital headroom
+  needs the **issuer**, the encumbrance warranty needs the **target**, DIN reliance
+  needs the **executing entity**;
+- everything that could not run, and why.
+
+Roles come from defined terms only. `(the "Target")` maps; **`(the "Company")`
+deliberately does not** — in a share purchase agreement it is usually the target and
+in a board resolution it is the executing entity, and guessing between them is the
+failure the strip exists to avoid. An unmapped term becomes `NAMED_PARTY`, which no
+rule asks for: a deal document then refuses and names the role it needs, while a
+single-company document resolves under a verdict that says the assumption was used.
+
+**Paste a register** (the collapsed textarea) to reconcile against it — hand-entered
+from the MCA portal is fine. Then every chip carries how far back an unfiled event
+could reach and in which direction, because `Chip` cannot be constructed without it.
+
+There is no green pill and there never will be. The headline says how many findings
+need resolving, or how many fields the register could not settle, or — when nothing
+ran — that nothing ran.
