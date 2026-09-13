@@ -233,7 +233,7 @@ Three concrete changes this forces:
 | Blocked on | What it blocks | Cost to unblock |
 |---|---|---|
 | A contracted MCA aggregator | Live snapshots. The provider still refuses; there is no scraping path. | A commercial agreement — out of reach at ₹2,000 |
-| Prospectus and Allotment Rules 2014, r.12 | A bound on paid-up capital; turns Q7/Q4 from `UNRESOLVABLE` into `AGREES` | Acquisition + human attestation |
+| Prospectus and Allotment Rules 2014, r.12 | A bound on paid-up capital; turns headroom from `UNRESOLVABLE` into `AGREES`. **Script written and tested** — `scripts/register_pas_rules.py`, handoff in [ACQUISITION_HANDOFF_pas_rules_2014](ACQUISITION_HANDOFF_pas_rules_2014.md) | A download + `--attest` |
 | Directors Rules 2014, r.12A | Any statement about DIN deactivation beyond "the register says so" | Acquisition + human attestation |
 | ~20 real documents | Extraction accuracy on Indian capital clauses; the whole HIGH-tier claim | Legwork, not money |
 

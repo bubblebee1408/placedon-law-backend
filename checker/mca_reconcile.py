@@ -364,6 +364,21 @@ def _test() -> None:
                            classes=classes).verdict == REFUSED,
           "...and a class the memorandum does not register is refused, not assumed")
 
+    # ── end to end: what one attestation actually buys ───────────────────────
+    from scripts.register_pas_rules import attested_stub, stub_registration
+    before = capital_headroom(new_shares=100_000, class_name="equity", classes=classes,
+                              issued_blindness=assess(snap, "paid_up_capital", today))
+    with stub_registration(attested_stub(days=30)):
+        after = capital_headroom(new_shares=100_000, class_name="equity",
+                                 classes=classes,
+                                 issued_blindness=assess(snap, "paid_up_capital", today))
+    check(before.verdict == UNRESOLVABLE and after.verdict == AGREES,
+          f"acquiring and attesting the Allotment Rules turns this refusal into an "
+          f"answer ({before.verdict} -> {after.verdict}) -- the acquisition is wired, "
+          f"not merely described")
+    check("2026-08-13" in after.blindness,
+          f"...and the answer still carries the bound it now has: {after.blindness}")
+
     # ── rule 2: the green chip that should not be green ──────────────────────
     empty = charge_warranty(document_states_unencumbered=True, registry_charges=(),
                             blindness=charge_blind, clause_ref="Cl 5.1")

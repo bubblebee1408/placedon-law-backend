@@ -152,7 +152,9 @@ lawful unfiled event could reach and in which direction.
   What changed is that the engine, the refusals and the buyer simulation cost nothing
   to build and are now green, so the day a contract exists the feature is a wiring job.
 - **Missing:** a contracted aggregator; the two delegated rules that would bound
-  paid-up capital and DIN status. The simulation's one `GAP` — which company on a
+  paid-up capital and DIN status — the acquisition script for the first is written
+  and tested (`scripts/register_pas_rules.py`) and waits on a download and an
+  attestation. The simulation's one `GAP` — which company on a
   four-party SPA the bar is about — was closed by `checker/party_resolution.py`:
   a CIN is never a party, a role is, and each rule declares the role it needs.
 

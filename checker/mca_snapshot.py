@@ -75,8 +75,9 @@ class Window:
     section_number: str  # corpus index key, e.g. "77"
     days: int
     direction: str
-    quote: str           # verbatim fragment; _test() proves it is still in the Act
+    quote: str           # verbatim fragment; _test() proves it is still in its source
     kind: str = "DUTY"   # DUTY = the primary period; OUTER = the longest lawful late filing
+    source: str = "corpus"   # "corpus" => checked against the Act; else an artifact
 
     def __post_init__(self) -> None:
         if self.direction not in (FLOOR, CEILING, EITHER):
@@ -215,6 +216,39 @@ class Assessment:
         return f"{self.field}: " + "; ".join(bits) + "."
 
 
+def window_from_record(rec: dict) -> Window | None:
+    """Build a window from an attested delegated-rule registration.
+
+    The width comes out of `window_days`, which the registration script parsed from
+    the artifact's own clause. Nothing here supplies a default: a record without a
+    period yields no window, so an attestation to a bound that was never read
+    produces no bound.
+    """
+    days, clause = rec.get("window_days"), rec.get("operative_clause") or ""
+    if not isinstance(days, int) or days <= 0 or not clause:
+        return None
+    return Window(rec.get("window_form") or "?",
+                  f"rule {rec.get('rule')}, {rec.get('title')}", "", days, FLOOR,
+                  clause, source=rec.get("artifact_sha256") or "artifact")
+
+
+def _delegated_window(field_name: str) -> Window | None:
+    """A window that exists only once a person has attested the rule stating it.
+
+    This is the payoff of an acquisition, wired rather than described: until the
+    Prospectus and Allotment Rules are held AND attested, paid-up capital has no
+    width and `capital_headroom` will not say AGREES.
+    """
+    if field_name != "paid_up_capital":
+        return None
+    try:
+        from scripts.register_pas_rules import is_attested, registration
+    except ImportError:
+        return None
+    rec = registration()
+    return window_from_record(rec) if is_attested(rec) else None
+
+
 def assess(snap: Snapshot, field_name: str, as_of: date,
            agm_date: date | None = None) -> Assessment:
     """How blind are we about this field, as at `as_of`?"""
@@ -231,13 +265,17 @@ def assess(snap: Snapshot, field_name: str, as_of: date,
                           note=f"fetched {age} days ago, policy allows "
                                f"{MAX_FETCH_AGE_DAYS}; re-fetch before relying on it")
 
+    windows = f.windows
     if f.unbounded_reason:
-        return Assessment(UNBOUNDED_BLIND, field_name,
-                          note=f"{f.unbounded_reason}. Acquire: {f.acquire}")
+        delegated = _delegated_window(field_name)
+        if delegated is None:
+            return Assessment(UNBOUNDED_BLIND, field_name,
+                              note=f"{f.unbounded_reason}. Acquire: {f.acquire}")
+        windows = (delegated,)
 
     if f.anchor == "AGM":
         if agm_date is None:
-            return Assessment(NEEDS_ANCHOR, field_name, windows=f.windows,
+            return Assessment(NEEDS_ANCHOR, field_name, windows=windows,
                               note=f"the window runs from the annual general meeting "
                                    f"({f.windows[0].section}); no AGM date was given")
         base = agm_date
@@ -245,13 +283,13 @@ def assess(snap: Snapshot, field_name: str, as_of: date,
         base = as_of
 
     floor = ceiling = None
-    for w in f.windows:
+    for w in windows:
         since = base - timedelta(days=w.days)
         if w.direction in (FLOOR, EITHER):
             floor = since if floor is None else min(floor, since)
         if w.direction in (CEILING, EITHER):
             ceiling = since if ceiling is None else min(ceiling, since)
-    return Assessment(BOUNDED_BLIND, field_name, floor, ceiling, f.windows)
+    return Assessment(BOUNDED_BLIND, field_name, floor, ceiling, windows)
 
 
 def may_assert_absence(field_name: str) -> tuple[bool, str]:
@@ -301,6 +339,8 @@ def verify_against_corpus() -> list[str]:
     """Return a failure line per window whose quote is no longer in the Act."""
     bad = []
     for w in all_windows():
+        if w.source != "corpus":     # an artifact-sourced window is checked by the
+            continue                 # registration script against its own file
         try:
             text = _section_text(w.section_number)
         except (KeyError, FileNotFoundError):
@@ -359,6 +399,29 @@ def _test() -> None:
         check(r.state == UNBOUNDED_BLIND and r.floor_blind_since is None,
               f"{f} is unbounded-blind and states no width")
         check("Acquire:" in r.sentence(), f"...and names what would bound it")
+
+    # ── an acquisition changes behaviour, not just a record ──────────────────
+    from scripts.register_pas_rules import (attested_stub,
+                                            registered_unattested_stub,
+                                            stub_registration)
+    with stub_registration(registered_unattested_stub()):
+        check(assess(snap, "paid_up_capital", today).state == UNBOUNDED_BLIND,
+              "a held-but-unattested rule bounds nothing -- storage is not review")
+    with stub_registration(attested_stub(days=30)):
+        a2 = assess(snap, "paid_up_capital", today)
+        check(a2.state == BOUNDED_BLIND
+              and a2.floor_blind_since == today - timedelta(days=30),
+              f"...and once attested the bound is real ({a2.floor_blind_since})")
+        check(a2.ceiling_blind_since is None,
+              "an unfiled return of allotment only raises the true figure, so the "
+              "bound is a floor and there is no ceiling")
+    with stub_registration(attested_stub(days=60)):
+        check(assess(snap, "paid_up_capital", today).floor_blind_since
+              == today - timedelta(days=60),
+              "the width comes from the artifact -- a file saying sixty gives sixty")
+    bad = attested_stub(); bad["window_days"] = None
+    check(window_from_record(bad) is None,
+          "a record with no period read yields no window, whatever its status says")
 
     # ── an AGM-anchored field will not be guessed from today ─────────────────
     r = assess(snap, "financial_statements", today)
