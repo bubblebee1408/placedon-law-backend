@@ -76,6 +76,7 @@ suites=(
   checker/mca_reconcile.py
   checker/party_resolution.py
   checker/mca_strip.py
+  checker/code_transition.py
   checker/buyer_sim.py
   checker/s185.py
   checker/s188.py
