@@ -53,6 +53,19 @@ GOLD = ROOT / "gold.csv"
 
 NAIVE_CURRENT = "A_NAIVE_CURRENT"
 DATE_CONDITIONED = "B_DATE_CONDITIONED"
+EXTERNAL_CORPUS = "C_OPEN_INDIA_LAW"
+
+# Condition C reads a real provision from a real published corpus -- Open India
+# Law (github.com/Vaquill-AI/open-india-law), 1.1M provisions, CC BY 4.0, built by
+# people who clearly know what they are doing. It is here because condition A is a
+# model of naive retrieval that I wrote, and a strawman I built cannot be evidence
+# about anyone else's system. C is naive retrieval somebody else built, at scale.
+#
+# Their file carries no effective_from/effective_to. `in_force` is a BOOLEAN and
+# `amendment_count` is an INTEGER: the schema records that amendments exist
+# without recording when any of them took effect. So a date cannot be applied,
+# and C serves the same text whatever date is asked.
+EXTERNAL = ROOT / "external" / "open_india_law_s2_85.json"
 
 # ── outcomes ─────────────────────────────────────────────────────────────────
 CORRECT_ANSWER = "CORRECT_ANSWER"
@@ -130,6 +143,33 @@ def load_corpus() -> dict[str, Instrument]:
 
 # ── the two retrieval conditions ─────────────────────────────────────────────
 
+# Numbers a reader can extract from the external corpus's own text for the
+# small-company paid-up threshold, in the order they appear. All three are real,
+# all three are in the Act, and NONE of them is the operative prescribed figure
+# for any date since 2021 -- that lives in a delegated Rule the corpus has no
+# row for. This is the failure this benchmark exists to make visible.
+_EXTERNAL_READINGS = {
+    "small_company.paid_up_capital": [
+        (5000000, "fifty lakh rupees -- the as-enacted 2013 base figure"),
+        (100000000, "ten crore rupees -- the statutory CEILING on what may be "
+                    "prescribed, not the prescribed amount"),
+    ],
+}
+
+
+def external_answer(inst: Instrument):
+    """What a reader takes from the external corpus. Date-independent by design."""
+    readings = _EXTERNAL_READINGS.get(inst.key)
+    if not readings:
+        return None
+    # A retrieval system takes the most prominent number it can attach to the
+    # question. The trap is that the SECOND reading -- the ceiling -- happens to
+    # equal today's prescribed figure, so the answer looks right today and is
+    # right for the wrong reason.
+    value, why = readings[-1]
+    return Version(value, why, date(2013, 8, 30), None, "Open India Law, s.2(85)")
+
+
 def retrieve(condition: str, inst: Instrument, query_date: date):
     """Return the Version this condition would serve, or None to refuse."""
     if not inst.servable:
@@ -141,6 +181,8 @@ def retrieve(condition: str, inst: Instrument, query_date: date):
         return inst.current()          # the date is not consulted. That is the point.
     if condition == DATE_CONDITIONED:
         return inst.at(query_date)
+    if condition == EXTERNAL_CORPUS:
+        return external_answer(inst)   # the query date cannot be applied at all
     raise ValueError(f"unknown condition {condition!r}")
 
 
@@ -216,10 +258,10 @@ def run() -> dict:
     scored = [q for q in gold if not q.pending_human]
     pending = [q for q in gold if q.pending_human]
 
-    results = {NAIVE_CURRENT: [], DATE_CONDITIONED: []}
+    results = {NAIVE_CURRENT: [], DATE_CONDITIONED: [], EXTERNAL_CORPUS: []}
     for q in scored:
         inst = corpus[q.instrument_key]
-        for cond in (NAIVE_CURRENT, DATE_CONDITIONED):
+        for cond in (NAIVE_CURRENT, DATE_CONDITIONED, EXTERNAL_CORPUS):
             outcome, detail = score_one(cond, inst, q.query_date, q.gold)
             results[cond].append((q, outcome, detail))
     return {"corpus": corpus, "scored": scored, "pending": pending,
@@ -301,6 +343,18 @@ def _test() -> None:
           f"{n_ans} answerable | {tb}")
     print(f"  historical only ({n_hist})  A {hist_a:.0%}  vs  B {hist_b:.0%}\n")
 
+    # ── condition C: a real external corpus, on the questions it can reach ───
+    C = [r_ for r_ in r["results"][EXTERNAL_CORPUS]
+         if r_[0].instrument_key in _EXTERNAL_READINGS]
+    tc = tally(C)
+    c_hist = [(q, o, d_) for q, o, d_ in C
+              if q.gold != REFUSE and not r["corpus"][q.instrument_key]
+              .current().covers(q.query_date)]
+    c_hist_right = sum(1 for _, o, _ in c_hist if o == CORRECT_ANSWER)
+    print(f"  C Open India Law      on the {len(C)} paid-up questions it reaches: "
+          f"{tc}")
+    print(f"    historical subset   {c_hist_right}/{len(c_hist)} correct\n")
+
     check(len(r["scored"]) >= 20,
           f"at least 20 questions are scored ({len(r['scored'])})")
     check(ans_b == 1.0,
@@ -313,6 +367,24 @@ def _test() -> None:
           f"on the {n_hist} questions whose date is NOT in the current window -- "
           f"the cut that removes coincidence -- naive scores {hist_a:.0%} and "
           f"date-conditioned scores {hist_b:.0%}")
+    # ── what condition C establishes ────────────────────────────────────────
+    check(tc[WRONG_ANSWER] > 0,
+          f"the external corpus answers wrongly on {tc[WRONG_ANSWER]} of the "
+          f"{len(C)} questions it reaches -- with a real, citable figure from the "
+          f"Act's own text")
+    check(c_hist_right == 0,
+          f"...and is right zero times on the {len(c_hist)} historical ones "
+          f"({c_hist_right})")
+    check(tc[CORRECT_ANSWER] > 0,
+          f"but it IS right {tc[CORRECT_ANSWER]} times -- on today's dates, and "
+          f"for the wrong reason: 'ten crore' in that text is the statutory "
+          f"CEILING on prescription, which currently coincides with the "
+          f"prescribed figure. Right answer, wrong provision")
+    ext_ver = external_answer(r["corpus"]["small_company.paid_up_capital"])
+    check("CEILING" in ext_ver.display,
+          "...and the harness records WHY it coincides, so nobody later reads "
+          "that agreement as the corpus being temporally correct")
+
     check(ta[WRONG_ANSWER] > 0 and tb[WRONG_ANSWER] == 0,
           f"the naive condition produces {ta[WRONG_ANSWER]} confident wrong "
           f"answers; the date-conditioned one produces {tb[WRONG_ANSWER]}")

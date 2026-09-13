@@ -1,0 +1,17 @@
+{
+ "_WHAT_THIS_IS": "One provision extracted verbatim from Open India Law (github.com/Vaquill-AI/open-india-law), file in_central_legislation.parquet v2026.08.1. Kept so condition C is reproducible without re-downloading 25 MB.",
+ "_LICENCE": "Data CC BY 4.0, Vaquill AI. Attribution required and given. Code in that repo is Apache 2.0 and is NOT used here -- no scraper of theirs was run, per CLAUDE.md's rule on crawlers we have not read.",
+ "_RETRIEVED": "2026-09-14",
+ "act_id": "IND_central_2114",
+ "title": "The Companies Act, 2013",
+ "stored_under_section_number": "3",
+ "section_title": "The Companies Act, 2013",
+ "in_force": true,
+ "act_status": "in_force",
+ "amendment_count": 0,
+ "year": 2013.0,
+ "source_url": "https://www.indiacode.nic.in/handle/123456789/2114?view_type=browse",
+ "mirror_url": "https://oss-data-in.vaquill.ai/legislation/IND_central_2114/act.pdf",
+ "source_publisher": "Legislative Department, Ministry of Law and Justice (India Code)",
+ "provision_text": "( _85_ ) \"small company\" means a company, other than a public company,\u2014 ( _i_ ) paid-up share capital of which does not exceed fifty lakh rupees or such higher amount as may be prescribed which shall not be more than[1] [ten crore rupees]"
+}
