@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Placedon Word add-in — the XML "add-in only" manifest, deliberately.
+
+  The unified JSON manifest is real, but it is NOT supported on non-subscription
+  Word (perpetual / LTSC), and the Microsoft 365 admin center's "upload add-in
+  from file" flow accepts only this XML form. For an Indian corporate legal team
+  on mixed Office versions, XML has the reach.
+
+  SourceLocation must be HTTPS in production. For local development on macOS,
+  see addin/README.md — the file is copied into Word's own sandboxed wef folder.
+-->
+<OfficeApp xmlns="http://schemas.microsoft.com/office/appforoffice/1.1"
+           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+           xsi:type="TaskPaneApp">
+  <Id>7f3c1b90-4d2e-4a71-9c88-0a5e6b2f41d3</Id>
+  <Version>0.1.0.0</Version>
+  <ProviderName>Placedon</ProviderName>
+  <DefaultLocale>en-IN</DefaultLocale>
+  <DisplayName DefaultValue="Placedon — currency check" />
+  <Description DefaultValue="Checks whether the law this document relies on has moved since the document was made." />
+  <SupportUrl DefaultValue="https://placedon.com/support" />
+  <AppDomains>
+    <AppDomain>https://localhost:3000</AppDomain>
+  </AppDomains>
+  <Hosts>
+    <Host Name="Document" />
+  </Hosts>
+  <Requirements>
+    <Sets DefaultMinVersion="1.1">
+      <!-- 1.3 for document properties (the document's own date, which this
+           whole feature turns on). 1.5 for Range.insertComment. 1.5 reaches
+           Word Windows 2302+, Mac 16.70+ and the web. -->
+      <Set Name="WordApi" MinVersion="1.3" />
+    </Sets>
+  </Requirements>
+  <DefaultSettings>
+    <SourceLocation DefaultValue="https://localhost:3000/taskpane.html" />
+  </DefaultSettings>
+  <!-- ReadWriteDocument is required for insertComment. v1 never edits body text
+       or formatting; it only annotates. See taskpane.js. -->
+  <Permissions>ReadWriteDocument</Permissions>
+</OfficeApp>

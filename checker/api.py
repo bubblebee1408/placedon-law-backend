@@ -364,6 +364,95 @@ def document_check(payload: dict, *, generated_at: str) -> dict:
     }
 
 
+# ── POST /v1/mca-strip ───────────────────────────────────────────────────────
+
+_STRIP_KEYS = frozenset({"as_of", "document_date", "agm_date", "allow_sole_party",
+                         "parties", "registers", "document"})
+_PARTY_KEYS = frozenset({"cin", "role", "span", "start", "end"})
+_REGISTER_KEYS = frozenset({"cin", "fetched_at", "source", "values", "classes"})
+_CLASS_KEYS = frozenset({"name", "nominal_per_share", "authorised_rupees",
+                         "issued_rupees"})
+_DOCFACT_KEYS = frozenset({"allotment_shares", "allotment_class", "allotment_clause",
+                           "states_unencumbered", "encumbrance_clause",
+                           "signatory_din"})
+
+MCA_STRIP_DOES_NOT_ESTABLISH = (
+    "that a warranty is breached -- the register shows a conflict, not a conclusion",
+    "that a figure is current -- every chip carries how far back an unfiled event "
+    "could reach, and in which direction",
+    "that the registry record is primary evidence -- it is graded SECONDARY, and a "
+    "hash proves our custody, not what MCA said",
+)
+
+
+def _reject_unknown(obj: dict, allowed: frozenset, where: str) -> None:
+    unknown = set(obj) - allowed
+    if unknown:
+        raise BadRequest(f"unknown field(s) in {where}: {', '.join(sorted(unknown))}")
+
+
+def mca_strip(payload: dict, *, generated_at: str) -> dict:
+    """Reconcile a draft against the registers held for its parties.
+
+    Deterministic; no model is consulted. The registers are supplied by the caller
+    because there is no contracted aggregator -- `corporate_data` still refuses, and
+    that is the honest prototype boundary rather than a missing feature.
+    """
+    from checker.mca_reconcile import ClassCapital
+    from checker.mca_snapshot import Snapshot
+    from checker.mca_strip import DocumentFacts, Register, as_json, build
+    from checker.party_resolution import Party
+
+    _reject_unknown(payload, _STRIP_KEYS, "request")
+    as_of = _date(payload, "as_of") or date.fromisoformat(generated_at[:10])
+    doc_date = _date(payload, "document_date")
+    if doc_date and doc_date > as_of:
+        raise BadRequest(f"'document_date' ({doc_date}) is after 'as_of' ({as_of}) "
+                         "-- a document cannot be read before it was made")
+
+    parties = []
+    for raw in payload.get("parties") or ():
+        _reject_unknown(raw, _PARTY_KEYS, "parties[]")
+        try:
+            parties.append(Party(_req(raw, "cin"), _req(raw, "role"),
+                                 raw.get("span"), raw.get("start"), raw.get("end")))
+        except ValueError as e:
+            raise BadRequest(str(e)) from e
+
+    registers = []
+    for raw in payload.get("registers") or ():
+        _reject_unknown(raw, _REGISTER_KEYS, "registers[]")
+        fetched = _date(raw, "fetched_at", required=True)
+        classes = None
+        if raw.get("classes") is not None:
+            classes = []
+            for c in raw["classes"]:
+                _reject_unknown(c, _CLASS_KEYS, "registers[].classes[]")
+                classes.append(ClassCapital(_req(c, "name"),
+                                            int(_req(c, "nominal_per_share")),
+                                            c.get("authorised_rupees"),
+                                            c.get("issued_rupees")))
+            classes = tuple(classes)
+        try:
+            snap = Snapshot(_req(raw, "cin"), fetched, _req(raw, "source"),
+                            dict(raw.get("values") or {}))
+        except ValueError as e:
+            raise BadRequest(str(e)) from e
+        registers.append(Register(snap, classes))
+
+    facts = dict(payload.get("document") or {})
+    _reject_unknown(facts, _DOCFACT_KEYS, "document")
+    document = DocumentFacts(**facts)
+
+    strip = build(registers=tuple(registers), parties=tuple(parties),
+                  document=document, as_of=as_of, document_date=doc_date,
+                  agm_date=_date(payload, "agm_date"),
+                  allow_sole_party=bool(payload.get("allow_sole_party", True)))
+
+    return {**as_json(strip), "generated_at": generated_at,
+            "does_not_establish": list(MCA_STRIP_DOES_NOT_ESTABLISH)}
+
+
 def handle(method: str, path: str, body: dict | None, *, generated_at: str
            ) -> tuple[int, dict]:
     """Route one request. Pure: no I/O. Returns (status, response dict)."""
@@ -418,6 +507,11 @@ def handle(method: str, path: str, body: dict | None, *, generated_at: str
             return 200, document_check(body or {}, generated_at=generated_at)
         except BadRequest as e:
             return 400, {"error": "bad_request", "detail": str(e)}
+    if method == "POST" and path == "/v1/mca-strip":
+        try:
+            return 200, mca_strip(body or {}, generated_at=generated_at)
+        except BadRequest as e:
+            return 400, {"error": "bad_request", "detail": str(e)}
     if method == "POST" and path == "/v1/compliance-pack":
         try:
             return 200, compliance_pack(body or {}, generated_at=generated_at)
@@ -427,6 +521,7 @@ def handle(method: str, path: str, body: dict | None, *, generated_at: str
                  "detail": f"no route for {method} {path}",
                  "routes": ["GET /v1/health", "POST /v1/compliance-pack",
                             "POST /v1/document-check",
+                            "POST /v1/mca-strip",
                             "GET /v1/company/{cin}/events",
                             "GET /v1/company/{cin}/events/{event_id}",
                             "GET /v1/instruments/{fragment}/affected"]}
@@ -640,6 +735,53 @@ def _test() -> None:
 
     st, body = handle("GET", "/v1/nope", None, generated_at=GEN)
     check(st == 404 and "routes" in body, "an unknown route 404s and lists the routes")
+
+    # ── POST /v1/mca-strip ───────────────────────────────────────────────────
+    _cin = "U72200KA2021PTC145892"
+    _strip_body = {
+        "as_of": "2026-09-12", "document_date": "2026-06-14",
+        "parties": [{"cin": _cin, "role": "TARGET", "span": "(the 'Target')"},
+                    {"cin": _cin, "role": "ISSUER", "span": "the Company shall allot"}],
+        "registers": [{"cin": _cin, "fetched_at": "2026-09-12",
+                       "source": "MCA21 via contracted aggregator",
+                       "values": {"charges": [{"holder": "ICICI Bank"}],
+                                  "authorised_capital": 50_000_000,
+                                  "paid_up_capital": 32_000_000},
+                       "classes": [{"name": "equity", "nominal_per_share": 10,
+                                    "authorised_rupees": 40_000_000,
+                                    "issued_rupees": 32_000_000}]}],
+        "document": {"allotment_shares": 1_000_000, "allotment_clause": "Cl 3.2",
+                     "states_unencumbered": True, "encumbrance_clause": "Cl 5.1"}}
+    st, r = handle("POST", "/v1/mca-strip", _strip_body, generated_at=GEN)
+    check(st == 200 and r["severity"] == "BLOCKING",
+          f"the strip route answers, and a Rs 1 Cr allotment against Rs 0.80 Cr of "
+          f"equity headroom is blocking ({st}/{r.get('severity')})")
+    check(all(c["blindness"] for c in r["chips"]),
+          "every chip crosses the wire with its blindness attached")
+    check("reconciled" not in r["headline"].lower(),
+          f"the headline never claims reconciliation: {r['headline']!r}")
+    check(r["evidence_grade"] == "SECONDARY" and r["no_model"] is True,
+          "the payload grades its evidence and declares no model ran")
+    check(any("not a conclusion" in d for d in r["does_not_establish"]),
+          "...and states in the payload that a conflict is not a conclusion")
+
+    for bad, why in (({"partys": []}, "a mistyped top-level key"),
+                     ({"parties": [{"cin": _cin, "role": "TARGET", "spam": "x"}]},
+                      "a mistyped key inside parties[]"),
+                     ({"parties": [{"cin": _cin, "role": "COUNTERPARTY"}]},
+                      "an unknown role"),
+                     ({"registers": [{"cin": _cin, "fetched_at": "2026-09-12",
+                                      "source": "s", "values": {"revenue": 1}}]},
+                      "an unknown master-data field"),
+                     ({"as_of": "2026-01-01", "document_date": "2026-06-14"},
+                      "a document dated after the read date")):
+        st_b, r_b = handle("POST", "/v1/mca-strip", bad, generated_at=GEN)
+        check(st_b == 400, f"{why} is refused with 400, not absorbed: "
+                           f"{r_b.get('detail', '')[:60]}")
+
+    check("POST /v1/mca-strip" in handle("GET", "/nope", None,
+                                         generated_at=GEN)[1]["routes"],
+          "the route is advertised in the 404 route list")
 
     # ── no model in the API path (parsed imports, not grepped) ──────────────
     import ast

@@ -48,13 +48,45 @@ INDIA_CODE_HANDLE = "https://indiacode.gov.in/handle/123456789/508693"
 
 # Later amendments India Code lists against this rule set. Recorded so the gap is
 # a named list rather than a vague doubt. Dates are India Code's dc.date.issued.
-KNOWN_AMENDMENTS = (
-    ("2014-06-09", "Amendment Rules 2014", "123456789/508688"),
-    ("2016-03-30", "Amendment Rules 2016", "123456789/508634"),
-    ("2018-09-12", "Amendment Rules 2018", "123456789/508752"),
-    ("2020-01-06", "Amendment Rules 2020", "123456789/508811"),
-    ("2023-01-19", "G.S.R. 41(E), Amendment Rules 2023", "123456789/508923"),
+# The chain, now ACQUIRED and traced. `touches` records which rule each amendment
+# actually operates on -- read from the instrument, not inferred from its title.
+#
+# The result is worth stating plainly, because it was not the expected one:
+# **Rule 8 has never been amended.** Both instruments that mention it operate on
+# Rule 8A, a different rule inserted after it. So the principal Rule 8 text --
+# "ten crore rupees or more ... whole-time key managerial personnel" -- stands as
+# enacted in 2014.
+#
+# But s.203's prescribed class is not Rule 8 alone. A company secretary is key
+# managerial personnel (s.2(51)), so Rule 8A is part of the same class, and its
+# text HAS moved: inserted 2014 at five crore for companies not covered by rule 8,
+# substituted 2020 to "every private company which has a paid up share capital of
+# ten crore rupees or more". The 2020 instrument also carries its own commencement
+# rule -- applicable for financial years commencing on or after 1 April 2020 --
+# which is a date condition, not a publication date, and must not be collapsed.
+CHAIN = (
+    ("2014-06-09", "G.S.R. 390(E)", "123456789/508688",
+     "corpus/sources/kmp_amend_2014-06-09.pdf", "8A",
+     "inserted rule 8A after rule 8: a company not covered by rule 8 with paid-up "
+     "capital of five crore rupees or more shall have a whole-time company secretary"),
+    ("2016-03-30", "Amendment Rules 2016", "123456789/508634",
+     "corpus/sources/kmp_amend_2016-03-30.pdf", None,
+     "does not operate on rule 8 or rule 8A"),
+    ("2018-09-12", "Amendment Rules 2018", "123456789/508752",
+     "corpus/sources/kmp_amend_2018-09-12.pdf", None,
+     "does not operate on rule 8 or rule 8A"),
+    ("2020-01-06", "G.S.R. 13(E)", "123456789/508811",
+     "corpus/sources/kmp_amend_2020-01-06.pdf", "8A",
+     "substituted rule 8A: every private company with paid-up capital of ten crore "
+     "rupees or more shall have a whole-time company secretary. Applicable for "
+     "financial years commencing on or after 1 April 2020"),
+    ("2023-01-19", "Amendment Rules 2023", "123456789/508923",
+     "corpus/sources/kmp_amend_2023-01-19.pdf", None,
+     "does not operate on rule 8 or rule 8A"),
 )
+
+# Kept for the registration record's older shape.
+KNOWN_AMENDMENTS = tuple((d, t, h) for d, t, h, _, _, _ in CHAIN)
 
 PENDING_HUMAN_REVIEW = "PENDING_HUMAN_REVIEW"
 CORROBORATED = "CORROBORATED"
@@ -192,9 +224,19 @@ def register(src: Path) -> str:
         "operative_clause_rule_8": clause,
         "classification": outcome,
         "is_principal": True,
+        # traced: every amendment is held and its effect on rules 8/8A is read.
+        # resolved: a person has confirmed the resulting operative text. Different
+        # things, and collapsing them is how a chain "resolves" without a reader.
+        "chain_traced": True,
         "chain_resolved": False,
-        "known_unacquired_amendments": [
-            {"issued": d, "title": t, "handle": h} for d, t, h in KNOWN_AMENDMENTS],
+        "amendment_chain": [
+            {"issued": d, "instrument": t, "handle": h, "artifact": a,
+             "operates_on_rule": r, "effect": e,
+             "artifact_sha256": ("sha256:" + hashlib.sha256(Path(a).read_bytes()).hexdigest()
+                                 if Path(a).is_file() else None)}
+            for d, t, h, a, r, e in CHAIN],
+        "rule_8_amended": False,
+        "rule_8a_current_source": "G.S.R. 13(E) of 06-01-2020",
         "identity_checked_by": None,
         "identity_checked_at": None,
         "verbatim_clause_checked_by": None,
@@ -206,12 +248,16 @@ def register(src: Path) -> str:
     print(f"stored         : {STORE}")
     print(f"record         : {RECORD}")
     print(f"status         : {PENDING_HUMAN_REVIEW}")
-    print(f"\n{len(KNOWN_AMENDMENTS)} later amendments to these Rules are UNACQUIRED:")
-    for d, t, h in KNOWN_AMENDMENTS:
-        print(f"  {d}  {t}")
-    print("\nSo s.203 stays refused even after attestation. Holding the first link")
-    print("of a chain and serving it as current is the failure this system exists")
-    print("to prevent -- it is what put a superseded Rs 4 crore in front of users.")
+    print(f"\nThe amendment chain is HELD and TRACED ({len(CHAIN)} instruments):")
+    for d, t, _, _, r, e in CHAIN:
+        print(f"  {d}  {t:22} {'rule ' + r if r else 'not rules 8/8A'}")
+    print("\n  Rule 8 has NEVER been amended — both instruments that mention it")
+    print("  operate on rule 8A. So the principal Rule 8 text stands as enacted.")
+    print("  Rule 8A HAS moved: inserted 2014 at five crore, substituted 2020 to")
+    print("  ten crore for private companies, for FYs from 1 April 2020.")
+    print("\ns.203 still REFUSES. Traced is not resolved: a person must confirm the")
+    print("resulting operative text, and that rule 8A belongs to the s.203 class")
+    print("because a company secretary is key managerial personnel (s.2(51)).")
     print("\n  python3 scripts/register_kmp_rules.py --attest <reviewer-id>")
     return outcome
 

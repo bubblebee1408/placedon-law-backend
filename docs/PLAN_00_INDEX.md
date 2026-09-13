@@ -18,6 +18,14 @@ status marker. Nothing is asserted because it sounds right.
 | [PLAN_07_TENANCY_AND_PRICING](PLAN_07_TENANCY_AND_PRICING.md) | Isolation, zero retention, what to charge for | The retention rule is quoted from a shipped system | Indian deal sizes not found |
 | [FEATURES](FEATURES.md) | **The canonical feature list.** If it is not there, it is not planned | 7 of 10 have a built engine | F8 unbuilt and risky |
 
+## Scope
+
+**Compliance across Indian corporate law**, declared in `checker/scope.py`: nine
+bodies in scope, one held. The register exists because widening a claimed scope
+without widening the refusals is how an engine starts appearing to cover law it
+has never read — and a silence that used to mean "outside our scope" would start
+meaning "no obligation found", which is the opposite answer.
+
 ## The one-paragraph version
 
 Indian corporate law changes underneath correct answers, and nothing watches. We
@@ -49,6 +57,9 @@ Stated first, because a plan that cannot be wrong is not a plan.
 3. An incumbent (SCC Online, Manupatra) ships dated-instrument tracking as one
    feature and commoditises the wedge.
 4. The as-of date reads to lawyers as hedging rather than rigour.
+5. The declared-but-unheld bodies stay unheld long enough that "in scope" becomes
+   a marketing word. One held body out of nine is a starting position, not a
+   resting one.
 
 None of these is answerable by building more. All four are answerable in ten
 conversations.

@@ -26,6 +26,7 @@ from dataclasses import dataclass
 from datetime import date
 
 from checker.company_profile import Money
+from checker import release
 from checker.provenance import CORROBORATED, SERVABLE, UNRESOLVED
 
 RULE15_TASK = "S-188-RULES"
@@ -49,7 +50,8 @@ class MemberApprovalThreshold:
 
     @property
     def servable(self) -> bool:
-        return self.state in SERVABLE
+        return release.may_release(evidence_state=self.state,
+                                   what=RULE15_INSTRUMENT).allowed
 
     def crosses(self, *, txn_value: Money | None, turnover: Money | None,
                 net_worth: Money | None,
@@ -115,7 +117,8 @@ def _money_or_none(v) -> Money | None:
 def lookup(as_of: date) -> MemberApprovalThreshold:
     """The reviewed threshold, or raise if it is not attested."""
     state, note, limbs = _review_state()
-    if state not in SERVABLE or limbs is None:
+    gate = release.may_release(evidence_state=state, what=RULE15_INSTRUMENT)
+    if not gate.allowed or limbs is None:
         raise ThresholdUnavailable(note)
     return MemberApprovalThreshold(
         paid_up_capital_floor=_money_or_none(limbs.get("paid_up_capital_floor_rupees")),
@@ -127,7 +130,8 @@ def lookup(as_of: date) -> MemberApprovalThreshold:
 def available() -> tuple[bool, str]:
     """(is the threshold servable, the reason) — without raising."""
     state, note, _ = _review_state()
-    return state in SERVABLE, note
+    return release.may_release(evidence_state=state,
+                               what=RULE15_INSTRUMENT).allowed, note
 
 
 # ── test support ──────────────────────────────────────────────────────────────

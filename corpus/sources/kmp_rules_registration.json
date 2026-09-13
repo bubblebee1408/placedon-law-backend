@@ -4,41 +4,64 @@
  "source_url": "https://indiacode.gov.in/server/api/core/bitstreams/835c8cda-3dae-490a-836f-1e0171af2bd6/content",
  "india_code_handle": "https://indiacode.gov.in/handle/123456789/508693",
  "acquisition_method": "india_code_dspace_api",
- "registered_at": "2026-09-10T08:00:22Z",
+ "registered_at": "2026-09-11T09:16:31Z",
  "artifact_sha256": "sha256:0c0b29fd00aae9c056833d3527e546fdacf5549e59efad2357fd40346c17ba31",
  "stored_text": "corpus/rules/kmp_rules_2014.txt",
  "stored_text_sha256": "sha256:bdd7e416183478ad6059c3105ea2a56ca3ddbc8bc185d2e556965860c768c21a",
  "operative_clause_rule_8": "8. Appointment of Key Managerial Personnel. - Every listed company and every other public company having a paid-up share capital of tencrore rupees or more shall have whole-time key managerial personnel.",
  "classification": "VERIFIED_INSTRUMENT",
  "is_principal": true,
+ "chain_traced": true,
  "chain_resolved": false,
- "known_unacquired_amendments": [
+ "amendment_chain": [
   {
    "issued": "2014-06-09",
-   "title": "Amendment Rules 2014",
-   "handle": "123456789/508688"
+   "instrument": "G.S.R. 390(E)",
+   "handle": "123456789/508688",
+   "artifact": "corpus/sources/kmp_amend_2014-06-09.pdf",
+   "operates_on_rule": "8A",
+   "effect": "inserted rule 8A after rule 8: a company not covered by rule 8 with paid-up capital of five crore rupees or more shall have a whole-time company secretary",
+   "artifact_sha256": "sha256:9c027ec78a66b1c0c6bb25b2449237eafea61d3a6a917c699887d36e7f4351bb"
   },
   {
    "issued": "2016-03-30",
-   "title": "Amendment Rules 2016",
-   "handle": "123456789/508634"
+   "instrument": "Amendment Rules 2016",
+   "handle": "123456789/508634",
+   "artifact": "corpus/sources/kmp_amend_2016-03-30.pdf",
+   "operates_on_rule": null,
+   "effect": "does not operate on rule 8 or rule 8A",
+   "artifact_sha256": "sha256:6dfec8d9a50bf93b3ac3a1f504cb3b14e7c48916afe5271dcecdcf0b475cb989"
   },
   {
    "issued": "2018-09-12",
-   "title": "Amendment Rules 2018",
-   "handle": "123456789/508752"
+   "instrument": "Amendment Rules 2018",
+   "handle": "123456789/508752",
+   "artifact": "corpus/sources/kmp_amend_2018-09-12.pdf",
+   "operates_on_rule": null,
+   "effect": "does not operate on rule 8 or rule 8A",
+   "artifact_sha256": "sha256:5c06359d6bf707450711a30ea8955658f967a63db881f55e78861fb81f5bc8d3"
   },
   {
    "issued": "2020-01-06",
-   "title": "Amendment Rules 2020",
-   "handle": "123456789/508811"
+   "instrument": "G.S.R. 13(E)",
+   "handle": "123456789/508811",
+   "artifact": "corpus/sources/kmp_amend_2020-01-06.pdf",
+   "operates_on_rule": "8A",
+   "effect": "substituted rule 8A: every private company with paid-up capital of ten crore rupees or more shall have a whole-time company secretary. Applicable for financial years commencing on or after 1 April 2020",
+   "artifact_sha256": "sha256:01dbb701c71c91bbc1ed4cad91b713dc011e67c1d18dba7f6f3036075a679825"
   },
   {
    "issued": "2023-01-19",
-   "title": "G.S.R. 41(E), Amendment Rules 2023",
-   "handle": "123456789/508923"
+   "instrument": "Amendment Rules 2023",
+   "handle": "123456789/508923",
+   "artifact": "corpus/sources/kmp_amend_2023-01-19.pdf",
+   "operates_on_rule": null,
+   "effect": "does not operate on rule 8 or rule 8A",
+   "artifact_sha256": "sha256:89a1caf9307fda37f42713248994cfd60a2a1026774090deaa5f9b033576c170"
   }
  ],
+ "rule_8_amended": false,
+ "rule_8a_current_source": "G.S.R. 13(E) of 06-01-2020",
  "identity_checked_by": null,
  "identity_checked_at": null,
  "verbatim_clause_checked_by": null,

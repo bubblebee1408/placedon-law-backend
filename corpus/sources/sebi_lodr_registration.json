@@ -1,0 +1,27 @@
+{
+ "instrument_id": "SEBI_LODR_2015_CONSOLIDATED",
+ "title": "SEBI (Listing Obligations and Disclosure Requirements) Regulations, 2015 \u2014 SEBI's consolidation",
+ "notification": "SEBI/LAD-NRO/GN/2015-16/013",
+ "source_url": "https://www.sebi.gov.in/sebi_data/attachdocs/jul-2026/1784630770711.pdf",
+ "landing_page": "https://www.sebi.gov.in/legal/regulations/jul-2026/securities-and-exchange-board-of-india-listing-obligations-and-disclosure-requirements-regulations-2015-last-amended-on-july-14-2026-_102974.html",
+ "acquisition_method": "sebi_gov_in_direct",
+ "registered_at": "2026-09-11T10:13:52Z",
+ "artifact_sha256": "sha256:f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "stored_text": "corpus/rules/sebi_lodr_2015.txt",
+ "stored_text_sha256": "sha256:e7c028077cae9179e05a8523f2529328dcab4af02910816c1162f6d863b35a6a",
+ "consolidation_marker": "Amended up to July 14",
+ "consolidation_year_from_landing_page": "2026",
+ "consolidation_year_in_artifact": false,
+ "is_consolidation": true,
+ "point_in_time_capable": false,
+ "point_in_time_note": "SEBI publishes a consolidation, not discrete amending notifications. This text is authoritative for the current law and silent on any earlier date. Dated questions must be refused until the amending notifications are acquired individually.",
+ "identity_checked_by": null,
+ "identity_checked_at": null,
+ "consolidation_understood_by": null,
+ "status": "PENDING_HUMAN_REVIEW",
+ "attests_to": [
+  "identity: this file is the SEBI (Listing Obligations and Disclosure Requirements) Regulations, 2015, notification SEBI/LAD-NRO/GN/2015-16/013",
+  "consolidation: the reviewer has read the 'Amended up to' line and understands this is SEBI's own consolidation, not an as-enacted instrument",
+  "point-in-time: the reviewer understands that attesting this makes CURRENT questions answerable and leaves DATED questions refused, because one snapshot is not a history"
+ ]
+}

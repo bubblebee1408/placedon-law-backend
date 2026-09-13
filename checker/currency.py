@@ -34,6 +34,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 
+from checker.lattice import Lattice
 from checker.prescribed_thresholds import Threshold, all_thresholds
 
 # ── currency states, ordered best -> worst so a rollup can take the worst ──────
@@ -44,7 +45,11 @@ UNACQUIRED = "UNACQUIRED"             # the governing instrument is known but no
 UNDECLARED = "UNDECLARED"             # the obligation declares no basis here -- a gap in THIS map
 
 # Worse = higher rank. A finding that needs a human wins over one that does not.
-_SEVERITY = {CURRENT: 0, NOT_YET_IN_FORCE: 1, SUPERSEDED: 2, UNACQUIRED: 3, UNDECLARED: 4}
+# The order lives in the lattice; _SEVERITY is derived from it so there is exactly
+# one place this vocabulary can be reordered.
+_LATTICE = Lattice("currency",
+                   (CURRENT, NOT_YET_IN_FORCE, SUPERSEDED, UNACQUIRED, UNDECLARED))
+_SEVERITY = {s: _LATTICE.rank(s) for s in _LATTICE.states}
 
 # States that mean "someone must act before this obligation is safe to serve".
 NEEDS_ACTION = (SUPERSEDED, UNACQUIRED, UNDECLARED)
@@ -191,7 +196,7 @@ def currency_of(dep: Dependency, as_of: date) -> Finding:
     findings += _rule_findings(dep.rule_ids)
     if not findings:
         return Finding(dep.obligation_id, CURRENT, dep.basis, None)
-    worst = max(findings, key=lambda f: _SEVERITY[f.status])
+    worst = _LATTICE.worst_of(findings, lambda f: f.status).witness
     return Finding(dep.obligation_id, worst.status, f"{dep.basis}: {worst.detail}", worst.instrument)
 
 

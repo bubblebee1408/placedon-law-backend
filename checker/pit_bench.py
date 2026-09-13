@@ -280,6 +280,8 @@ def _test() -> None:
           "the report keeps wrong answers and wrong refusals apart")
 
     print(f"\n{ok}/{ok + fail} passed")
+    if fail:
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":
