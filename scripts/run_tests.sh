@@ -80,6 +80,7 @@ suites=(
   checker/code_transition.py
   checker/buyer_sim.py
   checker/objection_sim.py
+  checker/coverage.py
   checker/s185.py
   checker/s188.py
   checker/s184.py

@@ -177,8 +177,10 @@ record(
         what_would_settle_it="every output ends with a coverage report -- checked: "
                              "X; NOT checked because not held: Y -- printed in "
                              "full, never collapsed, never dismissable",
-        action="make the coverage report mandatory and non-collapsible on every "
-               "surface: the pane, /v1/document-check, and the strip"),
+        action="DONE 13-09-2026: checker/coverage.py. `unchecked` is a REQUIRED "
+               "constructor argument, so a caller who has not thought about scope "
+               "cannot omit it; /v1/document-check carries the frame and the pane "
+               "renders it first, outside any <details>"),
     Objection(
         "O-03", IN_HOUSE_GC,
         "My worry is not the two rows you refuse. It is that my paralegal sees "
@@ -192,8 +194,10 @@ record(
         what_would_settle_it="scope shown as a permanent frame, and a written rule "
                              "that the tool never reports a document as COMPLIANT, "
                              "only as CHECKED AGAINST A NAMED LIST",
-        action="add the never-says-compliant invariant as a test, the way "
-               "mca_strip's FORBIDDEN_HEADLINE already works"),
+        action="DONE 13-09-2026: coverage.FORBIDDEN refuses 'compliant', 'all "
+               "clear', 'nothing to report' and six more at construction. Every "
+               "gap is NAMED rather than counted -- he asked for names because a "
+               "ratio reads as a percentage and a percentage reads as nearly-done"),
     Objection(
         "O-04", SENIOR_ADVOCATE,
         "Enactment, commencement and retrospective operation are three different "

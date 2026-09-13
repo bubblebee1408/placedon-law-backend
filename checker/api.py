@@ -348,6 +348,45 @@ def document_check(payload: dict, *, generated_at: str) -> dict:
                              "provision": row.provision, "state": row.state,
                              "basis": row.basis})
 
+    # The scope frame. Two practitioner personas in different registers demanded
+    # this independently (objection_sim O-02, O-03): one feared her staff would
+    # read silence as clearance, the other that his paralegal would read thirteen
+    # ticks as clean. Both are the same defect -- an answer that does not carry
+    # its own scope -- and it is fixed by NAMING what was not checked, every time,
+    # rather than by reporting a ratio.
+    from checker.coverage import Report, Unchecked
+    from checker import staleness
+
+    def _blocker(entry: dict) -> str:
+        """Name the instrument, from the engine's own inventory.
+
+        The row's blocked_by is preferred because it is what actually happened.
+        Where a row refuses without naming one, staleness.DEPENDENCIES knows which
+        instrument governs that obligation -- and "an unnamed instrument" is the
+        vagueness the practising CS objected to, so it is the last resort, not the
+        first.
+        """
+        named = entry.get("reference")
+        oid = entry.get("obligation_id")
+        for dep in staleness.DEPENDENCIES:
+            # An internal rule id ("S-177-RULES") is meaningless to the reader this
+            # frame exists for. Expand it to the instrument, with its acquisition
+            # state, so "not held" and "held but unread" are visibly different.
+            if named == dep.rule_id or (not named and oid in dep.governs):
+                return f"{dep.instrument} [{dep.state()}]"
+        if named:
+            return str(named)
+        return "an instrument this obligation does not name — report this"
+
+    cov = Report(
+        checked=tuple(v["duty"] for v in verified)
+                + tuple(x["duty"] for x in superseded),
+        unchecked=tuple(Unchecked(
+            c["duty"], "its governing instrument is not held or not yet reviewed",
+            acquire=_blocker(c),
+            state="CANNOT_VERIFY") for c in cannot_verify),
+        corpus="Companies Act 2013", as_of=as_of.isoformat())
+
     return {
         "document_date": doc_date.isoformat(),
         "as_of": as_of.isoformat(),
@@ -355,6 +394,7 @@ def document_check(payload: dict, *, generated_at: str) -> dict:
         "summary": {"superseded": len(superseded),
                     "cannot_verify": len(cannot_verify),
                     "verified": len(verified)},
+        "coverage": cov.to_json(),
         "superseded": superseded,
         "cannot_verify": cannot_verify,
         "verified": verified,
@@ -735,6 +775,29 @@ def _test() -> None:
 
     st, body = handle("GET", "/v1/nope", None, generated_at=GEN)
     check(st == 404 and "routes" in body, "an unknown route 404s and lists the routes")
+
+    # ── the coverage frame (objection_sim O-02, O-03) ────────────────────────
+    st, r = handle("POST", "/v1/document-check",
+                   {"document_date": "2024-06-14", "company_class": "private",
+                    "incorporation_date": "2021-01-01"}, generated_at=GEN)
+    cov = r["coverage"]
+    check(st == 200 and cov["unchecked_count"] == len(r["cannot_verify"]),
+          f"every answer carries a coverage frame, and it agrees with the rows "
+          f"({cov['checked_count']} checked, {cov['unchecked_count']} not)")
+    check(all(u["acquire"] and "unnamed" not in u["acquire"]
+              for u in cov["unchecked"]),
+          "every unchecked item names the INSTRUMENT that would settle it -- not "
+          "an internal rule id and not 'an unnamed instrument'")
+    check(any("HELD_UNREVIEWED" in u["acquire"] or "STAGED" in u["acquire"]
+              or "NOT_HELD" in u["acquire"] for u in cov["unchecked"]),
+          "...with its acquisition state, so 'not held' and 'held but unread' are "
+          "visibly different things")
+    check("silence about them is not a finding" in cov["sentence"],
+          "...and the frame says what silence does not mean")
+    check(cov["establishes_compliance"] is False and cov["dismissable"] is False,
+          "the frame declares it establishes no compliance and is not dismissable")
+    check(all(u["what"] in cov["sentence"] for u in cov["unchecked"]),
+          "...and every unchecked duty is named in full, never summarised away")
 
     # ── POST /v1/mca-strip ───────────────────────────────────────────────────
     _cin = "U72200KA2021PTC145892"

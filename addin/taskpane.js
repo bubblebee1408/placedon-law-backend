@@ -122,7 +122,12 @@ function isoDate(d) { return new Date(d).toISOString().slice(0, 10); }
 function render(r) {
   const out = document.getElementById("out");
   const s = r.summary || {};
-  out.innerHTML =
+  // The coverage frame leads, and it is not collapsible. Two practitioners in
+  // different registers independently said the same thing: a quiet panel reads as
+  // a clean document, and a staff member who is not a lawyer cannot tell "the law
+  // did not change" from "we never looked". It goes first, it names every gap in
+  // full, and there is deliberately no <details> around it.
+  out.innerHTML = coverageBlock(r.coverage) +
     block("Superseded — the law moved after this document", r.superseded, "superseded",
           x => `<div class="detail">Governed then: <span class="prov">${escapeHtml(short(x.governed_then))}</span><br>
                 Governs now: <span class="prov">${escapeHtml(short(x.governs_now))}</span>
@@ -131,6 +136,23 @@ function render(r) {
           x => `<div class="detail">${escapeHtml(truncate(x.detail, 220))}
                 ${x.reference ? `<br><span class="ref">${escapeHtml(x.reference)}</span>` : ""}</div>`)
   + collapsed("Verified", r.verified);
+}
+
+function coverageBlock(c) {
+  if (!c) return "";
+  const gaps = c.unchecked || [];
+  const head = `<div class="cov"><div class="k">Scope of this check</div>
+    <div class="v">Checked ${c.checked_count} of ${c.checked_count + c.unchecked_count}
+    ${c.corpus ? "against " + escapeHtml(c.corpus) : ""}${c.as_of ? ", as at " + escapeHtml(c.as_of) : ""}.</div>`;
+  if (!gaps.length) {
+    return head + `<div class="b">Nothing was withheld. This states what was examined,
+      not a conclusion about the document.</div></div>`;
+  }
+  return head + `<div class="b"><b>NOT checked (${gaps.length})</b> — these were not
+    examined at all, and silence about them is not a finding:</div>` +
+    gaps.map(u => `<div class="gap">· ${escapeHtml(u.what)}<br>
+      <span class="ref">needs: ${escapeHtml(u.acquire)}</span></div>`).join("") +
+    `</div>`;
 }
 
 function block(title, rows, cls, body) {
