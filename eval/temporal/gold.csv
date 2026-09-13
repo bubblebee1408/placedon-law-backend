@@ -1,0 +1,29 @@
+qid,instrument_key,query_date,question,gold,note
+T01,small_company.paid_up_capital,2024-06-14,"As at 14-06-2024, what is the prescribed maximum paid-up share capital for a small company?",40000000,in the 700(E) window
+T02,small_company.paid_up_capital,2023-01-09,"As at 09-01-2023, same question.",40000000,in the 700(E) window
+T03,small_company.paid_up_capital,2025-11-30,As at 30-11-2025 — the last day of the 700(E) window.,40000000,boundary: last day inclusive
+T04,small_company.paid_up_capital,2025-12-01,As at 01-12-2025 — the day 880(E) took effect.,100000000,boundary: first day inclusive
+T05,small_company.paid_up_capital,2026-09-13,As at 13-09-2026.,100000000,current window
+T06,small_company.paid_up_capital,2022-09-15,As at 15-09-2022 — the day 700(E) took effect.,40000000,boundary: opening day
+T07,small_company.paid_up_capital,2022-09-14,As at 14-09-2022 — one day before 700(E).,__REFUSE__,"no version held before 700(E); must refuse, not serve the oldest we have"
+T08,small_company.paid_up_capital,2019-04-01,As at 01-04-2019.,__REFUSE__,well before any held version
+T09,small_company.turnover,2024-06-14,"As at 14-06-2024, what is the prescribed maximum turnover for a small company?",400000000,700(E) window
+T10,small_company.turnover,2025-11-30,As at 30-11-2025.,400000000,boundary
+T11,small_company.turnover,2025-12-01,As at 01-12-2025.,1000000000,boundary
+T12,small_company.turnover,2026-09-13,As at 13-09-2026.,1000000000,current
+T13,small_company.turnover,2021-06-30,As at 30-06-2021.,__REFUSE__,before any held version
+T14,criminal.substantive_code,2023-05-12,"For an offence committed on 12-05-2023, which code governs substantive liability?",__REFUSE__,code_transition returns INSTRUMENT_NOT_HELD; the text is not in the corpus
+T15,criminal.substantive_code,2024-06-30,Offence on 30-06-2024 — the day before BNS commenced.,__REFUSE__,not held
+T16,criminal.substantive_code,2024-07-01,Offence on 01-07-2024 — BNS commencement day.,__REFUSE__,not held
+T17,criminal.procedural_code,2025-02-01,Proceedings commenced 01-02-2025 — which procedural code?,__REFUSE__,not held
+T18,criminal.procedural_code,2023-03-15,Proceedings commenced 15-03-2023.,__REFUSE__,not held
+T19,allotment.return_window_days,2024-06-14,"As at 14-06-2024, within what period must a return of allotment be filed in Form PAS-3?",__REFUSE__,"rule 12(1) is stable at thirty days, but the artifact is PENDING_HUMAN_REVIEW"
+T20,allotment.return_window_days,2016-08-01,"As at 01-08-2016, same question.",__REFUSE__,unattested
+T21,allotment.return_window_days,2026-09-13,"As at 13-09-2026, same question.",__REFUSE__,unattested
+T22,small_company.paid_up_capital,2025-12-02,"As at 02-12-2025, one day into the new window.",100000000,boundary+1
+T23,small_company.turnover,2022-09-15,As at 15-09-2022.,400000000,opening boundary
+T24,small_company.paid_up_capital,2025-06-30,"As at 30-06-2025, mid-way through the 700(E) window.",40000000,interior
+T25,small_company.turnover,2026-01-15,As at 15-01-2026.,1000000000,current window interior
+T26,small_company.paid_up_capital,2025-12-01,A company incorporated 10-11-2025 with Rs 6 crore paid-up capital prepares accounts for FY2025-26. Which threshold applies to its small-company status for that year?,PENDING_HUMAN,"turns on whether the test is applied at a balance-sheet date or across the year; needs a lawyer, not a date lookup"
+T27,criminal.substantive_code,2024-07-01,A continuing offence began 01-03-2024 and ran to 01-09-2024. Which code governs?,PENDING_HUMAN,code_transition escalates this as STRADDLES; the answer is contested and not a date comparison
+T28,allotment.return_window_days,2021-02-01,"Did G.S.R. 37(E) alter the return-of-allotment period, given it omitted sub-rule (6) of rule 12?",PENDING_HUMAN,requires reading the omitted sub-rule and its interaction with sub-rule (1)

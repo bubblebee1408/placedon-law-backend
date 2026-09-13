@@ -82,6 +82,7 @@ suites=(
   checker/objection_sim.py
   checker/coverage.py
   checker/sweep.py
+  eval/temporal/harness.py
   checker/s185.py
   checker/s188.py
   checker/s184.py
