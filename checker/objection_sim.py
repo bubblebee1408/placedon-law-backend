@@ -28,13 +28,28 @@ buyer simulation produced four corrections to shipped, green code. What it canno
 do is establish that anyone will pay. Those are different claims and only the
 first is available without a customer.
 
-## Where the questions come from
+## Where the questions come from, and the limit of that
 
-Not from me. Three adversarial personas, each briefed with a profile and each
-instructed to be difficult in a specific professional register -- a Bombay senior
-advocate, a practising CS of 37 years, an in-house GC at the named prospect.
-An objection I authored is one I have already answered. That is the failure mode
-this design is built against.
+Three adversarial personas, each briefed with a profile and told to be difficult
+in a specific professional register -- a Bombay senior advocate, a practising CS
+of 37 years, an in-house GC at the named prospect. Framing an objection through a
+persona does surface angles a direct self-review does not, and it surfaced a real
+false claim in our own materials (O-01).
+
+**But they are not independent witnesses, and an earlier version of this file said
+they were.** All three run on the same base model, from prompts written by that
+same model. When two of them agree, that is one prior surfacing twice --
+correlation by construction. Two witnesses who share a brain are one witness.
+
+So the rule is: **act on an objection when it is checkable against the code, never
+because two personas agreed.** O-01 was worth fixing because `staleness.DEPENDENCIES`
+could be read and the claim shown false. O-02 and O-03 were worth fixing because
+the missing scope frame was visible in the output. Agreement contributed nothing
+to either.
+
+Any figure a persona produces -- the Rs 24,000/year one of them named -- is
+**invented**. It is what a model imagines a Bengaluru sole practitioner would say,
+and it must never be cited as a price point.
 
 Run: python3 checker/objection_sim.py
 """
@@ -160,9 +175,11 @@ record(
                       "hold it and it is human-attested",
         what_would_settle_it="a dated, per-instrument holdings table he can check "
                              "himself, not an aggregate adjective",
-        action="publish a precise holdings list (instrument, state, date attested) "
-               "from staleness.DEPENDENCIES, and stop using aggregate words like "
-               "'most' about coverage"),
+        action="DONE 13-09-2026: scripts/holdings.py prints the table from "
+               "staleness.DEPENDENCIES and scope.BODIES at run time -- 2 of 5 "
+               "instruments usable, 1 of 11 bodies held. A maintained list is a "
+               "second place for the truth to live and it drifts exactly when it "
+               "matters. Quote no coverage figure that did not come from it"),
     Objection(
         "O-02", PRACTISING_CS,
         "My staff are commerce graduates. Kavitha will run your panel, it will say "
@@ -472,12 +489,21 @@ def _test() -> None:
     check(all("O-0" in q or "O-1" in q for q in queue()),
           "...and every queue item names the objection it answers")
 
-    # Convergence is the finding a single persona could not have produced.
+    # RETRACTED CLAIM. This assertion previously read "convergence across briefs
+    # is the one signal a self-written simulation cannot fake". That is false and
+    # I wrote it. Both personas run on the same base model, from prompts written
+    # by that same model, so agreement between them is CORRELATION BY
+    # CONSTRUCTION -- one prior surfacing twice -- not independent corroboration.
+    # Two witnesses who share a brain are one witness.
+    #
+    # The fix it produced was still worth making, because it was checkable against
+    # the code. The INFERENCE from agreement was not.
     coverage = [o for o in OBJECTIONS if o.id in ("O-02", "O-03")]
     check(len({o.persona.name for o in coverage}) == 2,
-          "two personas in different registers independently demanded the same "
-          "fix -- silence must never read as clearance. Convergence across "
-          "briefs is the one signal a self-written simulation cannot fake")
+          "two personas raised the same fix -- worth acting on because it was "
+          "checkable against the code, NOT because agreeing sub-agents corroborate "
+          "each other. They share a base model; that is correlation by "
+          "construction")
 
     check(len(PERSONAS) == 3 and len({p.register for p in PERSONAS}) == 3,
           "three personas, three different registers of scepticism -- not one "

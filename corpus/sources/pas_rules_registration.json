@@ -1,0 +1,59 @@
+{
+ "instrument_id": "PAS_RULES_2014",
+ "title": "Companies (Prospectus and Allotment of Securities) Rules, 2014",
+ "rule": "12",
+ "source_url": "https://indiacode.gov.in/server/api/core/bitstreams/a4906475-d997-427d-a0e9-1bbc5078b69d/content",
+ "downloaded_from": "India Code DSpace REST (open API), item c1199089-a010-44fe-b270-1aaec2e39ac6",
+ "downloaded_at": "2026-09-13",
+ "registered_at": "2026-09-13T17:40:43Z",
+ "acquisition_method": "human_browser",
+ "artifact_sha256": "sha256:686104cd223d808491c28536cbf5a983924341c7f6f19444507ed3abc2e1dec4",
+ "stored_text": "corpus/rules/pas_rules_2014.txt",
+ "stored_text_sha256": "sha256:275012e553c137c88b1973c9dbe69c71304d7e8b2aac08e4eff1b5aac74b8fea",
+ "operative_clause": "Whenever a company having a share capital makes any allotment of its securities, the company shall, within thirty days thereafter, file with the Registrar a return of allotment in Form PAS - 3 , along with the fee as specified in the Companies (Registration Offices and Fees) Rules, 2014.",
+ "window_days": 30,
+ "window_form": "PAS-3",
+ "classification": "VERIFIED_INSTRUMENT",
+ "identity_checked_by": null,
+ "identity_checked_at": null,
+ "verbatim_clause_checked_by": null,
+ "verbatim_clause_checked_at": null,
+ "status": "PENDING_HUMAN_REVIEW",
+ "attests_to": [
+  "identity: this file is the principal Companies (Prospectus and Allotment of Securities) Rules, 2014, and not one of the Amendment Rules that share the title",
+  "clause: rule 12's period and form are recorded verbatim from the file, with no repair, normalisation or reflow -- and the period recorded matches the words on the page",
+  "currency: no later amendment substituting rule 12 was found, or the ones found are named in the record"
+ ],
+ "chain": {
+  "traced_at": "2026-09-13",
+  "method": "India Code REST; each amendment's ORIGINAL bitstream extracted with checker.pdf_text and searched for 'rule 12'",
+  "amendments_checked": 10,
+  "rule_12_untouched_by": [
+   "Amendment Rules 2014",
+   "Amendment Rules 2018",
+   "Second Amendment Rules 2018",
+   "3rd Amendment Rules 2018",
+   "Amendment Rules 2019",
+   "Second Amendment Rules 2019",
+   "Third Amendment Rules 2019",
+   "G.S.R. 338(E) 2022"
+  ],
+  "rule_12_touched_by": [
+   {
+    "instrument": "G.S.R. 37(E)",
+    "effect": "sub-rule (6) of rule 12 shall be omitted",
+    "verbatim": "sub - rule (6) of rule 12 shall be omitted",
+    "bears_on_window_days": false,
+    "note": "It omits sub-rule (6). The thirty-day period and Form PAS-3 are in sub-rule (1), which this does not touch. The window therefore survives -- but the chain is NOT clean and a reader must see this."
+   }
+  ],
+  "UNREAD": [
+   {
+    "instrument": "G.S.R. 642(E), Amendment Rules 2020",
+    "why": "India Code lists the item but it has no ORIGINAL bundle, so no file could be retrieved",
+    "consequence": "the chain has a hole. Whether 642(E) touches rule 12 is UNKNOWN, and the third attestation limb cannot be signed as 'no later amendment was found' -- only as 'those found are named, and one could not be read'."
+   }
+  ],
+  "verdict": "WINDOW_SURVIVES_WITH_ONE_UNREAD_AMENDMENT"
+ }
+}
