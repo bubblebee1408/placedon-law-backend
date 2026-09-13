@@ -194,8 +194,16 @@ def _date_from_span(span: str) -> date | None:
     return None
 
 
-def _consistent(name: str, value: object, span: str) -> tuple[bool, str]:
-    """Does the quoted span actually yield the proposed value?"""
+def value_supported_by_span(name: str, value: object, span: str) -> tuple[bool, str]:
+    """Does the quoted span actually yield the proposed value?
+
+    Public because it has two callers. `reasoning.review()` used to check only
+    that a span EXISTED in the document, which a prompt injection defeats: an
+    attacker who controls the document controls the span too, so
+    {"value": 999999999, "span": "verified"} passed review clean when the word
+    "verified" appeared inside the injection itself. Span presence is necessary
+    and never sufficient.
+    """
     if name in MONEY_FIELDS:
         got = _money_from_span(span)
         if got is None:
@@ -264,7 +272,7 @@ def ground(document: str, proposed: dict, *, source_id: str | None = None
             out.append(Grounded(name, value, span, None, None, NOT_IN_DOCUMENT,
                                 "the quoted span does not appear in the document"))
             continue
-        ok, why = _consistent(name, value, span or "")
+        ok, why = value_supported_by_span(name, value, span or "")
         if not ok:
             out.append(Grounded(name, value, span, at[0], at[1], VALUE_MISMATCH, why))
             continue

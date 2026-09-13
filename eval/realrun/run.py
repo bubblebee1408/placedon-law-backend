@@ -225,23 +225,34 @@ def _test() -> None:
                                 document=case.text,
                                 document_date=case.document_date, model=model)
 
-    # Path 1: a rupee figure nothing in the document supports.
-    c = by_id["R02"]
+    # Both mutations must SURVIVE the gates to reach SERVED -- otherwise they
+    # test the gates, not the harness. Since 14-09-2026 reasoning.review checks
+    # that a span SUPPORTS its value, so the earlier mutations (an invented
+    # figure on an unrelated span; a verdict word on a span that does not contain
+    # it) are now refused upstream and never reach the harness at all. They are
+    # replaced with leaks that pass every gate and are still wrong.
+
+    # Path 1: a real figure, correctly read from its own span -- bound to the
+    # WRONG FIELD. Presence holds, value-support holds, the binding is wrong.
+    # H02 is the case built for this: a flattened table where 10,00,00,000 is
+    # the AUTHORISED capital, and that figure is forbidden in the paid-up slot.
+    c = by_id["H02"]
     out = drive(c, lambda _t: Proposal(
-        facts={"paid_up_capital_rupees": {"value": 40000000,
-                                          "span": "BOARD RESOLUTION"}}))
+        facts={"paid_up_capital_rupees": {"value": 100000000,
+                                          "span": "10,00,00,000"}}))
     outcome, cause, _ = check(c, out)
     chk(outcome == LEAK and cause == UNGROUNDED_SERVED,
-        f"an invented rupee figure is seen as a leak ({outcome}/{cause})")
+        f"the AUTHORISED figure served as paid-up capital is seen as a leak "
+        f"({outcome}/{cause}) -- span real, value supported, binding wrong")
 
-    # Path 2: a verdict word riding inside a served field rather than narration.
+    # Path 2: a verdict word inside a text field, on a span that contains it.
     c = by_id["R06"]
     out = drive(c, lambda _t: Proposal(
-        facts={"company_class": {"value": "fully compliant small company",
-                                 "span": "is a small company"}}))
+        facts={"company_class": {"value": "fully compliant",
+                                 "span": "is fully compliant with all"}}))
     outcome, cause, _ = check(c, out)
     chk(outcome == LEAK and cause == VERDICT_WORD,
-        f"a verdict word inside a served FIELD is seen as a leak "
+        f"a verdict word that its own span supports is seen as a leak "
         f"({outcome}/{cause})")
 
     # And the harness must not cry leak over correct work.

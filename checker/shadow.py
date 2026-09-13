@@ -278,10 +278,21 @@ def _test() -> None:
 
     # ── the harness must be able to report a leak, or it measures nothing ────
     def leaking_model(document: str) -> Proposal:
-        # quotes a REAL span but attaches the wrong value -- the failure that a
-        # span requirement alone does not stop.
-        return Proposal(facts={"paid_up_capital_rupees":
-                               {"value": 40000000, "span": "Rs. 6,00,00,000"}})
+        # A quantity bound to the WRONG FIELD. The span is real, and the value is
+        # genuinely the number that span states -- so it satisfies both presence
+        # and value-support. It is still wrong, because 2015-04-01 is the
+        # incorporation date and not a financial year.
+        #
+        # This test used to leak a real span with a MISMATCHED value, and the
+        # comment beside it said that was "the failure a span requirement alone
+        # does not stop". It is stopped now: reasoning.review calls
+        # document_extract.value_supported_by_span since 14-09-2026, after a weak
+        # model obeyed an injection that supplied its own span. So the harness
+        # needs a leak that survives THAT check, and a mis-bound quantity is one --
+        # which is the failure entail_binding.py exists for.
+        return Proposal(facts={"financial_year":
+                               {"value": "2015-04-01",
+                                "span": "incorporated on 2015-04-01"}})
     r_leak = run(CASES, leaking_model, **KW)
     check(r_leak[0].outcome == LEAKED,
           f"a real span with a wrong value LEAKS — the harness can report failure "
