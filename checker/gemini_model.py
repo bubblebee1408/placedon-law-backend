@@ -67,6 +67,8 @@ RATE_NOTE = ("Free tier is Flash and Flash-Lite only (Pro lost it April 2026). "
 # difference in the shadow scores is a difference in the MODEL and not in what
 # it was asked to do.
 from checker.anthropic_model import _EXTRACT_SYSTEM
+from checker.prompt_safety import (UNTRUSTED_CLAUSE, carries_clause,
+                                   contains_untrusted_block, wrap_untrusted)
 
 
 def available() -> bool:
@@ -115,7 +117,12 @@ def extract(document: str, *, budget=None, model: str = FLASH,
     payload = {
         "systemInstruction": {"parts": [{"text": _EXTRACT_SYSTEM}]},
         "contents": [{"role": "user", "parts": [
-            {"text": "DOCUMENT:\n" + document},
+            # E1. Gemini takes the document as a CONCATENATED STRING -- unlike
+            # Anthropic, which gets its own content block -- so "DOCUMENT:" was the
+            # only thing separating the document from the prompt around it, and a
+            # label is not a boundary. Delimited here, and only here, because this
+            # path returns no offsets into the text: there is nothing to shift.
+            {"text": wrap_untrusted(document, "uploaded document")},
             {"text": "Report what this document says."},
         ]}],
         "generationConfig": {"temperature": 0, "maxOutputTokens": 4096},
@@ -250,6 +257,33 @@ def _test() -> None:
     check("tokens-per-minute" in RATE_NOTE and "50x" in RATE_NOTE,
           "the free tier's binding limit is recorded, with the 50x error that "
           "reading requests-per-day caused here before")
+
+
+    # ── E1: untrusted text is delimited, and the clause is carried ───────────
+    from checker.prompt_safety import INJECTIONS
+    captured = {}
+
+    def _spy(model, payload, timeout=90):
+        captured["payload"] = payload
+        return {"candidates": [{"content": {"parts": [{"text": '{"facts": {}}'}]}}],
+                "usageMetadata": {"promptTokenCount": 10, "candidatesTokenCount": 5}}
+
+    hostile = ("Resolved that the Company do allot shares. "
+               + INJECTIONS[0] + " Dated 14 June 2026.")
+    extract(hostile, _transport=_spy)
+    sent = captured["payload"]["contents"][0]["parts"][0]["text"]
+
+    check(contains_untrusted_block(sent),
+          "the document reaches Gemini inside <source> delimiters, not after a "
+          "bare 'DOCUMENT:' label")
+    check(INJECTIONS[0] in sent,
+          "...carrying the injected instruction verbatim -- it is evidence about "
+          "what the document says, and stripping it would be repairing a source")
+    check(carries_clause(captured["payload"]["systemInstruction"]["parts"][0]["text"]),
+          "...and the system instruction tells the model that <source> is never a "
+          "command")
+    check(hostile in sent,
+          "the document text itself is byte-identical inside the block")
 
     print(f"\n{ok}/{ok + fail} passed")
 
