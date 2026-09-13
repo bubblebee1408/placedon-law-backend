@@ -259,10 +259,34 @@ Taken from the pasted plan regardless of the scope decision, and now binding:
 | 1 | Single vendor for reasoning — Sonnet + Haiku | Already `router.py`. **One amendment: keep Gemini Flash for `PAGE_IMAGE` only.** It is free, it wins on Devanagari, and at ₹2,000 a free OCR tier is the budget, not bloat |
 | 2 | No LangGraph, no CrewAI, no fine-tuning | Already how this is built. `docs/NON_GOALS.md` |
 | 3 | Measurement is the exit bar — not good numbers | Already the discipline: `shadow.py` gates on `LEAKED == 0`, `pit_bench.py` scores refusals as costs |
-| 4 | Wrap retrieved text in `<source>`; treat it as data, never instructions | **REAL GAP.** `model_adapter.py` is the only place that touches it. Next engineering item |
+| 4 | Wrap retrieved text in `<source>`; treat it as data, never instructions | **DONE 13-09-2026**, and the baseline stated here was wrong — see below |
 | 5 | Bounded correction loop, then abstain | **PARTIAL.** We abstain across ~10 modules; we do not bound-and-retry |
 
-Lessons 4 and 5 are the only two that need code, and neither blocks the meeting.
+Lesson 5 is the only one still needing code, and it does not block the meeting.
+
+### Correction to lesson 4's baseline
+
+This table originally said `model_adapter.py` was "the only place that honours this".
+**That was false and I wrote it.** A grep for `injection|untrusted` matched a comment in
+that file about *model output* being untrusted — a different thing — and I reported the
+hit without reading the match. The real baseline was **zero of five** entry points
+hardened, not one. Same error shape as the Harvey overstatement in §0: *a hit is not a
+reading*.
+
+Closed in `d700328` and `2f14d49`. The design principle that came out of it is not the
+one the brief proposed:
+
+> **The clause is universal; the delimiter is only for raw-string entry.**
+
+Wrapping the Anthropic extract path would have shifted the `char_location` offsets that
+span grounding rests on — no crash, just drift in the layer that makes "one ungrounded
+field poisons the record" true. `checker/anthropic_model.py` now demonstrates that
+exemption rather than asserting it: a real offset applied to a wrapped copy lands on
+`'nt\nThe C'` instead of `'1,00,000'`.
+
+Two things are logged rather than fixed, both in CLAUDE.md: **image-borne injection**
+(uncloseable by any string guard — Gemini reads pixels) and **E6 training-data
+poisoning** (`annotation.to_sft()`, dormant under the no-fine-tuning decision).
 
 ---
 
