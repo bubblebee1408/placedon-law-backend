@@ -151,3 +151,36 @@ From `CLAUDE.md`, restated here because acquisition is where they bite:
   listed-company disclosures, Indian Kanoon under its attribution terms.
 - Never repair a defective government source. Flag it, preserve it verbatim.
 - If evidence is incomplete, write `OPEN` or `UNVERIFIED`. Do not guess.
+
+---
+
+## Acquire from the issuer, not the aggregator (added 14-09-2026, measured)
+
+`scripts/provenance_census.py` runs `verify_document.py` across every held
+artifact. Measured, not asserted:
+
+| | intact |
+|---|---|
+| India Code (aggregator) | **0 of 8** |
+| MCA (issuing ministry) | **1 of 1** |
+| SEBI (issuing regulator) | 0 of 1 |
+
+**1 of 13 artifacts carries a valid signature over unaltered bytes.** Five are
+signed and then *altered* — content appended after the Gazette signed them, so a
+genuine CCA India chain sits behind bytes that no longer match it. Seven carry no
+signature at all.
+
+India Code re-renders and stamps what it serves. That is a reasonable thing for a
+reading portal to do and it is not a criticism of India Code. It has one
+consequence for us:
+
+> **Use an aggregator to FIND an instrument. Acquire from the issuing source when
+> the artifact must carry evidentiary weight.**
+
+The distinction between a *signed-then-altered* file and an *unsigned rendering*
+is preserved deliberately. They are different problems: one has a real signature
+behind altered bytes, the other never had one. Collapsing them would hide which
+artifacts are one clean re-fetch away from being provable.
+
+Re-run the census after any acquisition. The numbers above are generated, not
+maintained.
