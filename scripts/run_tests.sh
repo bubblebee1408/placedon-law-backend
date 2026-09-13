@@ -19,6 +19,7 @@ suites=(
   checker/orchestrator.py
   checker/bundles.py
   checker/reasoning.py
+  checker/field_binding.py
   checker/shadow.py
   checker/scope.py
   checker/session.py

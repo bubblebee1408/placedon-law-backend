@@ -63,10 +63,16 @@ CONCLUSION_ASSERTED = "CONCLUSION_ASSERTED"
 # and a span, and because the injection was part of the document the span checked
 # out. Presence was necessary and never sufficient.
 FACT_VALUE_UNSUPPORTED = "FACT_VALUE_UNSUPPORTED"
+# The span is real and supports its value, but names a DIFFERENT field. Added
+# 15-09-2026: closing FACT_VALUE_UNSUPPORTED immediately exposed this one,
+# because shadow.py's replacement leak was exactly it -- a turnover figure filed
+# as paid-up capital passes presence AND value-support, and on a flattened PDF
+# table it is the ordinary failure rather than the exotic one.
+FACT_MISBOUND = "FACT_MISBOUND"
 
 VIOLATIONS = (INTENT_NOT_DECLARED, FACT_WITHOUT_SPAN, FACT_NOT_GROUNDED,
-              FACT_VALUE_UNSUPPORTED, DATE_INVENTED, FIGURE_INVENTED,
-              CITATION_OUTSIDE_PACK, CONCLUSION_ASSERTED)
+              FACT_VALUE_UNSUPPORTED, FACT_MISBOUND, DATE_INVENTED,
+              FIGURE_INVENTED, CITATION_OUTSIDE_PACK, CONCLUSION_ASSERTED)
 
 
 @dataclass(frozen=True)
@@ -192,6 +198,16 @@ def review(proposal: Proposal, *, declared_intents: tuple[str, ...],
                 f"{name}: the span is present but does not support the value "
                 f"({why})", span[:60]))
             continue
+        # The span supports the value. Does it describe THIS field? Refused only
+        # when the span positively names a different one -- a span that names
+        # nothing is a bare figure quoted from a table, which is not an error.
+        from checker.field_binding import check as _binding_check
+        bind = _binding_check(name, span)
+        if bind.refused:
+            refusals.append(Refusal(
+                FACT_MISBOUND,
+                f"{name}: {bind.detail}", span[:60]))
+            continue
         facts[name] = item
 
     # 4/5/6. narration may not introduce a date, a figure or a citation that is
@@ -274,6 +290,17 @@ def misbehaving_model(violation: str) -> Proposal:
         return Proposal(facts={"paid_up_capital_rupees":
                                {"value": 999999999, "span": "The Company is a "
                                                             "private company"}})
+    if violation == FACT_MISBOUND:
+        # shadow.py's own replacement leak, and the one a flattened capital table
+        # produces every time: the authorised figure sits directly above the
+        # paid-up figure and is always the larger number.
+        # The span is in the document and genuinely states Rs 6,00,00,000, so
+        # presence and value-support both hold. It describes PAID-UP capital and
+        # is filed under net worth. Only the binding is wrong -- which is the
+        # shape a flattened capital table produces every time.
+        return Proposal(facts={"net_worth_rupees":
+                               {"value": 60000000,
+                                "span": "paid up share capital is Rs. 6,00,00,000"}})
     if violation == DATE_INVENTED:
         return Proposal(narration="The AGM was held on 2024-09-30.")
     if violation == FIGURE_INVENTED:

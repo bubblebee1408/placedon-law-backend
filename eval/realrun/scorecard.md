@@ -199,3 +199,64 @@ in this project. One 18-case run exhausts it.
 Not safety — 18 adversarial cases on two models. Not production accuracy; no
 filed document was used. Not the reasoning tier; Anthropic authenticates but the
 account has no credit.
+
+
+---
+
+# The next leak, closed the same day
+
+Closing `FACT_VALUE_UNSUPPORTED` immediately exposed the one behind it, because
+`shadow.py`'s replacement test *was* it: a quantity whose span is real, whose
+value is genuinely what that span states, and whose **field is wrong**.
+
+```
+{"paid_up_capital_rupees": {"value": 150000000,
+                            "span": "turnover of Rs 15,00,00,000"}}
+```
+
+Every gate passes this. The span is in the document. The span states
+Rs 15,00,00,000 and the value is 150000000. Only the binding is wrong — and on a
+flattened PDF table, where four figures sit under four labels the extraction has
+separated from them, **this is the ordinary failure rather than the exotic one.**
+
+## `checker/field_binding.py` — and the rule that keeps it honest
+
+New violation `FACT_MISBOUND`. It refuses **only** when the span positively names
+a *different* field and does not name the claimed one.
+
+**A span that names nothing is not refused.** A caller quoting a bare figure from
+a table has done nothing wrong — the label is simply elsewhere, and refusing it
+would convert a formatting accident into a compliance failure. That asymmetry is
+the entire design: every session this week produced at least one false positive
+that sent someone to fix work which was already correct, and a binding checker is
+the easiest place in this repository to build another.
+
+Scoped to the four mutually-exclusive money fields, plus `authorised` and
+`called-up` — which are named in documents, never extracted, and sit directly
+above paid-up in every capital table ever drafted, always as the larger number.
+
+## Measured, not asserted
+
+| | before | after |
+|---|---|---|
+| LEAK | 0 | **0** |
+| WRONG_REFUSAL | 15 | **15** |
+
+The new gate costs nothing beyond what the previous one already refused.
+
+**And it passes real correct work.** Regression-checked against the exact
+proposal `gemini-3.6-flash` returned earlier in the session: four fields, all
+still served, review clean. The bare-figure spans (`Rs 4,00,00,000`) come back
+`UNNAMED` rather than refused — the asymmetry doing its job.
+
+## What is still open, stated rather than hidden
+
+`shadow.py`'s leak **survives this fix, deliberately.** It is a *text-field*
+misbinding — `financial_year` filed from an incorporation-date span — and this
+check covers money fields only. So shadow still has a detectable leak, which is
+what keeps it measuring something.
+
+Date-and-text confusion is a different class from money-sibling confusion, and
+widening this checker to cover it without evidence of the failure shape would be
+building against an imagined bug. **That is the next thing to measure, not the
+next thing to assume.**
