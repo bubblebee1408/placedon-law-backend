@@ -45,15 +45,29 @@
     "verbatim": "sub - rule (6) of rule 12 shall be omitted",
     "bears_on_window_days": false,
     "note": "It omits sub-rule (6). The thirty-day period and Form PAS-3 are in sub-rule (1), which this does not touch. The window therefore survives -- but the chain is NOT clean and a reader must see this."
-   }
-  ],
-  "UNREAD": [
+   },
    {
-    "instrument": "G.S.R. 642(E), Amendment Rules 2020",
-    "why": "India Code lists the item but it has no ORIGINAL bundle, so no file could be retrieved",
-    "consequence": "the chain has a hole. Whether 642(E) touches rule 12 is UNKNOWN, and the third attestation limb cannot be signed as 'no later amendment was found' -- only as 'those found are named, and one could not be read'."
+    "instrument": "G.S.R. 642(E), Amendment Rules 2020, dated 16-10-2020",
+    "artifact": "corpus/sources/gsr642e_2020.pdf",
+    "sha256": "8b281a6c5f6fd7b241f2cfb1bb7390eeb094658d5906a1274c559af2bb1c2da5",
+    "gazette_id": "CG-DL-E-16102020-222511",
+    "effect": "UNKNOWN FROM THE ARTIFACT \u2014 it is a scan. 212 characters extracted from 1.2 MB, all of it signature metadata; there is no text layer to search, so we cannot confirm from the file itself whether rule 12 is touched.",
+    "signature_check": "INVALID \u2014 signed by SARVESH KUMAR SRIVASTAVA via (n)Code Solutions CA 2014 <- CCA India 2014, but the signed bytes do not match and unsigned content was APPENDED. India Code's copy has been altered after Gazette signing (apparently by India Code's own stamping). The chain is genuine; this rendering of it is not byte-intact.",
+    "secondary_report": "TaxGuru reports it amends rule 14(1) \u2014 a single annual special resolution for QIB allotments \u2014 and states rule 12 is not mentioned. SECONDARY, one source, unverified against the artifact.",
+    "bears_on_window_days": "PROBABLY NOT, on secondary reporting only"
    }
   ],
-  "verdict": "WINDOW_SURVIVES_WITH_ONE_UNREAD_AMENDMENT"
+  "UNREAD": [],
+  "verdict": "WINDOW_PROBABLY_SURVIVES_ON_SECONDARY_REPORTING",
+  "correction_2026_09_13": "An earlier version of this record said G.S.R. 642(E) 'has no ORIGINAL bundle, so no file could be retrieved'. That was MY BUG, not a gap in India Code: the trace script carried a placeholder UUID for that one item and never queried the real one. The item has ORIGINAL, TEXT and THUMBNAIL bundles. Retracted.",
+  "what_a_reviewer_must_do": "Open corpus/sources/gsr642e_2020.pdf and read it with your own eyes. It is a scan, so no automated check can do this. Confirm it amends rule 14 and not rule 12. Until then the third attestation limb is signable only as 'amendments traced; one is a scan whose effect rests on secondary reporting'."
+ },
+ "artifact_verification": {
+  "checked_at": "2026-09-13",
+  "tool": "scripts/verify_document.py",
+  "result": "INCOMPLETE_VERIFICATION",
+  "signature": "NOT_PRESENT",
+  "meaning": "India Code serves an UNSIGNED rendering of the Rules, not the signed e-Gazette PDF. It is an official government portal and a permitted source, so the artifact is usable -- but it is NOT cryptographically established as the Gazette, and must not be described as though it were.",
+  "answers": "the senior-advocate objection: are you reading the Gazette itself, or somebody's rendering of it? Measured answer: a rendering."
  }
 }
