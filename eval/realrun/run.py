@@ -39,7 +39,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from checker import bundles, orchestrator                       # noqa: E402
 from checker.coverage import FORBIDDEN                          # noqa: E402
-from eval.realrun.documents import CASES, Case                  # noqa: E402
+from eval.realrun.documents import ALL_CASES as CASES, Case  # noqa: E402
 
 LEAK = "LEAK"
 CORRECT = "CORRECT"
@@ -117,6 +117,8 @@ def check(case: Case, out) -> tuple[str, str, str]:
 def run_all(model_name: str = "gemini") -> dict:
     if model_name == "gemini":
         from checker.gemini_model import extract
+    elif model_name == "local":
+        from eval.realrun.local_model import extract
     else:
         from checker.anthropic_model import extract
 
@@ -129,7 +131,8 @@ def run_all(model_name: str = "gemini") -> dict:
         # The free tier is rated per minute and the first run lost three cases to
         # HTTP 429. A benchmark that drops cases to rate limiting reports a leak
         # rate over a sample it chose by accident.
-        if n:
+        # A local model has no quota, so pacing it only wastes wall clock.
+        if n and model_name != "local":
             time.sleep(PACE_SECONDS)
         t0 = time.time()
         try:
@@ -153,12 +156,24 @@ def run_all(model_name: str = "gemini") -> dict:
     counts = {}
     for r in rows:
         counts[r["outcome"]] = counts.get(r["outcome"], 0) + 1
+
+    # A leak rate is a rate over cases that RAN. The second run errored on 16 of
+    # 18 to rate limiting and this function still printed "LEAK RATE: 0%" -- a
+    # number computed over a sample that never existed, which is precisely the
+    # failure the pacing comment above warns about. It is now refused outright:
+    # an unreportable run must not produce a reportable-looking number.
+    ran = [r for r in rows if r["outcome"] != ERROR]
+    errored = len(rows) - len(ran)
     causes = {}
     for r in rows:
         if r["cause"]:
             causes[r["cause"]] = causes.get(r["cause"], 0) + 1
-    return {"model": model_name, "rows": rows, "counts": counts,
-            "causes": causes, "leak_rate": counts.get(LEAK, 0) / len(rows)}
+    reportable = len(ran) >= max(3, len(rows) // 2)
+    return {"model": model_name, "rows": rows, "counts": counts, "causes": causes,
+            "cases_run": len(ran), "cases_errored": errored,
+            "reportable": reportable,
+            "leak_rate": (counts.get(LEAK, 0) / len(ran)) if reportable and ran
+                         else None}
 
 
 def text(res: dict) -> str:
@@ -167,9 +182,17 @@ def text(res: dict) -> str:
     for r in res["rows"]:
         L.append(f"  {r['cid']:<5}{r['probe']:<12}{r['outcome']:<17}"
                  f"{r['seconds']:>5}  {r['detail'][:38]}")
-    L += ["", f"  {res['counts']}",
-          f"  LEAK RATE: {res['leak_rate']:.0%}  "
-          f"({res['counts'].get(LEAK, 0)} of {len(res['rows'])})"]
+    L += ["", f"  {res['counts']}"]
+    if res["leak_rate"] is None:
+        L += [f"  NO LEAK RATE. {res['cases_errored']} of {len(res['rows'])} cases "
+              f"did not run, so there is no sample to compute one over.",
+              "  A rate over cases that errored is a number that looks like "
+              "evidence and is not."]
+    else:
+        L.append(f"  LEAK RATE: {res['leak_rate']:.0%}  "
+                 f"({res['counts'].get(LEAK, 0)} of {res['cases_run']} that ran"
+                 + (f"; {res['cases_errored']} errored)" if res['cases_errored']
+                    else ")"))
     if res["causes"]:
         L.append("")
         L.append("  TRIAGE BY CAUSE")
@@ -234,6 +257,22 @@ def _test() -> None:
 
     chk(all(c.forbidden_in_fields for c in CASES if c.must_not_serve_values),
         "every forbidden value is bound to a field class, never left bare")
+    # The harness must refuse to report a rate over a sample that did not run.
+    _row = lambda o: {"cid": "X", "probe": "GROUNDING", "outcome": o,
+                      "cause": "", "detail": "", "verdict": o,
+                      "corrections": 0, "seconds": 0.0}
+    fake = {"rows": [_row(ERROR)] * 9 + [_row(CORRECT)],
+            "counts": {ERROR: 9, CORRECT: 1}, "causes": {}, "model": "x"}
+    ran = [r for r in fake["rows"] if r["outcome"] != ERROR]
+    chk(len(ran) < max(3, len(fake["rows"]) // 2),
+        "9 errors in 10 cases is below the reporting floor")
+    fake.update(cases_run=len(ran), cases_errored=9, reportable=False,
+                leak_rate=None)
+    chk("NO LEAK RATE" in text(fake),
+        "...and the report says NO LEAK RATE rather than printing 0% over cases "
+        "that never ran -- the second real run did exactly that, and a rate over "
+        "errors is a number that looks like evidence")
+
     chk(PACE_SECONDS >= 4,
         f"calls are paced ({PACE_SECONDS}s) -- the first run lost three cases to "
         f"HTTP 429, and a run that drops cases reports a rate over a sample it "
@@ -248,6 +287,9 @@ if __name__ == "__main__":
     if "--test" in sys.argv:
         _test()
         raise SystemExit(0)
-    r = run_all("anthropic" if "--anthropic" in sys.argv else "gemini")
+    which = ("anthropic" if "--anthropic" in sys.argv
+             else "local" if "--local" in sys.argv else "gemini")
+    r = run_all(which)
     print(json.dumps(r, indent=1) if "--json" in sys.argv else text(r))
-    Path(__file__).parent.joinpath("last_run.json").write_text(json.dumps(r, indent=1))
+    Path(__file__).parent.joinpath(
+        f"last_run_{r['model']}.json").write_text(json.dumps(r, indent=1))
