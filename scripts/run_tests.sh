@@ -134,6 +134,14 @@ suites=(
   checker/matter.py
 )
 
+# Test-only injection point. scripts/harness_regression.sh sets this to a suite that
+# is KNOWN to fail, to prove this runner actually turns RED. It can only ADD a suite,
+# never remove or silence one, so it cannot itself become a masking vector. Unset in
+# all normal use.
+if [ -n "${HARNESS_EXTRA_SUITE:-}" ]; then
+  suites+=("$HARNESS_EXTRA_SUITE")
+fi
+
 # --test flag rather than a bare run: this one takes a PDF argument in normal use.
 extra=("scripts/acquire_rules.py --test" "scripts/register_gsr700e.py --test" "scripts/register_gsr880e.py --test" "scripts/register_kmp_rules.py --test" "scripts/register_sebi_lodr.py --test" "scripts/register_pas_rules.py --test" "scripts/register_s188_rule15.py --test" "scripts/benchmark_refreeze_request.py --test" "scripts/parse_board_rules.py --test" "scripts/baseline_eval.py --test" "scripts/review.py --test" "scripts/review_brief.py --check" "scripts/slice_s96.py --test" "scripts/slice_s173.py --test" "scripts/serve_matrix.py --test" "scripts/serve_api.py --test" "scripts/record_interview.py --test" "scripts/verify_document.py --test" "scripts/verify_section_index.py --test" "scripts/resolve_missing_sections.py --test" "scripts/prove_temporal.py --test" "scripts/batch1_omissions.py --test" "scripts/batch1_review.py --test" "scripts/find_commencement.py --test")
 
@@ -179,4 +187,15 @@ done
 
 echo
 [ $fails -eq 0 ] && echo "all suites green" || echo "$fails suite(s) failing"
+
+# ONE machine-parseable line, and it is the only thing anything downstream may read.
+# Both false greens in this repo came from prose being eyeballed instead of a status
+# being parsed: once a trailing `tail` made the pipeline's status the tail's, once an
+# `&` detached the run so the wrapping shell returned 0 while tests were still going.
+# Neither was a bug in this file. Both were bugs at the CALL SITE, which is why the
+# fix is a parseable contract plus scripts/verify_green.sh as the single oracle.
+total=$(( ${#suites[@]} + ${#extra[@]} ))
+if [ "$fails" -eq 0 ]; then harness_status=GREEN; else harness_status=RED; fi
+printf 'HARNESS_RESULT suites=%d failed=%d status=%s\n' "$total" "$fails" "$harness_status"
+
 exit $fails
