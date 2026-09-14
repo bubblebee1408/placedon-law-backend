@@ -165,7 +165,7 @@ Local paths are relative to `/Users/nishantsingh/PlacedOn/placedon-law-backend/c
 | titan_agm_2025.pdf | 204,071 | 16 | 0 | 1 | yes |
 | titan_agm_2026.pdf | 211,426 | 15 | 0 | 1 | yes |
 
-`_raw/` also holds scripts: `dump.py` (332 B), `extract.py` (1,353 B), `slice.py` (633 B). The garbled-text heuristic flagged **0 pages** across all 14 local PDFs.
+`_raw/` also holds scripts: `dump.py` (332 B), `extract.py` (1,353 B), `slice.py` (633 B). The garbled-text heuristic flagged **0 pages** across all 14 local PDFs. *(Correction 14-09-2026: the heuristic missed real corruption. 17 local pages are text over a page-covering scan — all 14 of `rm_bm_20250128.pdf`, 1 of `rm_bm_20240529.pdf`, 2 of `rm_bm_20251103.pdf` — and on 20250128 the OCR errors reach the figures. MEASURED by `scripts/text_layer_census.py`, commit `9010605`.)*
 
 **Extracted text files** (bytes)
 
@@ -236,8 +236,8 @@ Both page ranges are SOURCED from MANIFEST.md. The parent annual reports are not
 6. **Page-number identity is unstable.** B1 prints two-up spreads as single PDF pages (130 of 466). Neither B1 nor C1 has a usable outline. A1's printed page numbers do match its PDF indices.
 7. **The held test corpus is far smaller than the documents above.**
    - Every real listed-company PDF in `corpus/testdocs/_raw/` is **1–22 pages**. The ICSI guidance notes are 169/179.
-   - All have text layers and none is garbled.
-   - INFERRED: the corpus exercises none of the failure modes measured in A1 (scanned annexures, low-dpi scans, corrupted text layers, bundles of mixed document types) and none of the scale of A1/B1/C1.
+   - All have text layers. ~~and none is garbled~~ *(corrected 14-09-2026: 17 pages carry an OCR text layer over a page-covering scan, with errors in the figures on `rm_bm_20250128.pdf`; commit `9010605`)*
+   - INFERRED: the corpus exercises none of the failure modes measured in A1 (scanned annexures, low-dpi scans, corrupted text layers, bundles of mixed document types) and none of the scale of A1/B1/C1. *(Corrected 14-09-2026: it does exercise one — an OCR'd scanned annexure with corrupted figures, 14 pages. It still exercises none of the others, nor A1's scale.)*
 
 ## Unresolved issues
 
