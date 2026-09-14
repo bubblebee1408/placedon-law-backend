@@ -223,7 +223,10 @@ def value_supported_by_span(name: str, value: object, span: str) -> tuple[bool, 
             return False, "the quoted span states no number"
         got = int(m.group(1).replace(",", "").replace(" ", ""))
         return got == value, f"span states {got}, extractor proposed {value}" if got != value else ""
-    # text: the value must appear in what was quoted
+    # text: the value must appear in what was quoted -- and must say something.
+    # An empty value is a substring of every span, so it is supported by none.
+    if value is None or not str(value).strip():
+        return False, "the proposed value is empty; no span can support it"
     return (str(value).lower() in _normalise(span).lower(),
             f"{value!r} does not appear in the quoted span")
 
@@ -365,6 +368,23 @@ def _test() -> None:
           "...and whitespace runs do not defeat the search")
     check(locate("company shall not exceed", odd) is None,
           "but the search does NOT repair the source to make a span match")
+
+    # ── an empty value is not supported by every span ────────────────────────
+    # 14-09-2026, llama3 via the realrun probe: {"cin": {"value": "", "span":
+    # "The Company was incorporated on 01 April 2015."}} was SERVED. The text
+    # check asked whether the value appears in the span, and "" appears in every
+    # string. An empty value says nothing, so no span can support it.
+    t05_span = "The Company was incorporated on 01 April 2015."
+    for blank in ("", "   "):
+        for field in TEXT_FIELDS:
+            ok_blank, why = value_supported_by_span(field, blank, t05_span)
+            check(not ok_blank,
+                  f"{field}={blank!r} is not supported by an unrelated span ({why})")
+    g6 = ground(t05_span, {"cin": {"value": "", "span": t05_span}}, source_id="d")
+    check(not g6.get("cin").usable and "cin" not in g6.to_payload(),
+          "...and ground() refuses it, so the empty CIN never reaches a payload")
+    check(value_supported_by_span("company_class", "private", "is a private company")[0],
+          "a real text value its span contains is still supported")
 
     # unknown keys are ignored, not rejected
     g5 = ground(DOC, dict(good, auditor_name={"value": "X", "span": "X"}), source_id="d")
