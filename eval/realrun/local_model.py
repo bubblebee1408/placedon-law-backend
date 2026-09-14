@@ -69,21 +69,41 @@ def extract(document: str, *, model: str = MODEL, timeout: int = 120):
     except (urllib.error.URLError, TimeoutError, OSError) as e:
         raise ModelUnavailable(f"ollama unreachable: {e}") from None
 
-    raw = data.get("response", "") or ""
+    # A reply that never finished is a SERVER failure, not a model answer. A model
+    # too big for GPU memory makes Ollama return HTTP 200 with done=false and an
+    # empty response; parsed, that is an empty Proposal from a case that "ran".
+    if data.get("error") or data.get("done") is not True:
+        raise ModelUnavailable(
+            f"ollama did not finish: {data.get('error') or 'done=false'}")
+
+    proposal, parse, raw = parse_reply(data.get("response", "") or "")
+    meta = {"model": model, "parse": parse}
+    if parse != "OK":
+        return proposal, meta | {"raw": raw[:200]}
+    return proposal, meta | {"tokens_out": data.get("eval_count"),
+                             "ms": round(data.get("total_duration", 0) / 1e6)}
+
+
+def parse_reply(raw: str) -> tuple[Proposal, str, str]:
+    """A model's reply text -> (Proposal, parse status, raw text).
+
+    Shared by every adapter, so a difference between two providers is a
+    difference in what the models said and never in how their replies were read.
+    """
     # The model's output is UNTRUSTED and frequently malformed -- fenced, doubled
     # braces, trailing prose. Parsing failure is a refusal, never a repair: a
     # harness that fixes up a model's JSON is measuring its own leniency.
     m = re.search(r"\{.*\}", raw, re.S)
     if not m:
-        return Proposal(), {"model": model, "raw": raw[:200], "parse": "NO_JSON"}
+        return Proposal(), "NO_JSON", raw
     try:
         obj = json.loads(m.group())
     except json.JSONDecodeError:
-        return Proposal(), {"model": model, "raw": raw[:200], "parse": "BAD_JSON"}
+        return Proposal(), "BAD_JSON", raw
 
     facts = obj.get("facts") if isinstance(obj, dict) else None
     if not isinstance(facts, dict):
-        return Proposal(), {"model": model, "raw": raw[:200], "parse": "NO_FACTS"}
+        return Proposal(), "NO_FACTS", raw
 
     # Pass through WHAT THE MODEL SAID, in the shape review expects. The first
     # version dropped any fact that was not already a {"value","span"} object --
@@ -105,7 +125,4 @@ def extract(document: str, *, model: str = MODEL, timeout: int = 120):
             clean[k] = {"value": v.get("value"), "span": v.get("span")}
         else:
             clean[k] = {"value": v, "span": None}
-    return (Proposal(facts=clean),
-            {"model": model, "parse": "OK",
-             "tokens_out": data.get("eval_count"),
-             "ms": round(data.get("total_duration", 0) / 1e6)})
+    return Proposal(facts=clean), "OK", raw

@@ -289,6 +289,39 @@ def _test() -> None:
         f"HTTP 429, and a run that drops cases reports a rate over a sample it "
         f"chose by accident")
 
+    # A server failure is not a model answer. On this 8 GB machine mistral-nemo
+    # (12B) ran Ollama out of GPU memory, and Ollama replied HTTP 200 with
+    # {"done": false, "response": ""}. That parsed as NO_JSON -- an empty
+    # Proposal, a case that "ran" and proposed nothing, counted in the
+    # denominator and never in cases_errored.
+    import io
+    from unittest import mock
+    from checker.anthropic_model import ModelUnavailable
+    from eval.realrun import local_model
+
+    def ollama_replies(body: dict):
+        return mock.patch.object(
+            local_model.urllib.request, "urlopen",
+            return_value=io.BytesIO(json.dumps(body).encode()))
+
+    oom = {"model": "", "created_at": "0001-01-01T00:00:00Z",
+           "response": "", "done": False}
+    try:
+        with ollama_replies(oom):
+            local_model.extract("any document")
+        raised = False
+    except ModelUnavailable:
+        raised = True
+    chk(raised, "an Ollama reply that never finished raises ModelUnavailable -- "
+                "an out-of-memory server is an ERROR, not a model that said nothing")
+
+    finished = {"done": True, "eval_count": 3, "total_duration": 1,
+                "response": '{"facts": {"cin": {"value": "U1", "span": "U1"}}}'}
+    with ollama_replies(finished):
+        p, meta = local_model.extract("any document")
+    chk(meta["parse"] == "OK" and "cin" in p.facts,
+        "...while a finished reply still parses as before")
+
     print(f"\n{ok}/{ok + fail} passed")
     if fail:
         raise SystemExit(1)
