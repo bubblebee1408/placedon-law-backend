@@ -1,0 +1,772 @@
+{
+ "rows": [
+  {
+   "cid": "T01",
+   "confusable": [
+    "document_date",
+    "incorporation_date"
+   ],
+   "orchestrator_verdict": "ABSTAINED",
+   "error": "",
+   "attempts": 2,
+   "raw_proposals": [
+    {
+     "facts": {
+      "incorporation_date": {
+       "value": "2015-04-01",
+       "span": null
+      },
+      "company_class": {
+       "value": "Private Company",
+       "span": null
+      }
+     },
+     "narration": ""
+    },
+    {
+     "facts": {
+      "incorporation_date": {
+       "value": "14 June 2024",
+       "span": null
+      },
+      "company_class": {
+       "value": "Company",
+       "span": null
+      }
+     },
+     "narration": ""
+    }
+   ],
+   "findings": [
+    {
+     "attempt": 1,
+     "field": "incorporation_date",
+     "value": "2015-04-01",
+     "span": null,
+     "verdict": "NO_SPAN",
+     "names_found": [],
+     "span_in_document": false,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 1,
+     "field": "company_class",
+     "value": "Private Company",
+     "span": null,
+     "verdict": "NO_SPAN",
+     "names_found": [],
+     "span_in_document": false,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 2,
+     "field": "incorporation_date",
+     "value": "14 June 2024",
+     "span": null,
+     "verdict": "NO_SPAN",
+     "names_found": [],
+     "span_in_document": false,
+     "value_belongs_to": "document_date",
+     "value_rendering": "14 june 2024"
+    },
+    {
+     "attempt": 2,
+     "field": "company_class",
+     "value": "Company",
+     "span": null,
+     "verdict": "NO_SPAN",
+     "names_found": [],
+     "span_in_document": false,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    }
+   ],
+   "seconds": 6.1
+  },
+  {
+   "cid": "T02",
+   "confusable": [
+    "financial_year",
+    "incorporation_date"
+   ],
+   "orchestrator_verdict": "ABSTAINED",
+   "error": "",
+   "attempts": 2,
+   "raw_proposals": [
+    {
+     "facts": {
+      "document_date": {
+       "value": "2024",
+       "span": null
+      },
+      "incorporation_date": {
+       "value": "01 April 2015",
+       "span": null
+      },
+      "company_class": {
+       "value": "Company",
+       "span": null
+      },
+      "financial_year": {
+       "value": "2023-24",
+       "span": null
+      }
+     },
+     "narration": ""
+    },
+    {
+     "facts": {
+      "document_date": {
+       "value": "14 June 2024",
+       "span": null
+      },
+      "incorporation_date": {
+       "value": "01 April 2015",
+       "span": null
+      },
+      "company_class": {
+       "value": "Company",
+       "span": null
+      },
+      "financial_year": {
+       "value": "2023-24",
+       "span": null
+      }
+     },
+     "narration": ""
+    }
+   ],
+   "findings": [
+    {
+     "attempt": 1,
+     "field": "document_date",
+     "value": "2024",
+     "span": null,
+     "verdict": "NO_SPAN",
+     "names_found": [],
+     "span_in_document": false,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 1,
+     "field": "incorporation_date",
+     "value": "01 April 2015",
+     "span": null,
+     "verdict": "NO_SPAN",
+     "names_found": [],
+     "span_in_document": false,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 1,
+     "field": "company_class",
+     "value": "Company",
+     "span": null,
+     "verdict": "NO_SPAN",
+     "names_found": [],
+     "span_in_document": false,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 1,
+     "field": "financial_year",
+     "value": "2023-24",
+     "span": null,
+     "verdict": "NO_SPAN",
+     "names_found": [],
+     "span_in_document": false,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 2,
+     "field": "document_date",
+     "value": "14 June 2024",
+     "span": null,
+     "verdict": "NO_SPAN",
+     "names_found": [],
+     "span_in_document": false,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 2,
+     "field": "incorporation_date",
+     "value": "01 April 2015",
+     "span": null,
+     "verdict": "NO_SPAN",
+     "names_found": [],
+     "span_in_document": false,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 2,
+     "field": "company_class",
+     "value": "Company",
+     "span": null,
+     "verdict": "NO_SPAN",
+     "names_found": [],
+     "span_in_document": false,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 2,
+     "field": "financial_year",
+     "value": "2023-24",
+     "span": null,
+     "verdict": "NO_SPAN",
+     "names_found": [],
+     "span_in_document": false,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    }
+   ],
+   "seconds": 6.9
+  },
+  {
+   "cid": "T03",
+   "confusable": [
+    "cin"
+   ],
+   "orchestrator_verdict": "ABSTAINED",
+   "error": "",
+   "attempts": 2,
+   "raw_proposals": [
+    {
+     "facts": {
+      "document_date": {
+       "value": "2024-06-14",
+       "span": null
+      },
+      "company_class": {
+       "value": "Private Limited",
+       "span": null
+      },
+      "cin": {
+       "value": "U74999KA2019PTC123456",
+       "span": null
+      }
+     },
+     "narration": ""
+    },
+    {
+     "facts": {
+      "document_date": {
+       "value": "14 June 2024",
+       "span": null
+      },
+      "company_class": {
+       "value": "Private Limited",
+       "span": null
+      },
+      "cin": {
+       "value": "U74999KA2019PTC123456",
+       "span": null
+      }
+     },
+     "narration": ""
+    }
+   ],
+   "findings": [
+    {
+     "attempt": 1,
+     "field": "document_date",
+     "value": "2024-06-14",
+     "span": null,
+     "verdict": "NO_SPAN",
+     "names_found": [],
+     "span_in_document": false,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 1,
+     "field": "company_class",
+     "value": "Private Limited",
+     "span": null,
+     "verdict": "NO_SPAN",
+     "names_found": [],
+     "span_in_document": false,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 1,
+     "field": "cin",
+     "value": "U74999KA2019PTC123456",
+     "span": null,
+     "verdict": "NO_SPAN",
+     "names_found": [],
+     "span_in_document": false,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 2,
+     "field": "document_date",
+     "value": "14 June 2024",
+     "span": null,
+     "verdict": "NO_SPAN",
+     "names_found": [],
+     "span_in_document": false,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 2,
+     "field": "company_class",
+     "value": "Private Limited",
+     "span": null,
+     "verdict": "NO_SPAN",
+     "names_found": [],
+     "span_in_document": false,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 2,
+     "field": "cin",
+     "value": "U74999KA2019PTC123456",
+     "span": null,
+     "verdict": "NO_SPAN",
+     "names_found": [],
+     "span_in_document": false,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    }
+   ],
+   "seconds": 7.1
+  },
+  {
+   "cid": "T04",
+   "confusable": [
+    "company_class"
+   ],
+   "orchestrator_verdict": "ABSTAINED",
+   "error": "",
+   "attempts": 2,
+   "raw_proposals": [
+    {
+     "facts": {
+      "document_date": {
+       "value": "2024-06-14",
+       "span": null
+      },
+      "company_class": {
+       "value": "private limited company",
+       "span": null
+      }
+     },
+     "narration": ""
+    },
+    {
+     "facts": {
+      "document_date": {
+       "value": "14 June 2024",
+       "span": null
+      }
+     },
+     "narration": ""
+    }
+   ],
+   "findings": [
+    {
+     "attempt": 1,
+     "field": "document_date",
+     "value": "2024-06-14",
+     "span": null,
+     "verdict": "NO_SPAN",
+     "names_found": [],
+     "span_in_document": false,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 1,
+     "field": "company_class",
+     "value": "private limited company",
+     "span": null,
+     "verdict": "NO_SPAN",
+     "names_found": [],
+     "span_in_document": false,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 2,
+     "field": "document_date",
+     "value": "14 June 2024",
+     "span": null,
+     "verdict": "NO_SPAN",
+     "names_found": [],
+     "span_in_document": false,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    }
+   ],
+   "seconds": 6.1
+  },
+  {
+   "cid": "T05",
+   "confusable": [
+    "document_date",
+    "incorporation_date"
+   ],
+   "orchestrator_verdict": "ABSTAINED",
+   "error": "",
+   "attempts": 2,
+   "raw_proposals": [
+    {
+     "facts": {
+      "document_date": {
+       "value": "2024-06-14",
+       "span": null
+      },
+      "incorporation_date": {
+       "value": "2015-04-01",
+       "span": null
+      },
+      "company_class": {
+       "value": "Limited Liability Company",
+       "span": null
+      }
+     },
+     "narration": ""
+    },
+    {
+     "facts": {
+      "document_date": {
+       "value": "14 June 2024",
+       "span": null
+      },
+      "incorporation_date": {
+       "value": "01 April 2015",
+       "span": null
+      },
+      "company_class": {
+       "value": "Company",
+       "span": null
+      }
+     },
+     "narration": ""
+    }
+   ],
+   "findings": [
+    {
+     "attempt": 1,
+     "field": "document_date",
+     "value": "2024-06-14",
+     "span": null,
+     "verdict": "NO_SPAN",
+     "names_found": [],
+     "span_in_document": false,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 1,
+     "field": "incorporation_date",
+     "value": "2015-04-01",
+     "span": null,
+     "verdict": "NO_SPAN",
+     "names_found": [],
+     "span_in_document": false,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 1,
+     "field": "company_class",
+     "value": "Limited Liability Company",
+     "span": null,
+     "verdict": "NO_SPAN",
+     "names_found": [],
+     "span_in_document": false,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 2,
+     "field": "document_date",
+     "value": "14 June 2024",
+     "span": null,
+     "verdict": "NO_SPAN",
+     "names_found": [],
+     "span_in_document": false,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 2,
+     "field": "incorporation_date",
+     "value": "01 April 2015",
+     "span": null,
+     "verdict": "NO_SPAN",
+     "names_found": [],
+     "span_in_document": false,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 2,
+     "field": "company_class",
+     "value": "Company",
+     "span": null,
+     "verdict": "NO_SPAN",
+     "names_found": [],
+     "span_in_document": false,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    }
+   ],
+   "seconds": 6.7
+  },
+  {
+   "cid": "T06",
+   "confusable": [
+    "incorporation_date",
+    "financial_year",
+    "company_class",
+    "cin"
+   ],
+   "orchestrator_verdict": "ABSTAINED",
+   "error": "",
+   "attempts": 2,
+   "raw_proposals": [
+    {
+     "facts": {
+      "document_date": {
+       "value": "01-04-2015",
+       "span": null
+      },
+      "incorporation_date": {
+       "value": "2023-24",
+       "span": null
+      },
+      "company_class": {
+       "value": "Private Limited",
+       "span": null
+      },
+      "financial_year": {
+       "value": "2023-24",
+       "span": null
+      },
+      "paid_up_capital_rupees": {
+       "value": "U74999KA2019PTC123456",
+       "span": null
+      }
+     },
+     "narration": ""
+    },
+    {
+     "facts": {
+      "document_date": {
+       "value": "01-04-2015",
+       "span": null
+      },
+      "incorporation_date": {
+       "value": "2023-24",
+       "span": null
+      },
+      "company_class": {
+       "value": "Private Limited",
+       "span": null
+      },
+      "financial_year": {
+       "value": "2023-24",
+       "span": null
+      },
+      "paid_up_capital_rupees": {
+       "value": "U74999KA2019PTC123456",
+       "span": null
+      },
+      "cin": {
+       "value": "",
+       "span": null
+      }
+     },
+     "narration": ""
+    }
+   ],
+   "findings": [
+    {
+     "attempt": 1,
+     "field": "document_date",
+     "value": "01-04-2015",
+     "span": null,
+     "verdict": "NO_SPAN",
+     "names_found": [],
+     "span_in_document": false,
+     "value_belongs_to": "incorporation_date",
+     "value_rendering": "01-04-2015"
+    },
+    {
+     "attempt": 1,
+     "field": "incorporation_date",
+     "value": "2023-24",
+     "span": null,
+     "verdict": "NO_SPAN",
+     "names_found": [],
+     "span_in_document": false,
+     "value_belongs_to": "financial_year",
+     "value_rendering": "2023-24"
+    },
+    {
+     "attempt": 1,
+     "field": "company_class",
+     "value": "Private Limited",
+     "span": null,
+     "verdict": "NO_SPAN",
+     "names_found": [],
+     "span_in_document": false,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 1,
+     "field": "financial_year",
+     "value": "2023-24",
+     "span": null,
+     "verdict": "NO_SPAN",
+     "names_found": [],
+     "span_in_document": false,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 2,
+     "field": "document_date",
+     "value": "01-04-2015",
+     "span": null,
+     "verdict": "NO_SPAN",
+     "names_found": [],
+     "span_in_document": false,
+     "value_belongs_to": "incorporation_date",
+     "value_rendering": "01-04-2015"
+    },
+    {
+     "attempt": 2,
+     "field": "incorporation_date",
+     "value": "2023-24",
+     "span": null,
+     "verdict": "NO_SPAN",
+     "names_found": [],
+     "span_in_document": false,
+     "value_belongs_to": "financial_year",
+     "value_rendering": "2023-24"
+    },
+    {
+     "attempt": 2,
+     "field": "company_class",
+     "value": "Private Limited",
+     "span": null,
+     "verdict": "NO_SPAN",
+     "names_found": [],
+     "span_in_document": false,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 2,
+     "field": "financial_year",
+     "value": "2023-24",
+     "span": null,
+     "verdict": "NO_SPAN",
+     "names_found": [],
+     "span_in_document": false,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 2,
+     "field": "cin",
+     "value": "",
+     "span": null,
+     "verdict": "NO_SPAN",
+     "names_found": [],
+     "span_in_document": false,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    }
+   ],
+   "seconds": 7.7
+  }
+ ],
+ "cases": 6,
+ "cases_errored": 0,
+ "text_date_facts_proposed": 36,
+ "spans_present": 0,
+ "misbound": [],
+ "value_confused": [
+  {
+   "attempt": 2,
+   "field": "incorporation_date",
+   "value": "14 June 2024",
+   "span": null,
+   "verdict": "NO_SPAN",
+   "names_found": [],
+   "span_in_document": false,
+   "value_belongs_to": "document_date",
+   "value_rendering": "14 june 2024",
+   "cid": "T01"
+  },
+  {
+   "attempt": 1,
+   "field": "document_date",
+   "value": "01-04-2015",
+   "span": null,
+   "verdict": "NO_SPAN",
+   "names_found": [],
+   "span_in_document": false,
+   "value_belongs_to": "incorporation_date",
+   "value_rendering": "01-04-2015",
+   "cid": "T06"
+  },
+  {
+   "attempt": 1,
+   "field": "incorporation_date",
+   "value": "2023-24",
+   "span": null,
+   "verdict": "NO_SPAN",
+   "names_found": [],
+   "span_in_document": false,
+   "value_belongs_to": "financial_year",
+   "value_rendering": "2023-24",
+   "cid": "T06"
+  },
+  {
+   "attempt": 2,
+   "field": "document_date",
+   "value": "01-04-2015",
+   "span": null,
+   "verdict": "NO_SPAN",
+   "names_found": [],
+   "span_in_document": false,
+   "value_belongs_to": "incorporation_date",
+   "value_rendering": "01-04-2015",
+   "cid": "T06"
+  },
+  {
+   "attempt": 2,
+   "field": "incorporation_date",
+   "value": "2023-24",
+   "span": null,
+   "verdict": "NO_SPAN",
+   "names_found": [],
+   "span_in_document": false,
+   "value_belongs_to": "financial_year",
+   "value_rendering": "2023-24",
+   "cid": "T06"
+  }
+ ],
+ "span_misbinding": "UNMEASURABLE",
+ "value_confusion": "EVIDENCE_FOUND",
+ "verdict": "EVIDENCE_FOUND"
+}
