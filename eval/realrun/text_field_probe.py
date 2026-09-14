@@ -251,6 +251,71 @@ def value_confusion(case: TextCase, field: str, value) -> tuple[str, str]:
     return "", ""
 
 
+# ── what was served, scored against the document ─────────────────────────────
+CORRECT_SERVED = "CORRECT_SERVED"
+WRONG_SERVED = "WRONG_SERVED"
+UNSCORED = "UNSCORED"     # the case has no truth for this field. Not evidence.
+NOT_EXACT = "NOT_EXACT"   # contains a true rendering without equalling one. For a
+                          # human to read; never counted as wrong.
+
+
+def served_score(case: TextCase, field: str, value) -> str:
+    """Is a value that passed every gate actually this document's value?
+
+    The misbinding verdicts above judge a proposal's SHAPE. This judges what a
+    lawyer would read. Compared as written (`_canon`), never parsed, and only for
+    fields the case carries truth for -- a field with none is UNSCORED, not wrong.
+    """
+    if field not in case.truth:
+        return UNSCORED
+    got = _canon(value)
+    truths = [_canon(t) for t in case.truth[field]]
+    if got and got in truths:
+        return CORRECT_SERVED
+    # 'a private limited company and a small company' names the true class and
+    # more. That is not provably wrong, so it is not scored as wrong.
+    if got and any(t and t in got for t in truths):
+        return NOT_EXACT
+    return WRONG_SERVED
+
+
+class ReplayExhausted(RuntimeError):
+    """The gates asked for an attempt the stored run never made."""
+
+
+def replay_model(stored: dict):
+    """A model that says exactly what a stored run's model said, and nothing else.
+
+    Replayed through today's gates, a stricter check can refuse an attempt the
+    original run accepted and ask for a correction that was never made. That
+    raises: inventing the missing answer would score the replay, not the model.
+    """
+    by_text = {}
+    for r in stored.get("rows", []):
+        case = next((c for c in TEXT_CASES if c.cid == r.get("cid")), None)
+        if case is not None:
+            by_text[case.text] = iter(r.get("raw_proposals") or [])
+
+    def model(text_: str) -> Proposal:
+        # A correction is sent as the document followed by a brief, so the case is
+        # the one whose text BEGINS the prompt -- the longest, should one case's
+        # text ever prefix another's.
+        key = max((t for t in by_text if text_.startswith(t)), key=len, default=None)
+        attempt = next(by_text[key], None) if key is not None else None
+        if attempt is None:
+            raise ReplayExhausted("no stored attempt left for this document")
+        return Proposal(facts=attempt.get("facts") or {},
+                        narration=attempt.get("narration") or None)
+
+    return model
+
+
+def rescore(stored: dict) -> dict:
+    """Re-run a stored probe result through today's gates. No model is called."""
+    return probe_all(replay_model(stored)) | {"model": stored.get("model"),
+                                              "rescored_from": stored.get("model")}
+
+
 def capture(model):
     """Wrap a model so every raw proposal it returns is kept, verbatim.
 
@@ -276,12 +341,14 @@ def probe_one(case: TextCase, model) -> dict:
     """One document through the real orchestrator, with the raw proposals kept."""
     wrapped, seen = capture(model)
     t0 = time.time()
-    verdict, error = "", ""
+    verdict, error, served_facts = "", "", {}
     try:
         out = orchestrator.run(intent=bundles.capabilities()[0],
                                document=case.text,
                                document_date=case.document_date, model=wrapped)
         verdict = out.verdict
+        if out.served and out.review is not None:
+            served_facts = dict(out.review.facts)
     except orchestrator.OrchestrationRefused as e:
         verdict, error = "REFUSED_BEFORE_CALL", str(e)[:80]
     except Exception as e:                                        # noqa: BLE001
@@ -303,10 +370,19 @@ def probe_one(case: TextCase, model) -> dict:
                              and str(span) in case.text,
                              "value_belongs_to": other,
                              "value_rendering": rendering})
+    served = {}
+    for fname, item in served_facts.items():
+        if fname not in NON_MONEY_FIELDS or not isinstance(item, dict):
+            continue
+        value = item.get("value")
+        served[fname] = {"value": value, "span": item.get("span"),
+                         "score": served_score(case, fname, value),
+                         "belongs_to": value_confusion(case, fname, value)[0]}
     return {"cid": case.cid, "confusable": list(case.confusable),
             "orchestrator_verdict": verdict, "error": error,
             "attempts": len(seen), "raw_proposals": seen,
-            "findings": findings, "seconds": round(time.time() - t0, 1)}
+            "findings": findings, "served": served,
+            "seconds": round(time.time() - t0, 1)}
 
 
 def probe_all(model) -> dict:
@@ -328,7 +404,21 @@ def probe_all(model) -> dict:
     else:
         span_verdict = "NO_EVIDENCE"
     value_verdict = "EVIDENCE_FOUND" if confused else "NO_EVIDENCE"
+
+    # What a lawyer would read. Nothing served and scored is not a clean result.
+    served = [s | {"cid": r["cid"], "field": f}
+              for r in rows for f, s in r["served"].items()]
+    scored = [s for s in served if s["score"] != UNSCORED]
+    wrong = [s for s in scored if s["score"] == WRONG_SERVED]
+    not_exact = [s for s in scored if s["score"] == NOT_EXACT]
+    served_verdict = ("UNMEASURABLE" if not scored
+                      else "EVIDENCE_FOUND" if wrong else "NO_EVIDENCE")
     return {"rows": rows,
+            "served_scored": len(scored),
+            "served_unscored": len(served) - len(scored),
+            "wrong_served": wrong,
+            "not_exact_served": not_exact,
+            "wrong_served_verdict": served_verdict,
             "cases": len(rows),
             "cases_errored": sum(r["orchestrator_verdict"] == "ERROR"
                                  for r in rows),
@@ -378,6 +468,17 @@ def text(res: dict) -> str:
     elif res["span_misbinding"] == "NO_EVIDENCE":
         L += ["", "  A negative result is the finding. field_binding.py must "
                   "NOT be widened on it."]
+    L += ["",
+          f"  {'served, scored vs the document':<32}{res['served_scored']:>3}   "
+          f"({res['served_unscored']} served with no truth to score against)",
+          f"  {'served a wrong value':<32}{len(res['wrong_served']):>3}   "
+          f"{res['wrong_served_verdict']}"]
+    for w in res["wrong_served"]:
+        L.append(f"  SERVED A WRONG VALUE  {w['cid']}  {w['field']}={w['value']!r}  "
+                 f"span={w['span']!r}"
+                 + (f"  <-- this is the {w['belongs_to']}" if w["belongs_to"] else ""))
+    for n in res["not_exact_served"]:
+        L.append(f"  not exact (read it)   {n['cid']}  {n['field']}={n['value']!r}")
     return "\n".join(L)
 
 
@@ -531,6 +632,100 @@ def _test() -> None:
       "every confusable pair is a text or date field; the money fields are "
       "field_binding's, not this probe's")
 
+    # ── what was SERVED, scored against what the document says ──────────────
+    # 14-09-2026: T05's previous-meeting date filed as document_date, quoting its
+    # own sentence, passed every gate and SERVED -- and the misbinding counts above
+    # could not see it, because the span names no other field. A probe that only
+    # counts binding shapes misses the wrong answer a lawyer would actually read.
+    t05 = [c_ for c_ in TEXT_CASES if c_.cid == "T05"][0]
+    c(served_score(t05, "document_date", "2024-03-12") == WRONG_SERVED,
+      "the previous meeting's date served as document_date scores WRONG_SERVED")
+    c(served_score(t05, "document_date", "14 June 2024") == CORRECT_SERVED,
+      "the document's own date, in any rendering, scores CORRECT_SERVED")
+    c(served_score(t05, "cin", "U74999KA2019PTC123456") == UNSCORED,
+      "a field the case has no truth for is UNSCORED, never WRONG -- the same "
+      "asymmetry as every other verdict in this probe")
+
+    # The first re-score of gpt-5-mini reported T04's company_class 'a private
+    # limited company and a small company' as WRONG_SERVED. The document says both;
+    # the truth table lists them separately, and exact matching called it wrong.
+    # A value that CONTAINS a correct rendering is not provably wrong.
+    t04 = [c_ for c_ in TEXT_CASES if c_.cid == "T04"][0]
+    c(served_score(t04, "company_class",
+                   "a private limited company and a small company") == NOT_EXACT,
+      "a compound value containing the true class is NOT_EXACT, not WRONG")
+    c(served_score(t04, "company_class", "Limited Liability Partnership") == WRONG_SERVED,
+      "...while a class the document never states is still WRONG_SERVED")
+    res = probe_all(lambda _t: Proposal(facts={"company_class": {
+        "value": "a private limited company and a small company",
+        "span": "The Company is a private limited company and a small company"}}))
+    c(not res["wrong_served"] and res["not_exact_served"],
+      "NOT_EXACT is reported on its own and never counted as a wrong answer")
+
+    def wrong_date(_t: str) -> Proposal:
+        return Proposal(facts={"document_date": {
+            "value": "2024-03-12",
+            "span": "the previous meeting held on 12 March 2024"}})
+
+    row = probe_one(t05, wrong_date)
+    c(row["served"].get("document_date", {}).get("score") == WRONG_SERVED,
+      f"probe_one records the wrong value it was SERVED "
+      f"({row['orchestrator_verdict']}, {row['served']})")
+    res = probe_all(wrong_date)
+    c(res["wrong_served"] and res["wrong_served_verdict"] == "EVIDENCE_FOUND",
+      "probe_all reports a wrong served value as evidence")
+    c("SERVED A WRONG VALUE" in text(res),
+      "...and the report says so in words, not only in a count")
+
+    res = probe_all(clean)
+    c(not res["wrong_served"] and res["served_scored"] >= 1
+      and res["wrong_served_verdict"] == "NO_EVIDENCE",
+      f"a clean model serves nothing wrong ({res['served_scored']} scored)")
+    res = probe_all(spanless)
+    c(res["served_scored"] == 0 and res["wrong_served_verdict"] == "UNMEASURABLE",
+      "nothing served and scored is UNMEASURABLE, not a clean result")
+
+    # ── re-scoring a stored run replays what the model said; it invents nothing ─
+    stored = {"model": "stub", "rows": [
+        {"cid": "T05", "raw_proposals": [{"facts": {"document_date": {
+            "value": "2024-03-12",
+            "span": "the previous meeting held on 12 March 2024"}},
+            "narration": ""}]},
+        {"cid": "T01", "raw_proposals": []}]}
+    again = rescore(stored)
+    t05_row = [r for r in again["rows"] if r["cid"] == "T05"][0]
+    c(t05_row["served"].get("document_date", {}).get("score") == WRONG_SERVED,
+      "rescore replays the stored proposal through TODAY's gates and scores it")
+    t01_row = [r for r in again["rows"] if r["cid"] == "T01"][0]
+    c(t01_row["orchestrator_verdict"] == "ERROR" and not t01_row["served"],
+      "a case with no stored answer is an ERROR in the replay -- never an empty "
+      "answer the model did not give")
+    c(again["rescored_from"] == "stub",
+      "the re-scored result names the run it was replayed from")
+
+    # The first --rescore of the real runs errored EVERY two-attempt case after one
+    # attempt: the correction call does not send the bare document text, so a
+    # lookup keyed on the exact text found nothing. A stub with one attempt per
+    # case could not see it.
+    two = {"model": "stub2", "rows": [{"cid": "T05", "raw_proposals": [
+        {"facts": {"cin": {"value": "",
+                           "span": "The Company was incorporated on 01 April 2015."},
+                   "document_date": {
+                       "value": "2024-06-14",
+                       "span": "MINUTES OF THE BOARD MEETING held on 14 June 2024."}},
+         "narration": ""},
+        {"facts": {"document_date": {
+            "value": "2024-06-14",
+            "span": "MINUTES OF THE BOARD MEETING held on 14 June 2024."}},
+         "narration": ""}]}]}
+    t05_two = [r for r in rescore(two)["rows"] if r["cid"] == "T05"][0]
+    c(t05_two["attempts"] == 2
+      and t05_two["orchestrator_verdict"] == "SERVED_AFTER_CORRECTION"
+      and t05_two["served"].get("document_date", {}).get("score") == CORRECT_SERVED,
+      f"a refused first attempt replays its stored CORRECTION, not an exhaustion "
+      f"({t05_two['orchestrator_verdict']}, {t05_two['attempts']} attempts, "
+      f"{t05_two['error']})")
+
     print(f"\n{ok}/{ok + fail} passed")
     if fail:
         raise SystemExit(1)
@@ -539,6 +734,15 @@ def _test() -> None:
 if __name__ == "__main__":
     if "--test" in sys.argv:
         _test()
+        raise SystemExit(0)
+    if "--rescore" in sys.argv:
+        # Stored proposals through today's gates. No model call; the measured file
+        # is left as it was, and the replay is written beside it.
+        src = Path(sys.argv[sys.argv.index("--rescore") + 1])
+        result = rescore(json.loads(src.read_text()))
+        print(text(result))
+        src.with_name(src.stem + ".rescored.json").write_text(
+            json.dumps(result, indent=1))
         raise SystemExit(0)
     if "--run" not in sys.argv:
         print(__doc__)

@@ -1,0 +1,579 @@
+{
+ "rows": [
+  {
+   "cid": "T01",
+   "confusable": [
+    "document_date",
+    "incorporation_date"
+   ],
+   "orchestrator_verdict": "SERVED",
+   "error": "",
+   "attempts": 1,
+   "raw_proposals": [
+    {
+     "facts": {
+      "document_date": {
+       "value": "2024-06-14",
+       "span": "14 June 2024."
+      },
+      "incorporation_date": {
+       "value": "2015-04-01",
+       "span": "01 April 2015"
+      }
+     },
+     "narration": ""
+    }
+   ],
+   "findings": [
+    {
+     "attempt": 1,
+     "field": "document_date",
+     "value": "2024-06-14",
+     "span": "14 June 2024.",
+     "verdict": "UNNAMED",
+     "names_found": [],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 1,
+     "field": "incorporation_date",
+     "value": "2015-04-01",
+     "span": "01 April 2015",
+     "verdict": "UNNAMED",
+     "names_found": [],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    }
+   ],
+   "served": {
+    "document_date": {
+     "value": "2024-06-14",
+     "span": "14 June 2024.",
+     "score": "CORRECT_SERVED",
+     "belongs_to": ""
+    },
+    "incorporation_date": {
+     "value": "2015-04-01",
+     "span": "01 April 2015",
+     "score": "CORRECT_SERVED",
+     "belongs_to": ""
+    }
+   },
+   "seconds": 0.0
+  },
+  {
+   "cid": "T02",
+   "confusable": [
+    "financial_year",
+    "incorporation_date"
+   ],
+   "orchestrator_verdict": "SERVED",
+   "error": "",
+   "attempts": 1,
+   "raw_proposals": [
+    {
+     "facts": {
+      "document_date": {
+       "value": "2024-06-14",
+       "span": "dated 14 June 2024."
+      },
+      "incorporation_date": {
+       "value": "2015-04-01",
+       "span": "incorporated on 01 April 2015,"
+      },
+      "financial_year": {
+       "value": "2023-24",
+       "span": "financial year 2023-24."
+      }
+     },
+     "narration": ""
+    }
+   ],
+   "findings": [
+    {
+     "attempt": 1,
+     "field": "document_date",
+     "value": "2024-06-14",
+     "span": "dated 14 June 2024.",
+     "verdict": "BOUND",
+     "names_found": [
+      "dated"
+     ],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 1,
+     "field": "incorporation_date",
+     "value": "2015-04-01",
+     "span": "incorporated on 01 April 2015,",
+     "verdict": "BOUND",
+     "names_found": [
+      "incorporated on"
+     ],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 1,
+     "field": "financial_year",
+     "value": "2023-24",
+     "span": "financial year 2023-24.",
+     "verdict": "BOUND",
+     "names_found": [
+      "financial year"
+     ],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    }
+   ],
+   "served": {
+    "document_date": {
+     "value": "2024-06-14",
+     "span": "dated 14 June 2024.",
+     "score": "CORRECT_SERVED",
+     "belongs_to": ""
+    },
+    "incorporation_date": {
+     "value": "2015-04-01",
+     "span": "incorporated on 01 April 2015,",
+     "score": "CORRECT_SERVED",
+     "belongs_to": ""
+    },
+    "financial_year": {
+     "value": "2023-24",
+     "span": "financial year 2023-24.",
+     "score": "CORRECT_SERVED",
+     "belongs_to": ""
+    }
+   },
+   "seconds": 0.0
+  },
+  {
+   "cid": "T03",
+   "confusable": [
+    "cin"
+   ],
+   "orchestrator_verdict": "SERVED",
+   "error": "",
+   "attempts": 1,
+   "raw_proposals": [
+    {
+     "facts": {
+      "document_date": {
+       "value": "2024-06-14",
+       "span": "dated 14 June 2024."
+      },
+      "company_class": {
+       "value": "PRIVATE LIMITED",
+       "span": "ACME WORKS PRIVATE LIMITED,"
+      },
+      "cin": {
+       "value": "U74999KA2019PTC123456",
+       "span": "CIN U74999KA2019PTC123456,"
+      }
+     },
+     "narration": ""
+    }
+   ],
+   "findings": [
+    {
+     "attempt": 1,
+     "field": "document_date",
+     "value": "2024-06-14",
+     "span": "dated 14 June 2024.",
+     "verdict": "BOUND",
+     "names_found": [
+      "dated"
+     ],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 1,
+     "field": "company_class",
+     "value": "PRIVATE LIMITED",
+     "span": "ACME WORKS PRIVATE LIMITED,",
+     "verdict": "BOUND",
+     "names_found": [
+      "private limited"
+     ],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 1,
+     "field": "cin",
+     "value": "U74999KA2019PTC123456",
+     "span": "CIN U74999KA2019PTC123456,",
+     "verdict": "BOUND",
+     "names_found": [
+      "cin"
+     ],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    }
+   ],
+   "served": {
+    "document_date": {
+     "value": "2024-06-14",
+     "span": "dated 14 June 2024.",
+     "score": "CORRECT_SERVED",
+     "belongs_to": ""
+    },
+    "company_class": {
+     "value": "PRIVATE LIMITED",
+     "span": "ACME WORKS PRIVATE LIMITED,",
+     "score": "UNSCORED",
+     "belongs_to": ""
+    },
+    "cin": {
+     "value": "U74999KA2019PTC123456",
+     "span": "CIN U74999KA2019PTC123456,",
+     "score": "CORRECT_SERVED",
+     "belongs_to": ""
+    }
+   },
+   "seconds": 0.0
+  },
+  {
+   "cid": "T04",
+   "confusable": [
+    "company_class"
+   ],
+   "orchestrator_verdict": "SERVED_AFTER_CORRECTION",
+   "error": "",
+   "attempts": 2,
+   "raw_proposals": [
+    {
+     "facts": {
+      "document_date": {
+       "value": "2024-06-14",
+       "span": "dated 14 June 2024."
+      },
+      "company_class": {
+       "value": "private limited company; small company",
+       "span": "The Company is a private limited company and a small company within the meaning of section 2(85)."
+      }
+     },
+     "narration": ""
+    },
+    {
+     "facts": {
+      "document_date": {
+       "value": "2024-06-14",
+       "span": "BOARD RESOLUTION dated 14 June 2024."
+      },
+      "company_class": {
+       "value": "a private limited company and a small company",
+       "span": "The Company is a private limited company and a small company within the meaning of section 2(85)."
+      }
+     },
+     "narration": ""
+    }
+   ],
+   "findings": [
+    {
+     "attempt": 1,
+     "field": "document_date",
+     "value": "2024-06-14",
+     "span": "dated 14 June 2024.",
+     "verdict": "BOUND",
+     "names_found": [
+      "dated"
+     ],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 1,
+     "field": "company_class",
+     "value": "private limited company; small company",
+     "span": "The Company is a private limited company and a small company within the meaning of section 2(85).",
+     "verdict": "BOUND",
+     "names_found": [
+      "private limited",
+      "small company"
+     ],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 2,
+     "field": "document_date",
+     "value": "2024-06-14",
+     "span": "BOARD RESOLUTION dated 14 June 2024.",
+     "verdict": "BOUND",
+     "names_found": [
+      "dated"
+     ],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 2,
+     "field": "company_class",
+     "value": "a private limited company and a small company",
+     "span": "The Company is a private limited company and a small company within the meaning of section 2(85).",
+     "verdict": "BOUND",
+     "names_found": [
+      "private limited",
+      "small company"
+     ],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    }
+   ],
+   "served": {
+    "document_date": {
+     "value": "2024-06-14",
+     "span": "BOARD RESOLUTION dated 14 June 2024.",
+     "score": "CORRECT_SERVED",
+     "belongs_to": ""
+    },
+    "company_class": {
+     "value": "a private limited company and a small company",
+     "span": "The Company is a private limited company and a small company within the meaning of section 2(85).",
+     "score": "NOT_EXACT",
+     "belongs_to": ""
+    }
+   },
+   "seconds": 0.0
+  },
+  {
+   "cid": "T05",
+   "confusable": [
+    "document_date",
+    "incorporation_date"
+   ],
+   "orchestrator_verdict": "SERVED",
+   "error": "",
+   "attempts": 1,
+   "raw_proposals": [
+    {
+     "facts": {
+      "document_date": {
+       "value": "2024-06-14",
+       "span": "14 June 2024"
+      },
+      "incorporation_date": {
+       "value": "2015-04-01",
+       "span": "01 April 2015."
+      }
+     },
+     "narration": ""
+    }
+   ],
+   "findings": [
+    {
+     "attempt": 1,
+     "field": "document_date",
+     "value": "2024-06-14",
+     "span": "14 June 2024",
+     "verdict": "UNNAMED",
+     "names_found": [],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 1,
+     "field": "incorporation_date",
+     "value": "2015-04-01",
+     "span": "01 April 2015.",
+     "verdict": "UNNAMED",
+     "names_found": [],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    }
+   ],
+   "served": {
+    "document_date": {
+     "value": "2024-06-14",
+     "span": "14 June 2024",
+     "score": "CORRECT_SERVED",
+     "belongs_to": ""
+    },
+    "incorporation_date": {
+     "value": "2015-04-01",
+     "span": "01 April 2015.",
+     "score": "CORRECT_SERVED",
+     "belongs_to": ""
+    }
+   },
+   "seconds": 0.0
+  },
+  {
+   "cid": "T06",
+   "confusable": [
+    "incorporation_date",
+    "financial_year",
+    "company_class",
+    "cin"
+   ],
+   "orchestrator_verdict": "SERVED",
+   "error": "",
+   "attempts": 1,
+   "raw_proposals": [
+    {
+     "facts": {
+      "document_date": {
+       "value": "2024-06-14",
+       "span": "BOARD RESOLUTION dated 14 June 2024."
+      },
+      "incorporation_date": {
+       "value": "2015-04-01",
+       "span": "01-04-2015"
+      },
+      "financial_year": {
+       "value": "2023-24",
+       "span": "2023-24"
+      },
+      "company_class": {
+       "value": "Private Limited",
+       "span": "Private Limited"
+      },
+      "cin": {
+       "value": "U74999KA2019PTC123456",
+       "span": "U74999KA2019PTC123456"
+      }
+     },
+     "narration": ""
+    }
+   ],
+   "findings": [
+    {
+     "attempt": 1,
+     "field": "document_date",
+     "value": "2024-06-14",
+     "span": "BOARD RESOLUTION dated 14 June 2024.",
+     "verdict": "BOUND",
+     "names_found": [
+      "dated"
+     ],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 1,
+     "field": "incorporation_date",
+     "value": "2015-04-01",
+     "span": "01-04-2015",
+     "verdict": "UNNAMED",
+     "names_found": [],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 1,
+     "field": "financial_year",
+     "value": "2023-24",
+     "span": "2023-24",
+     "verdict": "UNNAMED",
+     "names_found": [],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 1,
+     "field": "company_class",
+     "value": "Private Limited",
+     "span": "Private Limited",
+     "verdict": "BOUND",
+     "names_found": [
+      "private limited"
+     ],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 1,
+     "field": "cin",
+     "value": "U74999KA2019PTC123456",
+     "span": "U74999KA2019PTC123456",
+     "verdict": "UNNAMED",
+     "names_found": [],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    }
+   ],
+   "served": {
+    "document_date": {
+     "value": "2024-06-14",
+     "span": "BOARD RESOLUTION dated 14 June 2024.",
+     "score": "CORRECT_SERVED",
+     "belongs_to": ""
+    },
+    "incorporation_date": {
+     "value": "2015-04-01",
+     "span": "01-04-2015",
+     "score": "CORRECT_SERVED",
+     "belongs_to": ""
+    },
+    "financial_year": {
+     "value": "2023-24",
+     "span": "2023-24",
+     "score": "CORRECT_SERVED",
+     "belongs_to": ""
+    },
+    "company_class": {
+     "value": "Private Limited",
+     "span": "Private Limited",
+     "score": "CORRECT_SERVED",
+     "belongs_to": ""
+    },
+    "cin": {
+     "value": "U74999KA2019PTC123456",
+     "span": "U74999KA2019PTC123456",
+     "score": "CORRECT_SERVED",
+     "belongs_to": ""
+    }
+   },
+   "seconds": 0.0
+  }
+ ],
+ "served_scored": 16,
+ "served_unscored": 1,
+ "wrong_served": [],
+ "not_exact_served": [
+  {
+   "value": "a private limited company and a small company",
+   "span": "The Company is a private limited company and a small company within the meaning of section 2(85).",
+   "score": "NOT_EXACT",
+   "belongs_to": "",
+   "cid": "T04",
+   "field": "company_class"
+  }
+ ],
+ "wrong_served_verdict": "NO_EVIDENCE",
+ "cases": 6,
+ "cases_errored": 0,
+ "text_date_facts_proposed": 19,
+ "spans_present": 19,
+ "misbound": [],
+ "value_confused": [],
+ "span_misbinding": "NO_EVIDENCE",
+ "value_confusion": "NO_EVIDENCE",
+ "verdict": "NO_EVIDENCE",
+ "model": "azure:gpt-5-mini",
+ "rescored_from": "azure:gpt-5-mini"
+}

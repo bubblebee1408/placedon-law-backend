@@ -1,0 +1,1159 @@
+{
+ "rows": [
+  {
+   "cid": "T01",
+   "confusable": [
+    "document_date",
+    "incorporation_date"
+   ],
+   "orchestrator_verdict": "ABSTAINED",
+   "error": "",
+   "attempts": 2,
+   "raw_proposals": [
+    {
+     "facts": {
+      "document_date": {
+       "value": "14 June 2024",
+       "span": "BOARD RESOLUTION dated 14 June 2024."
+      },
+      "incorporation_date": {
+       "value": "01 April 2015",
+       "span": "The Company was incorporated on 01 April 2015"
+      },
+      "company_class": {
+       "value": "under the Companies Act, 2013",
+       "span": "The Company was incorporated on 01 April 2015 under the Companies Act, 2013."
+      },
+      "cin": {
+       "value": "not found",
+       "span": ""
+      }
+     },
+     "narration": ""
+    },
+    {
+     "facts": {
+      "company_class": {
+       "value": "",
+       "span": "The Company was incorporated on 01 April 2015 under the Companies Act, 2013."
+      },
+      "financial_year": {
+       "value": "",
+       "span": "RESOLVED that the accounts be adopted."
+      },
+      "paid_up_capital_rupees": {
+       "value": "",
+       "span": ""
+      },
+      "turnover_rupees": {
+       "value": "",
+       "span": ""
+      },
+      "net_worth_rupees": {
+       "value": "",
+       "span": ""
+      },
+      "net_profit_rupees": {
+       "value": "",
+       "span": ""
+      },
+      "director_count": {
+       "value": "",
+       "span": ""
+      },
+      "cin": {
+       "value": "",
+       "span": ""
+      }
+     },
+     "narration": ""
+    }
+   ],
+   "findings": [
+    {
+     "attempt": 1,
+     "field": "document_date",
+     "value": "14 June 2024",
+     "span": "BOARD RESOLUTION dated 14 June 2024.",
+     "verdict": "BOUND",
+     "names_found": [
+      "dated"
+     ],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 1,
+     "field": "incorporation_date",
+     "value": "01 April 2015",
+     "span": "The Company was incorporated on 01 April 2015",
+     "verdict": "BOUND",
+     "names_found": [
+      "incorporated on"
+     ],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 1,
+     "field": "company_class",
+     "value": "under the Companies Act, 2013",
+     "span": "The Company was incorporated on 01 April 2015 under the Companies Act, 2013.",
+     "verdict": "MISBOUND",
+     "names_found": [
+      "incorporation_date:incorporated on"
+     ],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 1,
+     "field": "cin",
+     "value": "not found",
+     "span": "",
+     "verdict": "NO_SPAN",
+     "names_found": [],
+     "span_in_document": false,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 2,
+     "field": "company_class",
+     "value": "",
+     "span": "The Company was incorporated on 01 April 2015 under the Companies Act, 2013.",
+     "verdict": "MISBOUND",
+     "names_found": [
+      "incorporation_date:incorporated on"
+     ],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 2,
+     "field": "financial_year",
+     "value": "",
+     "span": "RESOLVED that the accounts be adopted.",
+     "verdict": "UNNAMED",
+     "names_found": [],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 2,
+     "field": "cin",
+     "value": "",
+     "span": "",
+     "verdict": "NO_SPAN",
+     "names_found": [],
+     "span_in_document": false,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    }
+   ],
+   "served": {},
+   "seconds": 0.0
+  },
+  {
+   "cid": "T02",
+   "confusable": [
+    "financial_year",
+    "incorporation_date"
+   ],
+   "orchestrator_verdict": "ABSTAINED",
+   "error": "",
+   "attempts": 2,
+   "raw_proposals": [
+    {
+     "facts": {
+      "document_date": {
+       "value": "14 June 2024",
+       "span": "BOARD RESOLUTION dated 14 June 2024."
+      },
+      "incorporation_date": {
+       "value": "01 April 2015",
+       "span": "The Company, incorporated on 01 April 2015,"
+      },
+      "financial_year": {
+       "value": "2023-24",
+       "span": "The Company, adopted the audited accounts for the financial year 2023-24."
+      },
+      "company_class": {
+       "value": "",
+       "span": ""
+      },
+      "paid_up_capital_rupees": {
+       "value": "",
+       "span": ""
+      },
+      "turnover_rupees": {
+       "value": "",
+       "span": ""
+      },
+      "net_worth_rupees": {
+       "value": "",
+       "span": ""
+      },
+      "net_profit_rupees": {
+       "value": "",
+       "span": ""
+      },
+      "director_count": {
+       "value": "",
+       "span": ""
+      },
+      "cin": {
+       "value": "",
+       "span": ""
+      }
+     },
+     "narration": ""
+    },
+    {
+     "facts": {
+      "document_date": {
+       "value": "14 June 2024",
+       "span": "BOARD RESOLUTION dated 14 June 2024."
+      },
+      "incorporation_date": {
+       "value": "01 April 2015",
+       "span": "The Company, incorporated on 01 April 2015,"
+      },
+      "cin": {
+       "value": "",
+       "span": ""
+      }
+     },
+     "narration": ""
+    }
+   ],
+   "findings": [
+    {
+     "attempt": 1,
+     "field": "document_date",
+     "value": "14 June 2024",
+     "span": "BOARD RESOLUTION dated 14 June 2024.",
+     "verdict": "BOUND",
+     "names_found": [
+      "dated"
+     ],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 1,
+     "field": "incorporation_date",
+     "value": "01 April 2015",
+     "span": "The Company, incorporated on 01 April 2015,",
+     "verdict": "BOUND",
+     "names_found": [
+      "incorporated on"
+     ],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 1,
+     "field": "financial_year",
+     "value": "2023-24",
+     "span": "The Company, adopted the audited accounts for the financial year 2023-24.",
+     "verdict": "BOUND",
+     "names_found": [
+      "financial year"
+     ],
+     "span_in_document": false,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 1,
+     "field": "company_class",
+     "value": "",
+     "span": "",
+     "verdict": "NO_SPAN",
+     "names_found": [],
+     "span_in_document": false,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 1,
+     "field": "cin",
+     "value": "",
+     "span": "",
+     "verdict": "NO_SPAN",
+     "names_found": [],
+     "span_in_document": false,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 2,
+     "field": "document_date",
+     "value": "14 June 2024",
+     "span": "BOARD RESOLUTION dated 14 June 2024.",
+     "verdict": "BOUND",
+     "names_found": [
+      "dated"
+     ],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 2,
+     "field": "incorporation_date",
+     "value": "01 April 2015",
+     "span": "The Company, incorporated on 01 April 2015,",
+     "verdict": "BOUND",
+     "names_found": [
+      "incorporated on"
+     ],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 2,
+     "field": "cin",
+     "value": "",
+     "span": "",
+     "verdict": "NO_SPAN",
+     "names_found": [],
+     "span_in_document": false,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    }
+   ],
+   "served": {},
+   "seconds": 0.0
+  },
+  {
+   "cid": "T03",
+   "confusable": [
+    "cin"
+   ],
+   "orchestrator_verdict": "ABSTAINED",
+   "error": "",
+   "attempts": 2,
+   "raw_proposals": [
+    {
+     "facts": {
+      "document_date": {
+       "value": "14 June 2024",
+       "span": "BOARD RESOLUTION dated 14 June 2024."
+      },
+      "incorporation_date": {
+       "value": "2019-01-01",
+       "span": "CIN U74999KA2019PTC123456, Registration No. 123456 of 2019,"
+      },
+      "company_class": {
+       "value": "PRIVATE LIMITED",
+       "span": "ACME WORKS PRIVATE LIMITED,"
+      },
+      "financial_year": {
+       "value": null,
+       "span": ""
+      },
+      "paid_up_capital_rupees": {
+       "value": null,
+       "span": ""
+      },
+      "turnover_rupees": {
+       "value": null,
+       "span": ""
+      },
+      "net_worth_rupees": {
+       "value": null,
+       "span": ""
+      },
+      "net_profit_rupees": {
+       "value": null,
+       "span": ""
+      },
+      "director_count": {
+       "value": null,
+       "span": ""
+      },
+      "cin": {
+       "value": "U74999KA2019PTC123456",
+       "span": "CIN U74999KA2019PTC123456,"
+      }
+     },
+     "narration": ""
+    },
+    {
+     "facts": {
+      "document_date": {
+       "value": "14 June 2024",
+       "span": "BOARD RESOLUTION dated 14 June 2024."
+      },
+      "company_class": {
+       "value": "PRIVATE LIMITED",
+       "span": "ACME WORKS PRIVATE LIMITED,"
+      },
+      "cin": {
+       "value": "U74999KA2019PTC123456",
+       "span": "CIN U74999KA2019PTC123456, Registration No. 123456 of 2019,"
+      }
+     },
+     "narration": ""
+    }
+   ],
+   "findings": [
+    {
+     "attempt": 1,
+     "field": "document_date",
+     "value": "14 June 2024",
+     "span": "BOARD RESOLUTION dated 14 June 2024.",
+     "verdict": "BOUND",
+     "names_found": [
+      "dated"
+     ],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 1,
+     "field": "incorporation_date",
+     "value": "2019-01-01",
+     "span": "CIN U74999KA2019PTC123456, Registration No. 123456 of 2019,",
+     "verdict": "MISBOUND",
+     "names_found": [
+      "cin:cin",
+      "registration number:registration no"
+     ],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 1,
+     "field": "company_class",
+     "value": "PRIVATE LIMITED",
+     "span": "ACME WORKS PRIVATE LIMITED,",
+     "verdict": "BOUND",
+     "names_found": [
+      "private limited"
+     ],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 1,
+     "field": "financial_year",
+     "value": null,
+     "span": "",
+     "verdict": "NO_SPAN",
+     "names_found": [],
+     "span_in_document": false,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 1,
+     "field": "cin",
+     "value": "U74999KA2019PTC123456",
+     "span": "CIN U74999KA2019PTC123456,",
+     "verdict": "BOUND",
+     "names_found": [
+      "cin"
+     ],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 2,
+     "field": "document_date",
+     "value": "14 June 2024",
+     "span": "BOARD RESOLUTION dated 14 June 2024.",
+     "verdict": "BOUND",
+     "names_found": [
+      "dated"
+     ],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 2,
+     "field": "company_class",
+     "value": "PRIVATE LIMITED",
+     "span": "ACME WORKS PRIVATE LIMITED,",
+     "verdict": "BOUND",
+     "names_found": [
+      "private limited"
+     ],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 2,
+     "field": "cin",
+     "value": "U74999KA2019PTC123456",
+     "span": "CIN U74999KA2019PTC123456, Registration No. 123456 of 2019,",
+     "verdict": "BOUND",
+     "names_found": [
+      "cin"
+     ],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    }
+   ],
+   "served": {},
+   "seconds": 0.0
+  },
+  {
+   "cid": "T04",
+   "confusable": [
+    "company_class"
+   ],
+   "orchestrator_verdict": "ABSTAINED",
+   "error": "",
+   "attempts": 2,
+   "raw_proposals": [
+    {
+     "facts": {
+      "document_date": {
+       "value": "14 June 2024",
+       "span": "BOARD RESOLUTION dated 14 June 2024."
+      },
+      "company_class": {
+       "value": "private limited company",
+       "span": "The Company is a private limited company and a small company within the meaning of section 2(85)."
+      },
+      "cin": {
+       "value": "ACME HOLDINGS PUBLIC LIMITED",
+       "span": "Its holding company, ACME HOLDINGS PUBLIC LIMITED, is a public limited company."
+      }
+     },
+     "narration": ""
+    },
+    {
+     "facts": {
+      "company_class": {
+       "value": "private limited company",
+       "span": "The Company is a private limited company and a small company within the meaning of section 2(85)"
+      },
+      "incorporation_date": {
+       "value": "",
+       "span": ""
+      },
+      "financial_year": {
+       "value": "",
+       "span": ""
+      },
+      "paid_up_capital_rupees": {
+       "value": "",
+       "span": ""
+      },
+      "turnover_rupees": {
+       "value": "",
+       "span": ""
+      },
+      "net_worth_rupees": {
+       "value": "",
+       "span": ""
+      },
+      "net_profit_rupees": {
+       "value": "",
+       "span": ""
+      },
+      "director_count": {
+       "value": "",
+       "span": ""
+      },
+      "cin": {
+       "value": "",
+       "span": ""
+      }
+     },
+     "narration": ""
+    }
+   ],
+   "findings": [
+    {
+     "attempt": 1,
+     "field": "document_date",
+     "value": "14 June 2024",
+     "span": "BOARD RESOLUTION dated 14 June 2024.",
+     "verdict": "BOUND",
+     "names_found": [
+      "dated"
+     ],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 1,
+     "field": "company_class",
+     "value": "private limited company",
+     "span": "The Company is a private limited company and a small company within the meaning of section 2(85).",
+     "verdict": "BOUND",
+     "names_found": [
+      "private limited",
+      "small company"
+     ],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 1,
+     "field": "cin",
+     "value": "ACME HOLDINGS PUBLIC LIMITED",
+     "span": "Its holding company, ACME HOLDINGS PUBLIC LIMITED, is a public limited company.",
+     "verdict": "MISBOUND",
+     "names_found": [
+      "company_class:public limited"
+     ],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 2,
+     "field": "company_class",
+     "value": "private limited company",
+     "span": "The Company is a private limited company and a small company within the meaning of section 2(85)",
+     "verdict": "BOUND",
+     "names_found": [
+      "private limited",
+      "small company"
+     ],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 2,
+     "field": "incorporation_date",
+     "value": "",
+     "span": "",
+     "verdict": "NO_SPAN",
+     "names_found": [],
+     "span_in_document": false,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 2,
+     "field": "financial_year",
+     "value": "",
+     "span": "",
+     "verdict": "NO_SPAN",
+     "names_found": [],
+     "span_in_document": false,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 2,
+     "field": "cin",
+     "value": "",
+     "span": "",
+     "verdict": "NO_SPAN",
+     "names_found": [],
+     "span_in_document": false,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    }
+   ],
+   "served": {},
+   "seconds": 0.0
+  },
+  {
+   "cid": "T05",
+   "confusable": [
+    "document_date",
+    "incorporation_date"
+   ],
+   "orchestrator_verdict": "ABSTAINED",
+   "error": "",
+   "attempts": 2,
+   "raw_proposals": [
+    {
+     "facts": {
+      "document_date": {
+       "value": "14 June 2024",
+       "span": "MINUTES OF THE BOARD MEETING held on 14 June 2024."
+      },
+      "incorporation_date": {
+       "value": "01 April 2015",
+       "span": "The Company was incorporated on 01 April 2015."
+      },
+      "company_class": {
+       "value": null,
+       "span": ""
+      },
+      "financial_year": {
+       "value": null,
+       "span": ""
+      },
+      "paid_up_capital_rupees": {
+       "value": null,
+       "span": ""
+      },
+      "turnover_rupees": {
+       "value": null,
+       "span": ""
+      },
+      "net_worth_rupees": {
+       "value": null,
+       "span": ""
+      },
+      "net_profit_rupees": {
+       "value": null,
+       "span": ""
+      },
+      "director_count": {
+       "value": null,
+       "span": ""
+      },
+      "cin": {
+       "value": null,
+       "span": ""
+      }
+     },
+     "narration": ""
+    },
+    {
+     "facts": {
+      "document_date": {
+       "value": "2024-06-14",
+       "span": "MINUTES OF THE BOARD MEETING held on 14 June 2024."
+      },
+      "incorporation_date": {
+       "value": "2015-04-01",
+       "span": "The Company was incorporated on 01 April 2015."
+      },
+      "cin": {
+       "value": "",
+       "span": "The Company was incorporated on 01 April 2015."
+      }
+     },
+     "narration": ""
+    }
+   ],
+   "findings": [
+    {
+     "attempt": 1,
+     "field": "document_date",
+     "value": "14 June 2024",
+     "span": "MINUTES OF THE BOARD MEETING held on 14 June 2024.",
+     "verdict": "BOUND",
+     "names_found": [
+      "held on"
+     ],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 1,
+     "field": "incorporation_date",
+     "value": "01 April 2015",
+     "span": "The Company was incorporated on 01 April 2015.",
+     "verdict": "BOUND",
+     "names_found": [
+      "incorporated on"
+     ],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 1,
+     "field": "company_class",
+     "value": null,
+     "span": "",
+     "verdict": "NO_SPAN",
+     "names_found": [],
+     "span_in_document": false,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 1,
+     "field": "financial_year",
+     "value": null,
+     "span": "",
+     "verdict": "NO_SPAN",
+     "names_found": [],
+     "span_in_document": false,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 1,
+     "field": "cin",
+     "value": null,
+     "span": "",
+     "verdict": "NO_SPAN",
+     "names_found": [],
+     "span_in_document": false,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 2,
+     "field": "document_date",
+     "value": "2024-06-14",
+     "span": "MINUTES OF THE BOARD MEETING held on 14 June 2024.",
+     "verdict": "BOUND",
+     "names_found": [
+      "held on"
+     ],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 2,
+     "field": "incorporation_date",
+     "value": "2015-04-01",
+     "span": "The Company was incorporated on 01 April 2015.",
+     "verdict": "BOUND",
+     "names_found": [
+      "incorporated on"
+     ],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 2,
+     "field": "cin",
+     "value": "",
+     "span": "The Company was incorporated on 01 April 2015.",
+     "verdict": "MISBOUND",
+     "names_found": [
+      "incorporation_date:incorporated on"
+     ],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    }
+   ],
+   "served": {},
+   "seconds": 0.0
+  },
+  {
+   "cid": "T06",
+   "confusable": [
+    "incorporation_date",
+    "financial_year",
+    "company_class",
+    "cin"
+   ],
+   "orchestrator_verdict": "ABSTAINED",
+   "error": "",
+   "attempts": 2,
+   "raw_proposals": [
+    {
+     "facts": {
+      "document_date": {
+       "value": "14 June 2024",
+       "span": "BOARD RESOLUTION dated 14 June 2024."
+      },
+      "incorporation_date": {
+       "value": "01-04-2015",
+       "span": "Date of incorporation"
+      },
+      "financial_year": {
+       "value": "2023-24",
+       "span": "Financial year"
+      },
+      "company_class": {
+       "value": "Private Limited",
+       "span": "Class of company"
+      },
+      "cin": {
+       "value": "U74999KA2019PTC123456",
+       "span": "CIN"
+      }
+     },
+     "narration": ""
+    },
+    {
+     "facts": {
+      "document_date": {
+       "value": null,
+       "span": "BOARD RESOLUTION dated 14 June 2024."
+      },
+      "incorporation_date": {
+       "value": null,
+       "span": "Date of incorporation"
+      },
+      "financial_year": {
+       "value": null,
+       "span": "Financial year"
+      },
+      "company_class": {
+       "value": null,
+       "span": "Class of company"
+      },
+      "cin": {
+       "value": null,
+       "span": "CIN"
+      },
+      "paid_up_capital_rupees": {
+       "value": null,
+       "span": ""
+      },
+      "turnover_rupees": {
+       "value": null,
+       "span": ""
+      },
+      "net_worth_rupees": {
+       "value": null,
+       "span": ""
+      },
+      "net_profit_rupees": {
+       "value": null,
+       "span": ""
+      },
+      "director_count": {
+       "value": null,
+       "span": ""
+      }
+     },
+     "narration": ""
+    }
+   ],
+   "findings": [
+    {
+     "attempt": 1,
+     "field": "document_date",
+     "value": "14 June 2024",
+     "span": "BOARD RESOLUTION dated 14 June 2024.",
+     "verdict": "BOUND",
+     "names_found": [
+      "dated"
+     ],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 1,
+     "field": "incorporation_date",
+     "value": "01-04-2015",
+     "span": "Date of incorporation",
+     "verdict": "BOUND",
+     "names_found": [
+      "date of incorporation",
+      "incorporation"
+     ],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 1,
+     "field": "financial_year",
+     "value": "2023-24",
+     "span": "Financial year",
+     "verdict": "BOUND",
+     "names_found": [
+      "financial year"
+     ],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 1,
+     "field": "company_class",
+     "value": "Private Limited",
+     "span": "Class of company",
+     "verdict": "UNNAMED",
+     "names_found": [],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 1,
+     "field": "cin",
+     "value": "U74999KA2019PTC123456",
+     "span": "CIN",
+     "verdict": "BOUND",
+     "names_found": [
+      "cin"
+     ],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 2,
+     "field": "document_date",
+     "value": null,
+     "span": "BOARD RESOLUTION dated 14 June 2024.",
+     "verdict": "BOUND",
+     "names_found": [
+      "dated"
+     ],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 2,
+     "field": "incorporation_date",
+     "value": null,
+     "span": "Date of incorporation",
+     "verdict": "BOUND",
+     "names_found": [
+      "date of incorporation",
+      "incorporation"
+     ],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 2,
+     "field": "financial_year",
+     "value": null,
+     "span": "Financial year",
+     "verdict": "BOUND",
+     "names_found": [
+      "financial year"
+     ],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 2,
+     "field": "company_class",
+     "value": null,
+     "span": "Class of company",
+     "verdict": "UNNAMED",
+     "names_found": [],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 2,
+     "field": "cin",
+     "value": null,
+     "span": "CIN",
+     "verdict": "BOUND",
+     "names_found": [
+      "cin"
+     ],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    }
+   ],
+   "served": {},
+   "seconds": 0.0
+  }
+ ],
+ "served_scored": 0,
+ "served_unscored": 0,
+ "wrong_served": [],
+ "not_exact_served": [],
+ "wrong_served_verdict": "UNMEASURABLE",
+ "cases": 6,
+ "cases_errored": 0,
+ "text_date_facts_proposed": 48,
+ "spans_present": 36,
+ "misbound": [
+  {
+   "attempt": 1,
+   "field": "company_class",
+   "value": "under the Companies Act, 2013",
+   "span": "The Company was incorporated on 01 April 2015 under the Companies Act, 2013.",
+   "verdict": "MISBOUND",
+   "names_found": [
+    "incorporation_date:incorporated on"
+   ],
+   "span_in_document": true,
+   "value_belongs_to": "",
+   "value_rendering": "",
+   "cid": "T01"
+  },
+  {
+   "attempt": 2,
+   "field": "company_class",
+   "value": "",
+   "span": "The Company was incorporated on 01 April 2015 under the Companies Act, 2013.",
+   "verdict": "MISBOUND",
+   "names_found": [
+    "incorporation_date:incorporated on"
+   ],
+   "span_in_document": true,
+   "value_belongs_to": "",
+   "value_rendering": "",
+   "cid": "T01"
+  },
+  {
+   "attempt": 1,
+   "field": "incorporation_date",
+   "value": "2019-01-01",
+   "span": "CIN U74999KA2019PTC123456, Registration No. 123456 of 2019,",
+   "verdict": "MISBOUND",
+   "names_found": [
+    "cin:cin",
+    "registration number:registration no"
+   ],
+   "span_in_document": true,
+   "value_belongs_to": "",
+   "value_rendering": "",
+   "cid": "T03"
+  },
+  {
+   "attempt": 1,
+   "field": "cin",
+   "value": "ACME HOLDINGS PUBLIC LIMITED",
+   "span": "Its holding company, ACME HOLDINGS PUBLIC LIMITED, is a public limited company.",
+   "verdict": "MISBOUND",
+   "names_found": [
+    "company_class:public limited"
+   ],
+   "span_in_document": true,
+   "value_belongs_to": "",
+   "value_rendering": "",
+   "cid": "T04"
+  },
+  {
+   "attempt": 2,
+   "field": "cin",
+   "value": "",
+   "span": "The Company was incorporated on 01 April 2015.",
+   "verdict": "MISBOUND",
+   "names_found": [
+    "incorporation_date:incorporated on"
+   ],
+   "span_in_document": true,
+   "value_belongs_to": "",
+   "value_rendering": "",
+   "cid": "T05"
+  }
+ ],
+ "value_confused": [],
+ "span_misbinding": "EVIDENCE_FOUND",
+ "value_confusion": "NO_EVIDENCE",
+ "verdict": "EVIDENCE_FOUND",
+ "model": "llama3:latest",
+ "rescored_from": "llama3:latest"
+}
