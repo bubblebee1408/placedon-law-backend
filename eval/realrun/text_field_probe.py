@@ -662,16 +662,21 @@ def _test() -> None:
     c(not res["wrong_served"] and res["not_exact_served"],
       "NOT_EXACT is reported on its own and never counted as a wrong answer")
 
-    def wrong_date(_t: str) -> Proposal:
-        return Proposal(facts={"document_date": {
-            "value": "2024-03-12",
-            "span": "the previous meeting held on 12 March 2024"}})
+    # That T05 leak was closed the same day (orchestrator DOCUMENT_DATE_CONFLICT),
+    # so the witness below moved to a gap still open -- a text value that is only
+    # a fragment of its span (overnight runbook task L7). It must move again when
+    # that closes, never be deleted: an instrument that cannot show it sees a wrong
+    # served value proves nothing by reporting none.
+    def fragment(_t: str) -> Proposal:
+        return Proposal(facts={"company_class": {
+            "value": "company",
+            "span": "The Company is a private limited company and a small company"}})
 
-    row = probe_one(t05, wrong_date)
-    c(row["served"].get("document_date", {}).get("score") == WRONG_SERVED,
+    row = probe_one(t04, fragment)
+    c(row["served"].get("company_class", {}).get("score") == WRONG_SERVED,
       f"probe_one records the wrong value it was SERVED "
       f"({row['orchestrator_verdict']}, {row['served']})")
-    res = probe_all(wrong_date)
+    res = probe_all(fragment)
     c(res["wrong_served"] and res["wrong_served_verdict"] == "EVIDENCE_FOUND",
       "probe_all reports a wrong served value as evidence")
     c("SERVED A WRONG VALUE" in text(res),
@@ -687,14 +692,14 @@ def _test() -> None:
 
     # ── re-scoring a stored run replays what the model said; it invents nothing ─
     stored = {"model": "stub", "rows": [
-        {"cid": "T05", "raw_proposals": [{"facts": {"document_date": {
-            "value": "2024-03-12",
-            "span": "the previous meeting held on 12 March 2024"}},
+        {"cid": "T04", "raw_proposals": [{"facts": {"company_class": {
+            "value": "company",
+            "span": "The Company is a private limited company and a small company"}},
             "narration": ""}]},
         {"cid": "T01", "raw_proposals": []}]}
     again = rescore(stored)
-    t05_row = [r for r in again["rows"] if r["cid"] == "T05"][0]
-    c(t05_row["served"].get("document_date", {}).get("score") == WRONG_SERVED,
+    t04_row = [r for r in again["rows"] if r["cid"] == "T04"][0]
+    c(t04_row["served"].get("company_class", {}).get("score") == WRONG_SERVED,
       "rescore replays the stored proposal through TODAY's gates and scores it")
     t01_row = [r for r in again["rows"] if r["cid"] == "T01"][0]
     c(t01_row["orchestrator_verdict"] == "ERROR" and not t01_row["served"],

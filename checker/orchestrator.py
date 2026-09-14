@@ -68,6 +68,10 @@ ABSTAINED = "ABSTAINED"                # corrections exhausted; nothing served
 REFUSED_BEFORE_CALL = "REFUSED_BEFORE_CALL"   # a gate fired; no model ran
 OUTCOMES = (SERVED, SERVED_AFTER_CORRECTION, ABSTAINED, REFUSED_BEFORE_CALL)
 
+# A served document_date that is not the date the caller declared. Enforced here,
+# not in reasoning.review, because only this layer holds the declared date.
+DOCUMENT_DATE_CONFLICT = "DOCUMENT_DATE_CONFLICT"
+
 
 class OrchestrationRefused(RuntimeError):
     """A precondition failed. No model was called."""
@@ -132,6 +136,37 @@ def _narrowed(first: Proposal, second: Proposal) -> tuple[bool, str]:
     return True, ""
 
 
+def _against_declared_date(rev: Review, declared: date) -> Review:
+    """Refuse a served document_date that is not the declared document date.
+
+    Added 14-09-2026 after text_field_probe T05: a board minute's PREVIOUS meeting
+    date, filed as document_date and quoting its own sentence, passed every review
+    check. The span says "held on" -- document_date's own term -- so field_binding
+    binds it. The only thing that knows it is wrong is the date this function was
+    given, which review never sees.
+
+    The refusal does not state the declared date. correction_brief shows the model
+    every refusal, and a model handed the expected value echoes it.
+    """
+    item = (rev.facts or {}).get("document_date")
+    if not isinstance(item, dict):
+        return rev
+    from checker.document_extract import _as_date
+    served = _as_date(item.get("value"))
+    # review has already required the value to be a date its span supports, so an
+    # unparseable value cannot arrive here; if one did, there is nothing to compare.
+    if served is None or served == declared:
+        return rev
+    facts = {k: v for k, v in rev.facts.items() if k != "document_date"}
+    conflict = Refusal(
+        DOCUMENT_DATE_CONFLICT,
+        f"document_date: {served.isoformat()} is not the date this document was "
+        f"declared to bear; a date quoted from elsewhere in it is not its date",
+        str(item.get("span") or "")[:60])
+    return Review(rev.intent, facts, rev.narration, rev.citations,
+                  rev.refusals + (conflict,))
+
+
 def correction_brief(review: Review) -> str:
     """What the model is told on the retry. Refusals only -- never a hint.
 
@@ -181,8 +216,10 @@ def run(*, intent: str, document: str, document_date: date | None,
     proposal = model(document)
     step("model", f"proposed {len(proposal.facts or {})} fact(s), "
                   f"{len(proposal.citations or ())} citation(s)")
-    rev = reasoning.review(proposal, declared_intents=declared, document=document,
-                           pack_ids=pack_ids, verified_text=verified_text)
+    rev = _against_declared_date(
+        reasoning.review(proposal, declared_intents=declared, document=document,
+                         pack_ids=pack_ids, verified_text=verified_text),
+        document_date)
     if rev.clean:
         step("review", "clean")
         return Outcome(SERVED, rev, tuple(steps))
@@ -207,9 +244,11 @@ def run(*, intent: str, document: str, document_date: date | None,
             step("correction", f"ABANDONED — {why}")
             return Outcome(ABSTAINED, rev, tuple(steps), used, rev.refusals)
 
-        rev2 = reasoning.review(retry, declared_intents=declared,
-                                document=document, pack_ids=pack_ids,
-                                verified_text=verified_text)
+        rev2 = _against_declared_date(
+            reasoning.review(retry, declared_intents=declared,
+                             document=document, pack_ids=pack_ids,
+                             verified_text=verified_text),
+            document_date)
         if rev2.clean:
             step("review", "clean after correction")
             return Outcome(SERVED_AFTER_CORRECTION, rev2, tuple(steps), used)
@@ -333,6 +372,56 @@ def _test() -> None:
     check(MAX_CORRECTIONS == 1,
           "the cap is one -- a second failure is sampling, not converging, and "
           "the constant makes raising it visible in a diff")
+
+    # ── a served document_date must be the date the caller declared ──────────
+    # 14-09-2026, text_field_probe T05: the previous meeting's date, filed as
+    # document_date and quoting its own sentence, passed every review check and
+    # SERVED -- although this function was told the document is dated 14 June
+    # 2024. Binding cannot see it: the span says "held on", document_date's own
+    # term. Only this layer holds the declared date, so only this layer can.
+    DOC2 = ("MINUTES OF THE BOARD MEETING held on 14 June 2024. The minutes of "
+            "the previous meeting held on 12 March 2024 were confirmed.")
+    prompts: list[str] = []
+
+    def previous_meeting(text: str) -> Proposal:
+        prompts.append(text)
+        return Proposal(intent=INTENT, facts={"document_date": {
+            "value": "2024-03-12",
+            "span": "the previous meeting held on 12 March 2024"}})
+
+    out = run(intent=INTENT, document=DOC2, document_date=D, model=previous_meeting)
+    check(out.verdict == ABSTAINED and not out.served,
+          f"the previous meeting's date served as document_date ABSTAINS ({out.verdict})")
+    check(any(r.violation == DOCUMENT_DATE_CONFLICT for r in out.abstained_on),
+          "...on DOCUMENT_DATE_CONFLICT, named")
+    check(len(prompts) == 2 and "2024-06-14" not in prompts[1]
+          and "DOCUMENT_DATE_CONFLICT" in prompts[1],
+          "the correction names the conflict and does NOT hand the model the "
+          "declared date -- an echoed date would pass every check and prove nothing")
+
+    def own_date(_: str) -> Proposal:
+        return Proposal(intent=INTENT, facts={"document_date": {
+            "value": "2024-06-14",
+            "span": "MINUTES OF THE BOARD MEETING held on 14 June 2024."}})
+
+    out = run(intent=INTENT, document=DOC2, document_date=D, model=own_date)
+    check(out.verdict == SERVED,
+          f"the document's own date, matching the declared one, is served ({out.verdict})")
+
+    calls2 = {"n": 0}
+
+    def corrects_date(text: str) -> Proposal:
+        calls2["n"] += 1
+        return previous_meeting(text) if calls2["n"] == 1 else own_date(text)
+
+    out = run(intent=INTENT, document=DOC2, document_date=D, model=corrects_date)
+    check(out.verdict == SERVED_AFTER_CORRECTION
+          and out.review.facts["document_date"]["value"] == "2024-06-14",
+          f"a model that corrects the date is served after correction ({out.verdict})")
+
+    out = run(intent=INTENT, document=DOC, document_date=D, model=clean_model)
+    check(out.verdict == SERVED,
+          "a proposal with no document_date is unaffected by the date check")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:
