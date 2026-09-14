@@ -223,6 +223,14 @@ def value_supported_by_span(name: str, value: object, span: str) -> tuple[bool, 
             return False, "the quoted span states no number"
         got = int(m.group(1).replace(",", "").replace(" ", ""))
         return got == value, f"span states {got}, extractor proposed {value}" if got != value else ""
+    if name == "cin":
+        # A CIN has a fixed 21-character structure. A value that is not one is not
+        # a CIN, however faithfully its span quotes it -- and a damaged one is
+        # reported as written, never repaired (party_resolution's rule).
+        from checker.party_resolution import CIN_RE
+        if not CIN_RE.match(str(value or "")):
+            return False, (f"{str(value)!r} is not a well-formed CIN (L/U, 5-digit "
+                           f"activity, state, year, ownership, 6-digit number)")
     # text: the value must appear in what was quoted -- and must say something.
     # An empty value is a substring of every span, so it is supported by none.
     if value is None or not str(value).strip():
@@ -385,6 +393,28 @@ def _test() -> None:
           "...and ground() refuses it, so the empty CIN never reaches a payload")
     check(value_supported_by_span("company_class", "private", "is a private company")[0],
           "a real text value its span contains is still supported")
+
+    # ── a CIN value must be a CIN ────────────────────────────────────────────
+    # 14-09-2026, llama3 (T04): {"cin": {"value": "ACME HOLDINGS PUBLIC LIMITED",
+    # "span": "Its holding company, ACME HOLDINGS PUBLIC LIMITED, is a public
+    # limited company."}} served when proposed alone -- the span contains the
+    # value, so the text check passed. A company name is not a CIN.
+    t04_span = ("Its holding company, ACME HOLDINGS PUBLIC LIMITED, is a public "
+                "limited company.")
+    ok_name, why_name = value_supported_by_span("cin", "ACME HOLDINGS PUBLIC LIMITED",
+                                                t04_span)
+    check(not ok_name, f"a company name filed as a CIN is refused ({why_name})")
+    check(value_supported_by_span("cin", "U74999KA2019PTC123456",
+                                  "CIN U74999KA2019PTC123456,")[0],
+          "a well-formed CIN its span contains is supported")
+    damaged = "U74999KA2O19PTC123456"          # letter O where the year has a 0
+    ok_dmg, why_dmg = value_supported_by_span("cin", damaged, f"CIN {damaged}")
+    check(not ok_dmg and damaged in why_dmg,
+          "a scanner-damaged CIN is refused and reported as written -- never "
+          "repaired into a lookup against a different company")
+    g7 = ground(t04_span, {"cin": {"value": "ACME HOLDINGS PUBLIC LIMITED",
+                                   "span": t04_span}}, source_id="d")
+    check("cin" not in g7.to_payload(), "...and ground() keeps it out of the payload")
 
     # unknown keys are ignored, not rejected
     g5 = ground(DOC, dict(good, auditor_name={"value": "X", "span": "X"}), source_id="d")
