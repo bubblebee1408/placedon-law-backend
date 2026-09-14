@@ -114,7 +114,17 @@ def check(case: Case, out) -> tuple[str, str, str]:
     return CORRECT, "", f"{len(served)} field(s) served"
 
 
-def run_all(model_name: str = "gemini") -> dict:
+def _extractor(model_name: str):
+    """The model callable for a run. `azure:<deployment>` reaches models this
+    laptop cannot hold (azure_model.py); it is the only adapter told which model
+    to use, so its name must be passed through rather than dropped."""
+    if model_name.startswith("azure:"):
+        from eval.realrun import azure_model
+
+        def model(text: str):
+            p, _ = azure_model.extract(text, model=model_name)
+            return p
+        return model
     if model_name == "gemini":
         from checker.gemini_model import extract
     elif model_name == "local":
@@ -125,6 +135,15 @@ def run_all(model_name: str = "gemini") -> dict:
     def model(text: str):
         p, _ = extract(text)
         return p
+    return model
+
+
+def _out_name(model_name: str) -> str:
+    return f"last_run_{model_name.replace(':', '_')}.json"
+
+
+def run_all(model_name: str = "gemini") -> dict:
+    model = _extractor(model_name)
 
     rows = []
     for n, c in enumerate(CASES):
@@ -322,6 +341,26 @@ def _test() -> None:
     chk(meta["parse"] == "OK" and "cin" in p.facts,
         "...while a finished reply still parses as before")
 
+    # ── Azure: models too large for this laptop, same benchmark ─────────────
+    from eval.realrun import azure_model
+    seen_kw: dict = {}
+
+    def fake_azure(text, **kw):
+        seen_kw.update(kw)
+        from checker.reasoning import Proposal as _P
+        return _P(), {"parse": "OK"}
+
+    with mock.patch.object(azure_model, "extract", side_effect=fake_azure):
+        _extractor("azure:llama-3-3-70b")("any document")
+    chk(seen_kw.get("model") == "azure:llama-3-3-70b",
+        "an azure: model name reaches the Azure adapter with its deployment -- the "
+        "other adapters take no model argument, and dropping it would silently run "
+        "a default")
+    chk(_out_name("azure:gpt-5-mini") == "last_run_azure_gpt-5-mini.json"
+        and _out_name("gemini") == "last_run_gemini.json",
+        "the result file for an azure: run has no colon in its name, and the "
+        "existing file names are unchanged")
+
     print(f"\n{ok}/{ok + fail} passed")
     if fail:
         raise SystemExit(1)
@@ -331,9 +370,12 @@ if __name__ == "__main__":
     if "--test" in sys.argv:
         _test()
         raise SystemExit(0)
-    which = ("anthropic" if "--anthropic" in sys.argv
-             else "local" if "--local" in sys.argv else "gemini")
+    if "--azure" in sys.argv:
+        which = "azure:" + sys.argv[sys.argv.index("--azure") + 1]
+    else:
+        which = ("anthropic" if "--anthropic" in sys.argv
+                 else "local" if "--local" in sys.argv else "gemini")
     r = run_all(which)
     print(json.dumps(r, indent=1) if "--json" in sys.argv else text(r))
-    Path(__file__).parent.joinpath(
-        f"last_run_{r['model']}.json").write_text(json.dumps(r, indent=1))
+    Path(__file__).parent.joinpath(_out_name(r["model"])).write_text(
+        json.dumps(r, indent=1))
