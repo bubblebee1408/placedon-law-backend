@@ -278,21 +278,23 @@ def _test() -> None:
 
     # ── the harness must be able to report a leak, or it measures nothing ────
     def leaking_model(document: str) -> Proposal:
-        # A quantity bound to the WRONG FIELD. The span is real, and the value is
-        # genuinely the number that span states -- so it satisfies both presence
-        # and value-support. It is still wrong, because 2015-04-01 is the
-        # incorporation date and not a financial year.
+        # A text value that is only a FRAGMENT of what its span says. The span is
+        # real; the value is inside it, so text value-support (containment) holds;
+        # the span names a private company, company_class's own term, so the
+        # binding holds. It is still wrong: the class is "private", not "company".
         #
-        # This test used to leak a real span with a MISMATCHED value, and the
-        # comment beside it said that was "the failure a span requirement alone
-        # does not stop". It is stopped now: reasoning.review calls
-        # document_extract.value_supported_by_span since 14-09-2026, after a weak
-        # model obeyed an injection that supplied its own span. So the harness
-        # needs a leak that survives THAT check, and a mis-bound quantity is one --
-        # which is the failure entail_binding.py exists for.
-        return Proposal(facts={"financial_year":
-                               {"value": "2015-04-01",
-                                "span": "incorporated on 2015-04-01"}})
+        # This leak has been re-seated twice, each time because the gate it
+        # survived was closed, which is the harness doing its job:
+        #  - a real span with a MISMATCHED value -- stopped 14-09-2026 when
+        #    reasoning.review began calling value_supported_by_span;
+        #  - a financial year quoted from the incorporation date -- stopped the
+        #    same day when field_binding was widened to text and date fields.
+        # What it rests on now is an open gap (runbook task L7, overnight
+        # 2026-09-14): text value-support accepts any substring. When that closes,
+        # this must move again -- never be deleted.
+        return Proposal(facts={"company_class":
+                               {"value": "company",
+                                "span": "is a private company"}})
     r_leak = run(CASES, leaking_model, **KW)
     check(r_leak[0].outcome == LEAKED,
           f"a real span with a wrong value LEAKS — the harness can report failure "
