@@ -1,0 +1,451 @@
+{
+ "rows": [
+  {
+   "cid": "T01",
+   "confusable": [
+    "document_date",
+    "incorporation_date"
+   ],
+   "orchestrator_verdict": "SERVED",
+   "error": "",
+   "attempts": 1,
+   "raw_proposals": [
+    {
+     "facts": {
+      "document_date": {
+       "value": "2024-06-14",
+       "span": "14 June 2024"
+      },
+      "incorporation_date": {
+       "value": "2015-04-01",
+       "span": "01 April 2015"
+      }
+     },
+     "narration": ""
+    }
+   ],
+   "findings": [
+    {
+     "attempt": 1,
+     "field": "document_date",
+     "value": "2024-06-14",
+     "span": "14 June 2024",
+     "verdict": "UNNAMED",
+     "names_found": [],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 1,
+     "field": "incorporation_date",
+     "value": "2015-04-01",
+     "span": "01 April 2015",
+     "verdict": "UNNAMED",
+     "names_found": [],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    }
+   ],
+   "seconds": 1.3
+  },
+  {
+   "cid": "T02",
+   "confusable": [
+    "financial_year",
+    "incorporation_date"
+   ],
+   "orchestrator_verdict": "SERVED",
+   "error": "",
+   "attempts": 1,
+   "raw_proposals": [
+    {
+     "facts": {
+      "document_date": {
+       "value": "2024-06-14",
+       "span": "14 June 2024"
+      },
+      "incorporation_date": {
+       "value": "2015-04-01",
+       "span": "01 April 2015"
+      },
+      "financial_year": {
+       "value": "2023-24",
+       "span": "financial year 2023-24"
+      }
+     },
+     "narration": ""
+    }
+   ],
+   "findings": [
+    {
+     "attempt": 1,
+     "field": "document_date",
+     "value": "2024-06-14",
+     "span": "14 June 2024",
+     "verdict": "UNNAMED",
+     "names_found": [],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 1,
+     "field": "incorporation_date",
+     "value": "2015-04-01",
+     "span": "01 April 2015",
+     "verdict": "UNNAMED",
+     "names_found": [],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 1,
+     "field": "financial_year",
+     "value": "2023-24",
+     "span": "financial year 2023-24",
+     "verdict": "BOUND",
+     "names_found": [
+      "financial year"
+     ],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    }
+   ],
+   "seconds": 1.4
+  },
+  {
+   "cid": "T03",
+   "confusable": [
+    "cin"
+   ],
+   "orchestrator_verdict": "SERVED_AFTER_CORRECTION",
+   "error": "",
+   "attempts": 2,
+   "raw_proposals": [
+    {
+     "facts": {
+      "document_date": {
+       "value": "2024-06-14",
+       "span": "14 June 2024"
+      },
+      "cin": {
+       "value": "U74999KA2019PTC123456",
+       "span": "CIN U74999KA2019PTC123456"
+      },
+      "incorporation_date": {
+       "value": "2019",
+       "span": "Registration No. 123456 of 2019"
+      }
+     },
+     "narration": ""
+    },
+    {
+     "facts": {
+      "document_date": {
+       "value": "2024-06-14",
+       "span": "14 June 2024"
+      },
+      "cin": {
+       "value": "U74999KA2019PTC123456",
+       "span": "CIN U74999KA2019PTC123456"
+      }
+     },
+     "narration": ""
+    }
+   ],
+   "findings": [
+    {
+     "attempt": 1,
+     "field": "document_date",
+     "value": "2024-06-14",
+     "span": "14 June 2024",
+     "verdict": "UNNAMED",
+     "names_found": [],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 1,
+     "field": "cin",
+     "value": "U74999KA2019PTC123456",
+     "span": "CIN U74999KA2019PTC123456",
+     "verdict": "BOUND",
+     "names_found": [
+      "cin"
+     ],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 1,
+     "field": "incorporation_date",
+     "value": "2019",
+     "span": "Registration No. 123456 of 2019",
+     "verdict": "MISBOUND",
+     "names_found": [
+      "registration number:registration no"
+     ],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 2,
+     "field": "document_date",
+     "value": "2024-06-14",
+     "span": "14 June 2024",
+     "verdict": "UNNAMED",
+     "names_found": [],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 2,
+     "field": "cin",
+     "value": "U74999KA2019PTC123456",
+     "span": "CIN U74999KA2019PTC123456",
+     "verdict": "BOUND",
+     "names_found": [
+      "cin"
+     ],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    }
+   ],
+   "seconds": 2.3
+  },
+  {
+   "cid": "T04",
+   "confusable": [
+    "company_class"
+   ],
+   "orchestrator_verdict": "SERVED",
+   "error": "",
+   "attempts": 1,
+   "raw_proposals": [
+    {
+     "facts": {
+      "document_date": {
+       "value": "2024-06-14",
+       "span": "14 June 2024"
+      },
+      "company_class": {
+       "value": "private limited company",
+       "span": "The Company is a private limited company"
+      }
+     },
+     "narration": ""
+    }
+   ],
+   "findings": [
+    {
+     "attempt": 1,
+     "field": "document_date",
+     "value": "2024-06-14",
+     "span": "14 June 2024",
+     "verdict": "UNNAMED",
+     "names_found": [],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 1,
+     "field": "company_class",
+     "value": "private limited company",
+     "span": "The Company is a private limited company",
+     "verdict": "BOUND",
+     "names_found": [
+      "private limited"
+     ],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    }
+   ],
+   "seconds": 0.8
+  },
+  {
+   "cid": "T05",
+   "confusable": [
+    "document_date",
+    "incorporation_date"
+   ],
+   "orchestrator_verdict": "SERVED",
+   "error": "",
+   "attempts": 1,
+   "raw_proposals": [
+    {
+     "facts": {
+      "document_date": {
+       "value": "2024-06-14",
+       "span": "14 June 2024"
+      },
+      "incorporation_date": {
+       "value": "2015-04-01",
+       "span": "01 April 2015"
+      }
+     },
+     "narration": ""
+    }
+   ],
+   "findings": [
+    {
+     "attempt": 1,
+     "field": "document_date",
+     "value": "2024-06-14",
+     "span": "14 June 2024",
+     "verdict": "UNNAMED",
+     "names_found": [],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 1,
+     "field": "incorporation_date",
+     "value": "2015-04-01",
+     "span": "01 April 2015",
+     "verdict": "UNNAMED",
+     "names_found": [],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    }
+   ],
+   "seconds": 0.8
+  },
+  {
+   "cid": "T06",
+   "confusable": [
+    "incorporation_date",
+    "financial_year",
+    "company_class",
+    "cin"
+   ],
+   "orchestrator_verdict": "SERVED",
+   "error": "",
+   "attempts": 1,
+   "raw_proposals": [
+    {
+     "facts": {
+      "incorporation_date": {
+       "value": "2015-04-01",
+       "span": "01-04-2015"
+      },
+      "financial_year": {
+       "value": "2023-24",
+       "span": "2023-24"
+      },
+      "company_class": {
+       "value": "Private Limited",
+       "span": "Private Limited"
+      },
+      "cin": {
+       "value": "U74999KA2019PTC123456",
+       "span": "U74999KA2019PTC123456"
+      },
+      "document_date": {
+       "value": "2024-06-14",
+       "span": "14 June 2024"
+      }
+     },
+     "narration": ""
+    }
+   ],
+   "findings": [
+    {
+     "attempt": 1,
+     "field": "incorporation_date",
+     "value": "2015-04-01",
+     "span": "01-04-2015",
+     "verdict": "UNNAMED",
+     "names_found": [],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 1,
+     "field": "financial_year",
+     "value": "2023-24",
+     "span": "2023-24",
+     "verdict": "UNNAMED",
+     "names_found": [],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 1,
+     "field": "company_class",
+     "value": "Private Limited",
+     "span": "Private Limited",
+     "verdict": "BOUND",
+     "names_found": [
+      "private limited"
+     ],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 1,
+     "field": "cin",
+     "value": "U74999KA2019PTC123456",
+     "span": "U74999KA2019PTC123456",
+     "verdict": "UNNAMED",
+     "names_found": [],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    },
+    {
+     "attempt": 1,
+     "field": "document_date",
+     "value": "2024-06-14",
+     "span": "14 June 2024",
+     "verdict": "UNNAMED",
+     "names_found": [],
+     "span_in_document": true,
+     "value_belongs_to": "",
+     "value_rendering": ""
+    }
+   ],
+   "seconds": 1.6
+  }
+ ],
+ "cases": 6,
+ "cases_errored": 0,
+ "text_date_facts_proposed": 19,
+ "spans_present": 19,
+ "misbound": [
+  {
+   "attempt": 1,
+   "field": "incorporation_date",
+   "value": "2019",
+   "span": "Registration No. 123456 of 2019",
+   "verdict": "MISBOUND",
+   "names_found": [
+    "registration number:registration no"
+   ],
+   "span_in_document": true,
+   "value_belongs_to": "",
+   "value_rendering": "",
+   "cid": "T03"
+  }
+ ],
+ "value_confused": [],
+ "span_misbinding": "EVIDENCE_FOUND",
+ "value_confusion": "NO_EVIDENCE",
+ "verdict": "EVIDENCE_FOUND",
+ "model": "azure:llama-3-3-70b"
+}
