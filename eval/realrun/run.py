@@ -142,6 +142,36 @@ def _out_name(model_name: str) -> str:
     return f"last_run_{model_name.replace(':', '_')}.json"
 
 
+def _run_case(c: Case, model) -> dict:
+    """One case through the real orchestrator, scored, with every raw proposal kept.
+
+    The raw proposals are what make a gate change judgeable later: without them a
+    refusal can be counted but never replayed (R03, 14-09-2026). Captured with the
+    same helper text_field_probe uses, so both harnesses record attempts one way.
+    """
+    from eval.realrun.text_field_probe import capture
+    wrapped, seen = capture(model)
+    t0 = time.time()
+    try:
+        out = orchestrator.run(intent=bundles.capabilities()[0],
+                               document=c.text,
+                               document_date=c.document_date, model=wrapped)
+        outcome, cause, detail = check(c, out)
+        verdict = out.verdict
+        corrections = out.corrections_used
+    except orchestrator.OrchestrationRefused as e:
+        outcome, cause, detail = check(c, None)
+        verdict, corrections = "REFUSED_BEFORE_CALL", 0
+        detail = str(e)[:70]
+    except Exception as e:                                   # noqa: BLE001
+        outcome, cause, detail = ERROR, "harness", f"{type(e).__name__}: {e}"
+        verdict, corrections = "ERROR", 0
+    return {"cid": c.cid, "probe": c.probe, "outcome": outcome,
+            "cause": cause, "detail": detail, "verdict": verdict,
+            "corrections": corrections, "raw_proposals": seen,
+            "seconds": round(time.time() - t0, 1)}
+
+
 def run_all(model_name: str = "gemini") -> dict:
     model = _extractor(model_name)
 
@@ -153,25 +183,7 @@ def run_all(model_name: str = "gemini") -> dict:
         # A local model has no quota, so pacing it only wastes wall clock.
         if n and model_name != "local":
             time.sleep(PACE_SECONDS)
-        t0 = time.time()
-        try:
-            out = orchestrator.run(intent=bundles.capabilities()[0],
-                                   document=c.text,
-                                   document_date=c.document_date, model=model)
-            outcome, cause, detail = check(c, out)
-            verdict = out.verdict
-            corrections = out.corrections_used
-        except orchestrator.OrchestrationRefused as e:
-            outcome, cause, detail = check(c, None)
-            verdict, corrections = "REFUSED_BEFORE_CALL", 0
-            detail = str(e)[:70]
-        except Exception as e:                                   # noqa: BLE001
-            outcome, cause, detail = ERROR, "harness", f"{type(e).__name__}: {e}"
-            verdict, corrections = "ERROR", 0
-        rows.append({"cid": c.cid, "probe": c.probe, "outcome": outcome,
-                     "cause": cause, "detail": detail, "verdict": verdict,
-                     "corrections": corrections,
-                     "seconds": round(time.time() - t0, 1)})
+        rows.append(_run_case(c, model))
     counts = {}
     for r in rows:
         counts[r["outcome"]] = counts.get(r["outcome"], 0) + 1
@@ -340,6 +352,26 @@ def _test() -> None:
         p, meta = local_model.extract("any document")
     chk(meta["parse"] == "OK" and "cin" in p.facts,
         "...while a finished reply still parses as before")
+
+    # ── a row keeps what the model said, so a gate change can be replayed ───
+    # R03 was over-refused on gpt-5-mini, Llama-70B and gemma3 (14-09-2026), and
+    # the fix to integer value-support could not be judged: no row held the
+    # proposal the gate refused. text_field_probe keeps raw proposals; this did not.
+    r03 = by_id["R03"]
+
+    def says_seven(_t: str) -> Proposal:
+        return Proposal(facts={"director_count": {
+            "value": 7, "span": "Four directors of the Company's seven were present."}})
+
+    row = _run_case(r03, says_seven)
+    chk(row["raw_proposals"]
+        and row["raw_proposals"][0]["facts"]["director_count"]["value"] == 7,
+        f"a benchmark row keeps the raw proposal the gate judged "
+        f"({row['verdict']}, {len(row['raw_proposals'])} attempt(s))")
+    chk(len(row["raw_proposals"]) == row["corrections"] + 1,
+        "...every attempt, including the correction the orchestrator asked for")
+    chk(row["cid"] == "R03" and row["outcome"] in (CORRECT, WRONG_REFUSAL, LEAK),
+        "...and the row still carries its scored outcome")
 
     # ── Azure: models too large for this laptop, same benchmark ─────────────
     from eval.realrun import azure_model
