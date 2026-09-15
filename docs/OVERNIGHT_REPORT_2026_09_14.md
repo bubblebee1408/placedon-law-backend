@@ -96,16 +96,32 @@ language list.
 
 ## 6. PLAN_12 — large-document intake architecture
 
-**Status: in progress when this report was written.** Three independent designs were produced
-(abstention-first, scale-first, residency-first). Three judges scored them, and all three
-picked **abstention-first** (34.5 / 36 / 35), with no fatal flaws named. A synthesis was
-written. Both red-team lenses then returned findings they rated fatal; examples:
+**Status: complete and committed** — [PLAN_12](PLAN_12_DOCUMENT_INTAKE_ARCHITECTURE.md).
 
-- the provider-eligibility function checks the evidence marker, not the value
-- `NOT_FOUND` rests on unmeasured extractor recall
+- **How it was made:** three independent designs (abstention-first, scale-first,
+  residency-first), three judges, a synthesis, a two-lens red team, then fixes.
+  **Abstention-first won** (judge totals 105.5 against 94.5 and 94.5).
+- **Red team:** **43 findings, all FIXED**, including two rated fatal:
+  - the provider-eligibility check read the evidence marker, not the value
+  - `NOT_FOUND` rested on unmeasured extractor recall; it is now unreachable until recall
+    is measured
 
-A fix agent was applying them. **Do not treat PLAN_12 as final until its "Red-team findings
-and dispositions" section exists and has been committed.**
+  7 findings carry a residual OPEN note tied to a named research gap.
+- **The shape, in one line:** every cell starts ABSTAINED and is served only when every stage
+  from the bytes to the value has recorded a positive reason to trust it. A refusal names its
+  page. Every threshold ships as `None` until measured. G01 has both branches designed and
+  neither chosen.
+- **Checked by the main session before commit:**
+  - Sarvam's 10-page limit matches R3 D9 word for word
+  - Textract is marked ineligible in Mumbai on R4 G1/G2 (org opt-out unverified), matching
+    the row
+- **One error corrected.** PLAN_12 listed the per-page reader as BUILT with nothing blocking it,
+  and planned page anchors over it as "buildable now". The synthesis ran before D1's census
+  existed. D1 measured that reader agreeing with an independent one on 0 of 14 files. The
+  status row, the enumerator rationale (INFERRED → MEASURED) and build step 2 now say
+  **BLOCKED on D-002**.
+- **Length:** about 16,600 words. It is a design reference, not a read-once document; §1
+  (thesis) and §10 (what is blocked and the build order) are the parts to read first.
 
 ## 7. Tooling (`ea35142`)
 
