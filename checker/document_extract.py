@@ -194,6 +194,23 @@ def _date_from_span(span: str) -> date | None:
     return None
 
 
+# Counts in corporate documents are written in words as often as digits ("seven
+# directors"). Zero to twenty covers board and member counts as written; a count
+# above twenty in words is refused as no number rather than guessed at.
+_NUMBER_WORDS = {w: n for n, w in enumerate(
+    "zero one two three four five six seven eight nine ten eleven twelve thirteen "
+    "fourteen fifteen sixteen seventeen eighteen nineteen twenty".split())}
+
+
+def _integers(span: str) -> set[int]:
+    """Every distinct whole number a span states, in digits or in words."""
+    text = _normalise(span)
+    found = {int(m.group(1).replace(",", "").replace(" ", "")) for m in _NUM.finditer(text)}
+    found |= {_NUMBER_WORDS[w] for w in re.findall(r"[a-z]+", text.lower())
+              if w in _NUMBER_WORDS}
+    return found
+
+
 def value_supported_by_span(name: str, value: object, span: str) -> tuple[bool, str]:
     """Does the quoted span actually yield the proposed value?
 
@@ -218,11 +235,19 @@ def value_supported_by_span(name: str, value: object, span: str) -> tuple[bool, 
         return (got == want,
                 f"span states {got}, extractor proposed {value}" if got != want else "")
     if name in INT_FIELDS:
-        m = _NUM.search(_normalise(span))
-        if not m:
+        # One number, or no support. "Four directors of the Company's seven were
+        # present" states two counts; gpt-5-mini proposed the wrong one (4) from it
+        # on 15-09-2026, and the first-number rule this replaced would have taken
+        # the first number of "4 directors of the Company's 7" the same way.
+        got = _integers(span)
+        if not got:
             return False, "the quoted span states no number"
-        got = int(m.group(1).replace(",", "").replace(" ", ""))
-        return got == value, f"span states {got}, extractor proposed {value}" if got != value else ""
+        if len(got) > 1:
+            return False, (f"the quoted span states more than one number "
+                           f"({', '.join(str(n) for n in sorted(got))}) and does "
+                           f"not say which is {name}")
+        (n,) = got
+        return n == value, f"span states {n}, extractor proposed {value}" if n != value else ""
     if name == "cin":
         # A CIN has a fixed 21-character structure. A value that is not one is not
         # a CIN, however faithfully its span quotes it -- and a damaged one is
@@ -415,6 +440,32 @@ def _test() -> None:
     g7 = ground(t04_span, {"cin": {"value": "ACME HOLDINGS PUBLIC LIMITED",
                                    "span": t04_span}}, source_id="d")
     check("cin" not in g7.to_payload(), "...and ground() keeps it out of the payload")
+
+    # ── an integer is read in words too, and only from an unambiguous span ───
+    # 14/15-09-2026, realrun R03 on real models. "Four directors of the Company's
+    # seven were present." Llama-3.3-70B quoted "the Company's seven" for
+    # director_count=7 and was refused: the check looked for a digit. gpt-5-mini
+    # quoted the whole sentence and proposed 4 -- the PRESENT count, the wrong
+    # answer. A fix that only learned number words and kept "first number wins"
+    # would have served that 4. So the span must state exactly one number.
+    ok7, why7 = value_supported_by_span("director_count", 7, "the Company's seven")
+    check(ok7, f"'the Company's seven' supports director_count=7 ({why7 or 'ok'})")
+    sentence = "Four directors of the Company's seven were present."
+    ok4, why4 = value_supported_by_span("director_count", 4, sentence)
+    check(not ok4 and "4" in why4 and "7" in why4,
+          f"gpt-5-mini's 4 from a span stating two counts is refused as ambiguous ({why4})")
+    check(not value_supported_by_span("director_count", 7, sentence)[0],
+          "...and so is 7 from the same span -- the span does not say which count it is")
+    ok_d4, why_d4 = value_supported_by_span("director_count", 4,
+                                            "4 directors of the Company's 7")
+    check(not ok_d4,
+          f"digits too: '4 directors of the Company's 7' no longer supports 4 "
+          f"-- the first-number rule accepted it ({why_d4})")
+    check(value_supported_by_span("director_count", 2, "2 directors")[0]
+          and value_supported_by_span("director_count", 12, "twelve directors")[0],
+          "a span stating one count, in digits or words, still supports it")
+    check(not value_supported_by_span("director_count", 3, "the Board of Directors")[0],
+          "a span stating no number supports none")
 
     # unknown keys are ignored, not rejected
     g5 = ground(DOC, dict(good, auditor_name={"value": "X", "span": "X"}), source_id="d")
