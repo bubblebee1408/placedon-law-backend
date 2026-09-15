@@ -1,0 +1,30 @@
+{
+ "as_of": "2026-09-15",
+ "body": {
+  "covers": "foreign investment, sectoral caps, reporting (FC-GPR, FC-TRS), downstream investment",
+  "key": "FEMA1999",
+  "name": "Foreign Exchange Management Act, 1999 and the FDI rules",
+  "regulator": "RBI / DPIIT",
+  "scope_status": "DECLARED"
+ },
+ "context": {
+  "document_date": null,
+  "kind": "general"
+ },
+ "generated_at": "2026-09-15T00:00:00Z",
+ "held": [
+  "Companies Act, 2013"
+ ],
+ "question": "What must we report to RBI for this share allotment to a foreign investor?",
+ "reason": "Foreign Exchange Management Act, 1999 and the FDI rules (RBI / DPIIT) is within scope — it covers foreign investment, sectoral caps, reporting (FC-GPR, FC-TRS), downstream investment — but no instrument has been acquired, so nothing here can be decided. Nothing acquired. Sectoral caps change by press note, which is a different acquisition problem from a Gazette rule. This is a statement about what we hold, not a finding that no obligation applies.",
+ "schema": "placedon.ask/0",
+ "scope": {
+  "held": [
+   "Companies Act, 2013"
+  ],
+  "sentence": "1 of 9 in-scope bodies of law are held"
+ },
+ "state": "out_of_scope",
+ "turn_id": "t_53d5771a2f6d",
+ "uses_model": false
+}

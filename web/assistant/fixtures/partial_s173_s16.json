@@ -1,0 +1,65 @@
+{
+ "as_of": "2026-09-15",
+ "confirmed": [
+  {
+   "cite": "Companies Act 2013, s.173 (Meetings of Board)",
+   "defects": [],
+   "evidence_state": "CORROBORATED",
+   "ref": "ACT:COMPANIES_ACT_2013:S173",
+   "retrieved_on": [
+    "2026-08-18",
+    "2026-08-19"
+   ],
+   "source_url": "https://www.indiacode.nic.in/SectionPageContent?actid=AC_CEN_22_29_00008_201318_1517807327856&sectionID=49099",
+   "title": "Meetings of Board",
+   "unusable_reason": null,
+   "usable_for_answering": true,
+   "verbatim": "(1) Every company shall hold the first meeting of the Board of Directors\nwithin thirty days of the date of its incorporation and thereafter hold a minimum number of four meetings\nof its Board of Directors every year in such a manner that not more than one hundred and twenty days\nshall intervene between two consecutive meetings of the Board:\nProvided that the Central Government may, by notification, direct that the provisions of this subsection\nshall not apply in relation to any class or description of companies or shall apply subject to such\nexceptions, modifications or conditions as may be specified in the notification.\n(2) The participation of directors in a meeting of the Board may be either in person or through video\nconferencing or other audio visual means, as may be prescribed, which are capable of recording and\nrecognising the participation of the directors and of recording and storing the proceedings of such\nmeetings along with date and time:\nProvided that the Central Government may, by notification, specify such matters which shall not be\ndealt with in a meeting through video conferencing or other audio visual means.\n<sup>1</sup>[Provided further that where there is quorum in a meeting through physical presence of directors, any\nother director may participate through video conferencing or other audio visual means in such meeting on\nany matter specified under the first proviso.]\n(3) A meeting of the Board shall be called by giving not less than seven days notice in writing to\nevery director at his address registered with the company and such notice shall be sent by hand delivery or\nby post or by electronic means:\nProvided that a meeting of the Board may be called at shorter notice to transact urgent business\nsubject to the condition that at least one independent director, if any, shall be present at the meeting:\nProvided further that in case of absence of independent directors from such a meeting of the Board,\ndecisions taken at such a meeting shall be circulated to all the directors and shall be final only on\nratification thereof by at least one independent director, if any.\n(4) Every officer of the company whose duty is to give notice under this section and who fails to do\nso shall be liable to a penalty of twenty-five thousand rupees.\n(5) A One Person Company, small company and dormant company shall be deemed to have complied\nwith the provisions of this section if at least one meeting of the Board of Directors has been conducted in\neach half of a calendar year and the gap between the two meetings is not less than ninety days:\nProvided that nothing contained in this sub-section and in section 174 shall apply to One Person\nCompany in which there is only one director on its Board of Directors."
+  }
+ ],
+ "context": {
+  "document_date": null,
+  "kind": "general"
+ },
+ "demand_signal": {
+  "action": "tell_us_blocking"
+ },
+ "evidence_pack": {
+  "insufficient_evidence": false,
+  "missing": [
+   "ACT:COMPANIES_ACT_2013:S16 exists in state SUSPENDED but is not admitted for model use"
+  ],
+  "retrieval_query": "s.173 and s.16",
+  "route": "exact",
+  "unusable_keys": [],
+  "usable_keys": [
+   "ACT:COMPANIES_ACT_2013:S173"
+  ]
+ },
+ "generated_at": "2026-09-15T00:00:00Z",
+ "law_version": {
+  "basis": "CURRENT_CONSOLIDATION_AS_INGESTED",
+  "corpus_fetched": [
+   "2026-08-18"
+  ],
+  "point_in_time_verified": false,
+  "statement": "This pack carries the CURRENT CONSOLIDATION of the Companies Act 2013 as India Code rendered it when the corpus was ingested (2026-08-18). It is NOT a point-in-time version of the law and carries no verified commencement or amendment date. The amendment vintage of individual provisions is not uniform and not fully known: SD-002 confirms that some records carry pre-amendment wording while the same publisher's PDF carries later wording. Those provisions are marked unusable in this pack. Point-in-time reconstruction exists in this system but is UNVERIFIED against any external source, so no statement here is a statement about the law as it stood on any past date."
+ },
+ "not_confirmed": [
+  {
+   "detail": "ACT:COMPANIES_ACT_2013:S16 exists in state SUSPENDED but is not admitted for model use",
+   "kind": "pack_missing"
+  }
+ ],
+ "question": "What does s.173 require, and does s.16 apply here?",
+ "schema": "placedon.ask/0",
+ "scope": {
+  "held": [
+   "Companies Act, 2013"
+  ],
+  "sentence": "1 of 9 in-scope bodies of law are held"
+ },
+ "state": "partial",
+ "turn_id": "t_87e16579523a",
+ "uses_model": false
+}

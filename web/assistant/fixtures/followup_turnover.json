@@ -1,0 +1,66 @@
+{
+ "as_of": "2026-09-15",
+ "citations": [
+  {
+   "cite": "Companies Act 2013, s.2 (Definitions)",
+   "defects": [],
+   "evidence_state": "CORROBORATED",
+   "ref": "ACT:COMPANIES_ACT_2013:S2",
+   "retrieved_on": [
+    "2026-08-18",
+    "2026-08-19"
+   ],
+   "source_url": "https://www.indiacode.nic.in/SectionPageContent?actid=AC_CEN_22_29_00008_201318_1517807327856&sectionID=185",
+   "title": "Definitions",
+   "unusable_reason": null,
+   "usable_for_answering": true
+  }
+ ],
+ "context": {
+  "document_date": null,
+  "kind": "general"
+ },
+ "evidence_pack": {
+  "insufficient_evidence": false,
+  "missing": [],
+  "retrieval_query": "s.2(85)",
+  "route": "exact",
+  "unusable_keys": [],
+  "usable_keys": [
+   "ACT:COMPANIES_ACT_2013:S2"
+  ]
+ },
+ "figures": [
+  {
+   "amount": "₹100 crore",
+   "effective_from": "2025-12-01",
+   "effective_to": null,
+   "evidence_state": "CORROBORATED",
+   "instrument": "G.S.R. 880(E), Companies (Specification of Definition Details) Amendment Rules, 2025, dated 01-12-2025",
+   "key": "small_company.turnover.prescribed",
+   "rupees": 1000000000,
+   "source_url": "UNRESOLVED — see scripts/register_gsr880e.py"
+  }
+ ],
+ "generated_at": "2026-09-15T00:00:00Z",
+ "law_version": {
+  "basis": "CURRENT_CONSOLIDATION_AS_INGESTED",
+  "corpus_fetched": [
+   "2026-08-18"
+  ],
+  "point_in_time_verified": false,
+  "statement": "This pack carries the CURRENT CONSOLIDATION of the Companies Act 2013 as India Code rendered it when the corpus was ingested (2026-08-18). It is NOT a point-in-time version of the law and carries no verified commencement or amendment date. The amendment vintage of individual provisions is not uniform and not fully known: SD-002 confirms that some records carry pre-amendment wording while the same publisher's PDF carries later wording. Those provisions are marked unusable in this pack. Point-in-time reconstruction exists in this system but is UNVERIFIED against any external source, so no statement here is a statement about the law as it stood on any past date."
+ },
+ "parent_turn_id": "t_20ccadb72b4b",
+ "question": "And the turnover limit?",
+ "schema": "placedon.ask/0",
+ "scope": {
+  "held": [
+   "Companies Act, 2013"
+  ],
+  "sentence": "1 of 9 in-scope bodies of law are held"
+ },
+ "state": "answered",
+ "turn_id": "t_35e5e8a47ea0",
+ "uses_model": false
+}
