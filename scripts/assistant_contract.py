@@ -37,6 +37,9 @@ sys.path.insert(0, str(ROOT))
 SCHEMA = "placedon.ask/0"
 STATES = ("answered", "partial", "out_of_scope")
 FIXTURE_DIR = ROOT / "web" / "assistant" / "fixtures"
+# The same fixtures, embedded for a page opened from disk (file:// cannot fetch local JSON).
+FIXTURE_JS = ROOT / "web" / "assistant" / "fixtures.js"
+FIXTURE_JS_PREFIX = "window.PLACEDON_ASK_FIXTURES = "
 # checker/orchestrator.py step() names. A stage the engine does not emit is not a stage.
 STAGE_NAMES = ("capability", "date", "model", "review", "correction", "abstain")
 # C4: no confidence, ever. `coverage` is refused because ClaimVerification.coverage is a float that
@@ -257,14 +260,20 @@ def build_fixtures() -> dict[str, dict]:
 
 def write_fixtures() -> list[Path]:
     FIXTURE_DIR.mkdir(parents=True, exist_ok=True)
+    fixtures = build_fixtures()
     written = []
-    for name, resp in build_fixtures().items():
+    for name, resp in fixtures.items():
         errs = validate(resp)
         if errs:
             raise SystemExit(f"{name} does not validate: {errs}")
         path = FIXTURE_DIR / f"{name}.json"
         path.write_text(json.dumps(resp, indent=1, ensure_ascii=False, sort_keys=True) + "\n")
         written.append(path)
+    # Written from the same validated dict in the same pass, so the two copies cannot diverge.
+    FIXTURE_JS.write_text(FIXTURE_JS_PREFIX
+                          + json.dumps(fixtures, indent=1, ensure_ascii=False, sort_keys=True)
+                          + ";\n")
+    written.append(FIXTURE_JS)
     return written
 
 
@@ -310,6 +319,12 @@ def _test() -> None:
       and all(json.loads((FIXTURE_DIR / f"{n}.json").read_text()) == r for n, r in fx.items()),
       "the fixtures on disk equal a fresh rebuild -- none was edited by hand "
       "(run --write after an engine change)")
+    # A page opened from disk cannot fetch() local JSON (Chromium blocks file:// requests), so
+    # the prototype reads an embedded copy. It is written by the same builder, never by hand.
+    js = FIXTURE_JS.read_text() if FIXTURE_JS.is_file() else ""
+    c(js.startswith(FIXTURE_JS_PREFIX)
+      and json.loads(js[len(FIXTURE_JS_PREFIX):].rstrip().rstrip(";")) == fx,
+      "fixtures.js embeds exactly the rebuilt fixtures, for a page opened from disk")
 
     # ── what the validator refuses ──────────────────────────────────────────
     def broken(name: str, mutate) -> list[str]:
