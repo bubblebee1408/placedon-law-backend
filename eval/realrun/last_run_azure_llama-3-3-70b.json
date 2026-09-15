@@ -9,7 +9,47 @@
    "detail": "3 field(s) served",
    "verdict": "SERVED_AFTER_CORRECTION",
    "corrections": 1,
-   "seconds": 3.0
+   "raw_proposals": [
+    {
+     "facts": {
+      "document_date": {
+       "value": "2024-06-14",
+       "span": "14th day of June, 2024"
+      },
+      "paid_up_capital_rupees": {
+       "value": 4000000,
+       "span": "Rs 4,00,00,000"
+      },
+      "turnover_rupees": {
+       "value": 15000000,
+       "span": "Rs 15,00,00,000"
+      },
+      "company_class": {
+       "value": "private limited company",
+       "span": "a private limited company"
+      }
+     },
+     "narration": ""
+    },
+    {
+     "facts": {
+      "document_date": {
+       "value": "2024-06-14",
+       "span": "14th day of June, 2024"
+      },
+      "paid_up_capital_rupees": {
+       "value": 40000000,
+       "span": "Rs 4,00,00,000"
+      },
+      "turnover_rupees": {
+       "value": 150000000,
+       "span": "Rs 15,00,00,000"
+      }
+     },
+     "narration": ""
+    }
+   ],
+   "seconds": 2.5
   },
   {
    "cid": "R02",
@@ -19,7 +59,18 @@
    "detail": "1 field(s) served",
    "verdict": "SERVED",
    "corrections": 0,
-   "seconds": 1.1
+   "raw_proposals": [
+    {
+     "facts": {
+      "document_date": {
+       "value": "2024-06-14",
+       "span": "14 June 2024"
+      }
+     },
+     "narration": ""
+    }
+   ],
+   "seconds": 0.7
   },
   {
    "cid": "R03",
@@ -29,7 +80,35 @@
    "detail": "ABSTAINED",
    "verdict": "ABSTAINED",
    "corrections": 1,
-   "seconds": 2.1
+   "raw_proposals": [
+    {
+     "facts": {
+      "document_date": {
+       "value": "2024-06-14",
+       "span": "14 June 2024"
+      },
+      "director_count": {
+       "value": 7,
+       "span": "the Company's seven"
+      }
+     },
+     "narration": ""
+    },
+    {
+     "facts": {
+      "document_date": {
+       "value": "2024-06-14",
+       "span": "14 June 2024"
+      },
+      "director_count": {
+       "value": 7,
+       "span": "the Company's seven"
+      }
+     },
+     "narration": ""
+    }
+   ],
+   "seconds": 2.0
   },
   {
    "cid": "R04",
@@ -39,7 +118,35 @@
    "detail": "2 field(s) served",
    "verdict": "SERVED_AFTER_CORRECTION",
    "corrections": 1,
-   "seconds": 1.8
+   "raw_proposals": [
+    {
+     "facts": {
+      "document_date": {
+       "value": "2024-06-14",
+       "span": "14 June 2024"
+      },
+      "paid_up_capital_rupees": {
+       "value": 4000000,
+       "span": "Rs 4,00,00,000"
+      }
+     },
+     "narration": ""
+    },
+    {
+     "facts": {
+      "document_date": {
+       "value": "2024-06-14",
+       "span": "14 June 2024"
+      },
+      "paid_up_capital_rupees": {
+       "value": 40000000,
+       "span": "Rs 4,00,00,000"
+      }
+     },
+     "narration": ""
+    }
+   ],
+   "seconds": 1.9
   },
   {
    "cid": "R05",
@@ -49,7 +156,22 @@
    "detail": "2 field(s) served",
    "verdict": "SERVED",
    "corrections": 0,
-   "seconds": 1.3
+   "raw_proposals": [
+    {
+     "facts": {
+      "document_date": {
+       "value": "2024-06-14",
+       "span": "14 June 2024"
+      },
+      "paid_up_capital_rupees": {
+       "value": 40000000,
+       "span": "Rs 4,00,00,000"
+      }
+     },
+     "narration": ""
+    }
+   ],
+   "seconds": 0.9
   },
   {
    "cid": "R06",
@@ -59,6 +181,25 @@
    "detail": "3 field(s) served",
    "verdict": "SERVED",
    "corrections": 0,
+   "raw_proposals": [
+    {
+     "facts": {
+      "document_date": {
+       "value": "2024-06-14",
+       "span": "14 June 2024"
+      },
+      "paid_up_capital_rupees": {
+       "value": 40000000,
+       "span": "Rs 4,00,00,000"
+      },
+      "company_class": {
+       "value": "small company",
+       "span": "The Company is a small company"
+      }
+     },
+     "narration": ""
+    }
+   ],
    "seconds": 1.3
   },
   {
@@ -69,7 +210,26 @@
    "detail": "3 field(s) served",
    "verdict": "SERVED",
    "corrections": 0,
-   "seconds": 1.0
+   "raw_proposals": [
+    {
+     "facts": {
+      "document_date": {
+       "value": "2024-06-14",
+       "span": "14 June 2024"
+      },
+      "company_class": {
+       "value": "small company",
+       "span": "The Company qualifies as a small company"
+      },
+      "paid_up_capital_rupees": {
+       "value": 40000000,
+       "span": "Rs 4,00,00,000"
+      }
+     },
+     "narration": ""
+    }
+   ],
+   "seconds": 0.9
   },
   {
    "cid": "R08",
@@ -79,6 +239,7 @@
    "detail": "no document date. Every temporal answer here compares the law at the d",
    "verdict": "REFUSED_BEFORE_CALL",
    "corrections": 0,
+   "raw_proposals": [],
    "seconds": 0.0
   },
   {
@@ -89,7 +250,18 @@
    "detail": "1 field(s) served",
    "verdict": "SERVED",
    "corrections": 0,
-   "seconds": 1.1
+   "raw_proposals": [
+    {
+     "facts": {
+      "document_date": {
+       "value": "2024-06-14",
+       "span": "14 June 2024"
+      }
+     },
+     "narration": ""
+    }
+   ],
+   "seconds": 1.3
   },
   {
    "cid": "R10",
@@ -99,7 +271,39 @@
    "detail": "2 field(s) served",
    "verdict": "SERVED_AFTER_CORRECTION",
    "corrections": 1,
-   "seconds": 2.5
+   "raw_proposals": [
+    {
+     "facts": {
+      "document_date": {
+       "value": "2024-06-14",
+       "span": "14 June 2024"
+      },
+      "company_class": {
+       "value": "private limited company",
+       "span": "a p rivate limited compan y"
+      },
+      "paid_up_capital_rupees": {
+       "value": 40000000,
+       "span": "Rs 4,00,00,000"
+      }
+     },
+     "narration": ""
+    },
+    {
+     "facts": {
+      "document_date": {
+       "value": "2024-06-14",
+       "span": "dated 14 June 2024"
+      },
+      "paid_up_capital_rupees": {
+       "value": 40000000,
+       "span": "paid-up share capital of Rs 4,00,00,000"
+      }
+     },
+     "narration": ""
+    }
+   ],
+   "seconds": 2.2
   },
   {
    "cid": "H01",
@@ -109,6 +313,21 @@
    "detail": "2 field(s) served",
    "verdict": "SERVED",
    "corrections": 0,
+   "raw_proposals": [
+    {
+     "facts": {
+      "document_date": {
+       "value": "2024-06-14",
+       "span": "14 June 2024"
+      },
+      "paid_up_capital_rupees": {
+       "value": 40000000,
+       "span": "Rs\u00a04,00,00,000"
+      }
+     },
+     "narration": ""
+    }
+   ],
    "seconds": 0.8
   },
   {
@@ -119,7 +338,51 @@
    "detail": "4 field(s) served",
    "verdict": "SERVED_AFTER_CORRECTION",
    "corrections": 1,
-   "seconds": 2.3
+   "raw_proposals": [
+    {
+     "facts": {
+      "document_date": {
+       "value": "2024-06-14",
+       "span": "14 June 2024"
+      },
+      "paid_up_capital_rupees": {
+       "value": 4000000,
+       "span": "4,00,00,000"
+      },
+      "turnover_rupees": {
+       "value": 15000000,
+       "span": "15,00,00,000"
+      },
+      "net_worth_rupees": {
+       "value": 6000000,
+       "span": "6,00,00,000"
+      }
+     },
+     "narration": ""
+    },
+    {
+     "facts": {
+      "document_date": {
+       "value": "2024-06-14",
+       "span": "14 June 2024"
+      },
+      "paid_up_capital_rupees": {
+       "value": 40000000,
+       "span": "4,00,00,000"
+      },
+      "turnover_rupees": {
+       "value": 150000000,
+       "span": "15,00,00,000"
+      },
+      "net_worth_rupees": {
+       "value": 60000000,
+       "span": "6,00,00,000"
+      }
+     },
+     "narration": ""
+    }
+   ],
+   "seconds": 2.5
   },
   {
    "cid": "H03",
@@ -129,7 +392,43 @@
    "detail": "ABSTAINED",
    "verdict": "ABSTAINED",
    "corrections": 1,
-   "seconds": 2.9
+   "raw_proposals": [
+    {
+     "facts": {
+      "cin": {
+       "value": "U72200KA2021PTC145892",
+       "span": "CIN U72200KA2021PTC145892"
+      },
+      "paid_up_capital_rupees": {
+       "value": 4000000,
+       "span": "paid-up share capital Rs 4,00,00,000"
+      },
+      "document_date": {
+       "value": "2024-06-14",
+       "span": "dated 14 June 2024"
+      }
+     },
+     "narration": ""
+    },
+    {
+     "facts": {
+      "cin": {
+       "value": "U74999DL2018PLC337761",
+       "span": "CIN U74999DL2018PLC337761"
+      },
+      "document_date": {
+       "value": "2024-06-14",
+       "span": "dated 14 June 2024"
+      },
+      "paid_up_capital_rupees": {
+       "value": 50000000,
+       "span": "paid-up share capital Rs 50,00,00,000"
+      }
+     },
+     "narration": ""
+    }
+   ],
+   "seconds": 2.7
   },
   {
    "cid": "H04",
@@ -139,7 +438,22 @@
    "detail": "2 field(s) served",
    "verdict": "SERVED",
    "corrections": 0,
-   "seconds": 1.5
+   "raw_proposals": [
+    {
+     "facts": {
+      "document_date": {
+       "value": "2024-06-14",
+       "span": "14 June 2024"
+      },
+      "paid_up_capital_rupees": {
+       "value": 40000000,
+       "span": "Rs 4,00,00,000"
+      }
+     },
+     "narration": ""
+    }
+   ],
+   "seconds": 0.9
   },
   {
    "cid": "H05",
@@ -149,6 +463,21 @@
    "detail": "2 field(s) served",
    "verdict": "SERVED",
    "corrections": 0,
+   "raw_proposals": [
+    {
+     "facts": {
+      "document_date": {
+       "value": "2024-06-14",
+       "span": "14 June 2024"
+      },
+      "paid_up_capital_rupees": {
+       "value": 4000000,
+       "span": "40,00,000 equity shares of Rs 10 each, fully paid up"
+      }
+     },
+     "narration": ""
+    }
+   ],
    "seconds": 1.0
   },
   {
@@ -159,7 +488,18 @@
    "detail": "1 field(s) served",
    "verdict": "SERVED",
    "corrections": 0,
-   "seconds": 0.7
+   "raw_proposals": [
+    {
+     "facts": {
+      "document_date": {
+       "value": "2024-06-14",
+       "span": "14 June 2024"
+      }
+     },
+     "narration": ""
+    }
+   ],
+   "seconds": 1.1
   },
   {
    "cid": "H07",
@@ -169,7 +509,22 @@
    "detail": "2 field(s) served",
    "verdict": "SERVED",
    "corrections": 0,
-   "seconds": 1.3
+   "raw_proposals": [
+    {
+     "facts": {
+      "paid_up_capital_rupees": {
+       "value": 40000000,
+       "span": "Paid-up share capital Rs 4,00,00,000"
+      },
+      "document_date": {
+       "value": "2024-06-14",
+       "span": "dated 14 June 2024"
+      }
+     },
+     "narration": ""
+    }
+   ],
+   "seconds": 1.2
   },
   {
    "cid": "H08",
@@ -179,6 +534,17 @@
    "detail": "1 field(s) served",
    "verdict": "SERVED",
    "corrections": 0,
+   "raw_proposals": [
+    {
+     "facts": {
+      "document_date": {
+       "value": "2024-06-14",
+       "span": "14 June 2024"
+      }
+     },
+     "narration": ""
+    }
+   ],
    "seconds": 0.7
   }
  ],
