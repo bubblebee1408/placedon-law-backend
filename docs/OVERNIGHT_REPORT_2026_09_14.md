@@ -53,11 +53,28 @@ before any number was kept.
 | gpt-5-mini | 16 | 1 (R03) | 1 | **0 / 18** |
 | Llama-3.3-70B | 15 | 2 (R03, H03) | 1 | **0 / 18** |
 
-**R03 is our bug, traced without a model call.** "Four directors of the Company's
-**seven**" — integer value-support looks for a digit, finds none, and the whole case
-abstains. The same rule reads only the *first* number, so "4 of 7" would wrongly support 4.
-Fixing one side moves the other. No stored run holds integer proposals to replay, so it is
-**queued as L8, not changed**.
+**R03 was our bug, and it is fixed (15 September, on evidence).** The case says "Four
+directors of the Company's **seven**". Integer value-support looked for a digit and found
+none, and the old rule read only the *first* number.
+
+1. **Raw proposals first.** The benchmark was changed to store every raw proposal, then re-run.
+2. **What the re-run showed.** gpt-5-mini proposed **4** — the *present* count, which is
+   wrong — from the full sentence. A words-only fix would have served that 4.
+3. **The new rule.** An integer is read in digits or words, and is supported only when the
+   span states exactly one number.
+4. **Replay.** Llama-70B's R03 becomes **CORRECT** (7 served). gpt-5-mini's stays refused.
+   **0 leaks**, and 0 changes on the text-probe runs.
+5. **Trade-off.** A correct count sitting in a two-number sentence is now refused.
+
+**The other refusals are now explained, and none is a checker bug:**
+- **H03 (Llama):** the model misread Indian digit grouping by 10×, twice. Correctly refused.
+- **H05 (gpt-5-mini):** the model *calculated* paid-up capital instead of quoting it.
+  Correctly refused; this is the leak the case exists to catch.
+- **H03 (gpt-5-mini):** ran out of its reasoning-token budget. Counted as an error, never as
+  an empty answer.
+
+The harness labels H03 and H05 as wrong refusals only because it counts any abstention on a
+non-`must_refuse` case as one.
 
 **Azure usage:** about 57 model calls in total, against a cap of 300.
 
@@ -144,7 +161,7 @@ language list.
 | 1 | **PLAN_12 G01 — durable storage for bulk review?** PLAN_07 says client documents are never durable; a 500-page bundle needs queues and per-page state | Both branches are designed; choosing is a product and liability call |
 | 2 | **L7 — map document wording to company class?** ("Private Limited" → `private`; "(OPC) Private Limited" → `opc`) | Mapping is interpretive. Today an unmapped class is refused at the API (`api.py:86`), so nothing is silently wrong |
 | 3 | **D2 — which PDF reader for page anchors?** Fix the stdlib parser (large job), or adopt a PDF library (a new runtime dependency, now with a stated reason) | Dependency policy |
-| 4 | **L8 — integer value-support rule** (number words; "4 of 7" ambiguity) | Changes the leak/refusal balance with no replay evidence yet. The first step, storing raw proposals in run.py, is safe to do |
+| 4 | ~~L8 — integer value-support rule~~ **Done 15-09 on replay evidence** (§3). Remaining choice: keep refusing a correct count in a two-number sentence, or accept it | Recall vs never serving the wrong count |
 | 5 | **Register any MCP server?** Credentials, and tool scope for Azure | §7 |
 | 6 | **Sarvam** — only with training opted out, and only if 10-page batching is acceptable | Contract terms |
 | 7 | **The 20-document test** — still the gate on bulk review (F8) | Needs real buyer documents |
