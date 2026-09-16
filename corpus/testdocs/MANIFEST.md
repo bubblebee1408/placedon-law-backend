@@ -14,6 +14,16 @@ below.
 
 **Every file below is text-extractable. No document in this corpus requires OCR.**
 
+> **Corrected 14-09-2026 — the second sentence is wrong for three Route Mobile filings.** Every
+> page is text-extractable, but on 17 pages the text layer is **someone else's OCR over a
+> page-covering scan**: all 14 pages of `_raw/rm_bm_20250128.pdf`, 1 of `rm_bm_20240529.pdf`,
+> 2 of `rm_bm_20251103.pdf` (measured by `scripts/text_layer_census.py`; see
+> `TEXT_LAYER_CENSUS.json`). On 20250128 the OCR errors reach the figures ("1.1124.31",
+> "621.8.)", "7.(,4") and the CIN, and `board_outcomes/routemobile_outcome_board_meeting_2025-01-28.txt`
+> carries them verbatim ("Flcior", "crorcs", "ripcrarions"). The commencement and conclusion times
+> the T1.6b/c checks read are clean in that file — the errors sit in the scanned results annexure.
+> **Nothing was repaired.** Do not use the annexure's figures from that fixture as ground truth.
+
 ---
 
 ## Count by document type

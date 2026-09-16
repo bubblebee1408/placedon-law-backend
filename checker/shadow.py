@@ -278,10 +278,23 @@ def _test() -> None:
 
     # ── the harness must be able to report a leak, or it measures nothing ────
     def leaking_model(document: str) -> Proposal:
-        # quotes a REAL span but attaches the wrong value -- the failure that a
-        # span requirement alone does not stop.
-        return Proposal(facts={"paid_up_capital_rupees":
-                               {"value": 40000000, "span": "Rs. 6,00,00,000"}})
+        # A text value that is only a FRAGMENT of what its span says. The span is
+        # real; the value is inside it, so text value-support (containment) holds;
+        # the span names a private company, company_class's own term, so the
+        # binding holds. It is still wrong: the class is "private", not "company".
+        #
+        # This leak has been re-seated twice, each time because the gate it
+        # survived was closed, which is the harness doing its job:
+        #  - a real span with a MISMATCHED value -- stopped 14-09-2026 when
+        #    reasoning.review began calling value_supported_by_span;
+        #  - a financial year quoted from the incorporation date -- stopped the
+        #    same day when field_binding was widened to text and date fields.
+        # What it rests on now is an open gap (runbook task L7, overnight
+        # 2026-09-14): text value-support accepts any substring. When that closes,
+        # this must move again -- never be deleted.
+        return Proposal(facts={"company_class":
+                               {"value": "company",
+                                "span": "is a private company"}})
     r_leak = run(CASES, leaking_model, **KW)
     check(r_leak[0].outcome == LEAKED,
           f"a real span with a wrong value LEAKS — the harness can report failure "

@@ -1,0 +1,113 @@
+{
+ "as_of": "2026-09-15",
+ "citations": [
+  {
+   "cite": "Companies Act 2013, s.2 (Definitions)",
+   "defects": [],
+   "evidence_state": "CORROBORATED",
+   "ref": "ACT:COMPANIES_ACT_2013:S2",
+   "retrieved_on": [
+    "2026-08-18",
+    "2026-08-19"
+   ],
+   "source_url": "https://www.indiacode.nic.in/SectionPageContent?actid=AC_CEN_22_29_00008_201318_1517807327856&sectionID=185",
+   "title": "Definitions",
+   "unusable_reason": null,
+   "usable_for_answering": true
+  }
+ ],
+ "context": {
+  "document_date": null,
+  "kind": "general"
+ },
+ "evidence_pack": {
+  "insufficient_evidence": false,
+  "missing": [],
+  "retrieval_query": "s.2(85)",
+  "route": "exact",
+  "unusable_keys": [],
+  "usable_keys": [
+   "ACT:COMPANIES_ACT_2013:S2"
+  ]
+ },
+ "facts": {
+  "company_class": {
+   "provenance": "USER_FACT",
+   "value": "private"
+  },
+  "paid_up_capital_rupees": {
+   "provenance": "USER_FACT",
+   "value": 120000000
+  },
+  "turnover_rupees": {
+   "provenance": "USER_FACT",
+   "value": 800000000
+  }
+ },
+ "figures": [
+  {
+   "amount": "₹10 crore",
+   "effective_from": "2025-12-01",
+   "effective_to": null,
+   "evidence_state": "CORROBORATED",
+   "instrument": "G.S.R. 880(E), Companies (Specification of Definition Details) Amendment Rules, 2025, dated 01-12-2025",
+   "key": "small_company.paid_up_capital.prescribed",
+   "rupees": 100000000,
+   "source_url": "UNRESOLVED — see scripts/register_gsr880e.py"
+  },
+  {
+   "amount": "₹100 crore",
+   "effective_from": "2025-12-01",
+   "effective_to": null,
+   "evidence_state": "CORROBORATED",
+   "instrument": "G.S.R. 880(E), Companies (Specification of Definition Details) Amendment Rules, 2025, dated 01-12-2025",
+   "key": "small_company.turnover.prescribed",
+   "rupees": 1000000000,
+   "source_url": "UNRESOLVED — see scripts/register_gsr880e.py"
+  }
+ ],
+ "generated_at": "2026-09-15T00:00:00Z",
+ "law_version": {
+  "basis": "CURRENT_CONSOLIDATION_AS_INGESTED",
+  "corpus_fetched": [
+   "2026-08-18"
+  ],
+  "point_in_time_verified": false,
+  "statement": "This pack carries the CURRENT CONSOLIDATION of the Companies Act 2013 as India Code rendered it when the corpus was ingested (2026-08-18). It is NOT a point-in-time version of the law and carries no verified commencement or amendment date. The amendment vintage of individual provisions is not uniform and not fully known: SD-002 confirms that some records carry pre-amendment wording while the same publisher's PDF carries later wording. Those provisions are marked unusable in this pack. Point-in-time reconstruction exists in this system but is UNVERIFIED against any external source, so no statement here is a statement about the law as it stood on any past date."
+ },
+ "question": "Is this company a small company?",
+ "rows": [
+  {
+   "basis": "a limb exceeds its limit, so not a small company",
+   "blocked_by": null,
+   "cited_spans": [
+    {
+     "path": "2(85)(i)",
+     "resolved": true,
+     "sha256": "sha256:8b24937ce6b9f3c3baeff9a2eca6c225f9ffb16c4af98b60ee6fc2816407e294"
+    },
+    {
+     "path": "2(85)(ii)",
+     "resolved": true,
+     "sha256": "sha256:f7a340b68b234b4e182e2c90688c1ae4c0764468c371cf24fa7dfdeefda11ead"
+    }
+   ],
+   "duty": "Establish whether the company is a small company",
+   "missing_facts": [],
+   "obligation_id": "CA13-S2-85-SMALL",
+   "provision": "Companies Act 2013, s.2(85)",
+   "state": "DOES_NOT_APPLY"
+  }
+ ],
+ "schema": "placedon.ask/0",
+ "scope": {
+  "held": [
+   "Companies Act, 2013"
+  ],
+  "sentence": "1 of 9 in-scope bodies of law are held"
+ },
+ "state": "answered",
+ "turn_id": "t_20ccadb72b4b",
+ "uses_model": false,
+ "what_it_is_not": "This is not a certificate of compliance and not legal advice. It covers 15 obligations, not the whole Companies Act, against a corpus that holds the Act but almost none of the subordinate rules — so some rows refuse rather than answer, and name the instrument they are waiting on. It generates no resolution, notice, or other operative document. No lawyer has reviewed it. It can say the analysis did not contradict itself; it cannot say nothing is wrong."
+}

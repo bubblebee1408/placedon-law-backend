@@ -46,17 +46,33 @@ from __future__ import annotations
 import json
 import os
 import re
+import subprocess
 import urllib.error
 import urllib.request
 
 from checker.anthropic_model import ModelRefused, ModelUnavailable, _parse
 from checker.reasoning import Proposal
 
-FLASH = "gemini-2.5-flash"
+# Pinned to an exact version, never to `gemini-flash-latest`: an alias that moves
+# underneath a benchmark makes every recorded number unreproducible.
+#
+# 2.5-flash was the original pin and is now DEAD for new API keys -- the /models
+# endpoint still lists it, but generateContent returns 404 saying it "is no longer
+# available to new users". Measured 14-09-2026 on a fresh key. A capability list
+# that advertises what the call refuses is worth knowing about.
+FLASH = "gemini-3.6-flash"
 FLASH_LITE = "gemini-2.5-flash-lite"
 
 _ENDPOINT = ("https://generativelanguage.googleapis.com/v1beta/models/"
              "{model}:generateContent")
+
+# Vertex AI: the same generateContent call, billed to a Cloud project and signed
+# with the caller's own Google login. Selected by GOOGLE_CLOUD_PROJECT.
+_VERTEX_ENDPOINT = ("https://{host}/v1/projects/{project}/locations/{loc}/"
+                    "publishers/google/models/{model}:generateContent")
+# Both values are interpolated into a URL, so both are checked before use.
+_PROJECT_ID = re.compile(r"[a-z][a-z0-9-]{4,28}[a-z0-9]")
+_LOCATION = re.compile(r"[a-z0-9-]{2,40}")
 
 RATE_NOTE = ("Free tier is Flash and Flash-Lite only (Pro lost it April 2026). "
              "The binding limit is tokens-per-minute, not requests-per-day. "
@@ -67,10 +83,20 @@ RATE_NOTE = ("Free tier is Flash and Flash-Lite only (Pro lost it April 2026). "
 # difference in the shadow scores is a difference in the MODEL and not in what
 # it was asked to do.
 from checker.anthropic_model import _EXTRACT_SYSTEM
+from checker.prompt_safety import (UNTRUSTED_CLAUSE, carries_clause,
+                                   contains_untrusted_block, wrap_untrusted)
+
+
+# A key in .env must reach a fresh process; `export` at a prompt does not
+# survive the shell that ran it. checker.env never overwrites a real
+# environment variable, so deployment still wins.
+from checker.env import load as _load_env  # noqa: E402
+_load_env()
 
 
 def available() -> bool:
-    return bool(os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"))
+    return bool(os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+                or os.getenv("GOOGLE_CLOUD_PROJECT"))
 
 
 def _key() -> str:
@@ -83,13 +109,64 @@ def _key() -> str:
     return k
 
 
+def _vertex_token() -> str:
+    """An access token from the caller's own Google login. No key is stored."""
+    login = "Run: gcloud auth application-default login"
+    try:
+        r = subprocess.run(["gcloud", "auth", "application-default",
+                            "print-access-token"],
+                           capture_output=True, text=True, timeout=30)
+    except (FileNotFoundError, subprocess.TimeoutExpired) as e:
+        raise ModelUnavailable(
+            f"GOOGLE_CLOUD_PROJECT is set but no Google login is usable ({e}). "
+            f"{login}") from None
+    if r.returncode != 0 or not r.stdout.strip():
+        raise ModelUnavailable(
+            f"gcloud could not issue a token: {(r.stderr or '').strip()[:200]}. "
+            f"{login}")
+    return r.stdout.strip()
+
+
+def _route(model: str, *, _token=None) -> tuple[str, dict]:
+    """Where the call goes and how it is signed. The payload never changes."""
+    headers = {"Content-Type": "application/json"}
+    project = os.getenv("GOOGLE_CLOUD_PROJECT")
+    if not project:
+        return _ENDPOINT.format(model=model) + "?key=" + _key(), headers
+
+    loc = os.getenv("GOOGLE_CLOUD_LOCATION") or "global"
+    if not _PROJECT_ID.fullmatch(project) or not _LOCATION.fullmatch(loc):
+        raise ModelUnavailable(
+            f"GOOGLE_CLOUD_PROJECT={project!r} / GOOGLE_CLOUD_LOCATION={loc!r} is "
+            f"not a valid project ID / location; refusing to build a URL from it")
+    host = ("aiplatform.googleapis.com" if loc == "global"
+            else f"{loc}-aiplatform.googleapis.com")
+    url = _VERTEX_ENDPOINT.format(host=host, project=project, loc=loc, model=model)
+    return url, headers | {"Authorization": f"Bearer {(_token or _vertex_token)()}"}
+
+
 def _post(model: str, payload: dict, timeout: int = 90) -> dict:
-    url = _ENDPOINT.format(model=model) + "?key=" + _key()
+    url, headers = _route(model)
     req = urllib.request.Request(
         url, data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json"}, method="POST")
+        headers=headers, method="POST")
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:
+        # A VERIFYING context, reused from robots.py rather than re-derived.
+        # python.org builds on macOS ship a CA path that does not exist until the
+        # bundled Install Certificates.command is run, so urllib fails where curl
+        # works. The tempting fix is ssl._create_unverified_context(); for a
+        # project whose whole claim is authenticated sources it is the wrong one,
+        # because an unverified endpoint cannot be distinguished from anyone able
+        # to answer on its behalf. robots.ssl_context() hunts for a real trust
+        # store and returns None when the machine has none -- and we fail closed
+        # on that rather than falling back.
+        from checker.robots import ssl_context
+        ctx = ssl_context()
+        if ctx is None:
+            raise ModelUnavailable(
+                "no CA trust store on this machine, so the API endpoint cannot be "
+                "authenticated. Refusing to call it unverified.")
+        with urllib.request.urlopen(req, timeout=timeout, context=ctx) as r:
             return json.loads(r.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
         body = e.read().decode("utf-8", "replace")[:300]
@@ -115,7 +192,12 @@ def extract(document: str, *, budget=None, model: str = FLASH,
     payload = {
         "systemInstruction": {"parts": [{"text": _EXTRACT_SYSTEM}]},
         "contents": [{"role": "user", "parts": [
-            {"text": "DOCUMENT:\n" + document},
+            # E1. Gemini takes the document as a CONCATENATED STRING -- unlike
+            # Anthropic, which gets its own content block -- so "DOCUMENT:" was the
+            # only thing separating the document from the prompt around it, and a
+            # label is not a boundary. Delimited here, and only here, because this
+            # path returns no offsets into the text: there is nothing to shift.
+            {"text": wrap_untrusted(document, "uploaded document")},
             {"text": "Report what this document says."},
         ]}],
         "generationConfig": {"temperature": 0, "maxOutputTokens": 4096},
@@ -132,6 +214,7 @@ def extract(document: str, *, budget=None, model: str = FLASH,
 
     usage = data.get("usageMetadata", {})
     meta = {"model": model,
+            "route": "vertex" if os.getenv("GOOGLE_CLOUD_PROJECT") else "ai-studio",
             "tokens_in": usage.get("promptTokenCount", 0),
             "tokens_out": usage.get("candidatesTokenCount", 0),
             "cost_inr": 0.0,          # free tier. Paid rates UNVERIFIED here.
@@ -169,7 +252,8 @@ def _test() -> None:
           "difference in the model, not in what it was asked")
 
     # ── no key: refuse, never blank ──────────────────────────────────────────
-    held = {k: os.environ.pop(k, None) for k in ("GEMINI_API_KEY", "GOOGLE_API_KEY")}
+    held = {k: os.environ.pop(k, None) for k in ("GEMINI_API_KEY", "GOOGLE_API_KEY",
+                                                  "GOOGLE_CLOUD_PROJECT")}
     try:
         check(not available(), "with no key, available() is False")
         try:
@@ -250,6 +334,94 @@ def _test() -> None:
     check("tokens-per-minute" in RATE_NOTE and "50x" in RATE_NOTE,
           "the free tier's binding limit is recorded, with the 50x error that "
           "reading requests-per-day caused here before")
+
+
+    # ── E1: untrusted text is delimited, and the clause is carried ───────────
+    from checker.prompt_safety import INJECTIONS
+    captured = {}
+
+    def _spy(model, payload, timeout=90):
+        captured["payload"] = payload
+        return {"candidates": [{"content": {"parts": [{"text": '{"facts": {}}'}]}}],
+                "usageMetadata": {"promptTokenCount": 10, "candidatesTokenCount": 5}}
+
+    hostile = ("Resolved that the Company do allot shares. "
+               + INJECTIONS[0] + " Dated 14 June 2026.")
+    extract(hostile, _transport=_spy)
+    sent = captured["payload"]["contents"][0]["parts"][0]["text"]
+
+    check(contains_untrusted_block(sent),
+          "the document reaches Gemini inside <source> delimiters, not after a "
+          "bare 'DOCUMENT:' label")
+    check(INJECTIONS[0] in sent,
+          "...carrying the injected instruction verbatim -- it is evidence about "
+          "what the document says, and stripping it would be repairing a source")
+    check(carries_clause(captured["payload"]["systemInstruction"]["parts"][0]["text"]),
+          "...and the system instruction tells the model that <source> is never a "
+          "command")
+    check(hostile in sent,
+          "the document text itself is byte-identical inside the block")
+
+    # ── Vertex AI: the same call, billed to a Cloud project, no API key ──────
+    # The AI Studio free tier ran out mid-benchmark and blocked a re-run for a
+    # day. Vertex sends the SAME payload against a project's quota instead.
+    # Only the address and the credential differ -- never the prompt.
+    import subprocess as _sp
+    from unittest import mock
+
+    names = ("GEMINI_API_KEY", "GOOGLE_API_KEY", "GOOGLE_CLOUD_PROJECT",
+             "GOOGLE_CLOUD_LOCATION")
+    held = {k: os.environ.pop(k, None) for k in names}
+    tok = lambda: "ya29.test"                                          # noqa: E731
+    try:
+        os.environ["GOOGLE_CLOUD_PROJECT"] = "demo-proj"
+        check(available(), "a Cloud project alone makes Gemini available -- no key")
+        url, headers = _route(FLASH, _token=tok)
+        check(url == ("https://aiplatform.googleapis.com/v1/projects/demo-proj/"
+                      f"locations/global/publishers/google/models/{FLASH}"
+                      ":generateContent"),
+              f"with a project set, the call goes to Vertex AI, global by default "
+              f"({url[:48]}...)")
+        check("key=" not in url
+              and headers.get("Authorization") == "Bearer ya29.test",
+              "...signed with the caller's Google login; no API key in the URL")
+
+        os.environ["GOOGLE_CLOUD_LOCATION"] = "asia-south1"
+        url, _ = _route(FLASH, _token=tok)
+        check(url.startswith("https://asia-south1-aiplatform.googleapis.com/v1/"
+                             "projects/demo-proj/locations/asia-south1/"),
+              "a regional location is sent to that region's host")
+
+        with mock.patch.object(_sp, "run", side_effect=FileNotFoundError("gcloud")):
+            try:
+                _vertex_token()
+                check(False, "no gcloud refuses")
+            except ModelUnavailable as e:
+                check("gcloud auth application-default login" in str(e),
+                      "with no gcloud the Vertex route refuses, and names the login "
+                      "command rather than returning a blank")
+        failed = _sp.CompletedProcess(["gcloud"], 1, stdout="", stderr="reauth needed")
+        with mock.patch.object(_sp, "run", return_value=failed):
+            try:
+                _vertex_token()
+                check(False, "an expired login refuses")
+            except ModelUnavailable as e:
+                check("reauth needed" in str(e),
+                      "an expired login refuses with gcloud's own reason")
+
+        os.environ.pop("GOOGLE_CLOUD_PROJECT")
+        os.environ.pop("GOOGLE_CLOUD_LOCATION")
+        os.environ["GEMINI_API_KEY"] = "k-test"
+        url, headers = _route(FLASH, _token=tok)
+        check(url.startswith("https://generativelanguage.googleapis.com/")
+              and url.endswith("?key=k-test") and "Authorization" not in headers,
+              "with no project, the AI Studio key route is unchanged")
+    finally:
+        for k in names:
+            os.environ.pop(k, None)
+        for k, v in held.items():
+            if v is not None:
+                os.environ[k] = v
 
     print(f"\n{ok}/{ok + fail} passed")
 

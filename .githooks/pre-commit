@@ -7,13 +7,22 @@
 # to type a command. A safety property nobody checks is a safety property you do not have.
 #
 # WHY IT RUNS EVERYTHING
-# The full suite is ~4 seconds, measured. A changed-files fast path would cost more in complexity
-# and in missed cross-module breakage than the seconds it saves. Cross-module breakage is the
-# common case here: section_index, mvp_freeze and legal_ref constrain each other.
+# 147 suites in ~81 seconds, measured 13-09-2026. (This comment previously said "~4 seconds";
+# it was written when the suite was a fraction of its current size and was simply stale.) A
+# changed-files fast path would cost more in complexity and in missed cross-module breakage
+# than it saves -- cross-module breakage is the common case here: section_index, mvp_freeze
+# and legal_ref constrain each other.
 #
-# WHY IT DELEGATES TO scripts/run_tests.sh
-# That script is the single definition of "green". CI runs the same file. Two copies of the
-# definition would drift, and the drift would be discovered by a false green.
+# There is deliberately NO caching of a previous green result. A cache is a way to report
+# green without having verified it, which is the exact bug this gate exists to prevent. If
+# 81 seconds proves too slow in practice, that is a decision for a human to take openly --
+# not something to paper over inside the gate.
+#
+# WHY IT DELEGATES TO scripts/verify_green.sh
+# That script is the single oracle for "green", and it is the only thing permitted to answer.
+# It runs scripts/run_tests.sh synchronously and parses the HARNESS_RESULT contract line;
+# a missing or unparseable line is NOT GREEN. Two copies of the definition would drift, and
+# the drift would be discovered by a false green.
 #
 # SCOPE CAVEAT
 # This checks the WORKING TREE, not the staged index. Checking the index exactly would mean
@@ -43,16 +52,17 @@ fi
 repo_root=$(git rev-parse --show-toplevel) || exit 1
 cd "$repo_root" || exit 1
 
-runner=scripts/run_tests.sh
+runner=scripts/verify_green.sh
 if [ ! -f "$runner" ]; then
     echo "pre-commit: $runner is missing; refusing to commit blind." >&2
     echo "pre-commit: bypass with  SKIP_TESTS=1 git commit ..." >&2
     exit 1
 fi
 
-# Invoked through its own shebang, never `sh $runner`: run_tests.sh is bash and uses arrays, and
-# /bin/sh is dash on the Linux runners where CI executes the identical file.
-echo "pre-commit: running $runner (~4s)..." >&2
+# Invoked through bash explicitly, never `sh $runner`: these scripts are bash and use arrays and
+# herestrings, and /bin/sh is dash on the Linux runners where CI executes the identical file.
+# No `&`, no trailing pipe: the assignment's status IS the oracle's status.
+echo "pre-commit: running $runner (147 suites, ~81s)..." >&2
 output=$(bash "$runner" 2>&1)
 status=$?
 
@@ -75,7 +85,7 @@ fi
                                   { show = 0 }
     '
     echo "------------------------------------------------------------------------------"
-    echo " Reproduce:  ./scripts/run_tests.sh"
+    echo " Reproduce:  ./scripts/verify_green.sh   (exit 0 only when truly green)"
     echo " One suite:  PYTHONPATH=. python3 <the file named above>"
     echo " Bypass:     SKIP_TESTS=1 git commit ...   (says so loudly; leaves it unverified)"
     echo "=============================================================================="

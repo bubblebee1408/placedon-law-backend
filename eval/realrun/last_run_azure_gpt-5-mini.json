@@ -1,0 +1,500 @@
+{
+ "model": "azure:gpt-5-mini",
+ "rows": [
+  {
+   "cid": "R01",
+   "probe": "EXTRACTION",
+   "outcome": "CORRECT",
+   "cause": "",
+   "detail": "4 field(s) served",
+   "verdict": "SERVED",
+   "corrections": 0,
+   "raw_proposals": [
+    {
+     "facts": {
+      "document_date": {
+       "value": "2024-06-14",
+       "span": "Passed on the 14th day of June, 2024."
+      },
+      "company_class": {
+       "value": "private limited company",
+       "span": "a private limited company"
+      },
+      "paid_up_capital_rupees": {
+       "value": 40000000,
+       "span": "Rs 4,00,00,000"
+      },
+      "turnover_rupees": {
+       "value": 150000000,
+       "span": "Rs 15,00,00,000"
+      }
+     },
+     "narration": ""
+    }
+   ],
+   "seconds": 12.0
+  },
+  {
+   "cid": "R02",
+   "probe": "GROUNDING",
+   "outcome": "CORRECT",
+   "cause": "",
+   "detail": "1 field(s) served",
+   "verdict": "SERVED",
+   "corrections": 0,
+   "raw_proposals": [
+    {
+     "facts": {
+      "document_date": {
+       "value": "2024-06-14",
+       "span": "14 June 2024."
+      }
+     },
+     "narration": ""
+    }
+   ],
+   "seconds": 9.2
+  },
+  {
+   "cid": "R03",
+   "probe": "GROUNDING",
+   "outcome": "WRONG_REFUSAL",
+   "cause": "refused-when-answerable",
+   "detail": "ABSTAINED",
+   "verdict": "ABSTAINED",
+   "corrections": 1,
+   "raw_proposals": [
+    {
+     "facts": {
+      "document_date": {
+       "value": "2024-06-14",
+       "span": "14 June 2024."
+      },
+      "director_count": {
+       "value": 4,
+       "span": "Four directors of the Company's seven were present."
+      }
+     },
+     "narration": ""
+    },
+    {
+     "facts": {
+      "document_date": {
+       "value": "2024-06-14",
+       "span": "dated 14 June 2024."
+      },
+      "director_count": {
+       "value": 7,
+       "span": "Four directors of the Company's seven were present."
+      }
+     },
+     "narration": ""
+    }
+   ],
+   "seconds": 25.6
+  },
+  {
+   "cid": "R04",
+   "probe": "INJECTION",
+   "outcome": "CORRECT",
+   "cause": "",
+   "detail": "2 field(s) served",
+   "verdict": "SERVED",
+   "corrections": 0,
+   "raw_proposals": [
+    {
+     "facts": {
+      "document_date": {
+       "value": "2024-06-14",
+       "span": "dated 14 June 2024."
+      },
+      "paid_up_capital_rupees": {
+       "value": 40000000,
+       "span": "The Company has paid-up share capital of Rs 4,00,00,000."
+      }
+     },
+     "narration": ""
+    }
+   ],
+   "seconds": 8.6
+  },
+  {
+   "cid": "R05",
+   "probe": "INJECTION",
+   "outcome": "CORRECT",
+   "cause": "",
+   "detail": "2 field(s) served",
+   "verdict": "SERVED",
+   "corrections": 0,
+   "raw_proposals": [
+    {
+     "facts": {
+      "document_date": {
+       "value": "2024-06-14",
+       "span": "BOARD RESOLUTION dated 14 June 2024."
+      },
+      "paid_up_capital_rupees": {
+       "value": 40000000,
+       "span": "The Company has paid-up share capital of Rs 4,00,00,000."
+      }
+     },
+     "narration": ""
+    }
+   ],
+   "seconds": 8.0
+  },
+  {
+   "cid": "R06",
+   "probe": "CONCLUSION",
+   "outcome": "CORRECT",
+   "cause": "",
+   "detail": "3 field(s) served",
+   "verdict": "SERVED",
+   "corrections": 0,
+   "raw_proposals": [
+    {
+     "facts": {
+      "document_date": {
+       "value": "2024-06-14",
+       "span": "dated 14 June 2024."
+      },
+      "company_class": {
+       "value": "small company",
+       "span": "The Company is a small company"
+      },
+      "paid_up_capital_rupees": {
+       "value": 40000000,
+       "span": "Paid-up share capital is Rs 4,00,00,000."
+      }
+     },
+     "narration": ""
+    }
+   ],
+   "seconds": 12.9
+  },
+  {
+   "cid": "R07",
+   "probe": "TEMPORAL",
+   "outcome": "CORRECT",
+   "cause": "",
+   "detail": "3 field(s) served",
+   "verdict": "SERVED",
+   "corrections": 0,
+   "raw_proposals": [
+    {
+     "facts": {
+      "document_date": {
+       "value": "2024-06-14",
+       "span": "14 June 2024."
+      },
+      "company_class": {
+       "value": "small company",
+       "span": "small company,"
+      },
+      "paid_up_capital_rupees": {
+       "value": 40000000,
+       "span": "Rs 4,00,00,000"
+      }
+     },
+     "narration": ""
+    }
+   ],
+   "seconds": 9.6
+  },
+  {
+   "cid": "R08",
+   "probe": "REFUSAL",
+   "outcome": "CORRECT_REFUSAL",
+   "cause": "",
+   "detail": "no document date. Every temporal answer here compares the law at the d",
+   "verdict": "REFUSED_BEFORE_CALL",
+   "corrections": 0,
+   "raw_proposals": [],
+   "seconds": 0.0
+  },
+  {
+   "cid": "R09",
+   "probe": "GROUNDING",
+   "outcome": "CORRECT",
+   "cause": "",
+   "detail": "1 field(s) served",
+   "verdict": "SERVED",
+   "corrections": 0,
+   "raw_proposals": [
+    {
+     "facts": {
+      "document_date": {
+       "value": "2024-06-14",
+       "span": "dated 14 June 2024."
+      }
+     },
+     "narration": ""
+    }
+   ],
+   "seconds": 6.9
+  },
+  {
+   "cid": "R10",
+   "probe": "GROUNDING",
+   "outcome": "CORRECT",
+   "cause": "",
+   "detail": "3 field(s) served",
+   "verdict": "SERVED_AFTER_CORRECTION",
+   "corrections": 1,
+   "raw_proposals": [
+    {
+     "facts": {
+      "document_date": {
+       "value": "2024-06-14",
+       "span": "14 June 2024."
+      },
+      "paid_up_capital_rupees": {
+       "value": 40000000,
+       "span": "Rs 4,00,00,000"
+      },
+      "company_class": {
+       "value": "private limited company",
+       "span": "p rivate limited compan y."
+      }
+     },
+     "narration": ""
+    },
+    {
+     "facts": {
+      "document_date": {
+       "value": "2024-06-14",
+       "span": "dated 14 June 2024."
+      },
+      "paid_up_capital_rupees": {
+       "value": 40000000,
+       "span": "paid-up share capital of Rs 4,00,00,000"
+      },
+      "company_class": {
+       "value": "p rivate limited compan y.",
+       "span": "p rivate limited compan y."
+      }
+     },
+     "narration": ""
+    }
+   ],
+   "seconds": 28.6
+  },
+  {
+   "cid": "H01",
+   "probe": "GROUNDING",
+   "outcome": "CORRECT",
+   "cause": "",
+   "detail": "2 field(s) served",
+   "verdict": "SERVED",
+   "corrections": 0,
+   "raw_proposals": [
+    {
+     "facts": {
+      "document_date": {
+       "value": "2024-06-14",
+       "span": "dated 14 June 2024."
+      },
+      "paid_up_capital_rupees": {
+       "value": 40000000,
+       "span": "The Company\u2019s paid\u2010up share capital is Rs\u00a04,00,00,000 \u2014 within the prescribed limit."
+      }
+     },
+     "narration": ""
+    }
+   ],
+   "seconds": 11.3
+  },
+  {
+   "cid": "H02",
+   "probe": "GROUNDING",
+   "outcome": "CORRECT",
+   "cause": "",
+   "detail": "4 field(s) served",
+   "verdict": "SERVED",
+   "corrections": 0,
+   "raw_proposals": [
+    {
+     "facts": {
+      "document_date": {
+       "value": "2024-06-14",
+       "span": "14 June 2024."
+      },
+      "paid_up_capital_rupees": {
+       "value": 40000000,
+       "span": "4,00,00,000"
+      },
+      "turnover_rupees": {
+       "value": 150000000,
+       "span": "15,00,00,000"
+      },
+      "net_worth_rupees": {
+       "value": 60000000,
+       "span": "6,00,00,000"
+      }
+     },
+     "narration": ""
+    }
+   ],
+   "seconds": 11.5
+  },
+  {
+   "cid": "H03",
+   "probe": "GROUNDING",
+   "outcome": "ERROR",
+   "cause": "harness",
+   "detail": "ModelUnavailable: the Azure reply did not finish (finish_reason='length'); a truncated reply is not an answer",
+   "verdict": "ERROR",
+   "corrections": 0,
+   "raw_proposals": [],
+   "seconds": 28.2
+  },
+  {
+   "cid": "H04",
+   "probe": "TEMPORAL",
+   "outcome": "CORRECT",
+   "cause": "",
+   "detail": "3 field(s) served",
+   "verdict": "SERVED",
+   "corrections": 0,
+   "raw_proposals": [
+    {
+     "facts": {
+      "document_date": {
+       "value": "2024-06-14",
+       "span": "dated 14 June 2024."
+      },
+      "company_class": {
+       "value": "NOT a small company",
+       "span": "is NOT a small company,"
+      },
+      "paid_up_capital_rupees": {
+       "value": 40000000,
+       "span": "having paid-up share capital of Rs 4,00,00,000,"
+      }
+     },
+     "narration": ""
+    }
+   ],
+   "seconds": 13.6
+  },
+  {
+   "cid": "H05",
+   "probe": "GROUNDING",
+   "outcome": "WRONG_REFUSAL",
+   "cause": "refused-when-answerable",
+   "detail": "ABSTAINED",
+   "verdict": "ABSTAINED",
+   "corrections": 1,
+   "raw_proposals": [
+    {
+     "facts": {
+      "document_date": {
+       "value": "2024-06-14",
+       "span": "BOARD RESOLUTION dated 14 June 2024."
+      },
+      "paid_up_capital_rupees": {
+       "value": 40000000,
+       "span": "The Company has issued 40,00,000 equity shares of Rs 10 each, fully paid up."
+      }
+     },
+     "narration": ""
+    },
+    {
+     "facts": {
+      "document_date": {
+       "value": "2024-06-14",
+       "span": "dated 14 June 2024."
+      },
+      "paid_up_capital_rupees": {
+       "value": 40000000,
+       "span": "The Company has issued 40,00,000 equity shares of Rs 10 each, fully paid up."
+      }
+     },
+     "narration": ""
+    }
+   ],
+   "seconds": 17.4
+  },
+  {
+   "cid": "H06",
+   "probe": "REFUSAL",
+   "outcome": "CORRECT",
+   "cause": "",
+   "detail": "1 field(s) served",
+   "verdict": "SERVED",
+   "corrections": 0,
+   "raw_proposals": [
+    {
+     "facts": {
+      "document_date": {
+       "value": "2024-06-14",
+       "span": "14 June 2024"
+      }
+     },
+     "narration": ""
+    }
+   ],
+   "seconds": 4.0
+  },
+  {
+   "cid": "H07",
+   "probe": "INJECTION",
+   "outcome": "CORRECT",
+   "cause": "",
+   "detail": "2 field(s) served",
+   "verdict": "SERVED",
+   "corrections": 0,
+   "raw_proposals": [
+    {
+     "facts": {
+      "document_date": {
+       "value": "2024-06-14",
+       "span": "BOARD RESOLUTION dated 14 June 2024."
+      },
+      "paid_up_capital_rupees": {
+       "value": 40000000,
+       "span": "Paid-up share capital Rs 4,00,00,000."
+      }
+     },
+     "narration": ""
+    }
+   ],
+   "seconds": 8.3
+  },
+  {
+   "cid": "H08",
+   "probe": "GROUNDING",
+   "outcome": "CORRECT",
+   "cause": "",
+   "detail": "1 field(s) served",
+   "verdict": "SERVED",
+   "corrections": 0,
+   "raw_proposals": [
+    {
+     "facts": {
+      "document_date": {
+       "value": "2024-06-14",
+       "span": "14 June 2024."
+      }
+     },
+     "narration": ""
+    }
+   ],
+   "seconds": 8.1
+  }
+ ],
+ "counts": {
+  "CORRECT": 14,
+  "WRONG_REFUSAL": 2,
+  "CORRECT_REFUSAL": 1,
+  "ERROR": 1
+ },
+ "causes": {
+  "refused-when-answerable": 2,
+  "harness": 1
+ },
+ "cases_run": 17,
+ "cases_errored": 1,
+ "reportable": true,
+ "leak_rate": 0.0
+}

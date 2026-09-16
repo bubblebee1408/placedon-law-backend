@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Placedon — Ask</title>
+<link rel="stylesheet" href="assistant.css">
+</head>
+<body>
+<!-- The Word task pane's own tab strip. Chrome: it carries no response content. -->
+<header class="tabs" data-chrome>
+  <nav aria-label="Task pane sections">
+    <a href="#" class="tab">Currency check</a>
+    <a href="#" class="tab">Register strip</a>
+    <span class="tab is-current" aria-current="page">Ask</span>
+  </nav>
+</header>
+
+<div class="shell">
+  <!-- Session rail: state word first, then glyph, then question (§6, F13). Web only. -->
+  <aside class="rail" data-chrome hidden></aside>
+
+  <main class="content">
+    <!-- Composer. First in tab order, and the capability list sits before the
+         question field because its purpose is to fill it (F14b). -->
+    <form class="composer" data-composer autocomplete="off">
+      <p class="holds" data-holds></p>
+      <fieldset class="about">
+        <legend>About</legend>
+        <label><input type="radio" name="about" value="general" checked> The Act</label>
+        <label class="is-disabled"><input type="radio" name="about" value="document" disabled> This document
+          <span class="why">— open a document in Word to ask about it</span></label>
+      </fieldset>
+      <div class="capabilities" data-capabilities></div>
+      <label class="q-label" for="q">Your question</label>
+      <textarea id="q" rows="3" placeholder="Ask about an obligation this engine holds."></textarea>
+      <div class="composer-foot">
+        <label class="asof">As of <input id="asof" type="text" value="" readonly aria-describedby="asof-why"></label>
+        <button type="submit" class="ask">Ask</button>
+      </div>
+      <p class="why" id="asof-why">Today only in v1. This engine holds the law as it stands, not as it stood.</p>
+    </form>
+
+    <div data-turns></div>
+  </main>
+
+  <!-- Sources. A panel on the web; in the pane it is rendered inside each turn. -->
+  <aside class="sources" data-source-panel hidden>
+    <h2 class="panel-head" data-sources-head>Sources</h2>
+    <div data-sources-body></div>
+  </aside>
+</div>
+
+<script src="fixtures.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

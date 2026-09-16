@@ -1,0 +1,63 @@
+{
+ "_README": "A versioned mini-corpus for the temporal-retrieval benchmark. Every version is seeded from an artifact ALREADY REGISTERED in this repository; nothing here was fetched for the benchmark, and nothing here is a legal claim made by the benchmark itself.",
+ "_PROVENANCE_WARNING": "Every artifact behind these versions is an INDIA CODE RENDERING, not a signed e-Gazette PDF. scripts/verify_document.py reports NOT_PRESENT (no signature) for pas_rules_2014.pdf and INVALID (content appended after signing) for gsr642e_2020.pdf. India Code is an official government portal and a permitted source, so these are usable -- but no output of this benchmark may imply Gazette-verified provenance.",
+ "_SCORING_NOTE": "Deterministic only. Numeric nuggets compare value+unit with tolerance; selection nuggets match a regex on the instrument or code name. There is no LLM judge anywhere in this harness, deliberately: an LLM judge would inherit the very recency bias the benchmark exists to measure.",
+
+ "instruments": [
+  {
+   "key": "small_company.paid_up_capital",
+   "question_form": "the prescribed maximum paid-up share capital for a small company",
+   "unit": "INR",
+   "source_artifacts": ["corpus/rules/gsr_700e_2022.txt", "corpus/rules/gsr_880e_2025.txt"],
+   "provenance": "India Code rendering; human-attested (register_gsr700e / register_gsr880e)",
+   "versions": [
+    {"value": 40000000, "display": "Rs 4 crore", "effective_from": "2022-09-15", "effective_to": "2025-11-30", "instrument": "G.S.R. 700(E)"},
+    {"value": 100000000, "display": "Rs 10 crore", "effective_from": "2025-12-01", "effective_to": null, "instrument": "G.S.R. 880(E)"}
+   ]
+  },
+  {
+   "key": "small_company.turnover",
+   "question_form": "the prescribed maximum turnover for a small company",
+   "unit": "INR",
+   "source_artifacts": ["corpus/rules/gsr_700e_2022.txt", "corpus/rules/gsr_880e_2025.txt"],
+   "provenance": "India Code rendering; human-attested",
+   "versions": [
+    {"value": 400000000, "display": "Rs 40 crore", "effective_from": "2022-09-15", "effective_to": "2025-11-30", "instrument": "G.S.R. 700(E)"},
+    {"value": 1000000000, "display": "Rs 100 crore", "effective_from": "2025-12-01", "effective_to": null, "instrument": "G.S.R. 880(E)"}
+   ]
+  },
+  {
+   "key": "criminal.substantive_code",
+   "question_form": "which code governs substantive criminal liability for an offence",
+   "unit": "SELECTION",
+   "source_artifacts": [],
+   "provenance": "NOT HELD. checker/code_transition.py carries the commencement date and the anchor; the code TEXT is not in the corpus and every verdict is INSTRUMENT_NOT_HELD.",
+   "versions": [
+    {"value": "Indian Penal Code, 1860", "display": "Indian Penal Code, 1860", "effective_from": "1862-01-01", "effective_to": "2024-06-30", "instrument": "IPC 1860"},
+    {"value": "Bharatiya Nyaya Sanhita, 2023", "display": "Bharatiya Nyaya Sanhita, 2023", "effective_from": "2024-07-01", "effective_to": null, "instrument": "BNS 2023"}
+   ]
+  },
+  {
+   "key": "criminal.procedural_code",
+   "question_form": "which code governs criminal procedure for proceedings commenced",
+   "unit": "SELECTION",
+   "source_artifacts": [],
+   "provenance": "NOT HELD, as above.",
+   "versions": [
+    {"value": "Code of Criminal Procedure, 1973", "display": "CrPC 1973", "effective_from": "1974-04-01", "effective_to": "2024-06-30", "instrument": "CrPC 1973"},
+    {"value": "Bharatiya Nagarik Suraksha Sanhita, 2023", "display": "BNSS 2023", "effective_from": "2024-07-01", "effective_to": null, "instrument": "BNSS 2023"}
+   ]
+  },
+  {
+   "key": "allotment.return_window_days",
+   "question_form": "the period within which a return of allotment must be filed in Form PAS-3",
+   "unit": "DAYS",
+   "source_artifacts": ["corpus/rules/pas_rules_2014.txt"],
+   "provenance": "India Code rendering, UNSIGNED (verify_document.py: signature NOT_PRESENT). Registered but NOT ATTESTED -- status PENDING_HUMAN_REVIEW.",
+   "_CONTROL": "NEGATIVE CONTROL, and not the kind the brief expected. Rule 12(1) has been stable at thirty days since 2014, so a naive current-corpus lookup gets it right for every date -- which is exactly why a benchmark made only of moved thresholds would flatter date-conditioning. But this repo will not SERVE it, because nobody has attested the artifact. The correct answer is therefore REFUSE, and both conditions are scored against that.",
+   "versions": [
+    {"value": 30, "display": "thirty days", "effective_from": "2014-04-01", "effective_to": null, "instrument": "Rule 12(1), PAS Rules 2014"}
+   ]
+  }
+ ]
+}

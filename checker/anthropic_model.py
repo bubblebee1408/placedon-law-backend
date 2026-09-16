@@ -43,6 +43,7 @@ import os
 import re
 from dataclasses import dataclass
 
+from checker.prompt_safety import UNTRUSTED_CLAUSE, carries_clause
 from checker.reasoning import Proposal
 
 EXTRACT = "claude-opus-5"
@@ -65,6 +66,13 @@ class ModelUnavailable(RuntimeError):
 
 class ModelRefused(RuntimeError):
     """The model returned something that is not a parseable proposal."""
+
+
+# A key in .env must reach a fresh process; `export` at a prompt does not
+# survive the shell that ran it. checker.env never overwrites a real
+# environment variable, so deployment still wins.
+from checker.env import load as _load_env  # noqa: E402
+_load_env()
 
 
 def available() -> bool:
@@ -90,7 +98,15 @@ def cost_inr(model: str, tokens_in: int, tokens_out: int) -> float:
 # is a prompt, and a prompt is not a safety mechanism -- reasoning.review() is.
 # What it DOES do is make the required output shape unambiguous, because a
 # malformed response is a wasted call rather than a caught error.
-_EXTRACT_SYSTEM = """\
+#
+# It also carries prompt_safety.UNTRUSTED_CLAUSE, and this string is SHARED WITH
+# GEMINI BY OBJECT IDENTITY (gemini_model.py imports this very name), so the clause
+# reaches both providers or neither. A test in each module asserts it is present,
+# because a shared constant is only shared until someone copies it.
+# Concatenated, not an f-string: the JSON shape below contains braces, and an
+# f-string would read them as format fields.
+_EXTRACT_SYSTEM = UNTRUSTED_CLAUSE + """
+
 You read one Indian corporate legal document and report what it says.
 
 Return ONLY a JSON object. For each field you find, give the value and the
@@ -306,6 +322,63 @@ def _test() -> None:
     except ModelUnavailable as e:
         check("no call was made" in str(e),
               "an exhausted budget refuses before the call, not after")
+
+
+    # ── E2/E3: the clause is carried, and the document is NOT delimited ──────
+    #
+    # This pair is the whole design decision. The clause must reach the model; the
+    # delimiters must NOT touch this path, because citations return char_location
+    # offsets into the document and a prefix would shift every one of them.
+    from checker.prompt_safety import (INJECTIONS, OPEN, UNTRUSTED_CLAUSE,
+                                       carries_clause, wrap_untrusted)
+
+    check(carries_clause(_EXTRACT_SYSTEM),
+          "the extract system prompt tells the model that <source> content is "
+          "evidence and never a command")
+    check("own content block" in _EXTRACT_SYSTEM,
+          "...and covers a document supplied as its own block, which is how THIS "
+          "path sends it")
+
+    hostile = ("Resolved that the Company do allot shares. " + INJECTIONS[1]
+               + " Dated 14 June 2026.")
+    sent = {}
+
+    class _SpyClient:
+        class messages:
+            @staticmethod
+            def create(**kw):
+                sent.update(kw)
+                class R:
+                    content = [type("B", (), {"type": "text",
+                                              "text": '{"facts": {}}'})()]
+                    usage = type("U", (), {"input_tokens": 10, "output_tokens": 5})()
+                return R()
+
+    extract(hostile, _client=_SpyClient())
+    doc_block = next(b for b in sent["messages"][0]["content"]
+                     if b["type"] == "document")
+    payload_text = doc_block["source"]["data"]
+
+    check(payload_text == hostile,
+          "the document reaches Anthropic BYTE-IDENTICAL -- not one character is "
+          "prepended")
+    check(OPEN not in payload_text,
+          "...specifically, it is NOT wrapped in <source>: this path returns "
+          "char_location offsets into this text, and a prefix would shift every "
+          "span silently")
+
+    # The drift this exemption prevents, demonstrated rather than asserted.
+    needle = "1,00,000"
+    doc = f"The Company shall allot {needle} equity shares."
+    true_at = doc.index(needle)
+    check(doc[true_at:true_at + len(needle)] == needle,
+          "an offset into the raw document lands on the span it names")
+    wrapped = wrap_untrusted(doc, "uploaded document")
+    check(wrapped[true_at:true_at + len(needle)] != needle,
+          f"...and the SAME offset into a wrapped document lands somewhere else "
+          f"({wrapped[true_at:true_at + len(needle)]!r}) -- which is exactly the "
+          f"silent drift that would have broken span grounding, and why this path "
+          f"is exempt")
 
     print(f"\n{ok}/{ok + fail} passed")
 

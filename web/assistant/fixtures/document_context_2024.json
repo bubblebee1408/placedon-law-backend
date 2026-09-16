@@ -1,0 +1,201 @@
+{
+ "as_of": "2026-09-15",
+ "confirmed": [
+  {
+   "basis": "s.96(1) reaches every company other than an OPC; no AGM dates were supplied",
+   "duty": "Hold an annual general meeting, and within the statutory gap",
+   "obligation_id": "CA13-S96-AGM",
+   "provision": "Companies Act 2013, s.96(1)",
+   "state": "APPLIES_UNDETERMINED"
+  },
+  {
+   "basis": "not a one-person company, so s.173 applies in full; no board meeting dates were supplied",
+   "duty": "Hold the minimum number of board meetings, correctly spaced",
+   "obligation_id": "CA13-S173-BOARD",
+   "provision": "Companies Act 2013, s.173(1)",
+   "state": "APPLIES_UNDETERMINED"
+  },
+  {
+   "basis": "applies to every company registered under the Act; the number of directors is not on the profile",
+   "duty": "Have enough directors, and not more than the maximum",
+   "obligation_id": "CA13-S149-BOARD-SIZE",
+   "provision": "Companies Act 2013, s.149(1)",
+   "state": "APPLIES_UNDETERMINED"
+  },
+  {
+   "basis": "applies to every company registered under the Act; no director's days-in-India were supplied; s.149(3) needs at least one director present 182 days in the year",
+   "duty": "Have at least one director resident in India for 182 days",
+   "obligation_id": "CA13-S149-3-RESIDENT",
+   "provision": "Companies Act 2013, s.149(3)",
+   "state": "APPLIES_UNDETERMINED"
+  },
+  {
+   "basis": "applies to every company registered under the Act; the thirty days run from the AGM, and no AGM date was given",
+   "duty": "File the financial statements with the Registrar in time",
+   "obligation_id": "CA13-S137-AOC4",
+   "provision": "Companies Act 2013, s.137(1)",
+   "state": "APPLIES_UNDETERMINED"
+  },
+  {
+   "basis": "applies to every company registered under the Act; the sixty days run from the AGM, or from the date one should have been held; neither is established",
+   "duty": "File the annual return with the Registrar in time",
+   "obligation_id": "CA13-S92-RETURN",
+   "provision": "Companies Act 2013, s.92(4)",
+   "state": "APPLIES_UNDETERMINED"
+  },
+  {
+   "basis": "no known figure reaches its s.135(1) threshold, but net_worth, net_profit are unknown -- any one could cross, so applicability cannot be ruled out",
+   "duty": "Constitute a CSR committee, if the company crosses a CSR threshold",
+   "obligation_id": "CA13-S135-CSR",
+   "provision": "Companies Act 2013, s.135(1)",
+   "state": "CANNOT_DETERMINE"
+  },
+  {
+   "basis": "applies to every company registered under the Act; no loans supplied: give the company's loans, guarantees and securities, with the director/relative graph, to assess s.185",
+   "duty": "Ensure no loan/guarantee/security is given to a director or connected person",
+   "obligation_id": "CA13-S185-LOANS-DIRECTORS",
+   "provision": "Companies Act 2013, s.185",
+   "state": "APPLIES_UNDETERMINED"
+  },
+  {
+   "basis": "applies to every company registered under the Act; no loans/investments supplied: give the company's loans, guarantees, securities and acquisitions to test the s.186(2) limit",
+   "duty": "Keep loans/investments within the s.186(2) limit, or authorise the excess",
+   "obligation_id": "CA13-S186-LOAN-INVESTMENT",
+   "provision": "Companies Act 2013, s.186",
+   "state": "APPLIES_UNDETERMINED"
+  },
+  {
+   "basis": "applies to every company registered under the Act; no borrowings supplied: give the company's proposed and existing borrowings, with paid-up capital, free reserves and securities premium, to test the s.180(1)(c) limit",
+   "duty": "Keep borrowings within the s.180(1)(c) limit, or authorise the excess",
+   "obligation_id": "CA13-S180-BORROWING-LIMIT",
+   "provision": "Companies Act 2013, s.180(1)(c)",
+   "state": "APPLIES_UNDETERMINED"
+  },
+  {
+   "basis": "applies to every company registered under the Act; no director contracts supplied: give the (director, counterparty) pairs for the company's contracts, with the entity graph, to assess s.184(2)",
+   "duty": "Ensure an interested director discloses and abstains",
+   "obligation_id": "CA13-S184-DIRECTOR-INTEREST",
+   "provision": "Companies Act 2013, s.184",
+   "state": "APPLIES_UNDETERMINED"
+  }
+ ],
+ "context": {
+  "document_date": "2024-06-01",
+  "kind": "document"
+ },
+ "generated_at": "2026-09-15T00:00:00Z",
+ "law_version": {
+  "basis": "CURRENT_CONSOLIDATION_AS_INGESTED",
+  "corpus_fetched": [
+   "2026-08-18"
+  ],
+  "point_in_time_requested": "2024-06-01",
+  "point_in_time_verified": false,
+  "statement": "This pack carries the CURRENT CONSOLIDATION of the Companies Act 2013 as India Code rendered it when the corpus was ingested (2026-08-18). It is NOT a point-in-time version of the law and carries no verified commencement or amendment date. The amendment vintage of individual provisions is not uniform and not fully known: SD-002 confirms that some records carry pre-amendment wording while the same publisher's PDF carries later wording. Those provisions are marked unusable in this pack. Point-in-time reconstruction exists in this system but is UNVERIFIED against any external source, so no statement here is a statement about the law as it stood on any past date. A point-in-time answer was requested for 2024-06-01. This pack CANNOT supply one. Do not treat any text below as the law as it stood on 2024-06-01."
+ },
+ "not_confirmed": [
+  {
+   "already_open_at_document_date": true,
+   "detail": "Companies Act 2013 s.188, held verbatim in corpus; the members'-approval threshold is a delegated rule (S-188-RULES) surfaced on the obligation row: S-188-RULES: Rule 15, Companies (Meetings of Board and its Powers) Rules, 2014 — the members'-approval thresholds is STAGED",
+   "duty": "Obtain the required approvals for related-party transactions",
+   "instrument": "S-188-RULES",
+   "kind": "cannot_verify",
+   "obligation_id": "CA13-S188-RPT",
+   "provision": "Companies Act 2013, s.188",
+   "reference": null
+  },
+  {
+   "already_open_at_document_date": true,
+   "detail": "Companies Act 2013 s.177, held verbatim; the prescribed class (Rule 6) is a delegated rule (S-177-RULES) surfaced on the obligation row: S-177-RULES: Rule 6, Companies (Meetings of Board and its Powers) Rules, 2014 is HELD_UNREVIEWED",
+   "duty": "Constitute an Audit Committee, if required",
+   "instrument": "S-177-RULES",
+   "kind": "cannot_verify",
+   "obligation_id": "CA13-S177-AUDIT-CTTE",
+   "provision": "Companies Act 2013, s.177",
+   "reference": "S-177-RULES"
+  },
+  {
+   "already_open_at_document_date": true,
+   "detail": "Companies Act 2013 s.203, held verbatim; the prescribed KMP class is a delegated rule (S-203-RULES) surfaced on the obligation row: S-203-RULES: G.S.R. 249(E), Companies (Appointment and Remuneration of Managerial Personnel) Rules, 2014 — Rule 8, the prescribed KMP class is CHAIN_TRACED",
+   "duty": "Appoint whole-time key managerial personnel, if in the prescribed class",
+   "instrument": "S-203-RULES",
+   "kind": "cannot_verify",
+   "obligation_id": "CA13-S203-KMP",
+   "provision": "Companies Act 2013, s.203",
+   "reference": "S-203-RULES"
+  }
+ ],
+ "question": "Is the law this document relies on still current?",
+ "schema": "placedon.ask/0",
+ "scope": {
+  "held": [
+   "Companies Act, 2013"
+  ],
+  "sentence": "1 of 9 in-scope bodies of law are held"
+ },
+ "scope_frame": {
+  "as_of": "2026-09-15",
+  "checked": [
+   "Hold an annual general meeting, and within the statutory gap",
+   "Hold the minimum number of board meetings, correctly spaced",
+   "Have enough directors, and not more than the maximum",
+   "Have at least one director resident in India for 182 days",
+   "File the financial statements with the Registrar in time",
+   "File the annual return with the Registrar in time",
+   "Constitute a CSR committee, if the company crosses a CSR threshold",
+   "Ensure no loan/guarantee/security is given to a director or connected person",
+   "Keep loans/investments within the s.186(2) limit, or authorise the excess",
+   "Keep borrowings within the s.180(1)(c) limit, or authorise the excess",
+   "Ensure an interested director discloses and abstains",
+   "Establish whether the company is a small company"
+  ],
+  "checked_count": 12,
+  "corpus": "Companies Act 2013",
+  "dismissable": false,
+  "establishes_compliance": false,
+  "sentence": "Checked 12 of 15 against Companies Act 2013, as at 2026-09-15.\nNOT checked (3) — these were not examined at all, and silence about them is not a finding:\n  · Obtain the required approvals for related-party transactions — its governing instrument is not held or not yet reviewed; needs: Rule 15, Companies (Meetings of Board and its Powers) Rules, 2014 — the members'-approval thresholds [STAGED]; (CANNOT_VERIFY)\n  · Constitute an Audit Committee, if required — its governing instrument is not held or not yet reviewed; needs: Rule 6, Companies (Meetings of Board and its Powers) Rules, 2014 [HELD_UNREVIEWED]; (CANNOT_VERIFY)\n  · Appoint whole-time key managerial personnel, if in the prescribed class — its governing instrument is not held or not yet reviewed; needs: G.S.R. 249(E), Companies (Appointment and Remuneration of Managerial Personnel) Rules, 2014 — Rule 8, the prescribed KMP class [CHAIN_TRACED]; (CANNOT_VERIFY)",
+  "unchecked": [
+   {
+    "acquire": "Rule 15, Companies (Meetings of Board and its Powers) Rules, 2014 — the members'-approval thresholds [STAGED]",
+    "state": "CANNOT_VERIFY",
+    "what": "Obtain the required approvals for related-party transactions",
+    "why": "its governing instrument is not held or not yet reviewed"
+   },
+   {
+    "acquire": "Rule 6, Companies (Meetings of Board and its Powers) Rules, 2014 [HELD_UNREVIEWED]",
+    "state": "CANNOT_VERIFY",
+    "what": "Constitute an Audit Committee, if required",
+    "why": "its governing instrument is not held or not yet reviewed"
+   },
+   {
+    "acquire": "G.S.R. 249(E), Companies (Appointment and Remuneration of Managerial Personnel) Rules, 2014 — Rule 8, the prescribed KMP class [CHAIN_TRACED]",
+    "state": "CANNOT_VERIFY",
+    "what": "Appoint whole-time key managerial personnel, if in the prescribed class",
+    "why": "its governing instrument is not held or not yet reviewed"
+   }
+  ],
+  "unchecked_count": 3
+ },
+ "state": "partial",
+ "superseded": [
+  {
+   "detail": "the prescribed small-company limits, set by delegated rule: G.S.R. 880(E), Companies (Specification of Definition Details) Amendment Rules, 2025, dated 01-12-2025 (CORROBORATED)",
+   "duty": "Establish whether the company is a small company",
+   "governed_then": "G.S.R. 700(E), Companies (Specification of Definition Details) Amendment Rules, 2022, dated 15-09-2022",
+   "governs_now": "G.S.R. 880(E), Companies (Specification of Definition Details) Amendment Rules, 2025, dated 01-12-2025",
+   "instrument": "G.S.R. 880(E), Companies (Specification of Definition Details) Amendment Rules, 2025, dated 01-12-2025",
+   "is_at_read_date": "CURRENT",
+   "obligation_id": "CA13-S2-85-SMALL",
+   "provision": "Companies Act 2013, s.2(85)",
+   "reference": null,
+   "was_at_document_date": "CURRENT"
+  }
+ ],
+ "turn_id": "t_65dde3494c4d",
+ "uses_model": false,
+ "what_it_is_not": [
+  "that the document is valid, correctly drafted, or legally effective",
+  "that the obligations named here are the whole of the Act that applies",
+  "that a row marked verified is compliant -- only that its legal basis is current"
+ ]
+}

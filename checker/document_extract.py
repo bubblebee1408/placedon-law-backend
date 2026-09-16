@@ -194,8 +194,33 @@ def _date_from_span(span: str) -> date | None:
     return None
 
 
-def _consistent(name: str, value: object, span: str) -> tuple[bool, str]:
-    """Does the quoted span actually yield the proposed value?"""
+# Counts in corporate documents are written in words as often as digits ("seven
+# directors"). Zero to twenty covers board and member counts as written; a count
+# above twenty in words is refused as no number rather than guessed at.
+_NUMBER_WORDS = {w: n for n, w in enumerate(
+    "zero one two three four five six seven eight nine ten eleven twelve thirteen "
+    "fourteen fifteen sixteen seventeen eighteen nineteen twenty".split())}
+
+
+def _integers(span: str) -> set[int]:
+    """Every distinct whole number a span states, in digits or in words."""
+    text = _normalise(span)
+    found = {int(m.group(1).replace(",", "").replace(" ", "")) for m in _NUM.finditer(text)}
+    found |= {_NUMBER_WORDS[w] for w in re.findall(r"[a-z]+", text.lower())
+              if w in _NUMBER_WORDS}
+    return found
+
+
+def value_supported_by_span(name: str, value: object, span: str) -> tuple[bool, str]:
+    """Does the quoted span actually yield the proposed value?
+
+    Public because it has two callers. `reasoning.review()` used to check only
+    that a span EXISTED in the document, which a prompt injection defeats: an
+    attacker who controls the document controls the span too, so
+    {"value": 999999999, "span": "verified"} passed review clean when the word
+    "verified" appeared inside the injection itself. Span presence is necessary
+    and never sufficient.
+    """
     if name in MONEY_FIELDS:
         got = _money_from_span(span)
         if got is None:
@@ -210,12 +235,31 @@ def _consistent(name: str, value: object, span: str) -> tuple[bool, str]:
         return (got == want,
                 f"span states {got}, extractor proposed {value}" if got != want else "")
     if name in INT_FIELDS:
-        m = _NUM.search(_normalise(span))
-        if not m:
+        # One number, or no support. "Four directors of the Company's seven were
+        # present" states two counts; gpt-5-mini proposed the wrong one (4) from it
+        # on 15-09-2026, and the first-number rule this replaced would have taken
+        # the first number of "4 directors of the Company's 7" the same way.
+        got = _integers(span)
+        if not got:
             return False, "the quoted span states no number"
-        got = int(m.group(1).replace(",", "").replace(" ", ""))
-        return got == value, f"span states {got}, extractor proposed {value}" if got != value else ""
-    # text: the value must appear in what was quoted
+        if len(got) > 1:
+            return False, (f"the quoted span states more than one number "
+                           f"({', '.join(str(n) for n in sorted(got))}) and does "
+                           f"not say which is {name}")
+        (n,) = got
+        return n == value, f"span states {n}, extractor proposed {value}" if n != value else ""
+    if name == "cin":
+        # A CIN has a fixed 21-character structure. A value that is not one is not
+        # a CIN, however faithfully its span quotes it -- and a damaged one is
+        # reported as written, never repaired (party_resolution's rule).
+        from checker.party_resolution import CIN_RE
+        if not CIN_RE.match(str(value or "")):
+            return False, (f"{str(value)!r} is not a well-formed CIN (L/U, 5-digit "
+                           f"activity, state, year, ownership, 6-digit number)")
+    # text: the value must appear in what was quoted -- and must say something.
+    # An empty value is a substring of every span, so it is supported by none.
+    if value is None or not str(value).strip():
+        return False, "the proposed value is empty; no span can support it"
     return (str(value).lower() in _normalise(span).lower(),
             f"{value!r} does not appear in the quoted span")
 
@@ -264,7 +308,7 @@ def ground(document: str, proposed: dict, *, source_id: str | None = None
             out.append(Grounded(name, value, span, None, None, NOT_IN_DOCUMENT,
                                 "the quoted span does not appear in the document"))
             continue
-        ok, why = _consistent(name, value, span or "")
+        ok, why = value_supported_by_span(name, value, span or "")
         if not ok:
             out.append(Grounded(name, value, span, at[0], at[1], VALUE_MISMATCH, why))
             continue
@@ -357,6 +401,71 @@ def _test() -> None:
           "...and whitespace runs do not defeat the search")
     check(locate("company shall not exceed", odd) is None,
           "but the search does NOT repair the source to make a span match")
+
+    # ── an empty value is not supported by every span ────────────────────────
+    # 14-09-2026, llama3 via the realrun probe: {"cin": {"value": "", "span":
+    # "The Company was incorporated on 01 April 2015."}} was SERVED. The text
+    # check asked whether the value appears in the span, and "" appears in every
+    # string. An empty value says nothing, so no span can support it.
+    t05_span = "The Company was incorporated on 01 April 2015."
+    for blank in ("", "   "):
+        for field in TEXT_FIELDS:
+            ok_blank, why = value_supported_by_span(field, blank, t05_span)
+            check(not ok_blank,
+                  f"{field}={blank!r} is not supported by an unrelated span ({why})")
+    g6 = ground(t05_span, {"cin": {"value": "", "span": t05_span}}, source_id="d")
+    check(not g6.get("cin").usable and "cin" not in g6.to_payload(),
+          "...and ground() refuses it, so the empty CIN never reaches a payload")
+    check(value_supported_by_span("company_class", "private", "is a private company")[0],
+          "a real text value its span contains is still supported")
+
+    # ── a CIN value must be a CIN ────────────────────────────────────────────
+    # 14-09-2026, llama3 (T04): {"cin": {"value": "ACME HOLDINGS PUBLIC LIMITED",
+    # "span": "Its holding company, ACME HOLDINGS PUBLIC LIMITED, is a public
+    # limited company."}} served when proposed alone -- the span contains the
+    # value, so the text check passed. A company name is not a CIN.
+    t04_span = ("Its holding company, ACME HOLDINGS PUBLIC LIMITED, is a public "
+                "limited company.")
+    ok_name, why_name = value_supported_by_span("cin", "ACME HOLDINGS PUBLIC LIMITED",
+                                                t04_span)
+    check(not ok_name, f"a company name filed as a CIN is refused ({why_name})")
+    check(value_supported_by_span("cin", "U74999KA2019PTC123456",
+                                  "CIN U74999KA2019PTC123456,")[0],
+          "a well-formed CIN its span contains is supported")
+    damaged = "U74999KA2O19PTC123456"          # letter O where the year has a 0
+    ok_dmg, why_dmg = value_supported_by_span("cin", damaged, f"CIN {damaged}")
+    check(not ok_dmg and damaged in why_dmg,
+          "a scanner-damaged CIN is refused and reported as written -- never "
+          "repaired into a lookup against a different company")
+    g7 = ground(t04_span, {"cin": {"value": "ACME HOLDINGS PUBLIC LIMITED",
+                                   "span": t04_span}}, source_id="d")
+    check("cin" not in g7.to_payload(), "...and ground() keeps it out of the payload")
+
+    # ── an integer is read in words too, and only from an unambiguous span ───
+    # 14/15-09-2026, realrun R03 on real models. "Four directors of the Company's
+    # seven were present." Llama-3.3-70B quoted "the Company's seven" for
+    # director_count=7 and was refused: the check looked for a digit. gpt-5-mini
+    # quoted the whole sentence and proposed 4 -- the PRESENT count, the wrong
+    # answer. A fix that only learned number words and kept "first number wins"
+    # would have served that 4. So the span must state exactly one number.
+    ok7, why7 = value_supported_by_span("director_count", 7, "the Company's seven")
+    check(ok7, f"'the Company's seven' supports director_count=7 ({why7 or 'ok'})")
+    sentence = "Four directors of the Company's seven were present."
+    ok4, why4 = value_supported_by_span("director_count", 4, sentence)
+    check(not ok4 and "4" in why4 and "7" in why4,
+          f"gpt-5-mini's 4 from a span stating two counts is refused as ambiguous ({why4})")
+    check(not value_supported_by_span("director_count", 7, sentence)[0],
+          "...and so is 7 from the same span -- the span does not say which count it is")
+    ok_d4, why_d4 = value_supported_by_span("director_count", 4,
+                                            "4 directors of the Company's 7")
+    check(not ok_d4,
+          f"digits too: '4 directors of the Company's 7' no longer supports 4 "
+          f"-- the first-number rule accepted it ({why_d4})")
+    check(value_supported_by_span("director_count", 2, "2 directors")[0]
+          and value_supported_by_span("director_count", 12, "twelve directors")[0],
+          "a span stating one count, in digits or words, still supports it")
+    check(not value_supported_by_span("director_count", 3, "the Board of Directors")[0],
+          "a span stating no number supports none")
 
     # unknown keys are ignored, not rejected
     g5 = ground(DOC, dict(good, auditor_name={"value": "X", "span": "X"}), source_id="d")
