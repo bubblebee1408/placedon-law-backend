@@ -29,12 +29,22 @@ PYTHONPATH=$PWD python3 scripts/assistant_contract.py --test    # in scripts/run
 
 ## Acceptance checks
 
-The six checks in PLAN §6 run headless against the cached Chromium. **Playwright is deliberately not a
-repository dependency** — the runner lives in the session scratchpad and is invoked from there:
+The six checks in PLAN §6 run headless against the cached Chromium. The runner is in the repo
+(`tools/accept.mjs`); **Playwright is deliberately not a repository dependency**, so install it
+anywhere outside the repo and point the runner at it:
 
 ```
-node <scratchpad>/shot/accept.mjs web/assistant/index.html web/assistant/fixtures [--shots=<dir>]
+mkdir -p ~/.cache/placedon-ux-tools && cd ~/.cache/placedon-ux-tools
+printf '{"private":true,"type":"module"}' > package.json && pnpm add playwright
+
+cd ~/PlacedOn/placedon-law-backend
+PLAYWRIGHT=$HOME/.cache/placedon-ux-tools/node_modules/playwright/index.mjs \
+  node web/assistant/tools/accept.mjs web/assistant/index.html web/assistant/fixtures \
+  [--shots=<dir>]
 ```
+
+`CHROMIUM=<path>` overrides the browser binary (the default is the Playwright-cached Chromium on
+macOS). The runner exits non-zero on any failure.
 
 It asserts, for every fixture at 320 / 360 / 768 / 1024 / 1440:
 
@@ -44,8 +54,8 @@ It asserts, for every fixture at 320 / 360 / 768 / 1024 / 1440:
 4. every figure shows its amount, instrument and in-force date;
 5. `[data-law-version]` is present wherever citations are;
 6. **no number on screen the fixture did not supply** (chrome is marked `data-chrome`);
-7. the composer is reached early in the tab order, every citation is keyboard-reachable, and the
-   source panel is reachable;
+7. the composer is reached early in the tab order and before any citation, every citation is
+   keyboard-reachable, and the source panel is reachable;
 8. no motion over 200ms, and none at all under `prefers-reduced-motion`;
 9. no network request leaves the page.
 
