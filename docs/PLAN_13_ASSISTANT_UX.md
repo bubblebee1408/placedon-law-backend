@@ -397,9 +397,12 @@ After Cancel: "Cancelled before a result arrived. Nothing is shown." The rail ro
 │ Does not apply                       │ S: rows[].state, Caption beside it
 │                                      │ (D10: alone it reads as its inverse)
 │ YOU SUPPLIED                         │ S: facts{} · provenance USER_FACT
-│ company_class          private       │
-│ paid_up_capital_rupees ₹12,00,00,000 │
-│ turnover_rupees        ₹80,00,00,000 │
+│ company_class                        │  label over value, never two columns
+│   private                            │  (F20: two mono columns overflow 320px)
+│ paid_up_capital_rupees               │
+│   120000000                          │  value exactly as `facts.*.value` arrives
+│ turnover_rupees                      │  (F15b: ₹12,00,00,000 was client-composed)
+│   800000000                          │
 │ DATED FIGURES                        │
 │ ┃ small_company.paid_up_capital.     │ S: figures[].key (⟨label⟩ NEW)
 │ ┃ prescribed                         │
@@ -441,14 +444,14 @@ After Cancel: "Cancelled before a result arrived. Nothing is shown." The rail ro
 │ ■ Is this       │ │ Is this company a small company?       ││     (Definitions)                  │
 │   company a     │ │ Asked as of 15-Sep-2026 · No model     ││     Corroborated · No defects      │
 │   small         │ │ used · Looked up s.2(85)               ││     recorded                       │
-│   company?      │ │ ■ Answered                             ││     Spans the row cited:           │
-│   Answered ·    │ │ Establish whether the company is a     ││     2(85)(i) resolved              │
-│   15-Sep-2026   │ │ small company                          ││     sha256:8b24937ce6b9…           │
-│                 │ │ a limb exceeds its limit, so not a     ││     2(85)(ii) resolved             │
-│                 │ │ small company                     [1]  ││     sha256:f7a340b68b23…           │
+│   company?      │ │ ■ Answered                             ││     Sub-clauses the row named      │
+│   Answered ·    │ │ Establish whether the company is a     ││     (resolved to s.2; sub-clause   │
+│   15-Sep-2026   │ │ small company                          ││     text not extracted):           │
+│                 │ │ a limb exceeds its limit, so not a     ││     2(85)(i)  2(85)(ii)            │
+│                 │ │ small company                     [1]  ││     [Show the content hashes]      │
 │                 │ │ s.2(85) · Does not apply               ││     Section text is not part of    │
-│                 │ │ YOU SUPPLIED  private · ₹12,00,00,000  ││     this response.                 │
-│                 │ │               · ₹80,00,00,000          ││                                    │
+│                 │ │ YOU SUPPLIED  private                  ││     this response.                 │
+│                 │ │               120000000  800000000     ││                                    │
 │                 │ │ ┃ small_company.paid_up_capital.presc. ││                                    │
 │                 │ │ ┃ ₹10 crore   In force from 01-Dec-2025││ ┊ Text as ingested 18-Aug-2026.    │
 │                 │ │ ┃ No end date recorded                 ││ ┊ Current consolidation, not a     │
@@ -832,6 +835,7 @@ I-E10, I-E11, I-E12, I-E17).
 | **A figure's in-force date** | `In force from 01-Dec-2025`, then `No end date recorded` or `Until <date>`, then the **full** instrument string | Inside the figure block, directly under the amount (C2) | **Solid** 2px Ink left rule, mono date, label in sans |
 | **Section text's basis** | `Text as ingested 18-Aug-2026. Current consolidation, not a point-in-time version.` | Only beneath a verbatim quotation or a citation record | **Dashed** 2px Ink-80 left rule, caption sans under a text-serif quote. Never adjacent to an amount |
 | A fetch date | `Fetched 18-Aug-2026, 19-Aug-2026 (fetch dates, not in-force dates)` | Inside a Sources citation record only | Caption, Ink-80 |
+| **The read date inside a server sentence** | `as at 2026-09-15`, inside `scope_frame.sentence` | Only inside that sentence, on a document turn | Rendered **verbatim and never restyled**, even though it is a sixth wording for a date this table otherwise calls "Asked as of" (D4; F28) |
 | An instrument's own date, inside a server string | e.g. `…Amendment Rules, 2025, dated 01-12-2025` | Wherever that string is rendered | Verbatim, never reformatted, never relabelled "in force from" |
 
 Rules that make the first two impossible to conflate:
@@ -1166,7 +1170,7 @@ renders nothing in its place until Phase C adds it.
 | Demand signal | `demand_signal` | C on `partial`; **NEW** on `out_of_scope` |
 | Citations, Sources | `citations[]` {ref, cite, title, evidence_state, usable_for_answering, unusable_reason, defects[], retrieved_on[], source_url}, `law_version` {basis, point_in_time_verified, corpus_fetched, statement}, `evidence_pack` {retrieval_query, route, usable_keys, unusable_keys, missing, insufficient_evidence} | C · `citations[].verbatim` on `answered`, `evidence_pack.id`: **NEW** |
 | Steps | `stages[]` + `caption` | C-opt, document path only (K9) · `caption`: **NEW** |
-| Holds line, scope register | `scope.held[]`, `scope.sentence` · `scope.bodies[]` {name, regulator, scope_status} | C · bodies: **NEW** |
+| Holds line, scope register | `scope.held[]`, `scope.sentence` · `scope.bodies[]` {name, regulator, scope_status} | **NEW, blocking** — `scope` is an envelope field on an *ask response*, and the empty state exists before any response. It needs the `GET /v1/scope` bootstrap (§19 Q1), not the ask envelope (F6b) |
 | Capability list, facts fields | `capabilities[]` {group, question, provision, requires[], inputs[], needs_document}, `capabilities.note` | **NEW** (from `bundles.registry()` + the obligation register) |
 | Request | question, as_of, context.kind, document{date,text}, capability, facts, parent_turn_id | **NEW** — the contract documents the response only |
 | Forbidden | `confidence`, any coverage float, any reviewer name, `human_reviewed`, a client-inferred state | never rendered |
@@ -1427,3 +1431,121 @@ are read as the same claim. Specific to this direction:
 | 4b. **Nothing the card showed is lost on copy** | §13 "Copy with sources": the payload is the card in render order, and the check is that every (S) string on screen appears in the clipboard text — run per fixture |
 | 5. Validator rejects an inferred state, a figure without an as-of, a citation outside the pack | Already in `scripts/assistant_contract.py:64-133`; this design adds the rules in §18.2, each classified HARD or SOFT so no soft defect voids a legally correct answer |
 | 6. `prefers-reduced-motion` removes all motion; nothing exceeds 200ms | §17 (one 120ms opacity transition, and it is the only motion) |
+
+---
+
+## 25. Critique findings and dispositions
+
+Two harsh critics — one for trust and legal accuracy, one for usability, design quality and founder
+intent — returned **43 findings** against this spec (7 fatal, 27 major, 9 minor). Findings are kept in
+full at `scratchpad/ux/critic_findings.json` for the run that produced them; each id below is theirs.
+
+### 25.1 Rules this pass added, binding on Phase B
+
+These are the fixes that are rules rather than redraws. Where a fix required redrawing six wireframes at
+two widths, the rule is stated here and the redraw is Phase B's, listed in §25.2 as OPEN.
+
+1. **The collapsed Sources summary keeps the two truths apart** (F5b, F7). In the pane the section is
+   collapsed by default, so its summary is what most readers ever see. It carries **two lines, never
+   one**: the ingestion basis under a dashed rule, and the in-force line under a solid rule. If a turn
+   has more than one figure the summary gives a **count**, never a merged date sentence.
+2. **A duty is printed once per turn** (F8b). On a document turn `scope_frame.sentence` is rendered
+   verbatim, and any `not_confirmed[]` item whose `duty` also appears in `scope_frame.unchecked[]` is
+   suppressed. The same three duties may not appear under two labels.
+3. **"Copy with sources" copies the card, in card order** (F9b): every rendered element, abstentions
+   first — state word, question, stamp, context band, `not_confirmed[]`, `superseded[]`, rows, figures
+   with instrument and in-force date, citations with the text-basis sentence, `scope_frame.sentence`,
+   `what_it_is_not`, and each `[n]` marker's target. Never a hand-picked subset. §24 check 4b is the test.
+4. **`out_of_scope` renders the body or the reason, not both** (F16). `reason` opens by naming the body
+   and its regulator, so when `reason` is present the structured `body.name` / `body.regulator` /
+   `body.covers` lines are suppressed. Server wording is never restyled, so deduplication is a layout
+   decision, not an edit to the string.
+5. **A marker expands what it targets before moving focus** (F18). In the pane, activating `[n]` expands
+   the Sources section first; the section is expanded whenever a marker targets it, so focus never
+   enters a hidden subtree and `aria-describedby` never points into one. The description names the
+   target: the cite for a citation, `figures[].key` plus the instrument for a figure.
+6. **The change badge names both sides from echoed values** (F19): "About changed: the open document →
+   the Act", not "changed from the previous turn", because a collapsed previous turn does not show its
+   About. Both strings are the ContextBand text the client already renders.
+7. **A negation pass over §13** (F21). The strongest state must not read as hedging (PLAN §7 falsifier
+   3). "No end date recorded" becomes part of the in-force line — `In force from 01-Dec-2025, still
+   current`; "Gazette link: not recorded" becomes `Gazette copy: pending`; `No model used` leaves the
+   stamp, because §13's model-disclosure line already carries it and the stamp is the card's first
+   line. Target: **no more than two negations** in any 360px view of an `answered` turn.
+8. **Group labels get one step of contrast** (F23). A label token is declared — DS H3, 14/600, sentence
+   case — and size or weight contrast is reserved for the group carrying the turn's state: NOT CONFIRMED
+   in `partial`, the figure block in `answered`. Six equal all-caps labels on the document turn is the
+   flat-hierarchy failure C6 bars.
+9. **The frame does not move when the first answer arrives** (F24). The 1440 empty state reserves the
+   Sources column (rendered empty with its header), so the content column sits where it will sit once
+   an answer exists. This costs nothing under C6 and needs no motion.
+10. **A hash is shown whole or not at all** (F25). `cited_spans` sha256 values render behind
+    `[Show the content hashes]`, in a wrapping mono block, and are included in the copy payload. A
+    12-character prefix is decoration in a product whose thesis is verifiability.
+11. **The As-of field accepts what Indian practitioners type** (F27): `DD-MM-YYYY`, `DD/MM/YYYY` and
+    ISO on input, normalised to `DD-Mon-YYYY` on blur. It carries `aria-invalid`, an `aria-describedby`
+    error id, and Ask stays enabled — an invalid date is a field error, never a blocked turn. (In v1 the
+    field is read-only at today's date, §9; these rules bind whenever Phase C makes it editable.)
+12. **The session rail reads state word first** (F13), matching §6 and §16's grayscale defence, and the
+    rail is included in §24 check 1's grayscale test.
+13. **`cited_spans` is labelled as what it is** (F14): "Sub-clauses the row named (resolved to s.2;
+    sub-clause text not extracted)". The client may not assert that a sub-clause was read when the
+    contract states its text is not extracted.
+14. **The L-C2 claim is narrowed** (F15). Magesh's standard — a refusal is correct only when it says what
+    was searched and not found — is met on the **detection-failure `partial`** (§7.12, the `located`
+    item), not on `out_of_scope`, whose fixture carries no `evidence_pack`. §19 Q1 and the §20 row say so.
+
+### 25.2 Dispositions
+
+| id | sev | Finding, in one line | Outcome |
+|---|---|---|---|
+| F1 | fatal | The empty state cannot render: scope/capabilities have no field | **FIXED** — `GET /v1/scope` bootstrap specified (§19 Q1, §18.1) |
+| F1b | fatal | A second figure drawn as a compressed line, dropping instrument and date | **FIXED** — every `figures[]` element renders through the identical FigureBlock |
+| F2 | fatal | A past `as_of` has no defined semantics | **FIXED** — read-only at today in v1, with the rule if Phase C makes it editable (§9) |
+| F2b | fatal | `CONFIRMED (12)` over 11 undetermined rows | **FIXED** — counts derive from the array; the group is renamed for what it holds (§18.2 rule 8) |
+| F3 | fatal | "Copy with sources" omitted abstentions | **FIXED** — §25.1 rule 3, tested by §24 check 4b |
+| F3b | fatal | Client-composed headline with `headline` absent from every fixture | **FIXED** — headline renders nothing until supplied; no amount permitted (§18.2 rule 1) |
+| F4b | fatal | A content rule would void a legally correct response | **FIXED** — §18.2 split into HARD (void) and SOFT (suppress the element) |
+| F10 | major | No drawn state for the outcomes that will dominate | **FIXED** — §7.12 draws the empty-`confirmed` partial and the undeclared-body screen |
+| F10b | major | ServiceError never focused or announced | **FIXED** — focus-and-announce moved to the pipeline tail (§4.3) |
+| F11 | major | A statute quote may be clipped mid-sub-section | **FIXED** — a clip may not end inside a numbered sub-section; the hidden count is server-derived |
+| F11b | major | Every turn's accessible name is the state word | **FIXED** — the article is labelled question + state |
+| F4 | major | Count client-computed from `scope_frame.checked_count` | **FIXED** — §18.2 rule 8 |
+| F5 | major | "No model used" beside "not admitted for model use" | **FIXED** — §18.2 rule 6 suppresses model-facing detail |
+| F5b | major | Collapsed summary merges the two as-of truths | **FIXED** — §25.1 rule 1 |
+| F6 | major | A row's state word rendered without its full basis | **FIXED** — §18.2 rule 9; basis never truncated |
+| F6b | major | Holds line marked C, but `scope` arrives only with a response | **FIXED** — §18.1 now **NEW, blocking** |
+| F7 | major | Collapsed summary asserts both truths in one sentence | **FIXED** — §25.1 rule 1 |
+| F7b | major | Two of the four "fences" on free text render nothing | **FIXED** — `capabilities[]` and `scope.bodies[]` are blocking Phase C deliverables |
+| F8 | major | A citation looks checked; its link is a dead host | **FIXED** — §18.2 rule 4, a client-side allowlist excluding `indiacode.nic.in` |
+| F8b | major | The same three duties printed under two labels | **FIXED** — §25.1 rule 2 |
+| F9 | major | SUPERSEDED asserts the law moved, carrying no date for the move | **FIXED** — §18.2 rule 7 re-renders the contradictory item; D9 stays open in §18.3 |
+| F9b | major | Copy payload a hand-picked subset | **FIXED** — §25.1 rule 3 |
+| F12 | major | What the client does with a malformed `what_it_is_not` | **FIXED** — §18.2 rule 3 (SOFT: block and heading dropped together) |
+| F12b | major | Accent budget broken by the docked composer | **FIXED** — §14: Caution is a semantic status hue, outside the accent count |
+| F13 | minor | Session rail inverts state-word-first order | **FIXED** — §25.1 rule 12 |
+| F13b | major | At 700px the answer column is narrower than the Word pane | **FIXED** — panel fluid `min(384px, 40vw)`; one-column breakpoint raised; 768/1024 added to the capture set |
+| F14 | minor | "Spans the row cited" asserts more than the contract carries | **FIXED** — §25.1 rule 13, and the wireframe redrawn |
+| F14b | major | The capability list comes after the field it fills | **FIXED** — §15 tab order puts capability rows before the question |
+| F15 | minor | L-C2 claimed for `out_of_scope`, which cannot meet it | **FIXED** — §25.1 rule 14 |
+| F15b | major | `₹12,00,00,000` is a client-composed string for `120000000` | **FIXED** — §6 renders the value as it arrives; wireframes redrawn |
+| F16 | major | `out_of_scope` prints body and regulator twice | **FIXED** — §25.1 rule 4 |
+| F17 | major | Ink-40 at 1.7:1 carries the ServiceError boundary | **FIXED** — dashed **Ink-80** border |
+| F18 | major | A marker moves focus into a collapsed subtree | **FIXED** — §25.1 rule 5 |
+| F19 | major | The change badge names one side only | **FIXED** — §25.1 rule 6 |
+| F20 | major | Two mono columns overflow at 320px | **FIXED as a rule** — label-over-value, no mono for fact keys; wireframe redrawn. **OPEN for Phase B:** §7.4 and §7.8 must also be drawn at 320 before sign-off (§24 check 2) |
+| F21 | major | Five negations in the strongest state | **FIXED** — §25.1 rule 7 |
+| F22 | major | Everything that makes it feel like Harvey exists only at ≥1100px | **OPEN — founder decision.** The critic is right that the pane is where the product lives (C7) and the Harvey frame is a web-only luxury. Bringing a docked source sheet with a turn header and a compact turn switcher down to 320–400px is a redesign of §7 and §10, not an edit. Recorded as the first question for Phase B, with §23 risk 2 |
+| F23 | minor | Six equal all-caps labels, flat hierarchy | **FIXED** — §25.1 rule 8 |
+| F24 | minor | The frame shifts when the first answer arrives | **FIXED** — §25.1 rule 9 |
+| F25 | minor | A truncated hash is decoration | **FIXED** — §25.1 rule 10 |
+| F26 | minor | SUPERSEDED shown while its own date flags contradict it | **FIXED** — §18.2 rule 7 |
+| F27 | minor | A bespoke date parser rejects what Indian practitioners type | **FIXED** — §25.1 rule 11 |
+| F28 | minor | §9 titled "six wordings" with five rows | **FIXED** — the sixth row added (D4) |
+
+**Totals: 42 FIXED, 1 OPEN (F22, founder decision), 0 REJECTED.** No finding was rejected: the two
+critics were given the spec, the contract and the audit, and every claim they made held on inspection.
+
+The three passes that applied these findings hit the same failure twice — a single agent given all 43
+findings against an 86KB spec stalled six times — so the batch that ran, the surgical edits and this
+section were done in the main session. Recorded because it is a fact about how this document was made.
