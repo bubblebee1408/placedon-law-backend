@@ -61,6 +61,22 @@ def _keys(obj, path="$"):
             yield from _keys(v, f"{path}[{i}]")
 
 
+def _lists(obj, path="$"):
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            yield from _lists(v, f"{path}.{k}")
+    elif isinstance(obj, list):
+        yield path, obj
+        for i, v in enumerate(obj):
+            yield from _lists(v, f"{path}[{i}]")
+
+
+def _as_json(v):
+    """What the engine returned, in JSON types. A tuple becomes a list; a string stays a
+    string -- list() on a string is how a sentence becomes 455 characters."""
+    return list(v) if isinstance(v, tuple) else v
+
+
 def validate(r: dict) -> list[str]:
     """Every way this response breaks the contract. Empty means it may be rendered."""
     if not isinstance(r, dict):
@@ -78,6 +94,12 @@ def validate(r: dict) -> list[str]:
     for k, p in _keys(r):
         if k in FORBIDDEN_KEYS:
             errs.append(f"{p}: a '{k}' field is forbidden (C4)")
+    for p, v in _lists(r):
+        # A sentence that went through list() arrives as its own characters. It reads as
+        # a list to every check that only counts items, and as nothing to a reader.
+        if len(v) > 2 and all(isinstance(x, str) and len(x) == 1 for x in v):
+            errs.append(f"{p}: {len(v)} single-character items -- this is a string that "
+                        f"was split, not a list the engine returned")
 
     ctx = r.get("context") or {}
     kind = ctx.get("kind")
@@ -202,7 +224,7 @@ def build_fixtures() -> dict[str, dict]:
         "citations": [_citation(p) for p in s285["provisions"]],
         "law_version": _law_version(s285),
         "evidence_pack": _pack_summary(s285, route285),
-        "what_it_is_not": list(pack_json["what_it_is_not"]),
+        "what_it_is_not": _as_json(pack_json["what_it_is_not"]),
     }
 
     mixed, route_mixed = _pack("s.173 and s.16")
@@ -241,8 +263,8 @@ def build_fixtures() -> dict[str, dict]:
         "not_confirmed": [{"kind": "cannot_verify"} | item for item in check["cannot_verify"]],
         "scope_frame": check["coverage"],
         # api returns a tuple here; a fixture is JSON, so it must hold JSON types or a rebuild
-        # compares unequal to the file it was written as.
-        "what_it_is_not": list(check["what_it_is_not"]),
+        # compares unequal to the file it was written as. _as_json leaves a string alone.
+        "what_it_is_not": _as_json(check["what_it_is_not"]),
     }
 
     followup = _envelope("And the turnover limit?", parent=answered["turn_id"]) | {
@@ -325,6 +347,29 @@ def _test() -> None:
     c(js.startswith(FIXTURE_JS_PREFIX)
       and json.loads(js[len(FIXTURE_JS_PREFIX):].rstrip().rstrip(";")) == fx,
       "fixtures.js embeds exactly the rebuilt fixtures, for a page opened from disk")
+
+    # ── a string is never a list of characters ──────────────────────────────
+    # The design agent found it while binding the spec to this contract:
+    # api.compliance_pack returns what_it_is_not as a STRING, list() split it into
+    # 455 single characters, and the fixture carried a sentence the engine never
+    # said in a shape no renderer could show. The fix is the type rule, and the
+    # validator so the shape cannot come back.
+    ans = fx["answered_small_company"]
+    from checker import api as _api
+    engine_says = _api.compliance_pack(
+        {"company_class": "private", "incorporation_date": "2019-06-01", "as_of": AS_OF,
+         "financial_year": "2025-26", "paid_up_capital_rupees": 120000000,
+         "turnover_rupees": 800000000}, generated_at=GENERATED_AT)["what_it_is_not"]
+    c(ans["what_it_is_not"] == engine_says,
+      f"what_it_is_not is what the engine returned, not a split of it "
+      f"({type(ans['what_it_is_not']).__name__}, "
+      f"{len(ans['what_it_is_not'])} item(s) vs engine {type(engine_says).__name__})")
+    c(validate(copy.deepcopy(ans) | {"what_it_is_not": list("a sentence")}),
+      "a field holding a list of single characters is refused -- that is a string "
+      "someone split, and no renderer can show it as a list")
+    c(validate(copy.deepcopy(ans) | {"what_it_is_not": ["a", "b"]}) == [],
+      "...while a short genuine list of one-letter items is not blocked by length "
+      "alone -- the rule needs more than two items to fire")
 
     # ── what the validator refuses ──────────────────────────────────────────
     def broken(name: str, mutate) -> list[str]:
