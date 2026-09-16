@@ -84,6 +84,15 @@
   "kind": "document"
  },
  "generated_at": "2026-09-15T00:00:00Z",
+ "law_version": {
+  "basis": "CURRENT_CONSOLIDATION_AS_INGESTED",
+  "corpus_fetched": [
+   "2026-08-18"
+  ],
+  "point_in_time_requested": "2024-06-01",
+  "point_in_time_verified": false,
+  "statement": "This pack carries the CURRENT CONSOLIDATION of the Companies Act 2013 as India Code rendered it when the corpus was ingested (2026-08-18). It is NOT a point-in-time version of the law and carries no verified commencement or amendment date. The amendment vintage of individual provisions is not uniform and not fully known: SD-002 confirms that some records carry pre-amendment wording while the same publisher's PDF carries later wording. Those provisions are marked unusable in this pack. Point-in-time reconstruction exists in this system but is UNVERIFIED against any external source, so no statement here is a statement about the law as it stood on any past date. A point-in-time answer was requested for 2024-06-01. This pack CANNOT supply one. Do not treat any text below as the law as it stood on 2024-06-01."
+ },
  "not_confirmed": [
   {
    "already_open_at_document_date": true,

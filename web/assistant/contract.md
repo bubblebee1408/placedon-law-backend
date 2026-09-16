@@ -66,7 +66,7 @@ section and records the subsection without extracting it.
 | `not_confirmed[]` `{kind, …}` — `pack_missing` · `unusable` · `cannot_verify` · (future) `refusal`, `model_decision` | pack `missing[]`, `unusable_reason()`, `api.document_check` `cannot_verify[]`, `reasoning.Refusal`, `model_adapter` decisions |
 | `superseded[]` (document path) | `api.document_check` |
 | `scope_frame` (document path) | `coverage.Report.to_json()` — renamed from `coverage` (K8) |
-| `law_version`, `evidence_pack` | as in §3 |
+| `law_version`, `evidence_pack` | as in §3. **On a document turn `law_version` is required** and carries `point_in_time_requested` = the document date, built by `evidence_pack._build_as_of`: `document_check` reports Act-only rows CURRENT by construction against the current consolidation, and this is what stops that reading as the law at the document's date (red team L2) |
 | `demand_signal` | NEW (UX spec §3.2) |
 
 ## 5. `out_of_scope`
@@ -95,7 +95,7 @@ would be NEW copy and needs its own decision.
 A missing or fourth state · a figure without `amount`, `instrument` or `effective_from` · a citation
 outside the evidence pack · `answered` citing an unusable provision · any `confidence` or `coverage`
 key at any depth · `answered` with `uses_model` true · `partial` with empty `not_confirmed` ·
-`out_of_scope` about a held body or without a reason · `stages` on a general turn, or a stage name the
+`out_of_scope` about a held body or without a reason · a turn that renders rows, confirmed items, superseded items or citations without `law_version` · `stages` on a general turn, or a stage name the
 orchestrator does not emit · a document turn without `document_date` · section text (citation or
 confirmed item) carrying `effective_from` · a follow-up with an empty `parent_turn_id`.
 
@@ -110,6 +110,7 @@ confirmed item) carrying `effective_from` · a follow-up with an empty `parent_t
 | `out_of_scope_fema` | out_of_scope | `scope.body("FEMA1999")`, `scope.refusal_for` |
 | `document_context_2024` | partial | `api.document_check` for a document dated 2024-06-01 |
 | `followup_turnover` | answered | `prescribed_thresholds.lookup` turnover; `retrieve("s.2(85)")`; parent = the answered turn |
+| `partial_nothing_confirmed` | partial, empty `confirmed` | `retrieve("rule 2(1)(t)")` — route `abstain`, empty pack; the state the design says will dominate (red team L3) |
 
 The user's *questions* are illustrative. Everything legal in a fixture is engine output. The self-test
 requires the files on disk to equal a fresh rebuild; after an engine change run

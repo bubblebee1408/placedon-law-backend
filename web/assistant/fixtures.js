@@ -198,6 +198,15 @@ window.PLACEDON_ASK_FIXTURES = {
    "kind": "document"
   },
   "generated_at": "2026-09-15T00:00:00Z",
+  "law_version": {
+   "basis": "CURRENT_CONSOLIDATION_AS_INGESTED",
+   "corpus_fetched": [
+    "2026-08-18"
+   ],
+   "point_in_time_requested": "2024-06-01",
+   "point_in_time_verified": false,
+   "statement": "This pack carries the CURRENT CONSOLIDATION of the Companies Act 2013 as India Code rendered it when the corpus was ingested (2026-08-18). It is NOT a point-in-time version of the law and carries no verified commencement or amendment date. The amendment vintage of individual provisions is not uniform and not fully known: SD-002 confirms that some records carry pre-amendment wording while the same publisher's PDF carries later wording. Those provisions are marked unusable in this pack. Point-in-time reconstruction exists in this system but is UNVERIFIED against any external source, so no statement here is a statement about the law as it stood on any past date. A point-in-time answer was requested for 2024-06-01. This pack CANNOT supply one. Do not treat any text below as the law as it stood on 2024-06-01."
+  },
   "not_confirmed": [
    {
     "already_open_at_document_date": true,
@@ -398,6 +407,53 @@ window.PLACEDON_ASK_FIXTURES = {
   },
   "state": "out_of_scope",
   "turn_id": "t_53d5771a2f6d",
+  "uses_model": false
+ },
+ "partial_nothing_confirmed": {
+  "as_of": "2026-09-15",
+  "confirmed": [],
+  "context": {
+   "document_date": null,
+   "kind": "general"
+  },
+  "evidence_pack": {
+   "insufficient_evidence": true,
+   "missing": [
+    "RULE:COMPANIES_MEETINGS_BOARD_POWERS_2014:R2 (Definitions) was cited and DOES exist, but is not admitted for model use: UNREVIEWED. Its text is unknown to you.",
+    "No provision was retrieved at all. This pack is empty."
+   ],
+   "retrieval_query": "rule 2(1)(t)",
+   "route": "abstain",
+   "unusable_keys": [],
+   "usable_keys": []
+  },
+  "generated_at": "2026-09-15T00:00:00Z",
+  "law_version": {
+   "basis": "CURRENT_CONSOLIDATION_AS_INGESTED",
+   "corpus_fetched": [],
+   "point_in_time_verified": false,
+   "statement": "This pack carries the CURRENT CONSOLIDATION of the Companies Act 2013 as India Code rendered it when the corpus was ingested (an unrecorded date). It is NOT a point-in-time version of the law and carries no verified commencement or amendment date. The amendment vintage of individual provisions is not uniform and not fully known: SD-002 confirms that some records carry pre-amendment wording while the same publisher's PDF carries later wording. Those provisions are marked unusable in this pack. Point-in-time reconstruction exists in this system but is UNVERIFIED against any external source, so no statement here is a statement about the law as it stood on any past date."
+  },
+  "not_confirmed": [
+   {
+    "detail": "RULE:COMPANIES_MEETINGS_BOARD_POWERS_2014:R2 (Definitions) was cited and DOES exist, but is not admitted for model use: UNREVIEWED. Its text is unknown to you.",
+    "kind": "pack_missing"
+   },
+   {
+    "detail": "No provision was retrieved at all. This pack is empty.",
+    "kind": "pack_missing"
+   }
+  ],
+  "question": "What does rule 2(1)(t) prescribe?",
+  "schema": "placedon.ask/0",
+  "scope": {
+   "held": [
+    "Companies Act, 2013"
+   ],
+   "sentence": "1 of 9 in-scope bodies of law are held"
+  },
+  "state": "partial",
+  "turn_id": "t_6c77ad3b8015",
   "uses_model": false
  },
  "partial_s173_s16": {

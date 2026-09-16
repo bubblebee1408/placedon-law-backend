@@ -129,6 +129,13 @@ def validate(r: dict) -> list[str]:
         for k in ("amount", "instrument", "effective_from"):
             if not fig.get(k):
                 errs.append(f"figure {fig.get('key')} has no {k}")
+    # A turn that shows rows or section text must say what law they were read against. On a
+    # document turn, "current" means current consolidation -- not the law at the document date.
+    if (state != "out_of_scope"
+            and any(r.get(k) for k in ("rows", "confirmed", "superseded", "citations"))
+            and not r.get("law_version")):
+        errs.append("a turn that renders rows or legal text needs law_version -- what law it "
+                    "was checked against")
 
     if state == "answered":
         if r.get("uses_model") is not False:
@@ -187,6 +194,23 @@ def _citation(p: dict) -> dict:
 def _law_version(d: dict) -> dict:
     a = d["as_of"]
     return {k: a[k] for k in ("basis", "point_in_time_verified", "corpus_fetched", "statement")}
+
+
+def _law_version_at(provisions: list[str], requested: str) -> dict:
+    """The engine's own basis statement for a past date, over the provisions a turn cites.
+
+    Built by evidence_pack's statement builder, never written here: it is the sentence that
+    says no statement is about the law as it stood on that date.
+    """
+    import re
+    from checker import evidence_pack
+    sections = sorted({m for p in provisions for m in re.findall(r"s\.(\d+[A-Z]?)", p)},
+                      key=lambda x: (int(re.match(r"\d+", x).group()), x))
+    pack, _ = _pack(" and ".join(f"s.{n}" for n in sections))
+    fetched = tuple(pack["as_of"]["corpus_fetched"])
+    a = evidence_pack._build_as_of(fetched, date.fromisoformat(requested)).to_dict()
+    return {k: a[k] for k in ("basis", "point_in_time_verified", "point_in_time_requested",
+                              "corpus_fetched", "statement")}
 
 
 def _pack_summary(d: dict, route: str) -> dict:
@@ -262,6 +286,13 @@ def build_fixtures() -> dict[str, dict]:
         "confirmed": check["verified"],
         "not_confirmed": [{"kind": "cannot_verify"} | item for item in check["cannot_verify"]],
         "scope_frame": check["coverage"],
+        # Red team L2: document_check says CURRENT for Act-only rows by construction, against
+        # the current consolidation. The turn carries the engine's statement for the
+        # document's own date so that "current" cannot be read as the law in 2024.
+        "law_version": _law_version_at(
+            [x.get("provision", "") for x in check["verified"] + check["cannot_verify"]
+             + check["superseded"]],
+            doc_payload["document_date"]),
         # api returns a tuple here; a fixture is JSON, so it must hold JSON types or a rebuild
         # compares unequal to the file it was written as. _as_json leaves a string alone.
         "what_it_is_not": _as_json(check["what_it_is_not"]),
@@ -275,7 +306,20 @@ def build_fixtures() -> dict[str, dict]:
         "evidence_pack": _pack_summary(s285, route285),
     }
 
-    return {"answered_small_company": answered, "partial_s173_s16": partial,
+    # Red team L3: the partial the design says will dominate -- a retrieval that abstained, so
+    # nothing is confirmed. retrieve() cannot resolve rule 2(1)(t) of the Definition Details
+    # Rules (audit E20), so the pack is empty and says why.
+    absent, route_absent = _pack("rule 2(1)(t)")
+    nothing = _envelope("What does rule 2(1)(t) prescribe?") | {
+        "state": "partial",
+        "confirmed": [],
+        "not_confirmed": [{"kind": "pack_missing", "detail": m} for m in absent["missing"]],
+        "law_version": _law_version(absent),
+        "evidence_pack": _pack_summary(absent, route_absent),
+    }
+
+    return {"partial_nothing_confirmed": nothing,
+            "answered_small_company": answered, "partial_s173_s16": partial,
             "out_of_scope_fema": out_of_scope, "document_context_2024": document,
             "followup_turnover": followup}
 
@@ -315,7 +359,7 @@ def _test() -> None:
     import copy
 
     fx = build_fixtures()
-    c(set(fx) >= {"answered_small_company", "partial_s173_s16", "out_of_scope_fema",
+    c(set(fx) >= {"answered_small_company", "partial_s173_s16", "out_of_scope_fema", "partial_nothing_confirmed",
                   "document_context_2024", "followup_turnover"},
       f"fixtures cover every state plus a document turn and a follow-up ({sorted(fx)})")
     for name, resp in fx.items():
@@ -371,6 +415,7 @@ def _test() -> None:
       "...while a short genuine list of one-letter items is not blocked by length "
       "alone -- the rule needs more than two items to fire")
 
+
     # ── what the validator refuses ──────────────────────────────────────────
     def broken(name: str, mutate) -> list[str]:
         r = copy.deepcopy(fx[name])
@@ -416,6 +461,31 @@ def _test() -> None:
       "section text carrying an in-force date is refused -- the two as-of truths stay distinct")
     c(broken("followup_turnover", lambda r: r.update(parent_turn_id="")),
       "a follow-up names the turn it follows")
+
+    # ── a document turn says what law it was checked against (red team L2) ──
+    # document_check reports Act-only obligations CURRENT by construction
+    # (currency.py), against a corpus that is the CURRENT consolidation. On a 2024
+    # document that reads as the law in 2024. The turn must carry the engine's own
+    # statement of the basis, with the document date as the requested point in time.
+    doc = fx["document_context_2024"]
+    lv = doc.get("law_version") or {}
+    c(lv.get("point_in_time_requested") == doc["context"]["document_date"]
+      and lv.get("point_in_time_verified") is False
+      and "no statement here is a statement about the law as it stood" in lv.get("statement", ""),
+      "the document turn carries the engine's basis statement for the document's own "
+      "date -- current consolidation, not the law as it stood")
+    c(broken("document_context_2024", lambda r: r.pop("law_version")),
+      "a turn that renders rows or superseded items without a law_version is refused")
+    c(broken("partial_s173_s16", lambda r: r.pop("law_version")),
+      "...and so is one that renders confirmed section text without it")
+    c(validate(copy.deepcopy(fx["out_of_scope_fema"])) == [],
+      "an out_of_scope turn renders no legal text and needs no law_version")
+
+    # ── the partial that will dominate: nothing confirmed (red team L3) ─────
+    emp = fx.get("partial_nothing_confirmed") or {}
+    c(emp.get("state") == "partial" and emp.get("confirmed") == []
+      and emp.get("not_confirmed") and emp.get("evidence_pack", {}).get("route") == "abstain",
+      "a fixture covers the empty-confirmed partial, built from a retrieval that abstained")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:
