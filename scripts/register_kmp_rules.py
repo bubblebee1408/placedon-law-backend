@@ -276,11 +276,22 @@ def register(src: Path) -> str:
     return outcome
 
 
-def attest(reviewer_id: str) -> str:
+def attest(reviewer_id: str, downloaded_from: str | None = None,
+           downloaded_at: str | None = None, *, replace: bool = False) -> str:
     rec = registration()
     if rec is None:
         print("no registration on record — run register first")
         return NO_RECORD
+    # The source goes in FIRST, and a bad one refuses before anything is stamped.
+    # Taking --from/--at and then dropping them would record an attestation while
+    # silently discarding the provenance the operator supplied: the worst of both.
+    if downloaded_from is not None or downloaded_at is not None:
+        outcome, written, message = SOURCE_POLICY.record_source(
+            rec, downloaded_from, downloaded_at, replace=replace)
+        if outcome in (SOURCE_REFUSED, SOURCE_CONFLICT):
+            print(message)
+            return outcome
+        rec = written if written is not None else rec
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     rec = dict(rec)
     rec.update({"identity_checked_by": reviewer_id, "identity_checked_at": now,
@@ -487,15 +498,49 @@ def _test() -> int:
                 rc_none = main(["--source", "--from", india, "--at", "2026-09-11"])
             check(rc_none == 2 and not mod.RECORD.exists(),
                   "with no registration to act on it exits 2 and writes nothing")
+
+            # ── fix round 1: --attest must not stamp the checks and drop the source ──
+            mod.RECORD.write_text(json.dumps(
+                {k: v for k, v in unsourced.items()
+                 if k not in ("identity_checked_by", "identity_checked_at",
+                              "verbatim_clause_checked_by", "verbatim_clause_checked_at")}
+                | {"status": PENDING_HUMAN_REVIEW}))
+            before = mod.RECORD.read_text()
+            with redirect_stdout(io.StringIO()):
+                rc_att = main(["--attest", "R1", "--from", india, "--at", "2026-09-11"])
+            stamped = json.loads(mod.RECORD.read_text())
+            check(rc_att == 0 and stamped["downloaded_from"] == india
+                  and stamped["identity_checked_by"] == "R1" and is_attested(stamped),
+                  "--attest --from --at records the reviewer AND the source together")
+            mod.RECORD.write_text(before)
+            with redirect_stdout(io.StringIO()):
+                rc_att_bad = main(["--attest", "R1", "--from", "https://taxguru.in/x.pdf",
+                                   "--at", "2026-09-11"])
+            check(rc_att_bad == 2 and mod.RECORD.read_text() == before,
+                  "...and a bad source stamps nothing, not even the reviewer")
+            mod.RECORD.write_text(before)
+            with redirect_stdout(io.StringIO()):
+                rc_att_bare = main(["--attest", "R1"])
+            check(rc_att_bare == 1
+                  and json.loads(mod.RECORD.read_text())["identity_checked_by"] == "R1"
+                  and not is_attested(json.loads(mod.RECORD.read_text())),
+                  "...while attesting with no source stamps the checks and says it is "
+                  "not usable (exit 1)")
         finally:
             mod.RECORD = saved
+
+    # ── fix round 1: the CLI's own contract ──────────────────────────────────
+    check(main([]) == 2 and main(["--replace"]) == 2,
+          "no arguments, or --replace alone, is refused with 2 -- nothing is written")
+    check(main(["--replace", "nonexistent-file.pdf"]) == 2,
+          "--replace applies only to --source or --attest; it is never ignored")
 
     print(f"\n{ok}/{ok + fail} passed")
     return 1 if fail else 0
 
 
 USAGE = """usage: register_kmp_rules.py <downloaded-file>
-       register_kmp_rules.py --attest <reviewer-id>
+       register_kmp_rules.py --attest <reviewer-id> [--from <URL> --at <DATE>] [--replace]
        register_kmp_rules.py --source --from <URL> --at <DATE> [--replace]
        register_kmp_rules.py --test
 <URL>: the https address the file was downloaded from, on one of
@@ -514,6 +559,9 @@ def main(argv: list[str]) -> int:
     rest, src_url, src_at = parsed
     replace = "--replace" in rest
     rest = [a for a in rest if a != "--replace"]
+    if replace and rest[:1] not in (["--source"], ["--attest"]):
+        print("--replace applies only to --source or --attest\n" + USAGE)
+        return 2
     if rest[:1] == ["--source"]:
         if len(rest) != 1 or src_url is None:
             print(USAGE)
@@ -523,7 +571,7 @@ def main(argv: list[str]) -> int:
         if len(rest) != 2:
             print(USAGE)
             return 2
-        return cli_exit(attest(rest[1]))
+        return cli_exit(attest(rest[1], src_url, src_at, replace=replace))
     if len(rest) != 1 or rest[0].startswith("--"):
         print(__doc__)
         print(USAGE)

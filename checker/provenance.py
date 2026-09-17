@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+import unicodedata
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -62,9 +63,13 @@ GAZETTE_OR_INDIA_CODE_HOSTS = frozenset({
 })
 OFFICIAL_SOURCE_HOSTS = GAZETTE_OR_INDIA_CODE_HOSTS | frozenset({"mca.gov.in", "www.mca.gov.in"})
 
+# Unicode categories that are invisible, or that a URL parser edits away: controls,
+# format characters (U+200B, U+FEFF, the bidi marks) and every kind of space.
+_INVISIBLE_CATEGORIES = frozenset({"Cc", "Cf", "Zs", "Zl", "Zp"})
+
 
 def _unspaced(value: str) -> bool:
-    """False when the value carries whitespace or a control character anywhere.
+    """False when the value carries whitespace, a control, or an invisible character.
 
     urlsplit() strips leading and trailing spaces and control characters, and removes
     tab, CR and LF from anywhere in the address. So `" https://egazette.gov.in/x "`
@@ -72,8 +77,16 @@ def _unspaced(value: str) -> bool:
     served, the string WITH the spaces, which is a different address from the one
     that was checked. Refusing is the fail-closed half of the choice: a checker that
     edits its input silently is checking something the caller never passed it.
+
+    `str.isspace()` is not enough on its own: U+200B ZERO WIDTH SPACE, U+FEFF and the
+    bidi marks are not whitespace to Python, they are invisible on screen, and they
+    survive a copy-and-paste out of a PDF or a web page -- which is exactly how an
+    address reaches this function. Unicode category Cc (control), Cf (format) and
+    Zs/Zl/Zp (separators) covers them by definition rather than by a list that has to
+    be remembered.
     """
-    return not any(ch.isspace() or ord(ch) < 0x20 or ord(ch) == 0x7F for ch in value)
+    return not any(ch.isspace() or unicodedata.category(ch) in _INVISIBLE_CATEGORIES
+                   for ch in value)
 
 
 def official_source_url(url: object, hosts: frozenset[str] = OFFICIAL_SOURCE_HOSTS) -> bool:
@@ -267,7 +280,52 @@ class SourcePolicy:
                                           != rec.get(self.clause_field)):
             return ("corroborating copy is called text-identical but does not carry the held "
                     "operative clause verbatim")
+        # A copy kept on disk is evidence only while it is still those bytes. Nothing
+        # re-read it before this: the file could be replaced, or another file moved
+        # into its name, and the record would go on corroborating.
+        path, digest = self._local_copy(copy_)
+        if digest is not None and digest != sha:
+            return (f"the stored copy {copy_['local_copy']} no longer hashes to the recorded "
+                    f"value ({digest} on disk, {sha} recorded)")
         return None
+
+    def _local_copy(self, copy_: dict) -> tuple[Path | None, str | None]:
+        """(path, sha256 of the file on disk) for a record's stored copy.
+
+        The digest is None when the record names no copy or the file is not there.
+        Relative paths are repo-relative, as the records write them.
+        """
+        named = copy_.get("local_copy")
+        if not isinstance(named, str) or not named:
+            return None, None
+        path = ROOT / named
+        if not path.is_file():
+            return path, None
+        h = hashlib.sha256()
+        with path.open("rb") as f:
+            for chunk in iter(lambda: f.read(1 << 20), b""):
+                h.update(chunk)
+        return path, "sha256:" + h.hexdigest()
+
+    def local_copy_note(self, rec: dict | None) -> str | None:
+        """What to say about a stored copy the record names but no longer holds.
+
+        Not a gap: the corroboration is the URL and the hash recorded AT FETCH TIME,
+        and deleting a file does not unsay them. But a record that names a local file
+        it does not have is making a claim about this repository that is no longer
+        true, and whoever reads the served figure should be told rather than left to
+        find out.
+        """
+        if not isinstance(rec, dict):
+            return None
+        copy_ = rec.get("corroborating_copy")
+        if not isinstance(copy_, dict):
+            return None
+        path, digest = self._local_copy(copy_)
+        if path is None or digest is not None:
+            return None
+        return (f"the corroborating copy {copy_['local_copy']} is not on disk; the "
+                f"corroboration rests on the address and hash recorded when it was fetched")
 
     def provenance_problem(self, rec: dict) -> str | None:
         """None when the record says where the artifact came from, or an official copy
@@ -692,11 +750,17 @@ def _test() -> None:
     # spaces and removes tab/CR/LF anywhere, so the address CHECKED here would not be
     # the address stored in the record and served to a reader. Refuse rather than
     # strip: a checker that quietly edits its input is checking something else.
+    # The escapes below are spelled out rather than pasted: an invisible character in
+    # source reads as an ordinary space to the next person, which is how the label on
+    # this very check came to say "non-breaking space" beside what looked like one.
     for bad, why in ((" https://egazette.gov.in/x.pdf", "a leading space"),
                      ("https://egazette.gov.in/x.pdf ", "a trailing space"),
                      ("https://egazette.gov.in/x.pdf\n", "a trailing newline"),
                      ("https://egazette.gov.in/Write\tReadData/x.pdf", "an embedded tab"),
-                     ("https://egazette.gov.in/x y.pdf", "a non-breaking space")):
+                     ("https://egazette.gov.in/x\u00a0y.pdf", "an embedded U+00A0 no-break space"),
+                     ("https://egazette.gov.in/x\u200by.pdf", "an embedded U+200B zero-width space"),
+                     ("https://egazette.gov.in/x\ufeffy.pdf", "an embedded U+FEFF byte-order mark"),
+                     ("https://egazette.gov.in/x\u200ey.pdf", "an embedded U+200E direction mark")):
         check(not official_source_url(bad),
               f"{why} is refused, not silently stripped ({bad!r})")
 
@@ -767,6 +831,41 @@ def _test() -> None:
           "...and does not when the clause differs")
     check(P880.corroboration_problem(kmp) is not None,
           "...and a policy reading another field finds no clause to compare")
+
+    # ── a stored copy is evidence only while it is still those bytes ─────────
+    # The copy's sha256 is what was fetched. local_copy names a file kept beside the
+    # held artifact, and nothing re-read it: rename the file, change the file, and the
+    # record went on corroborating. Present-and-different is a refusal; absent is not,
+    # because the corroboration is the URL and hash recorded AT FETCH TIME and a
+    # missing file does not unsay them -- but the record must stop implying it holds
+    # a file it does not, so the absence is reported.
+    import tempfile as _tempfile
+    with _tempfile.TemporaryDirectory() as _td:
+        stored = Path(_td) / "gazette_copy.pdf"
+        stored.write_bytes(b"%PDF-1.4 the bytes that were fetched")
+        stored_sha = "sha256:" + hashlib.sha256(stored.read_bytes()).hexdigest()
+        with_local = {k: v for k, v in rec_ok.items() if k != "corroborating_copy"} | {
+            "artifact_sha256": stored_sha,
+            "corroborating_copy": copy_ok | {"sha256": stored_sha,
+                                             "local_copy": str(stored)}}
+        check(P880.corroboration_problem(with_local) is None
+              and P880.local_copy_note(with_local) is None,
+              "a stored copy that still hashes to the recorded value corroborates, quietly")
+        stored.write_bytes(b"%PDF-1.4 somebody replaced this file")
+        problem = P880.corroboration_problem(with_local)
+        check(problem is not None and "no longer" in problem,
+              f"...a stored copy whose bytes changed does NOT corroborate ({problem})")
+        check(any(g.startswith("source:") for g in P880.attestation_gaps(with_local)),
+              "...and the record is refused, not merely noted")
+        stored.unlink()
+        check(P880.corroboration_problem(with_local) is None,
+              "a copy no longer on disk still corroborates: the URL and hash were "
+              "recorded when it was fetched, and deleting a file does not unsay them")
+        note = P880.local_copy_note(with_local)
+        check(note is not None and "not on disk" in note and str(stored) in note,
+              f"...but the record must not silently claim a local file it lost ({note})")
+    check(P880.local_copy_note(rec_ok) is None and P880.local_copy_note(None) is None,
+          "a record that claims no local copy has nothing to report")
 
     # ── recording a source: pure, so nothing is written on a refusal ──────────
     outcome, written, msg = P880.record_source(None, gaz, "2025-12-02")

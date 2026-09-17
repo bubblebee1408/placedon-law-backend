@@ -325,6 +325,12 @@ def provenance_problem(rec: dict) -> str | None:
     return SOURCE_POLICY.provenance_problem(rec)
 
 
+def local_copy_note(rec: dict | None) -> str | None:
+    """What to say when the record names a stored copy that is no longer on disk.
+    Not a gap: the corroboration is the address and hash recorded at fetch time."""
+    return SOURCE_POLICY.local_copy_note(rec)
+
+
 def attestation_gaps(rec: dict | None) -> list[str]:
     """Everything that keeps this record from being usable law. Empty means attested."""
     return SOURCE_POLICY.attestation_gaps(rec)

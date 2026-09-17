@@ -144,8 +144,8 @@ def _prescribed_state() -> tuple[str, str, str]:
     that the state follows the evidence rather than someone's memory of it.
     """
     try:
-        from scripts.register_gsr700e import (registration, is_attested,
-                                              attestation_gaps, provenance_problem)
+        from scripts.register_gsr700e import (registration, is_attested, attestation_gaps,
+                                              local_copy_note, provenance_problem)
     except ImportError:                                     # pragma: no cover
         return UNRESOLVED, "this instrument has not been acquired", ""
 
@@ -185,12 +185,17 @@ def _prescribed_state() -> tuple[str, str, str]:
         copy_ = rec["corroborating_copy"]
         source = (f"download source not recorded; {copy_['match']} copy at {copy_['url']} "
                   f"retrieved {copy_['retrieved_at']} ({copy_.get('recorded_by') or 'unlabelled'})")
+    # A copy the record names but the repository no longer holds does not unsay the
+    # address and hash recorded when it was fetched, so the figure still serves -- but
+    # an operator is told, because the record is claiming a file that is not there.
+    gone = local_copy_note(rec)
     return CORROBORATED, (
         f"held and confirmed by a named reviewer on "
         f"{rec['identity_checked_at'][:10]}"), (
         f"registered and attested by {rec['identity_checked_by']} at "
         f"{rec['identity_checked_at']}; artifact "
-        f"{rec.get('artifact_sha256', '?')[:23]}…; {source}")
+        f"{rec.get('artifact_sha256', '?')[:23]}…; {source}"
+        + (f"; {gone}" if gone else ""))
 
 
 def _prescribed_state_880() -> tuple[str, str, str]:
@@ -199,8 +204,8 @@ def _prescribed_state_880() -> tuple[str, str, str]:
     Same shape as _prescribed_state, for the instrument that SUPERSEDED 700(E).
     """
     try:
-        from scripts.register_gsr880e import (registration, is_attested,
-                                              attestation_gaps, provenance_problem)
+        from scripts.register_gsr880e import (registration, is_attested, attestation_gaps,
+                                              local_copy_note, provenance_problem)
     except ImportError:                                     # pragma: no cover
         return UNRESOLVED, "this instrument has not been acquired", ""
 
@@ -237,12 +242,17 @@ def _prescribed_state_880() -> tuple[str, str, str]:
         copy_ = rec["corroborating_copy"]
         source = (f"download source not recorded; {copy_['match']} copy at {copy_['url']} "
                   f"retrieved {copy_['retrieved_at']} ({copy_.get('recorded_by') or 'unlabelled'})")
+    # A copy the record names but the repository no longer holds does not unsay the
+    # address and hash recorded when it was fetched, so the figure still serves -- but
+    # an operator is told, because the record is claiming a file that is not there.
+    gone = local_copy_note(rec)
     return CORROBORATED, (
         f"held and confirmed by a named reviewer on "
         f"{rec['identity_checked_at'][:10]}"), (
         f"registered and attested by {rec['identity_checked_by']} at "
         f"{rec['identity_checked_at']}; artifact "
-        f"{rec.get('artifact_sha256', '?')[:23]}…; {source}")
+        f"{rec.get('artifact_sha256', '?')[:23]}…; {source}"
+        + (f"; {gone}" if gone else ""))
 
 
 # The date G.S.R. 880(E) took effect, and therefore the day after which the 2022
@@ -589,6 +599,35 @@ def _test() -> None:
 
     # ── the 2025 instrument is gated exactly the same way ────────────────────
     import scripts.register_gsr880e as reg880
+
+    # Fix round 1: a record naming a stored copy it no longer holds still serves --
+    # the address and hash were recorded when the copy was fetched, and deleting a
+    # file does not unsay them -- but the operator note must say the file is gone,
+    # and a copy that IS there and has changed must refuse.
+    copy_gone = {k: v for k, v in reg880.attested_stub().items()
+                 if k not in ("downloaded_from", "downloaded_at")} | {
+                     "corroborating_copy": {
+                         "url": "https://egazette.gov.in/WriteReadData/2025/268124.pdf",
+                         "retrieved_at": "2026-09-17T05:40:14Z",
+                         "sha256": "sha256:" + "ab" * 32, "match": "identical",
+                         "local_copy": "corpus/sources/no_such_copy.pdf"}}
+    with reg880.stub_registration(copy_gone):
+        st9, note9, op9 = _prescribed_state_880()
+        check(st9 == CORROBORATED,
+              f"a corroborating copy that is no longer on disk still serves ({st9})")
+        check("not on disk" in op9 and "no_such_copy.pdf" in op9,
+              f"...and the operator note says the file is gone ({op9[-90:]})")
+        check("not on disk" not in note9,
+              "...while the reader note stays about the law, not our filesystem")
+    changed_copy = copy_gone | {"corroborating_copy": copy_gone["corroborating_copy"] | {
+        "local_copy": "corpus/sources/gsr880e_2025.pdf", "sha256": "sha256:" + "cd" * 32}}
+    with reg880.stub_registration(changed_copy):
+        try:
+            lookup("small_company.paid_up_capital.prescribed", date(2026, 9, 15))
+            check(False, "a stored copy whose bytes are not the recorded ones must not serve")
+        except ThresholdUnavailable:
+            check(True, "a stored copy whose bytes are not the recorded ones serves nothing")
+
     with reg880.stub_registration(None):
         st5, note5, _op5 = _prescribed_state_880()
         check(st5 == UNRESOLVED, f"880(E) unacquired is UNRESOLVED ({st5})")

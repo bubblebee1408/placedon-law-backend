@@ -96,8 +96,12 @@ def grade(path: Path) -> tuple[str, str]:
     return UNKNOWN, text
 
 
-def _copy_source(stem: str) -> str:
-    """The fetch address of a corroborating copy stored under this name, or "".
+def _copy_source(pdf: Path) -> str:
+    """The fetch address of a corroborating copy stored AT THIS PATH, or "".
+
+    Matched on the recorded path, not the file name: two records naming different
+    files that happen to share a base name would otherwise cross-attribute, and one
+    record's Gazette copy would vouch for another record's file.
 
     Only a copy whose bytes differ from the record's held artifact is a separate
     file. A byte-identical copy is the held artifact itself, and what the record
@@ -111,17 +115,19 @@ def _copy_source(stem: str) -> str:
         copy_ = d.get("corroborating_copy")
         if not isinstance(copy_, dict) or not isinstance(copy_.get("local_copy"), str):
             continue
-        if (Path(copy_["local_copy"]).name == f"{stem}.pdf"
+        named = REPO / copy_["local_copy"]
+        if (named.resolve() == pdf.resolve()
                 and copy_.get("sha256") != d.get("artifact_sha256")):
             return str(copy_.get("url") or "")
     return ""
 
 
-def recorded_source(stem: str) -> str:
+def recorded_source(pdf: Path) -> str:
     """Where the registration record says this artifact came from."""
-    copied_from = _copy_source(stem)
+    copied_from = _copy_source(pdf)
     if copied_from:
         return copied_from
+    stem = pdf.stem
     for rec in SOURCES.glob("*registration*.json"):
         if stem.split("_")[0].lower() not in rec.name.lower():
             continue
@@ -150,7 +156,7 @@ def census() -> dict:
     rows = []
     for pdf in sorted(SOURCES.glob("*.pdf")):
         g, _ = grade(pdf)
-        src = recorded_source(pdf.stem)
+        src = recorded_source(pdf)
         rows.append({"artifact": pdf.name, "grade": g, "meaning": MEANING[g],
                      "recorded_source": src, "issuer": issuer_of(src)})
     counts = {g: sum(1 for r in rows if r["grade"] == g) for g in GRADES}
@@ -234,10 +240,12 @@ def _test() -> int:
     # Matching it to its registration by file-name prefix alone would put a Gazette
     # copy under India Code, and an intact file under the aggregator heading.
     import tempfile
-    global SOURCES
-    saved = SOURCES
+    global SOURCES, REPO
+    saved, saved_repo = SOURCES, REPO
     with tempfile.TemporaryDirectory() as td:
-        SOURCES = Path(td)
+        REPO = Path(td)
+        SOURCES = REPO / "corpus" / "sources"
+        SOURCES.mkdir(parents=True)
         held_sha = "sha256:" + "ab" * 32
         (SOURCES / "gsr999e_registration.json").write_text(json.dumps({
             "source_url": "https://indiacode.gov.in/handle/123456789/1",
@@ -253,12 +261,22 @@ def _test() -> int:
                 "url": "https://egazette.gov.in/WriteReadData/2098/2.pdf",
                 "sha256": held_sha, "match": "identical",
                 "local_copy": "corpus/sources/gsr998e_2098.pdf"}}))
+        # Fix round 1: a copy is matched by its recorded PATH, not by file name alone.
+        # Two records naming different files with the same base name would otherwise
+        # cross-attribute, and one record's Gazette copy would vouch for another's file.
+        (SOURCES / "gsr997e_registration.json").write_text(json.dumps({
+            "source_url": "https://indiacode.gov.in/handle/123456789/3",
+            "artifact_sha256": held_sha,
+            "corroborating_copy": {
+                "url": "https://egazette.gov.in/WriteReadData/2097/3.pdf",
+                "sha256": "sha256:" + "ef" * 32, "match": "text-identical",
+                "local_copy": "corpus/reference/gsr999e_2099_egazette.pdf"}}))
         try:
-            copy_src = recorded_source("gsr999e_2099_egazette")
-            held_src = recorded_source("gsr999e_2099")
-            same_src = recorded_source("gsr998e_2098")
+            copy_src = recorded_source(SOURCES / "gsr999e_2099_egazette.pdf")
+            held_src = recorded_source(SOURCES / "gsr999e_2099.pdf")
+            same_src = recorded_source(SOURCES / "gsr998e_2098.pdf")
         finally:
-            SOURCES = saved
+            SOURCES, REPO = saved, saved_repo
     check(copy_src == "https://egazette.gov.in/WriteReadData/2099/1.pdf"
           and issuer_of(copy_src) == "e-Gazette (publisher)",
           f"a stored corroborating copy is attributed to the host it was fetched from ({copy_src})")
@@ -267,6 +285,9 @@ def _test() -> int:
     check(same_src == "https://www.mca.gov.in/x.html",
           "...and a byte-identical copy IS the held artifact, so the record's source stands "
           f"({same_src})")
+    check(copy_src != "https://egazette.gov.in/WriteReadData/2097/3.pdf",
+          "...and a record naming the same FILE NAME under a different directory does "
+          f"not get to vouch for this one ({copy_src})")
 
     t = text(c)
     check("never to prove one" in t,

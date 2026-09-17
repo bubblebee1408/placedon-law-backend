@@ -257,6 +257,57 @@ decided, this record takes the same `SourcePolicy` as the others in one small ch
 
 ---
 
+## Fix round 1 (18-09-2026): what the verifier and the main session found
+
+Six findings against the P-2 commits, all fixed in one follow-up commit. The first is the one that
+mattered.
+
+**1. `--attest --from <URL> --at <DATE>` discarded the source on KMP and on the Allotment Rules
+(MEDIUM, reproduced by the main session).** `split_source_flags` lifted the flags out of the
+argument list and `attest(rest[1])` then ignored them: the human check fields were written, the
+provenance the operator supplied was dropped, the exit was 1 and nothing said so. Recording an
+attestation while silently discarding its provenance is the worst combination available — it is
+A-001 again, created by the fix for A-001. Both scripts now take `--from/--at/--replace` on
+`--attest` exactly as 880(E) and 700(E) do: the source is recorded FIRST, a bad or conflicting one
+refuses with exit 2 before anything is stamped, and attesting without a source stamps the checks,
+prints the remaining gap and exits 1.
+
+**2–3. CLI contract (LOW).** The Allotment Rules script exited 1 on no arguments while printing the
+shared wording that reserves 1 for "recorded but not usable"; it now exits 2, like its sibling.
+Both scripts gained the `--replace applies only to --source or --attest` guard, so `--replace
+file.pdf` no longer registers with the flag quietly ignored.
+
+**4. A stored corroborating copy is now re-hashed (LOW, applies to 700(E) and 880(E)).**
+`corroborating_copy.local_copy` was recorded and never read again, so renaming or replacing
+`corpus/sources/gsr700e_2022_egazette.pdf` left the record corroborating on a file that was no
+longer there or no longer those bytes. The rule now, in `SourcePolicy`:
+- **present and hashing to the recorded value** → corroborates, silently, as before;
+- **present and different** → the corroboration is REFUSED (`attestation_gaps` names it), because a
+  file that is not the bytes that were fetched is not evidence of what was fetched;
+- **absent** → the corroboration **stands**. The evidence is the address and the sha256 recorded at
+  fetch time, and deleting a local file does not unsay them. But the record is then claiming a file
+  this repository does not hold, so `local_copy_note()` says so and `prescribed_thresholds` appends
+  it to the **operator** note beside the served figure (never to the reader note, which is about the
+  law and not about our filesystem).
+Live records at the time of writing: both copies present, both hashing to their recorded values, no
+note.
+
+**5. The census matched a stored copy by file name (LOW).** `provenance_census._copy_source`
+compared base names, so two records naming different files that share a name would cross-attribute
+and one record's Gazette copy could vouch for another record's file. It now compares the recorded
+path, resolved against the repository root.
+
+**6. Invisible characters in an address (INFO).** `_unspaced` refused whitespace and C0 controls but
+not U+200B, U+FEFF or the bidi marks — none of which `str.isspace()` calls whitespace, all of which
+survive a copy-and-paste out of a PDF, and all of which are invisible in the record they would be
+stored in. It now refuses any character in Unicode categories Cc, Cf, Zs, Zl or Zp. The test label
+that read "a non-breaking space" beside what looked like a plain space was a literal U+00A0 pasted
+into the source; the cases are now spelled as escapes (`\u00a0`, `\u200b`, `\ufeff`, `\u200e`) so
+the next reader can see what is being tested.
+
+Nothing in §§1–5 above changed as a result: no served figure, no record content, and no evidence
+outcome. The fixes are to the guard and to two CLIs.
+
 ## What this audit did not do
 
 - It did not attest anything, and did not write or alter a human check field, a reviewer id or a timestamp.
