@@ -115,3 +115,21 @@ confirmed item) carrying `effective_from` · a follow-up with an empty `parent_t
 The user's *questions* are illustrative. Everything legal in a fixture is engine output. The self-test
 requires the files on disk to equal a fresh rebuild; after an engine change run
 `python3 scripts/assistant_contract.py --write`.
+
+## 9. Open questions from the finalized frontend (2026-09-17)
+
+`placedon-claude-legal-3300` renders engine output through a typed client (`src/lib/engine/types.ts`).
+Before `/v1/ask` is built, these need an answer so that the site can render `placedon.ask/0` without
+inventing anything. Source: `docs/research/ux/FRONTEND_ALIGNMENT_2026_09_17.md` §F6.
+
+1. **Provenance stamp.** The site shows `corpus_version`, `benchmark_version` and `checker_commit`
+   (`types.ts:183-192`); this envelope carries none of them.
+2. **`uses_model` or `no_model`.** The site's types use `no_model`; this contract uses `uses_model`. One name.
+3. **Class mapping.** The site's classes are `verified_fact | deterministic_conclusion | predictive_signal`
+   plus `abstained`. `CORROBORATED` must not render as "Verified fact": its own docs say nothing reaches
+   VERIFIED without human review. `out_of_scope` has no class there and needs one ("Not held").
+4. **`not_confirmed[]` identifiers.** `pack_missing` items carry only `kind` and `detail`. The key the
+   detail names should be its own `ref` field, so the site's citation chip can render without parsing
+   prose (the prototype parses it today, `app.js readerDetail`).
+5. **Not the claims schema.** The site's `RAG-INTEGRATION.md:327` expects `/v1/ask` to follow the
+   model-adapter `claims[]` schema. It will not; this contract is the shape. That document is stale.

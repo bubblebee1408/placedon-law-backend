@@ -965,7 +965,7 @@ next turn will use is never hidden.
 | Stamp | Asked as of {as_of} (UI + field) · No model used / A model was used (`uses_model`) · Looked up {evidence_pack.retrieval_query} (UI + field) |
 | Parent line | Follow-up to turn {n} (UI, from `parent_turn_id`) |
 | Change badge | About changed from the previous turn. · Date changed from the previous turn. (UI) |
-| State words | Answered · Partly answered · Not held (UI, a 1:1 map from `state`) |
+| State words | Answered · ~~Partly answered~~ **Abstained in part** (Abstained, when `confirmed[]` is empty) · Not held (UI, from `state`; changed 2026-09-17, §27) |
 | Row states | Applies · met (APPLIES_SATISFIED) · Applies · not met (APPLIES_NOT_SATISFIED) · Applies · not determined (APPLIES_UNDETERMINED) · Does not apply (DOES_NOT_APPLY) · Cannot determine (CANNOT_DETERMINE) |
 | Facts block (answer) | You supplied (UI); keys and values (S) |
 | Figure block | {figures[].key or ⟨label⟩} (S) · {amount} (S) · In force from {effective_from} (UI + field) · No end date recorded / Until {effective_to} (UI) · {instrument} (S, full, never shortened) · {evidence_state} sentence-cased (S) · Gazette link: not recorded (UI, when `source_url` is not a URL) |
@@ -1019,6 +1019,10 @@ outside the tool the state word is the only survivor and it sits above evidence 
 ---
 
 ## 14. Tokens
+
+> **Superseded 2026-09-17 — see §27.** The tokens below came from the business-plan design system of
+> 2026-08-16. The finalized frontend (`placedon-claude-legal-3300`, served at placedon.com) uses a different
+> system, and the prototype now follows it. This section is kept as the record of what was designed.
 
 Reused unchanged from DESIGN_SYSTEM §2–§4: Ink `#0A0A0A`, Parchment `#F5F3EF`, Slate `#475569`,
 Slate-80 `#334155`, Slate-20 `#E2E8F0`, Ink-80 `#4A4A4A`, Ink-40 `#B5B5B5`, Ink-10 `#E8E6E2`, Caution
@@ -1631,3 +1635,47 @@ text keeps the source PDF's hard line breaks and literal `<sup>` markup, which i
 Sources borders end at one viewport height in full-page screenshots (they are sticky); no screen reader
 was run, only DOM assertions; and every fixture is a saved response, so waiting, cancel and service-error
 states (§7.3, §7.11) are drawn in the spec but not built.
+
+---
+
+## 27. Alignment with the finalized frontend (2026-09-17)
+
+**Finding.** Everything above was designed against `Placedon-law-business-plan/docs/DESIGN_SYSTEM.md`
+(2026-08-16). The frontend the founder calls finalized, `placedon-claude-legal-3300` (Next.js 16,
+built 2026-09-11 to 09-15, and what https://www.placedon.com serves), uses a later, different system:
+dark ink and cream, Brass Gold as the one accent, Cool Grey reserved for abstention, Fraunces / Inter /
+IBM Plex Mono, and the voice "Ask. Verify. Cite. Or abstain." No backend Ask document mentioned that
+repo. Evidence and every conflict (C1–C20): [research/ux/FRONTEND_ALIGNMENT_2026_09_17.md](research/ux/FRONTEND_ALIGNMENT_2026_09_17.md).
+
+**Applied** (`5202f85`; 403/403 acceptance checks):
+
+| Was | Now | Why |
+|---|---|---|
+| Light Parchment page, white cards | Web: the site's dark ink shell. Each answer is Compliance Note paper (`#fbf8f2`, ink `#171512`). Pane (≤400px): light cream | 3300 `layout.tsx:46` is dark only; `.ddoc-paper` is its answer artefact. Status hues fail on ink (Slate 2.60:1, Caution 2.77:1, abstain grey 3.29:1), so they appear only on paper |
+| Slate accent | Brass Gold is the one accent element (the pane's current tab); gold-muted is used only for citation numbers on ink (4.72:1). Buttons are cream on ink (web) and ink on cream (pane) | 3300 `AGENTS.md:12-15` |
+| Caution brown on NOT CONFIRMED | The site's abstention card: 3px Cool Grey rule, faint tint, dashed badge carrying the kind word | `AGENTS.md:14-15`; `surfaces.css:176-186` |
+| Dashed rule = section-text basis | **Double** rule = section-text basis. Solid ink rule = figure (unchanged). Dashed = abstention, as on the site | The same mark cannot mean two things across the product |
+| System serif / sans / Menlo | Fraunces / Inter / IBM Plex Mono named first; mono for every reference, figure, instrument and date. No font file in this repo: the runner loads the brand-kit fonts for screenshots (`FONTS_DIR`) | `AGENTS.md:16-18`. Copying 1.5 MB of fonts into the engine repo buys nothing the port will not get from `next/font` |
+| "Partly answered" | "Abstained in part", and "Abstained" when `confirmed[]` is empty | "Partly answered" over a turn that answered nothing is an overclaim, and §7.12 says that turn will dominate. The site's promise is "Or abstain." The state and its glyph are still the server's (C3); the word is chosen from the server's own `confirmed[]`, as "Confirmed: none" already was |
+| Pane tabs on the web | Pane tabs in the pane only. Web: eyebrow "Product · Ask" and the concept note "Product concept, shown on fixed sample responses. Nothing you type is sent: there is no answer endpoint yet." | `RAG-INTEGRATION.md:58-60`: "do not present a working chatbot". The Ask page already sent nothing; now it says so before anyone types |
+
+**Kept stricter than the site:** 3px radius, no shadows or glass, motion ≤200ms (the site allows 250ms).
+**Rejected:** labelling obligation rows with the site's "Determined" class badge. A row whose own state is
+"Applies · not determined" under a badge reading "Determined" is the heading-contradicts-row failure
+(C10, §13 partial groups).
+**Accepted tension:** a nothing-confirmed turn shows the `partial` half-square beside "Abstained". The
+glyph marks the server's state; the word states what the turn did.
+
+**Open — founder decisions** (none blocks the prototype):
+1. Confirm that `placedon-claude-legal-3300` is the design system of record. Its own `AGENTS.md:3` still
+   says Next 15 + shadcn, and there is no shadcn in it.
+2. Placement: the web Ask as a fifth product surface at `/product/ask` inside the site's `SurfaceShell`
+   (report F5), concept-only until `/v1/ask` exists. Lifting the site's client ban (`types.ts:5`) is a
+   decision for when the route ships, and belongs in that repo's `AGENTS.md`.
+3. Dates: the Ask keeps `DD-Mon-YYYY` (in mono), which cannot be misread day/month. The site shows raw ISO
+   and `formatIST` ("11 Sept 2026"). One convention should win.
+4. Motion ceiling: 200ms (Ask) or 250ms (site). The site's own nav and button animations would fail the
+   Ask check as they stand.
+5. The Word add-in (`addin/taskpane.html`) still carries the retired Parchment / Slate / Caution tokens and
+   a green `.row.ok`. Re-basing it is a separate change.
+6. Contract questions for the frontend are listed in `web/assistant/contract.md` §9.
