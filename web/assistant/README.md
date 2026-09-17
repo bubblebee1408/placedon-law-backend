@@ -1,5 +1,9 @@
 # The Ask section — static prototype
 
+Styled on the **finalized frontend** (`placedon-claude-legal-3300`, the site placedon.com serves): the
+web is the site's dark ink shell, each answer is a sheet of Compliance Note paper, Brass Gold is the one
+accent, Cool Grey marks abstention only. The Word pane (≤400px) is the light cream variant.
+
 Design: [`docs/PLAN_13_ASSISTANT_UX.md`](../../docs/PLAN_13_ASSISTANT_UX.md) ·
 Plan: [`docs/PLAN_13_ASSISTANT_UX_PLAN.md`](../../docs/PLAN_13_ASSISTANT_UX_PLAN.md) ·
 Contract: [`contract.md`](contract.md)
@@ -45,6 +49,9 @@ PLAYWRIGHT=$HOME/.cache/placedon-ux-tools/node_modules/playwright/index.mjs \
   [--shots=<dir>]
 ```
 
+`FONTS_DIR=<dir>` loads the brand fonts (Fraunces, Inter, IBM Plex Mono — the finalized frontend
+self-hosts them from `placedon-claude-legal-3300/brand-kit/fonts/`) for the screenshots; the page itself
+names them and falls back to system faces, and no font file is copied into this repository.
 `CHROMIUM=<path>` overrides the browser binary (the default is the Playwright-cached Chromium on
 macOS). The runner exits non-zero on any failure.
 
@@ -69,8 +76,8 @@ It asserts, for every fixture at 320 / 360 / 768 / 1024 / 1440:
 11. no network request leaves the page;
 12. the empty state (no fixture) shows the title as the page's only `h1` and no answer.
 
-Last run: **403/403 across 6 fixtures × 5 widths, plus the empty state** (red-team rebuild,
-2026-09-17). Before the rebuild the same checks passed 233/396.
+Last run: **403/403 across 6 fixtures × 5 widths, plus the empty state** (red-team rebuild and
+re-base onto the finalized frontend's tokens, 2026-09-17). Before the rebuild the same checks passed 233/396.
 
 ## The hooks the checks depend on
 

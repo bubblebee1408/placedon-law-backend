@@ -25,10 +25,17 @@ var uid = 0;
 
 /* ── display words: 1:1 maps from engine enums (§13). Unknown values render verbatim. ── */
 var STATE = {
-  answered:     { word: 'Answered',        fill: 'full' },
-  partial:      { word: 'Partly answered', fill: 'half' },
-  out_of_scope: { word: 'Not held',        fill: 'none' }
+  answered:     { word: 'Answered',          fill: 'full' },
+  partial:      { word: 'Abstained in part', fill: 'half' },
+  out_of_scope: { word: 'Not held',          fill: 'none' }
 };
+/* The state is the server's; the word must be true of the turn it heads. A `partial` with an empty
+ * confirmed[] -- the case the contract routes ABSTAINED / INSUFFICIENT_EVIDENCE to (audit U2) --
+ * answered nothing, so "in part" would overclaim. The glyph and data-state stay `partial`. */
+function stateWord(r) {
+  if (r.state === 'partial' && !(r.confirmed || []).length) return 'Abstained';
+  return STATE[r.state].word;
+}
 var ROW_STATE = {
   APPLIES_SATISFIED: 'Applies · met',
   APPLIES_NOT_SATISFIED: 'Applies · not met',
@@ -289,7 +296,7 @@ function citedSpans(spans, path) {
   spans.forEach(function (s, i) {
     var li = field(el('li', 'ref'), path + '.cited_spans[' + i + ']');
     li.appendChild(document.createTextNode(s.path));
-    if (s.resolved === false) li.appendChild(label('span', 'caution-word', ' · not found in the corpus'));
+    if (s.resolved === false) li.appendChild(label('span', 'abstain-word', ' · not found in the corpus'));
     ul.appendChild(li);
   });
   var hashes = el('ul', 'plain');
@@ -321,9 +328,10 @@ function rowItem(r, path) {
 
 function notConfirmedItem(n, i, docDate, dutyShownAbove) {
   var path = 'not_confirmed[' + i + ']';
-  var box = field(el('div', 'item caution'), path);
+  var box = field(el('div', 'item abstain'), path);
   box.setAttribute('data-not-confirmed-item', '');
-  add(box, label('p', 'kind', words(NC_KIND, n.kind)));
+  // The site's abstention mark: a dashed badge (placedon-claude-legal-3300 surfaces.css .cb-abstained).
+  add(box, add(el('p'), label('span', 'badge badge-abstain', words(NC_KIND, n.kind))));
   // A duty the scope frame already names is not printed twice (L8, DQ8); the item is
   // identified by its provision instead.
   if (n.duty && !dutyShownAbove) add(box, field(el('p', 'duty', n.duty), path + '.duty'));
@@ -517,7 +525,7 @@ function turnCard(r, n, parent, recs) {
   var head = el('h2', 'state');
   head.id = hid;
   head.setAttribute('data-state-heading', '');
-  add(head, glyph(s.fill), label('span', null, s.word));
+  add(head, glyph(s.fill), label('span', null, stateWord(r)));
   add(card, head);
 
   if (r.state === 'out_of_scope') {
@@ -586,7 +594,7 @@ function priorLine(r, n) {
   var p = el('p', 'prior');
   p.setAttribute('data-prior-state', r.state);
   add(p, label('span', 'caption', 'Turn ' + n + ' · '), glyph(STATE[r.state].fill),
-    label('span', 'prior-word', ' ' + STATE[r.state].word + ' · '), field(el('span', null, r.question), 'question'));
+    label('span', 'prior-word', ' ' + stateWord(r) + ' · '), field(el('span', null, r.question), 'question'));
   return p;
 }
 
@@ -679,7 +687,7 @@ function renderRail(session) {
     var li = el('li');
     var b = el('button', 'rail-row');
     b.type = 'button';
-    add(b, label('span', 'rail-word', STATE[r.state].word + ' '), glyph(STATE[r.state].fill),
+    add(b, label('span', 'rail-word', stateWord(r) + ' '), glyph(STATE[r.state].fill),
       field(el('span', 'rail-q', r.question), 'question'),
       field(el('span', 'caption', 'Asked as of ' + human(r.as_of)), 'as_of'));
     b.addEventListener('click', function () {

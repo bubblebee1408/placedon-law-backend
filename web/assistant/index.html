@@ -7,8 +7,9 @@
 <link rel="stylesheet" href="assistant.css">
 </head>
 <body>
-<!-- The Word task pane's own tab strip. Chrome: it carries no response content. The two other
-     sections have no destination in this prototype, so they are not tab stops (A11Y-16). -->
+<!-- Chrome only. In the Word pane (<=400px) the bar carries the pane's own tab strip; the two other
+     sections have no destination in this prototype, so they are not tab stops (A11Y-16). On the web
+     the bar is the wordmark alone: the real page sits inside the site's SiteNav (placedon-claude-legal-3300). -->
 <header class="bar" data-chrome>
   <span class="wordmark">Placedon</span>
   <div class="tabs" role="tablist" aria-label="Task pane sections">
@@ -28,9 +29,12 @@
 
   <main class="content" id="ask" role="tabpanel" aria-labelledby="tab-ask">
     <div class="intro" data-intro data-chrome>
+      <p class="eyebrow">Product · Ask</p>
       <h1 class="title">Ask about the Companies Act, 2013</h1>
       <p class="sub" data-empty-only>Every figure shows the instrument that set it and the date it came
         into force. What we do not hold, we say we do not hold.</p>
+      <p class="concept">Product concept, shown on fixed sample responses. Nothing you type is sent:
+        there is no answer endpoint yet.</p>
     </div>
 
     <!-- The composer. After a turn exists it compacts but stays first, so focus order stays

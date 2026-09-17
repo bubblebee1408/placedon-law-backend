@@ -26,6 +26,10 @@
 //   [data-confirmed-item] [data-superseded-item] [data-not-confirmed-item]
 //                                      one per array element, inside the card <article>
 //   no ?fixture                        the empty state: the title as the page's one h1, no answer
+//
+// FONTS_DIR=<dir> (optional) loads the brand fonts from a local folder for screenshots only --
+// the finalized frontend self-hosts Fraunces / Inter / IBM Plex Mono; the prototype names them and
+// falls back to system faces. No font file is copied into this repository.
 import { readFileSync, readdirSync, mkdirSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { resolve, join, basename } from 'node:path';
@@ -42,10 +46,23 @@ if (shots) mkdirSync(shots, { recursive: true });
 const exe = process.env.CHROMIUM ||
   `${process.env.HOME}/Library/Caches/ms-playwright/chromium-1208/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing`;
 const WIDTHS = [320, 360, 768, 1024, 1440];
-// The design's state words are Answered / Partly answered / Not held.
+const FONTS = process.env.FONTS_DIR ? [
+  ['Fraunces', 'Fraunces-Variable.ttf', '100 900'],
+  ['Inter', 'Inter-Variable.ttf', '100 900'],
+  ['IBM Plex Mono', 'IBMPlexMono-Regular.ttf', '400'],
+  ['IBM Plex Mono', 'IBMPlexMono-Medium.ttf', '500'],
+].map(([family, file, weight]) =>
+  `@font-face{font-family:"${family}";src:url("${pathToFileURL(join(process.env.FONTS_DIR, file)).href}");font-weight:${weight};}`).join('') : '';
+async function withFonts(page) {
+  if (!FONTS) return;
+  await page.addStyleTag({ content: FONTS });
+  await page.evaluate(() => document.fonts.ready);
+}
+// The design's state words are Answered / Abstained in part (Abstained, when nothing was
+// confirmed) / Not held -- the finalized site's vocabulary ("Ask. Verify. Cite. Or abstain.").
 const HEADING_WORD = {
   answered: /answered/i,
-  partial: /in part|partly|partial|not confirmed/i,
+  partial: /abstained/i,
   out_of_scope: /outside|not held|out of scope/i,
 };
 
@@ -85,6 +102,7 @@ try {
       const errors = [];
       page.on('pageerror', e => errors.push(String(e)));
       await page.goto(`${pathToFileURL(resolve(page_)).href}?fixture=${encodeURIComponent(name)}`, { waitUntil: 'load' });
+      await withFonts(page);
       await page.waitForTimeout(150);
       if (errors.length) fail(name, w, `page errors: ${errors.join(' | ').slice(0, 200)}`);
       if (external.length) fail(name, w, `external requests attempted: ${external.length} (${external[0]})`);
@@ -304,6 +322,7 @@ try {
       const page = await ctx.newPage();
       await page.route('**/*', r => (/^(file|data):/.test(r.request().url()) ? r.continue() : r.abort()));
       await page.goto(pathToFileURL(resolve(page_)).href, { waitUntil: 'load' });
+      await withFonts(page);
       const empty = await page.evaluate(() => ({
         states: document.querySelectorAll('[data-state]').length,
         h1: [...document.querySelectorAll('h1')].map(h => h.innerText.trim()),
