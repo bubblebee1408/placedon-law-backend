@@ -59,7 +59,7 @@ by element.
 | 8 | **Collapsed earlier turns show no amount** — state word, question, asked-as-of and a count of figures, never a number and never a truncated instrument | Evidence direction (J1 best idea). It also avoids the client slicing a server instrument string into "G.S.R. 880(E)" |
 | 9 | **Change badge** "About changed from the previous turn" / "Date changed from the previous turn", computed only by comparing two server-echoed stamps | Evidence direction (J1, J2, J3 all listed it) |
 | 10 | **"Copy with sources"** on every turn; plain copy is not offered | Claude direction (J1, J2, J3). Provenance must survive outside the tool (C-E25 → brief C16) |
-| 11 | **Pane composer docks sticky and compact** after the first turn; a new turn's heading is scrolled to and focused, never the page bottom | J2: a docked composer plus a 1,500px partial turn made the pane a scroll hunt |
+| 11 | **Pane composer docks sticky and compact** after the first turn; a new turn's heading is scrolled to and focused, never the page bottom. **Built differently (2026-09-17):** the composer compacts to one summary line plus the field but stays *first*, above the turns, so focus order equals visual order (WCAG 2.4.3) and the acceptance check "composer within six tab stops" holds; a foot-docked composer would put the field last in DOM order or break that order | J2: a docked composer plus a 1,500px partial turn made the pane a scroll hunt |
 | 12 | **The whole spec is re-bound to the Phase C contract** (`placedon.ask/0`), not to audit §R2's draft. Field names, shapes and the five fixtures now decide what every component may render (§18) | The contract and fixtures landed after the directions were written. Nine defects this surfaced are listed in §18.3 |
 
 ---
@@ -232,7 +232,7 @@ relies on two aligned columns (§7.4's supplied facts stack label-over-value).
 | `FindingLine` | present (`answered` with rows) / absent | `rows[].basis` at H2 18, directly under the duty — the largest body text on the card while `headline` renders nothing (§2 change 4). **Never clipped, never ellipsized** at any width (§16) |
 | `RowItem` | five obligation states | Order is **duty (Body 14) → `FindingLine` (H2 18) → provision (mono Caption) · state word (Caption, beside it)**. The finding is the largest text in the row and the state word is the smallest, because `rows[].basis` carries the answer while `rows[].state` renders as "Does not apply" — which reads as the inverse of the truth (D10). A state word may never be rendered without the row's **full** `basis` in the same block (§18.2 rule 9) |
 | `NotConfirmedItem` | pack_missing / unusable / cannot_verify / ⟨refusal⟩ / ⟨model_decision⟩ | Caution left rule and Caution label — the only hue on the page. Two suppressions: (a) a `detail` addressed to a model is dropped by the soft validator (§4.3, §18.2 rule 6) and the kind word plus `ref` render alone — never a `pack_missing` detail saying a provision is "not admitted for model use" on a card stamped "No model used"; (b) on a document turn, an item whose `duty` already appears in `scope_frame.unchecked[]` is **not repeated** as its own item — its `detail` hangs off the scope frame's "Why each was not checked" disclosure instead, so nothing server-supplied is dropped and no duty is counted twice (§7.8) |
-| `SupersededItem` | present / absent / **withheld** | Governed then / governs now; instruments only, no in-force date. **Withheld** when `was_at_document_date == is_at_read_date` while `governed_then != governs_now` (D9): the record contradicts its own heading, so it renders as a `NotConfirmedItem` reading "Cannot verify — the currency record for this duty is inconsistent" with both server strings shown, never under the word SUPERSEDED (§18.2 rule 7) |
+| `SupersededItem` | present / absent / **withheld** | Governed then / governs now; instruments only, no in-force date; each status word beside its instrument and `detail` verbatim (red team L9). ~~Withheld when both statuses match~~ — withdrawn, see §18.2 rule 7 |
 | `ConfirmedItem` | citation (has `ref`) / obligation row (has `obligation_id`) / **none** | "Confirmed: none" is a label for an empty list, never a claim. The **group heading follows the shape**: citations group under CONFIRMED; obligation rows group under **CHECKED AGAINST THE ACT** with "None of these is a finding of compliance.", because every such row in `document_context_2024` is `APPLIES_UNDETERMINED` or `CANNOT_DETERMINE` (D11). The count is `len(confirmed[])` and never `scope_frame.checked_count` (§13) |
 | `LocatedItem` | present / absent | The empty-`confirmed` `partial` (I-U2): one server string naming what was searched, in what corpus, and that nothing usable was found. ⟨NEW⟩ — until Phase C supplies it the client writes no refusal prose and the card shows `not_confirmed[]` and "Confirmed: none" alone (§7.12) |
 | `VerbatimBlock` | open / clipped with "Show the full text" | Text serif; the basis line is never clipped. A clip **may not end inside a numbered sub-section**: the cut falls at the last sub-section boundary that fits, and the clipped state carries a count derived from the text — "sub-sections (2)–(5) not shown" — never a summary of what they say. Footnote markup inside `verbatim` (`<sup>1</sup>[Provided further …]`) is rendered **literally**, as a visible marker, with "Bracketed spans marked ¹ are amendments recorded in the source." Stripping it would be repairing a source (CLAUDE.md) |
@@ -1191,7 +1191,7 @@ any of these were hard, §24 check 1 would fail and both `answered` examples wou
 | 4 | No `source_url` on the dead host `indiacode.nic.in` (CLAUDE.md: the live host is `indiacode.gov.in`) (D3) | **SOFT** — suppress the link only; the citation, its evidence state and its verbatim text still render | every fixture carrying `citations[]` |
 | 5 | `partial` with an empty `confirmed[]` carries a `located` item naming what was searched and in what corpus — the I-U2 slot, per Magesh's definition of a correct refusal (L-C2) | **SOFT on the client, HARD on the server**: the server should not emit one without it, but the client never voids the turn and never relabels the state (C3) — it renders `not_confirmed[]` and "Confirmed: none" (§7.12) | none today |
 | 6 | `not_confirmed[]` items need a reader-facing `detail`; strings addressed to a model may not be the only text (D5) | **SOFT** — drop the detail, keep the kind word and `ref` | `partial_s173_s16` ("not admitted for model use") |
-| 7 | A `superseded[]` item whose `was_at_document_date == is_at_read_date` while `governed_then != governs_now` may not render under SUPERSEDED (D9) | **SOFT** — re-render as a `NotConfirmedItem` (§6 `SupersededItem`) | `document_context_2024` |
+| 7 | ~~A `superseded[]` item whose `was_at_document_date == is_at_read_date` while `governed_then != governs_now` may not render under SUPERSEDED (D9)~~ **WITHDRAWN 2026-09-17 (red team L11).** A change of governing instrument with both statuses CURRENT is the case the feature exists for: `checker/api.py:314-322` defines "moved" as a change of instrument, precisely because once G.S.R. 880(E) was attested both dates read CURRENT. The item renders under SUPERSEDED with each status beside its instrument | — | — |
 | 8 | A confirmed-group heading and its count must derive from `confirmed[]` itself, never from `scope_frame.checked_count` (D11) | **HARD on the client's own copy** — it is a client rule, not a response rule | n/a |
 | 9 | A row's state word may not render without that row's full `basis` in the same block | **HARD on the client's own layout** | n/a |
 | 10 | Every `answered` and `partial` response carries a `what_it_is_not` — the bound on the claim is the one element the client may not write for itself | **Server-side rule only**; on the client it is **SOFT** (nothing renders, no heading, the turn still renders in full — C3) | `partial_s173_s16`, `followup_turnover` (§8) |
@@ -1212,7 +1212,7 @@ no `instrument` or no `effective_from`; a `confidence` field; any client-inferre
 | D6 | No `headline`, `figures[].label`, fact labels, `capabilities[]`, `scope.bodies[]`, `stages[].caption`, `citations[].verbatim` on `answered`, or `demand_signal` on `out_of_scope` | contract §2–§5 |
 | D7 | `followup_turnover` answers "And the turnover limit?" from `s.2(85)` with a `parent_turn_id`, which implies context carried between turns — no conversation state exists (I-E34). Either the server must carry it explicitly, or the fixture's question is illustrative only | `fixtures/followup_turnover.json` |
 | D8 | `confirmed[]` holds two different shapes (citation, obligation row) with no discriminator | contract §4 |
-| D9 | `document_context_2024.superseded[0]` carries `was_at_document_date: CURRENT` **and** `is_at_read_date: CURRENT` while naming a then/now instrument change — to be checked before it is shown to a practitioner | fixture |
+| D9 | `document_context_2024.superseded[0]` carries `was_at_document_date: CURRENT` **and** `is_at_read_date: CURRENT` while naming a then/now instrument change — **CLOSED 2026-09-17: not a defect.** Each status describes its own instrument on its own date; `checker/api.py:314-322` detects the move by instrument (red team L11) | fixture |
 | D11 | `document_context_2024` puts **11** items in `confirmed[]` while `scope_frame.checked_count` says **12** (the twelfth checked duty is in `superseded[]`), and all 11 are `APPLIES_UNDETERMINED` / `CANNOT_DETERMINE` — i.e. nothing in the group is confirmed of anything. The contract calls these "verified document-check rows" (§4), which they are not. Phase C must either supply a group label the rows can bear or state that `confirmed[]` on a document turn means "checked", not "cleared" | fixture; contract §4 |
 | D10 | `rows[].state = DOES_NOT_APPLY` on the classification row "Establish whether the company is a small company" reads as "the test does not apply" rather than "not a small company"; the basis carries the meaning | fixture; `checker/obligations.py:710-718` |
 
@@ -1467,11 +1467,14 @@ two widths, the rule is stated here and the redraw is Phase B's, listed in §25.
 6. **The change badge names both sides from echoed values** (F19): "About changed: the open document →
    the Act", not "changed from the previous turn", because a collapsed previous turn does not show its
    About. Both strings are the ContextBand text the client already renders.
-7. **A negation pass over §13** (F21). The strongest state must not read as hedging (PLAN §7 falsifier
-   3). "No end date recorded" becomes part of the in-force line — `In force from 01-Dec-2025, still
-   current`; "Gazette link: not recorded" becomes `Gazette copy: pending`; `No model used` leaves the
-   stamp, because §13's model-disclosure line already carries it and the stamp is the card's first
-   line. Target: **no more than two negations** in any 360px view of an `answered` turn.
+7. **A negation pass over §13** (F21) — **corrected 2026-09-17 by the red team; three of its four
+   edits were wrong and are withdrawn.** The in-force line reads `In force from 01-Dec-2025 · No end
+   date recorded`, not "still current": the engine records no end date, it does not certify the
+   present, and "still current" is a currency claim no field supports (red team L5). The link line
+   stays `Gazette link: not recorded`: the 880(E) registration has no `downloaded_from` or
+   `downloaded_at`, so "pending" would promise a copy nobody is fetching (L6). `No model used` stays
+   in the stamp on every turn, because nothing else on the card says it (NG-4). What survives is the
+   target: negations are merged into one line where they can be, never removed by making a claim.
 8. **Group labels get one step of contrast** (F23). A label token is declared — DS H3, 14/600, sentence
    case — and size or weight contrast is reserved for the group carrying the turn's state: NOT CONFIRMED
    in `partial`, the figure block in `answered`. Six equal all-caps labels on the document turn is the
@@ -1519,7 +1522,7 @@ two widths, the rule is stated here and the redraw is Phase B's, listed in §25.
 | F7b | major | Two of the four "fences" on free text render nothing | **FIXED** — `capabilities[]` and `scope.bodies[]` are blocking Phase C deliverables |
 | F8 | major | A citation looks checked; its link is a dead host | **FIXED** — §18.2 rule 4, a client-side allowlist excluding `indiacode.nic.in` |
 | F8b | major | The same three duties printed under two labels | **FIXED** — §25.1 rule 2 |
-| F9 | major | SUPERSEDED asserts the law moved, carrying no date for the move | **FIXED** — §18.2 rule 7 re-renders the contradictory item; D9 stays open in §18.3 |
+| F9 | major | SUPERSEDED asserts the law moved, carrying no date for the move | **FIXED, then corrected** — the §18.2 rule 7 remedy was itself wrong and is withdrawn (red team L11, §26); the item now shows the instruments' own dates, and D9 is closed |
 | F9b | major | Copy payload a hand-picked subset | **FIXED** — §25.1 rule 3 |
 | F12 | major | What the client does with a malformed `what_it_is_not` | **FIXED** — §18.2 rule 3 (SOFT: block and heading dropped together) |
 | F12b | major | Accent budget broken by the docked composer | **FIXED** — §14: Caution is a semantic status hue, outside the accent count |
@@ -1534,12 +1537,12 @@ two widths, the rule is stated here and the redraw is Phase B's, listed in §25.
 | F18 | major | A marker moves focus into a collapsed subtree | **FIXED** — §25.1 rule 5 |
 | F19 | major | The change badge names one side only | **FIXED** — §25.1 rule 6 |
 | F20 | major | Two mono columns overflow at 320px | **FIXED as a rule** — label-over-value, no mono for fact keys; wireframe redrawn. **OPEN for Phase B:** §7.4 and §7.8 must also be drawn at 320 before sign-off (§24 check 2) |
-| F21 | major | Five negations in the strongest state | **FIXED** — §25.1 rule 7 |
+| F21 | major | Five negations in the strongest state | **FIXED, then corrected** — §25.1 rule 7's remedies made claims no field supports; three withdrawn (§26) |
 | F22 | major | Everything that makes it feel like Harvey exists only at ≥1100px | **OPEN — founder decision.** The critic is right that the pane is where the product lives (C7) and the Harvey frame is a web-only luxury. Bringing a docked source sheet with a turn header and a compact turn switcher down to 320–400px is a redesign of §7 and §10, not an edit. Recorded as the first question for Phase B, with §23 risk 2 |
 | F23 | minor | Six equal all-caps labels, flat hierarchy | **FIXED** — §25.1 rule 8 |
 | F24 | minor | The frame shifts when the first answer arrives | **FIXED** — §25.1 rule 9 |
 | F25 | minor | A truncated hash is decoration | **FIXED** — §25.1 rule 10 |
-| F26 | minor | SUPERSEDED shown while its own date flags contradict it | **FIXED** — §18.2 rule 7 |
+| F26 | minor | SUPERSEDED shown while its own date flags contradict it | **REVERSED 2026-09-17** — the flags do not contradict it (red team L11); §18.2 rule 7 withdrawn |
 | F27 | minor | A bespoke date parser rejects what Indian practitioners type | **FIXED** — §25.1 rule 11 |
 | F28 | minor | §9 titled "six wordings" with five rows | **FIXED** — the sixth row added (D4) |
 
@@ -1549,3 +1552,82 @@ critics were given the spec, the contract and the audit, and every claim they ma
 The three passes that applied these findings hit the same failure twice — a single agent given all 43
 findings against an 86KB spec stalled six times — so the batch that ran, the surgical edits and this
 section were done in the main session. Recorded because it is a fact about how this document was made.
+
+---
+
+## 26. Red team — findings and dispositions (2026-09-16/17)
+
+Four adversarial lenses read the built prototype (`web/assistant/`, commit `7f5255d`) against this spec,
+the contract and the engine: legal accuracy and abstention (L), accessibility (A11Y), design quality
+(DQ), NON_GOALS guard (NG). **52 findings: 4 fatal (3 distinct defects — DQ1 and L1 are one), 28 major, 20 minor.** Their verdict: "a debug view
+with a form on top". Findings file (outside the repo): `~/.cache/placedon-ux-tools/redteam_findings.json`.
+
+Method: the red-team assertions were added to `web/assistant/tools/accept.mjs` first; the old build
+failed them (**233/396**). The rebuild (`2c21e09`) passes **403/403** across 6 fixtures × 5 widths plus
+the empty state. Two engine-side findings were fixed in the contract builder (`ea627b7`). Two findings
+proved this spec wrong (L5, L11) and are corrected above (§25.1 rule 7, §18.2 rule 7).
+
+| ID | Sev | Finding (short) | Disposition |
+|---|---|---|---|
+| NG-1 | fatal | Ask reloads the page; default fixture reads as a live answer | **FIXED** `2c21e09` — submit prevented, status "Prototype: nothing was sent…", no fixture = empty state |
+| DQ1 | fatal | `confirmed[]` never rendered in the card | **FIXED** `2c21e09` — every element rendered, rows and citations in their own groups |
+| L1 | fatal | same, legal lens: a count heading over rows reading "not determined" | **FIXED** `2c21e09` — rows with state word and full basis; "None of these is a finding of compliance." |
+| L2 | fatal | document turn has no `law_version`; Act-only rows read CURRENT at a 2024 date | **FIXED** `ea627b7` (validator + builder) and `2c21e09` (card: "It is not the law as it stood on 01-Jun-2024.") |
+| NG-2 | major | empty state has no title; Holds line filled from the last answer | **FIXED** — §13 title and sub; Holds line removed until `GET /v1/scope` exists |
+| NG-3 | major | composer copy "holds the law as it stands" overclaims | **FIXED** — "a current consolidation, not point-in-time law" |
+| NG-4 | major | no model-use line | **FIXED** — stamp always states it; "Model use: not stated" when absent |
+| NG-5 | major | model-facing strings leak through Sources | **FIXED** — one shared filter for `not_confirmed` and `evidence_pack.missing`; engine wording behind a disclosure |
+| NG-6 | major | facts appear with no provenance | **FIXED** — "Facts sent with this request, entered in fields, not read from the question." |
+| NG-7 | major | empty `confirmed` silent; Sources hidden | **FIXED** — "Confirmed: none"; panel says "Sources for this turn: none supplied." |
+| NG-8 | major | follow-up does not say what it follows | **FIXED** — parent line + collapsed parent turn |
+| DQ2 | major | row hierarchy flat, basis buried | **FIXED** — state word + basis lead the row; visible rule |
+| DQ3 | major | 1440 layout has no rail, no sticky sources | **FIXED** — rail · answer · sticky Sources grid ≥1200px |
+| DQ4 | major | composer takes 40% of the pane | **FIXED differently** — compacts at the top, not docked at the foot (§2 change 11) |
+| DQ5 | major | accent overused, browser-blue radios | **FIXED** — Ink `accent-color`, Ink tab rule and pane Ask button, Ink-80 superseded rule |
+| DQ6 | major | raw enums and mono sentences | **FIXED** — §13 display maps; mono only for refs, keys, hashes; dotted keys break at dots |
+| DQ7 | major | context band not a strip; About ignores `context.kind` | **FIXED** |
+| DQ8 | major | duplicate duties on the document turn | **FIXED** — scope frame first; not-confirmed items identified by provision |
+| DQ9 | major | no h1, no wordmark, no empty state | **FIXED** — Playfair **not** added (self-hosted font = PLAN §5 dependency decision, founder) |
+| A11Y-1 | major | submit reloads; nothing announced | **FIXED** — Enter asks, Shift+Enter new line, polite status. Focus-to-new-turn awaits a real `/v1/ask` |
+| A11Y-2 | major | group labels are divs | **FIXED** — h3 |
+| A11Y-3 | major | confirmed rows unreachable | **FIXED** (as DQ1) |
+| A11Y-4 | major | records are tab stops that do nothing | **FIXED** — `[n]` markers → record (tabindex −1) → "Back to answer"; check 7 rewritten |
+| A11Y-5 | major | input borders 1.2:1 | **FIXED** — Ink-80, 8.9:1; checked |
+| L3 | major | empty-`confirmed` partial untested | **FIXED** — fixture `partial_nothing_confirmed` (`ea627b7`) + checks |
+| L4 | major | identifiers dropped with model-facing detail | **FIXED** (as NG-5) — ref and state always shown |
+| L5 | major | "still current" is a claim no field supports | **FIXED** — "No end date recorded"; **spec corrected** §25.1 rule 7 |
+| L6 | major | 880(E) served CORROBORATED on an attestation with no download source | **OPEN — founder decision** (tighten `register_gsr880e.is_attested()` and re-attest). Client shows "Gazette link: not recorded" |
+| L7 | major | "Source link: not recorded" when a link was recorded | **FIXED** — "on the retired host indiacode.nic.in, so it is not linked"; URL behind a disclosure, unrepaired |
+| L8 | major | scope frame and not-confirmed repeat each other | **FIXED** (as DQ8) |
+| L9 | major | superseded detail dropped; server strings built as chrome | **FIXED** — detail and status words rendered with `field()` |
+| L10 | major | composer promises currency | **FIXED** (as NG-3) |
+| NG-9 | minor | About control ignores the turn's context | **FIXED** |
+| DQ10 | minor | Unicode glyphs misalign | **FIXED** — inline SVG, `aria-hidden` |
+| DQ11 | minor | cramped label; As-of as an input; focus ring in shots | **FIXED** — As-of is text; shots taken before any focus |
+| DQ12 | minor | `what_it_is_not` list as plain lines | **FIXED** — `<ul>` at body size |
+| A11Y-6 | minor | disclosures lack `aria-expanded` | **FIXED** — checked |
+| A11Y-7 | minor | no h1; aside unlabelled | **FIXED** |
+| A11Y-8 | minor | glyph read aloud | **FIXED** |
+| A11Y-9 | minor | vague link names, small targets | **FIXED** — "Source: {cite}", "Gazette copy of {instrument}" |
+| A11Y-10 | minor | targets under 44px | **FIXED** for Ask, tabs, radios, markers, actions; inline disclosures 32px (above WCAG 2.5.8's 24px) |
+| A11Y-11 | minor | label touches field | **FIXED** |
+| A11Y-12 | minor | 11px text | **FIXED** — 12px minimum |
+| A11Y-13 | minor | `disabled` hides the reason | **FIXED** — `aria-disabled` + described-by reason |
+| A11Y-14 | minor | parent line not associated | **FIXED** — `aria-describedby` |
+| A11Y-15 | minor | record has no text-basis line | **FIXED** — dashed rule and basis line in each record |
+| A11Y-16 | minor | dead tabs are tab stops | **FIXED** — tablist, one stop, others `aria-disabled` |
+| L11 | minor | spec rule 7 would hide a valid supersession | **FIXED** — **spec corrected**, §18.2 rule 7 withdrawn, D9 closed; check asserts the item renders |
+| L12 | minor | spans rendered once, wrong index, `resolved` ignored | **FIXED** — per row, real path, "not found in the corpus" |
+| L13 | minor | law-version line hardcoded | **FIXED** — derived from `basis` + `point_in_time_verified`; unknown basis → statement verbatim |
+| L14 | minor | composed lines marked chrome escape check 6 | **FIXED** — composed lines use `field()` |
+| L15 | minor | About radios ignore `context.kind` | **FIXED** (as NG-9) |
+
+**Totals: 50 FIXED (4 of them by correcting this spec or the builder), 1 FIXED differently (DQ4),
+1 OPEN (L6, founder decision).** Still open from §25: F22.
+
+**What the checks still cannot see** (recorded so 403/403 is not read as more than it is): the verbatim
+text keeps the source PDF's hard line breaks and literal `<sup>` markup, which is faithful and ragged;
+"Copy with sources" copies rendered text only, so closed disclosures are not in the paste; the rail and
+Sources borders end at one viewport height in full-page screenshots (they are sticky); no screen reader
+was run, only DOM assertions; and every fixture is a saved response, so waiting, cancel and service-error
+states (§7.3, §7.11) are drawn in the spec but not built.
