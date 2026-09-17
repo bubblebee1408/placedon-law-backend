@@ -42,7 +42,7 @@ Lanes: **ME** = this session · **A/B/C/D** = subagents (worktree-isolated) ·
 | 11 | FEATURES.md F5 + PLAN_15 status: watcher BUILT, delivery remaining | D | Status lines name files and commits | DONE `c2d7c0d` (CLAUDE.md 527→529) |
 | 12 | Gazette digest: render new/UNKNOWN/UNSEEN items as a dated markdown report — delivery v0, no legal inference | D | `reports/gazette_digest.md` from the watcher log; test GREEN | DONE `c2d7c0d` |
 | 13 | Link the watcher to `corpus_currency`: a new MCA instrument raises "ledger may be behind", never a conclusion | D | Digest shows it; no Ring 0 import | DONE `c2d7c0d` |
-| 14 | Red-team every new Ring 2 module (fail-closed, licence, blindness, ring boundary) | E | Findings dispositioned | RUNNING — first attempt died on a usage limit; relaunched at `c2d7c0d` |
+| 14 | Red-team every new Ring 2 module (fail-closed, licence, blindness, ring boundary) | E | Findings dispositioned | **DONE** `9c1de5a` findings, `28c7ba3` + `d408ffe` + `4041a8f` fixes — 11 of 13 closed; RT-03 and RT-10 OPEN by decision |
 | 15 | Integrate subagent commits one at a time; gate after each | ME | Each lands GREEN | continuous — B, C integrated as single files |
 | 16 | Final report: what runs, what is designed, what is blocked | ME | `docs/LOOP_THEMIS_20_MOVES_REPORT.md` | DONE — `LOOP_THEMIS_20_MOVES_REPORT.md` |
 | 17 | **SD-005 decision** — accept split words as source defect or acquire a cleaner rendering | H | Founder decision | BLOCKED |
@@ -77,3 +77,12 @@ progress for reasons outside this session — then stop and report.
   commit. Report written (move 16). Red team relaunched after a usage limit.
   `origin` is 1 commit behind HEAD: the peer session pushed the shared branch,
   carrying this session's commits with it.
+- 18-09 — red team reported 6 FATAL, 4 MAJOR, 3 MINOR against the Ring 2 layer.
+  Eleven closed, each with the test that would have caught it. Two left OPEN
+  deliberately: **RT-03** (an empty 200 body is a legal ACCESSIBLE result) and
+  **RT-10** (licence enforcement is advisory — `is_servable_commercially()` is
+  called from nowhere outside tests). Both need a serving layer that does not
+  exist; closing them now would mean inventing the chokepoint they belong to.
+  **The worst finding was pre-existing and not in the new code**: RT-14,
+  `scripts/ingest_companies_act.py` fetching the statutory corpus with TLS
+  verification disabled and a spoofed browser user agent.

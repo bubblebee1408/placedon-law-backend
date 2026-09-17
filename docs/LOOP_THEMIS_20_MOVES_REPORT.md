@@ -64,7 +64,7 @@ founder; one on a permission.
 | 8 | robots.txt 401/403 is a refusal | **DONE** `54eba61` |
 | 9 | Hook prints the real suite count | **DONE** `86e24a2` |
 | 10–13 | FEATURES/CLAUDE.md numbers, digest, ledger signal | **DONE** `c2d7c0d` |
-| 14 | Red team of the Ring 2 layer | **RUNNING** — first attempt died on a usage limit; relaunched against `c2d7c0d`, writing findings incrementally |
+| 14 | Red team of the Ring 2 layer | **DONE** — 6 FATAL, 4 MAJOR, 3 MINOR; **11 closed**, 2 open by decision |
 | 15 | Integrate agent commits one at a time | **DONE** — four agents, integrated by named file only |
 | 16 | This report | **DONE** |
 | 17 | **SD-005** — accept the split words as a source defect, or acquire a cleaner rendering of G.S.R. 240(E) | **BLOCKED — founder** |
@@ -99,8 +99,31 @@ founder; one on a permission.
   alert, no email.
 - **No feed touches a legal decision**, and `rings.py` is what makes that a test
   rather than a promise.
-- **The red team has not reported yet** (move 14). Until it does, this layer is new
-  code that has been tested by its author and by fixtures, not attacked.
+- **Two red-team findings remain OPEN by decision**: RT-03 (an empty 200 body is a
+  legal ACCESSIBLE result) and RT-10 (licence enforcement is advisory — nothing
+  calls `is_servable_commercially()` outside tests). Both belong to a serving layer
+  that does not exist yet.
+
+## 6a. The red team, and what it found (move 14)
+
+Thirteen findings, every one proven with a runnable snippet. **Eleven are fixed**,
+each with the test that would have caught it (`28c7ba3`, `d408ffe`, `4041a8f`).
+
+| Finding | Why it mattered |
+|---|---|
+| **RT-14 FATAL** | `scripts/ingest_companies_act.py` fetched the **statutory corpus** with TLS verification disabled and a spoofed Chrome user agent — the one fetch here where a man-in-the-middle rewrites the law. Pre-existing, not new code. Dormant only because its host is dead |
+| **RT-08 FATAL** | Both watchers wrote state **before** the log. An ordinary kill between the two consumed the alert permanently. Now log-then-state, fsynced, proven by a crash test |
+| **RT-07 FATAL** | A listing that went **backwards** produced an empty gap range and read as a clean poll. Now a failed poll that holds the mark |
+| **RT-04 FATAL** | A body shorter than its declared length was served as complete — half the SDN list would have been hashed and parsed as the whole source |
+| **RT-01 / RT-02 FATAL** | The firewall saw only direct, static imports: `importlib.import_module` walked straight past it, and any unregistered helper was an invisible laundering hop. Now transitively closed, with dynamic-import machinery refused in a decider |
+| **RT-11 MAJOR** | One nested `<span>` would truncate the Ministry cell and silence the MCA alert with every test still green |
+| **RT-09, RT-05, RT-12, RT-13** | Non-atomic state writes; a relative redirect blamed on a missing header; ID/date never cross-checked; a Unicode-digit IMO keying an unreachable index entry |
+
+**Open by decision:** RT-03 and RT-10 (§6).
+
+**The lesson worth carrying:** the layer written today held up better than the code
+around it. The single worst finding was a two-line TLS bypass that had been sitting
+in the corpus ingestion path.
 
 ## 7. What I would do next
 
