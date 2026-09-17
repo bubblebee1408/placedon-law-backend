@@ -135,9 +135,37 @@ def _clean(fragment: str) -> str:
     return re.sub(r"\s+", " ", _html.unescape(re.sub(r"<[^>]+>", " ", fragment))).strip()
 
 
+_SPAN_TAG = re.compile(r"<\s*(/?)\s*span\b", re.I)
+
+
+def _span_body(page: str, start: int) -> str:
+    """The text of the span opening at `start`, counting NESTED spans.
+
+    RT-11: the old form was one non-greedy regex to `</span>`, which stops at the
+    FIRST close. eGazette wraps values in `<font>` today, but a single nested
+    `<span>` -- a styling change on their side, not ours -- would have truncated the
+    Ministry cell, and "Ministry of <span>Corporate Affairs</span>" would read as
+    "Ministry of": not the MCA string, so the feed's core alert would go quietly
+    silent. Depth counting cannot be fooled that way.
+    """
+    depth, pos = 1, start
+    while depth and pos < len(page):
+        m = _SPAN_TAG.search(page, pos)
+        if not m:
+            return page[start:]          # unterminated: take the rest, do not guess
+        depth += -1 if m.group(1) else 1
+        end = page.find(">", m.end())
+        if end == -1:
+            return page[start:m.start()]
+        pos = end + 1
+        if depth == 0:
+            return page[start:m.start()]
+    return page[start:pos]
+
+
 def _column(page: str, span_id_prefix: str) -> dict[int, str]:
-    pat = re.compile(r'id="' + re.escape(span_id_prefix) + r'_(\d+)"[^>]*>(.*?)</span>', re.S)
-    return {int(m.group(1)): _clean(m.group(2)) for m in pat.finditer(page)}
+    pat = re.compile(r'id="' + re.escape(span_id_prefix) + r'_(\d+)"[^>]*>')
+    return {int(m.group(1)): _clean(_span_body(page, m.end())) for m in pat.finditer(page)}
 
 
 def _week_columns(page: str) -> dict[str, str]:
@@ -344,6 +372,18 @@ def _test() -> None:
         pdf_url("CG-DL-E-276294"); check(False, "a malformed id must raise")
     except ValueError:
         check(True, "a malformed id raises rather than guessing a year")
+
+    # ---- RT-11: a nested span must not truncate the Ministry cell ----
+    nested = ('<span id="rpt_Extra_lbl_MinistryE_0">Ministry of <span style="x">Corporate '
+              'Affairs</span></span>'
+              '<span id="rpt_Extra_lbl_SubjectE_0">...</span>'
+              '<span id="rpt_Extra_lbl_DateE_0">18-Sep-2026</span>'
+              '<span id="rpt_Extra_lbl_UGIDExtra_0">CG-DL-E-18092026-300</span>')
+    ni = parse_listing(nested)
+    check(len(ni) == 1 and ni[0].ministry == "Ministry of Corporate Affairs",
+          f"a nested span keeps the whole ministry name (got {ni[0].ministry!r})")
+    check(ni[0].corporate_affairs is True,
+          "...so the MCA alert still fires -- RT-11 would have silenced it")
 
     # ---- watching ----
     first = watch(items, None)

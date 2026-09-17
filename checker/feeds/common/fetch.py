@@ -110,6 +110,10 @@ def _default_opener(url: str, *, timeout: float):
     return opener.open(req, timeout=timeout)
 
 
+class _Truncated(Exception):
+    """The server declared N bytes and delivered fewer. RT-04."""
+
+
 def _read_capped(resp, max_bytes: int) -> tuple[bool, bytes]:
     """Read a response body up to `max_bytes`, cancelling the moment the running
     total would cross it. Ported from http.js's `readCappedResponseText` shape
@@ -118,12 +122,14 @@ def _read_capped(resp, max_bytes: int) -> tuple[bool, bytes]:
     Returns (too_large, content).
     """
     declared = resp.getheader("Content-Length") if hasattr(resp, "getheader") else None
+    declared_n: int | None = None
     if declared is not None:
         try:
-            if int(declared) > max_bytes:
+            declared_n = int(declared)
+            if declared_n > max_bytes:
                 return True, b""
         except ValueError:
-            pass  # a malformed header proves nothing either way; fall through to the real read
+            declared_n = None  # a malformed header proves nothing either way
 
     chunks: list[bytes] = []
     total = 0
@@ -135,6 +141,14 @@ def _read_capped(resp, max_bytes: int) -> tuple[bool, bytes]:
         if total > max_bytes:
             return True, b""
         chunks.append(chunk)
+
+    # RT-04: a declared Content-Length the body does not reach means the connection
+    # dropped mid-transfer. Until 2026-09-18 that short body was returned as a
+    # complete, ACCESSIBLE fetch -- so half of the SDN list, or a truncated Gazette
+    # page, would have been hashed, cached and parsed as if it were the whole
+    # source. A partial document is not a smaller document; it is an unknown one.
+    if declared_n is not None and total < declared_n:
+        raise _Truncated(f"declared {declared_n} bytes, received {total}")
     return False, b"".join(chunks)
 
 
@@ -217,7 +231,14 @@ def _handle_http_error(source_id: str, entry_url: str, exc: urllib.error.HTTPErr
 
 def _finish(source_id: str, entry_url: str, resp, max_bytes: int, *,
            resolved_host: str = "", note: str = "") -> FetchResult:
-    too_large, content = _read_capped(resp, max_bytes)
+    try:
+        too_large, content = _read_capped(resp, max_bytes)
+    except _Truncated as exc:
+        # UNREACHABLE, not BLOCKED: the host answered and then stopped talking.
+        return _refused(source_id, entry_url, UNREACHABLE,
+                        http_status=getattr(resp, "status", None),
+                        note=f"truncated transfer ({exc}) -- refused rather than "
+                             "treated as a complete document")
     status = getattr(resp, "status", None)
     if too_large:
         return _refused(source_id, entry_url, BLOCKED, http_status=status,
@@ -388,6 +409,25 @@ def _test() -> None:
     # ── DEFAULT_MAX_BYTES actually reflects the measured OFAC payload ───────
     check(DEFAULT_MAX_BYTES > 29_076_910,
           f"the default cap ({DEFAULT_MAX_BYTES}) clears the measured SDN payload size (29,076,910)")
+
+    # ---- RT-04: a body shorter than its declared Content-Length ----------------
+    short = _FakeResponse(200, b"half a document", headers={"Content-Length": "999999"})
+    r = fetch("t", "https://example.gov/x", rules=allow_all,
+              opener=lambda url, *, timeout: short)
+    check(r.source_behaviour == UNREACHABLE and r.content == b"",
+          "a truncated transfer is refused, carrying no bytes")
+    check("truncated" in r.note,
+          "...and says so, rather than presenting a partial document as complete")
+    exact = _FakeResponse(200, b"whole", headers={"Content-Length": "5"})
+    r2 = fetch("t", "https://example.gov/x", rules=allow_all,
+               opener=lambda url, *, timeout: exact)
+    check(r2.source_behaviour == ACCESSIBLE and r2.content == b"whole",
+          "a body that matches its declared length still succeeds")
+    nolen = _FakeResponse(200, b"no header here")
+    r3 = fetch("t", "https://example.gov/x", rules=allow_all,
+               opener=lambda url, *, timeout: nolen)
+    check(r3.source_behaviour == ACCESSIBLE,
+          "no Content-Length at all is not treated as truncation")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:

@@ -27,11 +27,29 @@ ACT_ID = "AC_CEN_22_29_00008_201318_1517807327856"
 ACT_PAGE = "https://www.indiacode.nic.in/handle/123456789/2114"
 CONTENT_EP = "https://www.indiacode.nic.in/SectionPageContent?actid={act}&sectionID={sid}"
 OUT = Path(__file__).resolve().parent.parent / "corpus/companies_act"
-UA = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                   "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36"}
-CTX = ssl.create_default_context()
-CTX.check_hostname = False
-CTX.verify_mode = ssl.CERT_NONE
+# TLS verification and the user agent were both disabled/faked here until
+# 2026-09-18 (red team RT-14, docs/research/RED_TEAM_RING2_2026_09_18.md):
+#
+#     CTX.check_hostname = False
+#     CTX.verify_mode = ssl.CERT_NONE
+#     UA = {"User-Agent": "Mozilla/5.0 ... Chrome/126 Safari/537.36"}
+#
+# on the script that ingests the Companies Act corpus itself -- the one fetch in
+# this repository where a man-in-the-middle would rewrite the statute. It was not
+# exploitable on the day it was found (CLAUDE.md records indiacode.nic.in as a dead
+# domain; the live host is indiacode.gov.in), but it was live, unconditional, and
+# one hostname away from being reachable.
+#
+# Both now come from checker.robots, which fails closed: no CA bundle means no
+# fetch, and the user agent identifies us honestly, as the source policy requires.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from checker.robots import USER_AGENT, ssl_context      # noqa: E402
+
+UA = {"User-Agent": USER_AGENT}
+CTX = ssl_context()
+if CTX is None:
+    raise SystemExit("ingest_companies_act: no CA bundle available; refusing to fetch "
+                     "the statute over an unverified connection")
 PAUSE = 0.4  # be a polite client
 
 

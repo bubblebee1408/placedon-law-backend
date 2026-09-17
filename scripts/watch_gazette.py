@@ -23,6 +23,7 @@ UNSEEN serials); 1 = the poll itself failed.
 from __future__ import annotations
 
 import json
+import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -79,15 +80,46 @@ def poll(feed, state: Path, log: Path, *, now: str) -> tuple[int, dict]:
                                  "corporate_affairs")}
             for it in p["items"] if it["serial"] in new_set
         ]
-        if p["high_water"] is not None and (last is None or p["high_water"] > last):
-            state.parent.mkdir(parents=True, exist_ok=True)
-            state.write_text(json.dumps({"high_water": p["high_water"], "updated_at": now}) + "\n")
-    else:
+    # RT-07: a listing whose highest serial is BELOW the recorded mark is not a
+    # quiet day -- it is a degraded or stale read (a cached page, a partial render,
+    # a mirror). The gap check `range(last+1, top+1)` is EMPTY when top < last, so
+    # such a poll used to report as perfectly clean. It is now a failed poll: the
+    # mark is held and the regression is named.
+    regressed = (readable and last is not None and p["high_water"] is not None
+                 and p["high_water"] < last)
+    if regressed:
+        readable = False
+        entry["regressed_to"] = p["high_water"]
+        entry["note"] = (f"listing regressed: highest serial {p['high_water']} is below the "
+                         f"recorded mark {last} -- stale or partial read, not a quiet day")
+
+    if not readable:
         entry["high_water_held_at"] = last   # the rule above, recorded
 
+    # RT-08, the flagship finding: the record is on disk, FSYNCED, BEFORE the mark
+    # advances. Previously the mark moved first, so an ordinary kill between the two
+    # writes -- cron, systemd, a container stop -- consumed the alert permanently:
+    # the next poll saw nothing new and no log line ever named what was missed.
     log.parent.mkdir(parents=True, exist_ok=True)
     with log.open("a") as fh:
         fh.write(json.dumps(entry) + "\n")
+        fh.flush(); os.fsync(fh.fileno())
+
+    if readable and p["high_water"] is not None and (last is None or p["high_water"] > last):
+        # RT-09: atomic (temp + fsync + rename), so a crash mid-write cannot leave a
+        # half-written mark for the next run to choke on.
+        state.parent.mkdir(parents=True, exist_ok=True)
+        tmp = state.with_suffix(state.suffix + ".tmp")
+        try:
+            with tmp.open("w") as fh:
+                fh.write(json.dumps({"high_water": p["high_water"], "updated_at": now}) + "\n")
+                fh.flush(); os.fsync(fh.fileno())
+            os.replace(tmp, state)
+        except OSError:
+            # Leave no fragment behind: a stale .tmp is confusing evidence next to a
+            # state file, and a future reader should never have to guess which is real.
+            tmp.unlink(missing_ok=True)
+            raise
 
     if not readable:
         return 1, entry
@@ -99,6 +131,8 @@ def poll(feed, state: Path, log: Path, *, now: str) -> tuple[int, dict]:
 def _report(code: int, e: dict) -> None:
     if code == 1:
         print(f"POLL FAILED ({e['source_behaviour']}): {e.get('note') or 'page unreadable'}")
+        if "regressed_to" in e:
+            print("  the listing went BACKWARDS -- treated as a stale read, not as a quiet day")
         print(f"  high-water mark held at {e.get('high_water_held_at')} -- nothing marked seen")
         return
     print(f"eGazette polled {e['observed_at']}: {e['listed']} listed, "
@@ -199,8 +233,40 @@ def _test() -> int:
         c, e = poll(Fake(body), st, lg, now=_now())
         check(c == 0 and e["new_serials"] == [], "re-polling the same page reports nothing new")
 
+        # ---- RT-07: a listing that goes BACKWARDS is a stale read, not a quiet day ----
+        back = page(("Ministry of Labour", "CG-DL-E-18092026-99"))   # 99 < mark 104
+        c, e = poll(Fake(back), st, lg, now=_now())
+        check(c == 1, "a listing whose top serial is below the mark is a FAILED poll")
+        check(e.get("regressed_to") == 99 and "regressed" in (e.get("note") or ""),
+              "...and the regression is named, not silently reported as clean")
+        check(load_high_water(st) == 104, "...and the mark is held, never lowered")
+
+        # ---- RT-08: the log is durable BEFORE the mark moves ----
+        # Simulate a crash at the instant the mark is written: the poll dies, but the
+        # record of what it saw must already be on disk, or the alert is lost forever.
+        import os as _os
+        real_replace = _os.replace
+        def boom(*a, **k):
+            raise OSError("simulated crash between log and state")
+        before = len(lg.read_text().splitlines())
+        _os.replace = boom
+        try:
+            poll(Fake(page(("Ministry of Corporate Affairs", "CG-DL-E-19092026-200"))), st, lg, now=_now())
+            crashed = False
+        except OSError:
+            crashed = True
+        finally:
+            _os.replace = real_replace
+        after = lg.read_text().splitlines()
+        check(crashed, "the simulated crash happened where the mark is written")
+        check(len(after) == before + 1, "...and the poll's record was already written")
+        check("CG-DL-E-19092026-200" in after[-1],
+              "...naming the MCA instrument, so the next run can still surface it")
+        check(load_high_water(st) == 104, "...and the mark did not advance through the crash")
+        check(not list(st.parent.glob("*.tmp")), "RT-09: no half-written temp state is left behind")
+
         lines = lg.read_text().strip().splitlines()
-        check(len(lines) == 5, f"every poll, failed or not, is logged ({len(lines)} lines)")
+        check(len(lines) == 7, f"every poll, failed or not, is logged ({len(lines)} lines)")
         check(json.loads(lines[1])["high_water_held_at"] == 100, "the log records the held mark")
 
         st.write_text("{not json")

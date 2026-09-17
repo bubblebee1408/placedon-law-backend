@@ -84,6 +84,7 @@ and this watcher inherits that same blindness. Every REMOVED line says so.
 from __future__ import annotations
 
 import json
+import os
 import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -190,15 +191,37 @@ def load_state(path: Path) -> dict | None:
 
 
 def write_state(path: Path, state: dict) -> None:
+    """Write the baseline ATOMICALLY (temp file, fsync, rename).
+
+    RT-09: a plain write_text truncates first, so a crash mid-write leaves a
+    half-written baseline. The next run refuses loudly rather than silently
+    resetting, which is the right direction -- but it needs a human. os.replace is
+    atomic on POSIX, so the file a reader sees is either the old baseline or the new
+    one, never a fragment.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(state, indent=2, sort_keys=True, ensure_ascii=False) + "\n",
-                    encoding="utf-8")
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    body = json.dumps(state, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
+    try:
+        with tmp.open("w", encoding="utf-8") as f:
+            f.write(body); f.flush(); os.fsync(f.fileno())
+        os.replace(tmp, path)
+    except OSError:
+        tmp.unlink(missing_ok=True)   # leave no fragment beside the real baseline
+        raise
 
 
 def append_log(path: Path, record: dict) -> None:
+    """Append one poll record, FLUSHED AND FSYNCED before returning.
+
+    RT-08: every caller that advances the baseline must have this record on disk
+    first. An fsync here is what makes "log before state" a real ordering rather
+    than an ordering of two buffered writes the OS may reorder.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as f:
         f.write(json.dumps(record, sort_keys=True, ensure_ascii=False) + "\n")
+        f.flush(); os.fsync(f.fileno())
 
 
 def _report(delta: Delta, old: dict[str, dict], new: dict[str, dict], published: str) -> None:
@@ -273,9 +296,12 @@ def poll(feed: OfacSdnFeed, *, cache_root: Path, state_path: Path, log_path: Pat
     }
 
     if prev_state is None:
-        write_state(state_path, new_state)
+        # RT-08: the record lands on disk BEFORE the baseline advances. A crash
+        # between the two used to lose the poll entirely -- the next run would diff
+        # against a baseline nothing had ever reported.
         append_log(log_path, {"at": observed_at, "result": "baseline", "publish_date": published,
                               "record_count": parsed, "sha256": entry.sha256})
+        write_state(state_path, new_state)
         print(f"BASELINE ESTABLISHED: {parsed} records, published {published}. "
               f"No prior baseline existed -- no delta reported.")
         return EXIT_UNCHANGED
@@ -296,19 +322,24 @@ def poll(feed: OfacSdnFeed, *, cache_root: Path, state_path: Path, log_path: Pat
     old_summary, _old_parsed = _summarise(prev_content)
     delta = diff(old_summary, new_summary)
 
-    write_state(state_path, new_state)  # advance the baseline regardless of delta emptiness
-
+    # RT-08, the flagship finding: the delta is WRITTEN DOWN before the baseline
+    # moves. Previously state advanced first, so a kill between the two lines --
+    # an ordinary event under cron, systemd or a container -- consumed a newly
+    # sanctioned entity permanently: the next poll diffed against the new baseline
+    # and saw nothing, and no log line ever named it.
     if delta.is_empty():
         append_log(log_path, {"at": observed_at, "result": "unchanged", "publish_date": published,
                               "record_count": parsed, "sha256": entry.sha256})
+        write_state(state_path, new_state)
         print(f"no change ({parsed} records, published {published})")
         return EXIT_UNCHANGED
 
-    _report(delta, old_summary, new_summary, published)
     append_log(log_path, {"at": observed_at, "result": "changed", "publish_date": published,
                           "record_count": parsed, "sha256": entry.sha256,
                           "added": list(delta.added), "removed": list(delta.removed),
                           "changed": list(delta.changed)})
+    write_state(state_path, new_state)
+    _report(delta, old_summary, new_summary, published)
     return EXIT_CHANGED
 
 
