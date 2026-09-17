@@ -872,8 +872,10 @@ Header (web, sticky): `Sources · Turn 2 · About the open document`. Contents, 
    pack statement in a closed disclosure; fetch dates; the source link (only when `source_url` parses as
    an `https://` URL).
 2. **Each figure's instrument record** — full instrument string, `In force from` / end state,
-   `evidence_state`, and "Gazette link: not recorded" when `source_url` is not a URL. It is not one today:
-   `checker/prescribed_thresholds.py:106` holds `SOURCE_880 = "UNRESOLVED — see scripts/register_gsr880e.py"`.
+   `evidence_state`, and "Gazette link: not recorded" when `source_url` is not a URL. **Since `0fae26c`
+   (2026-09-17)** an attested figure serves its recorded or corroborated Gazette URL
+   (`https://egazette.gov.in/WriteReadData/2025/268124.pdf` for 880(E)); the "UNRESOLVED" marker remains
+   only on rows that are not served.
 3. **Evidence pack** — `retrieval_query` ("Looked up …"), `route`, `usable_keys`, `unusable_keys`,
    `missing[]`, all in mono.
 4. **Steps the server recorded** — only when `stages[]` is present, i.e. the document path (K9), as a
@@ -1209,7 +1211,7 @@ no `instrument` or no `effective_from`; a `confidence` field; any client-inferre
 | # | Defect | Location |
 |---|---|---|
 | D1 | **`what_it_is_not` has two shapes.** The single-character list (the builder wrapping a string in `list()`) was fixed on 2026-09-16, but `answered_small_company` now carries a **string** and `document_context_2024` a **list of three strings**, while the contract names the field `what_it_is_not[]`. The client must accept both (render a string as one paragraph, a list as list items) or Phase C must pick one | `scripts/assistant_contract.py:205`; `fixtures/answered_small_company.json`, `fixtures/document_context_2024.json`; contract §4 |
-| D2 | `figures[].source_url` is `"UNRESOLVED — see scripts/register_gsr880e.py"`, a sentence in a URL field | `checker/prescribed_thresholds.py:106` |
+| D2 | ~~`figures[].source_url` is `"UNRESOLVED — see scripts/register_gsr880e.py"`, a sentence in a URL field~~ **CLOSED 2026-09-17** (`0fae26c`): served figures carry the eGazette URL; the marker stays only on unserved rows | `checker/prescribed_thresholds.py` |
 | D3 | `citations[].source_url` points at `indiacode.nic.in`, which 403s; the live host is `indiacode.gov.in` | fixtures; corpus records |
 | D4 | `scope_frame.sentence` says "as at 2026-09-15" for the **read** date — a sixth date wording the client may not restyle | `checker/coverage.py:110` |
 | D5 | `not_confirmed[].detail` for `pack_missing` is written for a model ("not admitted for model use") | `checker/evidence_pack.py` missing strings |
