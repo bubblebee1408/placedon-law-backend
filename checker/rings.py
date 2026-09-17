@@ -1,0 +1,369 @@
+"""The one-way firewall between the legal core and the forecasting layers.
+
+## The architecture this enforces
+
+`docs/PLAN_08_BOOKMARK_AND_GODSEYE.md` §2 declares four rings:
+
+    RING 0  LEGAL CORE      statute, obligations, deciders, currency, entailment
+    RING 1  BOOKMARK        entity graph (CIN/DIN), public registers, event log
+    RING 2  FEEDS           observations from named live sources
+    RING 3  INFERENCE       ordinal assessments; numeric estimates only if calibrated
+
+A module in ring N may import from rings below it. **No Ring 0 decider may
+import, read, or receive any value originating in Ring 2 or Ring 3. Same for
+Ring 1.** A forecast may never be an input to a deterministic legal decision.
+Ring 2 and Ring 3 are currently EMPTY — no God's Eye or inference module has
+been built yet (PLAN_08 §3: the release chokepoint has to land first) — so this
+guard currently has nothing to catch. That is expected, and the guard has to
+keep working (not error, not vacuously report "clean" for the wrong reason)
+right up to the day a Ring 2 module is registered.
+
+## Why structural, not conventional
+
+The product's whole claim is that a wrong model cannot make the product wrong.
+That property is what a probability leaking into an applicability decision
+destroys — and it destroys it **silently**, because the output of a corrupted
+Ring 0 decider still looks exactly like a deterministic legal answer. There is
+no downstream symptom to notice. A code-review convention ("please don't
+import checker.godseye in a decider") relies on every future diff being read
+by someone who remembers the rule; an AST walk does not forget.
+
+`checker/api.py:858-859` already does the structural version of this for a
+narrower claim — it parses its own module with `ast` and asserts the parsed
+import roots exclude `openai`/`anthropic`/`requests`/`httpx`, rather than
+trusting a comment that says "no model calls here". This module is the same
+technique pointed at the ring boundary instead of the network boundary.
+
+## Why the walk covers nested imports, not just the top of the file
+
+`ast.walk` descends into every function and method body, not just module
+level. That is deliberate: an import deferred inside a function is the
+**normal, legitimate** style already used all over this codebase for
+lower-ring dependencies (`checker/cascade.py` imports `checker.entail_baseline`
+inside a function, `checker/obligations.py` imports `checker.s185` inside a
+function) to avoid import cycles. The same mechanism is exactly how an
+upward leak would be hidden — an import at module level is what a reviewer's
+eye catches; a `import checker.godseye.feed` on line 800 of a 60-line function
+is not. A guard that only scanned top-level imports would miss precisely the
+case it exists for.
+
+## The negative control
+
+A guard that has never been shown to fail is not evidence that it works — it
+is evidence that nobody has tried. This repository has already lost real time
+to exactly that shape of mistake, twice: `harness_regression.sh` exists
+because a green check once turned out to be a check that could not turn red,
+and `docs/D002_CLOSURE_REPORT_2026_09_17.md` §2.1 records that
+`pdf_text.py`'s only wired-in test fixture was the one corpus document
+structurally immune to the bug it was meant to catch — "a green check that
+cannot fail... a test whose fixture cannot exhibit the defect is not
+evidence, and the harness cannot tell the difference." `_test()` below does
+not just assert the real codebase is clean; it first builds a synthetic
+module that DOES import a (temporarily registered) Ring 2 module from inside
+a function, and asserts `violations()`'s underlying scan catches it. Only
+after the guard has been shown capable of failing does its clean run on the
+real codebase count as evidence of anything.
+
+## Classifying imports, not files
+
+`ring_of` takes a module's **import name** (`"checker.currency"`, or
+`"applicability"` for a root-level module, or the file-path spelling
+`"checker/currency.py"` — both normalise to the same key) rather than a raw
+file path, because the thing that can leak is an import statement, and
+Python import statements name modules, not files. `from checker import
+event_log` and `from checker.event_log import Answer` must both resolve to
+the same registry key even though they parse to different AST shapes; see
+`_imported_names` for how `ast.ImportFrom` is normalised to cover both.
+"""
+from __future__ import annotations
+
+import ast
+from pathlib import Path
+
+RING_0 = 0   # LEGAL CORE — statute, obligations, deciders, currency, entailment
+RING_1 = 1   # BOOKMARK — entity graph (CIN/DIN), public registers, event log
+RING_2 = 2   # FEEDS — observations from named live sources
+RING_3 = 3   # INFERENCE — ordinal assessments; numeric estimates only if calibrated
+
+RING_NAMES = {
+    RING_0: "RING 0 LEGAL CORE",
+    RING_1: "RING 1 BOOKMARK",
+    RING_2: "RING 2 FEEDS",
+    RING_3: "RING 3 INFERENCE",
+}
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+
+# Declared, not inferred. Registry keys are import names, exactly as they would
+# appear on the right-hand side of `import` / `from ... import` in this
+# codebase's own style (`checker.currency`, or bare `applicability` for a
+# root-level module such as `applicability.py`).
+REGISTRY: dict[str, int] = {
+    # ── RING 0 — statute, obligations, deciders, currency, entailment ──────
+    "applicability": RING_0,
+    "checker.obligations": RING_0,
+    "checker.s180": RING_0,             # borrowing-limit decider, same family as s185/6/8
+    "checker.s184": RING_0,             # director-interest decider, same family as s185/6/8
+    "checker.s185": RING_0,
+    "checker.s186": RING_0,
+    "checker.s188": RING_0,
+    "checker.s188_threshold": RING_0,
+    "checker.currency": RING_0,
+    "checker.cascade": RING_0,
+    "checker.ground_span": RING_0,
+    "checker.as_of": RING_0,
+    "checker.amendment": RING_0,
+    "checker.prescribed_thresholds": RING_0,
+    "checker.entail_baseline": RING_0,
+    "checker.entail_binding": RING_0,
+    "checker.entail_mine": RING_0,
+    "checker.entail_pairs_v2": RING_0,
+    "checker.entail_paraphrase": RING_0,
+    "checker.entail_qualifier": RING_0,
+    "checker.entail_role": RING_0,
+    "checker.admission": RING_0,
+    "checker.provenance": RING_0,
+
+    # ── RING 1 — entity graph, public registers, event log ─────────────────
+    "checker.entity_graph": RING_1,
+    "checker.event_log": RING_1,
+    "checker.corporate_data": RING_1,
+    "checker.mca_aggregator": RING_1,
+    "checker.mca_snapshot": RING_1,
+
+    # ── RING 2 — FEEDS. Deliberately empty; see the module docstring. ──────
+    # ── RING 3 — INFERENCE. Deliberately empty; see the module docstring. ──
+}
+
+
+def _normalise(module_path: str) -> str:
+    """`"checker/currency.py"` and `"checker.currency"` are the same module."""
+    dotted = module_path[:-3] if module_path.endswith(".py") else module_path
+    return dotted.replace("/", ".").replace("\\", ".")
+
+
+def ring_of(module_path: str) -> int | None:
+    """The ring a module belongs to, or None if it is unclassified.
+
+    None is not an error. Most of this repository — `scripts/`, `eval/`,
+    third-party packages — is neither Ring 0 nor Ring 1 and has no business
+    being forced into this vocabulary; only the modules PLAN_08 §2 actually
+    names are classified, plus the same-family deciders noted above.
+    """
+    return REGISTRY.get(_normalise(module_path))
+
+
+def _imported_names(tree: ast.AST, importer: str) -> list[tuple[str, int]]:
+    """Every dotted module name imported anywhere in `tree`, with its line.
+
+    Walks the WHOLE tree via `ast.walk`, so an import nested inside a function
+    or method is found exactly as reliably as one at module level — that is
+    exactly how a leak would be hidden (see the module docstring).
+
+    `from checker import event_log` and `from checker.event_log import X` are
+    both normalised to the module name `checker.event_log`, by combining the
+    `from`-clause with each imported name as well as recording the bare
+    `from`-clause itself; a relative import (`from . import x`) is resolved
+    against `importer`'s own package rather than skipped, so switching an
+    absolute import to a relative one cannot dodge the check.
+    """
+    found: list[tuple[str, int]] = []
+    importer_parts = importer.split(".")
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                found.append((alias.name, node.lineno))
+        elif isinstance(node, ast.ImportFrom):
+            if node.level:
+                pkg_parts = importer_parts[:-node.level] if node.level <= len(importer_parts) else []
+                base = ".".join(pkg_parts)
+                module = f"{base}.{node.module}" if node.module else base
+            else:
+                if node.module is None:
+                    continue
+                module = node.module
+            found.append((module, node.lineno))
+            for alias in node.names:
+                found.append((f"{module}.{alias.name}", node.lineno))
+    return found
+
+
+def _leaks_upward(tree: ast.AST, importer: str, ring: int) -> list[tuple[str, int, int]]:
+    """`(imported module, its ring, line)` for every FORBIDDEN import in `tree`.
+
+    Only Ring 0 and Ring 1 importers are constrained at all — imports flowing
+    downward or sideways within the allowed direction are never flagged. An
+    import target that is not registered (`ring_of` returns None) is never
+    flagged either: this guard enforces one declared rule, it does not invent
+    opinions about the rest of the codebase.
+    """
+    if ring not in (RING_0, RING_1):
+        return []
+    out: list[tuple[str, int, int]] = []
+    for imported, lineno in _imported_names(tree, importer):
+        target = ring_of(imported)
+        if target in (RING_2, RING_3):
+            out.append((imported, target, lineno))
+    return out
+
+
+def _file_for(dotted: str) -> Path:
+    return REPO_ROOT / (dotted.replace(".", "/") + ".py")
+
+
+def violations() -> list[str]:
+    """Every real Ring 0/1 module that imports Ring 2 or 3, named with a witness.
+
+    A verdict with no witness is unusable: each entry names the offending
+    module, the exact import, and the line it appears on, so the fix is
+    "delete this line" rather than "go audit everything". Returns `[]` when
+    the firewall holds — which, with Ring 2 and Ring 3 currently empty, is
+    the only possible outcome, and this function still walks every declared
+    Ring 0/1 module's real AST to say so rather than asserting it by
+    construction.
+    """
+    out: list[str] = []
+    for dotted, ring in sorted(REGISTRY.items()):
+        if ring not in (RING_0, RING_1):
+            continue
+        path = _file_for(dotted)
+        if not path.is_file():
+            out.append(f"{dotted}: registered at ring {ring} but no source file at {path}")
+            continue
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        rel = path.relative_to(REPO_ROOT)
+        for imported, target, lineno in _leaks_upward(tree, dotted, ring):
+            out.append(
+                f"{rel}:{lineno} — {dotted} ({RING_NAMES[ring]}) imports "
+                f"{imported} ({RING_NAMES[target]})"
+            )
+    return out
+
+
+def _test() -> None:
+    ok = fail = 0
+
+    def check(cond: bool, label: str) -> None:
+        nonlocal ok, fail
+        if cond:
+            ok += 1; print(f"  [ok]   {label}")
+        else:
+            fail += 1; print(f"  [FAIL] {label}")
+
+    print("rings")
+
+    # ---- ring_of: both spellings, both real rings, and the unclassified case ----
+    check(ring_of("checker.currency") == RING_0, "checker.currency is Ring 0")
+    check(ring_of("checker/currency.py") == RING_0, "...and the file-path spelling agrees")
+    check(ring_of("applicability") == RING_0, "root-level applicability.py is Ring 0")
+    check(ring_of("checker.entity_graph") == RING_1, "checker.entity_graph is Ring 1")
+    check(ring_of("checker.lattice") is None, "an unregistered module is unclassified, not defaulted")
+    check(ring_of("checker.godseye.no_such_feed") is None,
+          "a module that does not exist yet is unclassified, not an error")
+
+    # ---- the task-mandated Ring 0 roster is actually present ---------------------
+    required_ring0 = [
+        "applicability", "checker.obligations", "checker.s185", "checker.s186",
+        "checker.s188", "checker.s188_threshold", "checker.currency", "checker.cascade",
+        "checker.ground_span", "checker.as_of", "checker.amendment",
+        "checker.prescribed_thresholds", "checker.admission", "checker.provenance",
+    ]
+    missing = [m for m in required_ring0 if REGISTRY.get(m) != RING_0]
+    check(not missing, f"every task-mandated Ring 0 module is registered (missing: {missing})")
+
+    entail_mods = sorted(m for m in REGISTRY if m.startswith("checker.entail_"))
+    check(len(entail_mods) >= 6 and all(REGISTRY[m] == RING_0 for m in entail_mods),
+          f"the entail_*.py family is registered as Ring 0 ({entail_mods})")
+
+    required_ring1 = [
+        "checker.entity_graph", "checker.event_log", "checker.corporate_data",
+        "checker.mca_aggregator", "checker.mca_snapshot",
+    ]
+    missing1 = [m for m in required_ring1 if REGISTRY.get(m) != RING_1]
+    check(not missing1, f"every task-mandated Ring 1 module is registered (missing: {missing1})")
+
+    # ---- Ring 2 and Ring 3 are currently EMPTY, and that must not error ----------
+    check(not any(r in (RING_2, RING_3) for r in REGISTRY.values()),
+          "no module is registered in Ring 2 or Ring 3 yet, as PLAN_08 §2 records")
+    empty_upper = violations()
+    check(isinstance(empty_upper, list),
+          "violations() runs cleanly with both upper rings empty, and does not raise")
+
+    # ---- downward and sideways imports are never flagged -------------------------
+    ok_tree = ast.parse(
+        "from checker.entity_graph import EntityGraph\n"
+        "from checker import provenance\n"
+    )
+    check(_leaks_upward(ok_tree, "checker.obligations", RING_0) == [],
+          "a Ring 0 module importing Ring 1 and Ring 0 is not flagged")
+
+    unclassified_tree = ast.parse("import checker.lattice\n")
+    check(_leaks_upward(unclassified_tree, "checker.obligations", RING_0) == [],
+          "importing an unclassified module raises no false positive")
+
+    # ---- NEGATIVE CONTROL: prove the guard can actually fail ---------------------
+    # A guard never observed to catch anything is not evidence it works — this
+    # repo already paid for that mistake once (docs/D002_CLOSURE_REPORT_2026_09_17.md
+    # §2.1: a test fixture structurally immune to the bug it guarded). Register a
+    # throwaway Ring 2 module, hide the import inside a function exactly the way a
+    # real leak would be hidden, and assert the scan finds it.
+    synthetic_src = (
+        "from __future__ import annotations\n"
+        "\n"
+        "def compute_applicability(company):\n"
+        "    # a forecast smuggled into a decider, one call down\n"
+        "    import godseye.fake_feed\n"
+        "    return godseye.fake_feed.risk_score(company)\n"
+    )
+    saved = REGISTRY.get("godseye.fake_feed")
+    REGISTRY["godseye.fake_feed"] = RING_2
+    try:
+        leaks = _leaks_upward(ast.parse(synthetic_src), "checker.fake_decider", RING_0)
+    finally:
+        if saved is None:
+            del REGISTRY["godseye.fake_feed"]
+        else:
+            REGISTRY["godseye.fake_feed"] = saved
+    check(len(leaks) == 1, f"a synthetic Ring 2 import nested inside a function is caught ({leaks})")
+    check(bool(leaks) and leaks[0][0] == "godseye.fake_feed" and leaks[0][1] == RING_2,
+          "...naming the exact module and its ring")
+    check(bool(leaks) and leaks[0][2] == 5,
+          f"...and the line it appears on, not just that a leak exists (line {leaks[0][2] if leaks else None})")
+    check("godseye.fake_feed" not in REGISTRY,
+          "the negative control cleans up after itself — no residue in REGISTRY")
+
+    # ---- a Ring 1 importer is checked with the same rule --------------------------
+    saved1 = REGISTRY.get("godseye.fake_feed")
+    REGISTRY["godseye.fake_feed"] = RING_2
+    try:
+        leaks1 = _leaks_upward(ast.parse("import godseye.fake_feed\n"),
+                               "checker.entity_graph", RING_1)
+    finally:
+        if saved1 is None:
+            del REGISTRY["godseye.fake_feed"]
+        else:
+            REGISTRY["godseye.fake_feed"] = saved1
+    check(len(leaks1) == 1, f"Ring 1 importing Ring 2 is caught the same way ({leaks1})")
+
+    # ---- a missing source file is reported, not silently skipped -----------------
+    REGISTRY["checker.__no_such_ring0_module__"] = RING_0
+    try:
+        v = violations()
+    finally:
+        del REGISTRY["checker.__no_such_ring0_module__"]
+    check(any("no_such_ring0_module" in x and "no source file" in x for x in v),
+          "a registered module whose file is missing is reported, not skipped")
+
+    # ---- the real codebase: run the guard for real, and report what it finds -----
+    real = violations()
+    check(real == [], f"no Ring 0/1 module in the real codebase imports Ring 2 or 3 ({real})")
+    for line in real:
+        print(f"  !! VIOLATION: {line}")
+
+    print(f"\n{ok}/{ok + fail} passed")
+    if fail:
+        raise SystemExit(1)
+
+
+if __name__ == "__main__":
+    _test()

@@ -34,6 +34,7 @@ suites=(
   checker/review_queue.py
   checker/pdf_text.py
   checker/pdf_pages.py
+  checker/rings.py
   checker/legal_retrieval.py
   checker/text_search.py
   checker/evidence_pack.py
