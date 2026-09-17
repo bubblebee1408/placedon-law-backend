@@ -44,9 +44,26 @@ uploaded nothing still gets a full matrix.
 - **Status:** BUILT. `obligations.py` (1,448 lines), live at `POST /v1/compliance-pack`,
   HTML via `matrix_view.py`.
 - **Missing:** a facts-in form a non-engineer would use.
-- **Caveat that matters:** **2 of 15 rows refuse** on an unheld rule — s.177
-  (Rule 6, held but unread) and s.203 (chain traced, unconfirmed). s.2(85) now
-  answers, because G.S.R. 880(E) was attested on 2026-09-10.
+- **Caveat that matters:** **2 of 15 rows refuse** on an unheld delegated rule —
+  s.177 (Rule 6, held but unread) and s.203 (chain traced, unconfirmed). s.2(85) now
+  answers, because G.S.R. 880(E) was attested on 2026-09-10. **MEASURED 2026-09-17**:
+  `PYTHONPATH=. python3 -c "from urllib.parse import parse_qs; from
+  checker.matrix_view import parse_profile, parse_evidence; from checker.obligations
+  import build, REGISTER; from collections import Counter; q =
+  'company_class=private&incorporation_date=2019-06-01&as_of=2026-08-31&financial_year=2024-25&paid_up_capital_crore=2&turnover_crore=30&is_holding_company=no&is_subsidiary_company=no&is_section_8=no&governed_by_special_act=no';
+  p = parse_qs(q, keep_blank_values=True); rows = build(parse_profile(p), REGISTER,
+  parse_evidence(p)); print(Counter(r.state for r in rows)); print([(r.obligation_id,
+  r.blocked_by) for r in rows if r.blocked_by])"` — using `checker/matrix_view.py`'s
+  own fixture company (private, incorporated 2019-06-01, FY 2024-25) from its
+  `_test()`: 15 rows, `Counter({'APPLIES_UNDETERMINED': 12, 'CANNOT_DETERMINE': 3})`,
+  and of the 3 `CANNOT_DETERMINE` rows exactly 2 carry a `blocked_by` naming an
+  unheld delegated rule — `[('CA13-S177-AUDIT-CTTE', 'S-177-RULES'),
+  ('CA13-S203-KMP', 'S-203-RULES')]`. The third, `CA13-S135-CSR`, is
+  `CANNOT_DETERMINE` for an unrelated reason — net worth and net profit are missing
+  company facts, not an unheld rule. **The count is company-fact dependent**: run the
+  same command with `company_class=public&is_listed=yes` added and only s.203
+  refuses (1 row), because s.177 then applies straight off the Act text; every other
+  company class or listing status measures 2.
 
 ### F3 · Evidence Pack / Verified Report
 The matrix as a dated, cited, hash-stamped document a CFO can hand to diligence
@@ -72,8 +89,13 @@ changes that move its obligations. Bitemporal: `at` (when it took effect) versus
 A Gazette instrument lands → these obligations move → these companies. Alerts that
 are dated and sourced, never a bare reminder.
 
-- **Status:** ENGINE BUILT — `affected_by()` is the reverse index.
-- **Missing:** subscriptions and delivery.
+- **Status:** ENGINE BUILT — `affected_by()` is the reverse index. A Gazette
+  watcher now exists and DETECTS new Gazette instruments: `checker/feeds/egazette.py`
+  + `scripts/watch_gazette.py` (commit `234dca2`), live baseline serial 276299
+  measured 2026-09-17. It reports what the Gazette published; it decides nothing.
+- **Missing:** the watcher is not wired to `affected_by()` — a detected instrument
+  is not yet connected to which obligations or companies it moves — and there is
+  no subscription or delivery to a user.
 
 ### F6 · Point-in-Time Answer
 "What did this provision say on 15 March 2019?" — the version in force on a past
@@ -192,6 +214,13 @@ Two real exceptions remain: **F8 is genuinely unbuilt and genuinely risky**, and
 **F11's engine is green but has no data behind it** and will not until an
 aggregator contract exists.
 
-And one thing gates the demo quality of F1, F2 and F3 at once: **four obligations
-refuse** because their delegated rules are unheld. Clearing those takes the matrix
-from 11 answerable rows to 15, and it is a day of human work, not engineering.
+And one thing gates the demo quality of F1, F2 and F3 at once: **2 of 15 rows
+refuse** (1 for a listed public company) because their delegated rule is unheld —
+s.177 and s.203, the same two named in F2's caveat above. **MEASURED 2026-09-17**
+with the same command as F2's caveat, against the same fixture: 15 rows,
+`Counter({'APPLIES_UNDETERMINED': 12, 'CANNOT_DETERMINE': 3})`, of which 2 are
+`blocked_by` an unheld delegated rule. Acquiring and reviewing both rules takes the
+matrix from 12 answerable rows to 14 for that fixture, not to all 15 — the third
+`CANNOT_DETERMINE` row, `CA13-S135-CSR`, is blocked on missing company facts (net
+worth, net profit), not a delegated rule, and no rule acquisition closes it. It is
+still a day of human work, not engineering.

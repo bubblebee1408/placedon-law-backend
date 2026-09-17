@@ -67,6 +67,18 @@ def poll(feed, state: Path, log: Path, *, now: str) -> tuple[int, dict]:
         entry.update({k: p[k] for k in ("listed", "high_water", "new_serials",
                                          "new_corporate_affairs", "new_ministry_unknown",
                                          "unseen_serials")})
+        # The log previously carried only gazette_id and serial for a new item --
+        # enough to say a poll SAW something new, not enough to say what it was.
+        # scripts/gazette_digest.py reads only this log (never re-fetches the
+        # site), so it needs ministry, kind and pdf_url here or it cannot render
+        # them. Minimal and additive: one field, the new items' own record, never
+        # replacing what was already logged.
+        new_set = set(p["new_serials"])
+        entry["new_items"] = [
+            {k: it[k] for k in ("gazette_id", "kind", "ministry", "pdf_url",
+                                 "corporate_affairs")}
+            for it in p["items"] if it["serial"] in new_set
+        ]
         if p["high_water"] is not None and (last is None or p["high_water"] > last):
             state.parent.mkdir(parents=True, exist_ok=True)
             state.write_text(json.dumps({"high_water": p["high_water"], "updated_at": now}) + "\n")
@@ -156,6 +168,7 @@ def _test() -> int:
         c, e = poll(Fake(None), st, lg, now=_now())
         check(c == 1, "an outage is a FAILED poll")
         check(load_high_water(st) == 100, "...and the high-water mark does NOT move during an outage")
+        check("new_items" not in e, "...and a failed poll logs no item records -- there are none to log")
 
         c, e = poll(Fake(b"<html>error</html>"), st, lg, now=_now())
         check(c == 1 and load_high_water(st) == 100, "an unreadable page also holds the mark")
@@ -168,6 +181,20 @@ def _test() -> int:
         check(e["unseen_serials"] == [102, 103],
               "serials published DURING the outage are reported UNSEEN, not lost")
         check(load_high_water(st) == 104, "the mark advances after a good read")
+
+        check(len(e["new_items"]) == 2,
+              f"the log entry carries a full record for every new item, not just the MCA one "
+              f"({len(e['new_items'])})")
+        mca_item = next(i for i in e["new_items"] if i["gazette_id"] == "CG-DL-E-18092026-104")
+        check(mca_item["ministry"] == "Ministry of Corporate Affairs"
+              and mca_item["corporate_affairs"] is True
+              and mca_item["pdf_url"].endswith("104.pdf")
+              and mca_item["kind"] == "EXTRAORDINARY",
+              "...with ministry, corporate_affairs, kind and pdf_url -- gazette_digest.py needs "
+              "all four and the log previously carried none of them")
+        check(any(i["gazette_id"] == "CG-DL-E-18092026-101" and i["corporate_affairs"] is False
+                  for i in e["new_items"]),
+              "...and a plain new item is recorded too, not only the ones needing a person")
 
         c, e = poll(Fake(body), st, lg, now=_now())
         check(c == 0 and e["new_serials"] == [], "re-polling the same page reports nothing new")

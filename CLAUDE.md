@@ -118,7 +118,7 @@ Files changed · Tests added or updated · Commands run · Results · Known limi
 | `checker/robots.py` | Robots + TLS enforcement in the fetch path; fails closed |
 | `checker/corroborate.py` | Prior wording vs the amending Act — the non-circular check |
 | `checker/ss/` | Secretarial Standards defect scanner + evidenced RULES.md |
-| `corpus/companies_act/` | 527 ingested sections, hash-stamped |
+| `corpus/companies_act/` | 529 ingested sections, hash-stamped (`ls corpus/companies_act/*.json \| wc -l`, measured 2026-09-17; matches README.md) |
 | `corpus/testdocs/` | Real + ICSI-specimen documents for scanner validation |
 | `corpus/reference/` | SS-1 and SS-2 full text |
 | `scripts/` | Ingestion and verification harnesses |
