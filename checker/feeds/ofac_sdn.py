@@ -127,7 +127,9 @@ BLINDNESS = EITHER
 # Registration" would also catch unrelated fields on non-vessel entries
 # ("Public Registration Number", "Romanian Tax Registration") -- exact match only.
 _IMO_ID_TYPE = "Vessel Registration Identification"
-_IMO_SHAPE = re.compile(r"^\d{7}$")
+# RT-13: `\\d` matches every Unicode decimal, so an IMO written in Devanagari or
+# fullwidth digits would key the index under a string no caller can type. ASCII only.
+_IMO_SHAPE = re.compile(r"^[0-9]{7}$")
 _IMO_PREFIX = re.compile(r"(?i)^imo\s*")
 
 # The namespace OFAC publishes under, read from the live file on 2026-09-17. Parsing

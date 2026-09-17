@@ -201,10 +201,18 @@ def _handle_http_error(source_id: str, entry_url: str, exc: urllib.error.HTTPErr
         entry_host = urlsplit(entry_url).netloc
 
         if not target_host or target_host not in allow_redirect_hosts:
+            # RT-05: a RELATIVE Location ("/somewhere") parses to an empty netloc.
+            # Reporting that as "(no Location header)" named the wrong cause; the
+            # refusal was right, its stated reason was not. A relative redirect is
+            # still never followed: it would land on the entry host without that host
+            # having been named in allow_redirect_hosts.
+            where = (target_host if target_host
+                     else f"the relative path {location!r}" if location
+                     else "(no Location header)")
             return _refused(
                 source_id, entry_url, BLOCKED, http_status=exc.code,
                 note=(f"entry host {entry_host} redirected ({exc.code}) to "
-                      f"{target_host or '(no Location header)'}, which is not in "
+                      f"{where}, which is not in "
                       f"allow_redirect_hosts -- refused rather than followed silently"))
 
         # An explicitly-trusted redirect target: fetch it as its own request. The
@@ -409,6 +417,16 @@ def _test() -> None:
     # ── DEFAULT_MAX_BYTES actually reflects the measured OFAC payload ───────
     check(DEFAULT_MAX_BYTES > 29_076_910,
           f"the default cap ({DEFAULT_MAX_BYTES}) clears the measured SDN payload size (29,076,910)")
+
+    # ---- RT-05: a relative Location names its real cause ----------------------
+    from email.message import Message as _Msg
+    def _rel_opener(url, *, timeout):
+        h = _Msg(); h["Location"] = "/elsewhere/file.xml"
+        raise urllib.error.HTTPError(url, 302, "Found", h, None)
+    rr = fetch("t", "https://example.gov/x", rules=allow_all, opener=_rel_opener)
+    check(rr.source_behaviour == BLOCKED, "a relative redirect is still refused")
+    check("relative path" in rr.note and "no Location header" not in rr.note,
+          f"...and the refusal names the relative path, not a missing header ({rr.note[:60]})")
 
     # ---- RT-04: a body shorter than its declared Content-Length ----------------
     short = _FakeResponse(200, b"half a document", headers={"Content-Length": "999999"})

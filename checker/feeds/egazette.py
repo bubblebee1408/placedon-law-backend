@@ -116,6 +116,7 @@ class GazetteItem:
     subject: str           # the page TRUNCATES this ("..."); never treat it as the text
     pdf_url: str
     corporate_affairs: bool | None   # None = UNKNOWN: the row names no single ministry
+    date_agrees: bool | None = None  # RT-12: does the ID's embedded date match the Date column?
 
 
 def pdf_url(gazette_id: str) -> str:
@@ -129,6 +130,29 @@ def pdf_url(gazette_id: str) -> str:
         raise ValueError(f"not a Gazette ID of the shape CG-XX-E-DDMMYYYY-N: {gazette_id!r}")
     year, serial = m.group(5), m.group(6)
     return f"https://{HOST}/WriteReadData/{year}/{serial}.pdf"
+
+
+_MONTHS = ("jan", "feb", "mar", "apr", "may", "jun",
+           "jul", "aug", "sep", "oct", "nov", "dec")
+
+
+def _dates_agree(m: "re.Match[str]", published: str) -> bool | None:
+    """Does the Gazette ID's embedded DDMMYYYY match the Date column?
+
+    RT-12: the two were never compared, so a mismatch -- a mis-keyed row, or an ID
+    reused across days -- would pass silently, and `pdf_url()` derives the YEAR from
+    the ID. None means "no date column to compare", not "they agree": an unreadable
+    date is not evidence of agreement.
+    """
+    if not published:
+        return None
+    parts = published.replace("/", "-").split("-")
+    if len(parts) != 3:
+        return None
+    dd, mon, yyyy = parts[0].strip(), parts[1].strip().lower()[:3], parts[2].strip()
+    if mon not in _MONTHS:
+        return None
+    return (dd.zfill(2), f"{_MONTHS.index(mon) + 1:02d}", yyyy) == (m.group(3), m.group(4), m.group(5))
 
 
 def _clean(fragment: str) -> str:
@@ -204,11 +228,13 @@ def parse_listing(page: str) -> list[GazetteItem]:
             if not m:
                 continue
             ministry = get.get("ministry", {}).get(n, "")
+            published = get.get("date", {}).get(n, "")
             items[gid] = GazetteItem(
                 gazette_id=gid, serial=int(m.group(6)), kind=kind,
                 published=get.get("date", {}).get(n, ""),
                 ministry=ministry, subject=get.get("subject", {}).get(n, ""),
                 pdf_url=pdf_url(gid),
+                date_agrees=_dates_agree(m, published),
                 corporate_affairs=(None if (not ministry or _MULTIPLE in ministry.casefold())
                                    else CORPORATE_AFFAIRS in ministry.casefold()),
             )
@@ -281,6 +307,9 @@ class EGazetteFeed:
             "unseen_means": w["unseen_means"],
             "high_water": w["high_water"],
             "subject_is_truncated": True,
+            # RT-12: rows whose ID date and Date column disagree. Reported, never
+            # repaired -- which of the two is right is not ours to decide.
+            "date_mismatch": [i.gazette_id for i in items if i.date_agrees is False],
         }
         return Observation(source_id=self.source_id, content_sha256=result.sha256,
                            observed_at=observed_at, licence=self.licence,
@@ -384,6 +413,19 @@ def _test() -> None:
           f"a nested span keeps the whole ministry name (got {ni[0].ministry!r})")
     check(ni[0].corporate_affairs is True,
           "...so the MCA alert still fires -- RT-11 would have silenced it")
+
+    # ---- RT-12: the ID's own date against the Date column --------------------
+    good = next(i for i in items if i.serial == 276299)
+    check(good.date_agrees is True, "a row whose ID date matches its Date column agrees")
+    mism = ('<span id="rpt_Extra_lbl_MinistryE_0">Ministry of Labour</span>'
+            '<span id="rpt_Extra_lbl_SubjectE_0">...</span>'
+            '<span id="rpt_Extra_lbl_DateE_0">11-Sep-2026</span>'
+            '<span id="rpt_Extra_lbl_UGIDExtra_0">CG-DL-E-17092026-301</span>')
+    mi = parse_listing(mism)
+    check(mi[0].date_agrees is False, "a row whose ID date contradicts its Date column is flagged")
+    nodate = mism.replace('<span id="rpt_Extra_lbl_DateE_0">11-Sep-2026</span>', "")
+    check(parse_listing(nodate)[0].date_agrees is None,
+          "no readable date is UNKNOWN, not agreement")
 
     # ---- watching ----
     first = watch(items, None)
