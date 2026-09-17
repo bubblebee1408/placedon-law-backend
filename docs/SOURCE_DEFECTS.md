@@ -216,3 +216,57 @@ miss these provisions. `entail_qualifier`'s delegated-rule pattern
 qualifier is present in law and invisible to that pattern. Trigger phrases in
 the `QUALIFIERS` inventory quote the served text, typo included, so the
 inventory-verification test passes against the source as it actually is.
+
+## SD-005 — broken word spacing in the English text layer of the Board Rules gazette
+
+**Found:** 2026-09-17, while verifying that the D-002 page-reader fix had unblocked the
+Board Rules re-extraction. It had not, and this is why.
+**Where:** `corpus/sources/companies_meetings_board_powers_rules_2014.pdf` — G.S.R. 240(E),
+the Companies (Meetings of Board and its Powers) Rules, 2014. **Pages 13–22**, the English
+operative text of r.1–r.15.
+
+The document's own text layer emits words split by stray spaces: `in its own na me`,
+`[P ART  II—S EC . 3(i)]`, `secti on 188`. This is not an extraction artefact of any one
+reader.
+
+### Why it is the source and not the reader — three independent engines
+
+Measured 2026-09-17 with `scripts/parse_board_rules.count_split_words`:
+
+| Reader | Engine | Whole document | **Pages 13–22 (the rules)** | Pages 1–12 (Hindi/front) |
+|---|---|---|---|---|
+| `pdf_text.extract_pages` (retired) | stdlib regex | 1,499 | — | — |
+| `pdf_pages.extract_pages` | pypdf | 1,474 | **1,458** | 16 |
+| independent oracle | pdfplumber / pdfminer.six | 1,367 | **1,350** | 16 |
+
+Three engines that share no parsing code agree within **8%**. The splits are concentrated in
+the **English** rule text — the pages actually under review — and are nearly absent from the
+Hindi pages (16 on every reader), which disproves the first hypothesis that Devanagari
+handling was the cause.
+
+**Status:** `SOURCE_DEFECT_CONFIRMED`. Present in the gazette's text layer; not caused by our
+ingestion, and not removable by changing readers.
+
+### Handling — preserved, not rejoined
+
+Not repaired. An automated dictionary rejoin would be exactly the silent correction
+`CLAUDE.md` forbids, and on statutory text the failure mode is worse than the defect: a
+rejoin that turns `na me` into `name` correctly will, on the next document, turn some
+genuine two-word phrase into one word and no one will know.
+
+`parse_board_rules` already counts the splits per rule and emits them as a parser warning
+(`N word(s) still split by extraction -- read text_raw against pages X-Y`), and
+`scripts/review.py` shows the parsed `text_raw` beside the gazette page text so a reviewer
+adjudicates against the source rather than against our reading of it.
+
+### Bearing on the 30 queued review items
+
+This is now what gates `reports/review_brief.md`, **not** D-002. The brief's fourth question —
+*"Is the extracted text usable for legal reasoning?"* — is precisely the judgement this defect
+demands of a human, and it is a legitimate question to put to one. R15 carries the worst of it
+(578 split words) and also runs to end-of-document absorbing the Annexure, so it needs a
+boundary decision in the same pass.
+
+**Open, and deliberately not decided here:** whether to acquire a cleaner rendering of the same
+instrument (India Code may serve it as structured text rather than a scanned-era PDF). That is
+an acquisition task under the existing source policy, not a repair.

@@ -3776,39 +3776,35 @@
   }
  ],
  "repo_reader": {
-  "reader": "checker/pdf_text.extract_pages (stdlib; not a renderer)",
+  "reader": "checker/pdf_pages.extract_pages (pypdf; offline tooling)",
   "page_totals": {
-   "NO_TEXT_EXTRACTED": 133,
-   "TEXT": 2
+   "NO_TEXT_EXTRACTED": 2,
+   "SUSPECT": 18,
+   "TEXT": 494
   },
-  "reader_failed": [
-   "_raw/icsi_gn_general.pdf",
-   "_raw/route_agm_2025.pdf",
-   "_raw/route_agm_2026.pdf",
-   "_raw/titan_agm_2025.pdf"
-  ]
+  "reader_failed": []
  },
  "reader_comparison": {
-  "documents_agreeing": 0,
+  "documents_agreeing": 14,
   "documents": 14,
   "rows": [
    {
     "document": "_raw/icsi_gn_board.pdf",
-    "repo_pages": 1,
+    "repo_pages": 169,
     "independent_pages": 169,
     "independent_failed": false,
-    "page_count_mismatch": true,
-    "pages_repo_missed": 163,
-    "agree": false
+    "page_count_mismatch": false,
+    "pages_repo_missed": 0,
+    "agree": true
    },
    {
     "document": "_raw/icsi_gn_general.pdf",
-    "repo_pages": 0,
+    "repo_pages": 179,
     "independent_pages": 179,
     "independent_failed": false,
-    "page_count_mismatch": true,
-    "pages_repo_missed": 178,
-    "agree": false
+    "page_count_mismatch": false,
+    "pages_repo_missed": 0,
+    "agree": true
    },
    {
     "document": "_raw/rm_bm_20240529.pdf",
@@ -3816,8 +3812,8 @@
     "independent_pages": 1,
     "independent_failed": false,
     "page_count_mismatch": false,
-    "pages_repo_missed": 1,
-    "agree": false
+    "pages_repo_missed": 0,
+    "agree": true
    },
    {
     "document": "_raw/rm_bm_20250128.pdf",
@@ -3825,8 +3821,8 @@
     "independent_pages": 14,
     "independent_failed": false,
     "page_count_mismatch": false,
-    "pages_repo_missed": 10,
-    "agree": false
+    "pages_repo_missed": 0,
+    "agree": true
    },
    {
     "document": "_raw/rm_bm_20251103.pdf",
@@ -3834,8 +3830,8 @@
     "independent_pages": 18,
     "independent_failed": false,
     "page_count_mismatch": false,
-    "pages_repo_missed": 13,
-    "agree": false
+    "pages_repo_missed": 0,
+    "agree": true
    },
    {
     "document": "_raw/rm_bm_20260507.pdf",
@@ -3843,35 +3839,35 @@
     "independent_pages": 22,
     "independent_failed": false,
     "page_count_mismatch": false,
-    "pages_repo_missed": 18,
-    "agree": false
+    "pages_repo_missed": 0,
+    "agree": true
    },
    {
     "document": "_raw/route_agm_2024.pdf",
-    "repo_pages": 37,
+    "repo_pages": 22,
     "independent_pages": 22,
     "independent_failed": false,
-    "page_count_mismatch": true,
-    "pages_repo_missed": 22,
-    "agree": false
+    "page_count_mismatch": false,
+    "pages_repo_missed": 0,
+    "agree": true
    },
    {
     "document": "_raw/route_agm_2025.pdf",
-    "repo_pages": 0,
+    "repo_pages": 16,
     "independent_pages": 16,
     "independent_failed": false,
-    "page_count_mismatch": true,
-    "pages_repo_missed": 16,
-    "agree": false
+    "page_count_mismatch": false,
+    "pages_repo_missed": 0,
+    "agree": true
    },
    {
     "document": "_raw/route_agm_2026.pdf",
-    "repo_pages": 0,
+    "repo_pages": 16,
     "independent_pages": 16,
     "independent_failed": false,
-    "page_count_mismatch": true,
-    "pages_repo_missed": 16,
-    "agree": false
+    "page_count_mismatch": false,
+    "pages_repo_missed": 0,
+    "agree": true
    },
    {
     "document": "_raw/sonata_agm_notice_29th_2024.pdf",
@@ -3879,17 +3875,17 @@
     "independent_pages": 18,
     "independent_failed": false,
     "page_count_mismatch": false,
-    "pages_repo_missed": 18,
-    "agree": false
+    "pages_repo_missed": 0,
+    "agree": true
    },
    {
     "document": "_raw/sonata_outcome_agm_2025.pdf",
-    "repo_pages": 5,
+    "repo_pages": 4,
     "independent_pages": 4,
     "independent_failed": false,
-    "page_count_mismatch": true,
-    "pages_repo_missed": 4,
-    "agree": false
+    "page_count_mismatch": false,
+    "pages_repo_missed": 0,
+    "agree": true
    },
    {
     "document": "_raw/sonata_outcome_agm_2026.pdf",
@@ -3897,17 +3893,17 @@
     "independent_pages": 4,
     "independent_failed": false,
     "page_count_mismatch": false,
-    "pages_repo_missed": 4,
-    "agree": false
+    "pages_repo_missed": 0,
+    "agree": true
    },
    {
     "document": "_raw/titan_agm_2025.pdf",
-    "repo_pages": 0,
+    "repo_pages": 16,
     "independent_pages": 16,
     "independent_failed": false,
-    "page_count_mismatch": true,
-    "pages_repo_missed": 16,
-    "agree": false
+    "page_count_mismatch": false,
+    "pages_repo_missed": 0,
+    "agree": true
    },
    {
     "document": "_raw/titan_agm_2026.pdf",
@@ -3915,8 +3911,8 @@
     "independent_pages": 15,
     "independent_failed": false,
     "page_count_mismatch": false,
-    "pages_repo_missed": 13,
-    "agree": false
+    "pages_repo_missed": 0,
+    "agree": true
    }
   ]
  }

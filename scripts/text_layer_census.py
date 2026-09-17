@@ -152,7 +152,7 @@ def _pdfplumber_read(path: Path) -> tuple[list[str], list[float]] | None:
 
 
 def summarise(rows: list[dict], *, reader: str =
-              "checker/pdf_text.extract_pages (stdlib; not a renderer)") -> dict:
+              "checker/pdf_pages.extract_pages (pypdf; offline tooling)") -> dict:
     totals: dict[str, int] = {}
     for r in rows:
         for label, n in r["counts"].items():
@@ -179,7 +179,7 @@ def run_census() -> dict:
     (see _test), so page totals are taken from pdfplumber and the repo reader's
     view is reported next to them with the per-document disagreement.
     """
-    from checker.pdf_text import extract_pages
+    from checker.pdf_pages import extract_pages
     independent_rows, repo_rows, comparison = [], [], []
     for p in sorted(CORPUS.rglob("*.pdf")):
         name = str(p.relative_to(CORPUS))

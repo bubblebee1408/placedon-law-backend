@@ -26,7 +26,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-from checker.pdf_text import extract_pages  # noqa: E402
+from checker.pdf_pages import extract_pages  # noqa: E402
 
 PDF = ROOT / "corpus/sources/companies_meetings_board_powers_rules_2014.pdf"
 OUT = ROOT / "corpus/rules/board_powers_2014.json"
@@ -202,7 +202,7 @@ def main() -> None:
         "gazette_date": "2014-03-31",
         "source_artifact": "corpus/sources/companies_meetings_board_powers_rules_2014.pdf",
         "source_artifact_sha256": ARTIFACT_SHA,
-        "extractor": "checker/pdf_text.py",
+        "extractor": "checker/pdf_pages.py",
         "pages": len(pages),
         "status": "UNREVIEWED",
         "production_usable": False,
