@@ -252,17 +252,38 @@ def fetch_rules(origin: str, *, timeout: float = 15.0) -> Rules:
                 return Rules(source=f"{url} HTTP {r.status}")
             body = r.read().decode("utf-8", "replace")
     except urllib.error.HTTPError as exc:
-        # A 4xx is an *answer*: the server is reachable and states that no rules
-        # file exists, which RFC 9309 treats as full allowance. A 5xx is not an
-        # answer, and neither is a timeout — those stay closed. Collapsing the two
-        # would either lock us out of every site without a robots.txt (cca.gov.in
-        # among them) or, worse, let a failing server look like permission.
-        if 400 <= exc.code < 500:
-            return Rules(loaded=True, source=f"{url} HTTP {exc.code}: no rules published")
-        return Rules(source=f"{url} HTTP {exc.code}")
+        return rules_for_status(exc.code, url)
     except (urllib.error.URLError, OSError, ValueError) as exc:
         return Rules(source=f"{url} unreachable: {exc}")
     return parse(body, source=url)
+
+
+# Status codes on robots.txt that are a REFUSAL, not an absence. RFC 9309 §2.3.1.3
+# groups all 4xx as "unavailable" and says a crawler MAY then access anything --
+# "may", not "must". A 401/403/407 is the server saying we are not welcome; a 429 is
+# it saying slow down. Reading either as "no rules exist, so everything is allowed"
+# is the RFC's letter and the wrong verdict. Measured 2026-09-17: bseindia.com
+# answers its robots.txt with an Akamai "Access Denied" 403, which the old rule read
+# as full permission.
+_DENIED = (401, 403, 407, 429)
+
+
+def rules_for_status(code: int, url: str) -> Rules:
+    """The ruleset implied by a non-200 answer for robots.txt.
+
+    A genuine absence (404, 410, and the remaining 4xx) is an *answer*: the server is
+    reachable and publishes no rules, which RFC 9309 treats as full allowance.
+    Collapsing that into "closed" would lock us out of every site without a
+    robots.txt (cca.gov.in, egazette.gov.in, sanctionslistservice.ofac.treas.gov
+    among them). A denial or rate limit (`_DENIED`), a 5xx, or any other status is
+    NOT permission and stays closed -- a failing or refusing server must never look
+    like consent.
+    """
+    if code in _DENIED:
+        return Rules(source=f"{url} HTTP {code}: access denied or rate-limited -- not treated as 'no rules'")
+    if 400 <= code < 500:
+        return Rules(loaded=True, source=f"{url} HTTP {code}: no rules published")
+    return Rules(source=f"{url} HTTP {code}")
 
 
 class Fetcher:
@@ -372,6 +393,22 @@ def _test() -> None:
 
     # A 404 means "no rules exist"; a 503 means "no answer". Only the first grants
     # permission, and conflating them is a bug in either direction.
+    # The status decision itself, exercised rather than hand-built (move 8, 2026-09-17).
+    # BSE answered its robots.txt with an Akamai "Access Denied" 403; the old rule read
+    # every 4xx as "no rules published" and so as permission.
+    u = "https://example.gov/robots.txt"
+    check(rules_for_status(404, u).loaded and allowed("https://example.gov/x", rules_for_status(404, u)),
+          "404: no rules file exists -> full allowance (RFC 9309)")
+    check(rules_for_status(410, u).loaded, "410 Gone is also an absent file -> allowance")
+    for code in (401, 403):
+        r = rules_for_status(code, u)
+        check(not r.loaded and not allowed("https://example.gov/x", r),
+              f"{code}: access DENIED is a block, not an absence -> closed")
+        check(f"HTTP {code}" in r.source and "denied" in r.source,
+              f"...and the {code} refusal says why")
+    check(not rules_for_status(429, u).loaded, "429 rate-limited is not an answer about rules -> closed")
+    check(not rules_for_status(503, u).loaded, "5xx is not an answer -> closed")
+
     r404 = Rules(loaded=True, source="HTTP 404: no rules published")
     check(allowed("https://cca.gov.in/anything", r404),
           "a 404 robots.txt permits fetching (RFC 9309)")
