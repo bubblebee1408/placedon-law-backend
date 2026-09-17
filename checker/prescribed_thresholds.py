@@ -179,7 +179,8 @@ def _prescribed_state_880() -> tuple[str, str, str]:
     Same shape as _prescribed_state, for the instrument that SUPERSEDED 700(E).
     """
     try:
-        from scripts.register_gsr880e import registration, is_attested
+        from scripts.register_gsr880e import (registration, is_attested,
+                                              attestation_gaps, provenance_problem)
     except ImportError:                                     # pragma: no cover
         return UNRESOLVED, "this instrument has not been acquired", ""
 
@@ -192,21 +193,36 @@ def _prescribed_state_880() -> tuple[str, str, str]:
             "not read in the Gazette (reference S-003)"), (
             "no registration on record. Acquire under S-003: download the Gazette "
             "artifact in a browser, then scripts/register_gsr880e.py.")
+    gaps = attestation_gaps(rec)
+    if gaps and all(g.startswith("source:") for g in gaps):
+        # A-001: a reviewer did check it. Saying otherwise would be false; what is
+        # missing is where the file came from.
+        return UNRESOLVED, (
+            "the instrument is held and a named reviewer checked it, but the record does "
+            "not say where it was downloaded from and no copy from an official host "
+            "corroborates it (reference S-003)"), (
+            f"artifact registered ({rec.get('artifact_sha256', '?')[:23]}…) and attested, "
+            f"but unsourced: {provenance_problem(rec)}. The person who downloaded it runs "
+            "scripts/register_gsr880e.py --source --from <URL> --at <YYYY-MM-DD>.")
     if not is_attested(rec):
-        missing = [k for k in ("identity_checked_by", "verbatim_clause_checked_by")
-                   if not rec.get(k)]
         return UNRESOLVED, (
             "the instrument is held but no reviewer has confirmed it is the right "
             "one and that its clause is reproduced verbatim (reference S-003)"), (
             f"artifact registered ({rec.get('artifact_sha256', '?')[:23]}…) but not "
-            f"attested: {', '.join(missing) or 'status is not CORROBORATED'}. Run "
-            "scripts/register_gsr880e.py --attest <reviewer-id>.")
+            f"attested: {'; '.join(gaps)}. Run scripts/register_gsr880e.py --attest "
+            "<reviewer-id> --from <URL> --at <YYYY-MM-DD>.")
+    if rec.get("downloaded_from"):
+        source = f"downloaded from {rec['downloaded_from']} on {rec['downloaded_at']}"
+    else:
+        copy_ = rec["corroborating_copy"]
+        source = (f"download source not recorded; {copy_['match']} copy at {copy_['url']} "
+                  f"retrieved {copy_['retrieved_at']} ({copy_.get('recorded_by') or 'unlabelled'})")
     return CORROBORATED, (
         f"held and confirmed by a named reviewer on "
         f"{rec['identity_checked_at'][:10]}"), (
         f"registered and attested by {rec['identity_checked_by']} at "
         f"{rec['identity_checked_at']}; artifact "
-        f"{rec.get('artifact_sha256', '?')[:23]}…")
+        f"{rec.get('artifact_sha256', '?')[:23]}…; {source}")
 
 
 # The date G.S.R. 880(E) took effect, and therefore the day after which the 2022
@@ -503,12 +519,31 @@ def _test() -> None:
         st6, _, _ = _prescribed_state_880()
         check(st6 == UNRESOLVED, "downloading 880(E) without attesting is not enough")
 
+    # A-001: both human checks, but nothing says where the file came from. Refused,
+    # and the note must not blame a reviewer who did check it.
+    unsourced = {k: v for k, v in reg880.attested_stub("reviewer-880").items()
+                 if k not in ("downloaded_from", "downloaded_at", "corroborating_copy")}
+    with reg880.stub_registration(unsourced):
+        st8, note8, op8 = _prescribed_state_880()
+        check(st8 == UNRESOLVED, f"880(E) checked but unsourced is refused ({st8})")
+        check("no reviewer has confirmed" not in note8 and "downloaded from" in note8,
+              f"...and the reader note names the missing source, not a missing review ({note8[:70]}…)")
+        check("--source --from" in op8,
+              "...and the operator note names the command that records it")
+        try:
+            operative_small_company_limits(date(2026, 9, 9))
+            check(False, "...and a 2026 date is refused")
+        except ThresholdUnavailable:
+            check(True, "...and a 2026 date is refused")
+
     with reg880.stub_registration(reg880.attested_stub("reviewer-880")):
         st7, note7, _op7 = _prescribed_state_880()
         check(st7 == CORROBORATED, f"an attested 880(E) becomes servable ({st7})")
         check("named reviewer" in note7,
               "...the reader note says a reviewer confirmed it")
         check("reviewer-880" in _op7, "...and the operator note names the reviewer")
+        check("downloaded from https://egazette.gov.in/" in _op7,
+              "...and where the file was downloaded from")
         cap25, turn25 = operative_small_company_limits(date(2026, 9, 9))
         check(cap25 == Money.crore(10) and turn25 == Money.crore(100),
               f"...and the 2025 limits then come through ({cap25} / {turn25})")

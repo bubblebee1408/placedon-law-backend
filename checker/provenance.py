@@ -21,6 +21,7 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass, field
 from pathlib import Path
+from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -44,6 +45,36 @@ UNREACHABLE = "UNREACHABLE"  # timeout / DNS failure / connection refused: the h
 NOT_FOUND = "NOT_FOUND"      # 404 from a host that DID answer.
 
 ACCESSIBILITY_STATES = (ACCESSIBLE, BLOCKED, UNREACHABLE, NOT_FOUND)
+
+# Where a registration record may say an instrument came from: the Gazette's publisher, India Code,
+# and the issuing ministry. Exact host names, not a suffix match -- "ends with gov.in" would admit
+# any host under gov.in, and "contains egazette" admits egazette.gov.in.example.com. India Code's
+# old indiacode.nic.in is absent on purpose: it is dead (CLAUDE.md), so no download came from it.
+OFFICIAL_SOURCE_HOSTS = frozenset({
+    "egazette.gov.in", "www.egazette.gov.in",
+    "indiacode.gov.in", "www.indiacode.gov.in",
+    "mca.gov.in", "www.mca.gov.in",
+})
+
+
+def official_source_url(url: object) -> bool:
+    """True only for an https address on an official host, with no credentials or odd port.
+
+    A plain-http copy of a Gazette notification is a copy anyone on the path could have edited, so
+    it is not a source this system may point to, however official the host name.
+    """
+    if not isinstance(url, str) or not url:
+        return False
+    try:
+        parts = urlsplit(url)
+        port = parts.port
+    except ValueError:
+        return False
+    if parts.scheme != "https" or parts.username is not None or parts.password is not None:
+        return False
+    if port not in (None, 443):
+        return False
+    return (parts.hostname or "") in OFFICIAL_SOURCE_HOSTS
 
 
 class ProvenanceError(ValueError):
@@ -365,6 +396,26 @@ def _test() -> None:
         check(False, "invented accessibility state must raise")
     except ProvenanceError:
         check(True, "invented accessibility state rejected")
+
+    # ── where an instrument may be recorded as coming from (A-001) ───────────
+    for url in ("https://egazette.gov.in/WriteReadData/2025/268124.pdf",
+                "https://indiacode.gov.in/handle/123456789/508916",
+                "https://www.mca.gov.in/content/mca/global/en/acts-rules/ebooks/rules.html",
+                "https://EGAZETTE.gov.in/WriteReadData/2025/268124.pdf"):
+        check(official_source_url(url), f"an official https address is accepted ({url})")
+    for url, why in (
+            ("http://egazette.gov.in/WriteReadData/2025/268124.pdf", "plain http"),
+            ("https://taxguru.in/company-law/gsr-880e.html", "a commentary site"),
+            ("https://egazette.gov.in.example.com/x.pdf", "a lookalike host"),
+            ("https://example.com/?u=https://egazette.gov.in/x.pdf", "an official URL in a query"),
+            ("https://someone@egazette.gov.in/x.pdf", "credentials in the address"),
+            ("https://egazette.gov.in:8443/x.pdf", "a non-default port"),
+            ("https://indiacode.nic.in/handle/123456789/2114", "India Code's dead domain"),
+            ("egazette.gov.in/WriteReadData/2025/268124.pdf", "no scheme"),
+            ("", "an empty string"),
+            (None, "no value"),
+            (42, "not a string")):
+        check(not official_source_url(url), f"{why} is refused ({url!r})")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:
