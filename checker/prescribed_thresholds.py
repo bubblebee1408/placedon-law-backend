@@ -144,7 +144,8 @@ def _prescribed_state() -> tuple[str, str, str]:
     that the state follows the evidence rather than someone's memory of it.
     """
     try:
-        from scripts.register_gsr700e import registration, is_attested
+        from scripts.register_gsr700e import (registration, is_attested,
+                                              attestation_gaps, provenance_problem)
     except ImportError:                                     # pragma: no cover
         return UNRESOLVED, "this instrument has not been acquired", ""
 
@@ -156,6 +157,17 @@ def _prescribed_state() -> tuple[str, str, str]:
             "HTTP 502 so checker.robots declines, and egazette chains to a root "
             "absent from this machine's trust store. Acquire under S-002: "
             "download in a browser, then scripts/register_gsr700e.py.")
+    gaps = attestation_gaps(rec)
+    if gaps and all(g.startswith("source:") for g in gaps):
+        # A-001 again, on the 2022 instrument: a reviewer did check it. Saying
+        # otherwise would be false; what is missing is where the file came from.
+        return UNRESOLVED, (
+            "the instrument is held and a named reviewer checked it, but the record does "
+            "not say where it was downloaded from and no copy from an official host "
+            "corroborates it (reference S-002)"), (
+            f"artifact registered ({rec.get('artifact_sha256', '?')[:23]}…) and attested, "
+            f"but unsourced: {provenance_problem(rec)}. The person who downloaded it runs "
+            "scripts/register_gsr700e.py --source --from <URL> --at <YYYY-MM-DD>.")
     if not is_attested(rec):
         missing = [k for k in ("identity_checked_by", "verbatim_clause_checked_by")
                    if not rec.get(k)]
@@ -163,16 +175,22 @@ def _prescribed_state() -> tuple[str, str, str]:
             "the instrument is held but no reviewer has confirmed it is the right "
             "one and that its clause is reproduced verbatim (reference S-002)"), (
             f"artifact registered ({rec.get('artifact_sha256', '?')[:23]}…) but not "
-            f"attested: {', '.join(missing) or 'status is not CORROBORATED'}. "
+            f"attested: {', '.join(missing) or '; '.join(gaps)}. "
             "Hashing proves the bytes did not change, not that they are the right "
             "instrument or that the clause survived extraction. Run "
-            "scripts/register_gsr700e.py --attest <reviewer-id>.")
+            "scripts/register_gsr700e.py --attest <reviewer-id> --from <URL> --at <DATE>.")
+    if rec.get("downloaded_from"):
+        source = f"downloaded from {rec['downloaded_from']} on {rec['downloaded_at']}"
+    else:
+        copy_ = rec["corroborating_copy"]
+        source = (f"download source not recorded; {copy_['match']} copy at {copy_['url']} "
+                  f"retrieved {copy_['retrieved_at']} ({copy_.get('recorded_by') or 'unlabelled'})")
     return CORROBORATED, (
         f"held and confirmed by a named reviewer on "
         f"{rec['identity_checked_at'][:10]}"), (
         f"registered and attested by {rec['identity_checked_by']} at "
         f"{rec['identity_checked_at']}; artifact "
-        f"{rec.get('artifact_sha256', '?')[:23]}…")
+        f"{rec.get('artifact_sha256', '?')[:23]}…; {source}")
 
 
 def _prescribed_state_880() -> tuple[str, str, str]:
@@ -254,9 +272,22 @@ def _source_880() -> str:
     return served_source_url(registration()) or SOURCE_880
 
 
+def _source_700() -> str:
+    """Where a served 700(E) figure points. Same rule as _source_880: the address the
+    registration record carries. The India Code handle stays on an unservable row --
+    it is where the instrument is listed, which is not a claim about where our file
+    came from, and nothing is served from that row anyway."""
+    try:
+        from scripts.register_gsr700e import registration, served_source_url
+    except ImportError:                                     # pragma: no cover
+        return f"{_INDIA_CODE}/508916"
+    return served_source_url(registration()) or f"{_INDIA_CODE}/508916"
+
+
 def _prescribed() -> tuple[Threshold, ...]:
     state, note, op_note = _prescribed_state()
     state880, note880, op_note880 = _prescribed_state_880()
+    source700 = _source_700()
     source880 = _source_880()
     _2022 = ("G.S.R. 700(E), Companies (Specification of Definition Details) "
              "Amendment Rules, 2022, dated 15-09-2022")
@@ -266,10 +297,10 @@ def _prescribed() -> tuple[Threshold, ...]:
     return (
         Threshold("small_company.paid_up_capital.prescribed", Money.crore(4),
                   date(2022, 9, 15), _GSR880_FROM - timedelta(days=1),
-                  _2022, f"{_INDIA_CODE}/508916", state, note + superseded, op_note),
+                  _2022, source700, state, note + superseded, op_note),
         Threshold("small_company.turnover.prescribed", Money.crore(40),
                   date(2022, 9, 15), _GSR880_FROM - timedelta(days=1),
-                  _2022, f"{_INDIA_CODE}/508916", state, note + superseded, op_note),
+                  _2022, source700, state, note + superseded, op_note),
         # The 2025 amounts are a CLAIM PENDING ATTESTATION, not a fact. They are
         # here so the artifact can be checked against them (register_gsr880e's
         # clause regex requires these words), and they are unservable until it is.
@@ -473,6 +504,9 @@ def _test() -> None:
     import scripts.register_gsr700e as reg
 
     unattested = {"artifact_sha256": "sha256:" + "ab" * 32,
+                  "classification": "VERIFIED_INSTRUMENT",
+                  "downloaded_from": "https://indiacode.gov.in/test-stub.pdf",
+                  "downloaded_at": "2026-09-04",
                   "identity_checked_by": None, "identity_checked_at": None,
                   "verbatim_clause_checked_by": None,
                   "verbatim_clause_checked_at": None,
@@ -516,6 +550,42 @@ def _test() -> None:
         st4, note4, _op4 = _prescribed_state()
         check(st4 == UNRESOLVED, "no registration means no servable threshold")
         check("S-002" in note4, "...and the note names the open task")
+
+    # A-001 on the 2022 instrument (P-2): both human checks, and nothing saying where
+    # the file came from. Refused -- and the note must not blame a reviewer who did check it.
+    unsourced700 = {k: v for k, v in reg.attested_stub("reviewer-700").items()
+                    if k not in ("downloaded_from", "downloaded_at", "corroborating_copy")}
+    with mock.patch.object(reg, "registration", lambda: unsourced700):
+        st700, note700, op700 = _prescribed_state()
+        check(st700 == UNRESOLVED, f"700(E) checked but unsourced is refused ({st700})")
+        check("no reviewer has confirmed" not in note700 and "downloaded from" in note700,
+              f"...and the reader note names the missing source, not a missing review "
+              f"({note700[:70]}…)")
+        check("--source --from" in op700,
+              "...and the operator note names the command that records it")
+        try:
+            operative_small_company_limits(in_2022)
+            check(False, "...and a 2024 date is refused")
+        except ThresholdUnavailable:
+            check(True, "...and a 2024 date is refused")
+    with mock.patch.object(reg, "registration",
+                           lambda: reg.attested_stub() | {"classification": "WRONG_INSTRUMENT"}):
+        try:
+            served700 = lookup("small_company.paid_up_capital.prescribed", in_2022)
+            check(False, f"a WRONG_INSTRUMENT 700(E) record must not serve ({served700.amount})")
+        except ThresholdUnavailable:
+            check(True, "a 700(E) record classified WRONG_INSTRUMENT serves nothing")
+    # A served 2022 figure points at the address its record carries, not at a constant.
+    with mock.patch.object(reg, "registration", lambda: reg.attested_stub()):
+        t700 = lookup("small_company.turnover.prescribed", in_2022)
+        check(t700.source_url == "https://egazette.gov.in/test-stub.pdf",
+              f"an attested 700(E) figure carries the recorded download address "
+              f"({t700.source_url})")
+    with mock.patch.object(reg, "registration", lambda: unsourced700):
+        held700 = held("small_company.turnover.prescribed", in_2022)
+        check(held700 and all(t.source_url.endswith("/508916") and not t.servable
+                              for t in held700),
+              "an unsourced 700(E) keeps the India Code handle, and is not served")
 
     # ── the 2025 instrument is gated exactly the same way ────────────────────
     import scripts.register_gsr880e as reg880

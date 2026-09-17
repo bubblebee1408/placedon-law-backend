@@ -49,12 +49,14 @@ import hashlib
 import json
 import re
 import sys
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from checker.provenance import GAZETTE_OR_INDIA_CODE_HOSTS, official_source_url  # noqa: E402
+from checker.provenance import (  # noqa: E402
+    EXIT_WORDING, GAZETTE_OR_INDIA_CODE_HOSTS, NO_RECORD, SOURCE_CONFLICT, SOURCE_RECORDED,
+    SOURCE_REFUSED, SourcePolicy, cli_exit, source_conflict, split_source_flags)
 
 STORE = Path("corpus/rules/gsr_880e_2025.txt")
 RECORD = Path("corpus/sources/gsr880e_registration.json")
@@ -65,6 +67,7 @@ RECORD = Path("corpus/sources/gsr880e_registration.json")
 SOURCE_URL = "https://www.mca.gov.in/content/mca/global/en/acts-rules/ebooks/rules.html"
 BITSTREAM_ID = None
 
+# The record's own status values, spelled here because register() writes them.
 PENDING_HUMAN_REVIEW = "PENDING_HUMAN_REVIEW"
 CORROBORATED = "CORROBORATED"
 
@@ -84,13 +87,11 @@ SOURCE_HOSTS = GAZETTE_OR_INDIA_CODE_HOSTS
 
 # The instrument's date of publication. No copy of it can have been downloaded earlier.
 PUBLISHED = date(2025, 12, 1)
-# What a corroborating copy must be. "not-found" and "blocked" are outcomes of a
-# search, not a corroboration, and anything looser than verbatim is not a match.
-CORROBORATING_MATCHES = ("identical", "text-identical")
-_SHA256 = re.compile(r"sha256:[0-9a-f]{64}")
-# A date-only entry is read as midnight UTC; a person entering today's date from
-# India can be up to a day "ahead" of that.
-_CLOCK_SLACK = timedelta(days=1)
+
+# The provenance rule this record is held to, shared with every other register script
+# (checker/provenance.py). Everything it decides -- host class, publication floor,
+# what a corroborating copy must be -- is stated here and nowhere else.
+SOURCE_POLICY = SourcePolicy(SOURCE_HOSTS, PUBLISHED)
 
 VERIFIED_INSTRUMENT = "VERIFIED_INSTRUMENT"
 WRONG_INSTRUMENT = "WRONG_INSTRUMENT"
@@ -168,9 +169,6 @@ def classify(text: str) -> tuple[str, str, str]:
     return VERIFIED_INSTRUMENT, "identifies as G.S.R. 880(E) of 2025 and carries the clause", clause
 
 
-SOURCE_REFUSED = "SOURCE_REFUSED"
-
-
 def register(src: Path, downloaded_from: str | None = None,
              downloaded_at: str | None = None) -> str:
     if downloaded_from is not None or downloaded_at is not None:
@@ -242,22 +240,6 @@ def register(src: Path, downloaded_from: str | None = None,
     return outcome
 
 
-SOURCE_CONFLICT = "SOURCE_CONFLICT"
-
-
-def source_conflict(rec: dict, downloaded_from: str | None,
-                    downloaded_at: str | None) -> str | None:
-    """Why recording this source would silently replace a different one, or None.
-    Recording the same source again is not a conflict."""
-    old = (rec.get("downloaded_from"), rec.get("downloaded_at"))
-    if old == (None, None) or old == (downloaded_from, downloaded_at):
-        return None
-    return ("a different download source is already recorded\n"
-            f"  recorded : {old[0]} on {old[1]}\n"
-            f"  given    : {downloaded_from} on {downloaded_at}\n"
-            "Nothing was written. Pass --replace to overwrite the recorded source.")
-
-
 def attest(reviewer_id: str, downloaded_from: str | None = None,
            downloaded_at: str | None = None, *, replace: bool = False) -> str:
     """Record that a person performed the checks, and optionally where they got the
@@ -267,19 +249,16 @@ def attest(reviewer_id: str, downloaded_from: str | None = None,
     rec = registration()
     if rec is None:
         print("no registration on record — run register first")
-        return "NO_RECORD"
+        return NO_RECORD
     if downloaded_from is not None or downloaded_at is not None:
-        problem = source_problem(downloaded_from, downloaded_at)
-        if problem:
-            print(f"download source refused: {problem}\nNothing was written.")
-            return SOURCE_REFUSED
-        conflict = None if replace else source_conflict(rec, downloaded_from, downloaded_at)
-        if conflict:
-            print(conflict)
-            return SOURCE_CONFLICT
-        rec["downloaded_from"] = downloaded_from
-        rec["downloaded_at"] = downloaded_at
+        outcome, written, message = SOURCE_POLICY.record_source(
+            rec, downloaded_from, downloaded_at, replace=replace)
+        if outcome in (SOURCE_REFUSED, SOURCE_CONFLICT):
+            print(message)
+            return outcome
+        rec = written if written is not None else rec
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    rec = dict(rec)
     rec["identity_checked_by"] = reviewer_id
     rec["identity_checked_at"] = now
     rec["verbatim_clause_checked_by"] = reviewer_id
@@ -300,25 +279,14 @@ def record_source(downloaded_from: str | None, downloaded_at: str | None, *,
     """Record only where and when the file was downloaded. The human check fields and
     their timestamps are left exactly as they are. A different source already on
     record is not overwritten unless replace is set."""
-    rec = registration()
-    if rec is None:
-        print("no registration on record — run register first")
-        return "NO_RECORD"
-    problem = source_problem(downloaded_from, downloaded_at)
-    if problem:
-        print(f"download source refused: {problem}\nNothing was written.")
-        return SOURCE_REFUSED
-    conflict = None if replace else source_conflict(rec, downloaded_from, downloaded_at)
-    if conflict:
-        print(conflict)
-        return SOURCE_CONFLICT
-    if (rec.get("downloaded_from"), rec.get("downloaded_at")) == (downloaded_from, downloaded_at):
-        print(f"already recorded: downloaded from {downloaded_from} on {downloaded_at}")
-    else:
-        rec["downloaded_from"] = downloaded_from
-        rec["downloaded_at"] = downloaded_at
-        RECORD.write_text(json.dumps(rec, indent=1) + "\n", encoding="utf-8")
-        print(f"recorded: downloaded from {downloaded_from} on {downloaded_at}")
+    outcome, written, message = SOURCE_POLICY.record_source(
+        registration(), downloaded_from, downloaded_at, replace=replace)
+    print(message)
+    if outcome in (NO_RECORD, SOURCE_REFUSED, SOURCE_CONFLICT):
+        return outcome
+    if outcome == SOURCE_RECORDED:
+        RECORD.write_text(json.dumps(written, indent=1) + "\n", encoding="utf-8")
+    rec = written if written is not None else registration()
     gaps = attestation_gaps(rec)
     print("attested" if not gaps else "NOT usable yet: " + "; ".join(gaps))
     return CORROBORATED if not gaps else PENDING_HUMAN_REVIEW
@@ -334,96 +302,32 @@ def registration() -> dict | None:
         return None
 
 
-def _when(value: object) -> datetime | None:
-    """An ISO date or date-time as an aware datetime, or None. Naive means UTC."""
-    if not isinstance(value, str) or not value.strip():
-        return None
-    try:
-        t = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    return t if t.tzinfo else t.replace(tzinfo=timezone.utc)
-
-
 def source_problem(url: object, at: object,
                    hosts: frozenset[str] = SOURCE_HOSTS) -> str | None:
     """Why this (address, date) pair is not a usable download source, or None.
 
     `hosts` defaults to the Gazette and India Code only, because that is the host
     class this record attests (ATTESTATIONS[2]) -- not every official host."""
-    if not official_source_url(url, hosts=hosts):
-        return (f"{url!r} is not an https address on a host this record attests "
-                f"({', '.join(sorted(hosts))})")
-    when = _when(at)
-    if when is None:
-        return f"{at!r} is not an ISO date (YYYY-MM-DD or a full timestamp)"
-    if when.date() < PUBLISHED:
-        return f"{at} is before the instrument was published ({PUBLISHED.isoformat()})"
-    if when > datetime.now(timezone.utc) + _CLOCK_SLACK:
-        return f"{at} is in the future"
-    return None
+    policy = SOURCE_POLICY if frozenset(hosts) == SOURCE_HOSTS else SourcePolicy(
+        frozenset(hosts), PUBLISHED)
+    return policy.source_problem(url, at)
 
 
 def corroboration_problem(rec: dict) -> str | None:
     """Why the record's corroborating copy does not corroborate, or None."""
-    copy_ = rec.get("corroborating_copy")
-    if not copy_:
-        return "no corroborating copy from an official host"
-    if not isinstance(copy_, dict):
-        return "corroborating_copy is not a record"
-    problem = source_problem(copy_.get("url"), copy_.get("retrieved_at"))
-    if problem:
-        return f"corroborating copy: {problem}"
-    sha = copy_.get("sha256")
-    if not isinstance(sha, str) or not _SHA256.fullmatch(sha):
-        return "corroborating copy has no well-formed sha256"
-    match = copy_.get("match")
-    if match not in CORROBORATING_MATCHES:
-        return f"corroborating copy match is {match!r}, not one of {CORROBORATING_MATCHES}"
-    if match == "identical" and sha != rec.get("artifact_sha256"):
-        return "corroborating copy is called identical but its sha256 is not the held artifact's"
-    if match == "text-identical" and (not rec.get("operative_clause")
-                                      or copy_.get("matched_clause") != rec.get("operative_clause")):
-        return ("corroborating copy is called text-identical but does not carry the held "
-                "operative clause verbatim")
-    return None
+    return SOURCE_POLICY.corroboration_problem(rec)
 
 
 def provenance_problem(rec: dict) -> str | None:
     """None when the record says where the artifact came from, or an official copy
     corroborates it. A recorded source that fails is a contradiction, and is refused
     whatever the corroboration says."""
-    if rec.get("downloaded_from") is not None or rec.get("downloaded_at") is not None:
-        problem = source_problem(rec.get("downloaded_from"), rec.get("downloaded_at"))
-        return None if problem is None else f"the recorded download source is refused: {problem}"
-    problem = corroboration_problem(rec)
-    if problem is None:
-        return None
-    return f"where the file was downloaded from is not recorded, and {problem}"
-
-
-_HUMAN_CHECKS = ("identity_checked_by", "identity_checked_at",
-                 "verbatim_clause_checked_by", "verbatim_clause_checked_at")
+    return SOURCE_POLICY.provenance_problem(rec)
 
 
 def attestation_gaps(rec: dict | None) -> list[str]:
     """Everything that keeps this record from being usable law. Empty means attested."""
-    if not isinstance(rec, dict) or not rec:
-        return ["no registration on record"]
-    gaps = []
-    # The classifier's outcome first. register() never writes a record for anything
-    # but VERIFIED_INSTRUMENT, so any other value was put there by hand, and two
-    # reviewer names do not overrule an identity check that failed.
-    if rec.get("classification") != VERIFIED_INSTRUMENT:
-        gaps.append(f"classification is {rec.get('classification')!r}, "
-                    f"not {VERIFIED_INSTRUMENT}")
-    gaps += [k for k in _HUMAN_CHECKS if not rec.get(k)]
-    if rec.get("status") != CORROBORATED:
-        gaps.append("status is not CORROBORATED")
-    problem = provenance_problem(rec)
-    if problem:
-        gaps.append(f"source: {problem}")
-    return gaps
+    return SOURCE_POLICY.attestation_gaps(rec)
 
 
 def is_attested(rec: dict | None) -> bool:
@@ -437,11 +341,7 @@ def served_source_url(rec: dict | None) -> str | None:
     """The address a served figure may point to: the recorded download, else the
     corroborating copy. None unless the record is attested -- an unusable record
     names no source for a figure, because no figure is served from it."""
-    if rec is None or not is_attested(rec):
-        return None
-    if rec.get("downloaded_from"):
-        return rec["downloaded_from"]
-    return rec["corroborating_copy"]["url"]
+    return SOURCE_POLICY.source_of(rec) if is_attested(rec) else None
 
 
 # ── test support ──────────────────────────────────────────────────────────────
@@ -739,6 +639,32 @@ def _test() -> int:
             check(reg["downloaded_from"] == gazette and reg["status"] == PENDING_HUMAN_REVIEW
                   and not is_attested(reg),
                   "...records them, and a source alone does not attest")
+
+            # ── P-2: an address carrying whitespace is refused, not stored with it ──
+            mod.RECORD.write_text(json.dumps(unsourced))
+            before = mod.RECORD.read_text()
+            for spaced, why in ((" " + gazette, "a leading space"),
+                                (gazette + " ", "a trailing space"),
+                                (gazette.replace("WriteReadData", "Write\tReadData"),
+                                 "an embedded tab")):
+                with redirect_stdout(io.StringIO()):
+                    rc_ws = main(["--source", "--from", spaced, "--at", "2025-12-02"])
+                check(rc_ws == 2 and mod.RECORD.read_text() == before,
+                      f"--source refuses an address with {why} rather than storing it")
+            with redirect_stdout(io.StringIO()):
+                rc_ws_at = main(["--source", "--from", gazette, "--at", " 2025-12-02"])
+            check(rc_ws_at == 2 and mod.RECORD.read_text() == before,
+                  "...and a date with a leading space")
+
+            # ── P-2: NO_RECORD writes nothing, so it exits 2 like every other refusal ──
+            mod.RECORD.unlink()
+            with redirect_stdout(io.StringIO()):
+                rc_none = main(["--source", "--from", gazette, "--at", "2025-12-02"])
+                rc_none_attest = main(["--attest", "R1", "--from", gazette, "--at", "2025-12-02"])
+            check(rc_none == 2 and rc_none_attest == 2 and not mod.RECORD.exists(),
+                  "with no registration to act on, --source and --attest exit 2, not 1")
+            check("no registration" in USAGE and "nothing is written" in USAGE,
+                  "...and the usage line's exit wording says so")
         finally:
             mod.RECORD, mod.STORE = saved
 
@@ -755,36 +681,16 @@ USAGE = """usage: register_gsr880e.py <downloaded-file> [--from <URL> --at <DATE
 <DATE>: when you downloaded it, YYYY-MM-DD (or a full ISO timestamp)
 --source records only the address and date; it leaves the checks as they are.
 --replace overwrites a different source already on record (refused without it).
-Exit 0 only when the record is usable law afterwards; 1 when it is not; 2 when refused."""
-
-# What each outcome means to a shell: 0 usable, 1 recorded but not usable, 2 refused.
-_CLI_EXIT = {CORROBORATED: 0, PENDING_HUMAN_REVIEW: 1, "NO_RECORD": 1,
-             SOURCE_REFUSED: 2, SOURCE_CONFLICT: 2}
-
-
-def _source_flags(args: list[str]) -> tuple[list[str], str | None, str | None] | None:
-    """(remaining args, --from, --at); None when the flags are malformed."""
-    rest: list[str] = []
-    got: dict[str, str] = {}
-    i = 0
-    while i < len(args):
-        if args[i] in ("--from", "--at"):
-            if i + 1 >= len(args) or args[i] in got:
-                return None
-            got[args[i]] = args[i + 1]
-            i += 2
-            continue
-        rest.append(args[i])
-        i += 1
-    if len(got) == 1:
-        return None                     # an address without a date, or the reverse
-    return rest, got.get("--from"), got.get("--at")
+""" + EXIT_WORDING + """
+Registering a file exits 0 once it is registered (which is not yet usable law), and
+2, 3 or 4 when the file is refused as the wrong instrument, missing the clause, or
+unreadable."""
 
 
 def main(argv: list[str]) -> int:
     if argv[:1] == ["--test"]:
         return _test()
-    parsed = _source_flags(argv)
+    parsed = split_source_flags(argv)
     if parsed is None:
         print("--from and --at go together, once each\n" + USAGE)
         return 2
@@ -798,12 +704,12 @@ def main(argv: list[str]) -> int:
         if len(rest) != 1 or src_url is None:
             print(USAGE)
             return 2
-        return _CLI_EXIT.get(record_source(src_url, src_at, replace=replace), 1)
+        return cli_exit(record_source(src_url, src_at, replace=replace))
     if rest[:1] == ["--attest"]:
         if len(rest) != 2:
             print(USAGE)
             return 2
-        return _CLI_EXIT.get(attest(rest[1], src_url, src_at, replace=replace), 1)
+        return cli_exit(attest(rest[1], src_url, src_at, replace=replace))
     if len(rest) != 1 or rest[0].startswith("--"):
         print(__doc__)
         print(USAGE)

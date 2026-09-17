@@ -27,21 +27,48 @@ It does not set the thresholds to VERIFIED. VERIFIED in this system means a
 hashed local artifact PLUS human review, and a script cannot perform the second
 half. It moves them to CORROBORATED, prints the clause verbatim for a person to
 read, and says what remains.
+
+## And where the file came from (A-001, P-2)
+
+The two human checks say the file is the right instrument and its clause is
+verbatim. Neither says where the file came from, and this record's own
+attests_to makes no claim about that either -- but `prescribed_thresholds`
+serves Rs 4 crore / Rs 40 crore with an ADDRESS printed beside them, and an
+address the record cannot support is a citation we invented. So `is_attested()`
+requires, on top of the human checks and the classifier's own
+VERIFIED_INSTRUMENT outcome, either the download address (https, Gazette or
+India Code) with its date, recorded by the person who downloaded it, or a copy
+fetched from such a host that is byte-identical or carries the held clause
+verbatim. The rule and its wording live in checker/provenance.SourcePolicy,
+shared with the other register scripts, so the four cannot drift.
 """
 import hashlib
 import json
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from checker.provenance import (  # noqa: E402
+    EXIT_WORDING, GAZETTE_OR_INDIA_CODE_HOSTS, NO_RECORD, SOURCE_CONFLICT, SOURCE_RECORDED,
+    SOURCE_REFUSED, SourcePolicy, cli_exit, split_source_flags)
 
 STORE = Path("corpus/rules/gsr_700e_2022.txt")
 RECORD = Path("corpus/sources/gsr700e_registration.json")
 
 SOURCE_URL = "https://indiacode.gov.in/handle/123456789/508916"
 BITSTREAM_ID = "6d5e9902-44a7-4ee5-975a-1fd7fc5d51a5"
+
+# The host class this record may cite: the Gazette that published the instrument and
+# India Code, which is where the record's own source_url points. The ministry's site
+# is official but nothing here came from it.
+SOURCE_HOSTS = GAZETTE_OR_INDIA_CODE_HOSTS
+# The instrument's date of publication, printed on the file. No copy of it can have
+# been downloaded earlier.
+PUBLISHED = date(2022, 9, 15)
+SOURCE_POLICY = SourcePolicy(SOURCE_HOSTS, PUBLISHED)
 
 # The record's own status, distinct from any evidence state. A registered
 # artifact is not usable law until both human checks are recorded against it.
@@ -129,7 +156,13 @@ def classify(text: str) -> tuple[str, str, str]:
     return VERIFIED_INSTRUMENT, "identifies as G.S.R. 700(E) of 2022 and carries the clause", clause
 
 
-def register(src: Path) -> str:
+def register(src: Path, downloaded_from: str | None = None,
+             downloaded_at: str | None = None) -> str:
+    if downloaded_from is not None or downloaded_at is not None:
+        problem = SOURCE_POLICY.source_problem(downloaded_from, downloaded_at)
+        if problem:
+            print(f"download source refused: {problem}\nNOT registered. Nothing was written.")
+            return SOURCE_REFUSED
     if not src.is_file():
         print(f"no such file: {src}")
         print(f"\nclassification : {UNREADABLE}")
@@ -158,7 +191,11 @@ def register(src: Path) -> str:
                  "Amendment Rules, 2022, dated 15-09-2022",
         "source_url": SOURCE_URL,
         "bitstream_id": BITSTREAM_ID,
-        "downloaded_at": None,          # filled by --attest; only a person knows it
+        # Only the person who downloaded the file knows these. Recorded by --from/--at
+        # on register, --attest or --source; is_attested() refuses without them unless
+        # an official copy corroborates the file.
+        "downloaded_from": downloaded_from,
+        "downloaded_at": downloaded_at,
         "registered_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "acquisition_method": "human_browser",
         "artifact_sha256": digest,
@@ -194,22 +231,27 @@ def register(src: Path) -> str:
     return outcome
 
 
-def attest(reviewer_id: str, downloaded_at: str | None = None) -> str:
-    """Record that a person performed both checks. Without this the artifact
-    is stored but not usable, and prescribed_thresholds keeps refusing.
+ATTEST_REFUSED = "ATTEST_REFUSED"
+
+
+def attest(reviewer_id: str, downloaded_from: str | None = None,
+           downloaded_at: str | None = None, *, replace: bool = False) -> str:
+    """Record that a person performed both checks, and optionally where they got the
+    file. Without this the artifact is stored but not usable, and
+    prescribed_thresholds keeps refusing. A bad source, or one that would silently
+    replace a different recorded source, is refused BEFORE anything is stamped.
 
     A reviewer id, not an address: benchmark and corpus files are meant to be
     distributable and a reviewer's address is not part of the evidence.
     """
-    if not RECORD.is_file():
+    rec = registration()
+    if rec is None:
         print(f"no registration to attest: {RECORD} does not exist")
         print("register the downloaded file first")
-        return UNREADABLE
+        return NO_RECORD
     if "@" in reviewer_id:
         print("record a pseudonymous reviewer id, not an email address")
-        return WRONG_INSTRUMENT
-
-    rec = json.loads(RECORD.read_text())
+        return ATTEST_REFUSED
 
     # The stored text must still hash to what was registered. An attestation
     # against a file that changed after registration attests to nothing.
@@ -220,27 +262,59 @@ def attest(reviewer_id: str, downloaded_at: str | None = None) -> str:
             print(f"  registered : {rec.get('stored_text_sha256')}")
             print(f"  on disk    : {now_hash}")
             print("re-register the artifact before attesting to it")
-            return WRONG_INSTRUMENT
+            return ATTEST_REFUSED
     else:
         print(f"REFUSED: {STORE} is missing; nothing to attest to")
-        return UNREADABLE
+        return ATTEST_REFUSED
+
+    if downloaded_from is not None or downloaded_at is not None:
+        outcome, written, message = SOURCE_POLICY.record_source(
+            rec, downloaded_from, downloaded_at, replace=replace)
+        if outcome in (SOURCE_REFUSED, SOURCE_CONFLICT):
+            print(message)
+            return outcome
+        rec = written if written is not None else rec
 
     stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    rec = dict(rec)
     rec.update({
         "identity_checked_by": reviewer_id,
         "identity_checked_at": stamp,
         "verbatim_clause_checked_by": reviewer_id,
         "verbatim_clause_checked_at": stamp,
-        "downloaded_at": downloaded_at or rec.get("downloaded_at"),
         "status": CORROBORATED,
     })
     RECORD.write_text(json.dumps(rec, indent=1) + "\n", encoding="utf-8")
     print(f"attested by {reviewer_id} at {stamp}")
     print(f"status         : {CORROBORATED}")
+    gaps = attestation_gaps(rec)
+    if gaps:
+        print("NOT usable yet: " + "; ".join(gaps))
+        print("The person who downloaded the file records where it came from:")
+        print("  python3 scripts/register_gsr700e.py --source --from <URL> --at <YYYY-MM-DD>")
+        return PENDING_HUMAN_REVIEW
     print("\nprescribed_thresholds derives its state from this record, so the")
     print("small-company limits are now servable. Run scripts/run_tests.sh and")
     print("close S-002 with the artifact hash, reviewer id and timestamps above.")
-    return VERIFIED_INSTRUMENT
+    return CORROBORATED
+
+
+def record_source(downloaded_from: str | None, downloaded_at: str | None, *,
+                  replace: bool = False) -> str:
+    """Record only where and when the file was downloaded. The human check fields and
+    their timestamps are left exactly as they are. A different source already on
+    record is not overwritten unless replace is set."""
+    outcome, written, message = SOURCE_POLICY.record_source(
+        registration(), downloaded_from, downloaded_at, replace=replace)
+    print(message)
+    if outcome in (NO_RECORD, SOURCE_REFUSED, SOURCE_CONFLICT):
+        return outcome
+    if outcome == SOURCE_RECORDED:
+        RECORD.write_text(json.dumps(written, indent=1) + "\n", encoding="utf-8")
+    rec = written if written is not None else registration()
+    gaps = attestation_gaps(rec)
+    print("attested" if not gaps else "NOT usable yet: " + "; ".join(gaps))
+    return CORROBORATED if not gaps else PENDING_HUMAN_REVIEW
 
 
 def registration() -> dict | None:
@@ -253,15 +327,28 @@ def registration() -> dict | None:
         return None
 
 
+def attestation_gaps(rec: dict | None) -> list[str]:
+    """Everything that keeps this record from being usable law. Empty means attested."""
+    return SOURCE_POLICY.attestation_gaps(rec)
+
+
+def provenance_problem(rec: dict) -> str | None:
+    """Why the record does not say where its artifact came from, or None."""
+    return SOURCE_POLICY.provenance_problem(rec)
+
+
 def is_attested(rec: dict | None) -> bool:
-    """Both human checks recorded, and the status says so."""
-    if not rec:
-        return False
-    return bool(rec.get("identity_checked_by")
-                and rec.get("identity_checked_at")
-                and rec.get("verbatim_clause_checked_by")
-                and rec.get("verbatim_clause_checked_at")
-                and rec.get("status") == CORROBORATED)
+    """Classified VERIFIED_INSTRUMENT, both human checks recorded, the status says so,
+    and the file's source is either recorded or corroborated from a Gazette or India
+    Code host (SOURCE_HOSTS)."""
+    return not attestation_gaps(rec)
+
+
+def served_source_url(rec: dict | None) -> str | None:
+    """The address a served figure may point to: the recorded download, else the
+    corroborating copy. None unless the record is attested -- an unusable record
+    names no source for a figure, because no figure is served from it."""
+    return SOURCE_POLICY.source_of(rec) if is_attested(rec) else None
 
 
 # ── test support ──────────────────────────────────────────────────────────────
@@ -277,14 +364,23 @@ import sys as _sys
 def registered_unattested_stub() -> dict:
     """A registration record that exists but carries neither human check."""
     return {"artifact_sha256": "sha256:" + "00" * 32,
+            "classification": VERIFIED_INSTRUMENT,
+            "operative_clause": "paid up capital and turnover of the small company shall "
+                                "not exceed rupees four crore and rupees forty crore [F .",
             "identity_checked_by": None, "identity_checked_at": None,
             "verbatim_clause_checked_by": None, "verbatim_clause_checked_at": None,
             "status": PENDING_HUMAN_REVIEW}
 
 
 def attested_stub(reviewer: str = "TEST") -> dict:
-    """A registration record with both human checks recorded."""
+    """Acquired, both checks done, and a download source recorded. The address is a
+    test value on an official host, not a real Gazette file."""
     return {"artifact_sha256": "sha256:" + "11" * 32,
+            "classification": VERIFIED_INSTRUMENT,
+            "operative_clause": "paid up capital and turnover of the small company shall "
+                                "not exceed rupees four crore and rupees forty crore [F .",
+            "downloaded_from": "https://egazette.gov.in/test-stub.pdf",
+            "downloaded_at": "2026-01-01",
             "identity_checked_by": reviewer, "identity_checked_at": "2026-01-01T00:00:00Z",
             "verbatim_clause_checked_by": reviewer,
             "verbatim_clause_checked_at": "2026-01-01T00:00:00Z",
@@ -365,17 +461,222 @@ def _test() -> int:
     check('"evidence_state": "CORROBORATED"' in src,
           "the registration records CORROBORATED, never VERIFIED")
 
+    # ── P-2: the A-001 guard, on the record whose figures are actually served ──
+    # Two human checks say this is the right instrument and its clause is verbatim.
+    # Neither says where the file came from -- and prescribed_thresholds serves the
+    # 2022 amounts with an address printed beside them.
+    check(not is_attested(None), "no record is not attested")
+    check(not is_attested(registered_unattested_stub()),
+          "a registered but unattested record is not attested")
+    check(is_attested(attested_stub()), "an attested record is attested")
+    half = attested_stub(); half["verbatim_clause_checked_by"] = None
+    check(not is_attested(half), "one of the two checks alone is not enough")
+
+    _SOURCE_KEYS = ("downloaded_from", "downloaded_at", "corroborating_copy")
+    unsourced = {k: v for k, v in attested_stub().items() if k not in _SOURCE_KEYS}
+    check(not is_attested(unsourced),
+          "both human checks with no recorded source and no corroboration is NOT attested")
+    gaps = attestation_gaps(unsourced)
+    check(any(g.startswith("source:") for g in gaps)
+          and not any("checked_by" in g for g in gaps),
+          f"...and the gap is named as the source, not as a missing reviewer ({gaps})")
+    gazette = "https://egazette.gov.in/WriteReadData/2022/238857.pdf"
+    india = "https://indiacode.gov.in/handle/123456789/508916"
+    check(is_attested(unsourced | {"downloaded_from": gazette, "downloaded_at": "2022-09-16"})
+          and is_attested(unsourced | {"downloaded_from": india, "downloaded_at": "2026-09-04"}),
+          "a Gazette or India Code download address with its date makes it attested")
+    for label, extra in (
+            ("an http address", {"downloaded_from": gazette.replace("https", "http"),
+                                 "downloaded_at": "2026-09-04"}),
+            ("a commentary site", {"downloaded_from": "https://taxguru.in/gsr-700e.pdf",
+                                   "downloaded_at": "2026-09-04"}),
+            ("the ministry's own site", {"downloaded_from": "https://www.mca.gov.in/x.pdf",
+                                         "downloaded_at": "2026-09-04"}),
+            ("an address with no date", {"downloaded_from": gazette}),
+            ("a date with no address", {"downloaded_at": "2026-09-04"}),
+            ("an address carrying a space", {"downloaded_from": " " + gazette,
+                                             "downloaded_at": "2026-09-04"}),
+            ("a download before the instrument was published",
+             {"downloaded_from": gazette, "downloaded_at": "2022-09-14"}),
+            ("a download dated in the future",
+             {"downloaded_from": gazette, "downloaded_at": "2999-01-01"})):
+        check(not is_attested(unsourced | extra), f"{label} is not a recorded source")
+
+    clause = unsourced["operative_clause"]
+    copy_ok = {"url": gazette, "retrieved_at": "2026-09-17T09:26:48Z",
+               "sha256": "sha256:" + "cd" * 32, "match": "text-identical",
+               "matched_clause": clause,
+               "recorded_by": "automated corroboration, not a human check"}
+    check(is_attested(unsourced | {"corroborating_copy": copy_ok}),
+          "a Gazette copy carrying the held clause verbatim stands in for the unrecorded source")
+    for label, bad in (
+            ("a copy whose clause differs", copy_ok | {"matched_clause": "something else"}),
+            ("a copy that only resembles the artifact", copy_ok | {"match": "similar"}),
+            ("a copy that was not found", copy_ok | {"match": "not-found"}),
+            ("a copy from a commentary site", copy_ok | {"url": "https://taxguru.in/x.pdf"}),
+            ("a copy with a malformed hash", copy_ok | {"sha256": "bb19f1b2"}),
+            ("an 'identical' copy whose hash is not the artifact's",
+             copy_ok | {"match": "identical"})):
+        check(not is_attested(unsourced | {"corroborating_copy": bad}),
+              f"{label} does not corroborate")
+    check(not is_attested(unsourced | {"downloaded_from": "https://taxguru.in/x.pdf",
+                                       "downloaded_at": "2026-09-04",
+                                       "corroborating_copy": copy_ok}),
+          "a recorded non-official source is a contradiction that corroboration does not cure")
+    check(not is_attested(registered_unattested_stub() | {"corroborating_copy": copy_ok}),
+          "provenance never stands in for the human checks")
+    for cls in (WRONG_INSTRUMENT, CLAUSE_NOT_FOUND, UNREADABLE, None):
+        check(not is_attested(attested_stub() | {"classification": cls}),
+              f"a record classified {cls} is not attested, whatever the checks say")
+
+    # What a served figure may point at.
+    check(served_source_url(attested_stub()) == "https://egazette.gov.in/test-stub.pdf",
+          "an attested record serves its recorded download address")
+    check(served_source_url(unsourced | {"corroborating_copy": copy_ok}) == gazette,
+          "...or, with none recorded, the corroborating copy's address")
+    check(served_source_url(unsourced) is None and served_source_url(None) is None
+          and served_source_url(registered_unattested_stub()) is None,
+          "...and nothing at all for a record that is not attested")
+
+    # The record on disk, asserted against whatever state it is in, so the suite does
+    # not flip red the day the founder records their own download source.
+    live = json.loads(RECORD.read_text()) if RECORD.is_file() else None
+    if live is not None:
+        check(is_attested(live), f"the live record is attested ({attestation_gaps(live)})")
+        cc = live.get("corroborating_copy")
+        if cc:
+            check(isinstance(cc, dict)
+                  and cc.get("matched_clause") == live.get("operative_clause")
+                  and "not a human check" in str(cc.get("recorded_by", "")),
+                  "...its corroborating copy carries the held clause, labelled as automated")
+        if live.get("downloaded_from") is None and live.get("downloaded_at") is None:
+            check(not is_attested({k: v for k, v in live.items()
+                                   if k != "corroborating_copy"}),
+                  "...and without that copy it is not attested (the A-001 record)")
+
+    # ── the CLI records a source, and refuses a bad one without writing ──────
+    import io
+    import tempfile
+    from contextlib import redirect_stdout
+    mod = sys.modules[__name__]
+    saved = (mod.RECORD, mod.STORE)
+    with tempfile.TemporaryDirectory() as td:
+        mod.RECORD, mod.STORE = Path(td) / "rec.json", Path(td) / "text.txt"
+        try:
+            mod.RECORD.write_text(json.dumps(unsourced))
+            before = mod.RECORD.read_text()
+            with redirect_stdout(io.StringIO()):
+                rc_bad = main(["--source", "--from", "https://taxguru.in/x.pdf",
+                               "--at", "2026-09-04"])
+                rc_half = main(["--source", "--from", gazette])
+            check(rc_bad == 2 and rc_half == 2 and mod.RECORD.read_text() == before,
+                  "--source refuses a commentary site, and needs both --from and --at")
+            with redirect_stdout(io.StringIO()):
+                rc_ok = main(["--source", "--from", india, "--at", "2026-09-04"])
+            after = json.loads(mod.RECORD.read_text())
+            check(rc_ok == 0 and after["downloaded_from"] == india
+                  and after["downloaded_at"] == "2026-09-04",
+                  "--source records an official address and date")
+            check(all(after[k] == unsourced[k] for k in unsourced),
+                  "...and nothing else changes: the human checks keep their names and times")
+            out = io.StringIO()
+            with redirect_stdout(out):
+                rc_conflict = main(["--source", "--from", gazette, "--at", "2026-09-05"])
+            check(rc_conflict == 2 and json.loads(mod.RECORD.read_text()) == after
+                  and "--replace" in out.getvalue(),
+                  "--source will not silently replace a different recorded source")
+            with redirect_stdout(io.StringIO()):
+                rc_rep = main(["--source", "--replace", "--from", gazette, "--at", "2026-09-05"])
+            check(rc_rep == 0
+                  and json.loads(mod.RECORD.read_text())["downloaded_from"] == gazette,
+                  "...unless --replace is given")
+            mod.RECORD.unlink()
+            with redirect_stdout(io.StringIO()):
+                rc_none = main(["--source", "--from", gazette, "--at", "2026-09-04"])
+            check(rc_none == 2 and not mod.RECORD.exists(),
+                  "with no registration to act on, --source exits 2 and writes nothing")
+            check("no registration" in USAGE and "nothing is written" in USAGE,
+                  "...and the usage line's exit wording says so")
+
+            # attesting stamps the reviewer AND the source together, or neither
+            mod.STORE.write_text("x")
+            staged = registered_unattested_stub() | {
+                "stored_text_sha256": "sha256:" + hashlib.sha256(b"x").hexdigest()}
+            mod.RECORD.write_text(json.dumps(staged))
+            before = mod.RECORD.read_text()
+            with redirect_stdout(io.StringIO()):
+                rc_attest_bad = main(["--attest", "R1", "--from", "https://taxguru.in/x.pdf",
+                                      "--at", "2026-09-04"])
+            check(rc_attest_bad == 2 and mod.RECORD.read_text() == before,
+                  "--attest with a bad source stamps nothing, not even the reviewer")
+            with redirect_stdout(io.StringIO()):
+                rc_attest_ok = main(["--attest", "R1", "--from", india, "--at", "2026-09-04"])
+            stamped = json.loads(mod.RECORD.read_text())
+            check(rc_attest_ok == 0 and is_attested(stamped)
+                  and stamped["identity_checked_by"] == "R1"
+                  and stamped["downloaded_from"] == india,
+                  "--attest --from --at records the reviewer and the source together")
+            mod.RECORD.write_text(json.dumps(staged))
+            with redirect_stdout(io.StringIO()):
+                rc_attest_unsourced = main(["--attest", "R1"])
+            check(rc_attest_unsourced == 1
+                  and not is_attested(json.loads(mod.RECORD.read_text())),
+                  "...and attesting without one stamps the reviewer but stays unusable (exit 1)")
+        finally:
+            mod.RECORD, mod.STORE = saved
+
     print(f"\n{ok}/{ok + fail} passed")
     return 1 if fail else 0
 
 
-if __name__ == "__main__":
-    if len(sys.argv) == 2 and sys.argv[1] == "--test":
-        raise SystemExit(_test())
-    if len(sys.argv) >= 3 and sys.argv[1] == "--attest":
-        raise SystemExit(EXIT[attest(sys.argv[2],
-                                     sys.argv[3] if len(sys.argv) > 3 else None)])
-    if len(sys.argv) != 2:
+USAGE = """usage: register_gsr700e.py <downloaded-file> [--from <URL> --at <DATE>]
+       register_gsr700e.py --attest <reviewer-id> [--from <URL> --at <DATE>] [--replace]
+       register_gsr700e.py --source --from <URL> --at <DATE> [--replace]
+       register_gsr700e.py --test
+<URL>: the https address you downloaded the file from, on one of
+       """ + ", ".join(sorted(SOURCE_HOSTS)) + """
+<DATE>: when you downloaded it, YYYY-MM-DD (or a full ISO timestamp)
+--source records only the address and date; it leaves the checks as they are.
+--replace overwrites a different source already on record (refused without it).
+""" + EXIT_WORDING + """
+Registering a file exits 0 once it is registered (which is not yet usable law), and
+2, 3 or 4 when the file is refused as the wrong instrument, missing the clause, or
+unreadable."""
+
+
+def main(argv: list[str]) -> int:
+    if argv[:1] == ["--test"]:
+        return _test()
+    parsed = split_source_flags(argv)
+    if parsed is None:
+        print("--from and --at go together, once each\n" + USAGE)
+        return 2
+    rest, src_url, src_at = parsed
+    replace = "--replace" in rest
+    rest = [a for a in rest if a != "--replace"]
+    if replace and rest[:1] not in (["--source"], ["--attest"]):
+        print("--replace applies only to --source or --attest\n" + USAGE)
+        return 2
+    if rest[:1] == ["--source"]:
+        if len(rest) != 1 or src_url is None:
+            print(USAGE)
+            return 2
+        return cli_exit(record_source(src_url, src_at, replace=replace))
+    if rest[:1] == ["--attest"]:
+        if len(rest) != 2:
+            print(USAGE)
+            return 2
+        out = attest(rest[1], src_url, src_at, replace=replace)
+        # ATTEST_REFUSED is this script's own refusal (an address for a reviewer
+        # id, or a stored text that changed); it writes nothing, so it exits 2.
+        return 2 if out == ATTEST_REFUSED else cli_exit(out)
+    if len(rest) != 1 or rest[0].startswith("--"):
         print(__doc__)
-        raise SystemExit(1)
-    raise SystemExit(EXIT[register(Path(sys.argv[1]))])
+        print(USAGE)
+        return 2
+    out = register(Path(rest[0]), src_url, src_at)
+    return 2 if out == SOURCE_REFUSED else EXIT.get(out, 1)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))

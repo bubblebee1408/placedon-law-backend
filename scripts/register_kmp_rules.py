@@ -34,10 +34,14 @@ import hashlib
 import json
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from checker.provenance import (  # noqa: E402
+    EXIT_WORDING, GAZETTE_OR_INDIA_CODE_HOSTS, NO_RECORD, SOURCE_CONFLICT, SOURCE_RECORDED,
+    SOURCE_REFUSED, SourcePolicy, cli_exit, split_source_flags)
 
 STORE = Path("corpus/rules/kmp_rules_2014.txt")
 RECORD = Path("corpus/sources/kmp_rules_registration.json")
@@ -90,6 +94,16 @@ KNOWN_AMENDMENTS = tuple((d, t, h) for d, t, h, _, _, _ in CHAIN)
 
 PENDING_HUMAN_REVIEW = "PENDING_HUMAN_REVIEW"
 CORROBORATED = "CORROBORATED"
+
+# Where this record may say its artifact came from: India Code, which is where
+# SOURCE_URL points and what the acquisition used, or the Gazette that published the
+# Rules. The date printed on the file is the floor for any download of it.
+SOURCE_HOSTS = GAZETTE_OR_INDIA_CODE_HOSTS
+PUBLISHED = date(2014, 3, 31)
+# Rule 8, not "the operative clause": this record keeps its verbatim text under its own
+# key, and a corroborating copy has to carry THAT.
+SOURCE_POLICY = SourcePolicy(SOURCE_HOSTS, PUBLISHED,
+                             clause_field="operative_clause_rule_8")
 
 ATTESTATIONS = (
     "identity: this file is G.S.R. 249(E) of 31-03-2014, the PRINCIPAL Companies "
@@ -266,17 +280,23 @@ def attest(reviewer_id: str) -> str:
     rec = registration()
     if rec is None:
         print("no registration on record — run register first")
-        return "NO_RECORD"
+        return NO_RECORD
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    rec = dict(rec)
     rec.update({"identity_checked_by": reviewer_id, "identity_checked_at": now,
                 "verbatim_clause_checked_by": reviewer_id,
                 "verbatim_clause_checked_at": now, "status": CORROBORATED})
     RECORD.write_text(json.dumps(rec, indent=1) + "\n", encoding="utf-8")
     print(f"attested by {reviewer_id} at {now}; status {CORROBORATED}")
-    print("\nNOTE: s.203 remains REFUSED. This attests the principal Rules only;")
-    print(f"{len(KNOWN_AMENDMENTS)} amendments are still unacquired and one of them")
-    print("may have moved the Rule 8 threshold. Resolving the chain is a separate act.")
-    return CORROBORATED
+    gaps = attestation_gaps(rec)
+    if gaps:
+        print("NOT usable yet: " + "; ".join(gaps))
+        print("Where the file was downloaded from is recorded separately:")
+        print("  python3 scripts/register_kmp_rules.py --source --from <URL> --at <DATE>")
+    print("\nNOTE: s.203 remains REFUSED whatever this record says. This attests the")
+    print("principal Rules only; the chain is traced but NOT resolved, and resolving it")
+    print("-- a person confirming the operative text of rules 8 and 8A -- is a separate act.")
+    return CORROBORATED if not gaps else PENDING_HUMAN_REVIEW
 
 
 def registration() -> dict | None:
@@ -288,19 +308,59 @@ def registration() -> dict | None:
         return None
 
 
+def attestation_gaps(rec: dict | None) -> list[str]:
+    """Everything that keeps this record from being usable law. Empty means attested.
+
+    NOTE: attested is not servable for this instrument -- see is_servable().
+    """
+    return SOURCE_POLICY.attestation_gaps(rec)
+
+
 def is_attested(rec: dict | None) -> bool:
-    """Both human checks recorded. NOTE: attested != servable for this instrument."""
-    if not rec:
-        return False
-    return bool(rec.get("identity_checked_by") and rec.get("identity_checked_at")
-                and rec.get("verbatim_clause_checked_by")
-                and rec.get("verbatim_clause_checked_at")
-                and rec.get("status") == CORROBORATED)
+    """Classified VERIFIED_INSTRUMENT, both human checks recorded, the status says so,
+    and the file's source is either recorded or corroborated from a Gazette or India
+    Code host. NOTE: attested != servable for this instrument."""
+    return not attestation_gaps(rec)
 
 
 def is_servable(rec: dict | None) -> bool:
     """Attested AND the amendment chain resolved. Today this is always False."""
     return is_attested(rec) and bool(rec and rec.get("chain_resolved"))
+
+
+def record_source(downloaded_from: str | None, downloaded_at: str | None, *,
+                  replace: bool = False) -> str:
+    """Record only where and when the file was downloaded. The human check fields and
+    their timestamps are left exactly as they are."""
+    outcome, written, message = SOURCE_POLICY.record_source(
+        registration(), downloaded_from, downloaded_at, replace=replace)
+    print(message)
+    if outcome in (NO_RECORD, SOURCE_REFUSED, SOURCE_CONFLICT):
+        return outcome
+    if outcome == SOURCE_RECORDED:
+        RECORD.write_text(json.dumps(written, indent=1) + "\n", encoding="utf-8")
+    rec = written if written is not None else registration()
+    gaps = attestation_gaps(rec)
+    print("attested" if not gaps else "NOT usable yet: " + "; ".join(gaps))
+    return CORROBORATED if not gaps else PENDING_HUMAN_REVIEW
+
+
+# ── test support ─────────────────────────────────────────────────────────────
+def attested_stub(reviewer: str = "TEST") -> dict:
+    """Acquired, both checks done, and a download source recorded. The address is a
+    test value on an official host, not a real India Code file."""
+    return {"artifact_sha256": "sha256:" + "ab" * 32,
+            "classification": VERIFIED_INSTRUMENT,
+            "operative_clause_rule_8": (
+                "8. Appointment of Key Managerial Personnel. - Every listed company and "
+                "every other public company having a paid-up share capital of tencrore "
+                "rupees or more shall have whole-time key managerial personnel."),
+            "downloaded_from": "https://indiacode.gov.in/test-stub.pdf",
+            "downloaded_at": "2026-09-11",
+            "identity_checked_by": reviewer, "identity_checked_at": "2026-01-01T00:00:00Z",
+            "verbatim_clause_checked_by": reviewer,
+            "verbatim_clause_checked_at": "2026-01-01T00:00:00Z",
+            "status": CORROBORATED, "chain_resolved": False}
 
 
 def _test() -> int:
@@ -345,9 +405,7 @@ def _test() -> int:
     check(o3 == WRONG_INSTRUMENT, f"a different rule set is refused ({o3})")
     check(classify("")[0] == UNREADABLE, "an unreadable file is UNREADABLE")
 
-    stub_attested = {"identity_checked_by": "R", "identity_checked_at": "t",
-                     "verbatim_clause_checked_by": "R", "verbatim_clause_checked_at": "t",
-                     "status": CORROBORATED, "chain_resolved": False}
+    stub_attested = attested_stub()
     check(is_attested(stub_attested), "an attested record is attested")
     check(not is_servable(stub_attested),
           "...but NOT servable while the amendment chain is unresolved")
@@ -355,21 +413,123 @@ def _test() -> int:
           "...and servable only once the chain is resolved")
     check(len(KNOWN_AMENDMENTS) == 5, "the five known amendments are recorded by date")
 
+    # ── P-2: the A-001 guard. Two human checks do not say where the file came from ──
+    _SOURCE_KEYS = ("downloaded_from", "downloaded_at", "corroborating_copy")
+    unsourced = {k: v for k, v in attested_stub().items() if k not in _SOURCE_KEYS}
+    check(not is_attested(unsourced) and not is_servable(dict(unsourced, chain_resolved=True)),
+          "both human checks with no recorded source and no corroboration is NOT attested")
+    gaps = attestation_gaps(unsourced)
+    check(any(g.startswith("source:") for g in gaps)
+          and not any("checked_by" in g for g in gaps),
+          f"...and the gap is named as the source, not as a missing reviewer ({gaps})")
+    india = ("https://indiacode.gov.in/server/api/core/bitstreams/"
+             "835c8cda-3dae-490a-836f-1e0171af2bd6/content")
+    check(is_attested(unsourced | {"downloaded_from": india, "downloaded_at": "2026-09-11"}),
+          "an India Code download address with its date makes it attested")
+    for label, extra in (
+            ("a commentary site", {"downloaded_from": "https://taxguru.in/kmp.pdf",
+                                   "downloaded_at": "2026-09-11"}),
+            ("the ministry's own site", {"downloaded_from": "https://www.mca.gov.in/x.pdf",
+                                         "downloaded_at": "2026-09-11"}),
+            ("an address with no date", {"downloaded_from": india}),
+            ("an address carrying a space", {"downloaded_from": india + " ",
+                                             "downloaded_at": "2026-09-11"}),
+            ("a download before the Rules were made",
+             {"downloaded_from": india, "downloaded_at": "2014-03-30"})):
+        check(not is_attested(unsourced | extra), f"{label} is not a recorded source")
+    copy_ok = {"url": "https://egazette.gov.in/WriteReadData/2014/1.pdf",
+               "retrieved_at": "2026-09-17T00:00:00Z", "sha256": "sha256:" + "cd" * 32,
+               "match": "text-identical",
+               "matched_clause": unsourced["operative_clause_rule_8"],
+               "recorded_by": "automated corroboration, not a human check"}
+    check(is_attested(unsourced | {"corroborating_copy": copy_ok}),
+          "a Gazette copy carrying Rule 8 verbatim stands in for the unrecorded source")
+    check(not is_attested(unsourced | {"corroborating_copy": copy_ok | {
+              "matched_clause": "Every listed company shall have somebody or other."}}),
+          "...and a copy whose Rule 8 differs does not")
+    for cls in (WRONG_INSTRUMENT, CLAUSE_NOT_FOUND, None):
+        check(not is_attested(attested_stub() | {"classification": cls}),
+              f"a record classified {cls} is not attested, whatever the checks say")
+
+    # The record on disk, asserted against whatever state it is in.
+    live = registration()
+    if live is not None:
+        live_gaps = attestation_gaps(live)
+        check(is_attested(live) == (not live_gaps),
+              f"the live record's state is what its gaps say ({live_gaps})")
+        check(not is_servable(live),
+              "...and it is not servable: the chain is traced, not resolved")
+
+    # ── the CLI records a source, and refuses a bad one without writing ──────
+    import io
+    import tempfile
+    from contextlib import redirect_stdout
+    mod = sys.modules[__name__]
+    saved = mod.RECORD
+    with tempfile.TemporaryDirectory() as td:
+        mod.RECORD = Path(td) / "rec.json"
+        try:
+            mod.RECORD.write_text(json.dumps(unsourced))
+            before = mod.RECORD.read_text()
+            with redirect_stdout(io.StringIO()):
+                rc_bad = main(["--source", "--from", "https://taxguru.in/x.pdf",
+                               "--at", "2026-09-11"])
+            check(rc_bad == 2 and mod.RECORD.read_text() == before,
+                  "--source refuses a commentary site and writes nothing")
+            with redirect_stdout(io.StringIO()):
+                rc_ok = main(["--source", "--from", india, "--at", "2026-09-11"])
+            after = json.loads(mod.RECORD.read_text())
+            check(rc_ok == 0 and after["downloaded_from"] == india
+                  and all(after[k] == unsourced[k] for k in unsourced),
+                  "--source records the address and date and changes nothing else")
+            mod.RECORD.unlink()
+            with redirect_stdout(io.StringIO()):
+                rc_none = main(["--source", "--from", india, "--at", "2026-09-11"])
+            check(rc_none == 2 and not mod.RECORD.exists(),
+                  "with no registration to act on it exits 2 and writes nothing")
+        finally:
+            mod.RECORD = saved
+
     print(f"\n{ok}/{ok + fail} passed")
     return 1 if fail else 0
 
 
-if __name__ == "__main__":
-    args = sys.argv[1:]
-    if args and args[0] == "--test":
-        raise SystemExit(_test())
-    if args and args[0] == "--attest":
-        if len(args) < 2:
-            print("usage: register_kmp_rules.py --attest <reviewer-id>")
-            raise SystemExit(2)
-        raise SystemExit(0 if attest(args[1]) == CORROBORATED else 1)
-    if not args:
+USAGE = """usage: register_kmp_rules.py <downloaded-file>
+       register_kmp_rules.py --attest <reviewer-id>
+       register_kmp_rules.py --source --from <URL> --at <DATE> [--replace]
+       register_kmp_rules.py --test
+<URL>: the https address the file was downloaded from, on one of
+       """ + ", ".join(sorted(SOURCE_HOSTS)) + """
+<DATE>: when it was downloaded, YYYY-MM-DD (or a full ISO timestamp)
+""" + EXIT_WORDING
+
+
+def main(argv: list[str]) -> int:
+    if argv[:1] == ["--test"]:
+        return _test()
+    parsed = split_source_flags(argv)
+    if parsed is None:
+        print("--from and --at go together, once each\n" + USAGE)
+        return 2
+    rest, src_url, src_at = parsed
+    replace = "--replace" in rest
+    rest = [a for a in rest if a != "--replace"]
+    if rest[:1] == ["--source"]:
+        if len(rest) != 1 or src_url is None:
+            print(USAGE)
+            return 2
+        return cli_exit(record_source(src_url, src_at, replace=replace))
+    if rest[:1] == ["--attest"]:
+        if len(rest) != 2:
+            print(USAGE)
+            return 2
+        return cli_exit(attest(rest[1]))
+    if len(rest) != 1 or rest[0].startswith("--"):
         print(__doc__)
-        print("usage: register_kmp_rules.py <downloaded-file>")
-        raise SystemExit(2)
-    raise SystemExit(EXIT.get(register(Path(args[0])), 1))
+        print(USAGE)
+        return 2
+    return EXIT.get(register(Path(rest[0])), 1)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))
