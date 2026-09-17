@@ -41,7 +41,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from checker.provenance import (  # noqa: E402
     EXIT_WORDING, GAZETTE_OR_INDIA_CODE_HOSTS, NO_RECORD, SOURCE_CONFLICT, SOURCE_RECORDED,
-    SOURCE_REFUSED, SourcePolicy, cli_exit, split_source_flags)
+    ROOT, SOURCE_REFUSED, SourcePolicy, cli_exit, file_digest, repo_relative, split_source_flags)
 
 STORE = Path("corpus/rules/kmp_rules_2014.txt")
 RECORD = Path("corpus/sources/kmp_rules_registration.json")
@@ -221,6 +221,7 @@ def register(src: Path) -> str:
         return outcome
 
     print(f"\nRule 8, verbatim:\n  {clause}\n")
+    held = repo_relative(src)
     STORE.parent.mkdir(parents=True, exist_ok=True)
     STORE.write_text(text, encoding="utf-8")
     RECORD.parent.mkdir(parents=True, exist_ok=True)
@@ -233,6 +234,9 @@ def register(src: Path) -> str:
         "acquisition_method": "india_code_dspace_api",
         "registered_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "artifact_sha256": digest,
+        # Which file this record holds, so the guard can re-read it later. A record
+        # that names no file cannot be checked, and is refused rather than trusted.
+        "local_artifact": held,
         "stored_text": str(STORE),
         "stored_text_sha256": "sha256:" + hashlib.sha256(STORE.read_bytes()).hexdigest(),
         "operative_clause_rule_8": clause,
@@ -259,6 +263,10 @@ def register(src: Path) -> str:
         "attests_to": ATTESTATIONS,
     }, indent=1) + "\n", encoding="utf-8")
 
+    if held is None:
+        print("\nNOTE: the file you registered is OUTSIDE this repository, so the record")
+        print("cannot name the file it holds, and the guard refuses a record it cannot")
+        print("re-read. Copy the artifact into corpus/sources/ and register that copy.")
     print(f"stored         : {STORE}")
     print(f"record         : {RECORD}")
     print(f"status         : {PENDING_HUMAN_REVIEW}")
@@ -356,11 +364,19 @@ def record_source(downloaded_from: str | None, downloaded_at: str | None, *,
     return CORROBORATED if not gaps else PENDING_HUMAN_REVIEW
 
 
+# The stubs name a file this repository really holds, with its real digest: the
+# guard re-reads the artifact now, so a stub carrying an invented hash would be
+# a record of a file that does not exist -- which is what it must refuse.
+_STUB_ARTIFACT = "corpus/sources/kmp_rules_2014.pdf"
+_STUB_ARTIFACT_SHA = file_digest(ROOT / _STUB_ARTIFACT) or "sha256:" + "00" * 32
+
+
 # ── test support ─────────────────────────────────────────────────────────────
 def attested_stub(reviewer: str = "TEST") -> dict:
     """Acquired, both checks done, and a download source recorded. The address is a
     test value on an official host, not a real India Code file."""
-    return {"artifact_sha256": "sha256:" + "ab" * 32,
+    return {"artifact_sha256": _STUB_ARTIFACT_SHA,
+            "local_artifact": _STUB_ARTIFACT,
             "classification": VERIFIED_INSTRUMENT,
             "operative_clause_rule_8": (
                 "8. Appointment of Key Managerial Personnel. - Every listed company and "

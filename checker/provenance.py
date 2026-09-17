@@ -175,6 +175,72 @@ def cli_exit(outcome: str) -> int:
     return _CLI_EXIT.get(outcome, 1)
 
 
+def repo_path(named: object) -> tuple[Path | None, str | None]:
+    """(path inside this repository, problem). Exactly one of the two is None.
+
+    Records write repo-relative paths, and `ROOT / named` does NOT confine: pathlib
+    treats an absolute right-hand side as the whole path, so "/etc/hosts" escapes, and
+    "../../../etc/hosts" resolves outside. Either way the guard would then be reading,
+    or reporting on, a file that is not part of the evidence this repository holds --
+    and an escaping path that happens not to exist reads as a harmless absence.
+    Symlinks are followed before the check, so a link out of the tree is caught too.
+    """
+    if not isinstance(named, str) or not named:
+        return None, "no path recorded"
+    if Path(named).is_absolute():
+        return None, f"{named} is an absolute path; records name files inside the repository"
+    try:
+        resolved = (ROOT / named).resolve()
+        resolved.relative_to(ROOT.resolve())
+    except (ValueError, OSError):
+        return None, f"{named} resolves outside the repository"
+    return resolved, None
+
+
+def repo_relative(path: Path) -> str | None:
+    """`path` written the way a record must: relative to this repository, or None.
+
+    None means the file is outside the tree -- which is the normal case for a fresh
+    download sitting in ~/Downloads, and the reason register() says to copy it in
+    rather than recording an address the guard will refuse.
+    """
+    try:
+        return str(path.resolve().relative_to(ROOT.resolve()))
+    except (ValueError, OSError):
+        return None
+
+
+_DIGESTS: dict[tuple[str, int, int], str] = {}
+
+
+def file_digest(path: Path) -> str | None:
+    """sha256 of a file, or None when it is not there. Memoised per process.
+
+    The key carries size and mtime_ns as well as the path, so a file that changes
+    under us gets a new digest rather than the one we happen to remember. Without the
+    memo every served figure re-hashes every artifact it rests on -- ~3.5 ms a call
+    measured on this corpus, on a path that runs once per obligation row.
+    """
+    try:
+        st = path.stat()
+    except OSError:
+        return None
+    key = (str(path), st.st_size, st.st_mtime_ns)
+    cached = _DIGESTS.get(key)
+    if cached is not None:
+        return cached
+    h = hashlib.sha256()
+    try:
+        with path.open("rb") as f:
+            for chunk in iter(lambda: f.read(1 << 20), b""):
+                h.update(chunk)
+    except OSError:
+        return None
+    digest = "sha256:" + h.hexdigest()
+    _DIGESTS[key] = digest
+    return digest
+
+
 def parse_when(value: object) -> datetime | None:
     """An ISO date or date-time as an aware datetime, or None. Naive means UTC.
 
@@ -283,29 +349,61 @@ class SourcePolicy:
         # A copy kept on disk is evidence only while it is still those bytes. Nothing
         # re-read it before this: the file could be replaced, or another file moved
         # into its name, and the record would go on corroborating.
-        path, digest = self._local_copy(copy_)
+        path, digest, unusable = self._local_copy(copy_)
+        if unusable:
+            return unusable
         if digest is not None and digest != sha:
             return (f"the stored copy {copy_['local_copy']} no longer hashes to the recorded "
                     f"value ({digest} on disk, {sha} recorded)")
         return None
 
-    def _local_copy(self, copy_: dict) -> tuple[Path | None, str | None]:
-        """(path, sha256 of the file on disk) for a record's stored copy.
+    def artifact_problem(self, rec: dict | None) -> str | None:
+        """Why the HELD artifact cannot carry this record's claim, or None.
 
-        The digest is None when the record names no copy or the file is not there.
-        Relative paths are repo-relative, as the records write them.
+        Everything else here checks a copy or an address. This checks the file the
+        answer rests on, which was hashed once at registration and, until now, never
+        read again: swap it, truncate it or delete it and the figure went on being
+        served with the clause of a file that is no longer there.
+
+        An absent artifact REFUSES rather than leaving a note, unlike an absent
+        corroborating copy: the copy is a record of evidence gathered elsewhere, and
+        its URL and hash were written down when it was fetched. The held artifact is
+        the evidence itself, and nothing stands in for it.
+        """
+        if not isinstance(rec, dict) or not rec:
+            return "no registration on record"
+        sha = rec.get("artifact_sha256")
+        if not isinstance(sha, str) or not _SHA256_FIELD.fullmatch(sha):
+            return f"the recorded artifact hash {sha!r} is not a sha256"
+        named = rec.get("local_artifact")
+        if not isinstance(named, str) or not named:
+            return ("the record does not name the file it holds, so the artifact cannot be "
+                    "re-read (add local_artifact)")
+        path, problem = repo_path(named)
+        if problem:
+            return f"the held artifact {named} cannot be read: {problem}"
+        digest = file_digest(path)
+        if digest is None:
+            return f"the held artifact {named} is not on disk"
+        if digest != sha:
+            return (f"the held artifact {named} no longer hashes to the recorded value "
+                    f"({digest} on disk, {sha} recorded)")
+        return None
+
+    def _local_copy(self, copy_: dict) -> tuple[Path | None, str | None, str | None]:
+        """(path, sha256 on disk, problem) for a record's stored copy.
+
+        The digest is None when the record names no copy or the file is not there; the
+        problem is set only when the path itself is unusable, which is a refusal and
+        not an absence.
         """
         named = copy_.get("local_copy")
         if not isinstance(named, str) or not named:
-            return None, None
-        path = ROOT / named
-        if not path.is_file():
-            return path, None
-        h = hashlib.sha256()
-        with path.open("rb") as f:
-            for chunk in iter(lambda: f.read(1 << 20), b""):
-                h.update(chunk)
-        return path, "sha256:" + h.hexdigest()
+            return None, None, None
+        path, problem = repo_path(named)
+        if problem:
+            return None, None, f"the stored copy {named} cannot be read: {problem}"
+        return path, file_digest(path), None
 
     def local_copy_note(self, rec: dict | None) -> str | None:
         """What to say about a stored copy the record names but no longer holds.
@@ -321,8 +419,8 @@ class SourcePolicy:
         copy_ = rec.get("corroborating_copy")
         if not isinstance(copy_, dict):
             return None
-        path, digest = self._local_copy(copy_)
-        if path is None or digest is not None:
+        path, digest, unusable = self._local_copy(copy_)
+        if unusable or path is None or digest is not None:
             return None
         return (f"the corroborating copy {copy_['local_copy']} is not on disk; the "
                 f"corroboration rests on the address and hash recorded when it was fetched")
@@ -354,6 +452,12 @@ class SourcePolicy:
         gaps += [k for k in human_checks if not rec.get(k)]
         if rec.get("status") != CORROBORATED:
             gaps.append("status is not CORROBORATED")
+        # Kept apart from the source gap, and prefixed so a caller can tell them
+        # apart: "we cannot say where this file came from" and "this is not the file
+        # that was checked" are different sentences to put in front of a reader.
+        artifact = self.artifact_problem(rec)
+        if artifact:
+            gaps.append(f"artifact: {artifact}")
         problem = self.provenance_problem(rec)
         if problem:
             gaps.append(f"source: {problem}")
@@ -786,10 +890,16 @@ def _test() -> None:
     except ProvenanceError:
         check(True, "a policy may only narrow the official host set")
 
-    held_hash = "sha256:" + "ab" * 32
+    # A real file this repository holds, so the record can be checked end to end: the
+    # held artifact is re-read now, and a record naming no file cannot be checked at all.
+    held_artifact = "corpus/sources/gsr880e_2025.pdf"
+    held_hash = file_digest(ROOT / held_artifact)
+    check(isinstance(held_hash, str) and held_hash.startswith("sha256:"),
+          f"the fixture artifact is present and hashable ({held_artifact})")
     copy_ok = {"url": gaz, "retrieved_at": "2026-09-17T05:40:14Z", "sha256": held_hash,
                "match": "identical"}
     rec_ok = {"classification": VERIFIED_INSTRUMENT, "artifact_sha256": held_hash,
+              "local_artifact": held_artifact,
               "identity_checked_by": "R", "identity_checked_at": "2026-01-01T00:00:00Z",
               "verbatim_clause_checked_by": "R",
               "verbatim_clause_checked_at": "2026-01-01T00:00:00Z",
@@ -840,14 +950,17 @@ def _test() -> None:
     # missing file does not unsay them -- but the record must stop implying it holds
     # a file it does not, so the absence is reported.
     import tempfile as _tempfile
-    with _tempfile.TemporaryDirectory() as _td:
+    # Inside the repository: a record names repo-relative paths, and a path outside the
+    # tree is refused outright (see the confinement checks below).
+    with _tempfile.TemporaryDirectory(dir=ROOT, prefix=".p2_copy_test_") as _td:
         stored = Path(_td) / "gazette_copy.pdf"
         stored.write_bytes(b"%PDF-1.4 the bytes that were fetched")
+        stored_rel = str(stored.relative_to(ROOT))
         stored_sha = "sha256:" + hashlib.sha256(stored.read_bytes()).hexdigest()
         with_local = {k: v for k, v in rec_ok.items() if k != "corroborating_copy"} | {
             "artifact_sha256": stored_sha,
             "corroborating_copy": copy_ok | {"sha256": stored_sha,
-                                             "local_copy": str(stored)}}
+                                             "local_copy": stored_rel}}
         check(P880.corroboration_problem(with_local) is None
               and P880.local_copy_note(with_local) is None,
               "a stored copy that still hashes to the recorded value corroborates, quietly")
@@ -862,10 +975,90 @@ def _test() -> None:
               "a copy no longer on disk still corroborates: the URL and hash were "
               "recorded when it was fetched, and deleting a file does not unsay them")
         note = P880.local_copy_note(with_local)
-        check(note is not None and "not on disk" in note and str(stored) in note,
+        check(note is not None and "not on disk" in note and stored_rel in note,
               f"...but the record must not silently claim a local file it lost ({note})")
     check(P880.local_copy_note(rec_ok) is None and P880.local_copy_note(None) is None,
           "a record that claims no local copy has nothing to report")
+
+    # ── the HELD artifact: the file the answer actually rests on ─────────────
+    # Everything above checks a COPY. The artifact itself was hashed once, at
+    # registration, and never read again: swap the file, truncate it, delete it, and
+    # the figure went on being served with the clause of a file that is no longer
+    # there. The corroborating copy is a RECORD of evidence; the held artifact IS the
+    # evidence, so an absent one refuses rather than leaving a note.
+    #
+    # The fixture lives inside the repository because the guard accepts only
+    # repo-relative paths -- which is the next check down.
+    with _tempfile.TemporaryDirectory(dir=ROOT, prefix=".p2_artifact_test_") as _atd:
+        art = Path(_atd) / "instrument.pdf"
+        art.write_bytes(b"%PDF-1.4 the instrument as registered\n" + b"x" * 4096)
+        rel = str(art.relative_to(ROOT))
+        art_sha = "sha256:" + hashlib.sha256(art.read_bytes()).hexdigest()
+        base = {k: v for k, v in rec_ok.items() if k != "corroborating_copy"} | {
+            "artifact_sha256": art_sha, "local_artifact": rel,
+            "downloaded_from": "https://egazette.gov.in/x.pdf", "downloaded_at": "2025-12-02"}
+        check(P880.artifact_problem(base) is None and P880.attestation_gaps(base) == [],
+              f"the held artifact, present and hashing to its record, is usable "
+              f"({P880.attestation_gaps(base)})")
+
+        whole = art.read_bytes()
+        art.write_bytes(whole[:100] + bytes([whole[100] ^ 0x01]) + whole[101:])
+        problem = P880.artifact_problem(base)
+        check(problem is not None and "no longer hashes" in problem,
+              f"...one byte different and it is refused ({problem})")
+        check(any(g.startswith("artifact:") for g in P880.attestation_gaps(base))
+              and not any(g.startswith("source:") for g in P880.attestation_gaps(base)),
+              "...named as the artifact, not as a missing source: a reader must not be "
+              "told the provenance is missing when the FILE is wrong")
+
+        art.write_bytes(whole[:200])
+        check(P880.artifact_problem(base) is not None,
+              "...a truncated artifact is refused")
+        art.unlink()
+        gone = P880.artifact_problem(base)
+        check(gone is not None and "not on disk" in gone,
+              f"...and an artifact that is not there at all is refused, not noted ({gone})")
+
+        # Path safety, for the held artifact and for a stored copy alike.
+        outside = Path(_atd) / "outside_link.pdf"
+        try:
+            outside.symlink_to("/etc/hosts")
+        except OSError:                                  # pragma: no cover
+            outside = None
+        for label, named in (("an absolute path", "/etc/hosts"),
+                             ("a path escaping the repository", "../../../etc/hosts"),
+                             ("a symlink out of the repository",
+                              str(outside.relative_to(ROOT)) if outside else None)):
+            if named is None:                            # pragma: no cover
+                continue
+            bad_art = P880.artifact_problem(base | {"local_artifact": named})
+            check(bad_art is not None and ("outside the repository" in bad_art
+                                           or "absolute" in bad_art),
+                  f"{label} is refused as a held artifact ({bad_art})")
+            bad_copy = {k: v for k, v in rec_ok.items()} | {
+                "corroborating_copy": copy_ok | {"local_copy": named}}
+            problem_copy = P880.corroboration_problem(bad_copy)
+            check(problem_copy is not None,
+                  f"...and refused as a stored copy, rather than read as merely absent "
+                  f"({problem_copy})")
+
+    nameless = {k: v for k, v in rec_ok.items() if k != "local_artifact"}
+    check(any(g.startswith("artifact:") and "does not name" in g
+              for g in P880.attestation_gaps(nameless)),
+          f"a record that does not name the file it holds cannot be checked, so it is "
+          f"refused ({P880.attestation_gaps(nameless)})")
+
+    # The digest is memoised on (path, size, mtime) -- and must not outlive the file
+    # it describes, or the whole check becomes a cache of a past truth.
+    with _tempfile.TemporaryDirectory(dir=ROOT, prefix=".p2_memo_test_") as _mtd:
+        f = Path(_mtd) / "a.bin"
+        f.write_bytes(b"one")
+        first = file_digest(f)
+        check(file_digest(f) == first, "the same file hashes to the same value")
+        f.write_bytes(b"two different bytes")
+        check(file_digest(f) != first,
+              "...and a file that changed hashes to a different one: the memo keys on "
+              "size and mtime, so it cannot serve a stale digest")
 
     # ── recording a source: pure, so nothing is written on a refusal ──────────
     outcome, written, msg = P880.record_source(None, gaz, "2025-12-02")

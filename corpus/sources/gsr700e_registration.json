@@ -27,6 +27,7 @@
  "registered_at": "2026-09-04T11:44:21Z",
  "acquisition_method": "human_browser",
  "artifact_sha256": "sha256:bb590caf9ef7e4dd4cf548ae6be32bab14323a3b0aa4cdc4be89157060bf5f49",
+ "local_artifact": "corpus/sources/gsr700e_2022.pdf",
  "stored_text": "corpus/rules/gsr_700e_2022.txt",
  "stored_text_sha256": "sha256:406f1936d3f3f051a8b4b91ef4d28f919bf0eda4bec0602590b5f84bcabb4d28",
  "operative_clause": "paid up capital and turnover of the small company shall not exceed rupees four crore and rupees forty crore [F .",

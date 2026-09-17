@@ -308,6 +308,48 @@ the next reader can see what is being tested.
 Nothing in §§1–5 above changed as a result: no served figure, no record content, and no evidence
 outcome. The fixes are to the guard and to two CLIs.
 
+## Fix round 2 (18-09-2026): the held artifact is re-read, and paths are confined
+
+**1. The file the answer rests on was never re-hashed (MEDIUM, reproduced by the main session:
+one byte flipped in `corpus/sources/gsr700e_2022.pdf` and `lookup()` still served Rs 4 crore).**
+Fix round 1 re-read the corroborating *copy*; the held artifact itself was hashed once, at
+registration, and compared only record-to-record afterwards. It is now re-read on the serving path,
+and the records say which file they hold:
+
+- Each record gains `local_artifact` (a repo-relative path), added only after the file at that path
+  was hashed and found equal to the `artifact_sha256` already recorded — identification proved, not
+  asserted: 700(E) `bb590caf…`, 880(E) `44faa58c…`, KMP `0c0b29fd…`, Allotment Rules `686104cd…`.
+- `SourcePolicy.artifact_problem()` refuses a record whose artifact **is missing, is not the
+  recorded bytes, or is not named at all**. Unlike the corroborating copy, an ABSENT artifact
+  refuses rather than leaving a note: the copy is a *record of* evidence gathered elsewhere, with
+  its URL and hash written down at fetch time, while the held artifact *is* the evidence.
+- The gap is prefixed `artifact:` and kept apart from `source:`, because "we cannot say where this
+  file came from" and "this is not the file that was checked" are different sentences to put in
+  front of a reader. What a reader sees when the hash fails:
+  *"the instrument is held, but the file on record is not the file that was checked: its bytes no
+  longer match what was recorded when it was registered (reference S-002/S-003)"*, and the operator
+  note carries the path and both digests with "restore the artifact from git, or re-register the
+  file you hold".
+- `register()` now writes `local_artifact` itself, and says plainly when the file being registered
+  sits outside the repository (the usual case for a fresh download): copy it into `corpus/sources/`
+  and register that copy, because a record that names no file cannot be checked.
+
+**2. `local_copy`/`local_artifact` paths are confined to the repository (LOW).** `ROOT / named` does
+not confine — pathlib treats an absolute right-hand side as the whole path, so `"/etc/hosts"`
+escaped, and `"../../../etc/hosts"` resolved outside and read as a harmless *absence*, leaving the
+record corroborating with only a note. `repo_path()` now refuses an absolute path, a path that
+resolves outside the tree, and (because it resolves symlinks first) a link pointing out of it. The
+gap text says which of the two it was.
+
+**3. Cost (verifier measured 3.38 ms per `lookup()`; fix round 2 adds more hashing).** `file_digest()`
+memoises per process on `(resolved path, size, mtime_ns)`, so a file that changes under us gets a
+new digest rather than a remembered one — asserted in the suite by rewriting a file between calls.
+Measured on this corpus, same machine: **3.54 ms per lookup before, 1.09-1.26 ms after**, while
+hashing strictly more than before (the held artifact as well as the copy).
+
+Nothing in §§1-5 changed as a result. Served state is unchanged: both figures still serve, on
+records that now also prove the file they rest on is the file that was checked.
+
 ## What this audit did not do
 
 - It did not attest anything, and did not write or alter a human check field, a reviewer id or a timestamp.

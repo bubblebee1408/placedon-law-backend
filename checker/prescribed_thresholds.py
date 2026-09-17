@@ -143,6 +143,7 @@ def _prescribed_state() -> tuple[str, str, str]:
     artifact it was asserting, and the whole point of the registration record is
     that the state follows the evidence rather than someone's memory of it.
     """
+    REF = "S-002"          # the ledger row a reader is pointed at
     try:
         from scripts.register_gsr700e import (registration, is_attested, attestation_gaps,
                                               local_copy_note, provenance_problem)
@@ -158,6 +159,20 @@ def _prescribed_state() -> tuple[str, str, str]:
             "absent from this machine's trust store. Acquire under S-002: "
             "download in a browser, then scripts/register_gsr700e.py.")
     gaps = attestation_gaps(rec)
+    artifact_gaps = [g for g in gaps if g.startswith("artifact:")]
+    if artifact_gaps:
+        # The file itself is the evidence. If it is gone, or is not the bytes that
+        # were checked, nothing else in the record can make up for it -- and the
+        # reader must be told that, not that a reviewer or a source is missing.
+        missing_name = any("does not name" in g for g in artifact_gaps)
+        return UNRESOLVED, (
+            ("the instrument is held, but the record does not say which file it holds, "
+             "so what was checked cannot be re-read (reference {ref})" if missing_name else
+             "the instrument is held, but the file on record is not the file that was "
+             "checked: its bytes no longer match what was recorded when it was "
+             "registered (reference {ref})").format(ref=REF)), (
+            f"{'; '.join(artifact_gaps)}. Restore the artifact from git, or re-register "
+            f"the file you hold; the figure is refused until its bytes match the record.")
     if gaps and all(g.startswith("source:") for g in gaps):
         # A-001 again, on the 2022 instrument: a reviewer did check it. Saying
         # otherwise would be false; what is missing is where the file came from.
@@ -203,6 +218,7 @@ def _prescribed_state_880() -> tuple[str, str, str]:
 
     Same shape as _prescribed_state, for the instrument that SUPERSEDED 700(E).
     """
+    REF = "S-003"          # the ledger row a reader is pointed at
     try:
         from scripts.register_gsr880e import (registration, is_attested, attestation_gaps,
                                               local_copy_note, provenance_problem)
@@ -219,6 +235,20 @@ def _prescribed_state_880() -> tuple[str, str, str]:
             "no registration on record. Acquire under S-003: download the Gazette "
             "artifact in a browser, then scripts/register_gsr880e.py.")
     gaps = attestation_gaps(rec)
+    artifact_gaps = [g for g in gaps if g.startswith("artifact:")]
+    if artifact_gaps:
+        # The file itself is the evidence. If it is gone, or is not the bytes that
+        # were checked, nothing else in the record can make up for it -- and the
+        # reader must be told that, not that a reviewer or a source is missing.
+        missing_name = any("does not name" in g for g in artifact_gaps)
+        return UNRESOLVED, (
+            ("the instrument is held, but the record does not say which file it holds, "
+             "so what was checked cannot be re-read (reference {ref})" if missing_name else
+             "the instrument is held, but the file on record is not the file that was "
+             "checked: its bytes no longer match what was recorded when it was "
+             "registered (reference {ref})").format(ref=REF)), (
+            f"{'; '.join(artifact_gaps)}. Restore the artifact from git, or re-register "
+            f"the file you hold; the figure is refused until its bytes match the record.")
     if gaps and all(g.startswith("source:") for g in gaps):
         # A-001: a reviewer did check it. Saying otherwise would be false; what is
         # missing is where the file came from.
@@ -513,7 +543,8 @@ def _test() -> None:
     from unittest import mock
     import scripts.register_gsr700e as reg
 
-    unattested = {"artifact_sha256": "sha256:" + "ab" * 32,
+    unattested = {"artifact_sha256": reg.registration()["artifact_sha256"],
+                  "local_artifact": reg.registration()["local_artifact"],
                   "classification": "VERIFIED_INSTRUMENT",
                   "downloaded_from": "https://indiacode.gov.in/test-stub.pdf",
                   "downloaded_at": "2026-09-04",
@@ -600,6 +631,34 @@ def _test() -> None:
     # ── the 2025 instrument is gated exactly the same way ────────────────────
     import scripts.register_gsr880e as reg880
 
+    # Fix round 2: the HELD artifact is re-read on the serving path. A record whose
+    # file is gone, or is no longer the bytes that were checked, refuses -- and the
+    # reader is told the FILE is wrong, not that the provenance is missing.
+    for label, broken in (
+            ("a file that is not on disk",
+             reg880.attested_stub() | {"local_artifact": "corpus/sources/no_such_file.pdf"}),
+            ("a file whose bytes are not the recorded ones",
+             reg880.attested_stub() | {"artifact_sha256": "sha256:" + "cd" * 32}),
+            ("a record naming no file at all",
+             {k: v for k, v in reg880.attested_stub().items() if k != "local_artifact"})):
+        with reg880.stub_registration(broken):
+            st_a, note_a, op_a = _prescribed_state_880()
+            check(st_a == UNRESOLVED, f"{label} is refused ({st_a})")
+            check("the file on record is not the file that was checked" in note_a
+                  or "does not say which file" in note_a,
+                  f"...and the reader note is about the file ({note_a[:80]}…)")
+            check("no reviewer has confirmed" not in note_a
+                  and "downloaded from" not in note_a,
+                  "...not about a reviewer or a source, neither of which is missing")
+            check("artifact" in op_a,
+                  f"...while the operator note names the artifact problem ({op_a[:80]}…)")
+            try:
+                lookup("small_company.paid_up_capital.prescribed", date(2026, 9, 15))
+                check(False, f"...and nothing is served for {label}")
+            except ThresholdUnavailable:
+                check(True, f"...and nothing is served for {label}")
+
+
     # Fix round 1: a record naming a stored copy it no longer holds still serves --
     # the address and hash were recorded when the copy was fetched, and deleting a
     # file does not unsay them -- but the operator note must say the file is gone,
@@ -609,7 +668,8 @@ def _test() -> None:
                      "corroborating_copy": {
                          "url": "https://egazette.gov.in/WriteReadData/2025/268124.pdf",
                          "retrieved_at": "2026-09-17T05:40:14Z",
-                         "sha256": "sha256:" + "ab" * 32, "match": "identical",
+                         "sha256": reg880.attested_stub()["artifact_sha256"],
+                         "match": "identical",
                          "local_copy": "corpus/sources/no_such_copy.pdf"}}
     with reg880.stub_registration(copy_gone):
         st9, note9, op9 = _prescribed_state_880()
@@ -676,7 +736,8 @@ def _test() -> None:
     copy_only = {k: v for k, v in reg880.attested_stub().items()
                  if k not in ("downloaded_from", "downloaded_at")} | {"corroborating_copy": {
                      "url": "https://egazette.gov.in/WriteReadData/2025/268124.pdf",
-                     "retrieved_at": "2026-09-17T05:40:14Z", "sha256": "sha256:" + "ab" * 32,
+                     "retrieved_at": "2026-09-17T05:40:14Z",
+                     "sha256": reg880.attested_stub()["artifact_sha256"],
                      "match": "identical"}}
     with reg880.stub_registration(copy_only):
         t880c = lookup("small_company.paid_up_capital.prescribed", date(2026, 9, 15))

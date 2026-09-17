@@ -53,7 +53,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from checker.provenance import (  # noqa: E402
     EXIT_WORDING, GAZETTE_OR_INDIA_CODE_HOSTS, NO_RECORD, SOURCE_CONFLICT, SOURCE_RECORDED,
-    SOURCE_REFUSED, SourcePolicy, cli_exit, split_source_flags)
+    ROOT, SOURCE_REFUSED, SourcePolicy, cli_exit, file_digest, repo_relative, split_source_flags)
 
 STORE = Path("corpus/rules/gsr_700e_2022.txt")
 RECORD = Path("corpus/sources/gsr700e_registration.json")
@@ -182,6 +182,7 @@ def register(src: Path, downloaded_from: str | None = None,
         return outcome
 
     print(f"\noperative clause, verbatim:\n  {clause}\n")
+    held = repo_relative(src)
     STORE.parent.mkdir(parents=True, exist_ok=True)
     STORE.write_text(text, encoding="utf-8")
     RECORD.parent.mkdir(parents=True, exist_ok=True)
@@ -199,6 +200,9 @@ def register(src: Path, downloaded_from: str | None = None,
         "registered_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "acquisition_method": "human_browser",
         "artifact_sha256": digest,
+        # Which file this record holds, so the guard can re-read it later. A record
+        # that names no file cannot be checked, and is refused rather than trusted.
+        "local_artifact": held,
         "stored_text": str(STORE),
         "stored_text_sha256": "sha256:" + hashlib.sha256(
             STORE.read_bytes()).hexdigest(),
@@ -216,6 +220,10 @@ def register(src: Path, downloaded_from: str | None = None,
         "attests_to": ATTESTATIONS,
     }, indent=1) + "\n", encoding="utf-8")
 
+    if held is None:
+        print("\nNOTE: the file you registered is OUTSIDE this repository, so the record")
+        print("cannot name the file it holds, and the guard refuses a record it cannot")
+        print("re-read. Copy the artifact into corpus/sources/ and register that copy.")
     print(f"stored         : {STORE}")
     print(f"record         : {RECORD}")
     print(f"status         : {PENDING_HUMAN_REVIEW}")
@@ -357,6 +365,13 @@ def served_source_url(rec: dict | None) -> str | None:
     return SOURCE_POLICY.source_of(rec) if is_attested(rec) else None
 
 
+# The stubs name a file this repository really holds, with its real digest: the
+# guard re-reads the artifact now, so a stub carrying an invented hash would be
+# a record of a file that does not exist -- which is what it must refuse.
+_STUB_ARTIFACT = "corpus/sources/gsr700e_2022.pdf"
+_STUB_ARTIFACT_SHA = file_digest(ROOT / _STUB_ARTIFACT) or "sha256:" + "00" * 32
+
+
 # ── test support ──────────────────────────────────────────────────────────────
 # The acquisition state is on-disk and changes when a reviewer attests. Tests
 # that exercise "refuses while unacquired" or "servable once acquired" must
@@ -369,7 +384,8 @@ import sys as _sys
 
 def registered_unattested_stub() -> dict:
     """A registration record that exists but carries neither human check."""
-    return {"artifact_sha256": "sha256:" + "00" * 32,
+    return {"artifact_sha256": _STUB_ARTIFACT_SHA,
+            "local_artifact": _STUB_ARTIFACT,
             "classification": VERIFIED_INSTRUMENT,
             "operative_clause": "paid up capital and turnover of the small company shall "
                                 "not exceed rupees four crore and rupees forty crore [F .",
@@ -381,7 +397,8 @@ def registered_unattested_stub() -> dict:
 def attested_stub(reviewer: str = "TEST") -> dict:
     """Acquired, both checks done, and a download source recorded. The address is a
     test value on an official host, not a real Gazette file."""
-    return {"artifact_sha256": "sha256:" + "11" * 32,
+    return {"artifact_sha256": _STUB_ARTIFACT_SHA,
+            "local_artifact": _STUB_ARTIFACT,
             "classification": VERIFIED_INSTRUMENT,
             "operative_clause": "paid up capital and turnover of the small company shall "
                                 "not exceed rupees four crore and rupees forty crore [F .",

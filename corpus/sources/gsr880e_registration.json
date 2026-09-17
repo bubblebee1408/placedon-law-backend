@@ -19,6 +19,7 @@
  "registered_at": "2026-09-09T09:35:25Z",
  "acquisition_method": "human_browser",
  "artifact_sha256": "sha256:44faa58ca500e7581e6612dc64baa586474adaf292734a7134c6c857d330a031",
+ "local_artifact": "corpus/sources/gsr880e_2025.pdf",
  "stored_text": "corpus/rules/gsr_880e_2025.txt",
  "stored_text_sha256": "sha256:ead93e59892b367029b13aba755184b21ce90c5a85bcaec085b95385616cb0cf",
  "operative_clause": "paid up capital and turnover of the small company s hall not exceed rupees ten crores and rupees one hundred crores respectively.",

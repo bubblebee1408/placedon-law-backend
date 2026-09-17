@@ -48,7 +48,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from checker.provenance import (  # noqa: E402
     EXIT_WORDING, GAZETTE_OR_INDIA_CODE_HOSTS, NO_RECORD, SOURCE_CONFLICT, SOURCE_RECORDED,
-    SOURCE_REFUSED, SourcePolicy, cli_exit, split_source_flags)
+    ROOT, SOURCE_REFUSED, SourcePolicy, cli_exit, file_digest, repo_relative, split_source_flags)
 
 STORE = Path("corpus/rules/pas_rules_2014.txt")
 RECORD = Path("corpus/sources/pas_rules_registration.json")
@@ -176,6 +176,7 @@ def register(src: Path) -> str:
     print("(read from the file, not assumed -- if that is not what the page says, "
           "do not attest)")
 
+    held = repo_relative(src)
     STORE.parent.mkdir(parents=True, exist_ok=True)
     STORE.write_text(text, encoding="utf-8")
     RECORD.parent.mkdir(parents=True, exist_ok=True)
@@ -189,6 +190,9 @@ def register(src: Path) -> str:
         "registered_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "acquisition_method": "human_browser",
         "artifact_sha256": digest,
+        # Which file this record holds, so the guard can re-read it later. A record
+        # that names no file cannot be checked, and is refused rather than trusted.
+        "local_artifact": held,
         "stored_text": str(STORE),
         "stored_text_sha256": "sha256:" + hashlib.sha256(STORE.read_bytes()).hexdigest(),
         "operative_clause": clause,
@@ -203,6 +207,10 @@ def register(src: Path) -> str:
         "attests_to": ATTESTATIONS,
     }, indent=1) + "\n", encoding="utf-8")
 
+    if held is None:
+        print("\nNOTE: the file you registered is OUTSIDE this repository, so the record")
+        print("cannot name the file it holds, and the guard refuses a record it cannot")
+        print("re-read. Copy the artifact into corpus/sources/ and register that copy.")
     print(f"\nstored         : {STORE}")
     print(f"record         : {RECORD}")
     print(f"status         : {PENDING_HUMAN_REVIEW}")
@@ -301,6 +309,13 @@ def record_source(downloaded_from: str | None, downloaded_at: str | None, *,
     return CORROBORATED if not gaps else PENDING_HUMAN_REVIEW
 
 
+# The stubs name a file this repository really holds, with its real digest: the
+# guard re-reads the artifact now, so a stub carrying an invented hash would be
+# a record of a file that does not exist -- which is what it must refuse.
+_STUB_ARTIFACT = "corpus/sources/pas_rules_2014.pdf"
+_STUB_ARTIFACT_SHA = file_digest(ROOT / _STUB_ARTIFACT) or "sha256:" + "00" * 32
+
+
 # ── test support ─────────────────────────────────────────────────────────────
 from contextlib import contextmanager as _contextmanager
 
@@ -315,7 +330,8 @@ def attested_stub(days: int = 30, reviewer: str = "TEST") -> dict:
                                 "within thirty days thereafter, file with the "
                                 "Registrar a return of allotment in Form PAS-3.",
             "window_days": days, "window_form": "PAS-3",
-            "artifact_sha256": "sha256:" + "ab" * 32,
+            "artifact_sha256": _STUB_ARTIFACT_SHA,
+            "local_artifact": _STUB_ARTIFACT,
             "identity_checked_by": reviewer, "identity_checked_at": "2026-01-01T00:00:00Z",
             "verbatim_clause_checked_by": reviewer,
             "verbatim_clause_checked_at": "2026-01-01T00:00:00Z",
