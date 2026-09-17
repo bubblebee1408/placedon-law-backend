@@ -238,6 +238,77 @@ def _file_for(dotted: str) -> Path:
     return REPO_ROOT / (dotted.replace(".", "/") + ".py")
 
 
+# Dynamic-import machinery. The AST walk sees `ast.Import`/`ast.ImportFrom` and
+# nothing else, so `importlib.import_module("checker.feeds.ofac_sdn")`,
+# `__import__(name)`, `sys.modules[...]` and `exec()` all reach Ring 2 with no
+# import node at all (red team RT-01). Their ARGUMENT is often computed, so no
+# static check can resolve where they lead. What a checker CAN do is refuse to
+# certify a decider that carries the machinery: in a Ring 0 or Ring 1 module these
+# have no legitimate use, and the repo has none today (asserted by _test()).
+_DYNAMIC_CALLS = {"__import__", "eval", "exec", "import_module"}
+
+
+def _dynamic_import_uses(tree: ast.AST) -> list[tuple[str, int]]:
+    """`(construct, line)` for every dynamic-import CALL in a module's AST.
+
+    Detected from the syntax tree, never from the text: a line-based scan flagged
+    the prose "Pure function, no I/O, no eval()" in `applicability.py`'s docstring
+    and would have taught everyone to ignore this check.
+
+    A module's own `_test()` is exempt. `checker/entail_binding.py` reads its own
+    source with `__import__("pathlib")` inside its test, which is a self-check, not
+    a decision path -- and a rule that fires on tests is a rule people route around.
+    """
+    out: list[tuple[str, int]] = []
+    test_spans = [(n.lineno, getattr(n, "end_lineno", n.lineno))
+                  for n in ast.walk(tree)
+                  if isinstance(n, ast.FunctionDef) and n.name == "_test"]
+
+    def in_test(lineno: int) -> bool:
+        return any(a <= lineno <= b for a, b in test_spans)
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            f = node.func
+            name = (f.id if isinstance(f, ast.Name)
+                    else f.attr if isinstance(f, ast.Attribute) else "")
+            if name in _DYNAMIC_CALLS and not in_test(node.lineno):
+                out.append((f"{name}()", node.lineno))
+        elif isinstance(node, ast.Subscript) and isinstance(node.value, ast.Attribute):
+            v = node.value
+            if v.attr == "modules" and isinstance(v.value, ast.Name) and v.value.id == "sys" \
+                    and not in_test(node.lineno):
+                out.append(("sys.modules[...]", node.lineno))
+    return out
+
+
+def _reachable_unregistered(dotted: str, seen: set[str] | None = None) -> set[str]:
+    """Local, UNREGISTERED modules a module imports, transitively.
+
+    RT-02: `violations()` checked only direct imports, so any unregistered helper
+    was an invisible laundering hop -- a decider imports `helpers`, `helpers`
+    imports a feed, and the guard saw nothing. The closure is walked through
+    unregistered local modules only; a registered one is judged on its own ring,
+    which is the whole point of registering it.
+    """
+    seen = set() if seen is None else seen
+    path = _file_for(dotted)
+    if not path.is_file():
+        return seen
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    except SyntaxError:
+        return seen
+    for imported, _lineno in _imported_names(tree, dotted):
+        if ring_of(imported) is not None or imported in seen:
+            continue
+        if not _file_for(imported).is_file():
+            continue                      # stdlib or third party: not ours to walk
+        seen.add(imported)
+        _reachable_unregistered(imported, seen)
+    return seen
+
+
 def violations() -> list[str]:
     """Every real Ring 0/1 module that imports Ring 2 or 3, named with a witness.
 
@@ -264,6 +335,22 @@ def violations() -> list[str]:
                 f"{rel}:{lineno} — {dotted} ({RING_NAMES[ring]}) imports "
                 f"{imported} ({RING_NAMES[target]})"
             )
+        # RT-01: machinery whose target a static walk cannot resolve.
+        for token, lineno in _dynamic_import_uses(tree):
+            out.append(
+                f"{rel}:{lineno} — {dotted} ({RING_NAMES[ring]}) uses {token!r}: a "
+                "dynamic import the ring check cannot follow. Not permitted in a "
+                "decider; import statically so the firewall can see it."
+            )
+        # RT-02: the laundering hop.
+        for helper in sorted(_reachable_unregistered(dotted)):
+            htree = ast.parse(_file_for(helper).read_text(encoding="utf-8"))
+            for imported, target, lineno in _leaks_upward(htree, helper, ring):
+                out.append(
+                    f"{_file_for(helper).relative_to(REPO_ROOT)}:{lineno} — {dotted} "
+                    f"({RING_NAMES[ring]}) reaches {imported} ({RING_NAMES[target]}) "
+                    f"through the unregistered module {helper}"
+                )
     return out
 
 
@@ -405,6 +492,40 @@ def _test() -> None:
     check(real == [], f"no Ring 0/1 module in the real codebase imports Ring 2 or 3 ({real})")
     for line in real:
         print(f"  !! VIOLATION: {line}")
+
+    # ---- RT-01: dynamic imports the AST walk cannot follow -------------------
+    dyn = ast.parse("import importlib\n"
+                    "def decide(c):\n"
+                    "    m = importlib.import_module('checker.feeds.ofac_sdn')\n"
+                    "    return m.screen(c)\n")
+    hits = _dynamic_import_uses(dyn)
+    check(any(t == "import_module()" for t, _ in hits),
+          f"importlib.import_module in a decider is flagged ({hits})")
+    check(_dynamic_import_uses(ast.parse("def f():\n    return __import__('x')\n")),
+          "__import__ is flagged too")
+    check(_dynamic_import_uses(ast.parse("import sys\ndef f():\n    return sys.modules['checker.feeds']\n")),
+          "sys.modules[...] is flagged")
+    check(not _dynamic_import_uses(ast.parse('"""prose mentioning eval() and __import__()."""\n')),
+          "prose in a docstring is NOT flagged -- the check reads syntax, not text")
+    check(not _dynamic_import_uses(ast.parse("def _test():\n    return __import__('pathlib')\n")),
+          "a module's own _test() is exempt -- a self-check is not a decision path")
+
+    # ---- RT-02: the laundering hop through an unregistered helper ------------
+    helper = REPO_ROOT / "checker" / "_rt02_probe_helper.py"
+    decider = REPO_ROOT / "checker" / "_rt02_probe_decider.py"
+    try:
+        helper.write_text("from checker.feeds import Observation\n")
+        decider.write_text("from checker import _rt02_probe_helper\n")
+        REGISTRY["checker._rt02_probe_decider"] = RING_0
+        found = [v for v in violations() if "_rt02_probe" in v]
+        check(bool(found), f"a Ring 0 module reaching a feed THROUGH a helper is caught ({found[:1]})")
+        check(found and "through the unregistered module" in found[0],
+              "...and the witness names the hop, so the fix is obvious")
+    finally:
+        REGISTRY.pop("checker._rt02_probe_decider", None)
+        helper.unlink(missing_ok=True); decider.unlink(missing_ok=True)
+    check(not [v for v in violations() if "_rt02_probe" in v],
+          "the probe cleans up after itself -- no residue in the registry or on disk")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:
