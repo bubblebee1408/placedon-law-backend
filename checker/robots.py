@@ -96,12 +96,28 @@ def ca_bundle() -> str | None:
     return None
 
 
+INTERMEDIATES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "certs", "intermediates.pem")
+
+
 def ssl_context() -> ssl.SSLContext | None:
-    """A verifying context, or None when no trust store can be found."""
+    """A verifying context, or None when no trust store can be found.
+
+    Also loads `certs/intermediates.pem` for chain COMPLETION: some government
+    hosts (egazette.gov.in) send only their leaf, and Python does not fetch the
+    missing issuer the way a browser does. Loading an intermediate here does not
+    make it an anchor -- OpenSSL still requires the chain to end at a SELF-SIGNED
+    root from the trusted bundle -- and VERIFY_X509_PARTIAL_CHAIN is cleared
+    explicitly so that holds on Python versions that would otherwise set it.
+    """
     bundle = ca_bundle()
     if bundle is None:
         return None
     ctx = ssl.create_default_context(cafile=bundle)
+    if _usable(INTERMEDIATES):
+        ctx.load_verify_locations(cafile=INTERMEDIATES)
+    partial = getattr(ssl, "VERIFY_X509_PARTIAL_CHAIN", None)
+    if partial is not None:
+        ctx.verify_flags &= ~partial
     ctx.check_hostname = True
     ctx.verify_mode = ssl.CERT_REQUIRED
     return ctx
@@ -370,6 +386,26 @@ def _test() -> None:
     if ctx is not None:
         check(ctx.verify_mode == ssl.CERT_REQUIRED and ctx.check_hostname,
               "the context verifies certificates and hostnames")
+        partial = getattr(ssl, "VERIFY_X509_PARTIAL_CHAIN", None)
+        check(partial is None or not (ctx.verify_flags & partial),
+              "partial chains are refused: an intermediate can never act as a root")
+
+    # Chain-completion intermediates (egazette.gov.in sends only its leaf).
+    import re as _re
+    from datetime import datetime as _dt, timezone as _tz
+    check(_usable(INTERMEDIATES), f"the intermediates file is present ({INTERMEDIATES})")
+    if _usable(INTERMEDIATES):
+        pem = open(INTERMEDIATES, encoding="ascii").read()
+        check(pem.count("BEGIN CERTIFICATE") == 2, "it holds exactly the two recorded intermediates")
+        ends = [_dt.strptime(s.strip(), "%b %d %H:%M:%S %Y GMT").replace(tzinfo=_tz.utc)
+                for s in _re.findall(r"^# notAfter=(.+)$", pem, _re.M)]
+        check(len(ends) == 2, "each intermediate records its expiry")
+        if ends:
+            days = (min(ends) - _dt.now(_tz.utc)).days
+            check(days > 0, f"no intermediate has expired (earliest lapses in {days} days)")
+            if 0 < days < 180:
+                print(f"  [WARN] an intermediate lapses in {days} days -- eGazette fetches "
+                      "will then fail closed until checker/certs/intermediates.pem is refreshed")
     # Assembled at runtime so this guard does not trip over its own source text.
     banned = ["_create_" + "unverified", "CERT_" + "NONE", "check_hostname = " + "False"]
     src = __import__("pathlib").Path(__file__).read_text()
