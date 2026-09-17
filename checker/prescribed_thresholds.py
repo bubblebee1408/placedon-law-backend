@@ -102,7 +102,9 @@ class ThresholdUnavailable(LookupError):
 _INDIA_CODE = "https://indiacode.gov.in/handle/123456789"
 # The India Code handle for 880(E) is UNRESOLVED -- not looked up from a primary
 # host, and inventing one would be a fabricated citation. The person who
-# downloads it records the real source in the registration record.
+# downloads it records the real source in the registration record, and once that
+# record is attested the served figure carries it (_source_880); this marker is
+# what an UNSERVABLE 880(E) row shows.
 SOURCE_880 = "UNRESOLVED — see scripts/register_gsr880e.py"
 
 # The Act's own limbs. These ARE in our corpus verbatim, so they are usable --
@@ -241,9 +243,21 @@ _GSR880_FROM = date(2025, 12, 1)
 # 01-12-2025 the only record covering it is 880(E), which is not servable until a
 # person acquires and attests it. The engine therefore REFUSES rather than
 # serving either the superseded figure or an unverified new one.
+def _source_880() -> str:
+    """Where a served 880(E) figure points: the address the registration record
+    carries (the recorded download, else the corroborating copy). The UNRESOLVED
+    marker stays only while the record is not attested -- when nothing is served."""
+    try:
+        from scripts.register_gsr880e import registration, served_source_url
+    except ImportError:                                     # pragma: no cover
+        return SOURCE_880
+    return served_source_url(registration()) or SOURCE_880
+
+
 def _prescribed() -> tuple[Threshold, ...]:
     state, note, op_note = _prescribed_state()
     state880, note880, op_note880 = _prescribed_state_880()
+    source880 = _source_880()
     _2022 = ("G.S.R. 700(E), Companies (Specification of Definition Details) "
              "Amendment Rules, 2022, dated 15-09-2022")
     _2025 = ("G.S.R. 880(E), Companies (Specification of Definition Details) "
@@ -260,9 +274,9 @@ def _prescribed() -> tuple[Threshold, ...]:
         # here so the artifact can be checked against them (register_gsr880e's
         # clause regex requires these words), and they are unservable until it is.
         Threshold("small_company.paid_up_capital.prescribed", Money.crore(10),
-                  _GSR880_FROM, None, _2025, SOURCE_880, state880, note880, op_note880),
+                  _GSR880_FROM, None, _2025, source880, state880, note880, op_note880),
         Threshold("small_company.turnover.prescribed", Money.crore(100),
-                  _GSR880_FROM, None, _2025, SOURCE_880, state880, note880, op_note880),
+                  _GSR880_FROM, None, _2025, source880, state880, note880, op_note880),
     )
 
 
@@ -535,6 +549,38 @@ def _test() -> None:
             check(False, "...and a 2026 date is refused")
         except ThresholdUnavailable:
             check(True, "...and a 2026 date is refused")
+
+    # Fix round 1 (main session's repro): a record the classifier called the wrong
+    # instrument must not serve, however many names are on it.
+    with reg880.stub_registration(reg880.attested_stub() | {"classification": "WRONG_INSTRUMENT"}):
+        try:
+            served = lookup("small_company.paid_up_capital.prescribed", date(2026, 9, 15))
+            check(False, f"a WRONG_INSTRUMENT record must not serve ({served.amount})")
+        except ThresholdUnavailable:
+            check(True, "a record classified WRONG_INSTRUMENT serves nothing")
+
+    # A served figure points at where the file came from, never at "UNRESOLVED".
+    with reg880.stub_registration(reg880.attested_stub()):
+        t880 = lookup("small_company.turnover.prescribed", date(2026, 9, 15))
+        check(t880.source_url == "https://egazette.gov.in/test-stub.pdf",
+              f"an attested 880(E) figure carries the recorded download address ({t880.source_url})")
+    copy_only = {k: v for k, v in reg880.attested_stub().items()
+                 if k not in ("downloaded_from", "downloaded_at")} | {"corroborating_copy": {
+                     "url": "https://egazette.gov.in/WriteReadData/2025/268124.pdf",
+                     "retrieved_at": "2026-09-17T05:40:14Z", "sha256": "sha256:" + "ab" * 32,
+                     "match": "identical"}}
+    with reg880.stub_registration(copy_only):
+        t880c = lookup("small_company.paid_up_capital.prescribed", date(2026, 9, 15))
+        check(t880c.source_url == "https://egazette.gov.in/WriteReadData/2025/268124.pdf",
+              f"...or the corroborating copy's address when none is recorded ({t880c.source_url})")
+    with reg880.stub_registration(reg880.registered_unattested_stub()):
+        held880 = held("small_company.paid_up_capital.prescribed", date(2026, 9, 15))
+        check(held880 and all(t.source_url == SOURCE_880 and not t.servable for t in held880),
+              "an unattested 880(E) keeps the UNRESOLVED marker, and is not served")
+    for t in held("small_company.paid_up_capital.prescribed", date(2026, 9, 15)):
+        if t.servable:
+            check(t.source_url.startswith("https://") and "UNRESOLVED" not in t.source_url,
+                  f"the live served figure names a real source ({t.source_url})")
 
     with reg880.stub_registration(reg880.attested_stub("reviewer-880")):
         st7, note7, _op7 = _prescribed_state_880()

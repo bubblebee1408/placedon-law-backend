@@ -46,23 +46,35 @@ NOT_FOUND = "NOT_FOUND"      # 404 from a host that DID answer.
 
 ACCESSIBILITY_STATES = (ACCESSIBLE, BLOCKED, UNREACHABLE, NOT_FOUND)
 
-# Where a registration record may say an instrument came from: the Gazette's publisher, India Code,
-# and the issuing ministry. Exact host names, not a suffix match -- "ends with gov.in" would admit
-# any host under gov.in, and "contains egazette" admits egazette.gov.in.example.com. India Code's
-# old indiacode.nic.in is absent on purpose: it is dead (CLAUDE.md), so no download came from it.
-OFFICIAL_SOURCE_HOSTS = frozenset({
+# Where a registration record may say an instrument came from. Exact host names, not a suffix
+# match -- "ends with gov.in" would admit any host under gov.in, and "contains egazette" admits
+# egazette.gov.in.example.com. India Code's old indiacode.nic.in is absent on purpose: it is dead
+# (CLAUDE.md), so no download came from it.
+#
+# Two sets, because a record may attest a narrower class than "official". The 880(E) record
+# attests "the host was the Gazette or India Code"; a file from the ministry's own site is official
+# but is not what that record attests, so its guard passes GAZETTE_OR_INDIA_CODE_HOSTS.
+GAZETTE_OR_INDIA_CODE_HOSTS = frozenset({
     "egazette.gov.in", "www.egazette.gov.in",
     "indiacode.gov.in", "www.indiacode.gov.in",
-    "mca.gov.in", "www.mca.gov.in",
 })
+OFFICIAL_SOURCE_HOSTS = GAZETTE_OR_INDIA_CODE_HOSTS | frozenset({"mca.gov.in", "www.mca.gov.in"})
 
 
-def official_source_url(url: object) -> bool:
-    """True only for an https address on an official host, with no credentials or odd port.
+def official_source_url(url: object, hosts: frozenset[str] = OFFICIAL_SOURCE_HOSTS) -> bool:
+    """True only for an https address on one of `hosts`, with no credentials or odd port.
+
+    `hosts` lets a caller narrow the set to what its record attests (see
+    GAZETTE_OR_INDIA_CODE_HOSTS). It may only narrow: a set naming any host outside
+    OFFICIAL_SOURCE_HOSTS raises, so no caller can widen "official" by passing its own list.
 
     A plain-http copy of a Gazette notification is a copy anyone on the path could have edited, so
     it is not a source this system may point to, however official the host name.
     """
+    if not frozenset(hosts) <= OFFICIAL_SOURCE_HOSTS:
+        raise ProvenanceError(
+            f"hosts may only narrow the official set; not official: "
+            f"{sorted(frozenset(hosts) - OFFICIAL_SOURCE_HOSTS)}")
     if not isinstance(url, str) or not url:
         return False
     try:
@@ -74,7 +86,7 @@ def official_source_url(url: object) -> bool:
         return False
     if port not in (None, 443):
         return False
-    return (parts.hostname or "") in OFFICIAL_SOURCE_HOSTS
+    return (parts.hostname or "") in hosts
 
 
 class ProvenanceError(ValueError):
@@ -416,6 +428,22 @@ def _test() -> None:
             (None, "no value"),
             (42, "not a string")):
         check(not official_source_url(url), f"{why} is refused ({url!r})")
+
+    # A record may attest a narrower class of host than "official". The caller passes it.
+    mca = "https://www.mca.gov.in/x.pdf"
+    check(official_source_url(mca), "the ministry's site is official by default")
+    check(not official_source_url(mca, hosts=GAZETTE_OR_INDIA_CODE_HOSTS),
+          "...but not a Gazette or India Code host")
+    check(official_source_url("https://egazette.gov.in/x.pdf", hosts=GAZETTE_OR_INDIA_CODE_HOSTS)
+          and official_source_url("https://indiacode.gov.in/x", hosts=GAZETTE_OR_INDIA_CODE_HOSTS),
+          "...while the Gazette and India Code are")
+    check(GAZETTE_OR_INDIA_CODE_HOSTS < OFFICIAL_SOURCE_HOSTS,
+          "the narrower set is a strict subset of the official one")
+    try:
+        official_source_url("https://egazette.gov.in/x", hosts=frozenset({"evil.example"}))
+        check(False, "a host set wider than the official one must raise")
+    except ProvenanceError:
+        check(True, "a host set wider than the official one is refused, not trusted")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:
