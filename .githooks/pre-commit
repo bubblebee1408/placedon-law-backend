@@ -7,7 +7,8 @@
 # to type a command. A safety property nobody checks is a safety property you do not have.
 #
 # WHY IT RUNS EVERYTHING
-# 147 suites in ~81 seconds, measured 13-09-2026. (This comment previously said "~4 seconds";
+# 147 suites in ~81 seconds, measured 13-09-2026; 173 suites by 17-09-2026, when two of them
+# read 169- and 179-page PDFs and a full run took several minutes. (This comment previously said "~4 seconds";
 # it was written when the suite was a fraction of its current size and was simply stale.) A
 # changed-files fast path would cost more in complexity and in missed cross-module breakage
 # than it saves -- cross-module breakage is the common case here: section_index, mvp_freeze
@@ -62,12 +63,15 @@ fi
 # Invoked through bash explicitly, never `sh $runner`: these scripts are bash and use arrays and
 # herestrings, and /bin/sh is dash on the Linux runners where CI executes the identical file.
 # No `&`, no trailing pipe: the assignment's status IS the oracle's status.
-echo "pre-commit: running $runner (147 suites, ~81s)..." >&2
+# No suite count here: a hard-coded "147" survived four suites being added. The real
+# count is printed after the run, from the runner's own HARNESS_RESULT contract line.
+echo "pre-commit: running $runner (every suite; takes several minutes)..." >&2
 output=$(bash "$runner" 2>&1)
 status=$?
 
 if [ "$status" -eq 0 ]; then
     echo "pre-commit: all suites green." >&2
+    printf '%s\n' "$output" | grep -E '^HARNESS_RESULT' | sed 's/^/pre-commit: /' >&2
     exit 0
 fi
 
