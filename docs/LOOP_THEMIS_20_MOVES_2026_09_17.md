@@ -30,21 +30,21 @@ Lanes: **ME** = this session · **A/B/C/D** = subagents (worktree-isolated) ·
 | # | Move | Lane | Done when | State |
 |---|---|---|---|---|
 | 1 | Commit the Gazette watcher (6 files, verified clean in isolation) | ME | On the branch, hook GREEN | DONE `234dca2` |
-| 2 | Push the branch after each landed commit | ME | `origin` matches local | BLOCKED — push denied by the permission classifier; founder must allow it |
-| 3 | OFAC delta watcher: added / removed SDN uids between polls, same high-water discipline as the Gazette runner | A | `scripts/watch_ofac.py --test` GREEN; live run records a baseline | running |
-| 4 | OFAC vessel index by IMO number — the lawful "God's Eye ships" | A | `lookup_vessel(imo)` tested offline; live count reported | running |
-| 5 | Cache OFAC artifacts through `feeds/common/cache.py` so a delta is computed from hashed, dated files | A | Two polls produce two dated artifacts; delta reads them | running |
+| 2 | Push the branch after each landed commit | ME | `origin` matches local | DONE by side effect — peer pushed the shared branch; direct push from here denied, not worked around |
+| 3 | OFAC delta watcher: added / removed SDN uids between polls, same high-water discipline as the Gazette runner | A | `scripts/watch_ofac.py --test` GREEN; live run records a baseline | DONE `7ec9272` |
+| 4 | OFAC vessel index by IMO number — the lawful "God's Eye ships" | A | `lookup_vessel(imo)` tested offline; live count reported | DONE `7ec9272` — 1,527 IMO-keyed, all check digits valid |
+| 5 | Cache OFAC artifacts through `feeds/common/cache.py` so a delta is computed from hashed, dated files | A | Two polls produce two dated artifacts; delta reads them | DONE `7ec9272` (cache git-ignored; 29 MB/artifact) |
 | 6 | Source audit, read-only: SEBI's own orders + terms, IBBI, MCA defaulter lists, RBI wilful defaulters | B | `docs/research/SOURCE_AUDIT_REGISTERS_2026_09_17.md`, every row SOURCED or UNVERIFIED | DONE `e68f938` — IBBI BUILDABLE (quote re-verified); SEBI, RBI forbidden by terms; MCA, CIBIL blocked |
 | 7 | Technical report, publishable, every number tagged MEASURED/SOURCED/INFERRED with its commit | C | `docs/THEMIS_TECHNICAL_REPORT_2026_09_17.md` | DONE `979e177` (integration note added) |
 | 8 | `robots.py`: a 401/403 on robots.txt is a block, not "no rules" (BSE finding) | ME | Test: 403 → not loaded; 404 → allow-all; gate GREEN | DONE `54eba61` |
 | 9 | Pre-commit hook prints the real suite count instead of the stale "147" | ME | Hook label computed; `harness_regression.sh` still passes | DONE `86e24a2` — hook now prints `suites=173 … GREEN` |
-| 10 | Reconcile FEATURES.md "2 of 15" vs "four obligations refuse" from `obligations.py` itself | D | One number, with the command that produced it | running (agent D, worktree wave2-d) |
-| 11 | FEATURES.md F5 + PLAN_15 status: watcher BUILT, delivery remaining | D | Status lines name files and commits | running (agent D) — also CLAUDE.md 527→529 |
-| 12 | Gazette digest: render new/UNKNOWN/UNSEEN items as a dated markdown report — delivery v0, no legal inference | D | `reports/gazette_digest.md` from the watcher log; test GREEN | running (agent D) |
-| 13 | Link the watcher to `corpus_currency`: a new MCA instrument raises "ledger may be behind", never a conclusion | D | Digest shows it; no Ring 0 import | running (agent D) |
-| 14 | Red-team every new Ring 2 module (fail-closed, licence, blindness, ring boundary) | E | Findings dispositioned | queued (wave 3) |
+| 10 | Reconcile FEATURES.md "2 of 15" vs "four obligations refuse" from `obligations.py` itself | D | One number, with the command that produced it | DONE `c2d7c0d` — measured: 2 of 15, s.177 + s.203 |
+| 11 | FEATURES.md F5 + PLAN_15 status: watcher BUILT, delivery remaining | D | Status lines name files and commits | DONE `c2d7c0d` (CLAUDE.md 527→529) |
+| 12 | Gazette digest: render new/UNKNOWN/UNSEEN items as a dated markdown report — delivery v0, no legal inference | D | `reports/gazette_digest.md` from the watcher log; test GREEN | DONE `c2d7c0d` |
+| 13 | Link the watcher to `corpus_currency`: a new MCA instrument raises "ledger may be behind", never a conclusion | D | Digest shows it; no Ring 0 import | DONE `c2d7c0d` |
+| 14 | Red-team every new Ring 2 module (fail-closed, licence, blindness, ring boundary) | E | Findings dispositioned | RUNNING — first attempt died on a usage limit; relaunched at `c2d7c0d` |
 | 15 | Integrate subagent commits one at a time; gate after each | ME | Each lands GREEN | continuous — B, C integrated as single files |
-| 16 | Final report: what runs, what is designed, what is blocked | ME | `docs/LOOP_THEMIS_20_MOVES_REPORT.md` | last |
+| 16 | Final report: what runs, what is designed, what is blocked | ME | `docs/LOOP_THEMIS_20_MOVES_REPORT.md` | DONE — `LOOP_THEMIS_20_MOVES_REPORT.md` |
 | 17 | **SD-005 decision** — accept split words as source defect or acquire a cleaner rendering | H | Founder decision | BLOCKED |
 | 18 | **SEBI debarred route** — OpenSanctions licence / written permission / SEBI orders | H | Founder decision | BLOCKED |
 | 19 | **Licence confirmation** for OFAC and eGazette (Copyright Act s.52(1)(q) reading) | H | A lawyer's or the source's own words | BLOCKED |
@@ -73,3 +73,7 @@ progress for reasons outside this session — then stop and report.
   worked around. 13 commits are local on `loop/bookmark-godseye-v0`.
 - The peer session committed `c072b01` and continues on provenance/registration files;
   every commit here stages explicit paths only and waits out its index lock.
+- 18-09 — waves 2 and 3 integrated; gate 163 → **175 suites GREEN**, green at every
+  commit. Report written (move 16). Red team relaunched after a usage limit.
+  `origin` is 1 commit behind HEAD: the peer session pushed the shared branch,
+  carrying this session's commits with it.
