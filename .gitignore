@@ -72,3 +72,8 @@ corpus/.gazette_watch.json
 corpus/.gazette_watch.jsonl
 # Subagent git worktrees -- isolated copies, never content.
 .claude/worktrees/
+# The OFAC watcher's state, log, and its content-hashed artifact cache. Each SDN
+# artifact is ~29 MB and must never be committed.
+corpus/.ofac_watch.json
+corpus/.ofac_watch.jsonl
+corpus/.feeds_cache/

@@ -66,6 +66,41 @@ spell out, and fuzzy matching invents hits; neither may enter a Ring 0 decider, 
 
 Also noted and preserved, not corrected: OFAC's own element is spelled
 `publshInformation`. That is the source's spelling.
+
+## Vessel index -- schema measured, not assumed (2026-09-17)
+
+Before `vessels()`/`lookup_vessel()` were written, the live file was read directly
+(`curl -r 0-5000000`, `<sdnEntry sdnType="Vessel">` blocks, no state through
+`checker.robots`) to see what OFAC actually publishes, because assuming a schema and
+writing a parser against the assumption is exactly the mistake this module's own
+docstring already warns against for `publshInformation`. What is really there, per
+`<sdnEntry>`:
+
+  `<idList><id><idType>Vessel Registration Identification</idType>
+   <idNumber>IMO 7406784</idNumber></id></idList>` -- one `<id>` per identifier; the
+  IMO number lives under EXACTLY this `idType` string (measured against 81 Vessel
+  entries in the first 5,000,000 bytes of the live file, 81/81 matched). Two
+  spellings of `idNumber` were both observed: `IMO 7406784` (prefixed) and
+  `8606173` (bare, no prefix) -- both are 7 digits once the optional `IMO` prefix
+  and surrounding whitespace are stripped, and both pass the IMO check digit for
+  real entries. A vessel may carry NO `<idList>` at all (measured: uid 4238,
+  `MAR AZUL`) -- not every Vessel entry has an IMO.
+
+  `<vesselInfo><callSign>…</callSign><vesselType>…</vesselType>
+   <vesselFlag>…</vesselFlag><vesselOwner>…</vesselOwner><tonnage>…</tonnage>
+   <grossRegisteredTonnage>…</grossRegisteredTonnage></vesselInfo>` -- every field
+  measured optional in practice (e.g. `callSign` and `vesselOwner` were present on
+  41/82 and 4/82 of the sampled Vessel entries respectively); none is assumed
+  present.
+
+`vessels()` keys strictly on `idType == "Vessel Registration Identification"` and a
+7-digit candidate (after stripping "IMO" and whitespace) -- not on any `idType`
+that merely mentions "Registration" (the file also carries, on non-vessel entries,
+`Public Registration Number` and `Romanian Tax Registration`, which are unrelated
+fields that happen to share a word). A candidate whose 7th digit fails the IMO
+check digit is INDEXED, not dropped or corrected: `imo_check_digit_valid=False` is
+the report; CLAUDE.md forbids repairing a defective source, and a source that
+misstates a check digit is not this module's mistake to fix silently.
 """
 from __future__ import annotations
 
@@ -78,13 +113,22 @@ from checker.feeds import (EITHER, LICENCE_UNVERIFIED, FetchResult, Observation)
 from checker.feeds.common.fetch import fetch as _fetch
 from checker.provenance import ACCESSIBLE
 
-__all__ = ["OfacSdnFeed", "ENTRY_URL", "PAYLOAD_HOST", "entries", "screen", "normalise"]
+__all__ = ["OfacSdnFeed", "ENTRY_URL", "PAYLOAD_HOST", "entries", "screen", "normalise",
+          "vessels", "lookup_vessel", "normalise_imo", "imo_check_digit_valid"]
 
 SOURCE_ID = "ofac.sdn"
 ENTRY_URL = "https://sanctionslistservice.ofac.treas.gov/api/download/SDN.XML"
 PAYLOAD_HOST = "wc2h-sls-prod-public-published.s3.us-gov-west-1.amazonaws.com"
 LICENCE = LICENCE_UNVERIFIED
 BLINDNESS = EITHER
+
+# Measured against the live file 2026-09-17 (see module docstring): this exact
+# idType string is where a vessel's IMO number lives. Matching on "contains
+# Registration" would also catch unrelated fields on non-vessel entries
+# ("Public Registration Number", "Romanian Tax Registration") -- exact match only.
+_IMO_ID_TYPE = "Vessel Registration Identification"
+_IMO_SHAPE = re.compile(r"^\d{7}$")
+_IMO_PREFIX = re.compile(r"(?i)^imo\s*")
 
 # The namespace OFAC publishes under, read from the live file on 2026-09-17. Parsing
 # is namespace-agnostic (`_local`) so a namespace change degrades to a count
@@ -110,9 +154,14 @@ def _text(el, child: str) -> str:
 
 
 def _entry(el) -> dict:
-    """One <sdnEntry> as a plain dict. Names only what screening needs."""
+    """One <sdnEntry> as a plain dict. Names what screening needs, plus (added for
+    the vessel index) the raw `<idList>` entries and `<vesselInfo>` block -- both
+    empty/absent on the vast majority of entries (individuals, entities), so this
+    costs nothing there and keeps `entries()` the single streaming source both
+    `screen()` and `vessels()` read from."""
     first, last = _text(el, "firstName"), _text(el, "lastName")
-    akas, programs = [], []
+    akas, programs, ids = [], [], []
+    vessel_info: dict = {}
     for c in el:
         tag = _local(c.tag)
         if tag == "programList":
@@ -124,12 +173,29 @@ def _entry(el) -> dict:
                 n = " ".join(x for x in (_text(a, "firstName"), _text(a, "lastName")) if x)
                 if n:
                     akas.append({"name": n, "category": _text(a, "category")})
+        elif tag == "idList":
+            for idnode in c:
+                if _local(idnode.tag) != "id":
+                    continue
+                ids.append({"id_type": _text(idnode, "idType"),
+                           "id_number": _text(idnode, "idNumber")})
+        elif tag == "vesselInfo":
+            vessel_info = {
+                "call_sign": _text(c, "callSign"),
+                "vessel_type": _text(c, "vesselType"),
+                "vessel_flag": _text(c, "vesselFlag"),
+                "vessel_owner": _text(c, "vesselOwner"),
+                "tonnage": _text(c, "tonnage"),
+                "gross_registered_tonnage": _text(c, "grossRegisteredTonnage"),
+            }
     return {
         "uid": _text(el, "uid"),
         "name": " ".join(x for x in (first, last) if x),
         "sdn_type": _text(el, "sdnType"),
         "programs": programs,
         "akas": akas,
+        "ids": ids,
+        "vessel_info": vessel_info,
     }
 
 
@@ -139,6 +205,75 @@ def entries(content: bytes):
         if _local(el.tag) == "sdnEntry":
             yield _entry(el)
             el.clear()
+
+
+def normalise_imo(raw: str) -> str:
+    """Strip a leading "IMO" (any case) and surrounding whitespace. Does NOT
+    validate shape or check digit -- see `imo_check_digit_valid`. Both spellings
+    measured on the live file (`IMO 7406784` and bare `8606173`) normalise to the
+    same form; stripping a prefix that is not there is a no-op."""
+    return _IMO_PREFIX.sub("", raw.strip()).strip()
+
+
+def imo_check_digit_valid(imo: str) -> bool:
+    """True iff `imo` is exactly 7 digits and its 7th digit is the IMO check
+    digit: the sum of the first six digits, each multiplied by 7,6,5,4,3,2 in
+    order, ends in the 7th digit. False for anything not 7 digits -- an
+    unexpected shape is not this function's business to coerce, only to report
+    (via the caller) as not IMO-shaped.
+    """
+    if not _IMO_SHAPE.match(imo):
+        return False
+    digits = [int(c) for c in imo]
+    total = sum(d * w for d, w in zip(digits[:6], (7, 6, 5, 4, 3, 2)))
+    return total % 10 == digits[6]
+
+
+def vessels(content: bytes) -> dict[str, dict]:
+    """Every Vessel-type <sdnEntry> that carries an IMO-shaped identifier,
+    keyed by that IMO number (post-`normalise_imo`, still exactly as published --
+    never re-derived or corrected).
+
+    Only `idType == "Vessel Registration Identification"` (the exact string
+    measured on the live file -- see module docstring) is read as a candidate
+    IMO. A candidate that is not 7 digits after normalising is not indexed at
+    all (it is not IMO-shaped, so there is nothing to validate); a candidate
+    that IS 7 digits but fails the check digit IS indexed, with
+    `imo_check_digit_valid=False` -- CLAUDE.md: never repair a defective
+    source, flag it and preserve it verbatim. A Vessel entry with no IMO-shaped
+    id at all (measured: `MAR AZUL`, uid 4238) is simply absent from this index;
+    it is still reachable via `entries()`.
+
+    Re-parses `content` on every call (streaming, flat memory, no persistent
+    index) -- call once per fetch and reuse the returned dict rather than
+    calling this in a loop over many lookups.
+    """
+    out: dict[str, dict] = {}
+    for e in entries(content):
+        if e["sdn_type"] != "Vessel":
+            continue
+        for idrec in e["ids"]:
+            if idrec["id_type"] != _IMO_ID_TYPE:
+                continue
+            imo = normalise_imo(idrec["id_number"])
+            if not _IMO_SHAPE.match(imo):
+                continue  # not 7 digits once normalised -- not IMO-shaped, nothing to index
+            out[imo] = {
+                "imo": imo,
+                "imo_check_digit_valid": imo_check_digit_valid(imo),
+                "uid": e["uid"],
+                "name": e["name"],
+                "programs": e["programs"],
+                **e["vessel_info"],
+            }
+    return out
+
+
+def lookup_vessel(imo: str, content: bytes) -> dict | None:
+    """One vessel record by IMO number (any spelling `normalise_imo` accepts),
+    or None if no Vessel entry in `content` carries it. Thin wrapper over
+    `vessels()` -- see its docstring for the indexing rules."""
+    return vessels(content).get(normalise_imo(imo))
 
 
 def _publish_info(content: bytes) -> tuple[str, int | None]:
@@ -325,6 +460,66 @@ def _test() -> None:
     from checker import rings
     check(rings.ring_of("checker.feeds.ofac_sdn") == rings.RING_2, "this module is registered Ring 2")
 
+    # ---- vessel index: synthetic entries in the schema measured 2026-09-17 ---
+    # uid 4243 EBANO / IMO 7406784 and the "IMO 7206512" example are real entries
+    # copied verbatim from the live file (see module docstring); "IMO 7406783" is
+    # the same digits as the real 7406784 with the check digit deliberately wrong.
+    def vessel_sample() -> bytes:
+        return f"""<?xml version="1.0" standalone="yes"?>
+<sdnList xmlns="{_NS_SEEN}">
+  <publshInformation><Publish_Date>09/16/2026</Publish_Date><Record_Count>3</Record_Count></publshInformation>
+  <sdnEntry><uid>4243</uid><lastName>EBANO</lastName><sdnType>Vessel</sdnType>
+    <programList><program>CUBA</program></programList>
+    <idList><id><uid>22133</uid><idType>Vessel Registration Identification</idType><idNumber>IMO 7406784</idNumber></id></idList>
+    <vesselInfo><vesselType>General Cargo</vesselType><vesselFlag>Panama</vesselFlag><tonnage>2595</tonnage><grossRegisteredTonnage>1865</grossRegisteredTonnage></vesselInfo>
+  </sdnEntry>
+  <sdnEntry><uid>9001</uid><lastName>BAD CHECK DIGIT</lastName><sdnType>Vessel</sdnType>
+    <programList><program>CUBA</program></programList>
+    <idList><id><uid>2</uid><idType>Vessel Registration Identification</idType><idNumber>IMO 7406783</idNumber></id></idList>
+    <vesselInfo><vesselType>Tanker</vesselType><vesselFlag>Panama</vesselFlag></vesselInfo>
+  </sdnEntry>
+  <sdnEntry><uid>4238</uid><lastName>MAR AZUL</lastName><sdnType>Vessel</sdnType>
+    <programList><program>CUBA</program></programList>
+    <vesselInfo><callSign>CL2192</callSign><vesselType>Tug</vesselType><vesselFlag>Cuba</vesselFlag><vesselOwner>Samir de Navegacion S.A.</vesselOwner><grossRegisteredTonnage>212</grossRegisteredTonnage></vesselInfo>
+  </sdnEntry>
+</sdnList>""".encode()
+
+    vsample = vessel_sample()
+
+    check(imo_check_digit_valid("7406784"), "the real EBANO IMO passes its own check digit")
+    check(imo_check_digit_valid("7206512"), "a second real IMO (measured live) passes too")
+    check(not imo_check_digit_valid("7406783"),
+          "the same six leading digits with a wrong 7th digit fails")
+    check(not imo_check_digit_valid("123456"), "a 6-digit string is not IMO-shaped at all")
+    check(not imo_check_digit_valid("IMO 7406784"), "an unnormalised string is not IMO-shaped")
+    check(normalise_imo("IMO 7406784") == "7406784", "a prefixed IMO strips to bare digits")
+    check(normalise_imo("  imo  7406784 ") == "7406784", "stripping tolerates case and extra whitespace")
+    check(normalise_imo("8606173") == "8606173", "stripping a prefix that is not there is a no-op")
+
+    vidx = vessels(vsample)
+    check(set(vidx) == {"7406784", "7406783"},
+          "only the two entries with an IMO-shaped id are indexed -- MAR AZUL (no idList) is absent")
+    check(vidx["7406784"]["imo_check_digit_valid"] is True, "the valid IMO is reported valid")
+    check(vidx["7406784"]["name"] == "EBANO" and vidx["7406784"]["vessel_type"] == "General Cargo",
+          "the valid entry carries its name and vesselInfo fields")
+    check(vidx["7406784"]["gross_registered_tonnage"] == "1865", "tonnage fields pass through as published")
+    check(vidx["7406783"]["imo_check_digit_valid"] is False,
+          "a failing check digit is INDEXED, not dropped or repaired")
+    check(vidx["7406783"]["name"] == "BAD CHECK DIGIT",
+          "...so the bad record is still reachable by the IMO the source actually published")
+
+    check(lookup_vessel("IMO 7406784", vsample)["uid"] == "4243",
+          "lookup_vessel accepts a prefixed IMO")
+    check(lookup_vessel("7406784", vsample)["uid"] == "4243",
+          "...and a bare one, resolving to the same record")
+    check(lookup_vessel("9999999", vsample) is None, "an IMO not on the list returns None, not a KeyError")
+    check(lookup_vessel("7406784", good) is None,
+          "a file with no Vessel entries at all (the Entity/Individual fixture) indexes nothing")
+
+    no_imo_vessels = [e for e in entries(vsample) if e["sdn_type"] == "Vessel" and not e["ids"]]
+    check(len(no_imo_vessels) == 1 and no_imo_vessels[0]["name"] == "MAR AZUL",
+          "a Vessel entry with no idList at all is still readable via entries(), just not vessels()")
+
     # ---- optional: the real file. Off by default so the gate stays hermetic. --
     if os.environ.get("THEMIS_LIVE") == "1":
         live = OfacSdnFeed()
@@ -336,6 +531,15 @@ def _test() -> None:
             print(f"         LIVE published={p['publish_date']} stated={p['record_count_stated']} "
                   f"parsed={p['record_count_parsed']} bytes={len(lr.content):,} sha256={lr.sha256[:16]}…")
             check(p["count_agrees"], "LIVE: parsed count equals OFAC's own stated Record_Count")
+
+            live_vessel_count = p["by_sdn_type"].get("Vessel", 0)
+            lvidx = vessels(lr.content)
+            valid_imo_count = sum(1 for v in lvidx.values() if v["imo_check_digit_valid"])
+            print(f"         LIVE vessels={live_vessel_count} indexed_by_imo={len(lvidx)} "
+                  f"valid_imo={valid_imo_count}")
+            check(live_vessel_count > 0, "LIVE: at least one Vessel-type sdnEntry present")
+            check(len(lvidx) <= live_vessel_count,
+                  "LIVE: the IMO index can only be as large as the number of Vessel entries")
     else:
         print("  [SKIP] live fetch (set THEMIS_LIVE=1 to hit the real Sanctions List Service)")
 
