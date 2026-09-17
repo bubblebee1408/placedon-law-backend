@@ -1,3 +1,10 @@
 -r requirements.txt
 uvicorn==0.42.0
 pdfplumber==0.11.10
+# Page-level PDF extraction for OFFLINE tooling only (checker/pdf_pages.py).
+# BSD-3-Clause, pure Python, zero mandatory transitive deps. Never imported by
+# checker/api.py or backend/ -- pdf_pages._test() asserts that boundary, so the
+# README's "no dependencies outside the standard library" stays true of the
+# served path. pdfplumber above is retained as the INDEPENDENT oracle in
+# scripts/text_layer_census.py; a single reader cannot judge itself.
+pypdf==6.16.1
