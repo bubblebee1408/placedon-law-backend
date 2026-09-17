@@ -131,8 +131,24 @@ REGISTRY: dict[str, int] = {
     "checker.mca_aggregator": RING_1,
     "checker.mca_snapshot": RING_1,
 
-    # ── RING 2 — FEEDS. Deliberately empty; see the module docstring. ──────
+    # ── RING 2 — FEEDS. Classified by PACKAGE below, not listed here. ──────
     # ── RING 3 — INFERENCE. Deliberately empty; see the module docstring. ──
+}
+
+# Whole packages whose every module belongs to one ring, by construction.
+#
+# Why a package rule and not more REGISTRY lines: REGISTRY matches exactly. When
+# `checker/feeds/` landed (2026-09-17), an exact-match-only guard had a hole — the
+# day someone adds `checker/feeds/mca_defaulters.py` and forgets to register it, a
+# Ring 0 decider could import it and `ring_of()` would return None, which this guard
+# deliberately never flags. A forgotten registry line would silently disable the
+# firewall for exactly the modules it exists to fence. So a feed is Ring 2 because
+# of WHERE it lives, and cannot escape by being forgotten.
+#
+# The same applies to importing the package itself: `from checker.feeds import
+# Observation` names `checker.feeds`, which no submodule entry would match.
+PACKAGE_RINGS: dict[str, int] = {
+    "checker.feeds": RING_2,
 }
 
 
@@ -149,8 +165,19 @@ def ring_of(module_path: str) -> int | None:
     third-party packages — is neither Ring 0 nor Ring 1 and has no business
     being forced into this vocabulary; only the modules PLAN_08 §2 actually
     names are classified, plus the same-family deciders noted above.
+
+    An exact REGISTRY entry wins. Otherwise the longest PACKAGE_RINGS prefix
+    decides, matched on whole dotted segments -- so `checker.feeds.ofac_sdn`
+    is Ring 2, while a hypothetical `checker.feedsX` is not.
     """
-    return REGISTRY.get(_normalise(module_path))
+    name = _normalise(module_path)
+    if name in REGISTRY:
+        return REGISTRY[name]
+    best, best_len = None, -1
+    for pkg, ring in PACKAGE_RINGS.items():
+        if (name == pkg or name.startswith(pkg + ".")) and len(pkg) > best_len:
+            best, best_len = ring, len(pkg)
+    return best
 
 
 def _imported_names(tree: ast.AST, importer: str) -> list[tuple[str, int]]:
@@ -282,9 +309,28 @@ def _test() -> None:
     missing1 = [m for m in required_ring1 if REGISTRY.get(m) != RING_1]
     check(not missing1, f"every task-mandated Ring 1 module is registered (missing: {missing1})")
 
-    # ---- Ring 2 and Ring 3 are currently EMPTY, and that must not error ----------
-    check(not any(r in (RING_2, RING_3) for r in REGISTRY.values()),
-          "no module is registered in Ring 2 or Ring 3 yet, as PLAN_08 §2 records")
+    # ---- Ring 2 is now populated, by PACKAGE; Ring 3 is still empty -------------
+    # This assertion used to read "Ring 2 and Ring 3 are empty". It changed on
+    # 2026-09-17 when checker/feeds/ landed -- updated to the new truth, not
+    # deleted, so the file still records what each ring is supposed to hold.
+    check(PACKAGE_RINGS.get("checker.feeds") == RING_2, "checker.feeds is Ring 2 as a package")
+    check(ring_of("checker.feeds") == RING_2, "importing the feeds PACKAGE itself resolves to Ring 2")
+    check(ring_of("checker.feeds.ofac_sdn") == RING_2, "a registered-by-location feed resolves to Ring 2")
+    check(ring_of("checker.feeds.not_written_yet") == RING_2,
+          "a FUTURE feed nobody remembered to register is still Ring 2 -- the hole this closes")
+    check(ring_of("checker/feeds/common/fetch.py") == RING_2, "...in the file-path spelling too")
+    check(ring_of("checker.feedsX") is None, "prefix matching is on whole segments, not characters")
+    check(not any(r == RING_3 for r in list(REGISTRY.values()) + list(PACKAGE_RINGS.values())),
+          "Ring 3 is still empty, as PLAN_08 §2 records")
+
+    # The hole, demonstrated: a Ring 0 decider importing an UNREGISTERED feed.
+    sneaky = ast.parse("def decide(c):\n    from checker.feeds.mca_defaulters import hit\n    return hit(c)\n")
+    caught = _leaks_upward(sneaky, "checker.s185", RING_0)
+    check(bool(caught) and caught[0][1] == RING_2,
+          f"a decider importing a never-registered feed is CAUGHT ({caught[:1]})")
+    pkg_import = ast.parse("from checker.feeds import Observation\n")
+    check(bool(_leaks_upward(pkg_import, "checker.obligations", RING_0)),
+          "a decider importing the feeds package itself is CAUGHT")
     empty_upper = violations()
     check(isinstance(empty_upper, list),
           "violations() runs cleanly with both upper rings empty, and does not raise")

@@ -56,20 +56,44 @@ _CA_CANDIDATES = (
 )
 
 
+def _usable(path: str | None) -> bool:
+    # A stub file would verify nothing; a real bundle is tens of kilobytes.
+    return bool(path) and os.path.exists(path) and os.path.getsize(path) > 1024
+
+
 def ca_bundle() -> str | None:
-    """Path to a usable CA bundle, or None if the machine has no trust store."""
-    p = ssl.get_default_verify_paths().openssl_cafile
-    if p and os.path.exists(p):
-        return p
-    for cand in _CA_CANDIDATES:
-        # A stub file would verify nothing; a real bundle is tens of kilobytes.
-        if os.path.exists(cand) and os.path.getsize(cand) > 1024:
-            return cand
+    """Path to a usable CA bundle, or None if the machine has no trust store.
+
+    Order: an explicit SSL_CERT_FILE, then certifi's maintained Mozilla bundle, then
+    the OS OpenSSL default, then the well-known paths. This never weakens
+    verification -- it changes WHICH trusted list is consulted, never WHETHER.
+
+    Why certifi now comes before the OS default (2026-09-17): the OS default on this
+    Mac is /etc/ssl/cert.pem, a frozen 128-certificate bundle that lacks *Sectigo
+    Public Server Authentication Root R46*. OFAC's Sanctions List Service chains
+    Treasury -> Entrust OV TLS Issuing RSA CA 2 -> Sectigo R46, so every verified
+    fetch there failed with "self-signed certificate in certificate chain" -- while
+    curl, using the macOS keychain (which has R46), succeeded. certifi 2025.08.03
+    carries 145 roots including R46. A stale trust store fails CLOSED, which is the
+    safe direction, but it made a correct source look broken; preferring the
+    maintained bundle fixes that without accepting anything unverified.
+    """
+    env = os.environ.get("SSL_CERT_FILE")
+    if _usable(env):
+        return env
     try:                                    # present on many machines, not a declared dep
         import certifi
-        return certifi.where()
+        if _usable(certifi.where()):
+            return certifi.where()
     except Exception:
-        return None
+        pass
+    p = ssl.get_default_verify_paths().openssl_cafile
+    if _usable(p):
+        return p
+    for cand in _CA_CANDIDATES:
+        if _usable(cand):
+            return cand
+    return None
 
 
 def ssl_context() -> ssl.SSLContext | None:

@@ -35,6 +35,12 @@ suites=(
   checker/pdf_text.py
   checker/pdf_pages.py
   checker/rings.py
+  checker/feeds/__init__.py
+  checker/feeds/common/__init__.py
+  checker/feeds/common/fetch.py
+  checker/feeds/common/cache.py
+  checker/feeds/common/rate.py
+  checker/feeds/ofac_sdn.py
   checker/legal_retrieval.py
   checker/text_search.py
   checker/evidence_pack.py
