@@ -219,6 +219,9 @@ def _artifact_reader_note(artifact_gaps: list[str], ref: str) -> str:
     if "does not name" in joined:
         reason = ("the record does not say which file it holds, so what was checked "
                   "cannot be re-read")
+    elif "could not be read" in joined:
+        reason = ("the file the record names is on disk but could not be read, so what was "
+                  "checked cannot be re-read")
     elif "is not on disk" in joined:
         reason = ("the file the record names is not on disk here, so what was checked "
                   "cannot be re-read")
@@ -652,6 +655,12 @@ def _test() -> None:
     # reader is told the FILE is wrong, not that the provenance is missing.
     # Each refusal names its OWN reason: only one of these is "the bytes changed", and
     # saying that of an absent or unnamed file describes a comparison that never ran.
+    note_u = _artifact_reader_note(
+        ["artifact: the held artifact corpus/sources/x.pdf is on disk but could not be read "
+         "(PermissionError)"], "S-003")
+    check("could not be read" in note_u and "not on disk" not in note_u,
+          f"an artifact that is on disk but unreadable is not described to the reader as "
+          f"absent ({note_u[:70]}…)")
     for label, broken, expected in (
             ("a file that is not on disk",
              reg880.attested_stub() | {"local_artifact": "corpus/sources/no_such_file.pdf"},

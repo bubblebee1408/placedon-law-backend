@@ -217,6 +217,10 @@ _DIGESTS: dict[tuple[str, int, int], str] = {}
 def file_digest(path: Path) -> str | None:
     """sha256 of a file, or None when it is not there. Memoised per process.
 
+    Only absence is None. A file that is there and cannot be read (permissions, an I/O
+    fault) raises: reported as "not on disk", an unreadable file would tell a reader the
+    evidence is missing when it is present and the fault is ours.
+
     The key carries size and mtime_ns as well as the path, so a file that changes
     under us gets a new digest rather than the one we happen to remember. Without the
     memo every served figure re-hashes every artifact it rests on -- ~3.5 ms a call
@@ -224,19 +228,16 @@ def file_digest(path: Path) -> str | None:
     """
     try:
         st = path.stat()
-    except OSError:
+    except (FileNotFoundError, NotADirectoryError):
         return None
     key = (str(path), st.st_size, st.st_mtime_ns)
     cached = _DIGESTS.get(key)
     if cached is not None:
         return cached
     h = hashlib.sha256()
-    try:
-        with path.open("rb") as f:
-            for chunk in iter(lambda: f.read(1 << 20), b""):
-                h.update(chunk)
-    except OSError:
-        return None
+    with path.open("rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
     digest = "sha256:" + h.hexdigest()
     _DIGESTS[key] = digest
     return digest
@@ -383,7 +384,11 @@ class SourcePolicy:
         path, problem = repo_path(named)
         if problem:
             return f"the held artifact {named} cannot be read: {problem}"
-        digest = file_digest(path)
+        try:
+            digest = file_digest(path)
+        except OSError as e:
+            return (f"the held artifact {named} is on disk but could not be read "
+                    f"({type(e).__name__})")
         if digest is None:
             return f"the held artifact {named} is not on disk"
         if digest != sha:
@@ -404,7 +409,11 @@ class SourcePolicy:
         path, problem = repo_path(named)
         if problem:
             return None, None, f"the stored copy {named} cannot be read: {problem}"
-        return path, file_digest(path), None
+        try:
+            return path, file_digest(path), None
+        except OSError as e:
+            return None, None, (f"the stored copy {named} is on disk but could not be read "
+                                f"({type(e).__name__})")
 
     def local_copy_note(self, rec: dict | None) -> str | None:
         """What to say about a stored copy the record names but no longer holds.
@@ -1015,6 +1024,26 @@ def _test() -> None:
         art.write_bytes(whole[:200])
         check(P880.artifact_problem(base) is not None,
               "...a truncated artifact is refused")
+
+        # An unreadable file is not an absent one (ASK-1 verifier, finding 9): a disk or
+        # permission fault must not reach a reader as "the file is not on disk".
+        art.write_bytes(whole)
+        _os.chmod(art, 0)
+        try:
+            try:
+                file_digest(art)
+                digest_raised = False
+            except OSError:
+                digest_raised = True
+            unreadable = P880.artifact_problem(base)
+        finally:
+            _os.chmod(art, 0o600)
+        check(digest_raised, "file_digest raises on a file it cannot read, rather than "
+                             "returning the None that means 'not there'")
+        check(unreadable is not None and "could not be read" in unreadable
+              and "not on disk" not in unreadable,
+              f"...so an unreadable artifact is refused as unreadable, not as absent "
+              f"({unreadable})")
         art.unlink()
         gone = P880.artifact_problem(base)
         check(gone is not None and "not on disk" in gone,
