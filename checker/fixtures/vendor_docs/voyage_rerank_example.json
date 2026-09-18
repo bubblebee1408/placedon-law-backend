@@ -1,0 +1,20 @@
+{
+  "_provenance": "shape copied from https://docs.voyageai.com/reference/reranker-api.md (OpenAPI 200 'Success' example; page updatedAt 2025-12-10; fetched 2026-09-18), not a live response. Copied verbatim.",
+  "example": {
+    "object": "list",
+    "data": [
+      {
+        "relevance_score": 0.455078125,
+        "index": 0
+      },
+      {
+        "relevance_score": 0.439453125,
+        "index": 1
+      }
+    ],
+    "model": "rerank-2.5-lite",
+    "usage": {
+      "total_tokens": 8
+    }
+  }
+}
