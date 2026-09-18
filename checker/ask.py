@@ -1,7 +1,8 @@
 """`POST /v1/ask` — one turn of the Ask surface, answered from deterministic calls alone.
 
 `answer(request)` returns a `placedon.ask/0` response (contract:
-`web/assistant/contract.md`, validator `scripts/assistant_contract.py`). Every field in it
+`web/assistant/contract.md`, validator `checker/ask_contract.py`, which the route runs on
+every response before serving it). Every field in it
 is produced by an engine module that decides by lookup: retrieval and the evidence pack,
 the prescribed-threshold table, the scope register, the obligation register through
 `api.compliance_pack`, and the document currency check through `api.document_check`.
@@ -13,12 +14,14 @@ waiting to be lifted: `answered` is only truthful from a deterministic path toda
 
 ## What this module will not do
 
-It does not read the question. A deterministic engine cannot know which provision a
-sentence means, and guessing would put a citation under words nobody asked us to
-interpret — the Act-versus-Rule collision `checker/retrieve.py` exists to prevent. So the
-request may NAME what it wants read (`provisions`, `figures`), each validated against what
-the engine declares; where it names nothing, retrieval runs on the user's own words and
-`retrieve()` decides the route, which is the only record of what was tried (UX spec §7.12).
+It does not decide what the question means. A deterministic engine cannot know which
+provision a sentence is about, and guessing would put a citation under words nobody asked us
+to interpret — the Act-versus-Rule collision `checker/retrieve.py` exists to prevent. So the
+request NAMES what it wants read (`provisions`, as citations; `figures`, as threshold keys),
+each validated against what the engine declares, and only what it names can be ANSWERED.
+Where it names no provision, `retrieve()` runs **lexical retrieval over the question's
+words** — a match of words against the corpus, not an understanding of them — and what that
+finds can only ever feed a `partial` turn, which says so (contract §6 D1, D16).
 
 The one thing the question itself decides is **scope** (`checker/ask_scope.py`, contract §6
 D2): a question that names a body of law `checker/scope.py` declares and does not hold is
@@ -32,7 +35,6 @@ Run: PYTHONPATH=. python3 checker/ask.py
 from __future__ import annotations
 
 import hashlib
-import re
 import sys
 from datetime import date
 from pathlib import Path
@@ -41,14 +43,16 @@ ROOT = Path(__file__).resolve().parent.parent
 if __package__ in (None, ""):                      # run as a file by scripts/run_tests.sh
     sys.path.insert(0, str(ROOT))
 
-from checker import ask_scope, obligations
+from checker import api, ask_scope, obligations
 from checker import prescribed_thresholds as pt
 from checker import scope
-from checker import api
 from checker.api import BadRequest, _date, document_check
 from checker.ask_contract import SCHEMA
+from checker.ask_read import (_as_json, _citation, _figure, _law_version, _law_version_at,
+                              _pack, _pack_summary, canon, cites, figure_sections,
+                              section_of)
+from checker.legal_retrieval import names_a_provision
 from checker.provenance_slots import USER_FACT
-from checker.retrieve import retrieve
 
 ANSWERED, PARTIAL, OUT_OF_SCOPE = "answered", "partial", "out_of_scope"
 # A question is rendered verbatim and, where it names no provision, is the retrieval
@@ -67,11 +71,22 @@ CONTEXT_KEYS = frozenset({"kind", "document_date"})
 # already carries as_of, and every row carries the financial year its figures are bound to.
 FRAME_FACTS = frozenset({"as_of", "incorporation_date", "financial_year"})
 
-# The engine's own statement when a turn reached nothing. It is a statement about what this
-# system did, never about the law: "we decided nothing" is not "nothing applies".
+# Statements this system makes about what IT did on a turn -- never about the law. Each is
+# used only where it is true: "we decided nothing" is not "nothing applies", and a turn that
+# read a provision must not say that nothing was reached (verifier finding 3).
 NOTHING_DECIDED = ("no obligation row, prescribed figure or admitted provision was reached "
                    "for this question. That is a statement about what this system read, not "
                    "a finding that no obligation applies")
+TEXT_NO_FACTS = ("the provision was read as held, but no company facts were supplied, so "
+                 "whether it applies to a company was not decided")
+TEXT_NO_ROW = ("the provision was read as held, but no obligation this engine decides rests "
+               "on it, so whether it applies to this company was not decided")
+LEXICAL = ("no provision was named: what is shown was found by matching the question's words "
+           "against the corpus, not by a citation, and none of it was applied to a company")
+FACTS_NOT_APPLIED = ("company facts were supplied, but the request named no provision, so "
+                     "they were not applied to any obligation")
+UNRESTED = ("{cite} was read, but no obligation row or prescribed figure in this turn rests "
+            "on it")
 NOTHING_REACHED = ("the document check reached no obligation in the register, so nothing "
                    "about this document was verified or flagged")
 
@@ -96,73 +111,29 @@ def _envelope(question: str, *, as_of: str, generated_at: str, kind: str,
     return env
 
 
-def _as_json(v):
-    """What the engine returned, in JSON types. A tuple becomes a list; a string stays a
-    string -- list() on a string is how a sentence becomes 455 characters."""
-    return list(v) if isinstance(v, tuple) else v
-
-
-# ── engine readers ────────────────────────────────────────────────────────────
-def _pack(query: str) -> tuple[dict, str]:
-    pack, route = retrieve(query)
-    return pack.to_dict(), route
-
-
-def _citation(p: dict) -> dict:
-    return {"ref": p["ref"], "cite": p["cite"], "title": p["title"],
-            "evidence_state": p["evidence_state"],
-            "usable_for_answering": p["usable_for_answering"],
-            "unusable_reason": p["unusable_reason"] or None,
-            "defects": p["defects"],
-            "retrieved_on": sorted({s["retrieved_on"] for s in p["sources"]
-                                    if s.get("retrieved_on")}),
-            "source_url": next((s["source_url"] for s in p["sources"]
-                                if s.get("source_url")), None)}
-
-
-def _law_version(d: dict) -> dict:
-    a = d["as_of"]
-    return {k: a[k] for k in ("basis", "point_in_time_verified", "corpus_fetched",
-                              "statement")}
-
-
-def _law_version_at(provisions: list[str], requested: str) -> dict:
-    """The engine's own basis statement for a past date, over the provisions a turn cites.
-
-    Built by evidence_pack's statement builder, never written here: it is the sentence that
-    says no statement is about the law as it stood on that date.
-    """
-    from checker import evidence_pack
-    sections = sorted({m for p in provisions for m in re.findall(r"s\.(\d+[A-Z]?)", p)},
-                      key=lambda x: (int(re.match(r"\d+", x).group()), x))
-    pack, _ = _pack(" and ".join(f"s.{n}" for n in sections))
-    fetched = tuple(pack["as_of"]["corpus_fetched"])
-    a = evidence_pack._build_as_of(fetched, date.fromisoformat(requested)).to_dict()
-    return {k: a[k] for k in ("basis", "point_in_time_verified", "point_in_time_requested",
-                              "corpus_fetched", "statement")}
-
-
-def _pack_summary(d: dict, route: str) -> dict:
-    return {"retrieval_query": d["query"], "route": route, "usable_keys": d["usable_keys"],
-            "unusable_keys": d["unusable_keys"], "missing": d["missing"],
-            "insufficient_evidence": d["insufficient_evidence"]}
-
-
-def _figure(key: str, as_of: date) -> dict:
-    t = pt.lookup(key, as_of)
-    return {"key": key, "amount": str(t.amount), "rupees": t.amount.rupees,
-            "instrument": t.instrument, "effective_from": t.effective_from.isoformat(),
-            "effective_to": t.effective_to.isoformat() if t.effective_to else None,
-            "evidence_state": t.state, "source_url": t.source_url}
-
-
-def _cites(provision: str, cite: str) -> bool:
-    """Does this obligation's provision name the citation the request asked to read?
-    The lookahead keeps s.16 out of s.186 -- a provision number is never a prefix."""
-    return re.search(rf"{re.escape(cite)}(?![0-9])", provision, re.I) is not None
-
-
 # ── the two answering paths ───────────────────────────────────────────────────
+def _rows_for(rows: list[dict], provisions: list[str]) -> tuple[list[dict], list[dict]]:
+    """(decided rows, not-confirmed items) for the obligations the named provisions cover.
+
+    A row carrying missing facts, a blocking instrument, or an undetermined state is not a
+    decision: it is named as not confirmed, with the facts it needed, and never served.
+    """
+    decided, undecided = [], []
+    for row in rows:
+        if not any(cites(row["provision"], c) for c in provisions):
+            continue                           # not an obligation this turn is about
+        if (row["missing_facts"] or row["blocked_by"]
+                or row["state"] in (obligations.APPLIES_UNDETERMINED,
+                                    obligations.CANNOT_DETERMINE)):
+            undecided.append({"kind": "cannot_verify", "ref": row["obligation_id"],
+                              "duty": row["duty"], "provision": row["provision"],
+                              "detail": row["basis"], "missing_facts": row["missing_facts"],
+                              "blocked_by": row["blocked_by"]})
+        else:
+            decided.append(row)
+    return decided, undecided
+
+
 def _general_turn(question: str, *, as_of: date, generated_at: str, facts: dict | None,
                   provisions: list[str], figures: list[str],
                   refusal: dict | None = None) -> dict:
@@ -172,8 +143,12 @@ def _general_turn(question: str, *, as_of: date, generated_at: str, facts: dict 
     title. The held part is read; the unheld part is refused in the register's words; and
     no row is decided, because a row would be Companies Act reasoning applied to a matter
     the unheld body may govern -- an LLP is not a company.
+
+    `gaps` are what the engine could not confirm; `notes` are this system's true statements
+    about what it did not do. An answered turn has neither.
     """
-    not_confirmed: list[dict] = [refusal] if refusal else []
+    gaps: list[dict] = [refusal] if refusal else []
+    notes: list[dict] = []
     served: list[dict] = []
     for key in figures:
         try:
@@ -181,63 +156,70 @@ def _general_turn(question: str, *, as_of: date, generated_at: str, facts: dict 
         except pt.ThresholdUnavailable as e:
             # A prescribed amount we are not willing to serve is a refusal that says why,
             # in the table's own words. It is never replaced by the statutory floor.
-            not_confirmed.append({"kind": "cannot_verify", "ref": key, "detail": str(e)})
-
-    # What was read. Where the request named provisions, they are the query; otherwise the
-    # user's own words are, and retrieve() decides the route -- the only record of what was
-    # tried, which the client renders as "Looked up …".
-    pack, route = _pack(" and ".join(provisions) if provisions else question)
+            gaps.append({"kind": "cannot_verify", "ref": key, "detail": str(e)})
 
     rows: list[dict] = []
     fact_block: dict = {}
     what_it_is_not = None
-    if facts is not None and refusal is None:
-        from checker.api import compliance_pack
-        pack_json = compliance_pack({"as_of": as_of.isoformat(), **facts},
-                                    generated_at=generated_at)
+    if facts is not None and refusal is None and provisions:
+        pack_json = api.compliance_pack({"as_of": as_of.isoformat(), **facts},
+                                        generated_at=generated_at)
         what_it_is_not = _as_json(pack_json["what_it_is_not"])
         fact_block = {k: {"value": v, "provenance": USER_FACT}
                       for k, v in facts.items() if k not in FRAME_FACTS}
-        for row in pack_json["rows"]:
-            if provisions and not any(_cites(row["provision"], c) for c in provisions):
-                continue                       # not the obligation this turn is about
-            if (row["missing_facts"] or row["blocked_by"]
-                    or row["state"] in (obligations.APPLIES_UNDETERMINED,
-                                        obligations.CANNOT_DETERMINE)):
-                not_confirmed.append({"kind": "cannot_verify", "ref": row["obligation_id"],
-                                      "duty": row["duty"], "provision": row["provision"],
-                                      "detail": row["basis"],
-                                      "missing_facts": row["missing_facts"],
-                                      "blocked_by": row["blocked_by"]})
-            else:
-                rows.append(row)
+        rows, undecided = _rows_for(pack_json["rows"], provisions)
+        gaps += undecided
+    elif facts is not None and refusal is None:
+        # D6: with no provision named, which obligation the facts bear on is not known --
+        # and choosing one from the question's words would be a guess.
+        notes.append({"kind": "cannot_verify", "detail": FACTS_NOT_APPLIED})
 
-    not_confirmed += [{"kind": "pack_missing", "detail": m} for m in pack["missing"]]
-    not_confirmed += [{"kind": "unusable", "ref": p["ref"], "reason": p["unusable_reason"],
-                       "defects": p["defects"]}
-                      for p in pack["provisions"] if not p["usable_for_answering"]]
+    if not provisions and served and not gaps and not notes:
+        # D16: figures the request named, and nothing else. Each carries its instrument, its
+        # in-force date and its source: that is its citation. No word of the question is
+        # searched to find another one.
+        return {"state": ANSWERED, "figures": served}
 
-    out: dict = {"state": ANSWERED if (served or rows) and not not_confirmed else PARTIAL}
-    if fact_block:
-        out["facts"] = fact_block
-    if rows:
-        out["rows"] = rows
-    if served:
-        out["figures"] = served
-    if out["state"] == ANSWERED:
-        out["citations"] = [_citation(p) for p in pack["provisions"]]
-    else:
-        out["confirmed"] = [_citation(p) | {"verbatim": p["reading_text"]}
-                            for p in pack["provisions"] if p["usable_for_answering"]]
-        out["not_confirmed"] = not_confirmed or [{"kind": "cannot_verify",
-                                                  "detail": NOTHING_DECIDED}]
-        if out["confirmed"] and not_confirmed:
-            out["demand_signal"] = {"action": "tell_us_blocking"}
-    out["law_version"] = _law_version(pack)
-    out["evidence_pack"] = _pack_summary(pack, route)
+    # What was read. Named provisions are read exactly; otherwise the question's words are
+    # matched lexically, and what that finds can only ever feed a partial turn (D1, D16).
+    pack, route = _pack(" and ".join(provisions) if provisions else question)
+    gaps += [{"kind": "pack_missing", "detail": m} for m in pack["missing"]]
+    gaps += [{"kind": "unusable", "ref": p["ref"], "reason": p["unusable_reason"],
+              "defects": p["defects"]}
+             for p in pack["provisions"] if not p["usable_for_answering"]]
+    usable = [p for p in pack["provisions"] if p["usable_for_answering"]]
+    if rows or served:
+        # D16: an answered turn cites only what its rows and figures rest on.
+        rests = ({n for r in rows for n, _ in canon(r["provision"])}
+                 | {n for f in served for n in figure_sections(f["key"])})
+        notes += [{"kind": "cannot_verify", "ref": p["ref"],
+                   "detail": UNRESTED.format(cite=p["cite"])}
+                  for p in usable if section_of(p["ref"]) not in rests]
+
+    tail = {"law_version": _law_version(pack), "evidence_pack": _pack_summary(pack, route)}
     if what_it_is_not is not None:
-        out["what_it_is_not"] = what_it_is_not
-    return out
+        tail["what_it_is_not"] = what_it_is_not
+    out: dict = {"facts": fact_block} if fact_block else {}
+    out |= {k: v for k, v in (("rows", rows), ("figures", served)) if v}
+
+    if provisions and (rows or served) and not gaps and not notes:
+        return {"state": ANSWERED} | out | {
+            "citations": [_citation(p) for p in pack["provisions"]]} | tail
+
+    confirmed = [_citation(p) | {"verbatim": p["reading_text"]} for p in usable]
+    if not provisions and confirmed:
+        notes.append({"kind": "cannot_verify", "detail": LEXICAL})
+    if not gaps and not notes:
+        # Only here, where nothing else is not confirmed: rows and figures are empty, so a
+        # turn that read text says what it did not decide, and only an empty one says that
+        # nothing was reached.
+        notes = [{"kind": "cannot_verify",
+                  "detail": NOTHING_DECIDED if not confirmed
+                  else TEXT_NO_FACTS if facts is None else TEXT_NO_ROW}]
+    out = {"state": PARTIAL} | out | {"confirmed": confirmed, "not_confirmed": gaps + notes}
+    if confirmed and gaps:
+        out["demand_signal"] = {"action": "tell_us_blocking"}
+    return out | tail
 
 
 def _document_turn(check: dict) -> dict:
@@ -364,6 +346,11 @@ def answer(request: dict, *, generated_at: str) -> dict:
         raise BadRequest(f"facts.as_of ({facts['as_of']!r}) contradicts the turn's as_of "
                          f"({as_of.isoformat()!r})")
     provisions, figures = _strings(request, "provisions"), _strings(request, "figures")
+    for cite in provisions:
+        if not names_a_provision(cite):
+            raise BadRequest(f"{cite!r} is not a citation. A provision is named the way the "
+                             f"Act is cited -- s.173, section 2(85), rule 3 -- never as a "
+                             f"bare number or a topic")
     declared = {t.key for t in pt.all_thresholds()}
     for key in figures:
         if key not in declared:
@@ -633,6 +620,63 @@ def _test() -> None:
         except BadRequest as e:
             check(True, f"{why} is refused ({str(e)[:46]})")
 
+    # ── a partial says only true things (verifier finding 3) ─────────────────
+    t = ask({"question": "What does s.173 require?", "as_of": AS_OF, "provisions": ["s.173"]})
+    details = [i.get("detail") for i in t["not_confirmed"]]
+    check(t["state"] == PARTIAL and t["confirmed"] and NOTHING_DECIDED not in details
+          and details == [TEXT_NO_FACTS] and validate(t) == [],
+          f"a text-only lookup is partial, and says what was not decided -- not that "
+          f"nothing was reached ({details})")
+    t = ask({"question": "What does s.2(41) define?", "as_of": AS_OF, "facts": FACTS,
+             "provisions": ["s.2(41)"]})
+    check(t["state"] == PARTIAL and "rows" not in t
+          and [i.get("detail") for i in t["not_confirmed"]] == [TEXT_NO_ROW],
+          f"...and with facts, that no obligation this engine decides rests on it "
+          f"({[i.get('detail', '')[:30] for i in t['not_confirmed']]})")
+
+    # ── what an answered turn cites (verifier finding 4) ─────────────────────
+    t = ask({"question": "What is the small company turnover limit?", "as_of": AS_OF,
+             "figures": [TURN]})
+    check(t["state"] == ANSWERED and "citations" not in t and "evidence_pack" not in t,
+          f"a named figure with no provision named is answered on the figure alone -- its "
+          f"instrument is its citation; no word of the question chose one "
+          f"({t['state']}, {sorted(k for k in t if k in ('citations', 'evidence_pack'))})")
+    t = ask({"question": "Is this company a small company?", "as_of": AS_OF})
+    check(t["state"] == PARTIAL and t["evidence_pack"]["route"] == "search"
+          and [i.get("detail") for i in t["not_confirmed"]] == [LEXICAL],
+          "lexical retrieval over the words feeds only a partial turn, and says so")
+    t = ask({"question": "Is this company a small company?", "as_of": AS_OF,
+             "facts": FACTS, "figures": [CAP, TURN]})
+    check(t["state"] == PARTIAL and "rows" not in t and "facts" not in t
+          and any(i.get("detail") == FACTS_NOT_APPLIED for i in t["not_confirmed"]),
+          "facts with no provision named are not applied to anything, and the turn says so")
+    t = ask({"question": "What does s.186 say about the turnover limit?", "as_of": AS_OF,
+             "figures": [TURN], "provisions": ["s.186"]})
+    check(t["state"] == PARTIAL and t.get("figures")
+          and any("s.186" in (i.get("detail") or "") for i in t["not_confirmed"]),
+          f"a figure is never answered under a provision it does not rest on -- s.186 is "
+          f"read and named as resting under nothing here ({t['state']})")
+    t = ask({"question": "Is this company a small company?", "as_of": AS_OF, "facts": FACTS,
+             "provisions": ["section 2(85)"], "figures": [CAP, TURN]})
+    check(t["state"] == ANSWERED
+          and [r["obligation_id"] for r in t.get("rows", [])] == ["CA13-S2-85-SMALL"],
+          f"'section 2(85)' finds the row 's.2(85)' does ({t['state']})")
+
+    # ── a provision number is never a near-miss (verifier finding 5) ─────────
+    check(not cites("Companies Act 2013, s.185", "s.18")
+          and not cites("Companies Act 2013, s.186", "s.16")
+          and cites("Companies Act 2013, s.173(1)", "s.173")
+          and cites("Companies Act 2013, s.2(85)", "Section 2(85)")
+          and not cites("Companies Act 2013, s.2(85)", "s.2(41)"),
+          "a citation matches a row's provision by section and subsection, never by prefix")
+    for bad in (["85"], ["2013"], ["related party transactions"]):
+        try:
+            answer({"question": "x", "provisions": bad}, generated_at=GEN)
+            check(False, f"provisions {bad} is refused")
+        except BadRequest as e:
+            check(True, f"provisions {bad} is refused -- a provision is a citation "
+                        f"({str(e)[:36]})")
+
     # ── facts fail closed (verifier finding 2, 7) ────────────────────────────
     # The engine declares its fact names (api.PROFILE_KEYS, api.EVIDENCE_KEYS). A key it
     # does not declare is refused, never echoed: facts.confidence would otherwise ride
@@ -663,14 +707,13 @@ def _test() -> None:
     # ── an engine failure is never an abstention ─────────────────────────────
     # AGENTS.md:62 and CLAUDE.md: a transport or engine failure must NEVER render as an
     # abstention. It is not a legal state, so it must not reach the client wearing one.
-    # Both copies of this module: it is imported as checker.ask by the route and run as
-    # __main__ by the harness, and patching one would leave the other answering normally.
-    import checker.ask as _pkg
+    # Retrieval is read through checker.ask_read, which is only ever imported as a package
+    # module, so one patch reaches both the direct call and the route.
+    import checker.ask_read as _read
     def _down(*a, **k):
         raise RuntimeError("engine unavailable")
-    saved, saved_pkg = globals()["retrieve"], _pkg.retrieve
-    globals()["retrieve"] = _down
-    _pkg.retrieve = _down
+    saved = _read.retrieve
+    _read.retrieve = _down
     try:
         answer({"question": "What does s.173 require?", "as_of": AS_OF,
                 "provisions": ["s.173"]}, generated_at=GEN)
@@ -686,8 +729,7 @@ def _test() -> None:
     except RuntimeError:
         check(True, "...and the route does not turn it into a 200 abstention")
     finally:
-        globals()["retrieve"] = saved
-        _pkg.retrieve = saved_pkg
+        _read.retrieve = saved
 
     # ── no model, on any path ────────────────────────────────────────────────
     check(all(r["uses_model"] is False for r in served),
