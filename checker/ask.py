@@ -44,12 +44,17 @@ if __package__ in (None, ""):                      # run as a file by scripts/ru
 from checker import ask_scope, obligations
 from checker import prescribed_thresholds as pt
 from checker import scope
+from checker import api
 from checker.api import BadRequest, _date, document_check
+from checker.ask_contract import SCHEMA
 from checker.provenance_slots import USER_FACT
 from checker.retrieve import retrieve
 
-SCHEMA = "placedon.ask/0"
 ANSWERED, PARTIAL, OUT_OF_SCOPE = "answered", "partial", "out_of_scope"
+# A question is rendered verbatim and, where it names no provision, is the retrieval
+# query. Past this it is a pasted document, not a question -- and a 50,000-character
+# query is a cost nobody asked for. The document path takes the document separately.
+MAX_QUESTION_CHARS = 2000
 
 # Everything a request may carry. Unknown keys are refused rather than ignored, for the
 # reason document_check gives: a mistyped field silently changes the answer.
@@ -275,6 +280,30 @@ def _with_refusal(turn: dict, item: dict) -> dict:
 
 
 # ── the request ───────────────────────────────────────────────────────────────
+def _check_facts(facts: dict, *, document: bool) -> None:
+    """Only the fact names the engine declares, and only JSON scalars as their values.
+
+    An undeclared key is refused, never echoed: `facts.confidence` would ride into the
+    response as a C4 violation, and `paid_up_capital` (no `_rupees`) would silently leave a
+    row undecided. Full typing is `api._profile`'s, where the facts are used; this catches
+    a list or an object where a single value belongs, on every path.
+    """
+    allowed = api._DOC_CHECK_KEYS if document else api.PROFILE_KEYS | {"evidence"}
+    unknown = set(facts) - allowed
+    if unknown:
+        raise BadRequest(f"unknown fact(s): {', '.join(sorted(unknown))}. This engine "
+                         f"declares: {', '.join(sorted(allowed))}")
+    for k, v in facts.items():
+        if k == "evidence":
+            if not isinstance(v, dict):
+                raise BadRequest("'evidence' must be an object")
+            stray = set(v) - api.EVIDENCE_KEYS
+            if stray:
+                raise BadRequest(f"unknown evidence field(s): {', '.join(sorted(stray))}")
+        elif v is not None and not isinstance(v, (str, int, float, bool)):
+            raise BadRequest(f"fact {k!r} must be a single value, got {type(v).__name__}")
+
+
 def _strings(request: dict, key: str) -> list[str]:
     v = request.get(key)
     if v is None:
@@ -310,6 +339,10 @@ def answer(request: dict, *, generated_at: str) -> dict:
     question = request.get("question")
     if not isinstance(question, str) or not question.strip():
         raise BadRequest("missing required field: 'question'")
+    if len(question) > MAX_QUESTION_CHARS:
+        raise BadRequest(f"'question' is {len(question)} characters; the limit is "
+                         f"{MAX_QUESTION_CHARS}. A document is sent as a document turn, "
+                         f"not as the question")
 
     ctx = request.get("context") or {}
     if not isinstance(ctx, dict):
@@ -325,6 +358,8 @@ def answer(request: dict, *, generated_at: str) -> dict:
     facts = request.get("facts")
     if facts is not None and not isinstance(facts, dict):
         raise BadRequest("'facts' must be an object")
+    if facts is not None:
+        _check_facts(facts, document=(kind == "document"))
     if facts and facts.get("as_of") and facts["as_of"] != as_of.isoformat():
         raise BadRequest(f"facts.as_of ({facts['as_of']!r}) contradicts the turn's as_of "
                          f"({as_of.isoformat()!r})")
@@ -384,21 +419,6 @@ def answer(request: dict, *, generated_at: str) -> dict:
     return env | _general_turn(question, as_of=as_of, generated_at=generated_at, facts=facts,
                                provisions=provisions, figures=figures, refusal=refusal)
 
-def _contract_validator():
-    """The contract validator, loaded from the file it lives in.
-
-    `validate()` lives beside the contract prose in scripts/assistant_contract.py, which is
-    not an importable package. Loading it by path here keeps ONE validator: a second copy in
-    the package would drift from the contract it is supposed to enforce. Test-only.
-    """
-    import importlib.util
-    spec = importlib.util.spec_from_file_location(
-        "assistant_contract", ROOT / "scripts" / "assistant_contract.py")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod.validate
-
-
 def _test() -> None:
     ok = fail = 0
 
@@ -413,7 +433,7 @@ def _test() -> None:
 
     print("ask")
     from checker import api
-    validate = _contract_validator()
+    from checker.ask_contract import validate
     GEN = "2026-09-15T00:00:00Z"
     AS_OF = "2026-09-15"
     FACTS = {"company_class": "private", "incorporation_date": "2019-06-01",
@@ -612,6 +632,33 @@ def _test() -> None:
             check(False, f"{why} is refused")
         except BadRequest as e:
             check(True, f"{why} is refused ({str(e)[:46]})")
+
+    # ── facts fail closed (verifier finding 2, 7) ────────────────────────────
+    # The engine declares its fact names (api.PROFILE_KEYS, api.EVIDENCE_KEYS). A key it
+    # does not declare is refused, never echoed: facts.confidence would otherwise ride
+    # into the response as a C4 violation, and a typo would silently leave a row undecided.
+    for bad_facts, why in (({**FACTS, "confidence": "HIGH"}, "an undeclared fact key"),
+                           ({**FACTS, "paid_up_capital": 6}, "a money fact without _rupees"),
+                           ({**FACTS, "cin": list("U12345")}, "a CIN sent as a list"),
+                           ({**FACTS, "director_count": "many"}, "a director count in words"),
+                           ({**FACTS, "evidence": {"confidence": 1}},
+                            "an undeclared evidence key")):
+        try:
+            answer({"question": "Is this company a small company?", "as_of": AS_OF,
+                    "facts": bad_facts, "provisions": ["s.2(85)"]}, generated_at=GEN)
+            check(False, f"{why} is refused")
+        except BadRequest as e:
+            check(True, f"{why} is refused with a 400, not echoed ({str(e)[:40]})")
+    try:
+        answer({"question": "x" * (MAX_QUESTION_CHARS + 1), "as_of": AS_OF},
+               generated_at=GEN)
+        check(False, "a question over the limit is refused")
+    except BadRequest as e:
+        check(str(MAX_QUESTION_CHARS) in str(e),
+              f"a question over {MAX_QUESTION_CHARS} characters is refused, naming the limit "
+              f"-- it would otherwise become the retrieval query whole")
+    check(len(ask({"question": "q" * MAX_QUESTION_CHARS, "as_of": AS_OF})["question"])
+          == MAX_QUESTION_CHARS, "...and one at the limit is accepted")
 
     # ── an engine failure is never an abstention ─────────────────────────────
     # AGENTS.md:62 and CLAUDE.md: a transport or engine failure must NEVER render as an

@@ -82,16 +82,28 @@ def _bool(payload: dict, key: str) -> bool | None:
     return v
 
 
+def _typed(payload: dict, key: str, kind: type, *, non_negative: bool = False):
+    """A scalar fact of the declared type, or None. A wrong type is a 400 naming the
+    field -- never a TypeError three modules later (director_count="many" was a crash)."""
+    v = payload.get(key)
+    if v is None:
+        return None
+    if not isinstance(v, kind) or isinstance(v, bool) or (non_negative and v < 0):
+        want = f"a non-negative {kind.__name__}" if non_negative else f"a {kind.__name__}"
+        raise BadRequest(f"{key!r} must be {want} or omitted, got {v!r}")
+    return v
+
+
 def _profile(payload: dict) -> CompanyProfile:
     cls = _req(payload, "company_class")
     if cls not in ("private", "public", "opc"):
         raise BadRequest(f"company_class must be private/public/opc, got {cls!r}")
-    fy = payload.get("financial_year")
+    fy = _typed(payload, "financial_year", str)
     return CompanyProfile(
         company_class=cls,
         incorporation_date=_date(payload, "incorporation_date", required=True),
         as_of=_date(payload, "as_of", required=True),
-        cin=payload.get("cin"),
+        cin=_typed(payload, "cin", str),
         latest_financial_year=fy,
         is_listed=_bool(payload, "is_listed"),
         is_section_8=_bool(payload, "is_section_8"),
@@ -102,7 +114,14 @@ def _profile(payload: dict) -> CompanyProfile:
         turnover=_figure(payload, "turnover", fy),
         net_worth=_figure(payload, "net_worth", fy),
         net_profit=_figure(payload, "net_profit", fy),
-        director_count=payload.get("director_count"))
+        director_count=_typed(payload, "director_count", int, non_negative=True))
+
+
+# The evidence fields _evidence() reads. Declared once so a caller that must refuse an
+# undeclared key (checker/ask.py) refuses exactly what this reader would ignore.
+EVIDENCE_KEYS = frozenset({"agm_dates", "financial_year_end", "board_meetings",
+                           "calendar_year", "aoc4_filed_on", "annual_return_filed_on",
+                           "resident_director_days", "first_financial_year_end"})
 
 
 def _evidence(payload: dict) -> Evidence:
@@ -247,13 +266,15 @@ DOC_CHECK_ESTABLISHES = (
     "which instrument moved it, and when it took effect",
     "what could not be checked, and the reference for acquiring it",
 )
-_DOC_CHECK_KEYS = frozenset({
-    "document_date", "as_of", "company_class", "incorporation_date", "cin",
+# The company facts _profile() reads -- the engine's declared fact names.
+PROFILE_KEYS = frozenset({
+    "as_of", "company_class", "incorporation_date", "cin",
     "financial_year", "is_listed", "is_section_8", "is_holding_company",
     "is_subsidiary_company", "governed_by_special_act", "director_count",
     "paid_up_capital_rupees", "turnover_rupees", "net_worth_rupees",
     "net_profit_rupees",
 })
+_DOC_CHECK_KEYS = PROFILE_KEYS | {"document_date"}
 
 DOC_CHECK_DOES_NOT_ESTABLISH = (
     "that the document is valid, correctly drafted, or legally effective",
@@ -547,10 +568,19 @@ def handle(method: str, path: str, body: dict | None, *, generated_at: str
         # One turn of the Ask surface. Deterministic: checker/ask.py calls retrieval, the
         # threshold table, the scope register and the two routes below, and never a model.
         from checker.ask import answer
+        from checker.ask_contract import validate
         try:
-            return 200, answer(body or {}, generated_at=generated_at)
+            resp = answer(body or {}, generated_at=generated_at)
         except BadRequest as e:
             return 400, {"error": "bad_request", "detail": str(e)}
+        # The route checks its own output. A response that breaks placedon.ask/0 is a
+        # server fault: withheld, with no state a client could render -- never a 200.
+        violations = validate(resp)
+        if violations:
+            return 500, {"error": "contract_violation",
+                         "detail": "the response broke placedon.ask/0 and was withheld",
+                         "violations": violations}
+        return 200, resp
     if method == "POST" and path == "/v1/document-check":
         try:
             return 200, document_check(body or {}, generated_at=generated_at)
@@ -862,8 +892,7 @@ def _test() -> None:
     # class from the one caught two frames up here. The route is only ever served as
     # checker.api (scripts/serve_api.py:22), so that is what this exercises.
     from checker.api import handle as ask_handle
-    from checker.ask import _contract_validator
-    _validate = _contract_validator()
+    from checker.ask_contract import validate as _validate
     _ask_facts = {"company_class": "private", "incorporation_date": "2019-06-01",
                   "as_of": "2026-09-05", "financial_year": "2024-25",
                   "paid_up_capital_rupees": 120000000, "turnover_rupees": 800000000}
@@ -899,6 +928,34 @@ def _test() -> None:
     check(st == 400, f"a figure key the engine does not declare is a 400 ({st})")
     check("POST /v1/ask" in ask_handle("GET", "/nope", None, generated_at=GEN)[1]["routes"],
           "the ask route is advertised in the 404 route list")
+
+    # The route checks its own response against the contract. A violation is a server
+    # fault: it is withheld as a 500 that carries no state, never served as a 200.
+    import checker.ask as _ask_mod
+    _saved_answer = _ask_mod.answer
+    _ask_mod.answer = lambda body, generated_at: {"schema": "placedon.ask/0",
+                                                  "state": "answered", "confidence": "HIGH"}
+    try:
+        st, r = ask_handle("POST", "/v1/ask", {"question": "x"}, generated_at=GEN)
+    finally:
+        _ask_mod.answer = _saved_answer
+    check(st == 500 and "state" not in r and r.get("violations"),
+          f"a response that breaks placedon.ask/0 is withheld as a 500 with no state "
+          f"({st}, {sorted(r)})")
+    st, r = ask_handle("POST", "/v1/ask",
+                       {"question": "Is this company a small company?",
+                        "facts": {**_ask_facts, "confidence": "HIGH"},
+                        "provisions": ["s.2(85)"]}, generated_at=GEN)
+    check(st == 400 and "confidence" in r["detail"],
+          f"an undeclared fact key is a 400 naming it, not an echoed field ({st})")
+
+    # ── facts are typed at the boundary, on every route that takes them ──────
+    for field, value in (("director_count", "many"), ("director_count", -1),
+                         ("cin", ["U", "1"]), ("financial_year", 2025)):
+        st, r = handle("POST", "/v1/compliance-pack",
+                       {**_ask_facts, field: value}, generated_at=GEN)
+        check(st == 400 and field in r.get("detail", ""),
+              f"{field}={value!r} is a 400 naming the field, not a crash ({st})")
 
     # ── no model in the API path (parsed imports, not grepped) ──────────────
     import ast
