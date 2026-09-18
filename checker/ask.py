@@ -49,9 +49,8 @@ from checker import scope
 from checker.api import BadRequest, _date, document_check
 from checker.ask_contract import SCHEMA
 from checker.ask_read import (_as_json, _citation, _figure, _law_version, _law_version_at,
-                              _pack, _pack_summary, canon, cites, figure_sections,
-                              section_of)
-from checker.legal_retrieval import names_a_provision
+                              _pack, _pack_summary, canon, cites, figure_basis, parses,
+                              section_of, within)
 from checker.provenance_slots import USER_FACT
 
 ANSWERED, PARTIAL, OUT_OF_SCOPE = "answered", "partial", "out_of_scope"
@@ -189,12 +188,17 @@ def _general_turn(question: str, *, as_of: date, generated_at: str, facts: dict 
              for p in pack["provisions"] if not p["usable_for_answering"]]
     usable = [p for p in pack["provisions"] if p["usable_for_answering"]]
     if rows or served:
-        # D16: an answered turn cites only what its rows and figures rest on.
-        rests = ({n for r in rows for n, _ in canon(r["provision"])}
-                 | {n for f in served for n in figure_sections(f["key"])})
-        notes += [{"kind": "cannot_verify", "ref": p["ref"],
-                   "detail": UNRESTED.format(cite=p["cite"])}
-                  for p in usable if section_of(p["ref"]) not in rests]
+        # D16: an answered turn cites only what its rows and figures rest on -- compared by
+        # clause, not section: a figure resting on s.2(85)(ii) does not rest on s.2(41).
+        rests = ([c for r in rows for c in canon(r["provision"])]
+                 + [c for f in served for c in figure_basis(f["key"])])
+        for cite in provisions:
+            named = canon(cite)
+            if not any(within(c, r) for c in named for r in rests):
+                ref = next((p["ref"] for p in usable
+                            if named and section_of(p["ref"]) == named[0][0]), None)
+                notes.append({"kind": "cannot_verify", "detail": UNRESTED.format(cite=cite)}
+                             | ({"ref": ref} if ref else {}))
 
     tail = {"law_version": _law_version(pack), "evidence_pack": _pack_summary(pack, route)}
     if what_it_is_not is not None:
@@ -347,10 +351,10 @@ def answer(request: dict, *, generated_at: str) -> dict:
                          f"({as_of.isoformat()!r})")
     provisions, figures = _strings(request, "provisions"), _strings(request, "figures")
     for cite in provisions:
-        if not names_a_provision(cite):
-            raise BadRequest(f"{cite!r} is not a citation. A provision is named the way the "
-                             f"Act is cited -- s.173, section 2(85), rule 3 -- never as a "
-                             f"bare number or a topic")
+        if not parses(cite):
+            raise BadRequest(f"{cite!r} is not a citation this engine can read. A provision is "
+                             f"named the way the Act is cited -- s.173, section 2(85), rule 3 "
+                             f"-- never as a bare number or a topic")
     declared = {t.key for t in pt.all_thresholds()}
     for key in figures:
         if key not in declared:
@@ -686,6 +690,31 @@ def _test() -> None:
     check(t["state"] == ANSWERED
           and [r["obligation_id"] for r in t.get("rows", [])] == ["CA13-S2-85-SMALL"],
           f"'section 2(85)' finds the row 's.2(85)' does ({t['state']})")
+
+    # ── one citation grammar (round 3, item 2) ───────────────────────────────
+    # Every form the retriever accepts as naming a provision must find the same row: two
+    # grammars that disagree drop the decided row and say, falsely, that nothing rests on it.
+    for form in ("s 2(85)", "u/s 2(85)", "S 2 (85)", "ss. 2(85)", "§ 2(85)", "sec 2(85)",
+                 "Sec. 2 (85)", "S.2(85)", "section 2(85)"):
+        r = ask({"question": "Is this company a small company?", "as_of": AS_OF,
+                 "facts": FACTS, "provisions": [form]})
+        details = [i.get("detail") for i in r.get("not_confirmed", [])]
+        check([x["obligation_id"] for x in r.get("rows", [])] == ["CA13-S2-85-SMALL"]
+              and TEXT_NO_ROW not in details and validate(r) == [],
+              f"{form!r} finds the s.2(85) row, and never says nothing rests on it "
+              f"({r['state']}, {[d[:24] for d in details if d]})")
+    try:
+        answer({"question": "x", "provisions": ["s.9999"]}, generated_at=GEN)
+        check(False, "a citation shape the grammar cannot parse is refused")
+    except BadRequest as e:
+        check("s.9999" in str(e), f"a citation shape the grammar cannot parse is a 400, not a "
+                                  f"silent miss ({str(e)[:40]})")
+    r = ask({"question": "What does s.2(41) say about turnover?", "as_of": AS_OF,
+             "provisions": ["s.2(41)"], "figures": [TURN]})
+    check(r["state"] == PARTIAL
+          and any("s.2(41)" in (i.get("detail") or "") for i in r["not_confirmed"]),
+          f"a figure resting on s.2(85)(ii) is not answered under s.2(41): the comparison is "
+          f"by clause, not by section ({r['state']})")
 
     # ── a provision number is never a near-miss (verifier finding 5) ─────────
     check(not cites("Companies Act 2013, s.185", "s.18")
