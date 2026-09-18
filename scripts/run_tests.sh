@@ -127,6 +127,7 @@ suites=(
   checker/corpus_retrieval.py
   checker/cross_section_eval.py
   checker/api.py
+  checker/ask.py
   checker/matrix_view.py
   checker/diligence_pack.py
   checker/review_table.py
