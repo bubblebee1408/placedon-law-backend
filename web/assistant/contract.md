@@ -8,6 +8,23 @@ put through the same `answer()`, so the prototype and the route cannot drift.
 Validator: `checker/ask_contract.py` — the route runs it on every response and withholds a
 violation as a `500` (§6 D18). Fixture builder and the validator's tests:
 `scripts/assistant_contract.py`.
+> **KNOWN DEFECTS — do not connect `/v1/ask` to any client yet (2026-09-18).** The route failed its
+> second independent verification and is BLOCKED under the loop's two-failed-rounds rule
+> (`.claude/plans/loop-next10-2026-09-17.md`; `research/TASKS.md` A-011). Three major defects remain:
+> 1. **It refuses held law when a question names the NCLT (or IBBI) without a section number**
+>    (capital reduction, schemes, oppression, winding up, conversion, registered valuers) — refused as
+>    IBC2016. The NCLT is constituted under the Companies Act itself (s.408); "Tribunal" in the same
+>    question is correctly not refused.
+> 2. **Two citation grammars disagree.** A provision written "s 2(85)", "u/s 2(85)", "S 2 (85)",
+>    "ss. 2(85)" or "§ 2(85)" is accepted as naming a provision but not parsed, so the decided row is
+>    dropped and the turn can say, falsely, that no obligation rests on it.
+> 3. **Register order beats the title the user named:** "s.62 and SEBI ICDR" is refused as SEBI LODR,
+>    with LODR's refusal text.
+> Minor: sub-clause near-misses (`s.2(85)(iii)`) still answer on the section; fact validation is
+> skipped when no provision is named; some partials' only reader text is a model-facing pack string.
+> Everything the first verification found is fixed (`4bfad19` … `b7c572c`); these are what the second
+> found. Evidence: the verifier's notes, summarised in the runbook log.
+
 Plan: [`docs/PLAN_13_ASSISTANT_UX_PLAN.md`](../../docs/PLAN_13_ASSISTANT_UX_PLAN.md). Evidence:
 [`docs/research/ux/INTERNAL_ASK_AUDIT.md`](../../docs/research/ux/INTERNAL_ASK_AUDIT.md) (§R2 is the
 draft this corrects).
