@@ -5,7 +5,26 @@ Written 2026-09-15 (runbook task UX-C). **The route exists** as of 2026-09-18 (A
 engine calls alone — no model is called on any path and `uses_model` is always `false`. The
 prototype is still static: it renders fixtures and sends nothing. Every fixture is now a REQUEST
 put through the same `answer()`, so the prototype and the route cannot drift.
-Validator and fixture builder: `scripts/assistant_contract.py`.
+Validator: `checker/ask_contract.py` — the route runs it on every response and withholds a
+violation as a `500` (§6 D18). Fixture builder and the validator's tests:
+`scripts/assistant_contract.py`.
+> **KNOWN DEFECTS — do not connect `/v1/ask` to any client yet (2026-09-18).** The route failed its
+> second independent verification and is BLOCKED under the loop's two-failed-rounds rule
+> (`.claude/plans/loop-next10-2026-09-17.md`; `research/TASKS.md` A-011). Three major defects remain:
+> 1. **It refuses held law when a question names the NCLT (or IBBI) without a section number**
+>    (capital reduction, schemes, oppression, winding up, conversion, registered valuers) — refused as
+>    IBC2016. The NCLT is constituted under the Companies Act itself (s.408); "Tribunal" in the same
+>    question is correctly not refused.
+> 2. **Two citation grammars disagree.** A provision written "s 2(85)", "u/s 2(85)", "S 2 (85)",
+>    "ss. 2(85)" or "§ 2(85)" is accepted as naming a provision but not parsed, so the decided row is
+>    dropped and the turn can say, falsely, that no obligation rests on it.
+> 3. **Register order beats the title the user named:** "s.62 and SEBI ICDR" is refused as SEBI LODR,
+>    with LODR's refusal text.
+> Minor: sub-clause near-misses (`s.2(85)(iii)`) still answer on the section; fact validation is
+> skipped when no provision is named; some partials' only reader text is a model-facing pack string.
+> Everything the first verification found is fixed (`4bfad19` … `b7c572c`); these are what the second
+> found. Evidence: the verifier's notes, summarised in the runbook log.
+
 Plan: [`docs/PLAN_13_ASSISTANT_UX_PLAN.md`](../../docs/PLAN_13_ASSISTANT_UX_PLAN.md). Evidence:
 [`docs/research/ux/INTERNAL_ASK_AUDIT.md`](../../docs/research/ux/INTERNAL_ASK_AUDIT.md) (§R2 is the
 draft this corrects).
@@ -76,74 +95,91 @@ section and records the subsection without extracting it.
 
 | Field | Source |
 |---|---|
-| `body` `{key, name, regulator, covers, scope_status}` | `scope.body(key)`; detection: `ask._body_named` (§6 D2) |
+| `body` `{key, name, regulator, covers, scope_status}` | `scope.body(key)`; detection: `checker/ask_scope.py` (§6 D2) |
 | `reason` | `scope.refusal_for(key)` verbatim |
 | `held[]` | `scope.in_corpus()` |
 
 A body the register does not declare (e.g. the Income-tax Act) has no `refusal_for` text; its `reason`
 would be NEW copy and needs its own decision. **Still open after ASK-1**: such a question is *not*
-out_of_scope. It falls to the general path and comes back `partial` — nothing is invented, and
-nothing useful is said either (PLAN_13 §7.12 calls `body.undeclared_reason` NEW and blocking).
+out_of_scope, and nothing is invented for it (PLAN_13 §7.12 calls `body.undeclared_reason` NEW and
+blocking). It is decided by what the request names, like any other turn: naming nothing, it comes
+back `partial` (lexical retrieval over its words, or nothing reached); with facts but no provision,
+`partial` (the facts are not applied, D6). If the request names Companies Act provisions or figures,
+those are answered **as named** — the engine does not know the question was about income tax, and
+the capability row that sent them is responsible for having chosen them.
 
-## 6. State mapping — DECIDED 2026-09-18 when `/v1/ask` was built (ASK-1)
+## 6. State mapping — DECIDED 2026-09-18 (ASK-1), revised the same day after the verifier
 
-Implementation: `checker/ask.py`. Every decision below is a choice this build made; the table it
-replaces was inferred. Where a case was **not** decided it says so rather than guessing.
+Implementation: `checker/ask.py` (mapping, request), `checker/ask_scope.py` (scope),
+`checker/ask_read.py` (engine readers, citation grammar), `checker/ask_contract.py` (validator).
+Every decision below is a choice this build made; the table it replaces was inferred. Where a case
+was **not** decided it says so rather than guessing. Fix round 1 (verifier FAIL on `be078a6`)
+revised D1, D2, D4, D6, D11, D14 and added D16–D18.
 
 ### The request
 
 ```jsonc
 POST /v1/ask
-{ "question": "Is this company a small company?",   // rendered verbatim; NEVER parsed for meaning
+{ "question": "Is this company a small company?",   // rendered verbatim, ≤ 2,000 characters;
+                                                    // its meaning is never decided (D1)
   "as_of": "2026-09-15",                            // optional; defaults to the day in generated_at
   "context": { "kind": "general", "document_date": null },
-  "facts": { … },                 // general: what /v1/compliance-pack takes
+  "facts": { … },                 // general: api.PROFILE_KEYS (+ "evidence": api.EVIDENCE_KEYS)
                                   // document: what /v1/document-check takes
-  "provisions": ["s.2(85)"],      // citations to read
+  "provisions": ["s.2(85)"],      // citations to read: s.173, section 2(85), rule 3
   "figures": ["small_company.turnover.prescribed"],   // prescribed-threshold keys
   "parent_turn_id": "t_20ccadb72b4b" }
 ```
 
-**D1 — `provisions` and `figures` exist because the engine does not read the question.** A
-deterministic engine cannot know which provision a sentence means, and guessing would put a
-citation under words nobody asked us to interpret — the Act-versus-Rule collision `retrieve.py`
-exists to prevent. So the caller (the capability row of PLAN_13 §4.1) names what it wants read, and
-each name is checked against what the engine declares: an undeclared figure key is a `400`, and an
-unresolvable citation comes back as a pack miss, never as a near-miss. **Where the request names no
-provision, the retrieval query is the user's own words** and `retrieve()` decides the route — which
-is what the stamp line renders as "Looked up …", the only record of what was tried (PLAN_13 §7.12).
-Anything the request does not name is not looked up; nothing is inferred from the sentence.
+**D1 — only what the request names can be answered.** A deterministic engine cannot know which
+provision a sentence is about, and guessing would put a citation under words nobody asked us to
+interpret — the Act-versus-Rule collision `retrieve.py` exists to prevent. So the caller (the
+capability row of PLAN_13 §4.1) names what it wants read: `provisions` must each be a citation (a
+bare number, a year or a topic is a `400`), and `figures` must be keys the threshold table declares
+(`400` otherwise). An unresolvable citation comes back as a pack miss, never as a near-miss.
+**Where the request names no provision, `retrieve()` runs lexical retrieval over the question's
+words** — a match of words against the corpus, with its own route (`search`, or `exact` where the
+sentence itself carries a citation), not an understanding of the question. What that finds is
+shown as the stamp line's "Looked up …", and it can **only ever feed a `partial` turn**, which says
+so (`ask.LEXICAL`).
 
 ### The mapping
 
 | Case | State | Decision |
 |---|---|---|
-| The question names a body `scope.py` declares and does not hold | `out_of_scope` | **D2.** Decided first, before any retrieval, and it wins even when the question also names law we hold — answering the LLP limb from Companies Act reasoning is the error `scope.py`'s own LLP note names. Detection (`ask._body_named`) uses **only the register's own strings**: multi-word phrases from `name` and `covers`, plus each named regulator, matched whole-phrase and case-insensitively. Single common words are excluded by construction — STAMP `covers` "debentures" and "agreements", and matching either would refuse a Companies Act question as a stamp-duty one. Several matches → the first in register order (so a SEBI question refuses as LODR, the held-as-consolidation body, before SEBI_OTHER). **No match → not `out_of_scope`** (see §5). |
-| A decided obligation row, or a servable prescribed figure, **and** nothing not confirmed | `answered` | **D3.** "Decided" excludes any row carrying `missing_facts`, a `blocked_by`, or state `APPLIES_UNDETERMINED` / `CANNOT_DETERMINE`: those move to `not_confirmed` (kind `cannot_verify`) and are not served as rows. An `answered` turn renders `citations[]`; a `partial` renders the same provisions as `confirmed[]` with their `verbatim`. |
-| Anything else on the general path | `partial` | **D4.** Including a pack miss, an unusable provision, an unservable figure, and an undecided row. A `partial` is **never empty-handed**: where a turn reached nothing at all, one `cannot_verify` item says so in the engine's words (`ask.NOTHING_DECIDED`) — "we decided nothing" is not "nothing applies". |
+| The question is about a body `scope.py` declares and does not hold | `out_of_scope` | **D2 (revised).** Decided first, by `checker/ask_scope.py`, from `scope.py`'s strings alone. **A wrong refusal of held law is the worse error** — it tells a user we do not cover what we do — so the detector is built around not making it. *Title signals* (strong): multi-word chunks of the body's `name`, capitalised 3+-letter acronyms in it (`FDI`, `SEBI`, `ICDR`), and the key's own acronym where the key is one token (`LLP`, `FEMA`, `IBC`); acronyms match case-sensitively. *Regulator signals* (weak): each regulator named. Any signal that is also a **held** body's declared string is dropped (`MCA` regulates the Companies Act, so it refuses nothing). **`covers` phrases are never a trigger** — "board composition", "annual filings", "issue of capital", "internal committee" are the held Act's vocabulary too — and serve only to choose between bodies already named ("SEBI … insider trading" → SEBI_OTHER); otherwise the first in register order. The text is NFKC-normalised, dotted acronyms collapsed (`R.B.I.`), whitespace collapsed; homoglyphs from other scripts are **not** folded (no confusables table is held). |
+| A declared body's **title** named next to held law | `partial` (MIXED) | **D2.** Held law = the held body's title ("Companies Act") in the question, or `provisions` in the request. The held part is read; the unheld part is one `cannot_verify` item, `ref` = the body key, `detail` = `scope.refusal_for` verbatim; **no row is decided and the facts are not applied**, because a row would be Companies Act reasoning applied to a matter the unheld body may govern ("Is our LLP a small company?" is never answered as a company). A bare section number next to a title is that body's section ("section 6 of FEMA"), not held law. |
+| A **regulator** named next to held law, including a bare citation | not refused | **D2.** The Companies Act's own procedure runs through these forums ("NCLT approval … under section 66"). **Known false positive, not fixed here:** a regulator with no held law cited still refuses ("Do we need NCLT approval to reduce share capital?" → IBC2016), because the register does not record that the NCLT is also the Companies Act's tribunal. The fix belongs in `scope.py`, the authority, and is the founder's call. Two regulators of different bodies ("NCLT and CCI approval for this merger") → register order, IBC2016 — a limitation, recorded. |
+| Rows or figures, every one decided, nothing not confirmed, every citation rested on | `answered` | **D3.** "Decided" excludes any row carrying `missing_facts`, a `blocked_by`, or state `APPLIES_UNDETERMINED` / `CANNOT_DETERMINE`: those move to `not_confirmed` (kind `cannot_verify`, with the facts they needed) and are not served as rows. |
+| Anything else on the general path | `partial` | **D4 (revised).** A `partial` is never empty-handed, and each statement it makes about itself is used **only where it is true**: `NOTHING_DECIDED` only when nothing at all was reached; `TEXT_NO_FACTS` when a provision was read and no facts were supplied; `TEXT_NO_ROW` when facts were supplied and no obligation this engine decides rests on the provision; `LEXICAL` when what is shown came from lexical retrieval; `FACTS_NOT_APPLIED` when facts came with no provision; `UNRESTED` for a named provision no served row or figure rests on. (Before the fix, a turn that had read s.173 said "no admitted provision was reached".) |
 | A prescribed figure the table will not serve | `partial`, figure absent | **D5.** The `ThresholdUnavailable` message is carried verbatim as the item's `detail`. The statutory floor is never substituted (`prescribed_thresholds.operative_small_company_limits` says why: ₹50 lakh against ₹4 crore is a wrong answer in the costume of a cautious one). |
-| Which rows a turn serves | — | **D6.** The rows whose `provision` names one of the request's `provisions`; where the request names none, every row the pack returned. A provision number is never a prefix (s.16 does not match s.186). |
+| Which rows a turn serves | — | **D6 (revised).** The rows whose `provision` falls under a named citation, compared as (section, subsection path) — s.173 covers s.173(1); s.16 never matches s.186, s.2(41) never s.2(85), and "section 2(85)" finds the s.2(85) row. **Where the request names no provision, no row is decided** and the facts are not applied, echoed or used; the turn says so (`FACTS_NOT_APPLIED`). Serving every row against a free-text question would claim a relevance nobody established. |
+| What an `answered` turn cites | — | **D16 (new).** Only sections its rows and figures **rest on**: a row rests on its own provision; a figure rests on the Act limb its statutory bounds are keyed to in the threshold table (`small_company.turnover.*` → s.2(85)(ii)). A named provision nothing rests on makes the turn `partial` and is named (`UNRESTED`) — no small-company figure is ever cited under s.186. Figures named with **no** provision are answered on the figures alone, with no `citations`, `evidence_pack` or `law_version`: each figure carries its instrument, in-force date and source, which is its citation, and no word of the question is searched for another. |
 | Document turn, `cannot_verify` non-empty | `partial` | **D7.** `confirmed` = the verified rows, `not_confirmed` = `cannot_verify`, `superseded` and `scope_frame` as in §4. |
-| Document turn, nothing flagged, something verified | `answered` | **D8.** The verified rows ride as `rows[]`. Unreachable with the register as it stands (every document check so far leaves something unverifiable), so it is exercised on the pure assembler `_document_turn`, not left undefined. |
+| Document turn, nothing flagged, something verified | `answered` | **D8.** The verified rows ride as `rows[]`. Unreachable with the register as it stands, so it is exercised on the pure assembler `_document_turn`, not left undefined. |
 | Document turn, nothing flagged, nothing verified, something superseded | `partial` | **D9.** One `cannot_verify` item per superseded row, from the row's own fields. |
 | Document turn that reached no obligation | `partial` | **D10.** One item, `ask.NOTHING_REACHED`. |
-| Any document turn | — | **D11.** No `evidence_pack`: the document path runs no retrieval. `law_version` is built at the **document's own date** (`_law_version_at`, red team L2). No `facts` block: the document's particulars are the check's own inputs and every row carries them. No `stages`: the orchestrator is the model path and this route never enters it, so no turn this route serves carries stages. |
+| Any document turn | — | **D11 (corrected).** No `evidence_pack` is served: nothing on the document path is shown as retrieved evidence. `_law_version_at` **does** call `retrieve()` — over the sections the check's rows cite, only to read the corpus-fetched dates the `law_version` statement is built from, at the **document's own date** (red team L2). (The first version of this line said the document path runs no retrieval; that was wrong.) No `facts` block: the document's particulars are the check's own inputs and every row carries them. No `stages`: the orchestrator is the model path and this route never enters it. A document turn that also names an unheld body's title gets its refusal item and is never `answered`. |
 | `BUDGET_EXHAUSTED`, a transport failure, an engine failure | **no state at all** | **D12.** `answer()` raises `BadRequest` for a malformed request (the route returns `400`) and lets **everything else propagate**. An engine failure must never reach a client wearing a legal state (CLAUDE.md; the frontend's `AGENTS.md:62`), so there is no `except Exception` on this path and a test asserts the route does not turn one into a `200`. |
-| Every state | `uses_model: false` | **D13.** No model is called on any path, and the suite asserts the module imports no model or network library. |
+| A malformed request | `400` | **D17 (new).** Refused, naming the field: an unknown request or context key; a fact name the engine does not declare (`api.PROFILE_KEYS`, `api.EVIDENCE_KEYS`; `_DOC_CHECK_KEYS` on a document turn) — so `facts.confidence` can never ride into a response; a list or object where one value belongs; a `cin` or `financial_year` that is not a string, a `director_count` that is not a non-negative integer (these were a `TypeError`, i.e. a `500`, on all three fact routes); a question over **2,000 characters** (a pasted document is a document turn, not a question); a `provisions` item that is not a citation; an empty `parent_turn_id`; a document turn with no date, or with two that disagree. |
+| A response that breaks `placedon.ask/0` | `500`, no state | **D18 (new).** The route runs `validate()` on its own response before serving it. A violation is withheld as `{"error": "contract_violation", "violations": […]}` — a server fault a client renders as a service error, never a `200` it could render as a state. |
+| Every state | `uses_model: false` | **D13.** No model is called on any path, and the suite asserts the modules import no model or network library. |
 
-**D14 — which supplied facts the response names back.** `facts` echoes the request's facts
-**verbatim**, labelled `USER_FACT`, minus `as_of`, `incorporation_date` and `financial_year` — the
-three fields `_profile()` needs to place the company in time, which the envelope's `as_of` and each
-row's own financial year already carry. Nothing is derived, defaulted or added; a fact that was not
-supplied leaves the row undecided rather than being invented. *Partly open*: on an AGM-timing turn
-`incorporation_date` is substantive rather than frame, and naming it there was not decided here.
+**D14 (revised) — which supplied facts the response names back.** Facts are echoed only on a turn
+that **applied** them (a provision named, not a MIXED turn), verbatim, labelled `USER_FACT`, minus
+`as_of`, `incorporation_date` and `financial_year` — the three fields `_profile()` needs to place
+the company in time, which the envelope's `as_of` and each row's own financial year already carry.
+Only declared fact names can arrive (D17), so nothing the engine does not know can be echoed.
+Nothing is derived, defaulted or added; a fact that was not supplied leaves the row undecided rather
+than being invented. *Partly open*: on an AGM-timing turn `incorporation_date` is substantive rather
+than frame, and naming it there was not decided here.
 
 **D15 — `demand_signal`.** Emitted (`{"action": "tell_us_blocking"}`) on a **general** `partial`
-that both confirmed something and could not confirm something else. **Not decided:** whether it
-also belongs on the empty-`confirmed` partial, on a document partial, or on `out_of_scope` — the
-UX spec shows the button in all three (§7.12, §7.11) but conditions it on the server supplying the
-field, and widening it changes a fixture the prototype is accepted against. Left to ASK-3/ASK-5 with
-the founder rather than guessed here.
+that both confirmed something and could not confirm something else (an engine gap — not one of the
+D4 statements about what this system did not do). **Not decided:** whether it also belongs on the
+empty-`confirmed` partial, on a document partial, or on `out_of_scope` — the UX spec shows the
+button in all three (§7.12, §7.11) but conditions it on the server supplying the field, and widening
+it changes a fixture the prototype is accepted against. Left to ASK-3/ASK-5 with the founder.
 
 **Still `NEW` after ASK-1, unchanged:** the `located` sentence for the empty-`confirmed` partial;
 `body.undeclared_reason` for a body the register does not declare (§5); the provenance stamp and
@@ -178,8 +214,8 @@ The user's *questions* are illustrative; what each turn reads is named by its re
 Everything legal in a fixture is engine output, and nothing is assembled in the builder. The
 self-test requires the files on disk to equal a fresh rebuild, so a change to the engine **or to the
 mapping** surfaces as a fixture diff rather than as a prototype rendering a shape no caller can
-obtain; after either, run `python3 scripts/assistant_contract.py --write`. (ASK-1 changed neither:
-all six fixtures rebuilt byte-identically through `answer()`.)
+obtain; after either, run `python3 scripts/assistant_contract.py --write`. (ASK-1 and its fix round
+changed neither: all six fixtures rebuild byte-identically through `answer()`.)
 
 ## 9. Open questions from the finalized frontend (2026-09-17)
 
