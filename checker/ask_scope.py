@@ -18,6 +18,12 @@ So a question is refused only on something that identifies the unheld body and n
   (`TERMS_OF_ART`: "CIRP", "resolution professional"), each proven absent from the held text.
 - **Regulator signals** (weak): each regulator the register names ("RBI", "SEBI").
 
+When several bodies are named, the title the user named decides, not register order: a
+signal only one body declares ("ICDR"), then the body whose `covers` the question names
+("buyback"), then register order. SEBI ICDR, SAST, PIT and Buyback share one key
+(SEBI_OTHER) in the register, so a question naming any of them refuses with SEBI_OTHER's
+text, which names all four.
+
 Any signal that is also the HELD Act's own vocabulary is dropped: MCA regulates the Companies
 Act, so "MCA" never refuses anything; and the NCLT and IBBI (`HELD_ACT_FORUMS`) are forums the
 Companies Act itself constitutes or relies on, so they never refuse on their own either. The `covers` phrases are never a
@@ -157,7 +163,31 @@ def _named_by(text: str, signals: list[str]) -> bool:
 
 
 def _covers_named(text: str, b) -> bool:
-    return any(_has(text, c, exact_case=False) for c in _chunks(b.covers))
+    """Does the question name something this body declares it covers? Single words count
+    here ("buyback"), because this only chooses between bodies already named -- it never
+    refuses anything on its own."""
+    items = (c.strip() for c in re.split(r"[,;()/\u2014]", b.covers))
+    return any(_has(text, c, exact_case=False) for c in items
+               if len(c) >= 3 and any(ch.isalpha() for ch in c))
+
+
+def _own_title_named(text: str, b) -> bool:
+    """Did the question name a title signal ONLY this body declares ("ICDR", not "SEBI")?"""
+    others = {sig for o in _unheld() if o is not b for sig in _signals(o)[0]}
+    return _named_by(text, [t for t in _signals(b)[0] if t not in others])
+
+
+def _choose(text: str, candidates: list):
+    """Which of several named bodies the question is about (D2, round 3).
+
+    The title the user named beats register order: a body named by a signal no other body
+    shares ("SEBI ICDR" -> SEBI_OTHER), then a body whose declared subject matter the
+    question names ("SEBI … buyback" -> SEBI_OTHER), and only then register order ("SEBI"
+    alone -> SEBI_LODR).
+    """
+    order = _unheld()
+    return min(candidates, key=lambda b: (not _own_title_named(text, b),
+                                          not _covers_named(text, b), order.index(b)))
 
 
 def read(question: str, provisions: Sequence[str] = ()) -> Reading:
@@ -176,10 +206,7 @@ def read(question: str, provisions: Sequence[str] = ()) -> Reading:
         candidates = [] if names_held else by_regulator
     if not candidates:
         return Reading(None, False, names_held)
-    # Several bodies named: the one whose declared subject matter the question also
-    # names, else the first in register order.
-    chosen = next((b for b in candidates if _covers_named(text, b)), candidates[0])
-    return Reading(chosen, bool(by_title), names_held)
+    return Reading(_choose(text, candidates), bool(by_title), names_held)
 
 
 def _test() -> None:
@@ -285,6 +312,20 @@ def _test() -> None:
           "can be the held Act's vocabulary")
     check(all(scope.body(k).status != scope.IN_CORPUS for k in TERMS_OF_ART),
           "terms of art are declared only for bodies we do not hold")
+
+    # ── a title the user names beats register order (round 3, item 3) ────────
+    r = read("Does s.62 and SEBI ICDR apply to our rights issue?")
+    check(r.refuse and r.body.key == "SEBI_OTHER",
+          f"'SEBI ICDR' is refused as the body whose title names ICDR, not as LODR "
+          f"({r.body.key if r.body else None})")
+    r = read("Does s.62 and SEBI ICDR apply to our rights issue?", provisions=["s.62"])
+    check(r.mixed and r.body.key == "SEBI_OTHER", "...and so is its mixed form")
+    for q, key in (("Do we need SEBI approval for a buyback?", "SEBI_OTHER"),
+                   ("What do the SAST regulations require of an acquirer?", "SEBI_OTHER"),
+                   ("What does SEBI require us to disclose continuously?", "SEBI_LODR")):
+        r = read(q)
+        check(r.refuse and r.body.key == key,
+              f"{q[:46]!r} -> {key} ({r.body.key if r.body else None})")
 
     # ── mixed: a title named next to held law ────────────────────────────────
     r = read("Is our LLP a small company?", provisions=["s.2(85)"])

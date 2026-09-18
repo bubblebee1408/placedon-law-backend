@@ -554,6 +554,13 @@ def _test() -> None:
           and r["reason"] == scope.refusal_for("IBC2016"),
           "an IBC-only question is still refused as the IBC, in its own words")
 
+    # ── the title the user named decides which refusal they get (item 3) ─────
+    r = ask({"question": "Does s.62 and SEBI ICDR apply to our rights issue?", "as_of": AS_OF})
+    check(r["state"] == OUT_OF_SCOPE and r["body"]["key"] == "SEBI_OTHER"
+          and r["reason"] == scope.refusal_for("SEBI_OTHER") and "ICDR" in r["reason"],
+          f"an ICDR question is refused with the ICDR body's own words, never LODR's "
+          f"({r.get('body', {}).get('key')})")
+
     # ── an undeclared body is NOT out_of_scope ───────────────────────────────
     tax = ask({"question": "How much TDS must we deduct under the Income-tax Act on this "
                            "payment?", "as_of": AS_OF})
