@@ -129,6 +129,7 @@ suites=(
   checker/cross_section_eval.py
   checker/api.py
   checker/ask.py
+  checker/ask_scope.py
   checker/matrix_view.py
   checker/diligence_pack.py
   checker/review_table.py

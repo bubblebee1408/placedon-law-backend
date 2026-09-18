@@ -20,10 +20,12 @@ request may NAME what it wants read (`provisions`, `figures`), each validated ag
 the engine declares; where it names nothing, retrieval runs on the user's own words and
 `retrieve()` decides the route, which is the only record of what was tried (UX spec §7.12).
 
-The one thing the question itself decides is **scope**: a question that names a body of law
-`checker/scope.py` declares and does not hold is refused in the register's own words. A body
-the register does not declare is NOT out_of_scope — there is no refusal text to serve and
-writing one would be inventing law (contract §5).
+The one thing the question itself decides is **scope** (`checker/ask_scope.py`, contract §6
+D2): a question that names a body of law `checker/scope.py` declares and does not hold is
+refused in the register's own words; one that names such a body next to held law is MIXED —
+the held part is read and the unheld part refused. A wrong refusal of held law is the worse
+error, so the held Act's own vocabulary never refuses. A body the register does not declare is
+NOT out_of_scope — there is no refusal text to serve and writing one would be inventing law.
 
 Run: PYTHONPATH=. python3 checker/ask.py
 """
@@ -39,7 +41,7 @@ ROOT = Path(__file__).resolve().parent.parent
 if __package__ in (None, ""):                      # run as a file by scripts/run_tests.sh
     sys.path.insert(0, str(ROOT))
 
-from checker import obligations
+from checker import ask_scope, obligations
 from checker import prescribed_thresholds as pt
 from checker import scope
 from checker.api import BadRequest, _date, document_check
@@ -149,46 +151,6 @@ def _figure(key: str, as_of: date) -> dict:
             "evidence_state": t.state, "source_url": t.source_url}
 
 
-# ── which body of law the question is about ───────────────────────────────────
-def _phrases(b) -> list[str]:
-    """The strings this body DECLARES about itself, long enough to be a match.
-
-    Only scope.py's own words are used, and only multi-word phrases from `name` and
-    `covers` plus the named regulators. A single common word would be a trap: STAMP
-    covers "debentures" and "agreements", and matching either would refuse a Companies
-    Act question about a debenture as though it were a stamp-duty question.
-    """
-    chunks = [c.strip() for c in re.split(r"[,;()/\u2014]", f"{b.name}|{b.covers}")
-              for c in c.split("|")]
-    out = [c for c in chunks if len(c.split()) >= 2 and not c[:1].isdigit()]
-    out += [r.strip() for r in re.split(r"[,/]", b.regulator)
-            if len(r.strip()) >= 3 and any(ch.isalpha() for ch in r)]
-    return out
-
-
-def _named(text: str, phrase: str) -> bool:
-    """Whole-phrase, case-insensitive. 'comp' never matches 'company'."""
-    return re.search(rf"(?<![A-Za-z0-9]){re.escape(phrase)}(?![A-Za-z0-9])",
-                     text, re.I) is not None
-
-
-def _body_named(question: str):
-    """The first body of law the question names that we do not hold, or None.
-
-    Held bodies are skipped, so a question naming both the Companies Act and an unheld
-    body is refused: answering the LLP limb from Companies Act reasoning is the exact
-    error scope.py's LLP note names. A body the register does not declare (the Income-tax
-    Act) matches nothing and is NOT out_of_scope -- there is no refusal text to serve and
-    writing one here would be inventing law (contract §5).
-    """
-    for b in scope.BODIES:
-        if b.status == scope.IN_CORPUS:
-            continue
-        if any(_named(question, ph) for ph in _phrases(b)):
-            return b
-    return None
-
-
 def _cites(provision: str, cite: str) -> bool:
     """Does this obligation's provision name the citation the request asked to read?
     The lookahead keeps s.16 out of s.186 -- a provision number is never a prefix."""
@@ -197,9 +159,16 @@ def _cites(provision: str, cite: str) -> bool:
 
 # ── the two answering paths ───────────────────────────────────────────────────
 def _general_turn(question: str, *, as_of: date, generated_at: str, facts: dict | None,
-                  provisions: list[str], figures: list[str]) -> dict:
-    """Retrieval, the threshold table and the obligation register, over one question."""
-    not_confirmed: list[dict] = []
+                  provisions: list[str], figures: list[str],
+                  refusal: dict | None = None) -> dict:
+    """Retrieval, the threshold table and the obligation register, over one question.
+
+    `refusal` is set on a MIXED turn (D2): the question also names an unheld body by its
+    title. The held part is read; the unheld part is refused in the register's words; and
+    no row is decided, because a row would be Companies Act reasoning applied to a matter
+    the unheld body may govern -- an LLP is not a company.
+    """
+    not_confirmed: list[dict] = [refusal] if refusal else []
     served: list[dict] = []
     for key in figures:
         try:
@@ -217,7 +186,7 @@ def _general_turn(question: str, *, as_of: date, generated_at: str, facts: dict 
     rows: list[dict] = []
     fact_block: dict = {}
     what_it_is_not = None
-    if facts is not None:
+    if facts is not None and refusal is None:
         from checker.api import compliance_pack
         pack_json = compliance_pack({"as_of": as_of.isoformat(), **facts},
                                     generated_at=generated_at)
@@ -295,6 +264,14 @@ def _document_turn(check: dict) -> dict:
                                          "detail": s["detail"]} for s in superseded]}
     return out | {"state": PARTIAL, "confirmed": [],
                   "not_confirmed": [{"kind": "cannot_verify", "detail": NOTHING_REACHED}]}
+
+
+def _with_refusal(turn: dict, item: dict) -> dict:
+    """A document turn that also named an unheld body by title: never answered."""
+    if turn["state"] == ANSWERED:
+        turn = ({k: v for k, v in turn.items() if k != "rows"}
+                | {"state": PARTIAL, "confirmed": turn["rows"], "not_confirmed": []})
+    return turn | {"not_confirmed": turn["not_confirmed"] + [item]}
 
 
 # ── the request ───────────────────────────────────────────────────────────────
@@ -381,27 +358,31 @@ def answer(request: dict, *, generated_at: str) -> dict:
     env = _envelope(question, as_of=as_of.isoformat(), generated_at=generated_at, kind=kind,
                     document_date=document_date, parent=parent)
 
-    # Scope first. A question about law we do not hold is refused whatever else it names,
-    # in the register's own words -- silence there would read as "no obligation found".
-    body = _body_named(question)
-    if body is not None:
+    # Scope first (D2). A question about law we do not hold is refused in the register's own
+    # words -- silence there would read as "no obligation found". A question that ALSO names
+    # held law is mixed: the held part is read and the unheld part refused, not the whole.
+    reading = ask_scope.read(question, provisions)
+    if reading.refuse:
+        body = reading.body
         return env | {"state": OUT_OF_SCOPE,
                       "body": {"key": body.key, "name": body.name,
                                "regulator": body.regulator, "covers": body.covers,
                                "scope_status": body.status},
                       "reason": scope.refusal_for(body.key),
                       "held": [b.name for b in scope.in_corpus()]}
+    refusal = ({"kind": "cannot_verify", "ref": reading.body.key,
+                "detail": scope.refusal_for(reading.body.key)} if reading.mixed else None)
 
     if kind == "document":
         if not isinstance(facts, dict):
             raise BadRequest("a document turn takes the /v1/document-check fields as 'facts'")
         check = document_check({**facts, "document_date": document_date,
                                 "as_of": as_of.isoformat()}, generated_at=generated_at)
-        return env | _document_turn(check)
+        turn = _document_turn(check)
+        return env | (_with_refusal(turn, refusal) if refusal else turn)
 
     return env | _general_turn(question, as_of=as_of, generated_at=generated_at, facts=facts,
-                               provisions=provisions, figures=figures)
-
+                               provisions=provisions, figures=figures, refusal=refusal)
 
 def _contract_validator():
     """The contract validator, loaded from the file it lives in.
@@ -516,11 +497,37 @@ def _test() -> None:
           "...in scope.refusal_for's words, never copy written here")
     check(o["held"] == [b.name for b in scope.in_corpus()],
           "...and it names what we do hold")
-    both = ask({"question": "Does s.173 apply to a Limited Liability Partnership Act entity?",
-                "as_of": AS_OF, "provisions": ["s.173"]})
-    check(both["state"] == OUT_OF_SCOPE and both["body"]["key"] == "LLP2008",
-          f"a question naming a body we do not hold is refused even when it also names "
-          f"law we do -- LLP is not answered from Companies Act reasoning ({both['state']})")
+    # D2 (fix round 1): a declared body's title named next to held law is MIXED -- the
+    # held part is read, the unheld part refused in the register's words, and no row is
+    # decided, because a row about an LLP would be Companies Act reasoning applied to it.
+    both = ask({"question": "Is our LLP a small company?", "as_of": AS_OF, "facts": FACTS,
+                "provisions": ["s.2(85)"], "figures": [CAP, TURN]})
+    refusal = [i for i in both.get("not_confirmed", []) if i.get("ref") == "LLP2008"]
+    check(both["state"] == PARTIAL and "rows" not in both and validate(both) == [],
+          f"an LLP question is never answered as a company, even with facts and a "
+          f"Companies Act provision named ({both['state']}, rows={'rows' in both})")
+    check(refusal and refusal[0]["detail"] == scope.refusal_for("LLP2008")
+          and "facts" not in both,
+          "...the LLP limb is refused in scope.refusal_for's words, and the facts are "
+          "not applied to anything")
+    mixed = ask({"question": "Does s.173 apply to a Limited Liability Partnership Act "
+                             "entity?", "as_of": AS_OF, "provisions": ["s.173"]})
+    check(mixed["state"] == PARTIAL
+          and [c["ref"] for c in mixed["confirmed"]] == ["ACT:COMPANIES_ACT_2013:S173"]
+          and any(i.get("ref") == "LLP2008" for i in mixed["not_confirmed"]),
+          f"...and the held provision the request named is still read, not refused with "
+          f"the rest ({mixed['state']})")
+
+    # ── the held Act's own vocabulary is never refused (verifier finding 1) ──
+    for q in ("Which MCA form do we file after the AGM under s.137?",
+              "Do we need NCLT approval to reduce share capital under section 66?",
+              "What are the board composition rules under s.149 for a private company?",
+              "What are our annual filings under the Companies Act, 2013?",
+              "Does a further issue of capital need a special resolution under s.62?",
+              "Must our Internal Committee report under the s.177 vigil mechanism?"):
+        r = ask({"question": q, "as_of": AS_OF})
+        check(r["state"] != OUT_OF_SCOPE and "reason" not in r and validate(r) == [],
+              f"not refused: {q[:56]!r} ({r['state']})")
 
     # ── an undeclared body is NOT out_of_scope ───────────────────────────────
     tax = ask({"question": "How much TDS must we deduct under the Income-tax Act on this "
@@ -529,17 +536,6 @@ def _test() -> None:
           f"a body the register does not declare is not refused -- there is no refusal "
           f"text to serve, and writing one would be inventing law ({tax['state']})")
     check(validate(tax) == [], f"...and the turn it does return validates ({validate(tax)})")
-
-    # ── detection uses only what scope.py declares ───────────────────────────
-    for q in ("Is this company a small company?",
-              "What does s.173 require, and does s.16 apply here?",
-              "Is the law this document relies on still current?",
-              "And the turnover limit?", "What does rule 2(1)(t) prescribe?",
-              "Can the board approve these debentures and the related agreements?"):
-        check(_body_named(q) is None,
-              f"no body is detected in {q[:44]!r} -- a single common word is never a match")
-    check(_body_named("What are our SEBI LODR disclosure duties?") is not None,
-          "...while a declared name is")
 
     # ── the document path ────────────────────────────────────────────────────
     doc_facts = {"document_date": "2024-06-01", "as_of": AS_OF, "company_class": "private",
