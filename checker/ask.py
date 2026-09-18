@@ -536,6 +536,24 @@ def _test() -> None:
         check(r["state"] != OUT_OF_SCOPE and "reason" not in r and validate(r) == [],
               f"not refused: {q[:56]!r} ({r['state']})")
 
+    # ── the Act's own forums, end to end (round 3, item 1) ───────────────────
+    for q in ("Do we need NCLT approval to reduce share capital?",
+              "Must the NCLT sanction our scheme of amalgamation?",
+              "Can minority shareholders petition the NCLT for oppression and mismanagement?",
+              "Can the NCLT wind up the company on just and equitable grounds?",
+              "Does converting from a public to a private company need NCLT approval?",
+              "Must the valuer for this allotment be registered with IBBI?"):
+        for req in ({"question": q, "as_of": AS_OF},
+                    {"question": q, "as_of": AS_OF, "provisions": ["s.66"]}):
+            r = ask(req)
+            check(r["state"] != OUT_OF_SCOPE and validate(r) == [],
+                  f"not refused ({'with' if 'provisions' in req else 'without'} a "
+                  f"provision): {q[:44]!r} ({r['state']})")
+    r = ask({"question": "Who appoints the resolution professional?", "as_of": AS_OF})
+    check(r["state"] == OUT_OF_SCOPE and r["body"]["key"] == "IBC2016"
+          and r["reason"] == scope.refusal_for("IBC2016"),
+          "an IBC-only question is still refused as the IBC, in its own words")
+
     # ── an undeclared body is NOT out_of_scope ───────────────────────────────
     tax = ask({"question": "How much TDS must we deduct under the Income-tax Act on this "
                            "payment?", "as_of": AS_OF})
