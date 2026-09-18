@@ -342,7 +342,8 @@ resolves outside the tree, and (because it resolves symlinks first) a link point
 gap text says which of the two it was.
 
 **3. Cost (verifier measured 3.38 ms per `lookup()`; fix round 2 adds more hashing).** `file_digest()`
-memoises per process on `(resolved path, size, mtime_ns)`, so a file that changes under us gets a
+memoises per process on `(resolved path, size, mtime_ns)`, so an ordinary change to a file gets a
+The limit of that key, stated rather than implied: a swap that restores BOTH size and `mtime_ns` inside one process is not detected (it needs write access and a deliberate `utime`; a fresh process always re-hashes, and a coarse-mtime filesystem could in principle collide by accident). The memo is a cost control, not tamper-detection — the re-hash on the serving path is what detects tampering. `checker/provenance.py`'s suite asserts this limit rather than a guarantee it does not have.
 new digest rather than a remembered one — asserted in the suite by rewriting a file between calls.
 Measured on this corpus, same machine: **3.54 ms per lookup before, 1.09-1.26 ms after**, while
 hashing strictly more than before (the held artifact as well as the copy).

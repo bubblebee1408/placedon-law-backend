@@ -19,6 +19,7 @@ Run: python3 checker/provenance.py
 from __future__ import annotations
 
 import hashlib
+import os as _os
 import re
 import unicodedata
 from dataclasses import dataclass, field
@@ -1058,7 +1059,18 @@ def _test() -> None:
         f.write_bytes(b"two different bytes")
         check(file_digest(f) != first,
               "...and a file that changed hashes to a different one: the memo keys on "
-              "size and mtime, so it cannot serve a stale digest")
+              "size and mtime_ns, so an ordinary change gets a new digest")
+        # The honest limit of that key, stated rather than implied: a swap that puts
+        # size AND mtime_ns back is not detected inside one process. It takes write
+        # access and a deliberate utime, and a fresh process re-hashes; a coarse-mtime
+        # filesystem could in principle collide by accident. Recorded so no caller
+        # reads the memo as tamper-detection.
+        st, second = f.stat(), file_digest(f)
+        f.write_bytes(b"TWO DIFFERENT BYTES")            # same length as b"two different bytes"
+        _os.utime(f, ns=(st.st_atime_ns, st.st_mtime_ns))
+        check(f.stat().st_size == st.st_size and file_digest(f) == second,
+              "a swap that restores size and mtime_ns is NOT detected in-process "
+              "(documented limit of the memo, not a guarantee)")
 
     # ── recording a source: pure, so nothing is written on a refusal ──────────
     outcome, written, msg = P880.record_source(None, gaz, "2025-12-02")

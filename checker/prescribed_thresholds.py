@@ -164,13 +164,7 @@ def _prescribed_state() -> tuple[str, str, str]:
         # The file itself is the evidence. If it is gone, or is not the bytes that
         # were checked, nothing else in the record can make up for it -- and the
         # reader must be told that, not that a reviewer or a source is missing.
-        missing_name = any("does not name" in g for g in artifact_gaps)
-        return UNRESOLVED, (
-            ("the instrument is held, but the record does not say which file it holds, "
-             "so what was checked cannot be re-read (reference {ref})" if missing_name else
-             "the instrument is held, but the file on record is not the file that was "
-             "checked: its bytes no longer match what was recorded when it was "
-             "registered (reference {ref})").format(ref=REF)), (
+        return UNRESOLVED, _artifact_reader_note(artifact_gaps, REF), (
             f"{'; '.join(artifact_gaps)}. Restore the artifact from git, or re-register "
             f"the file you hold; the figure is refused until its bytes match the record.")
     if gaps and all(g.startswith("source:") for g in gaps):
@@ -213,6 +207,34 @@ def _prescribed_state() -> tuple[str, str, str]:
         + (f"; {gone}" if gone else ""))
 
 
+
+def _artifact_reader_note(artifact_gaps: list[str], ref: str) -> str:
+    """What to tell a reader when the held file cannot carry the record's claim.
+
+    Each refusal has its own reason, and only one of them is "the bytes changed".
+    Saying that when the file is simply absent -- or when the record points somewhere
+    this system will not read -- describes a comparison that never happened.
+    """
+    joined = " ".join(artifact_gaps)
+    if "does not name" in joined:
+        reason = ("the record does not say which file it holds, so what was checked "
+                  "cannot be re-read")
+    elif "is not on disk" in joined:
+        reason = ("the file the record names is not on disk here, so what was checked "
+                  "cannot be re-read")
+    elif "cannot be read:" in joined:
+        reason = ("the record points at a file outside this repository, which is not "
+                  "read, so what was checked cannot be re-read")
+    elif "is not a sha256" in joined:
+        reason = ("the record's own hash of the file is malformed, so the file cannot be "
+                  "checked against it")
+    elif "no longer hashes" in joined:
+        reason = ("the file on record is not the file that was checked: its bytes no "
+                  "longer match what was recorded when it was registered")
+    else:
+        reason = "the file that was checked cannot be re-read"
+    return f"the instrument is held, but {reason} (reference {ref})"
+
 def _prescribed_state_880() -> tuple[str, str, str]:
     """(evidence state, note) for the 2025 amounts. Derived, never asserted.
 
@@ -240,13 +262,7 @@ def _prescribed_state_880() -> tuple[str, str, str]:
         # The file itself is the evidence. If it is gone, or is not the bytes that
         # were checked, nothing else in the record can make up for it -- and the
         # reader must be told that, not that a reviewer or a source is missing.
-        missing_name = any("does not name" in g for g in artifact_gaps)
-        return UNRESOLVED, (
-            ("the instrument is held, but the record does not say which file it holds, "
-             "so what was checked cannot be re-read (reference {ref})" if missing_name else
-             "the instrument is held, but the file on record is not the file that was "
-             "checked: its bytes no longer match what was recorded when it was "
-             "registered (reference {ref})").format(ref=REF)), (
+        return UNRESOLVED, _artifact_reader_note(artifact_gaps, REF), (
             f"{'; '.join(artifact_gaps)}. Restore the artifact from git, or re-register "
             f"the file you hold; the figure is refused until its bytes match the record.")
     if gaps and all(g.startswith("source:") for g in gaps):
@@ -634,19 +650,29 @@ def _test() -> None:
     # Fix round 2: the HELD artifact is re-read on the serving path. A record whose
     # file is gone, or is no longer the bytes that were checked, refuses -- and the
     # reader is told the FILE is wrong, not that the provenance is missing.
-    for label, broken in (
+    # Each refusal names its OWN reason: only one of these is "the bytes changed", and
+    # saying that of an absent or unnamed file describes a comparison that never ran.
+    for label, broken, expected in (
             ("a file that is not on disk",
-             reg880.attested_stub() | {"local_artifact": "corpus/sources/no_such_file.pdf"}),
+             reg880.attested_stub() | {"local_artifact": "corpus/sources/no_such_file.pdf"},
+             "is not on disk here"),
             ("a file whose bytes are not the recorded ones",
-             reg880.attested_stub() | {"artifact_sha256": "sha256:" + "cd" * 32}),
+             reg880.attested_stub() | {"artifact_sha256": "sha256:" + "cd" * 32},
+             "its bytes no longer match"),
             ("a record naming no file at all",
-             {k: v for k, v in reg880.attested_stub().items() if k != "local_artifact"})):
+             {k: v for k, v in reg880.attested_stub().items() if k != "local_artifact"},
+             "does not say which file"),
+            ("a file the record points at outside the repository",
+             reg880.attested_stub() | {"local_artifact": "../../etc/hosts"},
+             "outside this repository"),
+            ("a recorded hash that is not a sha256",
+             reg880.attested_stub() | {"artifact_sha256": "not-a-hash"},
+             "hash of the file is malformed")):
         with reg880.stub_registration(broken):
             st_a, note_a, op_a = _prescribed_state_880()
             check(st_a == UNRESOLVED, f"{label} is refused ({st_a})")
-            check("the file on record is not the file that was checked" in note_a
-                  or "does not say which file" in note_a,
-                  f"...and the reader note is about the file ({note_a[:80]}…)")
+            check(expected in note_a,
+                  f"...and the reader note says why: {expected!r} ({note_a[:80]}…)")
             check("no reviewer has confirmed" not in note_a
                   and "downloaded from" not in note_a,
                   "...not about a reviewer or a source, neither of which is missing")
