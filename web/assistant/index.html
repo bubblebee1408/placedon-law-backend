@@ -7,46 +7,75 @@
 <link rel="stylesheet" href="assistant.css">
 </head>
 <body>
-<!-- The Word task pane's own tab strip. Chrome: it carries no response content. -->
-<header class="tabs" data-chrome>
-  <nav aria-label="Task pane sections">
-    <a href="#" class="tab">Currency check</a>
-    <a href="#" class="tab">Register strip</a>
-    <span class="tab is-current" aria-current="page">Ask</span>
-  </nav>
+<!-- Chrome only. In the Word pane (<=400px) the bar carries the pane's own tab strip; the two other
+     sections have no destination in this prototype, so they are not tab stops (A11Y-16). On the web
+     the bar is the wordmark alone: the real page sits inside the site's SiteNav (placedon-claude-legal-3300). -->
+<header class="bar" data-chrome>
+  <span class="wordmark">Placedon</span>
+  <div class="tabs" role="tablist" aria-label="Task pane sections">
+    <span class="tab" role="tab" aria-selected="false" aria-disabled="true" tabindex="-1">Currency check</span>
+    <span class="tab" role="tab" aria-selected="false" aria-disabled="true" tabindex="-1">Register strip</span>
+    <span class="tab is-current" role="tab" aria-selected="true" tabindex="0" id="tab-ask" aria-controls="ask">Ask</span>
+  </div>
 </header>
 
-<div class="shell">
-  <!-- Session rail: state word first, then glyph, then question (§6, F13). Web only. -->
-  <aside class="rail" data-chrome hidden></aside>
+<div class="shell" data-shell>
+  <!-- Session rail, web only (§12). State word first, then glyph, then question. -->
+  <nav class="rail" aria-labelledby="rail-head" data-rail hidden>
+    <h2 class="rail-head" id="rail-head" data-chrome>This session</h2>
+    <ol class="rail-list" data-rail-list></ol>
+    <p class="hint" data-chrome>Not saved. Closing this window clears the list.</p>
+  </nav>
 
-  <main class="content">
-    <!-- Composer. First in tab order, and the capability list sits before the
-         question field because its purpose is to fill it (F14b). -->
-    <form class="composer" data-composer autocomplete="off">
-      <p class="holds" data-holds></p>
-      <fieldset class="about">
-        <legend>About</legend>
-        <label><input type="radio" name="about" value="general" checked> The Act</label>
-        <label class="is-disabled"><input type="radio" name="about" value="document" disabled> This document
-          <span class="why">— open a document in Word to ask about it</span></label>
-      </fieldset>
-      <div class="capabilities" data-capabilities></div>
-      <label class="q-label" for="q">Your question</label>
-      <textarea id="q" rows="3" placeholder="Ask about an obligation this engine holds."></textarea>
-      <div class="composer-foot">
-        <label class="asof">As of <input id="asof" type="text" value="" readonly aria-describedby="asof-why"></label>
+  <main class="content" id="ask" role="tabpanel" aria-labelledby="tab-ask">
+    <div class="intro" data-intro data-chrome>
+      <p class="eyebrow">Product · Ask</p>
+      <h1 class="title">Ask about the Companies Act, 2013</h1>
+      <p class="sub" data-empty-only>Every figure shows the instrument that set it and the date it came
+        into force. What we do not hold, we say we do not hold.</p>
+      <p class="concept">Product concept, shown on fixed sample responses. Nothing you type is sent:
+        there is no answer endpoint yet.</p>
+    </div>
+
+    <!-- The composer. After a turn exists it compacts but stays first, so focus order stays
+         visual order (WCAG 2.4.3); the spec's docked-at-foot composer is recorded as a deviation. -->
+    <form class="composer" data-composer aria-label="Ask a question" novalidate>
+      <p class="summary" data-summary hidden>
+        <span data-chrome data-summary-text></span>
+        <button type="button" class="disclose" data-change data-disclosure aria-expanded="false"
+                aria-controls="composer-full" data-chrome>Change</button>
+      </p>
+      <div id="composer-full" data-full>
+        <fieldset class="about">
+          <legend data-chrome>About</legend>
+          <label class="choice" data-chrome><input type="radio" name="about" value="general" checked
+                 aria-describedby="hint-general"> The Companies Act, 2013</label>
+          <p class="hint" id="hint-general" data-chrome>Section text and dated figures from the Act. A company is
+            checked only on facts you enter.</p>
+          <label class="choice" data-doc-choice data-chrome><input type="radio" name="about" value="document"
+                 aria-disabled="true" aria-describedby="hint-document"> This document</label>
+          <p class="hint" id="hint-document" data-doc-hint>Document checks run in the Word add-in.</p>
+        </fieldset>
+        <p class="hint" data-chrome>Answers use the Companies Act, 2013 as ingested: a current
+          consolidation, not point-in-time law. The as-of date is today only.</p>
+      </div>
+      <label class="q-label" for="q" data-chrome>Your question</label>
+      <textarea id="q" name="q" rows="3" placeholder="Ask about the Companies Act, 2013"
+                aria-describedby="keyhint"></textarea>
+      <div class="foot" data-chrome>
+        <span class="asof">As of <span data-today></span></span>
+        <span class="keyhint" id="keyhint">Enter asks · Shift+Enter for a new line</span>
         <button type="submit" class="ask">Ask</button>
       </div>
-      <p class="why" id="asof-why">Today only in v1. This engine holds the law as it stands, not as it stood.</p>
     </form>
+    <p class="status" role="status" data-status data-chrome></p>
 
-    <div data-turns></div>
+    <div class="turns" data-turns></div>
   </main>
 
-  <!-- Sources. A panel on the web; in the pane it is rendered inside each turn. -->
-  <aside class="sources" data-source-panel hidden>
-    <h2 class="panel-head" data-sources-head>Sources</h2>
+  <!-- Sources for one turn at a time. A sticky column on the web; below the answer in the pane. -->
+  <aside class="sources" data-source-panel aria-labelledby="sources-head" hidden>
+    <h2 class="panel-head" id="sources-head" data-sources-head data-chrome>Sources</h2>
     <div data-sources-body></div>
   </aside>
 </div>

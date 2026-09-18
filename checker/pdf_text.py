@@ -194,37 +194,42 @@ _CONTENTS = re.compile(rb"/Contents\s+(\d+)\s+0\s+R")
 
 
 def extract_pages(path: str | Path) -> list[str]:
-    """Text per page, in document order.
+    """RETIRED 2026-09-17 — it was wrong, quietly, on 13 of 14 corpus documents.
 
-    Page provenance is not decoration here: a legal record has to say where in the source it came
-    from, so a reviewer can open the gazette at that page and check it. Content streams are not
-    1:1 with pages (22 pages, 25 text-bearing streams in this gazette), so the /Type/Page objects
-    and their /Contents references are followed rather than guessed at by position.
+    Use `checker.pdf_pages.extract_pages`. This function is kept as a raising guard
+    rather than deleted, so that any caller resurrected from an old branch fails
+    loudly instead of re-acquiring the defect.
 
-    Returns [] when the page tree cannot be read; callers must not mistake that for a blank
-    document.
+    It located pages by regexing RAW FILE BYTES for `/Type/Page`. In PDF 1.5+ the
+    page objects and the cross-reference table live inside zlib-deflated object
+    streams (`/Type/ObjStm`) and cross-reference streams (`/Type/XRef`), which no
+    byte regex can see into. Measured before retirement:
+
+        icsi_gn_board.pdf      169 real pages -> returned   1
+        icsi_gn_general.pdf    179 real pages -> returned   0
+        route_agm_2024.pdf      22 real pages -> returned  37   (stale revisions)
+
+    A second, independent defect: `/Contents` was sought only in the 400 bytes
+    FOLLOWING the `/Type/Page` match, but many writers emit it BEFORE. On
+    sonata_agm_notice_29th_2024.pdf that lost the text of 17 of 18 pages while
+    still reporting all 18 — a file with no object streams at all.
+
+    Why this is a raise and not a fallback: an empty or short page list from a real
+    gazette is indistinguishable downstream from "the document says nothing", and in
+    a compliance engine that reads as *no obligation found*. This module's own
+    docstring names the rule — a guard that reports a property of the toolchain as a
+    property of the evidence is worse than no guard.
+
+    `extract_text` (whole-document) is unaffected and still used; it was verified
+    working on all 14 census documents.
     """
-    data = Path(path).read_bytes()
-    bodies: dict[int, bytes] = {}
-    starts = [(int(m.group(1)), m.end()) for m in _OBJ_HDR.finditer(data)]
-    for i, (num, off) in enumerate(starts):
-        end = starts[i + 1][1] if i + 1 < len(starts) else len(data)
-        bodies[num] = data[off:end]
-
-    cmap = _cmaps(data)
-    pages: list[str] = []
-    for m in _PAGE.finditer(data):
-        ref = _CONTENTS.search(data[m.start():m.start() + 400])
-        if not ref:
-            pages.append("")
-            continue
-        body = bodies.get(int(ref.group(1)), b"")
-        sm = _STREAM.search(body)
-        blob = _inflate(sm.group(1)) if sm else b""
-        raw = _render_stream(blob, {})
-        mapped = _render_stream(blob, cmap) if cmap else ""
-        pages.append(mapped if _englishness(mapped) > _englishness(raw) else raw)
-    return pages
+    raise NotImplementedError(
+        "checker.pdf_text.extract_pages was retired on 2026-09-17: it silently "
+        "returned wrong pages for PDF 1.5+ files (compressed object streams) and "
+        "lost text when /Contents preceded /Type/Page. "
+        "Use checker.pdf_pages.extract_pages instead. "
+        "See docs/D002_CLOSURE_REPORT_2026_09_17.md."
+    )
 
 
 def has_extractable_text(path: str | Path, *, min_words: int = 30) -> bool:
@@ -260,15 +265,23 @@ def _test() -> None:
 
     # The real gazette, if it has been acquired. Guards the regression that mattered: a merged
     # CMap destroyed this document's text, and the naive reading was the correct one.
+    # Page extraction moved to checker/pdf_pages.py on 2026-09-17 (D-002). The page
+    # assertions that used to live here now run there, against fixtures that can
+    # actually exhibit the defect -- the old fixture was PDF 1.4 with no object
+    # streams, i.e. structurally immune, which is why the bug survived 163 suites.
+    try:
+        extract_pages("/dev/null")
+        check(False, "the retired page reader must refuse to run")
+    except NotImplementedError as exc:
+        check("pdf_pages" in str(exc), "the retired page reader names its replacement")
+
     stored = Path(__file__).resolve().parent.parent / \
         "corpus/sources/companies_meetings_board_powers_rules_2014.pdf"
     if stored.is_file():
-        pg = extract_pages(stored)
-        check(len(pg) == 22, f"the Rules gazette reports 22 pages (got {len(pg)})")
-        check(sum(1 for p in pg if p.strip()) >= 20, "at least 20 pages carry text")
-        joined = " ".join(pg)
-        check("Meetings of Board" in joined, "page text carries the title")
-        check(_englishness(joined) > 500, "page text reads as prose")
+        # Whole-document extraction is the half that was never broken; keep guarding it.
+        t = extract_text(stored)
+        check("Meetings of Board" in t, "whole-document text carries the title")
+        check(_englishness(t) > 500, "whole-document text reads as prose")
     else:
         print("[SKIP] stored Rules PDF not present")
 

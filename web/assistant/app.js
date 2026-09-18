@@ -1,339 +1,750 @@
 /* The Ask section, rendering a placedon.ask/0 response.
  *
- * It renders; it never decides. Three rules govern every line below:
+ * It renders; it never decides. Four rules govern every line below:
  *   1. `state` comes from the server. The client never infers one (C3).
- *   2. Nothing is drawn that the response did not supply. Every text node is either
- *      a server string or a label marked data-chrome, and the acceptance checker
- *      fails the page if a number appears that the fixture does not carry.
- *   3. The two as-of truths never look alike: a figure carries an in-force date
- *      under a solid rule; section text carries "Text as ingested" under a dashed
- *      rule, and never an in-force date (C2, §9).
+ *   2. Nothing is drawn that the response did not supply. A text node is a server
+ *      string (field), a fixed label (label, marked data-chrome), or a line the client
+ *      composed from fields -- and those are built with field(), NOT label(), so the
+ *      acceptance check still traces every digit in them to the fixture.
+ *   3. The two as-of truths never look alike: a figure carries an in-force date under a
+ *      solid rule; section text carries "Text as ingested" under a dashed rule, and
+ *      never an in-force date (C2, §9).
+ *   4. Every array element is rendered. A count is the array's own length, and a
+ *      heading is never the only thing a reader gets about a row (red team L1, DQ1).
  *
- * Fixtures are embedded (fixtures.js) because a page opened from disk cannot
- * fetch local JSON. ?fixture=<name> selects one.
+ * Fixtures are embedded (fixtures.js) because a page opened from disk cannot fetch
+ * local JSON. ?fixture=<name> selects one; no fixture is the empty state.
  */
 'use strict';
 
 var FIXTURES = window.PLACEDON_ASK_FIXTURES || {};
 var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+var ROWS_SHOWN = 3;             // confirmed rows before "Show all"
+var SUBSECTIONS_SHOWN = 2;      // verbatim sub-sections before "Show the full text"
+var uid = 0;
 
-/* The state word is the state, in words, so the three stay distinct with colour
- * removed (§16). The glyph is redundant, never the only signal. */
+/* ── display words: 1:1 maps from engine enums (§13). Unknown values render verbatim. ── */
 var STATE = {
-  answered:     { word: 'Answered',       glyph: '■' },   // filled square
-  partial:      { word: 'Partly answered', glyph: '◧' },  // half-filled
-  out_of_scope: { word: 'Not held',       glyph: '□' }    // empty
+  answered:     { word: 'Answered',          fill: 'full' },
+  partial:      { word: 'Abstained in part', fill: 'half' },
+  out_of_scope: { word: 'Not held',          fill: 'none' }
 };
+/* The state is the server's; the word must be true of the turn it heads. A `partial` with an empty
+ * confirmed[] -- the case the contract routes ABSTAINED / INSUFFICIENT_EVIDENCE to (audit U2) --
+ * answered nothing, so "in part" would overclaim. The glyph and data-state stay `partial`. */
+function stateWord(r) {
+  if (r.state === 'partial' && !(r.confirmed || []).length) return 'Abstained';
+  return STATE[r.state].word;
+}
+var ROW_STATE = {
+  APPLIES_SATISFIED: 'Applies · met',
+  APPLIES_NOT_SATISFIED: 'Applies · not met',
+  APPLIES_UNDETERMINED: 'Applies · not determined',
+  DOES_NOT_APPLY: 'Does not apply',
+  CANNOT_DETERMINE: 'Cannot determine'
+};
+var NC_KIND = {
+  pack_missing: 'Not in the evidence pack',
+  unusable: 'Held, but its text may not be used',
+  cannot_verify: 'Cannot verify',
+  refusal: 'Stopped by review',
+  model_decision: 'Not decided'
+};
+var SCOPE_STATUS = {
+  DECLARED: 'In scope, nothing acquired',
+  CURRENT_ONLY: 'Current text only, no history',
+  OUT_OF_SCOPE: 'Outside scope'
+};
+var CURRENCY = { CURRENT: 'current' };
+function currencyWord(v) { return CURRENCY[v] || sentence(v).toLowerCase(); }
+function words(map, v) { return Object.prototype.hasOwnProperty.call(map, v) ? map[v] : String(v); }
 
+/* ── nodes ─────────────────────────────────────────────────────────────── */
 function el(tag, cls, text) {
   var n = document.createElement(tag);
   if (cls) n.className = cls;
   if (text !== undefined && text !== null) n.textContent = text;
   return n;
 }
-/* A label the response did not supply. Marked so the "no invented text" check can
- * tell our chrome from the server's words. */
+/* A fixed label the response did not supply. */
 function label(tag, cls, text) {
   var n = el(tag, cls, text);
   n.setAttribute('data-chrome', '');
   return n;
 }
+/* A server string, or a line composed from server fields; `path` is the audit trail. */
 function field(node, path) { node.setAttribute('data-f', path); return node; }
+function add(parent) {
+  for (var i = 1; i < arguments.length; i++) if (arguments[i]) parent.appendChild(arguments[i]);
+  return parent;
+}
+function groupHead(text, lead) {
+  var h = label('h3', 'group' + (lead ? ' lead' : ''), text);
+  h.setAttribute('data-group', '');
+  return h;
+}
 
-/* 2026-09-15 -> 15-Sep-2026. A rendering of a date the response supplied; no new
- * digits enter the page. */
+/* 2026-09-15 -> 15-Sep-2026. A rendering of a supplied date; no new digits enter. */
 function human(iso) {
   var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || ''));
   return m ? m[3] + '-' + MONTHS[+m[2] - 1] + '-' + m[1] : String(iso || '');
 }
-
-/* §18.2 rule 4: the live host is indiacode.gov.in. A link to the dead host is
- * suppressed — the citation still renders in full. */
-function usableLink(url) {
-  if (!url || !/^https:\/\//.test(url)) return null;
-  try {
-    if (new URL(url).hostname.indexOf('indiacode.nic.in') !== -1) return null;
-  } catch (e) { return null; }
-  return url;
+function today() {
+  var d = new Date();
+  return ('0' + d.getDate()).slice(-2) + '-' + MONTHS[d.getMonth()] + '-' + d.getFullYear();
+}
+/* CORROBORATED -> Corroborated; HELD_UNREVIEWED -> Held unreviewed. */
+function sentence(v) {
+  var s = String(v || '').replace(/_/g, ' ').toLowerCase();
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+/* 120000000 -> 12,00,00,000 (Indian grouping; the digits are the supplied ones). */
+function rupees(n) {
+  var s = String(n);
+  if (!/^\d+$/.test(s) || s.length <= 3) return s;
+  var head = s.slice(0, -3), tail = s.slice(-3);
+  return head.replace(/\B(?=(\d{2})+(?!\d))/g, ',') + ',' + tail;
+}
+/* Dotted keys break at the dots, not mid-word (DQ6). */
+function dotted(node, key) {
+  String(key).split('.').forEach(function (part, i) {
+    if (i) { node.appendChild(document.createTextNode('.')); node.appendChild(el('wbr')); }
+    node.appendChild(document.createTextNode(part));
+  });
+  return node;
 }
 
-function stamp(r) {
-  var bits = ['Asked as of ' + human(r.as_of)];
-  if (r.evidence_pack && r.evidence_pack.retrieval_query) {
-    bits.push('Looked up ' + r.evidence_pack.retrieval_query);
+/* Filled / half / hollow square. Redundant with the word, never the only signal. */
+function glyph(fill) {
+  var ns = 'http://www.w3.org/2000/svg';
+  var svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('viewBox', '0 0 10 10');
+  svg.setAttribute('class', 'glyph');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.setAttribute('focusable', 'false');
+  var box = document.createElementNS(ns, 'rect');
+  box.setAttribute('x', '0.5'); box.setAttribute('y', '0.5');
+  box.setAttribute('width', '9'); box.setAttribute('height', '9');
+  box.setAttribute('class', 'glyph-edge');
+  svg.appendChild(box);
+  if (fill !== 'none') {
+    var ink = document.createElementNS(ns, 'rect');
+    ink.setAttribute('x', '0.5'); ink.setAttribute('y', '0.5');
+    ink.setAttribute('width', fill === 'full' ? '9' : '4.5'); ink.setAttribute('height', '9');
+    ink.setAttribute('class', 'glyph-ink');
+    svg.appendChild(ink);
   }
-  return bits.join(' · ');
+  return svg;
+}
+
+/* A show/hide control that says whether it is open (A11Y-6). */
+function disclosure(showText, hideText, content) {
+  var id = 'd' + (++uid);
+  content.id = id;
+  content.hidden = true;
+  var btn = label('button', 'disclose', showText);
+  btn.type = 'button';
+  btn.setAttribute('data-disclosure', '');
+  btn.setAttribute('aria-expanded', 'false');
+  btn.setAttribute('aria-controls', id);
+  btn.addEventListener('click', function () {
+    content.hidden = !content.hidden;
+    btn.setAttribute('aria-expanded', String(!content.hidden));
+    btn.textContent = content.hidden ? showText : hideText;
+  });
+  return btn;
+}
+
+/* ── what a reader may be shown of a model-facing string (NG-5, L4) ───────
+ * Some engine strings are written to a model ("not admitted for model use",
+ * "Its text is unknown to you"). The reader gets the identifier and the state the
+ * string names, a plain sentence, and the engine's own words behind a disclosure --
+ * never prose that drops the identifier, and never the string silently removed. */
+var MODEL_FACING = /model use|for model|unknown to you/i;
+function readerDetail(text, path) {
+  var box = el('div', 'detail');
+  if (!MODEL_FACING.test(text)) return add(box, field(el('p', 'basis', text), path));
+  var ref = /^([A-Z]+:[A-Z0-9_]+:[A-Z0-9_]+(?: \([^)]*\))?)/.exec(text);
+  var state = /(?:in state|model use:)\s+([A-Z_]+)/.exec(text);
+  if (ref) add(box, field(dotted(el('p', 'ref'), ref[1]), path));
+  if (state) add(box, field(el('p', 'basis', 'Recorded state: ' + sentence(state[1])), path));
+  add(box, label('p', 'basis', 'In the corpus, but not admitted as evidence here.'));
+  var raw = field(el('p', 'raw', text), path);
+  add(box, disclosure("Show the engine's own wording", "Hide the engine's own wording", raw), raw);
+  return box;
 }
 
 /* ── the two as-of truths ──────────────────────────────────────────────── */
 function figureBlock(f, i) {
   var box = field(el('div', 'figure'), 'figures[' + i + ']');
   box.setAttribute('data-figure', f.key);
-  box.appendChild(el('div', 'ref', f.key));                       // label is NEW; key verbatim
-  box.appendChild(el('div', 'amount', f.amount));
-  // "still current" rather than "No end date recorded" (§25.1 rule 7).
-  var inforce = 'In force from ' + human(f.effective_from)
-    + (f.effective_to ? ', until ' + human(f.effective_to) : ', still current');
-  box.appendChild(el('div', 'inforce', inforce));
-  box.appendChild(el('div', 'instrument', f.instrument));          // never shortened
-  box.appendChild(el('div', 'ref', f.evidence_state));
-  var link = usableLink(f.source_url);
-  if (link) {
-    var a = el('a', null, 'Gazette copy');
-    a.href = link;
-    box.appendChild(a);
-  } else {
-    box.appendChild(label('div', 'why', 'Gazette copy: pending'));
-  }
+  add(box,
+    field(dotted(el('p', 'key'), f.key), 'figures[' + i + '].key'),
+    field(el('p', 'amount', f.amount), 'figures[' + i + '].amount'),
+    // "No end date recorded" is the only true claim about the present (§9; red team L5).
+    field(el('p', 'inforce', 'In force from ' + human(f.effective_from)
+      + (f.effective_to ? ' · Until ' + human(f.effective_to) : ' · No end date recorded')),
+      'figures[' + i + '].effective_from,effective_to'),
+    field(el('p', 'instrument', f.instrument), 'figures[' + i + '].instrument'),   // never shortened
+    field(el('p', 'caption', sentence(f.evidence_state)), 'figures[' + i + '].evidence_state'),
+    sourceLine(f.source_url, 'Gazette copy of ' + f.instrument, 'Gazette link: not recorded',
+      'figures[' + i + '].source_url'));
   return box;
 }
 
-function lawVersion(lv) {
+/* The text basis, derived from basis + point_in_time_verified (L13). An unknown basis
+ * falls back to the pack's own statement, verbatim. */
+function lawVersion(lv, compact) {
   if (!lv) return null;
   var box = field(el('div', 'lawver'), 'law_version');
   box.setAttribute('data-law-version', '');
+  var known = lv.basis === 'CURRENT_CONSOLIDATION_AS_INGESTED' && lv.point_in_time_verified === false;
+  if (!known) {
+    add(box, field(el('p', null, lv.statement), 'law_version.statement'));
+    return box;
+  }
   var fetched = (lv.corpus_fetched || []).map(human).join(', ');
-  box.appendChild(label('div', null, 'Text as ingested ' + fetched
-    + '. Current consolidation, not a point-in-time version.'));
+  add(box, field(el('p', null, (fetched
+    ? 'Text as ingested ' + fetched + '.'
+    : 'Text as ingested on a date the corpus does not record.')
+    + ' Current consolidation, not a point-in-time version.'), 'law_version.corpus_fetched'));
+  if (compact) return box;
+  if (lv.point_in_time_requested) {
+    // A document turn: the rows were read against today's text, not the text in force on
+    // the document's date (red team L2).
+    add(box, field(el('p', 'strong', 'It is not the law as it stood on '
+      + human(lv.point_in_time_requested) + '.'), 'law_version.point_in_time_requested'));
+  }
+  var st = field(el('p', 'raw', lv.statement), 'law_version.statement');
+  add(box, disclosure("Show the pack's full statement", "Hide the pack's full statement", st), st);
   return box;
 }
 
-/* ── citations ─────────────────────────────────────────────────────────── */
-function citation(c, i, path) {
-  var box = field(el('div', 'cit'), path + '[' + i + ']');
-  box.setAttribute('data-citation', c.ref);
-  // A citation record is reachable in its own right. It has to be: when the source
-  // link is suppressed (dead host, §18.2 rule 4) and there is no verbatim text, the
-  // record has no focusable child at all, and a keyboard reader could not reach the
-  // evidence. Caught by the acceptance check, not by reading the code.
-  box.setAttribute('tabindex', '0');
-  box.setAttribute('role', 'group');
-  box.setAttribute('aria-label', 'Source: ' + (c.cite || c.ref));
-  var head = el('div');
-  var b = el('strong', null, c.cite || c.ref);
-  head.appendChild(b);
-  box.appendChild(head);
-  box.appendChild(el('div', 'ref', c.ref));
-  box.appendChild(el('div', 'ref', c.evidence_state
-    + (c.defects && c.defects.length ? ' · defects: ' + c.defects.join(', ') : '')));
-  if (c.unusable_reason) box.appendChild(el('div', 'basis', c.unusable_reason));
-  if (c.retrieved_on && c.retrieved_on.length) {
-    box.appendChild(label('div', 'ref', 'Fetched ' + c.retrieved_on.map(human).join(', ')
-      + ' (fetch dates, not in-force dates)'));
+/* A source link, or a truthful line about why there is none (L7). */
+function sourceLine(url, linkName, noUrlText, path) {
+  var box = el('div', 'source-line');
+  if (!url) return add(box, label('p', 'caption', 'No source link was supplied.'));
+  var host = null;
+  try { host = /^https:\/\//.test(url) ? new URL(url).hostname : null; } catch (e) { host = null; }
+  if (!host) return add(box, label('p', 'caption', noUrlText));
+  if (host.indexOf('indiacode.nic.in') !== -1) {
+    // The recorded URL is on the retired host, which refuses every request. Shown as text,
+    // unrepaired, and not linked.
+    add(box, label('p', 'caption', 'The recorded link is on the retired host indiacode.nic.in, so it is not linked.'));
+    var raw = field(el('p', 'ref hash', url), path);
+    return add(box, disclosure('Show the recorded link', 'Hide the recorded link', raw), raw);
   }
-  if (c.verbatim) {
-    var btn = el('button', 'disclose', 'Show the text of ' + (c.cite || c.ref));
-    btn.type = 'button';
-    var pre = field(el('div', 'verbatim', c.verbatim), path + '[' + i + '].verbatim');
-    pre.hidden = true;
-    btn.addEventListener('click', function () {
-      pre.hidden = !pre.hidden;
-      btn.textContent = (pre.hidden ? 'Show' : 'Hide') + ' the text of ' + (c.cite || c.ref);
-    });
-    box.appendChild(btn);
-    box.appendChild(pre);
-  }
-  var link = usableLink(c.source_url);
-  if (link) { var a = el('a', null, 'Source'); a.href = link; box.appendChild(a); }
-  else box.appendChild(label('div', 'why', 'Source link: not recorded'));
-  return box;
+  var a = el('a', null, linkName);
+  a.href = url;
+  return add(box, field(a, path));
 }
 
-/* Sub-clauses the row named. The contract says their text is not extracted, so the
- * heading says so too (§25.1 rule 13). Hashes are shown whole or not at all (rule 10). */
-function citedSpans(spans, path) {
-  var box = el('div');
-  box.appendChild(label('div', 'group', 'Sub-clauses the row named'));
-  box.appendChild(label('div', 'why',
-    'Resolved to the section. Sub-clause text is not extracted.'));
-  spans.forEach(function (s, i) {
-    box.appendChild(field(el('div', 'ref', s.path), path + '.cited_spans[' + i + '].path'));
-  });
-  var btn = el('button', 'disclose', 'Show the content hashes');
+/* ── citations: a marker in the card, a record in Sources (A11Y-4) ─────── */
+var lastMarker = null;
+var RECORD_ID = new Map();          // citation object -> its Sources record id
+function marker(c, n, recordId) {
+  var btn = el('button', 'marker');
   btn.type = 'button';
-  var list = el('div');
-  list.hidden = true;
-  spans.forEach(function (s, i) {
-    list.appendChild(field(el('div', 'hash', s.sha256), path + '.cited_spans[' + i + '].sha256'));
-  });
+  btn.setAttribute('data-marker', c.ref);
+  add(btn, label('span', 'marker-n', '[' + n + ']'), field(el('span', null, c.cite || c.ref), 'cite'));
   btn.addEventListener('click', function () {
-    list.hidden = !list.hidden;
-    btn.textContent = (list.hidden ? 'Show' : 'Hide') + ' the content hashes';
+    var rec = document.getElementById(recordId);
+    if (!rec) return;
+    lastMarker = btn;
+    rec.focus();
   });
-  box.appendChild(btn);
-  box.appendChild(list);
+  return btn;
+}
+
+function citationRecord(c, n, path, lv, textInCard) {
+  var box = field(el('section', 'cit'), path);
+  box.id = 'rec-' + (++uid);
+  box.setAttribute('data-citation', c.ref);
+  box.setAttribute('tabindex', '-1');            // a focus target, not a tab stop
+  box.setAttribute('aria-label', 'Source ' + n + ': ' + (c.cite || c.ref));
+  add(box,
+    add(el('p', 'cit-head'), label('span', 'marker-n', '[' + n + '] '), field(el('strong', null, c.cite || c.ref), path + '.cite')),
+    field(dotted(el('p', 'ref'), c.ref), path + '.ref'),
+    field(el('p', 'caption', sentence(c.evidence_state)), path + '.evidence_state'),
+    c.defects && c.defects.length
+      ? field(el('p', 'caption', 'Defects: ' + c.defects.join(', ')), path + '.defects')
+      : label('p', 'caption', 'No defects recorded.'),
+    c.unusable_reason ? field(el('p', 'basis', c.unusable_reason), path + '.unusable_reason') : null,
+    label('p', 'caption', textInCard ? 'Its text is shown in the answer.' : 'Section text is not part of this response.'),
+    lawVersion(lv, true),
+    c.retrieved_on && c.retrieved_on.length
+      ? field(el('p', 'caption', 'Fetched ' + c.retrieved_on.map(human).join(', ')
+        + ' (fetch dates, not in-force dates)'), path + '.retrieved_on')
+      : null,
+    sourceLine(c.source_url, 'Source: ' + (c.cite || c.ref), 'No source link was supplied.', path + '.source_url'));
+  var back = label('button', 'disclose', 'Back to answer');
+  back.type = 'button';
+  back.setAttribute('data-back', '');
+  back.addEventListener('click', function () {
+    var to = lastMarker && document.contains(lastMarker) ? lastMarker : document.querySelector('[data-marker]');
+    if (to) to.focus();
+  });
+  return add(box, back);
+}
+
+/* Sub-clauses a row named, inside that row (L12). */
+function citedSpans(spans, path) {
+  var box = el('div', 'spans');
+  add(box, label('p', 'caption', 'Sub-clauses this row rests on. Their text is not reproduced; '
+    + 'each is identified by its content hash.'));
+  var ul = el('ul', 'plain');
+  spans.forEach(function (s, i) {
+    var li = field(el('li', 'ref'), path + '.cited_spans[' + i + ']');
+    li.appendChild(document.createTextNode(s.path));
+    if (s.resolved === false) li.appendChild(label('span', 'abstain-word', ' · not found in the corpus'));
+    ul.appendChild(li);
+  });
+  var hashes = el('ul', 'plain');
+  spans.forEach(function (s, i) {
+    hashes.appendChild(field(el('li', 'hash', s.path + '  ' + s.sha256), path + '.cited_spans[' + i + '].sha256'));
+  });
+  return add(box, ul, disclosure('Show the content hashes', 'Hide the content hashes', hashes), hashes);
+}
+
+/* ── items ─────────────────────────────────────────────────────────────── */
+function rowItem(r, path) {
+  var box = field(el('div', 'row'), path);
+  add(box,
+    field(el('p', 'duty', r.duty), path + '.duty'),
+    add(el('p', 'verdict'),
+      field(el('strong', null, words(ROW_STATE, r.state)), path + '.state'),
+      r.basis ? field(el('span', null, ' — ' + r.basis), path + '.basis') : null),   // never truncated
+    field(el('p', 'ref', r.provision), path + '.provision'));
+  if (r.missing_facts && r.missing_facts.length) {
+    add(box, label('p', 'caption', 'Facts it still needs'));
+    var ul = el('ul', 'plain');
+    r.missing_facts.forEach(function (m, i) { ul.appendChild(field(el('li', 'basis', m), path + '.missing_facts[' + i + ']')); });
+    add(box, ul);
+  }
+  if (r.blocked_by) add(box, field(el('p', 'caption', 'Waiting on ' + r.blocked_by), path + '.blocked_by'));
+  if (r.cited_spans && r.cited_spans.length) add(box, citedSpans(r.cited_spans, path));
   return box;
+}
+
+function notConfirmedItem(n, i, docDate, dutyShownAbove) {
+  var path = 'not_confirmed[' + i + ']';
+  var box = field(el('div', 'item abstain'), path);
+  box.setAttribute('data-not-confirmed-item', '');
+  // The site's abstention mark: a dashed badge (placedon-claude-legal-3300 surfaces.css .cb-abstained).
+  add(box, add(el('p'), label('span', 'badge badge-abstain', words(NC_KIND, n.kind))));
+  // A duty the scope frame already names is not printed twice (L8, DQ8); the item is
+  // identified by its provision instead.
+  if (n.duty && !dutyShownAbove) add(box, field(el('p', 'duty', n.duty), path + '.duty'));
+  if (n.provision) add(box, field(el('p', 'ref', n.provision), path + '.provision'));
+  var ids = [n.ref, n.reference, n.instrument].filter(function (x, k, a) { return x && a.indexOf(x) === k; });
+  if (ids.length) add(box, field(el('p', 'ref', ids.join(' · ')), path + '.ref'));
+  if (n.detail) add(box, readerDetail(n.detail, path + '.detail'));
+  if (n.reason) add(box, field(el('p', 'basis', n.reason), path + '.reason'));
+  if (n.already_open_at_document_date && docDate) {
+    add(box, field(el('p', 'caption', 'Already open on ' + human(docDate)
+      + ', the document’s date. Nothing changed after it was written.'), path + '.already_open_at_document_date'));
+  }
+  return box;
+}
+
+function supersededItem(sp, i) {
+  var path = 'superseded[' + i + ']';
+  var box = field(el('div', 'item moved'), path);
+  box.setAttribute('data-superseded-item', '');
+  add(box,
+    field(el('p', 'duty', sp.duty), path + '.duty'),
+    field(el('p', 'ref', sp.provision), path + '.provision'),
+    add(el('p', 'basis'), label('strong', null, 'Governed then: '),
+      field(el('span', null, sp.governed_then), path + '.governed_then'),
+      sp.was_at_document_date ? field(el('span', 'caption', ' (' + currencyWord(sp.was_at_document_date)
+        + ' on the document’s date)'), path + '.was_at_document_date') : null),
+    add(el('p', 'basis'), label('strong', null, 'Governs now: '),
+      field(el('span', null, sp.governs_now), path + '.governs_now'),
+      sp.is_at_read_date ? field(el('span', 'caption', ' (' + currencyWord(sp.is_at_read_date)
+        + ' on the read date)'), path + '.is_at_read_date') : null),
+    sp.detail ? add(el('p', 'caption'), label('span', null, 'What governs it now: '),
+      field(el('span', null, sp.detail), path + '.detail')) : null);
+  return box;
+}
+
+function verbatimBlock(c, path, lv) {
+  var parts = String(c.verbatim).split(/\n(?=\(\d+[A-Z]?\)\s)/);
+  var box = el('div', 'verbatim-box');
+  add(box, field(el('div', 'verbatim', parts.slice(0, SUBSECTIONS_SHOWN).join('\n')), path + '.verbatim'));
+  if (parts.length > SUBSECTIONS_SHOWN) {
+    var rest = field(el('div', 'verbatim', parts.slice(SUBSECTIONS_SHOWN).join('\n')), path + '.verbatim');
+    add(box, rest, disclosure('Show the full text of ' + (c.cite || c.ref), 'Hide the rest of the text', rest));
+    box.insertBefore(box.lastChild, rest);        // the control sits above what it opens
+  }
+  if (/[¹²³]|<sup>/.test(c.verbatim)) {                // footnote markup, rendered literally
+    add(box, label('p', 'caption', 'Bracketed spans marked ¹ are amendments recorded in the source.'));
+  }
+  return add(box, lawVersion(lv));
 }
 
 /* ── groups ────────────────────────────────────────────────────────────── */
-function rowItem(r, i) {
-  var box = field(el('div', 'row'), 'rows[' + i + ']');
-  box.appendChild(el('div', null, r.duty));
-  box.appendChild(el('div', 'ref', r.provision + ' · ' + r.state));
-  box.appendChild(el('div', 'basis', r.basis));       // never truncated (§18.2 rule 9)
-  (r.missing_facts || []).forEach(function (m) {
-    box.appendChild(el('div', 'basis', m));
-  });
-  return box;
+function confirmedGroup(r, card, recs) {
+  var items = r.confirmed || [];
+  if (!items.length) {
+    add(card, groupHead('Confirmed: none'));
+    if (r.evidence_pack && r.evidence_pack.insufficient_evidence) {
+      add(card, field(label('p', 'basis', 'The engine marked its evidence insufficient to answer.'),
+        'evidence_pack.insufficient_evidence'));
+    }
+    return;
+  }
+  var rows = items.filter(function (x) { return x.obligation_id; });
+  var cites = items.filter(function (x) { return !x.obligation_id; });
+  if (rows.length) {
+    add(card, groupHead('Checked against the Act (' + rows.length + ')'),
+      label('p', 'caption', 'None of these is a finding of compliance.'));
+    var more = el('div');
+    items.forEach(function (x, i) {
+      if (!x.obligation_id) return;
+      var node = rowItem(x, 'confirmed[' + i + ']');
+      node.setAttribute('data-confirmed-item', '');
+      (card.querySelectorAll('[data-confirmed-item]').length < ROWS_SHOWN ? card : more).appendChild(node);
+    });
+    if (more.childNodes.length) {
+      add(card, disclosure('Show all ' + rows.length + ' rows', 'Show fewer rows', more), more);
+    }
+    if (!r.scope_frame) add(card, lawVersion(r.law_version));
+  }
+  if (cites.length) {
+    add(card, groupHead('Confirmed (' + cites.length + ')'));
+    items.forEach(function (c, i) {
+      if (c.obligation_id) return;
+      var path = 'confirmed[' + i + ']';
+      var n = recs.indexOf(c) + 1;
+      var box = field(el('div', 'item confirmed'), path);
+      box.setAttribute('data-confirmed-item', '');
+      add(box,
+        field(el('p', 'duty', c.cite || c.ref), path + '.cite'),
+        field(el('p', 'caption', sentence(c.evidence_state)
+          + (c.defects && c.defects.length ? ' · Defects: ' + c.defects.join(', ') : '')), path + '.evidence_state'),
+        c.verbatim ? verbatimBlock(c, path, r.law_version) : lawVersion(r.law_version),
+        marker(c, n, RECORD_ID.get(c)));
+      add(card, box);
+    });
+  }
 }
 
-function notConfirmedItem(n, i) {
-  var box = field(el('div', 'item caution'), 'not_confirmed[' + i + ']');
-  box.appendChild(label('div', 'ref', n.kind));
-  if (n.ref) box.appendChild(el('div', 'ref', n.ref));
-  if (n.duty) box.appendChild(el('div', null, n.duty));
-  if (n.provision) box.appendChild(el('div', 'ref', n.provision));
-  // §18.2 rule 6: a string written for a model is not the only text a reader gets.
-  if (n.detail && !/model use|for model/i.test(n.detail)) {
-    box.appendChild(el('div', 'basis', n.detail));
-  } else if (n.detail) {
-    box.appendChild(label('div', 'basis', 'Held, but not admitted as evidence here.'));
+function factsBlock(facts) {
+  var box = el('div', 'facts-box');
+  add(box, groupHead('You supplied'),
+    label('p', 'caption', 'Facts sent with this request, entered in fields, not read from the question.'));
+  var dl = el('dl', 'facts');
+  Object.keys(facts).forEach(function (k) {
+    var v = facts[k] && facts[k].value;
+    var shown = /_rupees$/.test(k) ? '₹' + rupees(v) : String(v);
+    dl.appendChild(field(dotted(el('dt'), k), 'facts.' + k));
+    dl.appendChild(field(el('dd', null, shown), 'facts.' + k + '.value'));
+  });
+  return add(box, dl);
+}
+
+function whatItIsNot(w) {
+  if (!w || (Array.isArray(w) && !w.length)) return null;       // never a heading alone
+  var box = el('div', 'bound');
+  add(box, groupHead('What this does not establish'));
+  if (Array.isArray(w)) {
+    var ul = el('ul');
+    w.forEach(function (line, i) { ul.appendChild(field(el('li', null, line), 'what_it_is_not[' + i + ']')); });
+    return add(box, ul);
   }
-  if (n.reason) box.appendChild(el('div', 'basis', n.reason));
-  return box;
+  return add(box, field(el('p', null, w), 'what_it_is_not'));
+}
+
+function status(text) {
+  var s = document.querySelector('[data-status]');
+  s.textContent = '';
+  // Re-set after a tick so a repeated message is announced again.
+  setTimeout(function () { s.textContent = text; }, 30);
+}
+
+function actions(r, card) {
+  var bar = el('div', 'actions');
+  var copy = label('button', 'act', 'Copy with sources');
+  copy.type = 'button';
+  copy.addEventListener('click', function () {
+    var panel = document.querySelector('[data-source-panel]');
+    var text = card.innerText + (panel && !panel.hidden ? '\n\n' + panel.innerText : '');
+    var done = function () { status('Copied with instruments and dates.'); };
+    var failed = function () { status('Copy failed. Select the text and copy it instead.'); };
+    try { navigator.clipboard.writeText(text).then(done, failed); } catch (e) { failed(); }
+  });
+  var edit = label('button', 'act', 'Edit question');
+  edit.type = 'button';
+  edit.addEventListener('click', function () {
+    var q = document.getElementById('q');
+    q.value = r.question;
+    q.focus();
+  });
+  add(bar, copy, edit);
+  if (r.demand_signal) {
+    var ds = label('button', 'act', 'Tell us this is blocking you');
+    ds.type = 'button';
+    ds.addEventListener('click', function () { status('Prototype: nothing was recorded.'); });
+    add(bar, ds);
+  }
+  return bar;
 }
 
 /* ── the turn ──────────────────────────────────────────────────────────── */
-function turnCard(r) {
-  var card = el('article', 'turn');
-  var s = STATE[r.state];
-  var head = el('h2', 'state');
-  head.setAttribute('data-state-heading', '');
-  head.appendChild(label('span', 'glyph', s.glyph));
-  head.appendChild(label('span', null, s.word));
-  head.id = 'state-' + r.turn_id;
-  // The accessible name is question + state, not the state alone (F11b).
-  card.setAttribute('aria-label', r.question + ' — ' + s.word);
-  card.setAttribute('data-state', r.state);
+function stampLine(r) {
+  var bits = ['Asked as of ' + human(r.as_of)];
+  bits.push(r.uses_model === false ? 'No model used'
+    : r.uses_model === true ? 'A model was used' : 'Model use: not stated');     // NG-4
+  if (r.evidence_pack && r.evidence_pack.retrieval_query) bits.push('Looked up ' + r.evidence_pack.retrieval_query);
+  return field(el('p', 'stamp', bits.join(' · ')), 'as_of,uses_model,evidence_pack.retrieval_query');
+}
 
-  card.appendChild(label('div', 'band', r.context.kind === 'document'
+function turnCard(r, n, parent, recs) {
+  var s = STATE[r.state];
+  var card = el('article', 'turn');
+  card.setAttribute('data-state', r.state);
+  var qid = 'q-' + r.turn_id, hid = 'h-' + r.turn_id;
+  card.setAttribute('aria-labelledby', qid + ' ' + hid);         // question + state (F11b)
+
+  var doc = r.context && r.context.kind === 'document';
+  add(card, field(el('p', 'band', doc
     ? 'About the open document · dated ' + human(r.context.document_date)
-    : 'About the Act'));
-  card.appendChild(field(el('div', 'question', r.question), 'question'));
-  card.appendChild(label('div', 'stamp', stamp(r)));
-  card.appendChild(head);
+    : 'About the Act'), 'context'));
+  if (r.parent_turn_id) {
+    var pl = label('p', 'parent', parent.r
+      ? 'Follow-up to turn ' + parent.n + ' · ' + parent.r.question
+      : 'Follow-up to an earlier turn that is not in this session');
+    pl.id = 'p-' + r.turn_id;
+    card.setAttribute('aria-describedby', pl.id);
+    add(card, pl);
+  }
+  var q = field(el('p', 'question', r.question), 'question');
+  q.id = qid;
+  q.setAttribute('tabindex', '-1');
+  add(card, q, stampLine(r));
+  var head = el('h2', 'state');
+  head.id = hid;
+  head.setAttribute('data-state-heading', '');
+  add(head, glyph(s.fill), label('span', null, stateWord(r)));
+  add(card, head);
 
   if (r.state === 'out_of_scope') {
-    // The reason names the body and its regulator, so the structured lines are
-    // suppressed rather than repeated (§25.1 rule 4).
-    card.appendChild(field(el('div', 'basis', r.reason), 'reason'));
-    card.appendChild(label('div', 'group', 'What this engine holds'));
-    (r.held || []).forEach(function (h, i) {
-      card.appendChild(field(el('div', null, h), 'held[' + i + ']'));
-    });
+    if (r.body) {
+      add(card, add(el('p', 'body-line'),
+        field(el('strong', null, r.body.name), 'body.name'),
+        field(el('span', null, ' · ' + r.body.regulator), 'body.regulator'),
+        label('span', null, ' · ' + words(SCOPE_STATUS, r.body.scope_status))));
+    }
+    add(card, field(el('p', 'reason', r.reason), 'reason'),
+      groupHead('What we hold'));
+    var ul = el('ul', 'plain');
+    (r.held || []).forEach(function (h, i) { ul.appendChild(field(el('li', null, h), 'held[' + i + ']')); });
+    add(card, ul, field(el('p', 'caption', r.scope.sentence), 'scope.sentence'), actions(r, card));
     return card;
   }
 
-  if (r.facts) {
-    card.appendChild(label('div', 'group', 'You supplied'));
-    var dl = el('dl', 'facts');
-    Object.keys(r.facts).forEach(function (k) {
-      dl.appendChild(field(label('dt', null, k), 'facts.' + k));
-      dl.appendChild(field(el('dd', null, String(r.facts[k].value)), 'facts.' + k + '.value'));
-    });
-    card.appendChild(dl);
+  if (r.state === 'answered') {
+    (r.rows || []).forEach(function (row, i) { add(card, rowItem(row, 'rows[' + i + ']')); });
+    if (recs.length) {
+      add(card, groupHead('Section text'));
+      recs.forEach(function (c, i) { add(card, marker(c, i + 1, RECORD_ID.get(c))); });
+    }
+    if ((r.rows || []).length || recs.length) add(card, lawVersion(r.law_version));
+    if (r.facts) add(card, factsBlock(r.facts));
+    if (r.figures && r.figures.length) {
+      add(card, groupHead('Dated figures (' + r.figures.length + ')', true));
+      r.figures.forEach(function (f, i) { add(card, figureBlock(f, i)); });
+    }
+    add(card, whatItIsNot(r.what_it_is_not), actions(r, card));
+    return card;
   }
 
-  if (r.not_confirmed && r.not_confirmed.length) {
-    // Not confirmed leads in `partial`: the abstention is the finding (§8).
-    card.appendChild(label('div', 'group lead', 'Not confirmed (' + r.not_confirmed.length + ')'));
-    r.not_confirmed.forEach(function (n, i) { card.appendChild(notConfirmedItem(n, i)); });
+  // partial: the abstention is the finding, so it leads (§8).
+  var unchecked = [];
+  if (r.scope_frame) {
+    unchecked = (r.scope_frame.unchecked || []).map(function (u) { return u.what; });
+    add(card, groupHead('Scope of this check', true),
+      field(el('p', 'scope-sentence', r.scope_frame.sentence), 'scope_frame.sentence'),
+      lawVersion(r.law_version));
   }
-  if (r.superseded && r.superseded.length) {
-    card.appendChild(label('div', 'group', 'Superseded (' + r.superseded.length + ')'));
-    r.superseded.forEach(function (sp, i) {
-      var box = field(el('div', 'item caution'), 'superseded[' + i + ']');
-      box.appendChild(el('div', null, sp.duty));
-      box.appendChild(el('div', 'ref', sp.provision));
-      box.appendChild(label('div', 'basis', 'Governed then: ' + sp.governed_then));
-      box.appendChild(label('div', 'basis', 'Governs now: ' + sp.governs_now));
-      card.appendChild(box);
+  var nc = r.not_confirmed || [];
+  if (nc.length) {
+    add(card, groupHead('Not confirmed (' + nc.length + ')', !r.scope_frame));
+    if (unchecked.length) add(card, label('p', 'caption', 'The duties listed as not checked above, and why.'));
+    nc.forEach(function (item, i) {
+      add(card, notConfirmedItem(item, i, r.context && r.context.document_date, unchecked.indexOf(item.duty) !== -1));
     });
   }
-  if (r.rows && r.rows.length) {
-    r.rows.forEach(function (row, i) { card.appendChild(rowItem(row, i)); });
-    var withSpans = r.rows.filter(function (x) { return x.cited_spans && x.cited_spans.length; });
-    if (withSpans.length) card.appendChild(citedSpans(withSpans[0].cited_spans, 'rows[0]'));
+  if (r.superseded && r.superseded.length) {
+    add(card, groupHead('Superseded (' + r.superseded.length + ')'));
+    r.superseded.forEach(function (sp, i) { add(card, supersededItem(sp, i)); });
   }
+  confirmedGroup(r, card, recs);
   if (r.figures && r.figures.length) {
-    card.appendChild(label('div', 'group lead', 'Dated figures (' + r.figures.length + ')'));
-    r.figures.forEach(function (f, i) { card.appendChild(figureBlock(f, i)); });
+    add(card, groupHead('Dated figures (' + r.figures.length + ')'));
+    r.figures.forEach(function (f, i) { add(card, figureBlock(f, i)); });
   }
-  if (r.confirmed && r.confirmed.length) {
-    // The count is the rendered array's own length, never scope_frame.checked_count
-    // (§18.2 rule 8), and the label says checked, not cleared.
-    card.appendChild(label('div', 'group', 'Checked against the Act (' + r.confirmed.length + ')'));
-  }
-  if (r.scope_frame && r.scope_frame.sentence) {
-    card.appendChild(label('div', 'group', 'Scope of this check'));
-    card.appendChild(field(el('div', 'scope-sentence', r.scope_frame.sentence), 'scope_frame.sentence'));
-  }
-  if (r.what_it_is_not) {
-    card.appendChild(label('div', 'group', 'What this does not establish'));
-    var w = r.what_it_is_not;
-    if (Array.isArray(w)) {
-      w.forEach(function (line, i) {
-        card.appendChild(field(el('div', 'bound', line), 'what_it_is_not[' + i + ']'));
-      });
-    } else {
-      card.appendChild(field(el('div', 'bound', w), 'what_it_is_not'));
-    }
-  }
+  add(card, whatItIsNot(r.what_it_is_not), actions(r, card));
+  if (doc) add(card, label('p', 'caption', 'Nothing was changed in your document.'));
   return card;
 }
 
+/* A collapsed earlier turn: one line, and not an answer container (§12). */
+function priorLine(r, n) {
+  var p = el('p', 'prior');
+  p.setAttribute('data-prior-state', r.state);
+  add(p, label('span', 'caption', 'Turn ' + n + ' · '), glyph(STATE[r.state].fill),
+    label('span', 'prior-word', ' ' + stateWord(r) + ' · '), field(el('span', null, r.question), 'question'));
+  return p;
+}
+
 /* ── sources ───────────────────────────────────────────────────────────── */
-function sourcesFor(r) {
-  var frag = document.createDocumentFragment();
-  var cites = (r.citations || []).slice();
-  var path = 'citations';
-  if (!cites.length && r.confirmed) {
-    cites = r.confirmed.filter(function (c) { return c.ref; });
-    path = 'confirmed';
+function citationsOf(r) {
+  if (r.citations && r.citations.length) return { list: r.citations, path: 'citations' };
+  return { list: (r.confirmed || []).filter(function (c) { return c.ref && !c.obligation_id; }), path: 'confirmed' };
+}
+
+function renderSources(r, n, recs, path) {
+  var panel = document.querySelector('[data-source-panel]');
+  var body = document.querySelector('[data-sources-body]');
+  body.textContent = '';
+  panel.hidden = false;
+  document.querySelector('[data-sources-head]').textContent = 'Sources · Turn ' + n + ' · '
+    + (r.context && r.context.kind === 'document' ? 'About the open document' : 'About the Act');
+  var textInCard = path === 'confirmed';
+  recs.forEach(function (c, i) {
+    var rec = citationRecord(c, i + 1, path + '[' + (r[path] || []).indexOf(c) + ']', r.law_version, textInCard && !!c.verbatim);
+    RECORD_ID.set(c, rec.id);
+    body.appendChild(rec);
+  });
+  if (!recs.length) {
+    body.appendChild(label('p', 'caption', r.figures && r.figures.length
+      ? 'This turn has no citations.' : 'Sources for this turn: none supplied.'));
   }
-  cites.forEach(function (c, i) { frag.appendChild(citation(c, i, path)); });
-  var lv = lawVersion(r.law_version);
-  if (lv) frag.appendChild(lv);
-  if (r.evidence_pack) {
-    frag.appendChild(label('div', 'group', 'Evidence pack'));
-    var p = r.evidence_pack;
-    frag.appendChild(field(label('div', 'ref', 'Route: ' + p.route), 'evidence_pack.route'));
+  var p = r.evidence_pack;
+  if (p) {
+    var ep = el('div', 'pack');
+    add(ep, groupHead('Evidence pack'),
+      p.retrieval_query ? field(el('p', 'ref', 'Looked up ' + p.retrieval_query), 'evidence_pack.retrieval_query') : null,
+      field(el('p', 'ref', 'Route: ' + p.route), 'evidence_pack.route'));
     (p.usable_keys || []).forEach(function (k, i) {
-      frag.appendChild(field(el('div', 'ref', k), 'evidence_pack.usable_keys[' + i + ']'));
+      add(ep, field(dotted(el('p', 'ref'), 'Usable: ' + k), 'evidence_pack.usable_keys[' + i + ']'));
     });
-    (p.missing || []).forEach(function (m, i) {
-      frag.appendChild(field(el('div', 'basis', m), 'evidence_pack.missing[' + i + ']'));
+    (p.unusable_keys || []).forEach(function (k, i) {
+      add(ep, field(dotted(el('p', 'ref'), 'Not usable: ' + k), 'evidence_pack.unusable_keys[' + i + ']'));
     });
+    if ((p.missing || []).length) add(ep, label('p', 'caption', 'Reported missing by the pack:'));
+    (p.missing || []).forEach(function (m, i) { add(ep, readerDetail(m, 'evidence_pack.missing[' + i + ']')); });
+    body.appendChild(ep);
   }
-  return frag;
+}
+
+/* ── composer and rail ─────────────────────────────────────────────────── */
+function setComposer(r) {
+  document.querySelector('[data-today]').textContent = today();
+  var docRadio = document.querySelector('input[value="document"]');
+  var genRadio = document.querySelector('input[value="general"]');
+  var hint = document.querySelector('[data-doc-hint]');
+  var docDate = r && r.context && r.context.kind === 'document' && r.context.document_date;
+  if (docDate) {
+    // The pane has a dated document open, so the next question can be about it (L15, NG-9).
+    docRadio.removeAttribute('aria-disabled');
+    docRadio.checked = true;
+    hint.removeAttribute('data-chrome');
+    field(hint, 'context.document_date').textContent = 'Checks the open document, dated '
+      + human(docDate) + ', against the Companies Act, 2013.';
+  } else {
+    genRadio.checked = true;
+    hint.setAttribute('data-chrome', '');
+  }
+  document.querySelector('[data-doc-choice]').addEventListener('click', function (e) {
+    if (docRadio.getAttribute('aria-disabled') === 'true') { e.preventDefault(); genRadio.checked = true; }
+  });
+  if (!r) return;
+  // After a turn: compact, still first (see index.html).
+  var full = document.getElementById('composer-full');
+  var summary = document.querySelector('[data-summary]');
+  var change = document.querySelector('[data-change]');
+  full.hidden = true;
+  summary.hidden = false;
+  document.querySelector('[data-summary-text]').textContent = 'Next question: about '
+    + (docDate ? 'the open document' : 'the Companies Act, 2013') + '.';
+  change.addEventListener('click', function () {
+    full.hidden = !full.hidden;
+    change.setAttribute('aria-expanded', String(!full.hidden));
+    change.textContent = full.hidden ? 'Change' : 'Done';
+  });
+  var q = document.getElementById('q');
+  q.rows = 2;
+  q.placeholder = 'Ask another question';
+}
+
+function renderRail(session) {
+  var rail = document.querySelector('[data-rail]');
+  var list = document.querySelector('[data-rail-list]');
+  rail.hidden = false;
+  session.forEach(function (r, i) {
+    var li = el('li');
+    var b = el('button', 'rail-row');
+    b.type = 'button';
+    add(b, label('span', 'rail-word', stateWord(r) + ' '), glyph(STATE[r.state].fill),
+      field(el('span', 'rail-q', r.question), 'question'),
+      field(el('span', 'caption', 'Asked as of ' + human(r.as_of)), 'as_of'));
+    b.addEventListener('click', function () {
+      var target = i === session.length - 1
+        ? document.getElementById('h-' + r.turn_id)
+        : document.querySelector('[data-prior-state]');
+      if (target) { target.setAttribute('tabindex', '-1'); target.focus(); }
+    });
+    list.appendChild(add(li, b));
+  });
+}
+
+function wireComposer() {
+  var form = document.querySelector('[data-composer]');
+  var q = document.getElementById('q');
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();                          // NG-1: Ask never navigates
+    status(q.value.trim()
+      ? 'Prototype: nothing was sent. This page renders saved examples only.'
+      : 'Type a question first. (Prototype: nothing is sent either way.)');
+  });
+  q.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+      e.preventDefault();
+      if (form.requestSubmit) form.requestSubmit(); else form.dispatchEvent(new Event('submit', { cancelable: true }));
+    }
+  });
 }
 
 /* ── boot ──────────────────────────────────────────────────────────────── */
-function render(name) {
-  var r = FIXTURES[name];
-  var turns = document.querySelector('[data-turns]');
-  var panel = document.querySelector('[data-source-panel]');
-  var body = document.querySelector('[data-sources-body]');
-  turns.textContent = '';
-  body.textContent = '';
-  if (!r) {
-    turns.appendChild(label('p', 'basis', 'No fixture named ' + name + '.'));
-    return;
-  }
-  document.querySelector('[data-holds]').textContent =
-    r.scope.held.join(', ') + ' — ' + r.scope.sentence;
-  document.getElementById('asof').value = human(r.as_of);
-  turns.appendChild(turnCard(r));
-
-  var hasSources = (r.citations && r.citations.length)
-    || (r.confirmed && r.confirmed.filter(function (c) { return c.ref; }).length);
-  panel.hidden = !hasSources;
-  if (hasSources) {
-    document.querySelector('[data-sources-head]').textContent =
-      'Sources · ' + (r.context.kind === 'document' ? 'About the open document' : 'About the Act');
-    body.appendChild(sourcesFor(r));
-  }
+function byTurnId(id) {
+  var names = Object.keys(FIXTURES);
+  for (var i = 0; i < names.length; i++) if (FIXTURES[names[i]].turn_id === id) return FIXTURES[names[i]];
+  return null;
 }
 
-var params = new URLSearchParams(location.search);
-render(params.get('fixture') || 'answered_small_company');
+function render(name) {
+  wireComposer();
+  var turns = document.querySelector('[data-turns]');
+  if (!name) { setComposer(null); return; }                     // the empty state
+  var r = FIXTURES[name];
+  if (!r) {
+    setComposer(null);
+    turns.appendChild(label('p', 'basis', 'No saved example has that name.'));
+    return;
+  }
+  document.body.classList.add('has-turns');
+  var parent = r.parent_turn_id ? byTurnId(r.parent_turn_id) : null;
+  var session = parent ? [parent, r] : [r];
+  var n = session.length;
+  setComposer(r);
+
+  var src = citationsOf(r);
+  renderSources(r, n, src.list, src.path);                     // records first: markers point at them
+  if (parent) turns.appendChild(priorLine(parent, 1));
+  turns.appendChild(turnCard(r, n, { n: 1, r: parent }, src.list));
+  renderRail(session);
+}
+
+render(new URLSearchParams(location.search).get('fixture'));

@@ -6,6 +6,7 @@
  "acquisition_method": "india_code_dspace_api",
  "registered_at": "2026-09-11T09:16:31Z",
  "artifact_sha256": "sha256:0c0b29fd00aae9c056833d3527e546fdacf5549e59efad2357fd40346c17ba31",
+ "local_artifact": "corpus/sources/kmp_rules_2014.pdf",
  "stored_text": "corpus/rules/kmp_rules_2014.txt",
  "stored_text_sha256": "sha256:bdd7e416183478ad6059c3105ea2a56ca3ddbc8bc185d2e556965860c768c21a",
  "operative_clause_rule_8": "8. Appointment of Key Managerial Personnel. - Every listed company and every other public company having a paid-up share capital of tencrore rupees or more shall have whole-time key managerial personnel.",

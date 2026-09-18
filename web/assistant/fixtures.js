@@ -54,7 +54,7 @@ window.PLACEDON_ASK_FIXTURES = {
     "instrument": "G.S.R. 880(E), Companies (Specification of Definition Details) Amendment Rules, 2025, dated 01-12-2025",
     "key": "small_company.paid_up_capital.prescribed",
     "rupees": 100000000,
-    "source_url": "UNRESOLVED — see scripts/register_gsr880e.py"
+    "source_url": "https://egazette.gov.in/WriteReadData/2025/268124.pdf"
    },
    {
     "amount": "₹100 crore",
@@ -64,7 +64,7 @@ window.PLACEDON_ASK_FIXTURES = {
     "instrument": "G.S.R. 880(E), Companies (Specification of Definition Details) Amendment Rules, 2025, dated 01-12-2025",
     "key": "small_company.turnover.prescribed",
     "rupees": 1000000000,
-    "source_url": "UNRESOLVED — see scripts/register_gsr880e.py"
+    "source_url": "https://egazette.gov.in/WriteReadData/2025/268124.pdf"
    }
   ],
   "generated_at": "2026-09-15T00:00:00Z",
@@ -354,7 +354,7 @@ window.PLACEDON_ASK_FIXTURES = {
     "instrument": "G.S.R. 880(E), Companies (Specification of Definition Details) Amendment Rules, 2025, dated 01-12-2025",
     "key": "small_company.turnover.prescribed",
     "rupees": 1000000000,
-    "source_url": "UNRESOLVED — see scripts/register_gsr880e.py"
+    "source_url": "https://egazette.gov.in/WriteReadData/2025/268124.pdf"
    }
   ],
   "generated_at": "2026-09-15T00:00:00Z",

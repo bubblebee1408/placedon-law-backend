@@ -102,7 +102,9 @@ class ThresholdUnavailable(LookupError):
 _INDIA_CODE = "https://indiacode.gov.in/handle/123456789"
 # The India Code handle for 880(E) is UNRESOLVED -- not looked up from a primary
 # host, and inventing one would be a fabricated citation. The person who
-# downloads it records the real source in the registration record.
+# downloads it records the real source in the registration record, and once that
+# record is attested the served figure carries it (_source_880); this marker is
+# what an UNSERVABLE 880(E) row shows.
 SOURCE_880 = "UNRESOLVED — see scripts/register_gsr880e.py"
 
 # The Act's own limbs. These ARE in our corpus verbatim, so they are usable --
@@ -141,8 +143,10 @@ def _prescribed_state() -> tuple[str, str, str]:
     artifact it was asserting, and the whole point of the registration record is
     that the state follows the evidence rather than someone's memory of it.
     """
+    REF = "S-002"          # the ledger row a reader is pointed at
     try:
-        from scripts.register_gsr700e import registration, is_attested
+        from scripts.register_gsr700e import (registration, is_attested, attestation_gaps,
+                                              local_copy_note, provenance_problem)
     except ImportError:                                     # pragma: no cover
         return UNRESOLVED, "this instrument has not been acquired", ""
 
@@ -154,6 +158,25 @@ def _prescribed_state() -> tuple[str, str, str]:
             "HTTP 502 so checker.robots declines, and egazette chains to a root "
             "absent from this machine's trust store. Acquire under S-002: "
             "download in a browser, then scripts/register_gsr700e.py.")
+    gaps = attestation_gaps(rec)
+    artifact_gaps = [g for g in gaps if g.startswith("artifact:")]
+    if artifact_gaps:
+        # The file itself is the evidence. If it is gone, or is not the bytes that
+        # were checked, nothing else in the record can make up for it -- and the
+        # reader must be told that, not that a reviewer or a source is missing.
+        return UNRESOLVED, _artifact_reader_note(artifact_gaps, REF), (
+            f"{'; '.join(artifact_gaps)}. Restore the artifact from git, or re-register "
+            f"the file you hold; the figure is refused until its bytes match the record.")
+    if gaps and all(g.startswith("source:") for g in gaps):
+        # A-001 again, on the 2022 instrument: a reviewer did check it. Saying
+        # otherwise would be false; what is missing is where the file came from.
+        return UNRESOLVED, (
+            "the instrument is held and a named reviewer checked it, but the record does "
+            "not say where it was downloaded from and no copy from an official host "
+            "corroborates it (reference S-002)"), (
+            f"artifact registered ({rec.get('artifact_sha256', '?')[:23]}…) and attested, "
+            f"but unsourced: {provenance_problem(rec)}. The person who downloaded it runs "
+            "scripts/register_gsr700e.py --source --from <URL> --at <YYYY-MM-DD>.")
     if not is_attested(rec):
         missing = [k for k in ("identity_checked_by", "verbatim_clause_checked_by")
                    if not rec.get(k)]
@@ -161,25 +184,66 @@ def _prescribed_state() -> tuple[str, str, str]:
             "the instrument is held but no reviewer has confirmed it is the right "
             "one and that its clause is reproduced verbatim (reference S-002)"), (
             f"artifact registered ({rec.get('artifact_sha256', '?')[:23]}…) but not "
-            f"attested: {', '.join(missing) or 'status is not CORROBORATED'}. "
+            f"attested: {', '.join(missing) or '; '.join(gaps)}. "
             "Hashing proves the bytes did not change, not that they are the right "
             "instrument or that the clause survived extraction. Run "
-            "scripts/register_gsr700e.py --attest <reviewer-id>.")
+            "scripts/register_gsr700e.py --attest <reviewer-id> --from <URL> --at <DATE>.")
+    if rec.get("downloaded_from"):
+        source = f"downloaded from {rec['downloaded_from']} on {rec['downloaded_at']}"
+    else:
+        copy_ = rec["corroborating_copy"]
+        source = (f"download source not recorded; {copy_['match']} copy at {copy_['url']} "
+                  f"retrieved {copy_['retrieved_at']} ({copy_.get('recorded_by') or 'unlabelled'})")
+    # A copy the record names but the repository no longer holds does not unsay the
+    # address and hash recorded when it was fetched, so the figure still serves -- but
+    # an operator is told, because the record is claiming a file that is not there.
+    gone = local_copy_note(rec)
     return CORROBORATED, (
         f"held and confirmed by a named reviewer on "
         f"{rec['identity_checked_at'][:10]}"), (
         f"registered and attested by {rec['identity_checked_by']} at "
         f"{rec['identity_checked_at']}; artifact "
-        f"{rec.get('artifact_sha256', '?')[:23]}…")
+        f"{rec.get('artifact_sha256', '?')[:23]}…; {source}"
+        + (f"; {gone}" if gone else ""))
 
+
+
+def _artifact_reader_note(artifact_gaps: list[str], ref: str) -> str:
+    """What to tell a reader when the held file cannot carry the record's claim.
+
+    Each refusal has its own reason, and only one of them is "the bytes changed".
+    Saying that when the file is simply absent -- or when the record points somewhere
+    this system will not read -- describes a comparison that never happened.
+    """
+    joined = " ".join(artifact_gaps)
+    if "does not name" in joined:
+        reason = ("the record does not say which file it holds, so what was checked "
+                  "cannot be re-read")
+    elif "is not on disk" in joined:
+        reason = ("the file the record names is not on disk here, so what was checked "
+                  "cannot be re-read")
+    elif "cannot be read:" in joined:
+        reason = ("the record points at a file outside this repository, which is not "
+                  "read, so what was checked cannot be re-read")
+    elif "is not a sha256" in joined:
+        reason = ("the record's own hash of the file is malformed, so the file cannot be "
+                  "checked against it")
+    elif "no longer hashes" in joined:
+        reason = ("the file on record is not the file that was checked: its bytes no "
+                  "longer match what was recorded when it was registered")
+    else:
+        reason = "the file that was checked cannot be re-read"
+    return f"the instrument is held, but {reason} (reference {ref})"
 
 def _prescribed_state_880() -> tuple[str, str, str]:
     """(evidence state, note) for the 2025 amounts. Derived, never asserted.
 
     Same shape as _prescribed_state, for the instrument that SUPERSEDED 700(E).
     """
+    REF = "S-003"          # the ledger row a reader is pointed at
     try:
-        from scripts.register_gsr880e import registration, is_attested
+        from scripts.register_gsr880e import (registration, is_attested, attestation_gaps,
+                                              local_copy_note, provenance_problem)
     except ImportError:                                     # pragma: no cover
         return UNRESOLVED, "this instrument has not been acquired", ""
 
@@ -192,21 +256,49 @@ def _prescribed_state_880() -> tuple[str, str, str]:
             "not read in the Gazette (reference S-003)"), (
             "no registration on record. Acquire under S-003: download the Gazette "
             "artifact in a browser, then scripts/register_gsr880e.py.")
+    gaps = attestation_gaps(rec)
+    artifact_gaps = [g for g in gaps if g.startswith("artifact:")]
+    if artifact_gaps:
+        # The file itself is the evidence. If it is gone, or is not the bytes that
+        # were checked, nothing else in the record can make up for it -- and the
+        # reader must be told that, not that a reviewer or a source is missing.
+        return UNRESOLVED, _artifact_reader_note(artifact_gaps, REF), (
+            f"{'; '.join(artifact_gaps)}. Restore the artifact from git, or re-register "
+            f"the file you hold; the figure is refused until its bytes match the record.")
+    if gaps and all(g.startswith("source:") for g in gaps):
+        # A-001: a reviewer did check it. Saying otherwise would be false; what is
+        # missing is where the file came from.
+        return UNRESOLVED, (
+            "the instrument is held and a named reviewer checked it, but the record does "
+            "not say where it was downloaded from and no copy from an official host "
+            "corroborates it (reference S-003)"), (
+            f"artifact registered ({rec.get('artifact_sha256', '?')[:23]}…) and attested, "
+            f"but unsourced: {provenance_problem(rec)}. The person who downloaded it runs "
+            "scripts/register_gsr880e.py --source --from <URL> --at <YYYY-MM-DD>.")
     if not is_attested(rec):
-        missing = [k for k in ("identity_checked_by", "verbatim_clause_checked_by")
-                   if not rec.get(k)]
         return UNRESOLVED, (
             "the instrument is held but no reviewer has confirmed it is the right "
             "one and that its clause is reproduced verbatim (reference S-003)"), (
             f"artifact registered ({rec.get('artifact_sha256', '?')[:23]}…) but not "
-            f"attested: {', '.join(missing) or 'status is not CORROBORATED'}. Run "
-            "scripts/register_gsr880e.py --attest <reviewer-id>.")
+            f"attested: {'; '.join(gaps)}. Run scripts/register_gsr880e.py --attest "
+            "<reviewer-id> --from <URL> --at <YYYY-MM-DD>.")
+    if rec.get("downloaded_from"):
+        source = f"downloaded from {rec['downloaded_from']} on {rec['downloaded_at']}"
+    else:
+        copy_ = rec["corroborating_copy"]
+        source = (f"download source not recorded; {copy_['match']} copy at {copy_['url']} "
+                  f"retrieved {copy_['retrieved_at']} ({copy_.get('recorded_by') or 'unlabelled'})")
+    # A copy the record names but the repository no longer holds does not unsay the
+    # address and hash recorded when it was fetched, so the figure still serves -- but
+    # an operator is told, because the record is claiming a file that is not there.
+    gone = local_copy_note(rec)
     return CORROBORATED, (
         f"held and confirmed by a named reviewer on "
         f"{rec['identity_checked_at'][:10]}"), (
         f"registered and attested by {rec['identity_checked_by']} at "
         f"{rec['identity_checked_at']}; artifact "
-        f"{rec.get('artifact_sha256', '?')[:23]}…")
+        f"{rec.get('artifact_sha256', '?')[:23]}…; {source}"
+        + (f"; {gone}" if gone else ""))
 
 
 # The date G.S.R. 880(E) took effect, and therefore the day after which the 2022
@@ -225,9 +317,34 @@ _GSR880_FROM = date(2025, 12, 1)
 # 01-12-2025 the only record covering it is 880(E), which is not servable until a
 # person acquires and attests it. The engine therefore REFUSES rather than
 # serving either the superseded figure or an unverified new one.
+def _source_880() -> str:
+    """Where a served 880(E) figure points: the address the registration record
+    carries (the recorded download, else the corroborating copy). The UNRESOLVED
+    marker stays only while the record is not attested -- when nothing is served."""
+    try:
+        from scripts.register_gsr880e import registration, served_source_url
+    except ImportError:                                     # pragma: no cover
+        return SOURCE_880
+    return served_source_url(registration()) or SOURCE_880
+
+
+def _source_700() -> str:
+    """Where a served 700(E) figure points. Same rule as _source_880: the address the
+    registration record carries. The India Code handle stays on an unservable row --
+    it is where the instrument is listed, which is not a claim about where our file
+    came from, and nothing is served from that row anyway."""
+    try:
+        from scripts.register_gsr700e import registration, served_source_url
+    except ImportError:                                     # pragma: no cover
+        return f"{_INDIA_CODE}/508916"
+    return served_source_url(registration()) or f"{_INDIA_CODE}/508916"
+
+
 def _prescribed() -> tuple[Threshold, ...]:
     state, note, op_note = _prescribed_state()
     state880, note880, op_note880 = _prescribed_state_880()
+    source700 = _source_700()
+    source880 = _source_880()
     _2022 = ("G.S.R. 700(E), Companies (Specification of Definition Details) "
              "Amendment Rules, 2022, dated 15-09-2022")
     _2025 = ("G.S.R. 880(E), Companies (Specification of Definition Details) "
@@ -236,17 +353,17 @@ def _prescribed() -> tuple[Threshold, ...]:
     return (
         Threshold("small_company.paid_up_capital.prescribed", Money.crore(4),
                   date(2022, 9, 15), _GSR880_FROM - timedelta(days=1),
-                  _2022, f"{_INDIA_CODE}/508916", state, note + superseded, op_note),
+                  _2022, source700, state, note + superseded, op_note),
         Threshold("small_company.turnover.prescribed", Money.crore(40),
                   date(2022, 9, 15), _GSR880_FROM - timedelta(days=1),
-                  _2022, f"{_INDIA_CODE}/508916", state, note + superseded, op_note),
+                  _2022, source700, state, note + superseded, op_note),
         # The 2025 amounts are a CLAIM PENDING ATTESTATION, not a fact. They are
         # here so the artifact can be checked against them (register_gsr880e's
         # clause regex requires these words), and they are unservable until it is.
         Threshold("small_company.paid_up_capital.prescribed", Money.crore(10),
-                  _GSR880_FROM, None, _2025, SOURCE_880, state880, note880, op_note880),
+                  _GSR880_FROM, None, _2025, source880, state880, note880, op_note880),
         Threshold("small_company.turnover.prescribed", Money.crore(100),
-                  _GSR880_FROM, None, _2025, SOURCE_880, state880, note880, op_note880),
+                  _GSR880_FROM, None, _2025, source880, state880, note880, op_note880),
     )
 
 
@@ -442,7 +559,11 @@ def _test() -> None:
     from unittest import mock
     import scripts.register_gsr700e as reg
 
-    unattested = {"artifact_sha256": "sha256:" + "ab" * 32,
+    unattested = {"artifact_sha256": reg.registration()["artifact_sha256"],
+                  "local_artifact": reg.registration()["local_artifact"],
+                  "classification": "VERIFIED_INSTRUMENT",
+                  "downloaded_from": "https://indiacode.gov.in/test-stub.pdf",
+                  "downloaded_at": "2026-09-04",
                   "identity_checked_by": None, "identity_checked_at": None,
                   "verbatim_clause_checked_by": None,
                   "verbatim_clause_checked_at": None,
@@ -487,8 +608,112 @@ def _test() -> None:
         check(st4 == UNRESOLVED, "no registration means no servable threshold")
         check("S-002" in note4, "...and the note names the open task")
 
+    # A-001 on the 2022 instrument (P-2): both human checks, and nothing saying where
+    # the file came from. Refused -- and the note must not blame a reviewer who did check it.
+    unsourced700 = {k: v for k, v in reg.attested_stub("reviewer-700").items()
+                    if k not in ("downloaded_from", "downloaded_at", "corroborating_copy")}
+    with mock.patch.object(reg, "registration", lambda: unsourced700):
+        st700, note700, op700 = _prescribed_state()
+        check(st700 == UNRESOLVED, f"700(E) checked but unsourced is refused ({st700})")
+        check("no reviewer has confirmed" not in note700 and "downloaded from" in note700,
+              f"...and the reader note names the missing source, not a missing review "
+              f"({note700[:70]}…)")
+        check("--source --from" in op700,
+              "...and the operator note names the command that records it")
+        try:
+            operative_small_company_limits(in_2022)
+            check(False, "...and a 2024 date is refused")
+        except ThresholdUnavailable:
+            check(True, "...and a 2024 date is refused")
+    with mock.patch.object(reg, "registration",
+                           lambda: reg.attested_stub() | {"classification": "WRONG_INSTRUMENT"}):
+        try:
+            served700 = lookup("small_company.paid_up_capital.prescribed", in_2022)
+            check(False, f"a WRONG_INSTRUMENT 700(E) record must not serve ({served700.amount})")
+        except ThresholdUnavailable:
+            check(True, "a 700(E) record classified WRONG_INSTRUMENT serves nothing")
+    # A served 2022 figure points at the address its record carries, not at a constant.
+    with mock.patch.object(reg, "registration", lambda: reg.attested_stub()):
+        t700 = lookup("small_company.turnover.prescribed", in_2022)
+        check(t700.source_url == "https://egazette.gov.in/test-stub.pdf",
+              f"an attested 700(E) figure carries the recorded download address "
+              f"({t700.source_url})")
+    with mock.patch.object(reg, "registration", lambda: unsourced700):
+        held700 = held("small_company.turnover.prescribed", in_2022)
+        check(held700 and all(t.source_url.endswith("/508916") and not t.servable
+                              for t in held700),
+              "an unsourced 700(E) keeps the India Code handle, and is not served")
+
     # ── the 2025 instrument is gated exactly the same way ────────────────────
     import scripts.register_gsr880e as reg880
+
+    # Fix round 2: the HELD artifact is re-read on the serving path. A record whose
+    # file is gone, or is no longer the bytes that were checked, refuses -- and the
+    # reader is told the FILE is wrong, not that the provenance is missing.
+    # Each refusal names its OWN reason: only one of these is "the bytes changed", and
+    # saying that of an absent or unnamed file describes a comparison that never ran.
+    for label, broken, expected in (
+            ("a file that is not on disk",
+             reg880.attested_stub() | {"local_artifact": "corpus/sources/no_such_file.pdf"},
+             "is not on disk here"),
+            ("a file whose bytes are not the recorded ones",
+             reg880.attested_stub() | {"artifact_sha256": "sha256:" + "cd" * 32},
+             "its bytes no longer match"),
+            ("a record naming no file at all",
+             {k: v for k, v in reg880.attested_stub().items() if k != "local_artifact"},
+             "does not say which file"),
+            ("a file the record points at outside the repository",
+             reg880.attested_stub() | {"local_artifact": "../../etc/hosts"},
+             "outside this repository"),
+            ("a recorded hash that is not a sha256",
+             reg880.attested_stub() | {"artifact_sha256": "not-a-hash"},
+             "hash of the file is malformed")):
+        with reg880.stub_registration(broken):
+            st_a, note_a, op_a = _prescribed_state_880()
+            check(st_a == UNRESOLVED, f"{label} is refused ({st_a})")
+            check(expected in note_a,
+                  f"...and the reader note says why: {expected!r} ({note_a[:80]}…)")
+            check("no reviewer has confirmed" not in note_a
+                  and "downloaded from" not in note_a,
+                  "...not about a reviewer or a source, neither of which is missing")
+            check("artifact" in op_a,
+                  f"...while the operator note names the artifact problem ({op_a[:80]}…)")
+            try:
+                lookup("small_company.paid_up_capital.prescribed", date(2026, 9, 15))
+                check(False, f"...and nothing is served for {label}")
+            except ThresholdUnavailable:
+                check(True, f"...and nothing is served for {label}")
+
+
+    # Fix round 1: a record naming a stored copy it no longer holds still serves --
+    # the address and hash were recorded when the copy was fetched, and deleting a
+    # file does not unsay them -- but the operator note must say the file is gone,
+    # and a copy that IS there and has changed must refuse.
+    copy_gone = {k: v for k, v in reg880.attested_stub().items()
+                 if k not in ("downloaded_from", "downloaded_at")} | {
+                     "corroborating_copy": {
+                         "url": "https://egazette.gov.in/WriteReadData/2025/268124.pdf",
+                         "retrieved_at": "2026-09-17T05:40:14Z",
+                         "sha256": reg880.attested_stub()["artifact_sha256"],
+                         "match": "identical",
+                         "local_copy": "corpus/sources/no_such_copy.pdf"}}
+    with reg880.stub_registration(copy_gone):
+        st9, note9, op9 = _prescribed_state_880()
+        check(st9 == CORROBORATED,
+              f"a corroborating copy that is no longer on disk still serves ({st9})")
+        check("not on disk" in op9 and "no_such_copy.pdf" in op9,
+              f"...and the operator note says the file is gone ({op9[-90:]})")
+        check("not on disk" not in note9,
+              "...while the reader note stays about the law, not our filesystem")
+    changed_copy = copy_gone | {"corroborating_copy": copy_gone["corroborating_copy"] | {
+        "local_copy": "corpus/sources/gsr880e_2025.pdf", "sha256": "sha256:" + "cd" * 32}}
+    with reg880.stub_registration(changed_copy):
+        try:
+            lookup("small_company.paid_up_capital.prescribed", date(2026, 9, 15))
+            check(False, "a stored copy whose bytes are not the recorded ones must not serve")
+        except ThresholdUnavailable:
+            check(True, "a stored copy whose bytes are not the recorded ones serves nothing")
+
     with reg880.stub_registration(None):
         st5, note5, _op5 = _prescribed_state_880()
         check(st5 == UNRESOLVED, f"880(E) unacquired is UNRESOLVED ({st5})")
@@ -503,12 +728,64 @@ def _test() -> None:
         st6, _, _ = _prescribed_state_880()
         check(st6 == UNRESOLVED, "downloading 880(E) without attesting is not enough")
 
+    # A-001: both human checks, but nothing says where the file came from. Refused,
+    # and the note must not blame a reviewer who did check it.
+    unsourced = {k: v for k, v in reg880.attested_stub("reviewer-880").items()
+                 if k not in ("downloaded_from", "downloaded_at", "corroborating_copy")}
+    with reg880.stub_registration(unsourced):
+        st8, note8, op8 = _prescribed_state_880()
+        check(st8 == UNRESOLVED, f"880(E) checked but unsourced is refused ({st8})")
+        check("no reviewer has confirmed" not in note8 and "downloaded from" in note8,
+              f"...and the reader note names the missing source, not a missing review ({note8[:70]}…)")
+        check("--source --from" in op8,
+              "...and the operator note names the command that records it")
+        try:
+            operative_small_company_limits(date(2026, 9, 9))
+            check(False, "...and a 2026 date is refused")
+        except ThresholdUnavailable:
+            check(True, "...and a 2026 date is refused")
+
+    # Fix round 1 (main session's repro): a record the classifier called the wrong
+    # instrument must not serve, however many names are on it.
+    with reg880.stub_registration(reg880.attested_stub() | {"classification": "WRONG_INSTRUMENT"}):
+        try:
+            served = lookup("small_company.paid_up_capital.prescribed", date(2026, 9, 15))
+            check(False, f"a WRONG_INSTRUMENT record must not serve ({served.amount})")
+        except ThresholdUnavailable:
+            check(True, "a record classified WRONG_INSTRUMENT serves nothing")
+
+    # A served figure points at where the file came from, never at "UNRESOLVED".
+    with reg880.stub_registration(reg880.attested_stub()):
+        t880 = lookup("small_company.turnover.prescribed", date(2026, 9, 15))
+        check(t880.source_url == "https://egazette.gov.in/test-stub.pdf",
+              f"an attested 880(E) figure carries the recorded download address ({t880.source_url})")
+    copy_only = {k: v for k, v in reg880.attested_stub().items()
+                 if k not in ("downloaded_from", "downloaded_at")} | {"corroborating_copy": {
+                     "url": "https://egazette.gov.in/WriteReadData/2025/268124.pdf",
+                     "retrieved_at": "2026-09-17T05:40:14Z",
+                     "sha256": reg880.attested_stub()["artifact_sha256"],
+                     "match": "identical"}}
+    with reg880.stub_registration(copy_only):
+        t880c = lookup("small_company.paid_up_capital.prescribed", date(2026, 9, 15))
+        check(t880c.source_url == "https://egazette.gov.in/WriteReadData/2025/268124.pdf",
+              f"...or the corroborating copy's address when none is recorded ({t880c.source_url})")
+    with reg880.stub_registration(reg880.registered_unattested_stub()):
+        held880 = held("small_company.paid_up_capital.prescribed", date(2026, 9, 15))
+        check(held880 and all(t.source_url == SOURCE_880 and not t.servable for t in held880),
+              "an unattested 880(E) keeps the UNRESOLVED marker, and is not served")
+    for t in held("small_company.paid_up_capital.prescribed", date(2026, 9, 15)):
+        if t.servable:
+            check(t.source_url.startswith("https://") and "UNRESOLVED" not in t.source_url,
+                  f"the live served figure names a real source ({t.source_url})")
+
     with reg880.stub_registration(reg880.attested_stub("reviewer-880")):
         st7, note7, _op7 = _prescribed_state_880()
         check(st7 == CORROBORATED, f"an attested 880(E) becomes servable ({st7})")
         check("named reviewer" in note7,
               "...the reader note says a reviewer confirmed it")
         check("reviewer-880" in _op7, "...and the operator note names the reviewer")
+        check("downloaded from https://egazette.gov.in/" in _op7,
+              "...and where the file was downloaded from")
         cap25, turn25 = operative_small_company_limits(date(2026, 9, 9))
         check(cap25 == Money.crore(10) and turn25 == Money.crore(100),
               f"...and the 2025 limits then come through ({cap25} / {turn25})")

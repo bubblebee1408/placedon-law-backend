@@ -8,6 +8,7 @@
  "registered_at": "2026-09-13T17:40:43Z",
  "acquisition_method": "human_browser",
  "artifact_sha256": "sha256:686104cd223d808491c28536cbf5a983924341c7f6f19444507ed3abc2e1dec4",
+ "local_artifact": "corpus/sources/pas_rules_2014.pdf",
  "stored_text": "corpus/rules/pas_rules_2014.txt",
  "stored_text_sha256": "sha256:275012e553c137c88b1973c9dbe69c71304d7e8b2aac08e4eff1b5aac74b8fea",
  "operative_clause": "Whenever a company having a share capital makes any allotment of its securities, the company shall, within thirty days thereafter, file with the Registrar a return of allotment in Form PAS - 3 , along with the fee as specified in the Companies (Registration Offices and Fees) Rules, 2014.",

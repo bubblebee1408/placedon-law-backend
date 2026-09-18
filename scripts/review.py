@@ -59,7 +59,7 @@ sys.path.insert(0, str(ROOT))
 
 from checker import admission as adm          # noqa: E402
 from checker import review_queue as rq        # noqa: E402
-from checker.pdf_text import extract_pages    # noqa: E402
+from checker.pdf_pages import extract_pages    # noqa: E402
 
 PDF = ROOT / "corpus/sources/companies_meetings_board_powers_rules_2014.pdf"
 RULES_DOC = ROOT / "corpus/rules/board_powers_2014.json"
@@ -646,7 +646,7 @@ def render_item(item: rq.ReviewItem, *, doc: dict, all_pages: list[str], width: 
             out.append("")
             out.append(two_columns([], right, width=width, max_lines=max_lines,
                                    left_title="EXTRACTED  (none)",
-                                   right_title="GAZETTE  pdf_text.extract_pages"))
+                                   right_title="GAZETTE  pdf_pages.extract_pages"))
         else:
             # .get throughout: a half-written rules doc must not take the whole view down with it.
             out.append(f"rule      r.{rule.get('rule_number', '?')} -- "
@@ -669,7 +669,7 @@ def render_item(item: rq.ReviewItem, *, doc: dict, all_pages: list[str], width: 
             out.append("")
             out.append(two_columns(left, right, width=width, max_lines=max_lines,
                                    left_title="EXTRACTED  text_raw",
-                                   right_title="GAZETTE  pdf_text.extract_pages"))
+                                   right_title="GAZETTE  pdf_pages.extract_pages"))
             if dropped:
                 out.append(f"({dropped} non-printable character(s) hidden for display only; "
                            "the stored page text is unchanged)")
