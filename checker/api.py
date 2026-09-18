@@ -5,6 +5,7 @@ unit-testable without a socket; `scripts/serve_api.py` wraps it in the stdlib HT
 server. One real endpoint today:
 
     POST /v1/compliance-pack   company facts (JSON) -> the cited evidence pack (JSON)
+    POST /v1/ask               one question -> a placedon.ask/0 turn (checker/ask.py)
     GET  /v1/health            liveness + provenance
 
 No model is consulted (the register is deterministic), so this API never emits a
@@ -542,6 +543,14 @@ def handle(method: str, path: str, body: dict | None, *, generated_at: str
         except ProvenanceError as e:
             block = {"provenance_error": str(e)}
         return 200, {"status": "ok", "no_model": True, **block}
+    if method == "POST" and path == "/v1/ask":
+        # One turn of the Ask surface. Deterministic: checker/ask.py calls retrieval, the
+        # threshold table, the scope register and the two routes below, and never a model.
+        from checker.ask import answer
+        try:
+            return 200, answer(body or {}, generated_at=generated_at)
+        except BadRequest as e:
+            return 400, {"error": "bad_request", "detail": str(e)}
     if method == "POST" and path == "/v1/document-check":
         try:
             return 200, document_check(body or {}, generated_at=generated_at)
@@ -559,7 +568,8 @@ def handle(method: str, path: str, body: dict | None, *, generated_at: str
             return 400, {"error": "bad_request", "detail": str(e)}
     return 404, {"error": "not_found",
                  "detail": f"no route for {method} {path}",
-                 "routes": ["GET /v1/health", "POST /v1/compliance-pack",
+                 "routes": ["GET /v1/health", "POST /v1/ask",
+                            "POST /v1/compliance-pack",
                             "POST /v1/document-check",
                             "POST /v1/mca-strip",
                             "GET /v1/company/{cin}/events",
@@ -845,6 +855,50 @@ def _test() -> None:
     check("POST /v1/mca-strip" in handle("GET", "/nope", None,
                                          generated_at=GEN)[1]["routes"],
           "the route is advertised in the 404 route list")
+
+    # ── POST /v1/ask ─────────────────────────────────────────────────────────
+    # Served through the PACKAGE module, not this one. Running api.py as a file makes a
+    # second copy of it, and checker/ask.py raises the package's BadRequest -- a different
+    # class from the one caught two frames up here. The route is only ever served as
+    # checker.api (scripts/serve_api.py:22), so that is what this exercises.
+    from checker.api import handle as ask_handle
+    from checker.ask import _contract_validator
+    _validate = _contract_validator()
+    _ask_facts = {"company_class": "private", "incorporation_date": "2019-06-01",
+                  "as_of": "2026-09-05", "financial_year": "2024-25",
+                  "paid_up_capital_rupees": 120000000, "turnover_rupees": 800000000}
+    st, r = ask_handle("POST", "/v1/ask",
+                   {"question": "Is this company a small company?", "facts": _ask_facts,
+                    "provisions": ["s.2(85)"],
+                    "figures": ["small_company.paid_up_capital.prescribed"]},
+                   generated_at=GEN)
+    check(st == 200 and r["schema"] == "placedon.ask/0" and r["state"] == "answered",
+          f"the ask route answers a deterministic question ({st}/{r.get('state')})")
+    check(_validate(r) == [], f"...and its response meets the contract ({_validate(r)})")
+    check(r["uses_model"] is False and r["generated_at"] == GEN,
+          "...stating that no model was used, stamped with the request's time")
+
+    st, r = ask_handle("POST", "/v1/ask",
+                   {"question": "What must we report to RBI for this allotment?"},
+                   generated_at=GEN)
+    check(st == 200 and r["state"] == "out_of_scope" and _validate(r) == [],
+          f"a question about a body we do not hold is refused, not answered ({r.get('state')})")
+
+    st, r = ask_handle("POST", "/v1/ask",
+                   {"question": "Is this document current?",
+                    "context": {"kind": "document"}, "facts": {"company_class": "private",
+                                                               "incorporation_date": "2019-06-01"}},
+                   generated_at=GEN)
+    check(st == 400 and "document_date" in r["detail"],
+          f"a document turn with no document date is a 400 naming the field ({st})")
+    st, r = ask_handle("POST", "/v1/ask", {}, generated_at=GEN)
+    check(st == 400 and "question" in r["detail"],
+          f"a request with no question is a 400 ({st})")
+    st, r = ask_handle("POST", "/v1/ask", {"question": "x", "figures": ["no.such.key"]},
+                   generated_at=GEN)
+    check(st == 400, f"a figure key the engine does not declare is a 400 ({st})")
+    check("POST /v1/ask" in ask_handle("GET", "/nope", None, generated_at=GEN)[1]["routes"],
+          "the ask route is advertised in the 404 route list")
 
     # ── no model in the API path (parsed imports, not grepped) ──────────────
     import ast

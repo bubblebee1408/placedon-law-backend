@@ -2,13 +2,15 @@
 """The /v1/ask response contract (placedon.ask/0): a validator, and fixtures built from the engine.
 
 The Ask section (docs/PLAN_13_ASSISTANT_UX_PLAN.md) renders three server-decided states --
-answered, partial, out_of_scope -- and nothing else. The route does not exist yet, so the UI is
-prototyped against fixtures. Two failures that would make a prototype lie are designed out here:
+answered, partial, out_of_scope -- and nothing else. The prototype is static and sends nothing, so
+it renders fixtures. Two failures that would make a prototype lie are designed out here:
 
-1. **A fixture that says something the engine cannot.** Every fixture is BUILT by calling the
-   engine's own deterministic modules (retrieval, evidence packs, prescribed thresholds, the scope
-   register, the compliance pack, the document check). Nothing legal is typed by hand, and the test
-   rebuilds the fixtures and requires them to equal what is on disk.
+1. **A fixture that says something the route would not.** Every fixture is a REQUEST put through
+   `checker.ask.answer()` -- the same function `POST /v1/ask` calls (ASK-1), which itself only
+   calls deterministic modules (retrieval, evidence packs, prescribed thresholds, the scope
+   register, the compliance pack, the document check). Nothing legal is typed by hand, nothing is
+   assembled here, and the test rebuilds the fixtures and requires them to equal what is on disk --
+   so the prototype and the route cannot drift apart.
 2. **A response that breaks a design rule.** `validate()` rejects: a state that is not one of the
    three; a figure with no instrument or no in-force date; a citation outside the evidence pack; an
    `answered` citing an unusable provision; any `confidence` or `coverage` field (C4 -- the coverage
@@ -25,7 +27,6 @@ Run:  python3 scripts/assistant_contract.py --write    # rebuild web/assistant/f
 """
 from __future__ import annotations
 
-import hashlib
 import json
 import sys
 from datetime import date
@@ -69,12 +70,6 @@ def _lists(obj, path="$"):
         yield path, obj
         for i, v in enumerate(obj):
             yield from _lists(v, f"{path}[{i}]")
-
-
-def _as_json(v):
-    """What the engine returned, in JSON types. A tuple becomes a list; a string stays a
-    string -- list() on a string is how a sentence becomes 455 characters."""
-    return list(v) if isinstance(v, tuple) else v
 
 
 def validate(r: dict) -> list[str]:
@@ -162,166 +157,58 @@ def validate(r: dict) -> list[str]:
 
 
 # ── fixtures, built from the engine ───────────────────────────────────────────
-def _envelope(question: str, *, kind: str = "general", document_date: str | None = None,
-              parent: str | None = None) -> dict:
-    from checker import scope
-    turn = hashlib.sha256(f"{question}|{AS_OF}|{kind}|{document_date}".encode()).hexdigest()[:12]
-    env = {"schema": SCHEMA, "turn_id": f"t_{turn}", "question": question,
-           "generated_at": GENERATED_AT, "as_of": AS_OF,
-           "context": {"kind": kind, "document_date": document_date}, "uses_model": False,
-           "scope": {"held": [b.name for b in scope.in_corpus()], "sentence": scope.coverage()}}
-    if parent is not None:
-        env["parent_turn_id"] = parent
-    return env
+# Every fixture is a REQUEST put through checker.ask.answer(), the same function the
+# /v1/ask route calls. Nothing is assembled here, so a fixture cannot say something the
+# route would not: a change in the engine or in the mapping shows up as a fixture diff
+# (the self-test requires the files on disk to equal a fresh rebuild), never as a
+# prototype that renders a shape no caller can obtain.
+FACTS = {"company_class": "private", "incorporation_date": "2019-06-01", "as_of": AS_OF,
+         "financial_year": "2025-26", "paid_up_capital_rupees": 120000000,
+         "turnover_rupees": 800000000}
+DOC_FACTS = {"document_date": "2024-06-01", "as_of": AS_OF, "company_class": "private",
+             "incorporation_date": "2019-06-01", "financial_year": "2023-24",
+             "paid_up_capital_rupees": 30000000, "turnover_rupees": 300000000}
+CAP = "small_company.paid_up_capital.prescribed"
+TURNOVER = "small_company.turnover.prescribed"
 
-
-def _pack(query: str) -> tuple[dict, str]:
-    from checker.retrieve import retrieve
-    pack, route = retrieve(query)
-    return pack.to_dict(), route
-
-
-def _citation(p: dict) -> dict:
-    return {"ref": p["ref"], "cite": p["cite"], "title": p["title"],
-            "evidence_state": p["evidence_state"],
-            "usable_for_answering": p["usable_for_answering"],
-            "unusable_reason": p["unusable_reason"] or None,
-            "defects": p["defects"],
-            "retrieved_on": sorted({s["retrieved_on"] for s in p["sources"] if s.get("retrieved_on")}),
-            "source_url": next((s["source_url"] for s in p["sources"] if s.get("source_url")), None)}
-
-
-def _law_version(d: dict) -> dict:
-    a = d["as_of"]
-    return {k: a[k] for k in ("basis", "point_in_time_verified", "corpus_fetched", "statement")}
-
-
-def _law_version_at(provisions: list[str], requested: str) -> dict:
-    """The engine's own basis statement for a past date, over the provisions a turn cites.
-
-    Built by evidence_pack's statement builder, never written here: it is the sentence that
-    says no statement is about the law as it stood on that date.
-    """
-    import re
-    from checker import evidence_pack
-    sections = sorted({m for p in provisions for m in re.findall(r"s\.(\d+[A-Z]?)", p)},
-                      key=lambda x: (int(re.match(r"\d+", x).group()), x))
-    pack, _ = _pack(" and ".join(f"s.{n}" for n in sections))
-    fetched = tuple(pack["as_of"]["corpus_fetched"])
-    a = evidence_pack._build_as_of(fetched, date.fromisoformat(requested)).to_dict()
-    return {k: a[k] for k in ("basis", "point_in_time_verified", "point_in_time_requested",
-                              "corpus_fetched", "statement")}
-
-
-def _pack_summary(d: dict, route: str) -> dict:
-    return {"retrieval_query": d["query"], "route": route, "usable_keys": d["usable_keys"],
-            "unusable_keys": d["unusable_keys"], "missing": d["missing"],
-            "insufficient_evidence": d["insufficient_evidence"]}
-
-
-def _figure(key: str) -> dict:
-    from checker import prescribed_thresholds as pt
-    t = pt.lookup(key, date.fromisoformat(AS_OF))
-    return {"key": key, "amount": str(t.amount), "rupees": t.amount.rupees,
-            "instrument": t.instrument, "effective_from": t.effective_from.isoformat(),
-            "effective_to": t.effective_to.isoformat() if t.effective_to else None,
-            "evidence_state": t.state, "source_url": t.source_url}
+# The user's questions are illustrative. What each turn READS is named by the request --
+# the provisions and the prescribed figures -- because the engine does not parse a
+# sentence for meaning (checker/ask.py); everything legal in the response is engine output.
+REQUESTS: dict[str, dict] = {
+    # The empty-confirmed partial the design says will dominate (red team L3): retrieve()
+    # cannot resolve rule 2(1)(t) of the Definition Details Rules (audit E20), so the pack
+    # is empty and says why.
+    "partial_nothing_confirmed": {"question": "What does rule 2(1)(t) prescribe?",
+                                  "as_of": AS_OF, "provisions": ["rule 2(1)(t)"]},
+    "answered_small_company": {"question": "Is this company a small company?",
+                               "as_of": AS_OF, "context": {"kind": "general"},
+                               "facts": FACTS, "provisions": ["s.2(85)"],
+                               "figures": [CAP, TURNOVER]},
+    "partial_s173_s16": {"question": "What does s.173 require, and does s.16 apply here?",
+                         "as_of": AS_OF, "provisions": ["s.173", "s.16"]},
+    "out_of_scope_fema": {"question": "What must we report to RBI for this share allotment "
+                                      "to a foreign investor?", "as_of": AS_OF},
+    "document_context_2024": {"question": "Is the law this document relies on still current?",
+                              "as_of": AS_OF,
+                              "context": {"kind": "document",
+                                          "document_date": DOC_FACTS["document_date"]},
+                              "facts": DOC_FACTS},
+    # A follow-up turn. No conversation state exists (FEATURES.md:120), so the request
+    # names what it reads again and carries the id of the turn it follows.
+    "followup_turnover": {"question": "And the turnover limit?", "as_of": AS_OF,
+                          "figures": [TURNOVER], "provisions": ["s.2(85)"]},
+}
 
 
 def build_fixtures() -> dict[str, dict]:
-    """Every fixture, assembled from deterministic engine calls. No legal text is typed here."""
-    from checker import api, scope
+    """Every fixture, from the route's own answer() at a fixed as_of."""
+    from checker.ask import answer
 
-    facts = {"company_class": "private", "incorporation_date": "2019-06-01", "as_of": AS_OF,
-             "financial_year": "2025-26", "paid_up_capital_rupees": 120000000,
-             "turnover_rupees": 800000000}
-    pack_json = api.compliance_pack(facts, generated_at=GENERATED_AT)
-    small = next(row for row in pack_json["rows"] if row["obligation_id"] == "CA13-S2-85-SMALL")
-    s285, route285 = _pack("s.2(85)")
-    answered = _envelope("Is this company a small company?") | {
-        "state": "answered",
-        "facts": {k: {"value": facts[k], "provenance": "USER_FACT"}
-                  for k in ("company_class", "paid_up_capital_rupees", "turnover_rupees")},
-        "rows": [small],
-        "figures": [_figure("small_company.paid_up_capital.prescribed"),
-                    _figure("small_company.turnover.prescribed")],
-        "citations": [_citation(p) for p in s285["provisions"]],
-        "law_version": _law_version(s285),
-        "evidence_pack": _pack_summary(s285, route285),
-        "what_it_is_not": _as_json(pack_json["what_it_is_not"]),
-    }
-
-    mixed, route_mixed = _pack("s.173 and s.16")
-    partial = _envelope("What does s.173 require, and does s.16 apply here?") | {
-        "state": "partial",
-        "confirmed": [_citation(p) | {"verbatim": p["reading_text"]}
-                      for p in mixed["provisions"] if p["usable_for_answering"]],
-        "not_confirmed": ([{"kind": "pack_missing", "detail": m} for m in mixed["missing"]]
-                          + [{"kind": "unusable", "ref": p["ref"], "reason": p["unusable_reason"],
-                              "defects": p["defects"]}
-                             for p in mixed["provisions"] if not p["usable_for_answering"]]),
-        "law_version": _law_version(mixed),
-        "evidence_pack": _pack_summary(mixed, route_mixed),
-        "demand_signal": {"action": "tell_us_blocking"},
-    }
-
-    fema = scope.body("FEMA1999")
-    out_of_scope = _envelope("What must we report to RBI for this share allotment to a "
-                             "foreign investor?") | {
-        "state": "out_of_scope",
-        "body": {"key": fema.key, "name": fema.name, "regulator": fema.regulator,
-                 "covers": fema.covers, "scope_status": fema.status},
-        "reason": scope.refusal_for("FEMA1999"),
-        "held": [b.name for b in scope.in_corpus()],
-    }
-
-    doc_payload = {"document_date": "2024-06-01", "as_of": AS_OF, "company_class": "private",
-                   "incorporation_date": "2019-06-01", "financial_year": "2023-24",
-                   "paid_up_capital_rupees": 30000000, "turnover_rupees": 300000000}
-    check = api.document_check(doc_payload, generated_at=GENERATED_AT)
-    document = _envelope("Is the law this document relies on still current?", kind="document",
-                         document_date=doc_payload["document_date"]) | {
-        "state": "partial" if check["cannot_verify"] else "answered",
-        "superseded": check["superseded"],
-        "confirmed": check["verified"],
-        "not_confirmed": [{"kind": "cannot_verify"} | item for item in check["cannot_verify"]],
-        "scope_frame": check["coverage"],
-        # Red team L2: document_check says CURRENT for Act-only rows by construction, against
-        # the current consolidation. The turn carries the engine's statement for the
-        # document's own date so that "current" cannot be read as the law in 2024.
-        "law_version": _law_version_at(
-            [x.get("provision", "") for x in check["verified"] + check["cannot_verify"]
-             + check["superseded"]],
-            doc_payload["document_date"]),
-        # api returns a tuple here; a fixture is JSON, so it must hold JSON types or a rebuild
-        # compares unequal to the file it was written as. _as_json leaves a string alone.
-        "what_it_is_not": _as_json(check["what_it_is_not"]),
-    }
-
-    followup = _envelope("And the turnover limit?", parent=answered["turn_id"]) | {
-        "state": "answered",
-        "figures": [_figure("small_company.turnover.prescribed")],
-        "citations": [_citation(p) for p in s285["provisions"]],
-        "law_version": _law_version(s285),
-        "evidence_pack": _pack_summary(s285, route285),
-    }
-
-    # Red team L3: the partial the design says will dominate -- a retrieval that abstained, so
-    # nothing is confirmed. retrieve() cannot resolve rule 2(1)(t) of the Definition Details
-    # Rules (audit E20), so the pack is empty and says why.
-    absent, route_absent = _pack("rule 2(1)(t)")
-    nothing = _envelope("What does rule 2(1)(t) prescribe?") | {
-        "state": "partial",
-        "confirmed": [],
-        "not_confirmed": [{"kind": "pack_missing", "detail": m} for m in absent["missing"]],
-        "law_version": _law_version(absent),
-        "evidence_pack": _pack_summary(absent, route_absent),
-    }
-
-    return {"partial_nothing_confirmed": nothing,
-            "answered_small_company": answered, "partial_s173_s16": partial,
-            "out_of_scope_fema": out_of_scope, "document_context_2024": document,
-            "followup_turnover": followup}
+    out = {name: answer(req, generated_at=GENERATED_AT) for name, req in REQUESTS.items()}
+    out["followup_turnover"] = answer(
+        REQUESTS["followup_turnover"] | {"parent_turn_id": out["answered_small_company"]["turn_id"]},
+        generated_at=GENERATED_AT)
+    return out
 
 
 def write_fixtures() -> list[Path]:

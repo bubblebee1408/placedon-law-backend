@@ -86,3 +86,16 @@ progress for reasons outside this session — then stop and report.
   **The worst finding was pre-existing and not in the new code**: RT-14,
   `scripts/ingest_companies_act.py` fetching the statutory corpus with TLS
   verification disabled and a spoofed browser user agent.
+- 18-09 — after the merge: `harness_regression.sh` re-run (the check that the gate can
+  still turn RED after the hook change) → **7/7**. Clean tree GREEN, a hard failure RED,
+  and the silent-failure shape still caught.
+- **S11 — never edit `scripts/run_tests.sh` while it is running.** The first regression
+  run reported 5/7, case 2 failing with "no HARNESS_RESULT line". That was not a defect
+  in the gate: the suite list was edited mid-run (registering the IBBI feed), and bash
+  reads a script incrementally, so the running shell's offsets shifted and it ended
+  early. Reproduced directly on a stable tree: `HARNESS_RESULT suites=178 failed=1
+  status=RED`, exactly right. A false alarm about the safety gate is expensive — stage
+  suite-list edits when no sweep is in flight.
+- **IBBI feed built** (`162e1d2`): live 20 rows of a stated 14,835, header verified.
+  The first feed whose licence permits commercial serving (ATTRIBUTION). Move 18's
+  options are now three, not two — IBBI is buildable today and no longer hypothetical.
