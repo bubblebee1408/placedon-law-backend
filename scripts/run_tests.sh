@@ -42,6 +42,7 @@ suites=(
   checker/feeds/common/rate.py
   checker/feeds/ofac_sdn.py
   checker/feeds/egazette.py
+  checker/feeds/ibbi.py
   checker/legal_retrieval.py
   checker/text_search.py
   checker/evidence_pack.py
