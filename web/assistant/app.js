@@ -455,8 +455,9 @@ function whatItIsNot(w) {
   return add(box, field(el('p', null, w), 'what_it_is_not'));
 }
 
-function status(text) {
-  var s = document.querySelector('[data-status]');
+/* The visible status line, or (where = '[data-announce]') the screen-reader-only live region. */
+function status(text, where) {
+  var s = document.querySelector(where || '[data-status]');
   s.textContent = '';
   // Re-set after a tick so a repeated message is announced again.
   setTimeout(function () { s.textContent = text; }, 30);
@@ -499,6 +500,21 @@ function stampLine(r) {
   return field(el('p', 'stamp', bits.join(' · ')), 'as_of,uses_model,evidence_pack.retrieval_query');
 }
 
+/* The request values every card opens with: what it is about, and what it follows. */
+function contextBand(ctx) {
+  return field(el('p', 'band', ctx && ctx.kind === 'document'
+    ? 'About the open document · dated ' + human(ctx.document_date)
+    : 'About the Act'), 'context');
+}
+function parentLine(r, parent, card) {
+  var pl = label('p', 'parent', parent && parent.r
+    ? 'Follow-up to turn ' + parent.n + ' · ' + parent.r.question
+    : 'Follow-up to an earlier turn that is not in this session');
+  pl.id = 'p-' + (r.turn_id || 'req' + (++uid));
+  card.setAttribute('aria-describedby', pl.id);
+  return pl;
+}
+
 function turnCard(r, n, parent, recs) {
   var s = STATE[r.state];
   var card = el('article', 'turn');
@@ -507,17 +523,8 @@ function turnCard(r, n, parent, recs) {
   card.setAttribute('aria-labelledby', qid + ' ' + hid);         // question + state (F11b)
 
   var doc = r.context && r.context.kind === 'document';
-  add(card, field(el('p', 'band', doc
-    ? 'About the open document · dated ' + human(r.context.document_date)
-    : 'About the Act'), 'context'));
-  if (r.parent_turn_id) {
-    var pl = label('p', 'parent', parent.r
-      ? 'Follow-up to turn ' + parent.n + ' · ' + parent.r.question
-      : 'Follow-up to an earlier turn that is not in this session');
-    pl.id = 'p-' + r.turn_id;
-    card.setAttribute('aria-describedby', pl.id);
-    add(card, pl);
-  }
+  add(card, contextBand(r.context));
+  if (r.parent_turn_id) add(card, parentLine(r, parent, card));
   var q = field(el('p', 'question', r.question), 'question');
   q.id = qid;
   q.setAttribute('tabindex', '-1');
@@ -640,7 +647,8 @@ function renderSources(r, n, recs, path) {
 }
 
 /* ── composer and rail ─────────────────────────────────────────────────── */
-function setComposer(r) {
+/* `compact`: fold the composer to its one-line summary, as it is once a turn has been answered. */
+function setComposer(r, compact) {
   document.querySelector('[data-today]').textContent = today();
   var docRadio = document.querySelector('input[value="document"]');
   var genRadio = document.querySelector('input[value="general"]');
@@ -660,7 +668,7 @@ function setComposer(r) {
   document.querySelector('[data-doc-choice]').addEventListener('click', function (e) {
     if (docRadio.getAttribute('aria-disabled') === 'true') { e.preventDefault(); genRadio.checked = true; }
   });
-  if (!r) return;
+  if (!r || !compact) return;
   // After a turn: compact, still first (see index.html).
   var full = document.getElementById('composer-full');
   var summary = document.querySelector('[data-summary]');
@@ -700,20 +708,29 @@ function renderRail(session) {
   });
 }
 
+function submitComposer() {
+  var form = document.querySelector('[data-composer]');
+  if (form.requestSubmit) form.requestSubmit(); else form.dispatchEvent(new Event('submit', { cancelable: true }));
+}
+
 function wireComposer() {
   var form = document.querySelector('[data-composer]');
   var q = document.getElementById('q');
   form.addEventListener('submit', function (e) {
     e.preventDefault();                          // NG-1: Ask never navigates
-    status(q.value.trim()
-      ? 'Prototype: nothing was sent. This page renders saved examples only.'
-      : 'Type a question first. (Prototype: nothing is sent either way.)');
+    if (pending && pending.kind === 'waiting') return;           // disabled while waiting (§4.4)
+    if (!q.value.trim()) { status('Type a question first. (Prototype: nothing is sent either way.)'); return; }
+    if (!demo) { status('Prototype: nothing was sent. This page renders saved examples only.'); return; }
+    showNonAnswer(demo === 'error' ? 'error' : 'waiting', composerRequest(), true);
   });
   q.addEventListener('keydown', function (e) {
     if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
       e.preventDefault();
-      if (form.requestSubmit) form.requestSubmit(); else form.dispatchEvent(new Event('submit', { cancelable: true }));
+      submitComposer();
     }
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && pending && pending.kind === 'waiting') { e.preventDefault(); cancelWait(); }
   });
 }
 
@@ -734,11 +751,12 @@ function render(name) {
     turns.appendChild(label('p', 'basis', 'No saved example has that name.'));
     return;
   }
-  document.body.classList.add('has-turns');
   var parent = r.parent_turn_id ? byTurnId(r.parent_turn_id) : null;
+  if (demo) { renderRequest(r, parent); return; }
+  document.body.classList.add('has-turns');
   var session = parent ? [parent, r] : [r];
   var n = session.length;
-  setComposer(r);
+  setComposer(r, true);
 
   var src = citationsOf(r);
   renderSources(r, n, src.list, src.path);                     // records first: markers point at them
@@ -747,4 +765,6 @@ function render(name) {
   renderRail(session);
 }
 
-render(new URLSearchParams(location.search).get('fixture'));
+var params = new URLSearchParams(location.search);
+demo = NON_ANSWER.indexOf(params.get('state')) !== -1 ? params.get('state') : null;
+render(params.get('fixture'));

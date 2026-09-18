@@ -69,6 +69,8 @@
       </div>
     </form>
     <p class="status" role="status" data-status data-chrome></p>
+    <!-- Screen readers only: what arrived (waiting, cancelled, no result) and the question (§4.3 step 6). -->
+    <p class="sr-only" aria-live="polite" data-announce data-chrome></p>
 
     <div class="turns" data-turns></div>
   </main>
@@ -81,6 +83,7 @@
 </div>
 
 <script src="fixtures.js"></script>
+<script src="nonanswer.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

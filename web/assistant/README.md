@@ -28,6 +28,17 @@ renders a saved response. **Ask sends nothing**: it says so in a status line and
 | `followup_turnover` | answered, follow-up turn (its parent turn is shown collapsed above it) |
 | `partial_nothing_confirmed` | partial, nothing confirmed — the state the design expects to dominate |
 
+**Waiting, cancelled, no result** (PLAN_13 §4.4, §7.3, §7.11; words from §13). None is an answer
+state, so none carries `data-state`, a glyph or a state word, and none is drawn on answer paper.
+Add `?state=waiting`, `?state=cancelled` or `?state=error`, since the page has no endpoint to wait
+on. With a fixture, the page shows the state that fixture's request was in (its question, what it
+was about, its as-of date and nothing from its response). Without one, the page stays empty until you
+press Ask. `waiting` and `cancelled` never reply: Cancel or Esc ends the wait, and the card keeps its
+stamp. `error` fails at once: "No result". This card is a plain bordered box with no abstention grey,
+badge or dashed mark, because a service failure is never an abstention. Your question stays in the
+box, and Send again sends it again. Nothing runs on a client timer: no spinner, stages or skeleton.
+The code for these states is in `nonanswer.js`, which loads before `app.js`.
+
 Fixtures are embedded in `fixtures.js` because a page opened from `file://` cannot fetch local JSON.
 Both it and `fixtures/*.json` are written by the same builder in one pass:
 
@@ -77,22 +88,40 @@ It asserts, for every fixture at 320 / 360 / 768 / 1024 / 1440:
    announces that nothing was sent;
 10. no motion over 200ms, and none at all under `prefers-reduced-motion`;
 11. no network request leaves the page;
-12. the empty state (no fixture) shows the title as the page's only `h1` and no answer.
+12. the empty state (no fixture) shows the title as the page's only `h1` and no answer;
+13. each non-answer state (`?state=`), at 360 (the light pane, reduced motion) and 1440 (the dark
+    web shell), both with each fixture's request and with none (typed, then Ask). Checked: the
+    §13 words verbatim, in an `article` with its own `h2`; no `[data-state]` and no glyph. The service
+    error has no abstention or badge class, no dashed border, no abstention grey, no answer paper,
+    no state word, and a solid border of at least 3:1. The question stays in the box. The composer
+    is disabled while waiting and only then, and the waiting card does not change by itself. Cancel
+    and Send again are `<button>`s you can reach by Tab. On arrival, focus goes to Cancel, or to the
+    card's heading. Cancel, Esc and Send again each do what they say. The card carries the request's
+    band, parent line and stamp, and no number the request did not supply. No overflow, motion
+    within limits, one `h1`, no page errors, no network.
 
-Last run: **403/403 across 6 fixtures × 5 widths, plus the empty state** (red-team rebuild and
-re-base onto the finalized frontend's tokens, 2026-09-17; re-run unchanged on 2026-09-18 after the
-fixtures were rebuilt through the route's `answer()` — all six came out byte-identical). Before the
-rebuild the same checks passed 233/396.
+Last run: **883/883**: 403 across 6 fixtures × 5 widths plus the empty state (unchanged), and 480
+for the three non-answer states × 7 requests × 2 widths (2026-09-18, ASK-3). Before the states
+existed, 114 of check 13's 162 assertions failed (451/565). The 48 that passed hold on any page
+("empty until Ask", "no page errors"). Of 14 deliberate breakages in a scratch copy
+(dashed or grey error border, abstention class, `data-state`, answer paper, emptied box, a ticking
+waiting card, changed copy, a non-button Cancel, 300ms motion, no Esc, no focus move, unlocked
+composer, a state word), the runner caught every one. Before the red-team rebuild, checks 1–12
+passed 233/396.
 
 ## The hooks the checks depend on
 
 `data-state` · `data-state-heading` · `data-figure` · `data-citation` · `data-marker` · `data-back` ·
 `data-source-panel` · `data-composer` · `data-law-version` · `data-group` · `data-disclosure` ·
-`data-confirmed-item` · `data-superseded-item` · `data-not-confirmed-item` · `data-chrome` (a label
+`data-confirmed-item` · `data-superseded-item` · `data-not-confirmed-item` · `data-nonanswer`
+(`waiting` / `cancelled` / `error`) · `data-cancel` · `data-send-again` · `data-chrome` (a label
 the response did not supply) · `data-f` (the response path an element was rendered from — the audit
 trail behind check 6).
 
 ## What is deliberately absent
+
+A non-answer state page does not draw the session rail or the Sources column. §7.3 wants the rail
+row to read "Waiting" and then "Cancelled", so that row is not yet shown.
 
 No streaming, no model picker, no confidence, no skeleton loaders, no history search (C1–C6). The
 `headline`, `capabilities[]` and `scope.bodies[]` fields the design wants do not exist in the contract

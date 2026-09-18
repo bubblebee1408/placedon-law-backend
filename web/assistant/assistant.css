@@ -164,6 +164,9 @@ textarea::placeholder { color: var(--muted); }
   border: 1px solid var(--btn-bg); border-radius: var(--radius); padding: 0 var(--lg); cursor: pointer;
 }
 .ask:hover { opacity: .88; }
+/* While waiting (§4.4): disabled, and described by the waiting line rather than silently inert. */
+.ask[aria-disabled="true"] { opacity: .45; cursor: default; }
+textarea[aria-disabled="true"] { color: var(--muted); }
 .status:not(:empty) {
   margin-top: var(--sm); font-size: 13px; padding: var(--sm) 12px;
   border: 1px solid var(--line); border-radius: var(--radius);
@@ -287,6 +290,30 @@ textarea::placeholder { color: var(--muted); }
 .body-line { font-size: 16px; margin-bottom: var(--sm); }
 .reason { font-size: 16px; max-width: var(--measure); }
 
+/* ── not an answer: waiting, cancelled, no result (§4.4, §7.3, §7.11) ─────
+   On the shell, never on Compliance Note paper: paper is where an answer is printed. No glyph, no
+   state rule, no abstention grey, no dashed mark (dashed means abstention, §27). The service error
+   is the site's transport-error panel (surfaces.css .surface-error): a plain bordered box whose
+   border is the one container signal it has, so it uses --field-line, >= 3:1 on both themes. */
+.nonanswer {
+  border: 1px solid var(--line); border-radius: var(--radius);
+  padding: var(--lg) var(--md); color: var(--text);
+}
+@media (min-width: 401px) { .nonanswer { padding: var(--lg) clamp(20px, 3vw, 40px); } }
+.nonanswer-error { border-color: var(--field-line); }
+.nonanswer .band { color: var(--text); border-color: var(--line); }
+.na-head {
+  font: 460 22px/1.3 var(--display); letter-spacing: -0.004em;
+  font-variation-settings: "opsz" 24, "SOFT" 0, "WONK" 0;
+  margin-top: var(--md); width: fit-content; max-width: 100%;   /* the arrival focus ring hugs the words */
+}
+.nonanswer-error .na-head { margin-top: 0; }
+.na-said { margin-top: var(--sm); font-size: 15px; max-width: var(--measure); }
+.nonanswer .caption { margin-top: var(--sm); }
+.na-actions { margin-top: var(--md); }
+.nonanswer .act { color: var(--text); border-color: var(--field-line); }
+.nonanswer .act:hover { border-color: var(--text); }
+
 /* ── sources: on the shell (dark on the web), citations only ─────────────── */
 .cit { border-left: 3px double var(--muted); padding: var(--xs) 0 var(--xs) var(--md); margin-bottom: var(--lg); }
 .cit > * + * { margin-top: 2px; }
@@ -306,7 +333,8 @@ textarea::placeholder { color: var(--muted); }
 /* The Word task pane (320-400px). */
 @media (max-width: 400px) {
   .content { padding: var(--md) var(--sm); }
-  .turn { padding: var(--md) 12px; }
+  .turn, .nonanswer { padding: var(--md) 12px; }
+  .na-head { font-size: 20px; }
   .row, .item, .figure, .lawver, .cit { padding-left: var(--sm); }
   .keyhint, .eyebrow { display: none; }
   .state { font-size: 24px; }

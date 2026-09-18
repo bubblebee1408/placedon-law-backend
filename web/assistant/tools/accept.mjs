@@ -26,6 +26,10 @@
 //   [data-confirmed-item] [data-superseded-item] [data-not-confirmed-item]
 //                                      one per array element, inside the card <article>
 //   no ?fixture                        the empty state: the title as the page's one h1, no answer
+//   ?state=waiting|cancelled|error     a non-answer state: on load for ?fixture='s request; with no
+//                                      fixture, the empty page shows it when Ask is pressed
+//   [data-nonanswer="waiting|cancelled|error"]  the one card for it: an <article>, never [data-state]
+//   [data-cancel] [data-send-again]    its buttons
 //
 // FONTS_DIR=<dir> (optional) loads the brand fonts from a local folder for screenshots only --
 // the finalized frontend self-hosts Fraunces / Inter / IBM Plex Mono; the prototype names them and
@@ -80,6 +84,40 @@ function fixtureNumbers(obj, acc = new Set()) {
   } else if (Array.isArray(obj)) obj.forEach(v => fixtureNumbers(v, acc));
   else if (typeof obj === 'object') Object.values(obj).forEach(v => fixtureNumbers(v, acc));
   return acc;
+}
+
+// Numbers in visible, non-chrome text that the fixture did not supply.
+async function inventedNumbers(page, allowedNums) {
+  const screenNums = await page.evaluate(() => {
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    const out = [];
+    while (walker.nextNode()) {
+      const n = walker.currentNode;
+      const el = n.parentElement;
+      if (!el || el.closest('[data-chrome],script,style') || !el.offsetParent) continue;
+      for (const m of n.textContent.matchAll(/\d[\d,.]*\d|\d/g)) out.push(m[0].replace(/,/g, ''));
+    }
+    return out;
+  });
+  return [...new Set(screenNums.filter(x => !allowedNums.has(x) && !allowedNums.has(x.replace(/\.$/, ''))))];
+}
+
+// The longest transition or animation any element declares, in ms.
+async function worstMotion(page) {
+  return page.evaluate(() => {
+    let worst = 0;
+    for (const el of document.querySelectorAll('*')) {
+      const cs = getComputedStyle(el);
+      for (const v of [cs.transitionDuration, cs.animationDuration]) {
+        for (const p of v.split(',')) {
+          const t = p.trim();
+          const ms = t.endsWith('ms') ? parseFloat(t) : parseFloat(t) * 1000;
+          if (ms > worst) worst = ms;
+        }
+      }
+    }
+    return worst;
+  });
 }
 
 const browser = await chromium.launch({ executablePath: exe, headless: true });
@@ -139,18 +177,7 @@ try {
       }
 
       // 6. no number on screen that the fixture did not supply (chrome is exempt)
-      const screenNums = await page.evaluate(() => {
-        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-        const out = [];
-        while (walker.nextNode()) {
-          const n = walker.currentNode;
-          const el = n.parentElement;
-          if (!el || el.closest('[data-chrome],script,style') || !el.offsetParent) continue;
-          for (const m of n.textContent.matchAll(/\d[\d,.]*\d|\d/g)) out.push(m[0].replace(/,/g, ''));
-        }
-        return out;
-      });
-      const invented = [...new Set(screenNums.filter(x => !allowedNums.has(x) && !allowedNums.has(x.replace(/\.$/, ''))))];
+      const invented = await inventedNumbers(page, allowedNums);
       if (invented.length) fail(name, w, `numbers on screen not in the fixture: ${invented.slice(0, 8).join(', ')}`);
       else pass(name, w, 'every number traceable to the fixture');
 
@@ -289,20 +316,7 @@ try {
       }
 
       // 8. motion: nothing over 200ms, and nothing at all under prefers-reduced-motion
-      const motion = await page.evaluate(() => {
-        let worst = 0;
-        for (const el of document.querySelectorAll('*')) {
-          const cs = getComputedStyle(el);
-          for (const v of [cs.transitionDuration, cs.animationDuration]) {
-            for (const p of v.split(',')) {
-              const t = p.trim();
-              const ms = t.endsWith('ms') ? parseFloat(t) : parseFloat(t) * 1000;
-              if (ms > worst) worst = ms;
-            }
-          }
-        }
-        return worst;
-      });
+      const motion = await worstMotion(page);
       if (motion > 200) fail(name, w, `motion ${motion}ms exceeds 200ms`);
       else if (w === 320 && motion > 0) fail(name, w, `motion ${motion}ms under prefers-reduced-motion`);
       else pass(name, w, 'motion within limits');
@@ -340,7 +354,282 @@ try {
   }
 }
 
+// 13. The three non-answer states (PLAN_13 §4.4, §7.3, §7.11; copy verbatim from §13), both themes.
+//     ?state=waiting|cancelled|error. With ?fixture= the page shows the state that fixture's request
+//     was in, on load; without one the page is empty until Ask is pressed. None of the three is a
+//     server state, so none carries [data-state]; and the service error must never read as an
+//     abstention (placedon-claude-legal-3300 AGENTS.md: a transport failure is never rendered as an
+//     abstention) -- no abstention class, grey, dashed mark, glyph or state word, and not on paper.
+const NA_COPY = {
+  waiting: "Waiting for the server's decision.",
+  cancelled: 'Cancelled before a result arrived. Nothing is shown.',
+  errorHead: 'No result',
+  error: 'The service did not return a result, so there is no answer, partial or otherwise. Your question is still in the box.',
+  docLine: 'Nothing was changed in your document.',
+};
+const NA_STATES = ['waiting', 'cancelled', 'error'];
+const NA_WIDTHS = [360, 1440];
+const NA_SHOTS = new Set(['', 'document_context_2024', 'followup_turnover']);
+const TYPED = 'Does this company need a CSR committee?';
+
+// Everything the checks need about the (one) non-answer card and the composer.
+async function naFacts(page) {
+  return page.evaluate(() => {
+    const ABSTAIN = 'rgb(91, 100, 114)';     // --abstain #5b6472
+    const PAPER = 'rgb(251, 248, 242)';      // --paper #fbf8f2, the answer's sheet
+    const cards = [...document.querySelectorAll('[data-nonanswer]')];
+    const card = cards[0] || null;
+    const ta = document.querySelector('[data-composer] textarea');
+    const ask = document.querySelector('[data-composer] [type=submit]');
+    const a = document.activeElement;
+    const btns = sel => [...(card ? card.querySelectorAll(sel) : [])]
+      .map(b => ({ tag: b.tagName, type: b.getAttribute('type'), text: b.innerText.trim(), tabIndex: b.tabIndex }));
+    const qEl = card && card.querySelector('[data-f="question"]');
+    const f = {
+      n: cards.length,
+      kind: card && card.getAttribute('data-nonanswer'),
+      tag: card && card.tagName,
+      h2: card && card.querySelector('h2') ? card.querySelector('h2').innerText.trim() : null,
+      paras: card ? [...card.querySelectorAll('p')].map(p => p.innerText.trim()) : [],
+      text: card ? card.innerText : '',
+      html: card ? card.innerHTML : '',
+      question: qEl ? qEl.innerText.trim() : null,
+      states: document.querySelectorAll('[data-state]').length,
+      h1: document.querySelectorAll('h1').length,
+      box: ta ? ta.value : null,
+      boxLocked: !!ta && (ta.readOnly || ta.disabled || ta.getAttribute('aria-disabled') === 'true'),
+      askLocked: !!ask && (ask.disabled || ask.getAttribute('aria-disabled') === 'true'),
+      focusCancel: !!a && a.hasAttribute('data-cancel'),
+      focusAgain: !!a && a.hasAttribute('data-send-again'),
+      focusHead: !!card && !!a && a.tagName === 'H2' && card.contains(a),
+      cancel: btns('[data-cancel]'),
+      again: btns('[data-send-again]'),
+      progress: document.querySelectorAll('progress,[role=progressbar],[aria-valuenow],[class*=skeleton],[class*=spinner]').length,
+      running: document.getAnimations ? document.getAnimations().length : 0,
+      overflow: document.documentElement.scrollWidth > window.innerWidth + 1,
+    };
+    if (!card) return f;
+    const all = [card, ...card.querySelectorAll('*')];
+    const cls = e => String(e.className && e.className.baseVal !== undefined ? e.className.baseVal : e.className || '');
+    f.abstainClass = all.filter(e => /abstain|badge/.test(cls(e))).length;
+    f.glyphs = card.querySelectorAll('svg,.glyph,[data-state-heading],[data-state]').length;
+    f.dashed = all.filter(e => {
+      const cs = getComputedStyle(e);
+      return ['Top', 'Right', 'Bottom', 'Left'].some(s => cs[`border${s}Style`] === 'dashed' && parseFloat(cs[`border${s}Width`]) > 0);
+    }).length;
+    f.abstainHue = all.filter(e => {
+      const cs = getComputedStyle(e);
+      return [cs.color, cs.backgroundColor, cs.borderTopColor, cs.borderLeftColor].includes(ABSTAIN);
+    }).length;
+    f.onPaper = getComputedStyle(card).backgroundColor === PAPER;
+    f.stateWords = /\b(Answered|Abstained|Partly answered|Not held)\b/.test(card.innerText);
+    const lum = c => { const [r, g, b] = c.match(/\d+/g).slice(0, 3).map(Number).map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+    let bg = 'rgb(255, 255, 255)', e = card.parentElement;
+    while (e) { const c = getComputedStyle(e).backgroundColor; if (!/rgba\(0, 0, 0, 0\)|transparent/.test(c)) { bg = c; break; } e = e.parentElement; }
+    const cs = getComputedStyle(card);
+    const x = lum(cs.borderTopColor), y = lum(bg);
+    f.border = { style: cs.borderTopStyle, width: parseFloat(cs.borderTopWidth), ratio: (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05) };
+    return f;
+  });
+}
+
+async function tabReaches(page, attr, max = 40) {
+  for (let i = 0; i < max; i++) {
+    await page.keyboard.press('Tab');
+    if (await page.evaluate(a => !!document.activeElement && document.activeElement.hasAttribute(a), attr)) return i + 1;
+  }
+  return -1;
+}
+
+// What every non-answer card must be, wherever it came from.
+async function checkNonAnswer(page, S, question, src, w, at) {
+  const f = await naFacts(page);
+  const copyOk = S === 'waiting' ? f.h2 === NA_COPY.waiting && f.cancel.length === 1 && f.cancel[0].text === 'Cancel'
+    : S === 'cancelled' ? f.h2 === NA_COPY.cancelled && f.cancel.length === 0
+    : f.h2 === NA_COPY.errorHead && f.paras.includes(NA_COPY.error) && f.again.length === 1 && f.again[0].text === 'Send again';
+  if (f.n !== 1 || f.kind !== S) fail(at, w, `expected one [data-nonanswer=${S}], got ${f.n} (${f.kind})`);
+  else if (f.tag !== 'ARTICLE' || f.h2 === null) fail(at, w, `the ${S} card is not an article with its own h2`);
+  else if (!copyOk) fail(at, w, `the ${S} card does not carry §13's exact copy (h2 ${JSON.stringify(f.h2)})`);
+  else pass(at, w, `${S}: §13 copy verbatim, in an article with its own h2`);
+  if (!f.n) return;
+
+  if (f.states) fail(at, w, `${f.states} [data-state] on a ${S} page: it is not a server state`);
+  else if (f.glyphs) fail(at, w, `${f.glyphs} state glyph(s) in the ${S} card`);
+  else pass(at, w, `${S}: no [data-state], no state glyph`);
+
+  if (S === 'error') {
+    const bad = [
+      f.abstainClass && `${f.abstainClass} abstention/badge class(es)`,
+      f.dashed && `${f.dashed} dashed border(s)`,
+      f.abstainHue && `${f.abstainHue} element(s) in the abstention grey`,
+      f.onPaper && 'drawn on Compliance Note paper, like an answer',
+      f.stateWords && 'a state word',
+      !(f.border.style === 'solid' && f.border.width >= 1 && f.border.ratio >= 3)
+        && `border ${f.border.style} ${f.border.width}px at ${f.border.ratio.toFixed(2)}:1 (needs solid, >= 3:1)`,
+    ].filter(Boolean);
+    if (bad.length) fail(at, w, `the service error looks like an answer or an abstention: ${bad.join('; ')}`);
+    else pass(at, w, 'error: nothing an abstention carries; its own solid border >= 3:1');
+  }
+
+  if (f.box !== question) fail(at, w, `the question box holds ${JSON.stringify(f.box)}, not the question`);
+  else if (S !== 'error' && f.question !== question) fail(at, w, `the ${S} card shows ${JSON.stringify(f.question)} as the question`);
+  else pass(at, w, `${S}: the question is still in the box`);
+
+  const lockedRight = S === 'waiting' ? f.boxLocked && f.askLocked : !f.boxLocked && !f.askLocked;
+  if (!lockedRight) fail(at, w, S === 'waiting' ? 'the composer is not disabled while waiting' : `the composer is still disabled on a ${S} card`);
+  else pass(at, w, S === 'waiting' ? 'composer disabled while waiting' : `${S}: composer usable again`);
+
+  if (S === 'waiting') {
+    await page.waitForTimeout(400);
+    const g = await naFacts(page);
+    if (f.progress || g.progress || g.running) fail(at, w, `progress indicator or running animation while waiting (${g.progress}/${g.running})`);
+    else if (g.html !== f.html) fail(at, w, 'the waiting card changed by itself: client-timed progress');
+    else pass(at, w, 'waiting: static -- no spinner, skeleton, timer, stage or animation');
+  }
+
+  if (f.overflow) fail(at, w, 'horizontal overflow'); else pass(at, w, `${S}: no overflow`);
+  if (f.h1 !== 1) fail(at, w, `expected exactly one h1, found ${f.h1}`); else pass(at, w, `${S}: one h1`);
+
+  const motion = await worstMotion(page);
+  if (motion > 200) fail(at, w, `motion ${motion}ms exceeds 200ms`);
+  else if (w === 360 && motion > 0) fail(at, w, `motion ${motion}ms under prefers-reduced-motion`);
+  else pass(at, w, `${S}: motion within limits`);
+
+  if (src) {
+    const doc = src.data.context && src.data.context.kind === 'document';
+    const miss = [];
+    if (S !== 'error' && doc && !/About the open document · dated/.test(f.text)) miss.push('the document band');
+    if (S !== 'error' && src.data.parent_turn_id && !/Follow-up to turn/.test(f.text)) miss.push('the parent line');
+    if (S !== 'error' && !/Asked as of/.test(f.text)) miss.push('the stamp');
+    if (S === 'error' && doc && !f.paras.includes(NA_COPY.docLine)) miss.push(`"${NA_COPY.docLine}"`);
+    const invented = await inventedNumbers(page, fixtureNumbers(src.data));
+    if (invented.length) miss.push(`numbers not in the request: ${invented.slice(0, 6).join(', ')}`);
+    if (miss.length) fail(at, w, `${S}: request values wrong: ${miss.join('; ')}`);
+    else pass(at, w, `${S}: carries the request values the user set, and no others`);
+  }
+}
+
+// Without a fixture: the page is empty until Ask; Ask brings the card and moves focus (§15).
+async function arriveByAsk(page, S, w, at) {
+  const f0 = await naFacts(page);
+  if (f0.n || f0.states) fail(at, w, 'a card on the empty page before anything was asked');
+  else pass(at, w, 'empty until Ask is pressed');
+  await page.fill('[data-composer] textarea', TYPED);
+  await page.focus('[data-composer] textarea');
+  await page.keyboard.press('Enter');
+  const f1 = await naFacts(page);
+  if (S === 'error') {
+    if (f1.kind !== 'error' || !f1.focusHead) { fail(at, w, `Ask did not bring "No result" with focus on its heading (${f1.kind})`); return; }
+    await page.keyboard.press('Tab');
+    const f2 = await naFacts(page);
+    if (!f2.focusAgain || f2.again[0]?.tag !== 'BUTTON') fail(at, w, 'Send again is not a button reached by Tab from the heading');
+    else pass(at, w, 'Ask -> "No result", focus on its heading; Send again is the next tab stop');
+    return;
+  }
+  if (f1.kind !== 'waiting' || !f1.focusCancel || f1.cancel[0]?.tag !== 'BUTTON') { fail(at, w, `Ask did not bring the waiting card with focus on its Cancel button (${f1.kind})`); return; }
+  await page.focus('[data-composer] textarea');
+  await page.keyboard.press('Enter');
+  const f2 = await naFacts(page);
+  if (f2.n !== 1 || f2.kind !== 'waiting') fail(at, w, 'Enter while waiting sent the question again');
+  else pass(at, w, 'Ask -> waiting, focus on Cancel; Enter while waiting sends nothing more');
+  if (S !== 'cancelled') { await page.focus('[data-cancel]'); return; }   // where Ask left it
+  await page.keyboard.press('Escape');
+  const f3 = await naFacts(page);
+  if (f3.kind !== 'cancelled' || !f3.focusHead) fail(at, w, 'Esc did not cancel with focus on the card heading');
+  else pass(at, w, 'Esc cancels; focus on the cancelled card heading');
+}
+
+// With a fixture nothing moved focus on load, so the button must be reachable by Tab.
+async function checkReach(page, S, w, at) {
+  if (S === 'cancelled') return;
+  const attr = S === 'waiting' ? 'data-cancel' : 'data-send-again';
+  const name = S === 'waiting' ? 'Cancel' : 'Send again';
+  const stop = await tabReaches(page, attr);
+  const b = (await naFacts(page))[S === 'waiting' ? 'cancel' : 'again'][0];
+  if (stop < 0) fail(at, w, `${name} is not reached by Tab`);
+  else if (!b || b.tag !== 'BUTTON' || b.type !== 'button') fail(at, w, `${name} is not a <button type=button>`);
+  else pass(at, w, `${name} is a button reached by Tab`);
+}
+
+// Focus an element and press Enter on it, as a keyboard user would; false if it is not there.
+async function pressOn(page, sel) {
+  if (!(await page.$(sel))) return false;
+  await page.focus(sel);
+  await page.keyboard.press('Enter');
+  return true;
+}
+
+// What each state's control does.
+async function checkTransition(page, S, question, w, at) {
+  if (S === 'waiting') {
+    if (!(await pressOn(page, '[data-cancel]'))) { fail(at, w, 'no Cancel button to press'); return; }
+    const f = await naFacts(page);
+    if (f.n !== 1 || f.kind !== 'cancelled' || f.h2 !== NA_COPY.cancelled) fail(at, w, `Cancel did not rewrite the card as cancelled (${f.kind})`);
+    else if (!f.focusHead) fail(at, w, 'after Cancel, focus is not on the cancelled card heading');
+    else if (f.box !== question || f.boxLocked || f.askLocked || !/Asked as of/.test(f.text)) fail(at, w, 'after Cancel, the question, the composer or the stamp was lost');
+    else pass(at, w, 'Cancel -> cancelled copy, stamp kept, focus on its heading, question in the box');
+  } else if (S === 'cancelled') {
+    await pressOn(page, '[data-composer] textarea');
+    const f = await naFacts(page);
+    await page.keyboard.press('Escape');
+    const g = await naFacts(page);
+    if (f.n !== 1 || f.kind !== 'waiting' || !f.focusCancel) fail(at, w, `asking again from a cancelled card did not wait (${f.kind})`);
+    else if (g.n !== 1 || g.kind !== 'cancelled' || !g.focusHead || g.box !== question) fail(at, w, 'Esc did not cancel the second wait');
+    else pass(at, w, 'asking again waits; Esc cancels; the question stays');
+  } else {
+    if (!(await pressOn(page, '[data-send-again]'))) { fail(at, w, 'no Send again button to press'); return; }
+    const f = await naFacts(page);
+    if (f.n !== 1 || f.kind !== 'error' || !f.focusHead || f.box !== question) fail(at, w, `Send again did not leave one "No result" with focus on its heading (${f.n} ${f.kind})`);
+    else pass(at, w, 'Send again -> one fresh "No result", focus on its heading, question in the box');
+  }
+}
+
+{
+  const b3 = await chromium.launch({ executablePath: exe, headless: true });
+  try {
+    for (const S of NA_STATES) {
+      for (const src of [null, ...fixtures]) {
+        const fx = src ? src.name : '';
+        const at = `state=${S}${fx ? ` fixture=${fx}` : ''}`;
+        const question = src ? src.data.question : TYPED;
+        for (const w of NA_WIDTHS) {
+          const ctx = await b3.newContext({ viewport: { width: w, height: 900 }, reducedMotion: w === 360 ? 'reduce' : 'no-preference' });
+          const page = await ctx.newPage();
+          const external = [], errors = [];
+          await page.route('**/*', r => {
+            const u = r.request().url();
+            if (/^(file|data):/.test(u)) return r.continue();
+            external.push(u);
+            return r.abort();
+          });
+          page.on('pageerror', e => errors.push(String(e)));
+          const qs = (fx ? `fixture=${encodeURIComponent(fx)}&` : '') + `state=${S}`;
+          await page.goto(`${pathToFileURL(resolve(page_)).href}?${qs}`, { waitUntil: 'load' });
+          await withFonts(page);
+          if (src) {
+            await checkNonAnswer(page, S, question, src, w, at);
+            await checkReach(page, S, w, at);
+          } else {
+            await arriveByAsk(page, S, w, at);
+            await checkNonAnswer(page, S, question, null, w, at);
+          }
+          if (shots && NA_SHOTS.has(fx)) {
+            await page.screenshot({ path: join(shots, `state-${S}${fx ? `-${fx}` : ''}-${w}.png`), fullPage: true });
+          }
+          await checkTransition(page, S, question, w, at);
+          if (errors.length || external.length) fail(at, w, `page errors or network: ${[...errors, ...external].join(' | ').slice(0, 200)}`);
+          else pass(at, w, `${S}: no page errors, no network`);
+          await ctx.close();
+        }
+      }
+    }
+  } finally {
+    await b3.close();
+  }
+}
+
 const failed = results.filter(r => !r.ok);
 for (const r of failed) console.log(`FAIL ${r.fx} @${r.w}: ${r.msg}`);
-console.log(`ACCEPTANCE ${results.length - failed.length}/${results.length} checks passed across ${fixtures.length} fixtures x ${WIDTHS.length} widths`);
+console.log(`ACCEPTANCE ${results.length - failed.length}/${results.length} checks passed across ${fixtures.length} fixtures x ${WIDTHS.length} widths, `
+  + `the empty state, and ${NA_STATES.length} non-answer states x ${fixtures.length + 1} requests x ${NA_WIDTHS.length} widths`);
 process.exit(failed.length ? 1 : 0);
