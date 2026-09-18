@@ -339,3 +339,6 @@ textarea[aria-disabled="true"] { color: var(--muted); }
   .keyhint, .eyebrow { display: none; }
   .state { font-size: 24px; }
 }
+
+/* A multi-line question keeps its line breaks on the waiting / cancelled / error card (ASK-3 verifier). */
+[data-nonanswer] .question { white-space: pre-wrap; }

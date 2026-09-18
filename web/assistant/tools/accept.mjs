@@ -417,12 +417,24 @@ async function naFacts(page) {
       const cs = getComputedStyle(e);
       return ['Top', 'Right', 'Bottom', 'Left'].some(s => cs[`border${s}Style`] === 'dashed' && parseFloat(cs[`border${s}Width`]) > 0);
     }).length;
+    // Not one exact value: any COOL grey near the abstention grey counts, so a colour one unit off
+    // (#5c6573, found by the ASK-3 verifier) cannot pass. Warm greys (--grey #6b665f) are excluded
+    // by hue (blue channel above red), which is what makes the abstention grey read as abstention.
+    const [ar, ag, ab] = ABSTAIN.match(/\d+/g).map(Number);
+    const nearAbstain = c => {
+      const m = String(c).match(/\d+(\.\d+)?/g);
+      if (!m || m.length < 3 || (m.length > 3 && Number(m[3]) === 0)) return false;
+      const [r, g, b] = m.slice(0, 3).map(Number);
+      return b - r >= 12 && Math.hypot(r - ar, g - ag, b - ab) <= 30;
+    };
     f.abstainHue = all.filter(e => {
       const cs = getComputedStyle(e);
-      return [cs.color, cs.backgroundColor, cs.borderTopColor, cs.borderLeftColor].includes(ABSTAIN);
+      return [cs.color, cs.backgroundColor, cs.borderTopColor, cs.borderRightColor,
+              cs.borderBottomColor, cs.borderLeftColor].some(nearAbstain);
     }).length;
     f.onPaper = getComputedStyle(card).backgroundColor === PAPER;
-    f.stateWords = /\b(Answered|Abstained|Partly answered|Not held)\b/.test(card.innerText);
+    // Any form of "abstain" and the state glyph characters, not only the four state words.
+    f.stateWords = /\b(Answered|Partly answered|Not held)\b|abstain|[■◧◨◩□▣▢]/i.test(card.innerText);
     const lum = c => { const [r, g, b] = c.match(/\d+/g).slice(0, 3).map(Number).map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
     let bg = 'rgb(255, 255, 255)', e = card.parentElement;
     while (e) { const c = getComputedStyle(e).backgroundColor; if (!/rgba\(0, 0, 0, 0\)|transparent/.test(c)) { bg = c; break; } e = e.parentElement; }
