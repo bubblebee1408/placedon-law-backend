@@ -266,13 +266,16 @@ def _with_refusal(turn: dict, item: dict) -> dict:
 
 
 # ── the request ───────────────────────────────────────────────────────────────
-def _check_facts(facts: dict, *, document: bool) -> None:
-    """Only the fact names the engine declares, and only JSON scalars as their values.
+def _check_facts(facts: dict, *, document: bool, as_of: date) -> None:
+    """Only the fact names the engine declares, each typed by the engine's own validators,
+    on every path -- whether or not this turn applies them.
 
     An undeclared key is refused, never echoed: `facts.confidence` would ride into the
     response as a C4 violation, and `paid_up_capital` (no `_rupees`) would silently leave a
-    row undecided. Full typing is `api._profile`'s, where the facts are used; this catches
-    a list or an object where a single value belongs, on every path.
+    row undecided. The values are typed by `api._profile` and `api._evidence` themselves:
+    the profile is built once as a probe and thrown away, with placeholders standing in ONLY
+    for the required fields the caller did not supply, so every supplied value meets exactly
+    the rule it would meet where it is used.
     """
     allowed = api._DOC_CHECK_KEYS if document else api.PROFILE_KEYS | {"evidence"}
     unknown = set(facts) - allowed
@@ -288,6 +291,11 @@ def _check_facts(facts: dict, *, document: bool) -> None:
                 raise BadRequest(f"unknown evidence field(s): {', '.join(sorted(stray))}")
         elif v is not None and not isinstance(v, (str, int, float, bool)):
             raise BadRequest(f"fact {k!r} must be a single value, got {type(v).__name__}")
+    probe = {"company_class": "private", "incorporation_date": as_of.isoformat(),
+             "as_of": as_of.isoformat()} | {k: v for k, v in facts.items()
+                                             if k not in ("evidence", "document_date")}
+    api._profile(probe)
+    api._evidence(facts)
 
 
 def _strings(request: dict, key: str) -> list[str]:
@@ -344,8 +352,10 @@ def answer(request: dict, *, generated_at: str) -> dict:
     facts = request.get("facts")
     if facts is not None and not isinstance(facts, dict):
         raise BadRequest("'facts' must be an object")
+    if facts == {}:
+        facts = None                   # an empty object supplies no facts, and says none
     if facts is not None:
-        _check_facts(facts, document=(kind == "document"))
+        _check_facts(facts, document=(kind == "document"), as_of=as_of)
     if facts and facts.get("as_of") and facts["as_of"] != as_of.isoformat():
         raise BadRequest(f"facts.as_of ({facts['as_of']!r}) contradicts the turn's as_of "
                          f"({as_of.isoformat()!r})")
@@ -747,6 +757,22 @@ def _test() -> None:
             check(False, f"{why} is refused")
         except BadRequest as e:
             check(True, f"{why} is refused with a 400, not echoed ({str(e)[:40]})")
+    # Typed on EVERY path, applied or not (round 3 minor): a turn with no provision named
+    # does not use the facts, but a malformed fact is still a malformed request.
+    for bad_facts, why in (({"director_count": "many"}, "a director count in words"),
+                           ({"turnover_rupees": "80 crore"}, "a turnover in words"),
+                           ({"company_class": "llp"}, "a company class the engine has not"),
+                           ({"incorporation_date": "last year"}, "a date that is not a date"),
+                           ({"evidence": {"agm_dates": ["soon"]}}, "evidence that is not dates")):
+        try:
+            answer({"question": "Is this company a small company?", "as_of": AS_OF,
+                    "facts": bad_facts}, generated_at=GEN)
+            check(False, f"{why} is refused even with no provision named")
+        except BadRequest as e:
+            check(True, f"{why} is refused even with no provision named ({str(e)[:36]})")
+    t = ask({"question": "Is this company a small company?", "as_of": AS_OF, "facts": {}})
+    check(not any(i.get("detail") == FACTS_NOT_APPLIED for i in t["not_confirmed"]),
+          "an empty facts object is no facts -- the turn does not say facts were supplied")
     try:
         answer({"question": "x" * (MAX_QUESTION_CHARS + 1), "as_of": AS_OF},
                generated_at=GEN)
