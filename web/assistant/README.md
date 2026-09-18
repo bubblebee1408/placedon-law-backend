@@ -8,8 +8,11 @@ Design: [`docs/PLAN_13_ASSISTANT_UX.md`](../../docs/PLAN_13_ASSISTANT_UX.md) ·
 Plan: [`docs/PLAN_13_ASSISTANT_UX_PLAN.md`](../../docs/PLAN_13_ASSISTANT_UX_PLAN.md) ·
 Contract: [`contract.md`](contract.md)
 
-**This is a prototype, not a product surface.** `POST /v1/ask` does not exist; the page renders
-fixtures built from the engine (`scripts/assistant_contract.py`). Nothing here calls a model.
+**This is a prototype, not a product surface.** `POST /v1/ask` now exists (ASK-1, `checker/ask.py`
++ `checker/api.py`), but this page does not call it: it sends nothing and renders fixtures, and each
+fixture is a request put through the route's own `answer()` (`scripts/assistant_contract.py`), so
+what you see here is what a caller would get. Nothing here calls a model, and neither does the
+route — `uses_model` is always false.
 
 ## Run it
 
@@ -77,7 +80,9 @@ It asserts, for every fixture at 320 / 360 / 768 / 1024 / 1440:
 12. the empty state (no fixture) shows the title as the page's only `h1` and no answer.
 
 Last run: **403/403 across 6 fixtures × 5 widths, plus the empty state** (red-team rebuild and
-re-base onto the finalized frontend's tokens, 2026-09-17). Before the rebuild the same checks passed 233/396.
+re-base onto the finalized frontend's tokens, 2026-09-17; re-run unchanged on 2026-09-18 after the
+fixtures were rebuilt through the route's `answer()` — all six came out byte-identical). Before the
+rebuild the same checks passed 233/396.
 
 ## The hooks the checks depend on
 

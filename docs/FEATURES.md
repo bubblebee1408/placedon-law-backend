@@ -138,8 +138,15 @@ Ask a question → a cited answer, or an honest refusal. Never composes advice,
 never invents a citation.
 
 - **Status:** SAFETY SPINE BUILT — `model_adapter.py` (four refusals before any
-  call), `cascade.py`, `claim_verifier.py`.
-- **Missing:** `POST /v1/ask`, conversation state, and a model actually wired.
+  call), `cascade.py`, `claim_verifier.py`. **`POST /v1/ask` is built** (2026-09-18,
+  ASK-1): `checker/ask.py` answers one turn — answered / partial / out_of_scope —
+  from deterministic calls only (retrieval, the evidence pack, the prescribed
+  thresholds, the scope register, the compliance pack, the document check).
+  Contract and state mapping: `web/assistant/contract.md`.
+- **Missing:** conversation state, and a model actually wired. Until one is, the
+  route calls none and says so: `uses_model` is always false, and `answered` is
+  reachable only from a deterministic path because `claim_verifier` never returns
+  SUPPORTED.
 - **NON_GOAL boundary:** a *general* legal chatbot is barred. This is the
   constrained form — grounded or abstaining — and the constraint is the defence.
 
