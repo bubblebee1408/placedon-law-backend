@@ -283,19 +283,12 @@ def _check_facts(facts: dict, *, document: bool, as_of: date) -> None:
         raise BadRequest(f"unknown fact(s): {', '.join(sorted(unknown))}. This engine "
                          f"declares: {', '.join(sorted(allowed))}")
     for k, v in facts.items():
-        if k == "evidence":
-            if not isinstance(v, dict):
-                raise BadRequest("'evidence' must be an object")
-            stray = set(v) - api.EVIDENCE_KEYS
-            if stray:
-                raise BadRequest(f"unknown evidence field(s): {', '.join(sorted(stray))}")
-        elif v is not None and not isinstance(v, (str, int, float, bool)):
+        if k != "evidence" and v is not None and not isinstance(v, (str, int, float, bool)):
             raise BadRequest(f"fact {k!r} must be a single value, got {type(v).__name__}")
     probe = {"company_class": "private", "incorporation_date": as_of.isoformat(),
              "as_of": as_of.isoformat()} | {k: v for k, v in facts.items()
                                              if k not in ("evidence", "document_date")}
-    api._profile(probe)
-    api._evidence(facts)
+    api._evidence(facts, api._profile(probe).as_of)       # the one evidence schema
 
 
 def _strings(request: dict, key: str) -> list[str]:
@@ -808,6 +801,18 @@ def _test() -> None:
             check(False, f"{why} is refused even with no provision named")
         except BadRequest as e:
             check(True, f"{why} is refused even with no provision named ({str(e)[:36]})")
+    meet = ["2025-01-10", "2025-04-10", "2025-07-10", "2025-10-10"]
+    for ev, prov, why in (({"board_meetings": meet, "calendar_year": "2025"}, "s.173",
+                           "a calendar year sent as a string"),
+                          ({"resident_director_days": "many"}, "s.149(3)",
+                           "a day count in words")):
+        try:
+            answer({"question": "Did we comply?", "as_of": AS_OF,
+                    "facts": {**FACTS, "evidence": ev}, "provisions": [prov]},
+                   generated_at=GEN)
+            check(False, f"{why} is refused")
+        except BadRequest as e:
+            check(True, f"{why} is a 400 -- never a false defect or a crash ({str(e)[:40]})")
     t = ask({"question": "Is this company a small company?", "as_of": AS_OF, "facts": {}})
     check(not any(i.get("detail") == FACTS_NOT_APPLIED for i in t["not_confirmed"]),
           "an empty facts object is no facts -- the turn does not say facts were supplied")
