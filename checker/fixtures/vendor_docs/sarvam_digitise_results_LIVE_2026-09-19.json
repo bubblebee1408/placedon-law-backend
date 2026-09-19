@@ -1,0 +1,453 @@
+{
+  "_provenance": "LIVE response, not a doc example: GET https://api.sarvam.ai/doc-ai/v1/job/01a0b8e6-5f7c-7737-a4bb-53c29c08eaae/results, fetched 2026-09-19 by scripts/smoke_adapters.py's follow-up, for a Digitise job (language en-IN, output_format html) on page 1 of corpus/sources/gsr880e_2025.pdf -- the public G.S.R. 880(E) Gazette notification. Stored verbatim (gzip-decoded). Differs from the documented shape at https://docs.sarvam.ai/api-reference/doc-ai/job/results.md: documents[].filename (doc: file_name), page_count, status; pages[].page_num (doc: page_number), blocks, image_width, image_height, and NO content; usage.pages_discarded; body sent with Content-Encoding: gzip although no Accept-Encoding was sent.",
+  "http": {
+    "status": {
+      "http": 200,
+      "content_type": "application/json",
+      "content_encoding": null
+    },
+    "results": {
+      "http": 200,
+      "content_type": "application/json",
+      "content_encoding": "gzip"
+    }
+  },
+  "status_example": {
+    "$schema": "https://api.sarvam.ai/schemas/PublicJobBody.json",
+    "job_id": "01a0b8e6-5f7c-7737-a4bb-53c29c08eaae",
+    "status": "completed",
+    "pipeline": "digitise",
+    "usage": {
+      "pages_total": 1,
+      "pages_processed": 1,
+      "pages_succeeded": 1,
+      "pages_failed": 0
+    },
+    "created_at": "2026-09-19T09:01:40Z",
+    "updated_at": "2026-09-19T09:01:42Z"
+  },
+  "example": {
+    "job_id": "01a0b8e6-5f7c-7737-a4bb-53c29c08eaae",
+    "type": "digitise",
+    "status": "completed",
+    "usage": {
+      "pages_total": 1,
+      "pages_processed": 1,
+      "pages_succeeded": 1,
+      "pages_failed": 0,
+      "pages_discarded": 0
+    },
+    "documents": [
+      {
+        "filename": "pages-0001-0001.pdf",
+        "page_count": 1,
+        "status": "completed",
+        "pages": [
+          {
+            "page_num": 1,
+            "image_width": 2481,
+            "image_height": 3508,
+            "blocks": [
+              {
+                "block_id": "p1-b1",
+                "text": "रजिस्ट्री सं. डी.एल.- 33004/99",
+                "layout_tag": "header",
+                "reading_order": 1,
+                "coordinates": {
+                  "x1": 239,
+                  "y1": 254,
+                  "x2": 649,
+                  "y2": 304
+                },
+                "bbox_norm": [
+                  0.09633212414349053,
+                  0.07240592930444698,
+                  0.26158806932688433,
+                  0.08665906499429875
+                ]
+              },
+              {
+                "block_id": "p1-b2",
+                "text": "REGD. No. D. L.-33004/99",
+                "layout_tag": "header",
+                "reading_order": 2,
+                "coordinates": {
+                  "x1": 1792,
+                  "y1": 257,
+                  "x2": 2206,
+                  "y2": 303
+                },
+                "bbox_norm": [
+                  0.7222893994357114,
+                  0.07326111744583809,
+                  0.8891575977428456,
+                  0.08637400228050171
+                ]
+              },
+              {
+                "block_id": "p1-b3",
+                "text": "सत्यमेव जयते",
+                "layout_tag": "header",
+                "reading_order": 3,
+                "coordinates": {
+                  "x1": 1104,
+                  "y1": 422,
+                  "x2": 1310,
+                  "y2": 751
+                },
+                "bbox_norm": [
+                  0.4449818621523579,
+                  0.12029646522234892,
+                  0.52801289802499,
+                  0.21408209806157355
+                ]
+              },
+              {
+                "block_id": "p1-b4",
+                "text": "भारत का राजपत्र\nThe Gazette of India",
+                "layout_tag": "headline",
+                "reading_order": 4,
+                "coordinates": {
+                  "x1": 262,
+                  "y1": 662,
+                  "x2": 2206,
+                  "y2": 1033
+                },
+                "bbox_norm": [
+                  0.10560257960499798,
+                  0.1887115165336374,
+                  0.8891575977428456,
+                  0.29446978335233753
+                ]
+              },
+              {
+                "block_id": "p1-b5",
+                "text": "सी.जी.-डी.एल.-अ.-01122025-268124\nCG-DL-E-01122025-268124",
+                "layout_tag": "paragraph",
+                "reading_order": 5,
+                "coordinates": {
+                  "x1": 941,
+                  "y1": 1113,
+                  "x2": 1620,
+                  "y2": 1221
+                },
+                "bbox_norm": [
+                  0.3792825473599355,
+                  0.31727480045610035,
+                  0.652962515114873,
+                  0.34806157354618017
+                ]
+              },
+              {
+                "block_id": "p1-b6",
+                "text": "असाधारण\nEXTRAORDINARY",
+                "layout_tag": "paragraph",
+                "reading_order": 6,
+                "coordinates": {
+                  "x1": 1039,
+                  "y1": 1317,
+                  "x2": 1438,
+                  "y2": 1417
+                },
+                "bbox_norm": [
+                  0.41878274889157596,
+                  0.37542759407069554,
+                  0.5796049979846836,
+                  0.4039338654503991
+                ]
+              },
+              {
+                "block_id": "p1-b7",
+                "text": "भाग II—खण्ड 3—उप-खण्ड (i)",
+                "layout_tag": "paragraph",
+                "reading_order": 7,
+                "coordinates": {
+                  "x1": 977,
+                  "y1": 1436,
+                  "x2": 1494,
+                  "y2": 1488
+                },
+                "bbox_norm": [
+                  0.39379282547359934,
+                  0.40935005701254273,
+                  0.6021765417170496,
+                  0.4241733181299886
+                ]
+              },
+              {
+                "block_id": "p1-b8",
+                "text": "PART II—Section 3—Sub-section (i)",
+                "layout_tag": "paragraph",
+                "reading_order": 8,
+                "coordinates": {
+                  "x1": 898,
+                  "y1": 1483,
+                  "x2": 1578,
+                  "y2": 1541
+                },
+                "bbox_norm": [
+                  0.3619508262797259,
+                  0.4227480045610034,
+                  0.6360338573155986,
+                  0.4392816419612315
+                ]
+              },
+              {
+                "block_id": "p1-b9",
+                "text": "प्राधिकार से प्रकाशित",
+                "layout_tag": "paragraph",
+                "reading_order": 9,
+                "coordinates": {
+                  "x1": 1064,
+                  "y1": 1554,
+                  "x2": 1417,
+                  "y2": 1610
+                },
+                "bbox_norm": [
+                  0.42885933091495365,
+                  0.4429874572405929,
+                  0.5711406690850463,
+                  0.4589509692132269
+                ]
+              },
+              {
+                "block_id": "p1-b10",
+                "text": "PUBLISHED BY AUTHORITY",
+                "layout_tag": "paragraph",
+                "reading_order": 10,
+                "coordinates": {
+                  "x1": 938,
+                  "y1": 1607,
+                  "x2": 1532,
+                  "y2": 1663
+                },
+                "bbox_norm": [
+                  0.37807335751713017,
+                  0.4580957810718358,
+                  0.6174929463925837,
+                  0.4740592930444698
+                ]
+              },
+              {
+                "block_id": "p1-b11",
+                "text": "सं. 794]",
+                "layout_tag": "paragraph",
+                "reading_order": 11,
+                "coordinates": {
+                  "x1": 259,
+                  "y1": 1704,
+                  "x2": 433,
+                  "y2": 1762
+                },
+                "bbox_norm": [
+                  0.10439338976219266,
+                  0.48574686431014824,
+                  0.17452640064490124,
+                  0.5022805017103763
+                ]
+              },
+              {
+                "block_id": "p1-b12",
+                "text": "नई दिल्ली, सोमवार, दिसम्बर 1, 2025/अग्रहायण 10, 1947",
+                "layout_tag": "paragraph",
+                "reading_order": 12,
+                "coordinates": {
+                  "x1": 798,
+                  "y1": 1712,
+                  "x2": 1740,
+                  "y2": 1771
+                },
+                "bbox_norm": [
+                  0.3216444981862152,
+                  0.4880273660205245,
+                  0.7013301088270859,
+                  0.5048460661345496
+                ]
+              },
+              {
+                "block_id": "p1-b13",
+                "text": "No. 794]",
+                "layout_tag": "paragraph",
+                "reading_order": 13,
+                "coordinates": {
+                  "x1": 259,
+                  "y1": 1776,
+                  "x2": 432,
+                  "y2": 1834
+                },
+                "bbox_norm": [
+                  0.10439338976219266,
+                  0.5062713797035348,
+                  0.17412333736396615,
+                  0.5228050171037628
+                ]
+              },
+              {
+                "block_id": "p1-b14",
+                "text": "NEW DELHI, MONDAY, DECEMBER 1, 2025/AGRAHAYANA 10, 1947",
+                "layout_tag": "paragraph",
+                "reading_order": 14,
+                "coordinates": {
+                  "x1": 582,
+                  "y1": 1775,
+                  "x2": 1955,
+                  "y2": 1834
+                },
+                "bbox_norm": [
+                  0.23458282950423218,
+                  0.5059863169897377,
+                  0.7879887142281338,
+                  0.5228050171037628
+                ]
+              },
+              {
+                "block_id": "p1-b15",
+                "text": "कारपोरेट कार्य मंत्रालय",
+                "layout_tag": "section-title",
+                "reading_order": 15,
+                "coordinates": {
+                  "x1": 1034,
+                  "y1": 2008,
+                  "x2": 1445,
+                  "y2": 2070
+                },
+                "bbox_norm": [
+                  0.41676743248690046,
+                  0.572405929304447,
+                  0.5824264409512293,
+                  0.5900798175598632
+                ]
+              },
+              {
+                "block_id": "p1-b16",
+                "text": "अधिसूचना",
+                "layout_tag": "paragraph",
+                "reading_order": 16,
+                "coordinates": {
+                  "x1": 1135,
+                  "y1": 2094,
+                  "x2": 1349,
+                  "y2": 2161
+                },
+                "bbox_norm": [
+                  0.45747682386134625,
+                  0.5969213226909921,
+                  0.5437323659814591,
+                  0.6160205245153934
+                ]
+              },
+              {
+                "block_id": "p1-b17",
+                "text": "नई दिल्ली, 1 दिसम्बर, 2025",
+                "layout_tag": "paragraph",
+                "reading_order": 17,
+                "coordinates": {
+                  "x1": 977,
+                  "y1": 2187,
+                  "x2": 1500,
+                  "y2": 2254
+                },
+                "bbox_norm": [
+                  0.39379282547359934,
+                  0.6234321550741163,
+                  0.6045949214026602,
+                  0.6425313568985177
+                ]
+              },
+              {
+                "block_id": "p1-b18",
+                "text": "सा.का.नि. 880(अ).— केंद्रीय सरकार, कंपनी अधिनियम, 2013 (2013 का 18) की धारा 469 की उपधारा (1) और (2) द्वारा प्रदत्त शक्तियों का प्रयोग करते हुए, कंपनी (परिभाषा संबंधी ब्यौरों के विनिर्देश) नियम, 2014 में आगे और संशोधन हेतु निम्नलिखित नियम बनाती है, अर्थात्:-",
+                "layout_tag": "paragraph",
+                "reading_order": 18,
+                "coordinates": {
+                  "x1": 234,
+                  "y1": 2293,
+                  "x2": 2243,
+                  "y2": 2503
+                },
+                "bbox_norm": [
+                  0.094316807738815,
+                  0.6536488027366021,
+                  0.9040709391374446,
+                  0.7135119726339795
+                ]
+              },
+              {
+                "block_id": "p1-b19",
+                "text": "1. संक्षिप्त नाम और प्रारंभ- (1) इन नियमों का नाम कंपनी (परिभाषा संबंधी ब्यौरों के विनिर्देश) संशोधन नियम, 2025 है।",
+                "layout_tag": "paragraph",
+                "reading_order": 19,
+                "coordinates": {
+                  "x1": 238,
+                  "y1": 2538,
+                  "x2": 2243,
+                  "y2": 2684
+                },
+                "bbox_norm": [
+                  0.09592906086255543,
+                  0.7234891676168758,
+                  0.9040709391374446,
+                  0.7651083238312428
+                ]
+              },
+              {
+                "block_id": "p1-b20",
+                "text": "(2) ये राजपत्र में उनके प्रकाशन की तारीख से प्रवृत्त होंगे।",
+                "layout_tag": "paragraph",
+                "reading_order": 20,
+                "coordinates": {
+                  "x1": 387,
+                  "y1": 2723,
+                  "x2": 1340,
+                  "y2": 2791
+                },
+                "bbox_norm": [
+                  0.15598548972188633,
+                  0.7762257696693272,
+                  0.5401047964530431,
+                  0.7956100342075256
+                ]
+              },
+              {
+                "block_id": "p1-b21",
+                "text": "8053 GI/2025",
+                "layout_tag": "footer",
+                "reading_order": 21,
+                "coordinates": {
+                  "x1": 243,
+                  "y1": 3196,
+                  "x2": 475,
+                  "y2": 3244
+                },
+                "bbox_norm": [
+                  0.09794437726723096,
+                  0.9110604332953249,
+                  0.19145505844417574,
+                  0.9247434435575826
+                ]
+              },
+              {
+                "block_id": "p1-b22",
+                "text": "(1)",
+                "layout_tag": "page-number",
+                "reading_order": 22,
+                "coordinates": {
+                  "x1": 1197,
+                  "y1": 3198,
+                  "x2": 1251,
+                  "y2": 3247
+                },
+                "bbox_norm": [
+                  0.48246674727932287,
+                  0.9116305587229191,
+                  0.5042321644498187,
+                  0.9255986316989738
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

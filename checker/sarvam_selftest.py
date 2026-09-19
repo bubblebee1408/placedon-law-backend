@@ -49,7 +49,8 @@ class FakeSarvam:
     """Answers the four documented calls with the documented shapes."""
 
     def __init__(self, *, missing=None, empty=None, final="completed", polls_before=1,
-                 created_job_id=None, status_value=None):
+                 created_job_id=None, status_value=None, shape="docs"):
+        self.shape = shape
         self.missing = missing or {}      # job index -> page numbers left out
         self.empty = empty or {}          # job index -> page numbers with "" content
         self.final, self.polls_before = final, polls_before
@@ -83,12 +84,19 @@ class FakeSarvam:
                               "pages_succeeded": n - len(miss), "pages_failed": len(miss)},
                     "created_at": "2026-09-18T00:00:00Z", "updated_at": "2026-09-18T00:00:05Z"}
         if path.endswith("/results"):
-            pages = [{"page_number": p,
-                      "content": "" if p in self.empty.get(k, ()) else
-                      f"<p>page {p} of job {k}</p>"}
-                     for p in range(1, n + 1) if p not in miss]
+            if self.shape == "live":
+                pages = [_blocks_page(p, [] if p in self.empty.get(k, ()) else
+                                      [_block(1, f"page {p} of job {k}")])
+                         for p in range(1, n + 1) if p not in miss]
+                doc = {"filename": "x", "page_count": n, "status": self.final, "pages": pages}
+            else:
+                pages = [{"page_number": p,
+                          "content": "" if p in self.empty.get(k, ()) else
+                          f"<p>page {p} of job {k}</p>"}
+                         for p in range(1, n + 1) if p not in miss]
+                doc = {"file_name": "x", "pages": pages}
             return {"type": "digitise", "job_id": job["id"], "status": self.final,
-                    "documents": [{"file_name": "x", "pages": pages}],
+                    "documents": [doc],
                     "usage": {"pages_total": n, "pages_processed": n,
                               "pages_succeeded": n - len(miss), "pages_failed": len(miss)}}
         raise AssertionError(f"unexpected call {method} {path}")
@@ -163,6 +171,7 @@ def _checks(check, attempt, tmp: Path) -> None:
     _fixtures(check, attempt)
     _flow(check, attempt, no_opt_out)
     _errors(check, attempt, no_opt_out)
+    _live_shape(check, attempt, no_opt_out)
 
 
 def _privacy(check, attempt, tmp, no_opt_out, private) -> None:
@@ -529,4 +538,143 @@ def _errors(check, attempt, env) -> None:
               "no CA trust store -> refuses rather than calling unverified")
     finally:
         ctx.stop()
+        os.environ.pop("SARVAM_API_KEY", None)
+
+
+LIVE = "sarvam_digitise_results_LIVE_2026-09-19.json"
+
+
+def _blocks_page(n: int, blocks: list[dict]) -> dict:
+    return {"page_num": n, "image_width": 2481, "image_height": 3508, "blocks": blocks}
+
+
+def _block(i: int, text: str, tag: str = "paragraph") -> dict:
+    return {"block_id": f"p1-b{i}", "layout_tag": tag, "reading_order": i,
+            "coordinates": {"x1": 1, "y1": 1, "x2": 2, "y2": 2},
+            "bbox_norm": [0.1, 0.1, 0.2, 0.2], "text": text}
+
+
+def _live_shape(check, attempt, env) -> None:
+    """What the live API returned on 19-09, which is NOT the documented shape."""
+    fx = _fixture(LIVE)
+    check(fx["_provenance"].startswith("LIVE response, not a doc example")
+          and "gsr880e_2025.pdf" in fx["_provenance"],
+          "the live fixture is labelled as a live response, with its public source")
+    live = fx["example"]
+    pages = sm.parse_digitise_results(live, n_pages=1, first_page=1, output_format="html")
+    check(len(pages) == 1 and pages[0].status == "READ",
+          "the LIVE results shape (filename / page_num / blocks, no content) parses to a READ page")
+    t = pages[0].text or ""
+    check(t.startswith("\u0930\u091c\u093f\u0938\u094d\u091f\u094d\u0930\u0940")
+          and "880(\u0905)" in t and "CG-DL-E-01122025-268124" in t,
+          "...its text is the blocks in reading order: the Gazette header first, the "
+          "G.S.R. 880(E) Hindi notification and the CG-DL-E number inside")
+    check(len(pages[0].blocks) == 22 and pages[0].blocks[0].tag == "header"
+          and pages[0].blocks[0].bbox is not None,
+          "...and the 22 blocks are kept with tag and box, for page-anchored spans")
+    check([b.order for b in pages[0].blocks] == sorted(b.order for b in pages[0].blocks),
+          "blocks are ordered by reading_order")
+
+    # model-written text is quarantined, not read as the page
+    res = {"type": "digitise", "job_id": "j", "status": "completed",
+           "documents": [{"filename": "x.pdf", "page_count": 1, "status": "completed",
+                          "pages": [_blocks_page(1, [
+                              _block(1, "Board resolution dated 1 June"),
+                              _block(2, "A photograph of a signed page with a seal", "image"),
+                              _block(3, "Fig. 1: the seal", "image-caption")])]}],
+           "usage": {"pages_total": 1}}
+    pg = sm.parse_digitise_results(res, n_pages=1, first_page=1, output_format="html")[0]
+    check("photograph of a signed page" not in (pg.text or "")
+          and pg.model_written == ("A photograph of a signed page with a seal",),
+          "an `image` block's text is quarantined as model_written, never the page text")
+    check("Fig. 1: the seal" in (pg.text or ""),
+          "...while an image CAPTION, which is printed on the page, stays in the text")
+
+    for label, mutate in (
+        ("a page with neither content nor blocks",
+         lambda d: d["documents"][0]["pages"][0].pop("blocks")),
+        ("a block without text", lambda d: d["documents"][0]["pages"][0]["blocks"][0].pop("text")),
+        ("a block whose reading_order is not a number",
+         lambda d: d["documents"][0]["pages"][0]["blocks"][0].update(reading_order="1")),
+        ("page_count disagreeing with the pages sent",
+         lambda d: d["documents"][0].update(page_count=3)),
+        ("a document whose own status is failed on a completed job",
+         lambda d: d["documents"][0].update(status="failed")),
+    ):
+        d = json.loads(json.dumps(res))
+        mutate(d)
+        e = attempt(lambda d=d: sm.parse_digitise_results(d, n_pages=1, first_page=1,
+                                                          output_format="html"))
+        check(isinstance(e, sm.SarvamBadResponse), f"live shape: {label} -> refused")
+
+    empty = json.loads(json.dumps(res))
+    empty["documents"][0]["pages"][0]["blocks"] = []
+    pg = sm.parse_digitise_results(empty, n_pages=1, first_page=1, output_format="html")[0]
+    check(pg.status == "EMPTY", "a completed page with zero blocks is EMPTY, not blank")
+
+    # the 14-page flow, end to end, in the LIVE shape
+    os.environ["SARVAM_API_KEY"] = "sk-TEST"
+    try:
+        clock, fake = Clock(), FakeSarvam(shape="live")
+        r = sm.digitise(PUBLIC_14PAGE, language="en-IN", output_format="html", env_path=env,
+                        _transport=fake, _sleep=clock.sleep, _clock=clock.now)
+        check([p.page for p in r.pages] == list(range(1, 15)) and r.complete
+              and r.pages[10].text == "page 1 of job 1",
+              "a split 14-page document parses in the live shape, pages mapped back")
+    finally:
+        os.environ.pop("SARVAM_API_KEY", None)
+
+    # re-reading a job already paid for, without resubmitting it
+    os.environ["SARVAM_API_KEY"] = "sk-TEST"
+    try:
+        clock, fake = Clock(), FakeSarvam(shape="live")
+        sm.digitise(PUBLIC_2PAGE, language="en-IN", output_format="html", env_path=env,
+                    _transport=fake, _sleep=clock.sleep, _clock=clock.now)
+        before = len(fake.calls)
+        again = sm.fetch_results("job-0", n_pages=2, output_format="html", _transport=fake)
+        new_calls = fake.calls[before:]
+        check([p.text for p in again] == ["page 1 of job 0", "page 2 of job 0"]
+              and all(c[0] == "GET" for c in new_calls)
+              and ("GET", "/job/job-0/status") in new_calls,
+              "fetch_results() re-reads a finished job with GETs only -- no new job, no spend")
+        slow = FakeSarvam(shape="live", polls_before=10_000)
+        slow("POST", "/job/digitise", *sm.build_multipart(
+            [], [("file", "a.png", "image/png", b"x")], "B"))
+        e = attempt(lambda: sm.fetch_results("job-0", n_pages=1, _transport=slow))
+        check(isinstance(e, sm.SarvamServiceError) and "not terminal" in str(e),
+              "fetch_results() on a running job raises; it does not wait or guess")
+        e = attempt(lambda: sm.fetch_results("../x", n_pages=1, _transport=fake))
+        check(isinstance(e, ValueError), "fetch_results() refuses a job id unsafe in a URL")
+    finally:
+        os.environ.pop("SARVAM_API_KEY", None)
+
+    # gzip: the live results body came back Content-Encoding: gzip, unasked
+    import gzip as _gz
+    secret = "sk-SECRET-gz"
+    os.environ["SARVAM_API_KEY"] = secret
+    from checker import robots
+
+    class Resp:
+        def __init__(self, b, headers): self.b, self.headers = b, headers
+        def read(self): return self.b
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+    body = json.dumps(live).encode("utf-8")
+    try:
+        with mock.patch.object(robots, "ssl_context", return_value=object()):
+            for label, headers in (("with Content-Encoding: gzip", {"Content-Encoding": "gzip"}),
+                                   ("with the gzip magic but no header", {})):
+                with mock.patch.object(urllib.request, "urlopen",
+                                       return_value=Resp(_gz.compress(body), headers)):
+                    got = attempt(lambda: sm._call("GET", "/job/j/results", None, None))
+                    data = None if got else sm._call("GET", "/job/j/results", None, None)
+                check(got is None and data == live,
+                      f"a gzip-encoded body {label} is decoded, not refused as non-JSON")
+            with mock.patch.object(urllib.request, "urlopen",
+                                   return_value=Resp(b"\x1f\x8b-not-really-gzip",
+                                                     {"Content-Encoding": "gzip"})):
+                e = attempt(lambda: sm._call("GET", "/job/j/results", None, None))
+            check(isinstance(e, sm.SarvamBadResponse) and secret not in str(e),
+                  "a body that claims gzip but is not is refused, without the key")
+    finally:
         os.environ.pop("SARVAM_API_KEY", None)

@@ -56,6 +56,31 @@ UNVERIFIED:
 - Whether status polls count against the 10 req/min limit. Every request is paced as
   if they do.
 
+## What the LIVE API returned (first call, 19-09-2026) -- it is not the documented shape
+
+One Digitise job on page 1 of the public G.S.R. 880(E) Gazette PDF (language en-IN,
+output_format html), recorded by scripts/smoke_adapters.py and stored verbatim as
+checker/fixtures/vendor_docs/sarvam_digitise_results_LIVE_2026-09-19.json:
+
+- create and status matched S1/S2, plus an undocumented `$schema` field; the job was
+  `completed` at the first poll, `usage` also carries `pages_discarded`.
+- results came back `Content-Encoding: gzip` although no Accept-Encoding was sent.
+  urllib does not decode that, so the first call was refused as non-JSON; `_call`
+  now decodes gzip (by header, or by magic bytes) and refuses a body that claims gzip
+  but is not.
+- results differ from S3: `documents[].filename` (S3: `file_name`), plus `page_count`
+  and `status`; each page is `{page_num, image_width, image_height, blocks}` -- S3's
+  `page_number` and `content` are ABSENT. Text arrives as `blocks[{block_id,
+  layout_tag, reading_order, coordinates{x1,y1,x2,y2}, bbox_norm, text}]`.
+  `parse_digitise_results` accepts both shapes, each validated; the page text is the
+  blocks in reading order, and the blocks are kept (tag + box) for page-anchored spans.
+- Whether `output_format=md` changes that shape is UNVERIFIED (one job, html only).
+- The page is bilingual; with language en-IN the Hindi was read too. The emblem came
+  back as a `header` block holding the printed motto, not as an image description.
+  Blocks tagged image/photograph/chart/diagram/figure are nonetheless quarantined as
+  `model_written` and never enter `text` (INFERRED rule: which tags carry
+  AI-written descriptions is UNVERIFIED).
+
 ## The privacy guard (why it is a check, not a comment)
 
 Because of S8's default, a document sent here may train Sarvam's models. So
@@ -89,6 +114,7 @@ result records the range asked for. Nothing is dropped silently.
 """
 from __future__ import annotations
 
+import gzip
 import io
 import json
 import os
@@ -186,11 +212,23 @@ class JobStatus:
 
 
 @dataclass(frozen=True)
+class Block:
+    """One layout block of the LIVE results shape (see the 19-09 note above)."""
+    block_id: str
+    tag: str
+    order: int
+    text: str
+    bbox: tuple[float, ...] | None
+
+
+@dataclass(frozen=True)
 class PageText:
     page: int                # page number in the ORIGINAL document
     status: str              # READ | EMPTY | FAILED
-    content: str | None      # exactly what the API returned for the page
-    text: str | None         # plain text derived from content
+    content: str | None      # the documented shape's `content`, verbatim (None for blocks)
+    text: str | None         # plain text: from content, or from the blocks in reading order
+    blocks: tuple[Block, ...] = ()
+    model_written: tuple[str, ...] = ()   # quarantined: never part of `text`
 
 
 @dataclass(frozen=True)
@@ -430,6 +468,8 @@ def _call(method: str, path: str, body: bytes | None, content_type: str | None,
     try:
         with urllib.request.urlopen(req, timeout=timeout, context=ctx) as r:
             raw = r.read()
+            headers = getattr(r, "headers", None) or {}
+            encoding = str(headers.get("Content-Encoding") or "").lower()
     except urllib.error.HTTPError as e:
         detail = _redact(_problem(e.read().decode("utf-8", "replace")[:600]), key)[:300]
         kind = {429: "rate limited (10 req/min on every plan)",
@@ -445,6 +485,14 @@ def _call(method: str, path: str, body: bytes | None, content_type: str | None,
         raise SarvamServiceError(f"Sarvam {method} {path} failed mid-flight "
                                  f"({type(e).__name__}: {_redact(str(e), key)[:120]}). "
                                  f"{service}") from None
+    # Live 19-09: results arrive Content-Encoding: gzip, unasked. A JSON body can never
+    # start with 0x1f, so the magic bytes are an unambiguous second signal.
+    if encoding == "gzip" or raw[:2] == b"\x1f\x8b":
+        try:
+            raw = gzip.decompress(raw)
+        except (OSError, EOFError) as e:
+            raise SarvamBadResponse(
+                f"{method} {path}: body claims gzip but does not decode ({e})") from None
     try:
         return json.loads(raw.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as e:
@@ -523,9 +571,60 @@ def html_to_text(content: str) -> str:
     return "\n".join(ln for ln in lines if ln)
 
 
+# Blocks whose text may be WRITTEN by the model (image/chart descriptions) rather than
+# READ off the page. INFERRED from the documented section types; not yet observed live.
+MODEL_WRITTEN_TAGS = ("image", "photograph", "chart", "diagram", "chart/diagram",
+                      "chart-diagram", "figure")
+
+
+def _blocks(raw: object, pn: int) -> tuple[tuple[Block, ...], tuple[str, ...]]:
+    if not isinstance(raw, list):
+        raise SarvamBadResponse(f"page {pn}: blocks is not a list")
+    blocks = []
+    for i, b in enumerate(raw):
+        if not isinstance(b, dict) or not isinstance(b.get("text"), str):
+            raise SarvamBadResponse(f"page {pn}: block {i} has no text")
+        order = _int_or_none(b.get("reading_order"))
+        if order is None:
+            raise SarvamBadResponse(f"page {pn}: block {i} has no numeric reading_order")
+        box = b.get("bbox_norm")
+        bbox = (tuple(float(v) for v in box)
+                if isinstance(box, list) and all(isinstance(v, (int, float)) for v in box)
+                else None)
+        blocks.append(Block(str(b.get("block_id", i)), str(b.get("layout_tag", "")),
+                            order, b["text"], bbox))
+    blocks.sort(key=lambda b: b.order)
+    written = tuple(b.text for b in blocks if b.tag.lower() in MODEL_WRITTEN_TAGS)
+    return tuple(blocks), written
+
+
+def _page(pg: object, n_pages: int, output_format: str) -> tuple[int, dict]:
+    """(page number, parsed) for either shape: documented {page_number, content} or
+    live {page_num, blocks}. Anything else is refused."""
+    if not isinstance(pg, dict):
+        raise SarvamBadResponse("a page is not an object")
+    pn = _int_or_none(pg.get("page_number", pg.get("page_num")))
+    if pn is None or not 1 <= pn <= n_pages:
+        raise SarvamBadResponse(f"page number {pn!r} is missing or outside 1..{n_pages}")
+    if "content" in pg:
+        content = pg["content"]
+        if not isinstance(content, str):
+            raise SarvamBadResponse(f"page {pn} content is not text")
+        text = html_to_text(content) if output_format == "html" else content.strip()
+        return pn, {"content": content, "text": text, "blocks": (), "written": ()}
+    if "blocks" in pg:
+        blocks, written = _blocks(pg["blocks"], pn)
+        text = "\n".join(b.text.strip() for b in blocks
+                         if b.tag.lower() not in MODEL_WRITTEN_TAGS and b.text.strip())
+        return pn, {"content": None, "text": text, "blocks": blocks, "written": written}
+    raise SarvamBadResponse(f"page {pn} has neither content nor blocks")
+
+
 def parse_digitise_results(data: object, *, n_pages: int, first_page: int,
                            output_format: str) -> list[PageText]:
-    """One PageText per page of the job, in original page numbers. Nothing dropped."""
+    """One PageText per page of the job, in original page numbers. Nothing dropped.
+
+    Accepts the documented shape (S3) and the live shape seen 19-09 (see docstring)."""
     if not isinstance(data, dict) or data.get("type") != "digitise":
         raise SarvamBadResponse("results are not a digitise result")
     status = str(data.get("status", "")).lower()
@@ -536,30 +635,35 @@ def parse_digitise_results(data: object, *, n_pages: int, first_page: int,
     docs = data.get("documents")
     if not isinstance(docs, list) or len(docs) != 1 or not isinstance(docs[0], dict):
         raise SarvamBadResponse("expected exactly one document per job (one file is sent)")
-    pages = docs[0].get("pages")
+    doc = docs[0]
+    count = _int_or_none(doc.get("page_count"))
+    if count is not None and count != n_pages:
+        raise SarvamBadResponse(f"document page_count {count}, but {n_pages} pages were sent")
+    doc_status = str(doc.get("status", status)).lower()
+    if status == "completed" and doc_status != "completed":
+        raise SarvamBadResponse(f"job completed but its document says {doc_status!r}")
+    pages = doc.get("pages")
     if not isinstance(pages, list):
         raise SarvamBadResponse("the document has no pages list")
-    got: dict[int, str] = {}
+    got: dict[int, dict] = {}
     for pg in pages:
-        pn = pg.get("page_number") if isinstance(pg, dict) else None
-        content = pg.get("content") if isinstance(pg, dict) else None
-        if _int_or_none(pn) is None or not 1 <= pn <= n_pages or pn in got:
-            raise SarvamBadResponse(f"page_number {pn!r} is missing, repeated or outside 1..{n_pages}")
-        if not isinstance(content, str):
-            raise SarvamBadResponse(f"page {pn} content is not text")
-        got[pn] = content
+        pn, parsed = _page(pg, n_pages, output_format)
+        if pn in got:
+            raise SarvamBadResponse(f"page {pn} is repeated")
+        got[pn] = parsed
     missing = [p for p in range(1, n_pages + 1) if p not in got]
     if status == "completed" and missing:
         raise SarvamBadResponse(f"'completed' but pages {missing} are absent")
     out = []
     for pn in range(1, n_pages + 1):
-        content = got.get(pn)
-        text = None if content is None else (
-            html_to_text(content) if output_format == "html" else content.strip())
-        if content is None or (not text and status == "partially_completed"):
-            out.append(PageText(first_page + pn - 1, "FAILED", content, None))
+        g = got.get(pn)
+        page = first_page + pn - 1
+        if g is None or (not g["text"] and status == "partially_completed"):
+            out.append(PageText(page, "FAILED", g and g["content"], None,
+                                g["blocks"] if g else (), g["written"] if g else ()))
         else:
-            out.append(PageText(first_page + pn - 1, "READ" if text else "EMPTY", content, text))
+            out.append(PageText(page, "READ" if g["text"] else "EMPTY", g["content"],
+                                g["text"], g["blocks"], g["written"]))
     return out
 
 
@@ -605,6 +709,28 @@ def _run_parts(parts: list[Part], *, source: str, basis: str, language: str,
     billed = sum(j.usage.pages_processed or j.n_pages for j in jobs)
     return DigitiseResult(source, basis, language, output_format, pages_requested,
                           tuple(pages), tuple(jobs), round(billed * PRICE_INR_PER_PAGE, 2))
+
+
+def fetch_results(job_id: str, *, n_pages: int, first_page: int = 1,
+                  output_format: str = "md", _transport=None) -> list[PageText]:
+    """Re-read a job that already ran, with GETs only: no resubmission, no new spend.
+
+    The status must already be terminal -- this neither waits nor guesses. It is the
+    recovery path the service errors above point to ("re-poll the job id")."""
+    if not isinstance(job_id, str) or not _JOB_ID.fullmatch(job_id):
+        raise ValueError(f"{job_id!r} is not a job id that is safe in a URL")
+    if _transport is None:
+        _key()
+    call = _transport or _call
+    st = parse_status(call("GET", f"/job/{job_id}/status", None, None))
+    if st.status not in TERMINAL:
+        raise SarvamServiceError(f"job {job_id} is not terminal yet ({st.status}); "
+                                 f"re-poll later. Not an empty document.")
+    if st.status in ("failed", "rejected"):
+        raise SarvamServiceError(f"job {job_id} {st.status}; not an empty document")
+    return parse_digitise_results(call("GET", f"/job/{job_id}/results", None, None),
+                                  n_pages=n_pages, first_page=first_page,
+                                  output_format=output_format)
 
 
 def _validate(language: str, output_format: str) -> None:
