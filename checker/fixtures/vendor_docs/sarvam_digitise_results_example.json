@@ -1,0 +1,29 @@
+{
+  "_provenance": "shape copied from https://docs.sarvam.ai/api-reference/doc-ai/job/results.md ('Digitise results' example; fetched 2026-09-18), not a live response. Copied verbatim.",
+  "example": {
+    "type": "digitise",
+    "documents": [
+      {
+        "file_name": "policy.pdf",
+        "pages": [
+          {
+            "page_number": 1,
+            "content": "<h1>Policy Document</h1><p>Policy Number: ABC-1234</p>"
+          },
+          {
+            "page_number": 2,
+            "content": "<h1>Terms &amp; Conditions</h1><p>...</p>"
+          }
+        ]
+      }
+    ],
+    "job_id": "20260707_9f1c2b3a-4d5e-6f70-8a9b-c0d1e2f3a4b5",
+    "status": "completed",
+    "usage": {
+      "pages_total": 2,
+      "pages_processed": 2,
+      "pages_succeeded": 2,
+      "pages_failed": 0
+    }
+  }
+}

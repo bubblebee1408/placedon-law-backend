@@ -17,6 +17,7 @@ suites=(
   checker/gemini_model.py
   checker/router.py
   checker/voyage_model.py
+  checker/sarvam_model.py
   checker/orchestrator.py
   checker/bundles.py
   checker/reasoning.py
