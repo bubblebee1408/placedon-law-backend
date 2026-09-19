@@ -51,6 +51,25 @@ complexity added, and a single judge beat multi-agent debate on human alignment.
 
 Fan-out here is over DOCUMENTS, not over reasoning steps. That parallelism is
 real and safe; agentic decomposition of a legal question is neither.
+
+## Candidates are not preferences (D6, 18-09-2026)
+
+`CANDIDATES` lists providers that are WIRED but not TRUSTED: Sarvam Document AI
+for PAGE_IMAGE (`checker/sarvam_model.py`), Voyage `rerank-2.5` and `voyage-law-2`
+for retrieval (`checker/voyage_model.py`). `route()` never reads that table, so a
+candidate's key being present changes nothing: with only Sarvam available a scanned
+page is REFUSED, not sent to Sarvam. A row moves into `_PREFERENCE` only after its
+bake-off (`scripts/bakeoff_indic.py`, `scripts/bakeoff_retrieval.py`) shows a win
+whose 95% interval does not overlap the incumbent's, and a person makes that edit.
+
+Recorded while wiring them, because a bake-off is only as good as what it is compared
+with: the PAGE_IMAGE row's "86.3 chrF++" is not this repo's measurement. It is
+arXiv 2606.29213's corpus-level score for **Gemini 2.5 Flash** on 300 word- and
+phrase-level crops sampled from the Sanskrit-OCR-Typed corpus (historical typeset
+scans) -- not Indian corporate paper (docs/research/DOCUMENT_AI_PROVIDERS_INDIA.md,
+I1-I6). The model pinned below, `gemini-3.6-flash`, has no measurement of its own,
+because 2.5 Flash is closed to new keys (gemini_model.py). The preference stands until
+a same-harness run replaces it; it is not re-derived here.
 """
 from __future__ import annotations
 
@@ -112,6 +131,46 @@ _PREFERENCE = {
     (TEXT, LOW): [(ANTHROPIC, CLASSIFY, "measured Rs 0.97 per call on this shape"),
                   (GEMINI, FLASH, "free tier")],
 }
+
+# ── candidates: wired, not preferred. route() never reads this table. ─────────
+VOYAGE = "voyage"
+SARVAM = "sarvam"
+RETRIEVAL_RERANK = "RETRIEVAL_RERANK"
+RETRIEVAL_DENSE = "RETRIEVAL_DENSE"
+
+
+@dataclass(frozen=True)
+class Candidate:
+    role: str
+    provider: str
+    model: str
+    incumbent: str
+    bakeoff: str
+    adopt_when: str
+
+
+from checker import sarvam_model as _sarvam  # noqa: E402
+from checker import voyage_model as _voyage  # noqa: E402
+
+_RETRIEVAL_RULE = ("p@1 on the frozen 70-case cross_section_eval, with a Wilson 95% "
+                   "interval non-overlapping and above RRF's, and no non-overlapping "
+                   "loss on recall@5")
+CANDIDATES: tuple[Candidate, ...] = (
+    Candidate(PAGE_IMAGE, SARVAM, _sarvam.MODEL, f"{GEMINI}/{FLASH}",
+              "scripts/bakeoff_indic.py",
+              "corpus chrF++ on the same pages as the incumbent's evidence, with a "
+              "paired bootstrap 95% interval on the difference that is non-overlapping "
+              "with zero"),
+    Candidate(RETRIEVAL_RERANK, VOYAGE, _voyage.RERANK, "fusion.search (RRF, BM25 + MiniLM)",
+              "scripts/bakeoff_retrieval.py", _RETRIEVAL_RULE),
+    Candidate(RETRIEVAL_DENSE, VOYAGE, _voyage.LAW, "fusion.search (RRF, BM25 + MiniLM)",
+              "scripts/bakeoff_retrieval.py", _RETRIEVAL_RULE),
+)
+
+
+def candidates(role: str | None = None) -> tuple[Candidate, ...]:
+    return tuple(c for c in CANDIDATES if role is None or c.role == role)
+
 
 # Rough per-unit token shapes, for a cost estimate that is derived rather than
 # guessed. Real usage is recorded by the callables themselves.
@@ -285,7 +344,41 @@ def _test() -> None:
     check("estimated total" in p and "batch" in p,
           "the plan totals the spend and flags what batches")
 
+    # ── candidates are listed, never routed to ───────────────────────────────
+    preferred = {prov for opts in _PREFERENCE.values() for prov, _, _ in opts}
+    check(CANDIDATES and all(c.provider not in preferred for c in CANDIDATES),
+          "no candidate provider appears in the preference table -- that changes only "
+          "after a bake-off win")
+    EVERYONE = (ANTHROPIC, GEMINI, VOYAGE, SARVAM)
+    check(route(Task("ocr", PAGE_IMAGE, HIGH), available=EVERYONE).provider == GEMINI,
+          "with Sarvam's key present too, a scanned page still goes to the incumbent")
+    try:
+        route(Task("ocr", PAGE_IMAGE, HIGH), available=(SARVAM,))
+        check(False, "a candidate alone is not a route")
+    except NoRoute:
+        check(True, "with ONLY Sarvam available, a PAGE_IMAGE task refuses rather than "
+                    "routing to an unmeasured candidate")
+    try:
+        route(Task("ocr", PAGE_IMAGE, LOW), available=(SARVAM, VOYAGE))
+        check(False, "a LOW task does not degrade onto a candidate either")
+    except NoRoute:
+        check(True, "...and a LOW task does not degrade onto a candidate either")
+    check({c.role for c in CANDIDATES} == {PAGE_IMAGE, RETRIEVAL_RERANK, RETRIEVAL_DENSE},
+          "candidates: Sarvam for PAGE_IMAGE, Voyage for rerank and for dense retrieval")
+    from pathlib import Path as _P
+    root = _P(__file__).resolve().parent.parent
+    check(all((root / c.bakeoff).is_file() for c in CANDIDATES),
+          "every candidate names a bake-off script that exists")
+    check(all("non-overlapping" in c.adopt_when for c in CANDIDATES),
+          "every candidate's adoption rule requires non-overlapping intervals")
+    check(candidates(PAGE_IMAGE)[0].provider == SARVAM and not candidates("AUDIO"),
+          "candidates(role) filters by role")
+    check(set(providers_available()) <= {ANTHROPIC, GEMINI},
+          "providers_available() still lists only routable providers, never candidates")
+
     print(f"\n{ok}/{ok + fail} passed")
+    if fail:
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":
