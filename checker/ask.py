@@ -49,8 +49,8 @@ from checker import scope
 from checker.api import BadRequest, _date, document_check
 from checker.ask_contract import SCHEMA
 from checker.ask_read import (_as_json, _citation, _figure, _law_version, _law_version_at,
-                              _pack, _pack_summary, canon, cites, figure_basis, parses,
-                              section_of, within)
+                              _pack, _pack_summary, canon, cites, figure_basis,
+                              not_one_citation, section_of, within)
 from checker.provenance_slots import USER_FACT
 
 ANSWERED, PARTIAL, OUT_OF_SCOPE = "answered", "partial", "out_of_scope"
@@ -361,10 +361,12 @@ def answer(request: dict, *, generated_at: str) -> dict:
                          f"({as_of.isoformat()!r})")
     provisions, figures = _strings(request, "provisions"), _strings(request, "figures")
     for cite in provisions:
-        if not parses(cite):
-            raise BadRequest(f"{cite!r} is not a citation this engine can read. A provision is "
-                             f"named the way the Act is cited -- s.173, section 2(85), rule 3 "
-                             f"-- never as a bare number or a topic")
+        why = not_one_citation(cite)
+        if why:
+            raise BadRequest(f"{cite!r} is not one Companies Act citation: {why}. Name each "
+                             f"provision as its own item -- 's.2(85)', 'section 173(1)', "
+                             f"'rule 3'. Another Act, Rules, Regulations or a Code is not read "
+                             f"here, and is never read as the Companies Act")
     declared = {t.key for t in pt.all_thresholds()}
     for key in figures:
         if key not in declared:
@@ -725,6 +727,42 @@ def _test() -> None:
           and any("s.2(41)" in (i.get("detail") or "") for i in r["not_confirmed"]),
           f"a figure resting on s.2(85)(ii) is not answered under s.2(41): the comparison is "
           f"by clause, not by section ({r['state']})")
+
+    # ── a provision is ONE Companies Act citation and nothing else (round 4, A) ──
+    # Every shape the round-3 verifier found got through because an item could carry more
+    # than one citation, or another statute's name, and the scanner silently kept only
+    # the numbers. The item is now read whole: one citation, nothing beside it.
+    for bad, why in ((["s.2(85) and s.62"], "two citations in one item"),
+                     (["s.2(85), s.186 and s.188"], "three citations in one item"),
+                     (["sections 2(85) to 5"], "a range"),
+                     (["s.173-175"], "a hyphenated range"),
+                     (["section 2(85) of the LLP Act, 2008"], "another Act's section"),
+                     (["s.2(85) of the Limited Liability Partnership Act"],
+                      "another Act, by its full title"),
+                     (["section 7 of the IBC"], "the IBC's section"),
+                     (["s.6 of FEMA"], "FEMA's section"),
+                     (["rule 3 of the Companies (Meetings of Board and its Powers) Rules, 2014"],
+                      "a named Rules instrument"),
+                     (["Regulation 23 of SEBI LODR"], "a regulation"),
+                     (["s.2(85) under the Code"], "a Code")):
+        try:
+            answer({"question": "What does it say?", "as_of": AS_OF, "facts": FACTS,
+                    "provisions": bad, "figures": [TURN]}, generated_at=GEN)
+            check(False, f"{why} is refused")
+        except BadRequest as e:
+            check("one Companies Act citation" in str(e),
+                  f"{why} is refused, saying why: {bad[0]!r}")
+    for good in ("s.2(85)", "section 2(85)", "s.2(85) of the Companies Act, 2013",
+                 "Companies Act 2013, s.2(85)", "u/s 2(85)", "§ 2(85)"):
+        r = ask({"question": "Is this company a small company?", "as_of": AS_OF,
+                 "facts": FACTS, "provisions": [good]})
+        check([x["obligation_id"] for x in r.get("rows", [])] == ["CA13-S2-85-SMALL"],
+              f"...while {good!r} is one Companies Act citation and finds its row")
+    r = ask({"question": "What does rule 2(1)(t) prescribe?", "as_of": AS_OF,
+             "provisions": ["rule 2(1)(t)"]})
+    check(r["state"] == PARTIAL and r["confirmed"] == [],
+          "a bare rule number is still read, as a rule under the Companies Act, and "
+          "never answered (it abstains)")
 
     # ── a provision number is never a near-miss (verifier finding 5) ─────────
     check(not cites("Companies Act 2013, s.185", "s.18")

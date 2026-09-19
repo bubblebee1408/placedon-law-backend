@@ -80,12 +80,42 @@ def _figure(key: str, as_of: date) -> dict:
 # matching no row -- the decided row dropped and the turn said nothing rested on it. So the
 # comparison below uses the same scanner, and a provision it cannot scan is refused (a 400)
 # rather than accepted and silently missed.
-from checker.legal_retrieval import ACT, _scan  # noqa: E402
+from checker.legal_retrieval import ACT, _ITEM, _PREFIX, _scan  # noqa: E402
+
+# The only instrument a provision may name besides its own citation is the held Act.
+_HELD_BEFORE = re.compile(r"(?:the\s+)?Companies\s+Act(?:\s*,?\s*2013)?\s*,?\s*", re.I)
+_HELD_AFTER = re.compile(r"\s*,?\s*(?:(?:of|under)\s+)?(?:the\s+)?Companies\s+Act"
+                         r"(?:\s*,?\s*2013)?\s*", re.I)
+_US = re.compile(r"u/(?=s\b)", re.I)                 # "u/s 2(85)": the scanner reads the "s"
 
 
-def parses(provision: str) -> bool:
-    """Does the retriever's grammar read at least one Act or Rules citation here?"""
-    return bool(_scan(provision))
+def not_one_citation(item: str) -> str | None:
+    """Why this item is not exactly ONE Companies Act citation -- or None when it is.
+
+    Read whole, with the retriever's own prefix and number grammar: one citation
+    ("s.2(85)", "section 173(1)", "u/s 2(85)", "§ 2(85)", "rule 2(1)(t)"), optionally
+    qualified by the held Act ("of the Companies Act, 2013") and by nothing else. A second
+    citation, a range, or another instrument's name is refused rather than read: the scanner
+    keeps only the numbers, so "section 2(85) of the LLP Act" became Companies Act s.2(85)
+    and "s.2(85) and s.62" let one row stand for two citations.
+    """
+    text = item.strip().rstrip(".").strip()
+    held = _HELD_BEFORE.match(text)
+    rest = _US.sub("", text[held.end():] if held else text, count=1)
+    pre = _PREFIX.match(rest)
+    if not pre:
+        return "it does not begin with a citation (s., section, §, rule)"
+    num = _ITEM.match(rest, pre.end())
+    if not num:
+        return "no provision number follows the prefix"
+    tail = rest[num.end():]
+    if pre.group("rule") and (held or tail.strip()):
+        return ("a rule is cited by its number alone; a named Rules instrument is not "
+                "read here")
+    if tail.strip() and (held or not _HELD_AFTER.fullmatch(tail)):
+        return (f"after the citation it says {tail.strip()!r} -- a second citation, a range "
+                f"or another instrument")
+    return None
 
 
 def canon(text: str) -> list[tuple[str, str]]:
