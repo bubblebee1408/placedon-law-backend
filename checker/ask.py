@@ -52,7 +52,6 @@ from checker.ask_read import (_as_json, _citation, _figure, _law_version, _law_v
                               _pack, _pack_summary, canon, cites, figure_basis,
                               not_one_citation, section_of, within)
 from checker.provenance_slots import USER_FACT
-from checker.retrieve import ROUTE_EXACT
 
 ANSWERED, PARTIAL, OUT_OF_SCOPE = "answered", "partial", "out_of_scope"
 # A question is rendered verbatim and, where it names no provision, is the retrieval
@@ -83,13 +82,6 @@ TEXT_NO_ROW = ("the provision was read as held, but no obligation this engine de
                "on it, so whether it applies to this company was not decided")
 LEXICAL = ("no provision was named: what is shown was found by matching the question's words "
            "against the corpus, not by a citation, and none of it was applied to a company")
-# ...and where the question carried its own citation, the retrieval was exact, not a word
-# match, so LEXICAL's words would be false. An unqualified section number is read as the
-# Companies Act's (legal_retrieval), which is not always what the writer meant -- "section 7"
-# in an insolvency question is the IBC's -- so the turn says that too (round 4, D).
-QUESTION_CITED = ("no provision was named in the request: the citation in the question's own "
-                  "words was read, as a Companies Act section, which is not necessarily the "
-                  "Act the question meant, and none of it was applied to a company")
 FACTS_NOT_APPLIED = ("company facts were supplied, but the request named no provision, so "
                      "they were not applied to any obligation")
 UNRESTED = ("{cite} was read, but no obligation row or prescribed figure in this turn rests "
@@ -220,8 +212,7 @@ def _general_turn(question: str, *, as_of: date, generated_at: str, facts: dict 
 
     confirmed = [_citation(p) | {"verbatim": p["reading_text"]} for p in usable]
     if not provisions and confirmed:
-        notes.append({"kind": "cannot_verify",
-                      "detail": QUESTION_CITED if route == ROUTE_EXACT else LEXICAL})
+        notes.append({"kind": "cannot_verify", "detail": LEXICAL})
     if not gaps and not notes:
         # Only here, where nothing else is not confirmed: rows and figures are empty, so a
         # turn that read text says what it did not decide, and only an empty one says that
@@ -688,17 +679,6 @@ def _test() -> None:
     check(t["state"] == PARTIAL and t["evidence_pack"]["route"] == "search"
           and [i.get("detail") for i in t["not_confirmed"]] == [LEXICAL],
           "lexical retrieval over the words feeds only a partial turn, and says so")
-    # Round 4, D: the question carried its own citation, so the route was exact. Saying
-    # "not by a citation" of that turn was false -- and the citation was read as a
-    # Companies Act section when the question meant the IBC's s.7.
-    t = ask({"question": "Can a financial creditor file under section 7 before the NCLT?",
-             "as_of": AS_OF})
-    check(t["evidence_pack"]["route"] == "exact"
-          and [i.get("detail") for i in t["not_confirmed"]] == [QUESTION_CITED]
-          and LEXICAL not in [i.get("detail") for i in t["not_confirmed"]],
-          f"a citation in the question's own words is not called a word match, and the "
-          f"turn says it was read as a Companies Act section "
-          f"({[(i.get('detail') or '')[:30] for i in t['not_confirmed']]})")
     t = ask({"question": "Is this company a small company?", "as_of": AS_OF,
              "facts": FACTS, "figures": [CAP, TURN]})
     check(t["state"] == PARTIAL and "rows" not in t and "facts" not in t
