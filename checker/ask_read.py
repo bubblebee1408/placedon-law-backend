@@ -74,30 +74,68 @@ def _figure(key: str, as_of: date) -> dict:
             "evidence_state": t.state, "source_url": t.source_url}
 
 
-# ── citations: section and subsection, never a prefix ─────────────────────────
-_CITE = re.compile(r"(?:\bs\.|\bsection\s+|\bsec\.?)\s*(\d+[A-Z]?)((?:\s*\([0-9A-Za-z]+\))*)",
-                   re.I)
+# ── citations: ONE grammar, the retriever's own ───────────────────────────────
+# legal_retrieval._scan is how retrieve() reads a citation. Parsing it a second way here is
+# what let "s 2(85)", "u/s 2(85)", "S 2 (85)", "ss. 2(85)" and "§ 2(85)" retrieve s.2 while
+# matching no row -- the decided row dropped and the turn said nothing rested on it. So the
+# comparison below uses the same scanner, and a provision it cannot scan is refused (a 400)
+# rather than accepted and silently missed.
+from checker.legal_retrieval import ACT, _ITEM, _PREFIX, _scan  # noqa: E402
+
+# The only instrument a provision may name besides its own citation is the held Act.
+_HELD_BEFORE = re.compile(r"(?:the\s+)?Companies\s+Act(?:\s*,?\s*2013)?\s*,?\s*", re.I)
+_HELD_AFTER = re.compile(r"\s*,?\s*(?:(?:of|under)\s+)?(?:the\s+)?Companies\s+Act"
+                         r"(?:\s*,?\s*2013)?\s*", re.I)
+_US = re.compile(r"u/(?=s\b)", re.I)                 # "u/s 2(85)": the scanner reads the "s"
+
+
+def not_one_citation(item: str) -> str | None:
+    """Why this item is not exactly ONE Companies Act citation -- or None when it is.
+
+    Read whole, with the retriever's own prefix and number grammar: one citation
+    ("s.2(85)", "section 173(1)", "u/s 2(85)", "§ 2(85)", "rule 2(1)(t)"), optionally
+    qualified by the held Act ("of the Companies Act, 2013") and by nothing else. A second
+    citation, a range, or another instrument's name is refused rather than read: the scanner
+    keeps only the numbers, so "section 2(85) of the LLP Act" became Companies Act s.2(85)
+    and "s.2(85) and s.62" let one row stand for two citations.
+    """
+    text = item.strip().rstrip(".").strip()
+    held = _HELD_BEFORE.match(text)
+    rest = _US.sub("", text[held.end():] if held else text, count=1)
+    pre = _PREFIX.match(rest)
+    if not pre:
+        return "it does not begin with a citation (s., section, §, rule)"
+    num = _ITEM.match(rest, pre.end())
+    if not num:
+        return "no provision number follows the prefix"
+    tail = rest[num.end():]
+    if pre.group("rule") and (held or tail.strip()):
+        return ("a rule is cited by its number alone; a named Rules instrument is not "
+                "read here")
+    if tail.strip() and (held or not _HELD_AFTER.fullmatch(tail)):
+        return (f"after the citation it says {tail.strip()!r} -- a second citation, a range "
+                f"or another instrument")
+    return None
 
 
 def canon(text: str) -> list[tuple[str, str]]:
-    """Every Act citation in a string, as (section, subsection path).
+    """Every Act citation in a string, as (section, subsection path), by the retriever's
+    grammar. "Companies Act 2013, s.2(85)", "u/s 2(85)" and "§ 2 (85)" are all ("2", "(85)").
+    A bare number ("85", "2013") is not a citation and yields nothing; a Rules citation is
+    not an Act section and yields nothing here either."""
+    return [(c.number.upper(), c.subsection.lower()) for c in _scan(text) if c.namespace == ACT]
 
-    "Companies Act 2013, s.2(85)" and "section 2(85)" are both ("2", "(85)"). A bare
-    number ("85", "2013") is not a citation and yields nothing.
-    """
-    return [(m.group(1).upper(), re.sub(r"\s+", "", m.group(2)).lower())
-            for m in _CITE.finditer(text)]
+
+def within(a: tuple[str, str], b: tuple[str, str]) -> bool:
+    """Same section, and one clause path containing the other: s.173 and s.173(1) meet;
+    s.16 and s.186 never do, nor s.2(41) and s.2(85). Paths end in ')' so a string
+    prefix is a clause prefix: "(8)" is not a prefix of "(85)"."""
+    return a[0] == b[0] and (a[1].startswith(b[1]) or b[1].startswith(a[1]))
 
 
 def cites(provision: str, cite: str) -> bool:
-    """Does an obligation's provision fall under a citation the request named?
-
-    Same section, and one subsection path containing the other: s.173 covers s.173(1), and
-    s.2(85)(i) falls under the row for s.2(85). s.16 never matches s.186, and s.2(41) never
-    matches s.2(85) -- a provision number is never a prefix.
-    """
-    return any(n1 == n2 and (p1.startswith(p2) or p2.startswith(p1))
-               for n1, p1 in canon(provision) for n2, p2 in canon(cite))
+    """Does an obligation's provision fall under a citation the request named?"""
+    return any(within(a, b) for a in canon(provision) for b in canon(cite))
 
 
 def section_of(ref: str) -> str | None:
@@ -106,13 +144,13 @@ def section_of(ref: str) -> str | None:
     return m.group(1).upper() if m else None
 
 
-def figure_sections(key: str) -> set[str]:
-    """The Act sections a prescribed figure rests on, from the threshold table itself.
+def figure_basis(key: str) -> list[tuple[str, str]]:
+    """The Act clauses a prescribed figure rests on, from the threshold table itself.
 
     A prescribed amount is set by a delegated instrument; the statutory bounds of the same
     family ("small_company.turnover.*") are keyed to the Act's own limb, s.2(85)(ii). That
-    is the provision the figure rests on, and the only one it may be cited under.
+    is the clause the figure rests on, and the only one it may be cited under.
     """
     family = key.rsplit(".", 1)[0]
-    return {n for t in pt.all_thresholds() if t.key.rsplit(".", 1)[0] == family
-            for n, _ in canon(t.instrument)}
+    return sorted({c for t in pt.all_thresholds() if t.key.rsplit(".", 1)[0] == family
+                   for c in canon(t.instrument)})

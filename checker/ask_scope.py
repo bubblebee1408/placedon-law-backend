@@ -14,10 +14,19 @@ So a question is refused only on something that identifies the unheld body and n
   Bankruptcy Code"), capitalised acronyms of three or more letters in that name ("FDI",
   "SEBI", "ICDR"), and the register key's own acronym where the key is one token ("LLP",
   "FEMA", "IBC"). Acronyms match case-sensitively: "POSH" is a statute, "posh" is not.
-- **Regulator signals** (weak): each regulator the register names ("RBI", "NCLT").
+- **Terms of art** (strong): words that name one unheld body and nothing we hold
+  (`TERMS_OF_ART`: "CIRP", "resolution professional"), each proven absent from the held text.
+- **Regulator signals** (weak): each regulator the register names ("RBI", "SEBI").
 
-Any signal that also appears among a HELD body's own declared strings is dropped: MCA
-regulates the Companies Act, so "MCA" never refuses anything. The `covers` phrases are never a
+When several bodies are named, the title the user named decides, not register order: a
+signal only one body declares ("ICDR"), then the body whose `covers` the question names
+("buyback"), then register order. SEBI ICDR, SAST, PIT and Buyback share one key
+(SEBI_OTHER) in the register, so a question naming any of them refuses with SEBI_OTHER's
+text, which names all four.
+
+Any signal that is also the HELD Act's own vocabulary is dropped: MCA regulates the Companies
+Act, so "MCA" never refuses anything; and the NCLT and IBBI (`HELD_ACT_FORUMS`) are forums the
+Companies Act itself constitutes or relies on, so they never refuse on their own either. The `covers` phrases are never a
 signal — "board composition", "annual filings", "issue of capital" and "internal committee"
 are the Companies Act's vocabulary as much as any declared body's — and serve only to choose
 between bodies already named ("SEBI … insider trading" is SEBI's PIT regulations, not LODR).
@@ -67,6 +76,31 @@ class Reading:
         return self.body is not None and self.names_held
 
 
+# Forums the HELD Act itself constitutes or relies on. The register lists them as another
+# body's regulators (IBC2016: "IBBI / NCLT"), but a Companies Act question names them all
+# the time -- capital reduction, schemes, oppression, winding up, conversion, valuations --
+# and refusing those as insolvency questions denies what we hold. Founder decision,
+# 18-09-2026 (runbook DEMO PLAN, D1), recorded HERE because scope.py is the authority and is
+# not edited by this job. Each entry says what it rests on, and whether that is our corpus.
+HELD_ACT_FORUMS: dict[str, str] = {
+    "NCLT": ("constituted by Companies Act 2013 s.408 (corpus section_id 49303: 'a Tribunal "
+             "to be known as the National Company Law Tribunal') -- our own corpus"),
+    "IBBI": ("the authority registered valuers under Companies Act 2013 s.247 register with. "
+             "That role is set by the Companies (Registered Valuers and Valuation) Rules, "
+             "2017, which this engine does NOT hold: a founder decision, not a corpus fact"),
+}
+
+# Terms that name one unheld body and nothing we hold. A question using one is about that
+# body even when it does not name it ("Who appoints the resolution professional?"). They
+# rank with title signals. The test requires every one to be absent from the held Companies
+# Act text, so none of them can be the held Act's own vocabulary; "liquidator" and
+# "winding up" are therefore NOT here -- the Act uses both.
+TERMS_OF_ART: dict[str, tuple[str, ...]] = {
+    "IBC2016": ("CIRP", "corporate insolvency resolution process", "resolution professional",
+                "insolvency commencement"),
+}
+
+
 def _norm(text: str) -> str:
     """The question as it is meant, for matching only -- never for display.
 
@@ -101,9 +135,10 @@ def _unheld() -> tuple:
 
 
 def _shared(signal: str) -> bool:
-    """Is this string also a HELD body's own vocabulary? Then it refuses nothing."""
-    return any(_has(f"{b.name} | {b.covers} | {b.regulator}", signal, exact_case=False)
-               for b in _held())
+    """Is this string also the HELD Act's own vocabulary? Then it refuses nothing."""
+    return signal in HELD_ACT_FORUMS or any(
+        _has(f"{b.name} | {b.covers} | {b.regulator}", signal, exact_case=False)
+        for b in _held())
 
 
 def _signals(b) -> tuple[list[str], list[str]]:
@@ -113,6 +148,7 @@ def _signals(b) -> tuple[list[str], list[str]]:
     """
     titles = _chunks(b.name)
     titles += re.findall(r"\b[A-Z]{3,}\b", b.name)
+    titles += TERMS_OF_ART.get(b.key, ())
     key = re.sub(r"\d+$", "", b.key)
     if re.fullmatch(r"[A-Z]{3,}", key):
         titles.append(key)
@@ -127,7 +163,31 @@ def _named_by(text: str, signals: list[str]) -> bool:
 
 
 def _covers_named(text: str, b) -> bool:
-    return any(_has(text, c, exact_case=False) for c in _chunks(b.covers))
+    """Does the question name something this body declares it covers? Single words count
+    here ("buyback"), because this only chooses between bodies already named -- it never
+    refuses anything on its own."""
+    items = (c.strip() for c in re.split(r"[,;()/\u2014]", b.covers))
+    return any(_has(text, c, exact_case=False) for c in items
+               if len(c) >= 3 and any(ch.isalpha() for ch in c))
+
+
+def _own_title_named(text: str, b) -> bool:
+    """Did the question name a title signal ONLY this body declares ("ICDR", not "SEBI")?"""
+    others = {sig for o in _unheld() if o is not b for sig in _signals(o)[0]}
+    return _named_by(text, [t for t in _signals(b)[0] if t not in others])
+
+
+def _choose(text: str, candidates: list):
+    """Which of several named bodies the question is about (D2, round 3).
+
+    The title the user named beats register order: a body named by a signal no other body
+    shares ("SEBI ICDR" -> SEBI_OTHER), then a body whose declared subject matter the
+    question names ("SEBI … buyback" -> SEBI_OTHER), and only then register order ("SEBI"
+    alone -> SEBI_LODR).
+    """
+    order = _unheld()
+    return min(candidates, key=lambda b: (not _own_title_named(text, b),
+                                          not _covers_named(text, b), order.index(b)))
 
 
 def read(question: str, provisions: Sequence[str] = ()) -> Reading:
@@ -146,10 +206,7 @@ def read(question: str, provisions: Sequence[str] = ()) -> Reading:
         candidates = [] if names_held else by_regulator
     if not candidates:
         return Reading(None, False, names_held)
-    # Several bodies named: the one whose declared subject matter the question also
-    # names, else the first in register order.
-    chosen = next((b for b in candidates if _covers_named(text, b)), candidates[0])
-    return Reading(chosen, bool(by_title), names_held)
+    return Reading(_choose(text, candidates), bool(by_title), names_held)
 
 
 def _test() -> None:
@@ -206,6 +263,69 @@ def _test() -> None:
         r = read(q)
         check(r.refuse and r.body.key == key,
               f"{q[:44]!r} -> {key} ({r.body.key if r.body else None})")
+
+    # ── the Companies Act's own forums never refuse (round 3, item 1) ────────
+    # The NCLT is constituted by the held Act (s.408); registered valuers under s.247
+    # register with the IBBI. A question naming either is, first, a Companies Act question.
+    for q in ("Do we need NCLT approval to reduce share capital?",
+              "Do we need NCLT approval to reduce share capital under section 66?",
+              "Must the NCLT sanction our scheme of amalgamation?",
+              "Does the NCLT convene the creditors' meeting for a scheme of arrangement "
+              "under s.230?",
+              "Can minority shareholders petition the NCLT for oppression and mismanagement?",
+              "Can minority shareholders petition the NCLT under s.241?",
+              "Can the NCLT wind up the company on just and equitable grounds?",
+              "Can the NCLT wind up the company under s.271(e)?",
+              "Does converting from a public to a private company need NCLT approval?",
+              "Does a public-to-private conversion under s.14 need NCLT approval?",
+              "Must the valuer for this allotment be registered with IBBI?",
+              "Must the valuer under s.247 be registered with the IBBI?"):
+        r = read(q)
+        check(r.body is None,
+              f"not refused: {q[:58]!r} ({r.body.key if r.body else None})")
+    check(all(f not in _signals(b)[0] + _signals(b)[1]
+              for b in _unheld() for f in HELD_ACT_FORUMS),
+          "NCLT and IBBI are a signal for no unheld body")
+    from checker.section_index import section_by_number
+    s408 = section_by_number("408") or {}
+    check(str(s408.get("section_id")) == "49303"
+          and "National Company Law Tribunal" in s408.get("content", ""),
+          "...and the NCLT's entry rests on our own corpus: s.408 constitutes it")
+
+    # ── ...while the IBC itself still refuses ────────────────────────────────
+    for q in ("Does the IBC moratorium stop this suit?",
+              "What does the Insolvency and Bankruptcy Code say about this?",
+              "Is a CIRP pending against our supplier?",
+              "Who appoints the resolution professional?",
+              "What is the insolvency commencement date for this company?",
+              "Can the NCLT admit a CIRP application against us?"):
+        r = read(q)
+        check(r.refuse and r.body.key == "IBC2016",
+              f"refused as the IBC: {q[:52]!r} ({r.body.key if r.body else None})")
+    import glob, json as _json
+    corpus = " ".join(_json.load(open(f)).get("content", "")
+                      for f in glob.glob(str(Path(__file__).resolve().parent.parent
+                                             / "corpus/companies_act/[0-9]*.json")))
+    check(corpus and all(not _has(corpus, t, exact_case=len(t.split()) == 1)
+                         for terms in TERMS_OF_ART.values() for t in terms),
+          "no IBC term of art occurs anywhere in the held Companies Act text -- so none "
+          "can be the held Act's vocabulary")
+    check(all(scope.body(k).status != scope.IN_CORPUS for k in TERMS_OF_ART),
+          "terms of art are declared only for bodies we do not hold")
+
+    # ── a title the user names beats register order (round 3, item 3) ────────
+    r = read("Does s.62 and SEBI ICDR apply to our rights issue?")
+    check(r.refuse and r.body.key == "SEBI_OTHER",
+          f"'SEBI ICDR' is refused as the body whose title names ICDR, not as LODR "
+          f"({r.body.key if r.body else None})")
+    r = read("Does s.62 and SEBI ICDR apply to our rights issue?", provisions=["s.62"])
+    check(r.mixed and r.body.key == "SEBI_OTHER", "...and so is its mixed form")
+    for q, key in (("Do we need SEBI approval for a buyback?", "SEBI_OTHER"),
+                   ("What do the SAST regulations require of an acquirer?", "SEBI_OTHER"),
+                   ("What does SEBI require us to disclose continuously?", "SEBI_LODR")):
+        r = read(q)
+        check(r.refuse and r.body.key == key,
+              f"{q[:46]!r} -> {key} ({r.body.key if r.body else None})")
 
     # ── mixed: a title named next to held law ────────────────────────────────
     r = read("Is our LLP a small company?", provisions=["s.2(85)"])

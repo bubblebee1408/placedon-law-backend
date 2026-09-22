@@ -1,0 +1,34 @@
+{
+  "_provenance": "shape copied from https://docs.voyageai.com/reference/embeddings-api.md (OpenAPI 200 'Success' example; page updatedAt 2025-12-10; fetched 2026-09-18), not a live response. Copied verbatim, including the doc's own '...' elision inside each vector.",
+  "example": {
+    "object": "list",
+    "data": [
+      {
+        "object": "embedding",
+        "embedding": [
+          -0.016709786,
+          0.026996311,
+          -0.027496673,
+          "...",
+          -0.012125067
+        ],
+        "index": 0
+      },
+      {
+        "object": "embedding",
+        "embedding": [
+          0.003613521,
+          0.026428301,
+          -0.009491397,
+          "...",
+          -0.028471239
+        ],
+        "index": 1
+      }
+    ],
+    "model": "voyage-4-large",
+    "usage": {
+      "total_tokens": 8
+    }
+  }
+}

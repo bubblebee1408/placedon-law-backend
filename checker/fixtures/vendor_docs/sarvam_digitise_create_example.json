@@ -1,0 +1,8 @@
+{
+  "_provenance": "shape copied from https://docs.sarvam.ai/api-reference/doc-ai/job/digitise.md (201 response example; fetched 2026-09-18), not a live response. Copied verbatim: the doc's own placeholder values are the literal word 'string'.",
+  "example": {
+    "job_id": "string",
+    "status": "string",
+    "run_id": "string"
+  }
+}

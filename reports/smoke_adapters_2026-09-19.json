@@ -1,0 +1,219 @@
+{
+  "run": "2026-09-19",
+  "voyage": {
+    "sent": {
+      "sections": [
+        "173",
+        "185",
+        "188"
+      ],
+      "chars_each": 400,
+      "query": "how many board meetings must a company hold in a year"
+    },
+    "calls": [
+      {
+        "endpoint": "embeddings",
+        "top": [
+          "data",
+          "model",
+          "object",
+          "usage"
+        ],
+        "item": [
+          "embedding",
+          "index",
+          "object",
+          "text"
+        ],
+        "model": "voyage-law-2",
+        "usage": {
+          "total_tokens": 311
+        },
+        "object": "list",
+        "vs_docs": {
+          "top": {
+            "missing": [],
+            "extra": []
+          },
+          "item": {
+            "missing": [],
+            "extra": [
+              "text"
+            ]
+          }
+        }
+      },
+      {
+        "endpoint": "embeddings",
+        "top": [
+          "data",
+          "model",
+          "object",
+          "usage"
+        ],
+        "item": [
+          "embedding",
+          "index",
+          "object",
+          "text"
+        ],
+        "model": "voyage-law-2",
+        "usage": {
+          "total_tokens": 13
+        },
+        "object": "list",
+        "vs_docs": {
+          "top": {
+            "missing": [],
+            "extra": []
+          },
+          "item": {
+            "missing": [],
+            "extra": [
+              "text"
+            ]
+          }
+        }
+      },
+      {
+        "endpoint": "rerank",
+        "top": [
+          "data",
+          "model",
+          "object",
+          "usage"
+        ],
+        "item": [
+          "index",
+          "relevance_score"
+        ],
+        "model": "rerank-2.5",
+        "usage": {
+          "total_tokens": 301
+        },
+        "object": "list",
+        "vs_docs": {
+          "top": {
+            "missing": [],
+            "extra": []
+          },
+          "item": {
+            "missing": [],
+            "extra": []
+          }
+        }
+      }
+    ],
+    "result": {
+      "dims": [
+        1024
+      ],
+      "norms": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "rerank_order": [
+        "173",
+        "188",
+        "185"
+      ],
+      "rerank_scores": [
+        0.902344,
+        0.361328,
+        0.263672
+      ],
+      "tokens": [
+        311,
+        13,
+        301
+      ],
+      "cost_inr_list": 0.005136
+    },
+    "call_count": 3
+  },
+  "sarvam": {
+    "sent": {
+      "file": "corpus/sources/gsr880e_2025.pdf",
+      "page_range": [
+        1,
+        1
+      ],
+      "language": "en-IN",
+      "output_format": "html"
+    },
+    "calls": [
+      {
+        "call": "POST /job/digitise",
+        "kind": "POST /job/digitise",
+        "top": [
+          "$schema",
+          "job_id",
+          "run_id",
+          "status"
+        ],
+        "status": "pending",
+        "vs_docs": {
+          "top": {
+            "missing": [],
+            "extra": [
+              "$schema"
+            ]
+          }
+        }
+      },
+      {
+        "call": "GET /job/01a0b8e6-5f7c-7737-a4bb-53c29c08eaae/status",
+        "kind": "GET status",
+        "top": [
+          "$schema",
+          "created_at",
+          "job_id",
+          "pipeline",
+          "status",
+          "updated_at",
+          "usage"
+        ],
+        "status": "completed",
+        "usage": {
+          "pages_total": 1,
+          "pages_processed": 1,
+          "pages_succeeded": 1,
+          "pages_failed": 0
+        },
+        "usage_keys": [
+          "pages_failed",
+          "pages_processed",
+          "pages_succeeded",
+          "pages_total"
+        ],
+        "vs_docs": {
+          "top": {
+            "missing": [],
+            "extra": [
+              "$schema"
+            ]
+          },
+          "usage": {
+            "missing": [],
+            "extra": []
+          }
+        }
+      },
+      {
+        "call": "GET /job/01a0b8e6-5f7c-7737-a4bb-53c29c08eaae/results",
+        "error": "SarvamBadResponse",
+        "message": "GET /job/01a0b8e6-5f7c-7737-a4bb-53c29c08eaae/results returned 200 with a non-JSON body ('utf-8' codec can't decode byte 0x8b in position 1: invalid start byte)"
+      }
+    ],
+    "error": {
+      "type": "SarvamBadResponse",
+      "message": "GET /job/01a0b8e6-5f7c-7737-a4bb-53c29c08eaae/results returned 200 with a non-JSON body ('utf-8' codec can't decode byte 0x8b in position 1: invalid start byte)"
+    },
+    "call_count": 3,
+    "statuses_seen": [
+      "completed"
+    ]
+  }
+}

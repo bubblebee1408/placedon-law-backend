@@ -1,0 +1,17 @@
+{
+  "_provenance": "shape copied from https://docs.sarvam.ai/api-reference/doc-ai/job/digitise.md (400 error schema: type, title, status, detail, instance, errors[location, message, value]; fetched 2026-09-18), not a live response. Field NAMES are the doc's; the values are ours, because the doc gives none.",
+  "example": {
+    "type": "about:blank",
+    "title": "Bad Request",
+    "status": 400,
+    "detail": "Document exceeds the 10-page limit",
+    "instance": "/doc-ai/v1/job/digitise",
+    "errors": [
+      {
+        "location": "body.file",
+        "message": "too many pages",
+        "value": 12
+      }
+    ]
+  }
+}

@@ -14,10 +14,24 @@
  *
  * Fixtures are embedded (fixtures.js) because a page opened from disk cannot fetch
  * local JSON. ?fixture=<name> selects one; no fixture is the empty state.
+ *
+ * LIVE MODE (D2). Served by scripts/serve_ask.py on this computer, Ask POSTs
+ * {question, context} to /v1/ask on the same origin and renders the SERVER's reply
+ * through the same renderer the fixtures use -- so what a caller gets and what this page
+ * draws cannot drift. While the request is out the page shows the waiting card (§4.4) and
+ * Cancel aborts it; a dead server, a non-200, or a reply that is not a placedon.ask/0 turn
+ * in a state this client knows is the service error (§7.11), never an abstention. Opened
+ * from a file, or served from any other host, nothing is sent and the page behaves exactly
+ * as it did before: the local demo server is the one sanctioned client (contract.md).
  */
 'use strict';
 
 var FIXTURES = window.PLACEDON_ASK_FIXTURES || {};
+/* Loopback only: on any other host this page has no engine of its own to ask, and saying
+ * "this computer" would be false. */
+var LOOPBACK = /^(127\.0\.0\.1|localhost|\[::1\])$/;
+var LIVE = /^https?:$/.test(location.protocol) && LOOPBACK.test(location.hostname);
+var session = [];               // the turns on the page, oldest first
 var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 var ROWS_SHOWN = 3;             // confirmed rows before "Show all"
 var SUBSECTIONS_SHOWN = 2;      // verbatim sub-sections before "Show the full text"
@@ -455,8 +469,9 @@ function whatItIsNot(w) {
   return add(box, field(el('p', null, w), 'what_it_is_not'));
 }
 
-function status(text) {
-  var s = document.querySelector('[data-status]');
+/* The visible status line, or (where = '[data-announce]') the screen-reader-only live region. */
+function status(text, where) {
+  var s = document.querySelector(where || '[data-status]');
   s.textContent = '';
   // Re-set after a tick so a repeated message is announced again.
   setTimeout(function () { s.textContent = text; }, 30);
@@ -499,6 +514,21 @@ function stampLine(r) {
   return field(el('p', 'stamp', bits.join(' · ')), 'as_of,uses_model,evidence_pack.retrieval_query');
 }
 
+/* The request values every card opens with: what it is about, and what it follows. */
+function contextBand(ctx) {
+  return field(el('p', 'band', ctx && ctx.kind === 'document'
+    ? 'About the open document · dated ' + human(ctx.document_date)
+    : 'About the Act'), 'context');
+}
+function parentLine(r, parent, card) {
+  var pl = label('p', 'parent', parent && parent.r
+    ? 'Follow-up to turn ' + parent.n + ' · ' + parent.r.question
+    : 'Follow-up to an earlier turn that is not in this session');
+  pl.id = 'p-' + (r.turn_id || 'req' + (++uid));
+  card.setAttribute('aria-describedby', pl.id);
+  return pl;
+}
+
 function turnCard(r, n, parent, recs) {
   var s = STATE[r.state];
   var card = el('article', 'turn');
@@ -507,17 +537,8 @@ function turnCard(r, n, parent, recs) {
   card.setAttribute('aria-labelledby', qid + ' ' + hid);         // question + state (F11b)
 
   var doc = r.context && r.context.kind === 'document';
-  add(card, field(el('p', 'band', doc
-    ? 'About the open document · dated ' + human(r.context.document_date)
-    : 'About the Act'), 'context'));
-  if (r.parent_turn_id) {
-    var pl = label('p', 'parent', parent.r
-      ? 'Follow-up to turn ' + parent.n + ' · ' + parent.r.question
-      : 'Follow-up to an earlier turn that is not in this session');
-    pl.id = 'p-' + r.turn_id;
-    card.setAttribute('aria-describedby', pl.id);
-    add(card, pl);
-  }
+  add(card, contextBand(r.context));
+  if (r.parent_turn_id) add(card, parentLine(r, parent, card));
   var q = field(el('p', 'question', r.question), 'question');
   q.id = qid;
   q.setAttribute('tabindex', '-1');
@@ -604,13 +625,11 @@ function citationsOf(r) {
   return { list: (r.confirmed || []).filter(function (c) { return c.ref && !c.obligation_id; }), path: 'confirmed' };
 }
 
-function renderSources(r, n, recs, path) {
-  var panel = document.querySelector('[data-source-panel]');
-  var body = document.querySelector('[data-sources-body]');
-  body.textContent = '';
-  panel.hidden = false;
-  document.querySelector('[data-sources-head]').textContent = 'Sources · Turn ' + n + ' · '
-    + (r.context && r.context.kind === 'document' ? 'About the open document' : 'About the Act');
+/* The records for one turn, built detached: a live turn is assembled in full before
+ * anything on the page is replaced, so a reply this client cannot render leaves the page
+ * as it was and becomes the service error. */
+function sourcesBody(r, recs, path) {
+  var body = document.createDocumentFragment();
   var textInCard = path === 'confirmed';
   recs.forEach(function (c, i) {
     var rec = citationRecord(c, i + 1, path + '[' + (r[path] || []).indexOf(c) + ']', r.law_version, textInCard && !!c.verbatim);
@@ -637,15 +656,38 @@ function renderSources(r, n, recs, path) {
     (p.missing || []).forEach(function (m, i) { add(ep, readerDetail(m, 'evidence_pack.missing[' + i + ']')); });
     body.appendChild(ep);
   }
+  return body;
+}
+
+/* Put one turn's records in the panel, replacing whatever was there. */
+function installSources(r, n, records) {
+  var panel = document.querySelector('[data-source-panel]');
+  var body = document.querySelector('[data-sources-body]');
+  body.textContent = '';
+  panel.hidden = false;
+  document.querySelector('[data-sources-head]').textContent = 'Sources · Turn ' + n + ' · '
+    + (r.context && r.context.kind === 'document' ? 'About the open document' : 'About the Act');
+  body.appendChild(records);
+}
+
+function renderSources(r, n, recs, path) {
+  installSources(r, n, sourcesBody(r, recs, path));
 }
 
 /* ── composer and rail ─────────────────────────────────────────────────── */
-function setComposer(r) {
+var composerWired = false;      // listeners are added once, however many turns arrive
+var composerCompact = false;
+
+/* `compact`: fold the composer to its one-line summary, as it is once a turn has been answered. */
+function setComposer(r, compact) {
   document.querySelector('[data-today]').textContent = today();
   var docRadio = document.querySelector('input[value="document"]');
   var genRadio = document.querySelector('input[value="general"]');
   var hint = document.querySelector('[data-doc-hint]');
-  var docDate = r && r.context && r.context.kind === 'document' && r.context.document_date;
+  // Live, the next question can only be a general one: this page holds no document and
+  // sends none, so the document choice is never offered as the thing Ask will do (D2).
+  var docDate = (!LIVE || demo) && r && r.context && r.context.kind === 'document'
+    && r.context.document_date;
   if (docDate) {
     // The pane has a dated document open, so the next question can be about it (L15, NG-9).
     docRadio.removeAttribute('aria-disabled');
@@ -657,18 +699,23 @@ function setComposer(r) {
     genRadio.checked = true;
     hint.setAttribute('data-chrome', '');
   }
-  document.querySelector('[data-doc-choice]').addEventListener('click', function (e) {
-    if (docRadio.getAttribute('aria-disabled') === 'true') { e.preventDefault(); genRadio.checked = true; }
-  });
-  if (!r) return;
+  if (!composerWired) {
+    composerWired = true;
+    document.querySelector('[data-doc-choice]').addEventListener('click', function (e) {
+      if (docRadio.getAttribute('aria-disabled') === 'true') { e.preventDefault(); genRadio.checked = true; }
+    });
+  }
+  if (!r || !compact) return;
   // After a turn: compact, still first (see index.html).
   var full = document.getElementById('composer-full');
   var summary = document.querySelector('[data-summary]');
   var change = document.querySelector('[data-change]');
-  full.hidden = true;
   summary.hidden = false;
   document.querySelector('[data-summary-text]').textContent = 'Next question: about '
     + (docDate ? 'the open document' : 'the Companies Act, 2013') + '.';
+  if (composerCompact) return;             // a second live turn must not re-wire Change
+  composerCompact = true;
+  full.hidden = true;
   change.addEventListener('click', function () {
     full.hidden = !full.hidden;
     change.setAttribute('aria-expanded', String(!full.hidden));
@@ -679,11 +726,12 @@ function setComposer(r) {
   q.placeholder = 'Ask another question';
 }
 
-function renderRail(session) {
+function renderRail(turns) {
   var rail = document.querySelector('[data-rail]');
   var list = document.querySelector('[data-rail-list]');
   rail.hidden = false;
-  session.forEach(function (r, i) {
+  list.textContent = '';                   // rebuilt whole, so a live turn cannot duplicate a row
+  turns.forEach(function (r, i) {
     var li = el('li');
     var b = el('button', 'rail-row');
     b.type = 'button';
@@ -691,13 +739,18 @@ function renderRail(session) {
       field(el('span', 'rail-q', r.question), 'question'),
       field(el('span', 'caption', 'Asked as of ' + human(r.as_of)), 'as_of'));
     b.addEventListener('click', function () {
-      var target = i === session.length - 1
+      var target = i === turns.length - 1
         ? document.getElementById('h-' + r.turn_id)
-        : document.querySelector('[data-prior-state]');
+        : document.querySelectorAll('[data-prior-state]')[i];
       if (target) { target.setAttribute('tabindex', '-1'); target.focus(); }
     });
     list.appendChild(add(li, b));
   });
+}
+
+function submitComposer() {
+  var form = document.querySelector('[data-composer]');
+  if (form.requestSubmit) form.requestSubmit(); else form.dispatchEvent(new Event('submit', { cancelable: true }));
 }
 
 function wireComposer() {
@@ -705,15 +758,107 @@ function wireComposer() {
   var q = document.getElementById('q');
   form.addEventListener('submit', function (e) {
     e.preventDefault();                          // NG-1: Ask never navigates
-    status(q.value.trim()
-      ? 'Prototype: nothing was sent. This page renders saved examples only.'
-      : 'Type a question first. (Prototype: nothing is sent either way.)');
+    if (pending && pending.kind === 'waiting') return;           // disabled while waiting (§4.4)
+    var live = LIVE && !demo;                    // ?state= is the stand-in, in either mode
+    if (!q.value.trim()) {
+      status(live ? 'Type a question first.'
+        : 'Type a question first. (Prototype: nothing is sent either way.)');
+      return;
+    }
+    if (live) { askLive(composerRequest()); return; }
+    if (!demo) { status('Prototype: nothing was sent. This page renders saved examples only.'); return; }
+    showNonAnswer(demo === 'error' ? 'error' : 'waiting', composerRequest(), true);
   });
   q.addEventListener('keydown', function (e) {
     if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
       e.preventDefault();
-      if (form.requestSubmit) form.requestSubmit(); else form.dispatchEvent(new Event('submit', { cancelable: true }));
+      submitComposer();
     }
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && pending && pending.kind === 'waiting') { e.preventDefault(); cancelWait(); }
+  });
+}
+
+/* ── live mode (D2) ────────────────────────────────────────────────────────
+ * The page is served by scripts/serve_ask.py on this computer. Ask sends the user's words
+ * and what the About control says, and nothing else -- no facts, no provisions, no figures,
+ * because this page has no fields for them (PLAN_13 §11 items 3 and 5 wait on GET /v1/scope).
+ * So a live turn is answered by what the question itself names (contract §6 D1).
+ */
+/* The note must be true of the page it is on: file:// and any other host keep index.html's
+ * own words ("nothing you type is sent"); ?state= is a stand-in and sends nothing either. */
+function conceptNote(fixtureShown) {
+  var p = document.querySelector('[data-concept]');
+  if (!p || !LIVE || demo) return;
+  p.textContent = 'Live on this computer. Ask sends your question to the Placedon engine at '
+    + location.host + ' and nowhere else; the answer is built from deterministic engine calls, '
+    + 'and no model is used.'
+    + (fixtureShown ? ' The first turn below was loaded from a saved sample, not asked live.' : '');
+}
+
+/* What this client will render as a turn. Everything else -- a transport failure, a non-200,
+ * a body that is not a placedon.ask/0 turn, a state this client has no words for, an
+ * out_of_scope with no reason to show -- is the service error (§4.3 steps 1-3). */
+function isAskResponse(r) {
+  if (!r || typeof r !== 'object' || r.schema !== 'placedon.ask/0') return false;
+  if (!Object.prototype.hasOwnProperty.call(STATE, r.state)) return false;
+  return !(r.state === 'out_of_scope' && !r.reason);
+}
+
+/* Render the server's turn: built detached first, so a reply this client cannot draw leaves
+ * the page as it was and falls through to the error state. */
+function arrive(r) {
+  var turns = document.querySelector('[data-turns]');
+  var n = session.length + 1;
+  var src = citationsOf(r);
+  var records = sourcesBody(r, src.list, src.path);        // fills RECORD_ID for the markers
+  var card = turnCard(r, n, { n: n - 1, r: session[session.length - 1] || null }, src.list);
+  card.setAttribute('data-origin', 'live');
+
+  var open = turns.querySelector('article.turn');          // the turn this one follows
+  if (open) turns.replaceChild(priorLine(session[session.length - 1], session.length), open);
+  installSources(r, n, records);
+  turns.appendChild(card);
+  session.push(r);
+  document.body.classList.add('has-turns');
+  setComposer(r, true);
+  renderRail(session);
+  return card;
+}
+
+function askLive(req) {
+  var controller = new AbortController();
+  showNonAnswer('waiting', req, true);
+  var mine = pending;
+  mine.abort = function () { controller.abort(); };
+  var q = document.getElementById('q');
+  var live = function () { return pending === mine && mine.kind === 'waiting'; };
+  fetch('/v1/ask', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ question: req.question, context: req.context }),
+    cache: 'no-store',
+    credentials: 'same-origin',
+    signal: controller.signal
+  }).then(function (res) {
+    if (res.status !== 200) throw new Error('status ' + res.status);
+    return res.json();
+  }).then(function (r) {
+    if (!live()) return;                                   // cancelled: its card already says so
+    if (!isAskResponse(r)) throw new Error('not a placedon.ask/0 turn this client renders');
+    var card = arrive(r);
+    var question = card.querySelector('[data-f="question"]');
+    if (question) question.focus();                        // focus moves before the old card goes
+    mine.card.remove();
+    pending = null;
+    lockComposer(null);
+    q.value = '';                                          // it is on the card now
+    status(stateWord(r) + '. ' + r.question, '[data-announce]');
+  }).catch(function () {
+    // A dead server, a 500, a body that is not a turn: no answer, partial or otherwise.
+    if (!live()) return;
+    showNonAnswer('error', req, true);
   });
 }
 
@@ -727,6 +872,7 @@ function byTurnId(id) {
 function render(name) {
   wireComposer();
   var turns = document.querySelector('[data-turns]');
+  conceptNote(!!(name && FIXTURES[name]) && !demo);
   if (!name) { setComposer(null); return; }                     // the empty state
   var r = FIXTURES[name];
   if (!r) {
@@ -734,17 +880,22 @@ function render(name) {
     turns.appendChild(label('p', 'basis', 'No saved example has that name.'));
     return;
   }
-  document.body.classList.add('has-turns');
   var parent = r.parent_turn_id ? byTurnId(r.parent_turn_id) : null;
-  var session = parent ? [parent, r] : [r];
+  if (demo) { renderRequest(r, parent); return; }
+  document.body.classList.add('has-turns');
+  session = parent ? [parent, r] : [r];
   var n = session.length;
-  setComposer(r);
+  setComposer(r, true);
 
   var src = citationsOf(r);
   renderSources(r, n, src.list, src.path);                     // records first: markers point at them
   if (parent) turns.appendChild(priorLine(parent, 1));
-  turns.appendChild(turnCard(r, n, { n: 1, r: parent }, src.list));
+  var card = turnCard(r, n, { n: 1, r: parent }, src.list);
+  card.setAttribute('data-origin', 'fixture');                 // a saved sample, not a live answer
+  turns.appendChild(card);
   renderRail(session);
 }
 
-render(new URLSearchParams(location.search).get('fixture'));
+var params = new URLSearchParams(location.search);
+demo = NON_ANSWER.indexOf(params.get('state')) !== -1 ? params.get('state') : null;
+render(params.get('fixture'));

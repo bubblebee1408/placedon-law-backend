@@ -1,0 +1,152 @@
+{
+  "run": "2026-09-19",
+  "sarvam": {
+    "sent": {
+      "refetch_job_id": "01a0b8e6-5f7c-7737-a4bb-53c29c08eaae",
+      "note": "no new job submitted"
+    },
+    "calls": [
+      {
+        "call": "GET /job/01a0b8e6-5f7c-7737-a4bb-53c29c08eaae/status",
+        "kind": "GET status",
+        "top": [
+          "$schema",
+          "created_at",
+          "job_id",
+          "pipeline",
+          "status",
+          "updated_at",
+          "usage"
+        ],
+        "status": "completed",
+        "usage": {
+          "pages_total": 1,
+          "pages_processed": 1,
+          "pages_succeeded": 1,
+          "pages_failed": 0
+        },
+        "usage_keys": [
+          "pages_failed",
+          "pages_processed",
+          "pages_succeeded",
+          "pages_total"
+        ],
+        "vs_docs": {
+          "top": {
+            "missing": [],
+            "extra": [
+              "$schema"
+            ]
+          },
+          "usage": {
+            "missing": [],
+            "extra": []
+          }
+        }
+      },
+      {
+        "call": "GET /job/01a0b8e6-5f7c-7737-a4bb-53c29c08eaae/results",
+        "kind": "GET results",
+        "top": [
+          "documents",
+          "job_id",
+          "status",
+          "type",
+          "usage"
+        ],
+        "status": "completed",
+        "usage": {
+          "pages_total": 1,
+          "pages_processed": 1,
+          "pages_succeeded": 1,
+          "pages_failed": 0,
+          "pages_discarded": 0
+        },
+        "usage_keys": [
+          "pages_discarded",
+          "pages_failed",
+          "pages_processed",
+          "pages_succeeded",
+          "pages_total"
+        ],
+        "document_keys": [
+          "filename",
+          "page_count",
+          "pages",
+          "status"
+        ],
+        "page": [
+          "blocks",
+          "image_height",
+          "image_width",
+          "page_num"
+        ],
+        "content_excerpt": "None",
+        "blocks": 22,
+        "block_keys": [
+          "bbox_norm",
+          "block_id",
+          "coordinates",
+          "layout_tag",
+          "reading_order",
+          "text"
+        ],
+        "layout_tags": [
+          "footer",
+          "header",
+          "headline",
+          "page-number",
+          "paragraph",
+          "section-title"
+        ],
+        "vs_docs": {
+          "top": {
+            "missing": [],
+            "extra": []
+          },
+          "document": {
+            "missing": [
+              "file_name"
+            ],
+            "extra": [
+              "filename",
+              "page_count",
+              "status"
+            ]
+          },
+          "page": {
+            "missing": [
+              "content",
+              "page_number"
+            ],
+            "extra": [
+              "blocks",
+              "image_height",
+              "image_width",
+              "page_num"
+            ]
+          }
+        }
+      }
+    ],
+    "result": {
+      "pages": [
+        [
+          1,
+          "READ"
+        ]
+      ],
+      "blocks": [
+        22
+      ],
+      "model_written": [
+        []
+      ],
+      "text_excerpt": "रजिस्ट्री सं. डी.एल.- 33004/99\nREGD. No. D. L.-33004/99\nसत्यमेव जयते\nभारत का राजपत्र\nThe Gazette of India\nसी.जी.-डी.एल.-अ.-01122025-268124\nCG-DL-E-01122025-268124\nअसाधारण\nEXTRAORDINARY\nभाग II—खण्ड 3—उप-खण्ड (i)\nPART II—Section 3—Sub-section (i)\nप्राधिकार से प्रकाशित\nPUBLISHED BY AUTHORITY\nसं. 794]\nनई दिल्ली, सोमवार, दिसम्बर 1, 2025/अग्रहायण 10, 1947\nNo. 794]\nNEW DELHI, MONDAY, DECEMBER 1, 2025/AGRAHAYANA 10, 1947\nकारपोरेट कार्य मंत्रालय\nअधिसूचना\nनई दिल्ली, 1 दिसम्बर, 2025\nसा.का.नि. 880(अ).— केंद्रीय सरकार, कंपनी अधिनियम, 2013 (2013 का 18) की धारा 469 की उपधारा (1) और (2) द्वारा प्रदत्त शक्तियो"
+    },
+    "call_count": 2,
+    "statuses_seen": [
+      "completed"
+    ]
+  }
+}

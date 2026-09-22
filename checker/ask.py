@@ -49,10 +49,10 @@ from checker import scope
 from checker.api import BadRequest, _date, document_check
 from checker.ask_contract import SCHEMA
 from checker.ask_read import (_as_json, _citation, _figure, _law_version, _law_version_at,
-                              _pack, _pack_summary, canon, cites, figure_sections,
-                              section_of)
-from checker.legal_retrieval import names_a_provision
+                              _pack, _pack_summary, canon, cites, figure_basis,
+                              not_one_citation, section_of, within)
 from checker.provenance_slots import USER_FACT
+from checker.retrieve import ROUTE_EXACT
 
 ANSWERED, PARTIAL, OUT_OF_SCOPE = "answered", "partial", "out_of_scope"
 # A question is rendered verbatim and, where it names no provision, is the retrieval
@@ -83,6 +83,13 @@ TEXT_NO_ROW = ("the provision was read as held, but no obligation this engine de
                "on it, so whether it applies to this company was not decided")
 LEXICAL = ("no provision was named: what is shown was found by matching the question's words "
            "against the corpus, not by a citation, and none of it was applied to a company")
+# ...and where the question carried its own citation, the retrieval was exact, not a word
+# match, so LEXICAL's words would be false. An unqualified section number is read as the
+# Companies Act's (legal_retrieval), which is not always what the writer meant -- "section 7"
+# in an insolvency question is the IBC's -- so the turn says that too (round 4, D).
+QUESTION_CITED = ("no provision was named in the request: the citation in the question's own "
+                  "words was read, as a Companies Act section, which is not necessarily the "
+                  "Act the question meant, and none of it was applied to a company")
 FACTS_NOT_APPLIED = ("company facts were supplied, but the request named no provision, so "
                      "they were not applied to any obligation")
 UNRESTED = ("{cite} was read, but no obligation row or prescribed figure in this turn rests "
@@ -189,12 +196,17 @@ def _general_turn(question: str, *, as_of: date, generated_at: str, facts: dict 
              for p in pack["provisions"] if not p["usable_for_answering"]]
     usable = [p for p in pack["provisions"] if p["usable_for_answering"]]
     if rows or served:
-        # D16: an answered turn cites only what its rows and figures rest on.
-        rests = ({n for r in rows for n, _ in canon(r["provision"])}
-                 | {n for f in served for n in figure_sections(f["key"])})
-        notes += [{"kind": "cannot_verify", "ref": p["ref"],
-                   "detail": UNRESTED.format(cite=p["cite"])}
-                  for p in usable if section_of(p["ref"]) not in rests]
+        # D16: an answered turn cites only what its rows and figures rest on -- compared by
+        # clause, not section: a figure resting on s.2(85)(ii) does not rest on s.2(41).
+        rests = ([c for r in rows for c in canon(r["provision"])]
+                 + [c for f in served for c in figure_basis(f["key"])])
+        for cite in provisions:
+            named = canon(cite)
+            if not any(within(c, r) for c in named for r in rests):
+                ref = next((p["ref"] for p in usable
+                            if named and section_of(p["ref"]) == named[0][0]), None)
+                notes.append({"kind": "cannot_verify", "detail": UNRESTED.format(cite=cite)}
+                             | ({"ref": ref} if ref else {}))
 
     tail = {"law_version": _law_version(pack), "evidence_pack": _pack_summary(pack, route)}
     if what_it_is_not is not None:
@@ -208,7 +220,8 @@ def _general_turn(question: str, *, as_of: date, generated_at: str, facts: dict 
 
     confirmed = [_citation(p) | {"verbatim": p["reading_text"]} for p in usable]
     if not provisions and confirmed:
-        notes.append({"kind": "cannot_verify", "detail": LEXICAL})
+        notes.append({"kind": "cannot_verify",
+                      "detail": QUESTION_CITED if route == ROUTE_EXACT else LEXICAL})
     if not gaps and not notes:
         # Only here, where nothing else is not confirmed: rows and figures are empty, so a
         # turn that read text says what it did not decide, and only an empty one says that
@@ -262,13 +275,16 @@ def _with_refusal(turn: dict, item: dict) -> dict:
 
 
 # ── the request ───────────────────────────────────────────────────────────────
-def _check_facts(facts: dict, *, document: bool) -> None:
-    """Only the fact names the engine declares, and only JSON scalars as their values.
+def _check_facts(facts: dict, *, document: bool, as_of: date) -> None:
+    """Only the fact names the engine declares, each typed by the engine's own validators,
+    on every path -- whether or not this turn applies them.
 
     An undeclared key is refused, never echoed: `facts.confidence` would ride into the
     response as a C4 violation, and `paid_up_capital` (no `_rupees`) would silently leave a
-    row undecided. Full typing is `api._profile`'s, where the facts are used; this catches
-    a list or an object where a single value belongs, on every path.
+    row undecided. The values are typed by `api._profile` and `api._evidence` themselves:
+    the profile is built once as a probe and thrown away, with placeholders standing in ONLY
+    for the required fields the caller did not supply, so every supplied value meets exactly
+    the rule it would meet where it is used.
     """
     allowed = api._DOC_CHECK_KEYS if document else api.PROFILE_KEYS | {"evidence"}
     unknown = set(facts) - allowed
@@ -276,14 +292,12 @@ def _check_facts(facts: dict, *, document: bool) -> None:
         raise BadRequest(f"unknown fact(s): {', '.join(sorted(unknown))}. This engine "
                          f"declares: {', '.join(sorted(allowed))}")
     for k, v in facts.items():
-        if k == "evidence":
-            if not isinstance(v, dict):
-                raise BadRequest("'evidence' must be an object")
-            stray = set(v) - api.EVIDENCE_KEYS
-            if stray:
-                raise BadRequest(f"unknown evidence field(s): {', '.join(sorted(stray))}")
-        elif v is not None and not isinstance(v, (str, int, float, bool)):
+        if k != "evidence" and v is not None and not isinstance(v, (str, int, float, bool)):
             raise BadRequest(f"fact {k!r} must be a single value, got {type(v).__name__}")
+    probe = {"company_class": "private", "incorporation_date": as_of.isoformat(),
+             "as_of": as_of.isoformat()} | {k: v for k, v in facts.items()
+                                             if k not in ("evidence", "document_date")}
+    api._evidence(facts, api._profile(probe).as_of)       # the one evidence schema
 
 
 def _strings(request: dict, key: str) -> list[str]:
@@ -340,17 +354,21 @@ def answer(request: dict, *, generated_at: str) -> dict:
     facts = request.get("facts")
     if facts is not None and not isinstance(facts, dict):
         raise BadRequest("'facts' must be an object")
+    if facts == {}:
+        facts = None                   # an empty object supplies no facts, and says none
     if facts is not None:
-        _check_facts(facts, document=(kind == "document"))
+        _check_facts(facts, document=(kind == "document"), as_of=as_of)
     if facts and facts.get("as_of") and facts["as_of"] != as_of.isoformat():
         raise BadRequest(f"facts.as_of ({facts['as_of']!r}) contradicts the turn's as_of "
                          f"({as_of.isoformat()!r})")
     provisions, figures = _strings(request, "provisions"), _strings(request, "figures")
     for cite in provisions:
-        if not names_a_provision(cite):
-            raise BadRequest(f"{cite!r} is not a citation. A provision is named the way the "
-                             f"Act is cited -- s.173, section 2(85), rule 3 -- never as a "
-                             f"bare number or a topic")
+        why = not_one_citation(cite)
+        if why:
+            raise BadRequest(f"{cite!r} is not one Companies Act citation: {why}. Name each "
+                             f"provision as its own item -- 's.2(85)', 'section 173(1)', "
+                             f"'rule 3'. Another Act, Rules, Regulations or a Code is not read "
+                             f"here, and is never read as the Companies Act")
     declared = {t.key for t in pt.all_thresholds()}
     for key in figures:
         if key not in declared:
@@ -536,6 +554,31 @@ def _test() -> None:
         check(r["state"] != OUT_OF_SCOPE and "reason" not in r and validate(r) == [],
               f"not refused: {q[:56]!r} ({r['state']})")
 
+    # ── the Act's own forums, end to end (round 3, item 1) ───────────────────
+    for q in ("Do we need NCLT approval to reduce share capital?",
+              "Must the NCLT sanction our scheme of amalgamation?",
+              "Can minority shareholders petition the NCLT for oppression and mismanagement?",
+              "Can the NCLT wind up the company on just and equitable grounds?",
+              "Does converting from a public to a private company need NCLT approval?",
+              "Must the valuer for this allotment be registered with IBBI?"):
+        for req in ({"question": q, "as_of": AS_OF},
+                    {"question": q, "as_of": AS_OF, "provisions": ["s.66"]}):
+            r = ask(req)
+            check(r["state"] != OUT_OF_SCOPE and validate(r) == [],
+                  f"not refused ({'with' if 'provisions' in req else 'without'} a "
+                  f"provision): {q[:44]!r} ({r['state']})")
+    r = ask({"question": "Who appoints the resolution professional?", "as_of": AS_OF})
+    check(r["state"] == OUT_OF_SCOPE and r["body"]["key"] == "IBC2016"
+          and r["reason"] == scope.refusal_for("IBC2016"),
+          "an IBC-only question is still refused as the IBC, in its own words")
+
+    # ── the title the user named decides which refusal they get (item 3) ─────
+    r = ask({"question": "Does s.62 and SEBI ICDR apply to our rights issue?", "as_of": AS_OF})
+    check(r["state"] == OUT_OF_SCOPE and r["body"]["key"] == "SEBI_OTHER"
+          and r["reason"] == scope.refusal_for("SEBI_OTHER") and "ICDR" in r["reason"],
+          f"an ICDR question is refused with the ICDR body's own words, never LODR's "
+          f"({r.get('body', {}).get('key')})")
+
     # ── an undeclared body is NOT out_of_scope ───────────────────────────────
     tax = ask({"question": "How much TDS must we deduct under the Income-tax Act on this "
                            "payment?", "as_of": AS_OF})
@@ -645,6 +688,17 @@ def _test() -> None:
     check(t["state"] == PARTIAL and t["evidence_pack"]["route"] == "search"
           and [i.get("detail") for i in t["not_confirmed"]] == [LEXICAL],
           "lexical retrieval over the words feeds only a partial turn, and says so")
+    # Round 4, D: the question carried its own citation, so the route was exact. Saying
+    # "not by a citation" of that turn was false -- and the citation was read as a
+    # Companies Act section when the question meant the IBC's s.7.
+    t = ask({"question": "Can a financial creditor file under section 7 before the NCLT?",
+             "as_of": AS_OF})
+    check(t["evidence_pack"]["route"] == "exact"
+          and [i.get("detail") for i in t["not_confirmed"]] == [QUESTION_CITED]
+          and LEXICAL not in [i.get("detail") for i in t["not_confirmed"]],
+          f"a citation in the question's own words is not called a word match, and the "
+          f"turn says it was read as a Companies Act section "
+          f"({[(i.get('detail') or '')[:30] for i in t['not_confirmed']]})")
     t = ask({"question": "Is this company a small company?", "as_of": AS_OF,
              "facts": FACTS, "figures": [CAP, TURN]})
     check(t["state"] == PARTIAL and "rows" not in t and "facts" not in t
@@ -661,6 +715,67 @@ def _test() -> None:
     check(t["state"] == ANSWERED
           and [r["obligation_id"] for r in t.get("rows", [])] == ["CA13-S2-85-SMALL"],
           f"'section 2(85)' finds the row 's.2(85)' does ({t['state']})")
+
+    # ── one citation grammar (round 3, item 2) ───────────────────────────────
+    # Every form the retriever accepts as naming a provision must find the same row: two
+    # grammars that disagree drop the decided row and say, falsely, that nothing rests on it.
+    for form in ("s 2(85)", "u/s 2(85)", "S 2 (85)", "ss. 2(85)", "§ 2(85)", "sec 2(85)",
+                 "Sec. 2 (85)", "S.2(85)", "section 2(85)"):
+        r = ask({"question": "Is this company a small company?", "as_of": AS_OF,
+                 "facts": FACTS, "provisions": [form]})
+        details = [i.get("detail") for i in r.get("not_confirmed", [])]
+        check([x["obligation_id"] for x in r.get("rows", [])] == ["CA13-S2-85-SMALL"]
+              and TEXT_NO_ROW not in details and validate(r) == [],
+              f"{form!r} finds the s.2(85) row, and never says nothing rests on it "
+              f"({r['state']}, {[d[:24] for d in details if d]})")
+    try:
+        answer({"question": "x", "provisions": ["s.9999"]}, generated_at=GEN)
+        check(False, "a citation shape the grammar cannot parse is refused")
+    except BadRequest as e:
+        check("s.9999" in str(e), f"a citation shape the grammar cannot parse is a 400, not a "
+                                  f"silent miss ({str(e)[:40]})")
+    r = ask({"question": "What does s.2(41) say about turnover?", "as_of": AS_OF,
+             "provisions": ["s.2(41)"], "figures": [TURN]})
+    check(r["state"] == PARTIAL
+          and any("s.2(41)" in (i.get("detail") or "") for i in r["not_confirmed"]),
+          f"a figure resting on s.2(85)(ii) is not answered under s.2(41): the comparison is "
+          f"by clause, not by section ({r['state']})")
+
+    # ── a provision is ONE Companies Act citation and nothing else (round 4, A) ──
+    # Every shape the round-3 verifier found got through because an item could carry more
+    # than one citation, or another statute's name, and the scanner silently kept only
+    # the numbers. The item is now read whole: one citation, nothing beside it.
+    for bad, why in ((["s.2(85) and s.62"], "two citations in one item"),
+                     (["s.2(85), s.186 and s.188"], "three citations in one item"),
+                     (["sections 2(85) to 5"], "a range"),
+                     (["s.173-175"], "a hyphenated range"),
+                     (["section 2(85) of the LLP Act, 2008"], "another Act's section"),
+                     (["s.2(85) of the Limited Liability Partnership Act"],
+                      "another Act, by its full title"),
+                     (["section 7 of the IBC"], "the IBC's section"),
+                     (["s.6 of FEMA"], "FEMA's section"),
+                     (["rule 3 of the Companies (Meetings of Board and its Powers) Rules, 2014"],
+                      "a named Rules instrument"),
+                     (["Regulation 23 of SEBI LODR"], "a regulation"),
+                     (["s.2(85) under the Code"], "a Code")):
+        try:
+            answer({"question": "What does it say?", "as_of": AS_OF, "facts": FACTS,
+                    "provisions": bad, "figures": [TURN]}, generated_at=GEN)
+            check(False, f"{why} is refused")
+        except BadRequest as e:
+            check("one Companies Act citation" in str(e),
+                  f"{why} is refused, saying why: {bad[0]!r}")
+    for good in ("s.2(85)", "section 2(85)", "s.2(85) of the Companies Act, 2013",
+                 "Companies Act 2013, s.2(85)", "u/s 2(85)", "§ 2(85)"):
+        r = ask({"question": "Is this company a small company?", "as_of": AS_OF,
+                 "facts": FACTS, "provisions": [good]})
+        check([x["obligation_id"] for x in r.get("rows", [])] == ["CA13-S2-85-SMALL"],
+              f"...while {good!r} is one Companies Act citation and finds its row")
+    r = ask({"question": "What does rule 2(1)(t) prescribe?", "as_of": AS_OF,
+             "provisions": ["rule 2(1)(t)"]})
+    check(r["state"] == PARTIAL and r["confirmed"] == [],
+          "a bare rule number is still read, as a rule under the Companies Act, and "
+          "never answered (it abstains)")
 
     # ── a provision number is never a near-miss (verifier finding 5) ─────────
     check(not cites("Companies Act 2013, s.185", "s.18")
@@ -693,6 +808,34 @@ def _test() -> None:
             check(False, f"{why} is refused")
         except BadRequest as e:
             check(True, f"{why} is refused with a 400, not echoed ({str(e)[:40]})")
+    # Typed on EVERY path, applied or not (round 3 minor): a turn with no provision named
+    # does not use the facts, but a malformed fact is still a malformed request.
+    for bad_facts, why in (({"director_count": "many"}, "a director count in words"),
+                           ({"turnover_rupees": "80 crore"}, "a turnover in words"),
+                           ({"company_class": "llp"}, "a company class the engine has not"),
+                           ({"incorporation_date": "last year"}, "a date that is not a date"),
+                           ({"evidence": {"agm_dates": ["soon"]}}, "evidence that is not dates")):
+        try:
+            answer({"question": "Is this company a small company?", "as_of": AS_OF,
+                    "facts": bad_facts}, generated_at=GEN)
+            check(False, f"{why} is refused even with no provision named")
+        except BadRequest as e:
+            check(True, f"{why} is refused even with no provision named ({str(e)[:36]})")
+    meet = ["2025-01-10", "2025-04-10", "2025-07-10", "2025-10-10"]
+    for ev, prov, why in (({"board_meetings": meet, "calendar_year": "2025"}, "s.173",
+                           "a calendar year sent as a string"),
+                          ({"resident_director_days": "many"}, "s.149(3)",
+                           "a day count in words")):
+        try:
+            answer({"question": "Did we comply?", "as_of": AS_OF,
+                    "facts": {**FACTS, "evidence": ev}, "provisions": [prov]},
+                   generated_at=GEN)
+            check(False, f"{why} is refused")
+        except BadRequest as e:
+            check(True, f"{why} is a 400 -- never a false defect or a crash ({str(e)[:40]})")
+    t = ask({"question": "Is this company a small company?", "as_of": AS_OF, "facts": {}})
+    check(not any(i.get("detail") == FACTS_NOT_APPLIED for i in t["not_confirmed"]),
+          "an empty facts object is no facts -- the turn does not say facts were supplied")
     try:
         answer({"question": "x" * (MAX_QUESTION_CHARS + 1), "as_of": AS_OF},
                generated_at=GEN)

@@ -1,0 +1,6 @@
+{
+  "_provenance": "shape copied from https://docs.voyageai.com/reference/embeddings-api.md (components.responses.4XX schema: {detail: string}; fetched 2026-09-18), not a live response. The detail text is ours; the doc gives only the field.",
+  "example": {
+    "detail": "Invalid API key"
+  }
+}

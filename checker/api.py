@@ -117,26 +117,72 @@ def _profile(payload: dict) -> CompanyProfile:
         director_count=_typed(payload, "director_count", int, non_negative=True))
 
 
-# The evidence fields _evidence() reads. Declared once so a caller that must refuse an
-# undeclared key (checker/ask.py) refuses exactly what this reader would ignore.
-EVIDENCE_KEYS = frozenset({"agm_dates", "financial_year_end", "board_meetings",
-                           "calendar_year", "aoc4_filed_on", "annual_return_filed_on",
-                           "resident_director_days", "first_financial_year_end"})
+# ── the evidence schema: declared once, typed strictly, used by every route ───
+# ONE table. EVIDENCE_KEYS is derived from it, _evidence() builds from it, and checker/ask.py
+# refuses by it -- so no field can be read by one and ignored or coerced by another.
+# calendar_year was the field that proved the need: it was read untyped, "2025" compared
+# unequal to every meeting's int year, no meeting was counted, and s.173 reported a defect
+# in a company that held all four (ASK-1 round 3, finding 3).
+
+def _calendar_year(ev: dict, key: str, as_of: date):
+    """A calendar year the engine can actually evaluate s.173 against, or a 400.
+
+    First: the first calendar year wholly under the Companies Act 2013, from
+    checker/as_of.COMMENCEMENT (01-04-2014, when the bulk of the Act commenced) -- 2014
+    itself straddles the 1956 Act. Last: the last calendar year that has ENDED on the read
+    date. s.173 sets a minimum "every year" and s173_slice counts meetings without knowing
+    the date it is read on, so a year still running would be reported short of four
+    meetings in September -- another false defect.
+    """
+    from checker.as_of import COMMENCEMENT
+    year = _typed(ev, key, int)
+    if year is None:
+        return None
+    first = COMMENCEMENT.year + 1
+    last = as_of.year if (as_of.month, as_of.day) == (12, 31) else as_of.year - 1
+    if not first <= year <= last:
+        raise BadRequest(
+            f"'calendar_year' {year} cannot be evaluated: this engine checks s.173 for "
+            f"calendar years {first}-{last} -- from the first year wholly under the Act "
+            f"(commenced {COMMENCEMENT.isoformat()}) to the last year ended by the read date "
+            f"{as_of.isoformat()}")
+    return year
 
 
-def _evidence(payload: dict) -> Evidence:
+def _resident_days(ev: dict, key: str, as_of: date):
+    """Days in India in one financial year: 0 to 366. A financial year runs to 31 March
+    (s.2(41)), so a full one has 365 or 366 days; a longer first year falls under
+    s.149(3)'s proportionate proviso, which this engine does not compute."""
+    days = _typed(ev, key, int, non_negative=True)
+    if days is not None and days > 366:
+        raise BadRequest(f"{key!r} {days} is more days than a financial year has (366)")
+    return days
+
+
+_EVIDENCE_FIELDS = {
+    "agm_dates": lambda ev, k, as_of: _dates(ev, k),
+    "financial_year_end": lambda ev, k, as_of: _date(ev, k),
+    "board_meetings": lambda ev, k, as_of: _dates(ev, k),
+    "calendar_year": _calendar_year,
+    "aoc4_filed_on": lambda ev, k, as_of: _date(ev, k),
+    "annual_return_filed_on": lambda ev, k, as_of: _date(ev, k),
+    "resident_director_days": _resident_days,
+    "first_financial_year_end": lambda ev, k, as_of: _date(ev, k),
+}
+EVIDENCE_KEYS = frozenset(_EVIDENCE_FIELDS)
+
+
+def _evidence(payload: dict, as_of: date) -> Evidence:
+    """The evidence, every field typed by the one schema above. An undeclared field is a
+    400: read by nothing, it would change no row and the caller would never know."""
     ev = payload.get("evidence") or {}
     if not isinstance(ev, dict):
         raise BadRequest("'evidence' must be an object")
-    return Evidence(
-        agm_dates=_dates(ev, "agm_dates"),
-        financial_year_end=_date(ev, "financial_year_end"),
-        board_meetings=_dates(ev, "board_meetings"),
-        calendar_year=ev.get("calendar_year"),
-        aoc4_filed_on=_date(ev, "aoc4_filed_on"),
-        annual_return_filed_on=_date(ev, "annual_return_filed_on"),
-        resident_director_days=ev.get("resident_director_days"),
-        first_financial_year_end=_date(ev, "first_financial_year_end"))
+    unknown = set(ev) - EVIDENCE_KEYS
+    if unknown:
+        raise BadRequest(f"unknown evidence field(s): {', '.join(sorted(unknown))}. "
+                         f"Declared: {', '.join(sorted(EVIDENCE_KEYS))}")
+    return Evidence(**{k: read(ev, k, as_of) for k, read in _EVIDENCE_FIELDS.items()})
 
 
 def _row_json(r) -> dict:
@@ -158,7 +204,9 @@ def compliance_pack(payload: dict, *, generated_at: str) -> dict:
     """Build the pack from a validated payload and serialise it to JSON."""
     if not isinstance(payload, dict):
         raise BadRequest("request body must be a JSON object")
-    pack = build_pack(_profile(payload), _evidence(payload), generated_at=generated_at)
+    _reject_unknown(payload, PROFILE_KEYS | {"evidence"}, "request")
+    profile = _profile(payload)
+    pack = build_pack(profile, _evidence(payload, profile.as_of), generated_at=generated_at)
     return {
         "company_class": pack.company_class,
         "cin": pack.cin,
@@ -948,6 +996,45 @@ def _test() -> None:
                         "provisions": ["s.2(85)"]}, generated_at=GEN)
     check(st == 400 and "confidence" in r["detail"],
           f"an undeclared fact key is a 400 naming it, not an echoed field ({st})")
+
+    # ── evidence is typed by one schema, strictly (ASK-1 round 3, finding 3) ─
+    # calendar_year "2025" was never typed: s173_slice compared the meeting dates' int
+    # years with a string, counted none, and the row said APPLIES_NOT_SATISFIED -- a
+    # defect found in a company that held all four meetings. CLAUDE.md: never call a
+    # finding a defect when it is not one. Now a 400, on every route.
+    _meet = ["2025-01-10", "2025-04-10", "2025-07-10", "2025-10-10"]
+    for label, ev in (('calendar_year "2025" (a string)',
+                       {"board_meetings": _meet, "calendar_year": "2025"}),
+                      ('calendar_year "x"', {"board_meetings": _meet, "calendar_year": "x"}),
+                      ("calendar_year true", {"board_meetings": _meet, "calendar_year": True}),
+                      ("calendar_year 2025.5", {"board_meetings": _meet, "calendar_year": 2025.5}),
+                      ("calendar_year -5", {"board_meetings": _meet, "calendar_year": -5}),
+                      ("calendar_year 1999 (the 1956 Act's time)",
+                       {"board_meetings": _meet, "calendar_year": 1999}),
+                      ("calendar_year 2014 (the Act commenced 01-04-2014, mid-year)",
+                       {"board_meetings": _meet, "calendar_year": 2014}),
+                      ("calendar_year 2026, not yet over on the as_of date",
+                       {"board_meetings": _meet, "calendar_year": 2026}),
+                      ('resident_director_days "many"', {"resident_director_days": "many"}),
+                      ("resident_director_days 400", {"resident_director_days": 400}),
+                      ("resident_director_days -1", {"resident_director_days": -1}),
+                      ("an undeclared evidence key", {"board_meeting": _meet})):
+        st, r = handle("POST", "/v1/compliance-pack",
+                       {**_ask_facts, "as_of": "2026-08-31", "evidence": ev},
+                       generated_at=GEN)
+        check(st == 400, f"compliance-pack: {label} is a 400, never a coercion or a crash "
+                         f"({st}: {r.get('detail', '')[:50]})")
+    st, r = handle("POST", "/v1/compliance-pack",
+                   {**_ask_facts, "as_of": "2026-08-31",
+                    "evidence": {"board_meetings": _meet, "calendar_year": 2025}},
+                   generated_at=GEN)
+    row = next(x for x in r["rows"] if x["obligation_id"] == "CA13-S173-BOARD")
+    check(st == 200 and row["state"] != "APPLIES_NOT_SATISFIED",
+          f"...while four meetings in a finished 2025 are never a defect ({row['state']})")
+    st, r = handle("POST", "/v1/compliance-pack", {**_ask_facts, "turnover": 5},
+                   generated_at=GEN)
+    check(st == 400 and "turnover" in r.get("detail", ""),
+          f"an undeclared top-level fact is a 400 on compliance-pack too ({st})")
 
     # ── facts are typed at the boundary, on every route that takes them ──────
     for field, value in (("director_count", "many"), ("director_count", -1),
