@@ -258,11 +258,13 @@ class DigitiseResult:
 
 
 def available() -> bool:
-    return bool(os.getenv("SARVAM_API_KEY"))
+    return bool((os.getenv("SARVAM_API_KEY") or "").strip())
 
 
 def _key() -> str:
-    k = os.getenv("SARVAM_API_KEY")
+    # Stripped, as in voyage_model: a whitespace-only key from a shell export otherwise
+    # read as present and produced a whitespace header (D6 verifier, finding 1).
+    k = (os.getenv("SARVAM_API_KEY") or "").strip()
     if not k:
         raise SarvamUnavailable(
             "SARVAM_API_KEY is not set. This refuses rather than return an empty "

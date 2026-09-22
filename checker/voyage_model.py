@@ -105,6 +105,17 @@ RERANK_MODELS = (RERANK, RERANK_LITE)
 # USD per 1M tokens, list price (V5). Free allowances deliberately not deducted.
 PRICING_USD_PER_M = {LAW: 0.12, RERANK: 0.05, RERANK_LITE: 0.02}
 
+# The dimension each embedding model documents. A vector of another width is refused:
+# mutual consistency is not enough, because a silently re-dimensioned model would pass
+# a whole bake-off arm as if nothing had changed (D6 verifier, finding 2).
+DOCUMENTED_DIM = {LAW: 1024}
+
+
+def _stub_vec(*head: object) -> list:
+    """A self-test vector of the documented width. Only the tests use it: parse_embeddings
+    refuses any other width, so a 3-float stub would fail the very rule it is checking."""
+    return [*head] + [0.0] * (DOCUMENTED_DIM[LAW] - len(head))
+
 INPUT_TYPES = ("query", "document")
 MAX_ITEMS = 1_000          # embeddings `input` list and rerank `documents` (V1, V2)
 TIMEOUT_S = 60
@@ -147,11 +158,13 @@ _ENDPOINTS = ("embeddings", "rerank")
 
 
 def available() -> bool:
-    return bool(os.getenv("VOYAGE_API_KEY"))
+    return bool((os.getenv("VOYAGE_API_KEY") or "").strip())
 
 
 def _key() -> str:
-    k = os.getenv("VOYAGE_API_KEY")
+    # Stripped: a whitespace-only key read from a shell export made `available()` true and
+    # the header "Bearer    " (D6 verifier, finding 1). checker/env.py already strips .env.
+    k = (os.getenv("VOYAGE_API_KEY") or "").strip()
     if not k:
         raise VoyageUnavailable(
             "VOYAGE_API_KEY is not set. This refuses rather than fall back to BM25 or "
@@ -260,8 +273,16 @@ def parse_embeddings(data: object, n: int, *, model: str) -> list[list[float]]:
             raise VoyageBadResponse(
                 f"/embeddings: vector {i} is empty or holds a non-finite / non-number value")
         out[i] = [float(v) for v in vec]
-    if len({len(v) for v in out.values()}) != 1:
+    dims = {len(v) for v in out.values()}
+    if len(dims) != 1:
         raise VoyageBadResponse("/embeddings: vectors have different dimensions")
+    want = DOCUMENTED_DIM.get(model)
+    got = dims.pop()
+    if want is not None and got != want:
+        raise VoyageBadResponse(
+            f"/embeddings: {model} returned {got}-dimensional vectors, not the documented "
+            f"{want}. Refused rather than measured: a re-dimensioned model is a different "
+            f"model, and a bake-off arm run on it would answer a question nobody asked.")
     return [out[i] for i in range(n)]
 
 
@@ -355,6 +376,7 @@ def _test() -> None:
     import io
     from unittest import mock
 
+
     ok = fail = 0
 
     def check(cond: bool, label: str) -> None:
@@ -420,7 +442,7 @@ def _run_checks(check, attempt, network, mock, io) -> None:
         seen["endpoint"], seen["payload"] = endpoint, payload
         n = len(payload["input"])
         return {"object": "list", "model": payload["model"], "usage": {"total_tokens": 7 * n},
-                "data": [{"object": "embedding", "index": i, "embedding": [0.1 * (i + 1), 0.2, 0.3]}
+                "data": [{"object": "embedding", "index": i, "embedding": _stub_vec(0.1 * (i + 1), 0.2, 0.3)}
                          for i in range(n)]}
 
     vecs, call = embed(["s.173 board meetings", "s.185 loans"], input_type="document",
@@ -498,7 +520,7 @@ def _run_checks(check, attempt, network, mock, io) -> None:
 
     # ── 4. malformed responses are refused, never repaired ───────────────────
     good = {"object": "list", "model": LAW, "usage": {"total_tokens": 3},
-            "data": [{"index": 0, "embedding": [0.5, 0.5]}, {"index": 1, "embedding": [0.1, 0.9]}]}
+            "data": [{"index": 0, "embedding": _stub_vec(0.5, 0.5)}, {"index": 1, "embedding": _stub_vec(0.1, 0.9)}]}
 
     def variant(**kw):
         d = json.loads(json.dumps(good))
@@ -508,11 +530,13 @@ def _run_checks(check, attempt, network, mock, io) -> None:
     cases = {
         "no data": variant(data=None),
         "one vector for two inputs": variant(data=good["data"][:1]),
-        "duplicate index": variant(data=[good["data"][0], {"index": 0, "embedding": [1.0, 0.0]}]),
-        "index out of range": variant(data=[good["data"][0], {"index": 5, "embedding": [1.0, 0.0]}]),
+        "duplicate index": variant(data=[good["data"][0], {"index": 0, "embedding": _stub_vec(1.0)}]),
+        "index out of range": variant(data=[good["data"][0], {"index": 5, "embedding": _stub_vec(1.0)}]),
         "ragged dimensions": variant(data=[good["data"][0], {"index": 1, "embedding": [1.0]}]),
-        "a boolean in a vector": variant(data=[good["data"][0], {"index": 1, "embedding": [True, 0.0]}]),
-        "a NaN in a vector": variant(data=[good["data"][0], {"index": 1, "embedding": [float("nan"), 0.0]}]),
+        "the wrong dimension, consistently": variant(data=[{"index": 0, "embedding": [0.5, 0.5]},
+                                                           {"index": 1, "embedding": [0.1, 0.9]}]),
+        "a boolean in a vector": variant(data=[good["data"][0], {"index": 1, "embedding": _stub_vec(True, 0.0)}]),
+        "a NaN in a vector": variant(data=[good["data"][0], {"index": 1, "embedding": _stub_vec(float("nan"), 0.0)}]),
         "an empty vector": variant(data=[{"index": 0, "embedding": []}, {"index": 1, "embedding": []}]),
         "not an object": ["list"],
     }

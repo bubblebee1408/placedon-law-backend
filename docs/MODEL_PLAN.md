@@ -113,7 +113,7 @@ by default. Documents over 10 pages are split into 10-page jobs, never truncated
 The retrieval row above (InLegalBERT) and the RRF incumbent are unchanged.
 
 **What the first live calls showed (19-09).** `scripts/smoke_adapters.py --live`
-made four calls on public text only, and both records are in `reports/`. Voyage
+made ten HTTP requests on public text only (three Voyage calls; one Sarvam Digitise job = POST plus its status and results GETs, re-read later at no cost), and both records are in `reports/`. Voyage
 (three calls, 625 tokens, Rs 0.005 at list price) matched its docs exactly, except
 that each embedding item carries an undocumented `text` field; vectors came back
 1,024-dimensional and unit-length, and the reranker put s.173 first for a

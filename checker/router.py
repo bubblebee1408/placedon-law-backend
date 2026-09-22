@@ -124,7 +124,7 @@ from checker.gemini_model import FLASH
 
 _PREFERENCE = {
     (PAGE_IMAGE, HIGH): [(GEMINI, FLASH,
-        "86.3 chrF++ on real Devanagari scans, the best independently measured")],
+        "86.3 chrF++ on Devanagari word/phrase crops (Sanskrit typeset, arXiv 2606.29213) -- the best independently measured, and UNVERIFIED here until reproduced")],
     (PAGE_IMAGE, LOW): [(GEMINI, FLASH, "free tier, and best on Indic pages")],
     (TEXT, HIGH): [(ANTHROPIC, EXTRACT,
         "extraction: an error here becomes a wrong legal answer")],
