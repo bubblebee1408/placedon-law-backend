@@ -405,7 +405,15 @@ async function naFacts(page) {
       cancel: btns('[data-cancel]'),
       again: btns('[data-send-again]'),
       progress: document.querySelectorAll('progress,[role=progressbar],[aria-valuenow],[class*=skeleton],[class*=spinner]').length,
-      running: document.getAnimations ? document.getAnimations().length : 0,
+      // A spinner, a skeleton pulse or any client-timed progress is either endless or longer
+      // than the 200ms budget worstMotion() enforces; a button's own 140ms focus transition,
+      // still in flight because the machine is busy, is neither. Counting only the first kind
+      // keeps "the waiting card does nothing by itself" true without depending on the clock.
+      running: document.getAnimations ? document.getAnimations().filter(a => {
+        const t = a.effect && a.effect.getComputedTiming ? a.effect.getComputedTiming() : null;
+        if (!t) return true;
+        return t.iterations === Infinity || !(t.activeDuration <= 200);
+      }).length : 0,
       overflow: document.documentElement.scrollWidth > window.innerWidth + 1,
     };
     if (!card) return f;
@@ -640,8 +648,258 @@ async function checkTransition(page, S, question, w, at) {
   }
 }
 
+// 14. Live mode (D2): the same page served by scripts/serve_ask.py on a free loopback port. Ask
+//     sends {question, context} to POST /v1/ask on that origin and renders the SERVER's reply
+//     through the fixtures' renderer; while the request is out the page shows the waiting card
+//     and Cancel aborts it; a dead server, a non-200 or a reply that is not a placedon.ask/0 turn
+//     is the service error, never an abstention. ?fixture= and ?state= keep working over http.
+const LIVE_QUESTIONS = [
+  // Question-only, so the route answers only what it can read in the words (contract §6 D1):
+  // the small-company question names no provision -> partial, found by matching words.
+  { slug: 'small-company', q: 'Is this company a small company?', state: 'partial' },
+  { slug: 'declared-body', q: 'Do we need to tell the RBI before allotting shares to a foreign investor?', state: 'out_of_scope' },
+  { slug: 's173', q: 'What does s.173 require?', state: 'partial' },
+];
+const LIVE_WIDTHS = [360, 1440];
+
+// A child killed by a signal keeps exitCode null; signalCode says it is gone.
+const alive = proc => proc.exitCode === null && proc.signalCode === null;
+
+async function freePort() {
+  const { createServer } = await import('node:net');
+  return new Promise((res, rej) => {
+    const s = createServer();
+    s.on('error', rej);
+    s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => res(p)); });
+  });
+}
+
+// The demo server for the page under test: <repo>/scripts/serve_ask.py serves <repo>/web/assistant.
+async function startServer() {
+  const { spawn } = await import('node:child_process');
+  const repo = resolve(resolve(page_), '..', '..', '..');
+  const port = await freePort();
+  const proc = spawn('python3', [join(repo, 'scripts', 'serve_ask.py'), '--port', String(port)],
+    { cwd: repo, env: { ...process.env, PYTHONPATH: repo }, stdio: ['ignore', 'ignore', 'pipe'] });
+  let stderr = '';
+  proc.stderr.on('data', d => { stderr += d; });
+  const exited = new Promise(r => proc.on('exit', r));
+  const origin = `http://127.0.0.1:${port}`;
+  for (let i = 0; i < 200; i++) {                      // up to ~20 s for the engine to import
+    if (!alive(proc)) break;
+    try { if ((await fetch(`${origin}/index.html`)).status === 200) return { origin, proc, exited, stderr: () => stderr }; } catch { /* not up yet */ }
+    await new Promise(r => setTimeout(r, 100));
+  }
+  proc.kill('SIGTERM');
+  throw new Error(`serve_ask.py did not come up on ${origin}: ${stderr.slice(0, 300)}`);
+}
+
+// A page on the live origin: only that origin is reachable; POST /v1/ask can be held, so the
+// waiting state is observed deterministically and released on cue, or answered by the check.
+async function livePage(ctx, origin) {
+  const page = await ctx.newPage();
+  const t = { page, external: [], errors: [], asks: [], held: [], failed: [], hold: false, reply: null };
+  page.on('pageerror', e => t.errors.push(String(e)));
+  page.on('requestfailed', r => { if (r.url().endsWith('/v1/ask')) t.failed.push(r.failure()?.errorText || 'failed'); });
+  await page.route('**/*', async r => {
+    const req = r.request();
+    const u = req.url();
+    if (!u.startsWith(origin + '/')) { t.external.push(u); return r.abort(); }
+    if (new URL(u).pathname !== '/v1/ask') return r.continue();
+    t.asks.push({ method: req.method(), body: req.postData(), ctype: req.headers()['content-type'] || '' });
+    if (t.reply) return r.fulfill(t.reply);
+    if (t.hold) { t.held.push(r); return; }
+    return r.continue();
+  });
+  return t;
+}
+
+async function release(t) {
+  for (const r of t.held.splice(0)) { try { await r.continue(); } catch { /* the page aborted it */ } }
+}
+
+const human = iso => { const [y, m, d] = iso.split('-'); return `${d}-${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][Number(m) - 1]}-${y}`; };
+
+// One question asked through the page, held while the waiting card is checked, then answered
+// by the real server; the rendered turn must be that reply's, not a fixture's.
+async function liveQuestion(ctx, origin, spec, w, fixtureIds) {
+  const at = `live ${spec.slug}`;
+  const t = await livePage(ctx, origin);
+  const { page } = t;
+  await page.goto(`${origin}/`, { waitUntil: 'load' });
+  await withFonts(page);
+  const note = await page.$eval('[data-concept]', e => e.innerText).catch(() => '');
+  if (/Nothing you type is sent/i.test(note) || !/this computer/i.test(note) || !/no model/i.test(note)) fail(at, w, `live concept note is not the live wording: ${JSON.stringify(note)}`);
+  else pass(at, w, 'concept note: sent to the engine on this computer only, no model');
+
+  t.hold = true;
+  await page.fill('[data-composer] textarea', spec.q);
+  await page.focus('[data-composer] textarea');
+  await page.keyboard.press('Enter');
+  for (let i = 0; i < 100 && !t.held.length; i++) await page.waitForTimeout(50);   // the request reaching the route
+  const sent = t.asks[0];
+  let body = null;
+  try { body = JSON.parse(sent?.body || 'null'); } catch { body = null; }
+  const shape = body && JSON.stringify(Object.keys(body).sort()) === '["context","question"]'
+    && body.question === spec.q && JSON.stringify(body.context) === '{"kind":"general"}';
+  if (t.asks.length !== 1 || sent.method !== 'POST' || !/application\/json/.test(sent.ctype) || !shape) fail(at, w, `Ask did not POST {question, context} once: ${JSON.stringify(t.asks).slice(0, 200)}`);
+  else pass(at, w, 'Ask POSTs {question, context:{kind:general}} as JSON to /v1/ask, once');
+  const f = await naFacts(page);
+  if (f.kind !== 'waiting' || !f.focusCancel || !f.boxLocked || !f.askLocked || f.states) fail(at, w, `no waiting card with focus on Cancel while the request is out (${f.kind})`);
+  else pass(at, w, 'waiting card, composer locked, focus on Cancel, while the request is out');
+
+  // No request held means nothing was sent: every check below then fails rather than aborting.
+  const replyP = t.held.length ? page.waitForResponse(r => r.url().endsWith('/v1/ask')).catch(() => null) : null;
+  t.hold = false;
+  await release(t);
+  const reply = replyP ? await replyP : null;
+  const r = reply ? await reply.json().catch(() => ({})) : {};
+  if (reply) await page.waitForSelector('[data-state]', { timeout: 30000 }).catch(() => null);
+  const g = await page.evaluate(() => {
+    const card = document.querySelector('article[data-state]');
+    return {
+      states: [...document.querySelectorAll('[data-state]')].map(e => e.getAttribute('data-state')),
+      origin: card && card.getAttribute('data-origin'),
+      question: card && card.querySelector('[data-f="question"]')?.innerText.trim(),
+      stamp: card && card.querySelector('.stamp')?.innerText,
+      heading: card && card.querySelector('[data-state-heading]')?.innerText.trim(),
+      nonanswer: document.querySelectorAll('[data-nonanswer]').length,
+      lawVersion: !!document.querySelector('[data-law-version]'),
+      focusQuestion: !!card && document.activeElement === card.querySelector('[data-f="question"]'),
+      locked: document.querySelector('[data-composer] textarea').readOnly,
+    };
+  });
+  if (!reply || reply.status() !== 200 || r.schema !== 'placedon.ask/0' || r.state !== spec.state) fail(at, w, `server replied ${reply ? reply.status() : 'nothing'} ${r.state}, expected 200 ${spec.state}`);
+  else pass(at, w, `the server answered ${r.state}`);
+  if (g.states.length !== 1 || g.states[0] !== r.state || g.origin !== 'live') fail(at, w, `rendered ${JSON.stringify(g.states)} (${g.origin}), not the server's ${r.state}`);
+  else if (fixtureIds.has(r.turn_id) || g.question !== spec.q || !g.stamp?.includes(human(r.as_of || '0-1-0'))) fail(at, w, `the rendered turn is not this request's reply (${r.turn_id}, ${JSON.stringify(g.question)}, ${g.stamp})`);
+  else pass(at, w, `renders the server's ${r.state} for the typed question, stamped with its as-of, not a fixture`);
+  if (!HEADING_WORD[r.state]?.test(g.heading || '') || g.nonanswer || g.locked || !g.focusQuestion) fail(at, w, `after the reply: heading ${JSON.stringify(g.heading)}, ${g.nonanswer} non-answer card(s), locked ${g.locked}, focus on question ${g.focusQuestion}`);
+  else pass(at, w, 'state named in words; waiting card gone; composer usable; focus on the question');
+  if (['rows', 'confirmed', 'superseded', 'citations'].some(k => (r[k] || []).length) && !g.lawVersion) fail(at, w, 'legal content shown without [data-law-version]');
+  else pass(at, w, 'law version wherever legal text is shown');
+  const invented = await inventedNumbers(page, fixtureNumbers(r));
+  if (invented.length) fail(at, w, `numbers on screen not in the server's reply: ${invented.slice(0, 8).join(', ')}`);
+  else pass(at, w, "every number traceable to the server's reply");
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
+  if (overflow) fail(at, w, 'horizontal overflow'); else pass(at, w, 'no overflow');
+  if (shots) await page.screenshot({ path: join(shots, `live-${spec.slug}-${w}.png`), fullPage: true });
+  if (t.errors.length || t.external.length) fail(at, w, `page errors or network: ${[...t.errors, ...t.external].join(' | ').slice(0, 200)}`);
+  else pass(at, w, 'no page errors; nothing left this origin');
+  await page.close();
+}
+
+// Ask with the reply decided by the check (a 500, a wrong schema, an unknown state) or with the
+// server gone: every one is "No result", never an abstention, and the question stays in the box.
+async function liveFailure(ctx, origin, w, label, reply, stopServer) {
+  const at = `live ${label}`;
+  const t = await livePage(ctx, origin);
+  const { page } = t;
+  await page.goto(`${origin}/`, { waitUntil: 'load' });
+  if (stopServer) await stopServer();
+  t.reply = reply;
+  const q = 'What does s.173 require?';
+  await page.fill('[data-composer] textarea', q);
+  await page.focus('[data-composer] textarea');
+  await page.keyboard.press('Enter');
+  await page.waitForSelector('[data-nonanswer="error"]', { timeout: 30000 }).catch(() => null);
+  const f = await naFacts(page);
+  if (f.kind !== 'error' || f.states || !f.focusHead) fail(at, w, `expected "No result" with focus on its heading, got ${f.kind} (${f.states} state(s))`);
+  else pass(at, w, `${label}: the service error, not a state`);
+  await checkNonAnswer(page, 'error', q, null, w, at);
+  if (shots && w === 1440) await page.screenshot({ path: join(shots, `live-${label.replace(/\W+/g, '-')}-${w}.png`), fullPage: true });
+  if (t.errors.length || t.external.length) fail(at, w, `page errors or network: ${[...t.errors, ...t.external].join(' | ').slice(0, 200)}`);
+  else pass(at, w, `${label}: no page errors; nothing left this origin`);
+  await page.close();
+}
+
+{
+  const b4 = await chromium.launch({ executablePath: exe, headless: true });
+  let srv = null;
+  try {
+    srv = await startServer();
+    const { origin } = srv;
+    const fixtureIds = new Set(fixtures.map(f => f.data.turn_id));
+    for (const w of LIVE_WIDTHS) {
+      const ctx = await b4.newContext({ viewport: { width: w, height: 900 }, reducedMotion: w === 360 ? 'reduce' : 'no-preference' });
+      for (const spec of LIVE_QUESTIONS) await liveQuestion(ctx, origin, spec, w, fixtureIds);
+
+      // Cancel aborts the request, and a reply that arrives anyway is never rendered.
+      {
+        const at = 'live cancel';
+        const t = await livePage(ctx, origin);
+        const { page } = t;
+        await page.goto(`${origin}/`, { waitUntil: 'load' });
+        t.hold = true;
+        await page.fill('[data-composer] textarea', 'What does s.173 require?');
+        await page.focus('[data-composer] textarea');
+        await page.keyboard.press('Enter');
+        for (let i = 0; i < 100 && !t.held.length; i++) await page.waitForTimeout(50);
+        await pressOn(page, '[data-cancel]');
+        for (let i = 0; i < 100 && !t.failed.length; i++) await page.waitForTimeout(50);   // the abort reaching the network layer
+        await release(t);
+        await page.waitForTimeout(300);
+        const f = await naFacts(page);
+        if (!t.failed.length) fail(at, w, 'Cancel did not abort the request');
+        else if (f.kind !== 'cancelled' || f.states || f.box !== 'What does s.173 require?' || f.boxLocked) fail(at, w, `after Cancel: ${f.kind}, ${f.states} state(s), box ${JSON.stringify(f.box)}`);
+        else pass(at, w, 'Cancel aborts the request; nothing is rendered from it; the question stays');
+        if (t.errors.length || t.external.length) fail(at, w, `page errors or network: ${[...t.errors, ...t.external].join(' | ').slice(0, 200)}`);
+        else pass(at, w, 'cancel: no page errors; nothing left this origin');
+        await page.close();
+      }
+
+      await liveFailure(ctx, origin, w, 'reply 500', { status: 500, contentType: 'application/json', body: '{"error":"engine_failure"}' });
+      await liveFailure(ctx, origin, w, 'reply wrong schema', { status: 200, contentType: 'application/json', body: '{"schema":"placedon.ask/1","state":"answered"}' });
+      await liveFailure(ctx, origin, w, 'reply unknown state', { status: 200, contentType: 'application/json', body: '{"schema":"placedon.ask/0","state":"abstained"}' });
+
+      // ?fixture= and ?state= still work over http: a saved sample renders, and a stand-in state
+      // sends nothing.
+      {
+        const at = 'live fixture param';
+        const fx = fixtures.find(x => x.name === 'answered_small_company');
+        const t = await livePage(ctx, origin);
+        await t.page.goto(`${origin}/?fixture=${fx.name}`, { waitUntil: 'load' });
+        const g = await t.page.evaluate(() => ({
+          states: [...document.querySelectorAll('[data-state]')].map(e => e.getAttribute('data-state')),
+          origin: document.querySelector('article[data-state]')?.getAttribute('data-origin'),
+          note: document.querySelector('[data-concept]')?.innerText || '',
+        }));
+        if (g.states.join() !== fx.data.state || g.origin !== 'fixture' || t.asks.length || !/saved sample/i.test(g.note)) fail(at, w, `?fixture= over http: ${JSON.stringify(g)}, ${t.asks.length} ask(s)`);
+        else pass(at, w, '?fixture= over http renders the saved sample, says so, and sends nothing');
+        await t.page.close();
+        const s = await livePage(ctx, origin);
+        await s.page.goto(`${origin}/?state=waiting`, { waitUntil: 'load' });
+        await s.page.fill('[data-composer] textarea', TYPED);
+        await s.page.focus('[data-composer] textarea');
+        await s.page.keyboard.press('Enter');
+        const f = await naFacts(s.page);
+        const note = await s.page.$eval('[data-concept]', e => e.innerText).catch(() => '');
+        if (f.kind !== 'waiting' || s.asks.length || !/Nothing you type is sent/.test(note)) fail('live state param', w, `?state=waiting over http: ${f.kind}, ${s.asks.length} ask(s), note ${JSON.stringify(note)}`);
+        else pass('live state param', w, '?state= over http is still the stand-in: nothing is sent');
+        await s.page.close();
+      }
+      await ctx.close();
+    }
+
+    // The server goes down under a loaded page: Ask renders the service error.
+    for (const w of LIVE_WIDTHS) {
+      const ctx = await b4.newContext({ viewport: { width: w, height: 900 }, reducedMotion: w === 360 ? 'reduce' : 'no-preference' });
+      const stop = async () => { if (alive(srv.proc)) { srv.proc.kill('SIGTERM'); await srv.exited; } };
+      if (!alive(srv.proc)) srv = await startServer();
+      await liveFailure(ctx, srv.origin, w, 'server down', null, stop);
+      await ctx.close();
+    }
+  } catch (e) {
+    fail('live', 0, `live mode could not run: ${String(e).slice(0, 300)}`);
+  } finally {
+    if (srv && alive(srv.proc)) { srv.proc.kill('SIGTERM'); await srv.exited; }
+    await b4.close();
+  }
+}
+
 const failed = results.filter(r => !r.ok);
 for (const r of failed) console.log(`FAIL ${r.fx} @${r.w}: ${r.msg}`);
 console.log(`ACCEPTANCE ${results.length - failed.length}/${results.length} checks passed across ${fixtures.length} fixtures x ${WIDTHS.length} widths, `
-  + `the empty state, and ${NA_STATES.length} non-answer states x ${fixtures.length + 1} requests x ${NA_WIDTHS.length} widths`);
+  + `the empty state, ${NA_STATES.length} non-answer states x ${fixtures.length + 1} requests x ${NA_WIDTHS.length} widths, `
+  + `and live mode (${LIVE_QUESTIONS.length} questions, cancel, 4 failures, 2 params) x ${LIVE_WIDTHS.length} widths`);
 process.exit(failed.length ? 1 : 0);

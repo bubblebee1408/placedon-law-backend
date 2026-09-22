@@ -10,8 +10,11 @@
  * an abstention (placedon-claude-legal-3300 AGENTS.md): no abstention grey, no badge, no dashed
  * mark (dashed has meant abstention since §27) -- a plain bordered box that says there is no
  * answer, partial or otherwise.
- * This page has no answer endpoint, so ?state= picks what a stand-in server does with a request:
- * 'waiting' and 'cancelled' never reply (Cancel or Esc ends the wait); 'error' fails at once.
+ * Served by scripts/serve_ask.py these three states are real: the waiting card is up while the
+ * POST /v1/ask is out, Cancel and Esc abort it, and a dead server or anything that is not a
+ * placedon.ask/0 turn brings the error card (app.js askLive). ?state= keeps the stand-in for
+ * demonstrating them anywhere, including from a file: 'waiting' and 'cancelled' never reply,
+ * 'error' fails at once.
  * Nothing is timed on the client: no spinner, timer, stage names or skeleton (C1, C4, K9). */
 var NA = {
   waiting: "Waiting for the server's decision.",
@@ -24,7 +27,7 @@ var NA = {
 var NON_ANSWER = ['waiting', 'cancelled', 'error'];
 var demo = null;        // the ?state= value, when it names one of the three
 var base = null;        // the request values a ?fixture= carried: as_of, context, parent
-var pending = null;     // { kind, req, card }: the one non-answer card on the page
+var pending = null;     // { kind, req, card, abort? }: the one non-answer card on the page
 
 /* The request values the user set: the only things a waiting card may carry (§4.4). */
 function composerRequest() {
@@ -110,6 +113,8 @@ function showNonAnswer(kind, req, arrived) {
  * before the Cancel button is removed. The question stays in the box. */
 function cancelWait() {
   if (!pending || pending.kind !== 'waiting') return;
+  // Live, the request is aborted first: a reply that arrives anyway is never rendered.
+  if (pending.abort) pending.abort();
   var head = pending.card.querySelector('h2');
   head.textContent = NA.cancelled;
   head.focus();
