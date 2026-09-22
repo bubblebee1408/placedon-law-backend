@@ -95,9 +95,16 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "no-referrer")
         self.send_header("Content-Security-Policy", csp)
-        self.end_headers()
-        if self.command != "HEAD":
-            self.wfile.write(payload)
+        try:
+            self.end_headers()
+            if self.command != "HEAD":
+                self.wfile.write(payload)
+        except ConnectionError:
+            # The client went away mid-reply -- which is exactly what the page's own Cancel
+            # button does (AbortController). Without this, socketserver prints a traceback
+            # carrying this file's absolute path. There is nobody left to answer, so the
+            # only correct action is to stop quietly.
+            self.close_connection = True
 
     def _json(self, status: int, body: dict) -> None:
         payload = json.dumps(body, indent=1, ensure_ascii=False).encode("utf-8")
@@ -139,10 +146,17 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             status, resp = handle("POST", ROUTE, body, generated_at=self._now())
-        except Exception as e:  # noqa: BLE001 -- D12: the route lets every engine failure out
+        except BaseException as e:  # noqa: BLE001 -- D12: the route lets every engine failure out
+            # BaseException, not Exception: an engine that raises SystemExit or
+            # KeyboardInterrupt otherwise left the client with no reply at all and printed a
+            # traceback carrying this path. The caller is answered first; a shutdown signal
+            # is then re-raised so the server still stops.
             # The type only: the message could quote the request, and the log never does.
             sys.stderr.write(f"engine failure on POST {ROUTE}: {type(e).__name__}\n")
-            status, resp = 500, dict(ENGINE_FAILURE)
+            self._json(500, dict(ENGINE_FAILURE))
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+                raise
+            return
         self._json(status, resp)
 
     def _read_body(self) -> dict | None:
@@ -152,6 +166,13 @@ class Handler(BaseHTTPRequestHandler):
         if length > MAX_BODY:
             raise ValueError("request body too large")
         return json.loads(self.rfile.read(length).decode("utf-8"))
+
+    def handle_error(self, request, client_address) -> None:
+        """socketserver's default prints a traceback with this file's absolute path.
+        A dropped connection is ordinary here (Cancel); anything else is logged by type."""
+        exc = sys.exc_info()[1]
+        if not isinstance(exc, ConnectionError):
+            sys.stderr.write(f"connection error from {client_address[0]}: {type(exc).__name__}\n")
 
     def log_message(self, fmt: str, *args) -> None:
         # Method and path only, never the query or the body (the question lives there).
