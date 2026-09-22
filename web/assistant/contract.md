@@ -3,19 +3,29 @@
 Written 2026-09-15 (runbook task UX-C). **The route exists** as of 2026-09-18 (ASK-1):
 `POST /v1/ask` in `checker/api.py`, answered by `checker/ask.py::answer()` from deterministic
 engine calls alone — no model is called on any path and `uses_model` is always `false`. The
-prototype is still static: it renders fixtures and sends nothing. Every fixture is now a REQUEST
-put through the same `answer()`, so the prototype and the route cannot drift.
+prototype renders fixtures and sends nothing when it is opened from a file; served by
+`scripts/serve_ask.py` on 127.0.0.1 it asks this route live (D2, `web/assistant/README.md`).
+Every fixture is a REQUEST put through the same `answer()`, and a live turn is rendered by the
+same renderer, so the prototype and the route cannot drift.
 Validator: `checker/ask_contract.py` — the route runs it on every response and withholds a
 violation as a `500` (§6 D18). Fixture builder and the validator's tests:
 `scripts/assistant_contract.py`.
 > **STATUS (2026-09-19) — the three blocking defects are fixed; the route is awaiting its next
-> independent verification.** Do not wire a client to `/v1/ask` until that verification passes
-> (`research/TASKS.md` A-011). Fixed in ASK-1 fix round 3 (§6 D19–D22):
-> 1. **The NCLT and the IBBI no longer refuse anything on their own.** Capital reduction, schemes,
->    oppression, just-and-equitable winding up, public-to-private conversion and IBBI-registered
->    valuers are answered as Companies Act questions, with or without a section number (`88b6d8a`).
->    The IBC still refuses by title, by acronym and by its own terms of art (CIRP, resolution
->    professional, insolvency commencement).
+> independent verification.** Do not wire a client to `/v1/ask` until that verification passes,
+> with the single exception the founder approved for the demo (`research/TASKS.md` A-011):
+> `scripts/serve_ask.py`, the local demo server, which binds 127.0.0.1 alone and serves this route
+> only to `web/assistant/` on its own origin — every open item below still stands, and the page
+> sends only `{question, context}`, so a live turn is answered by what the question itself names. Fixed in ASK-1 fix round 3 (§6 D19–D22):
+> 1. **The NCLT and the IBBI no longer refuse anything on their own** (`88b6d8a`). The six cases
+>    that were refused as the IBC are not refused now, with or without a section number — and
+>    "not refused" is all that is claimed. Asked with no provision named, four of the six
+>    (capital reduction, oppression, public-to-private conversion, IBBI-registered valuers) come
+>    back `partial` with `confirmed: []` and one item, the evidence pack's own "No provision was
+>    retrieved at all. This pack is empty."; the other two find a section by word match and show
+>    its text, not applied to any company (scheme of amalgamation → s.232, just-and-equitable
+>    winding up → s.242). Naming the provision (`provisions: ["s.66"]` and so on) is what makes
+>    such a turn read the section the question is about. The IBC still refuses by title, by
+>    acronym and by its own terms of art (CIRP, resolution professional, insolvency commencement).
 > 2. **One citation grammar.** A provision is read by the retriever's own scanner everywhere, so
 >    "s 2(85)", "u/s 2(85)", "S 2 (85)", "ss. 2(85)" and "§ 2(85)" all find the s.2(85) row; a
 >    shape the scanner cannot read is a `400` (`137e74f`).
@@ -23,6 +33,20 @@ violation as a `500` (§6 D18). Fixture builder and the validator's tests:
 >    a buyback" refuse as SEBI_OTHER, with that body's text (`b8498bc`).
 > Also fixed: facts are typed on every path, applied or not; an answer's citations are checked by
 > clause, not section (`d31ad71`, `137e74f`).
+>
+> **Round 4 (2026-09-19/21) narrowed the request rather than patching cases** (§6 D23–D25):
+> - **A provision is exactly one Companies Act citation** (`8b32b84`). "s.2(85) and s.62",
+>   "s.2(85), s.186 and s.188" and "sections 2(85) to 5" were answered with citations the row and
+>   the figure did not rest on; "section 2(85) of the LLP Act, 2008" and "section 7 of the IBC"
+>   were answered as the Companies Act's. All are now a `400` saying why.
+> - **One evidence schema, typed strictly, on every route** (`11725d3`). `calendar_year: "2025"`
+>   with four 2025 board meetings produced **a defect in a company that had complied** —
+>   `APPLIES_NOT_SATISFIED` on s.173 — because the year was never typed; `resident_director_days:
+>   "many"` was a `500`. Both were reachable through `/v1/compliance-pack` as well, and a false
+>   defect there breaks CLAUDE.md. Now a `400`, never a coercion.
+> - **A citation in the question's own words is no longer described as a word match**
+>   (`ac6e6b7`), and the turn says it was read as a *Companies Act* section, which is not
+>   necessarily the Act the question meant.
 >
 > **Still open, stated plainly:**
 > - A clause the Act does not have (`s.2(85)(iii)`) still answers on the s.2(85) row. The
@@ -39,6 +63,13 @@ violation as a `500` (§6 D18). Fixture builder and the validator's tests:
 > - Some empty-`confirmed` partials' only reader text is an evidence-pack string written for a
 >   model ("not admitted for model use … Its text is unknown to you") — §9.4, ASK-2.
 > - Homoglyphs from other scripts (a Cyrillic "Е" in "SЕBI") are not folded.
+> - A bare section number next to an unheld body's title refuses the whole question ("Under s.230
+>   … Insolvency and Bankruptcy Code …" → IBC): §6 D2 decides that the number is that body's, and
+>   it is recorded as a design choice, not a bug.
+> - An IBC question that uses none of its terms of art ("NCLT admitted our insolvency
+>   application", "pre-packaged insolvency resolution process") is not refused; it comes back
+>   `partial`. A missed refusal is the safe direction, and the terms of art are the register's to
+>   extend.
 
 Plan: [`docs/PLAN_13_ASSISTANT_UX_PLAN.md`](../../docs/PLAN_13_ASSISTANT_UX_PLAN.md). Evidence:
 [`docs/research/ux/INTERNAL_ASK_AUDIT.md`](../../docs/research/ux/INTERNAL_ASK_AUDIT.md) (§R2 is the
@@ -231,6 +262,42 @@ that a question names held law, which can only suppress a refusal, never cause o
 **D22 — facts are typed wherever they arrive.** See D17. A turn that does not apply the facts still
 refuses malformed ones; an empty `facts` object is treated as none and no turn says facts were
 supplied when they were not.
+
+### Round 4 (2026-09-19/21) — narrow the input, and the cases fall out
+
+Three rounds of verification each found a new shape the request accepted, so this round changed
+the surface rather than the cases.
+
+**D23 — a `provisions` item is exactly ONE Companies Act citation.** Read whole with the
+retriever's own prefix and number grammar (`legal_retrieval._PREFIX`/`_ITEM`): one citation,
+optionally qualified by the held Act ("of the Companies Act, 2013"), and nothing else. A second
+citation, a range, another Act, a named Rules instrument, a Regulation or a Code is a `400`
+saying why — never read as the Companies Act, and never resolved for another instrument (we hold
+none of them). A bare rule number ("rule 2(1)(t)") is still read as a rule under the Companies
+Act; it can abstain, never answer. This closes the joint-string and other-statute defects at
+once: the scanner had kept only the numbers, so "section 2(85) of the LLP Act" became the
+Companies Act's s.2(85).
+
+**D24 — one evidence schema, declared once, typed strictly.** `api._EVIDENCE_FIELDS` is the
+single table: `EVIDENCE_KEYS` is derived from it, `api._evidence()` builds from it, and
+`checker/ask.py` refuses by it, so no field can be read by one route and ignored by another. An
+undeclared field, a wrong type or an out-of-range value is a `400` — never a coercion, never a
+`500`. Two ranges, and where they come from:
+- `calendar_year`: an `int` from **2015** to the last calendar year **ended** by the read date.
+  2015 because `checker/as_of.COMMENCEMENT` is 01-04-2014, so calendar 2014 straddles the 1956
+  Act; the upper bound because `s173_slice` counts meetings without knowing the date it is read
+  on, so a year still running would be reported short of four meetings in September.
+- `resident_director_days`: an `int` 0–366 — a financial year runs to 31 March (s.2(41)), so a
+  full one has 365 or 366 days; a longer first year is s.149(3)'s proportionate proviso, which
+  this engine does not compute.
+`/v1/compliance-pack` also refuses an undeclared top-level fact now, as `/v1/document-check`
+already did. A false defect on that route would break CLAUDE.md's rule about calling a finding a
+defect when it is not one, which is exactly what the untyped `calendar_year` produced.
+
+**D25 — what a turn says about its own retrieval is true of that turn.** With no provision named,
+a word-matched turn carries `LEXICAL`; a turn whose question carried its own citation carries
+`QUESTION_CITED`, which says the citation was read **as a Companies Act section**, not
+necessarily the Act the question meant.
 
 **Still `NEW` after ASK-1, unchanged:** the `located` sentence for the empty-`confirmed` partial;
 `body.undeclared_reason` for a body the register does not declare (§5); the provenance stamp and
