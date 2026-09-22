@@ -66,9 +66,28 @@ REVIEW_BUDGET_ROWS = 60
 # Hard stops. The rupee cap binds anything the repo prices; the call ceiling binds
 # everything else, because credit spent is still spent.
 SPEND_CAP_INR = 500.0
-MAX_CALLS = 70
+# Every request that leaves the machine counts, including the ones a rate limit
+# refused: a retry spends throughput even when it returns nothing.
+MAX_ATTEMPTS = 90
 
-PACE_SECONDS = 1.0        # Azure for Students is rate-limited per minute
+# Measured 23-09-2026 on the Azure for Students deployment: llama-3-3-70b answered
+# HTTP 429 to a 19,852-token document and answered a 13,070-token one fine twelve
+# seconds later. The pace is the deployment's throughput, not politeness.
+PACE_SECONDS = 12.0
+RETRY_ATTEMPTS = 3
+# Capacity 20 on the student deployment is ~20k tokens a minute, and the two
+# largest documents in the corpus are ~20k tokens each: they need a nearly idle
+# window, not a polite pause. 25 s and 60 s were not enough on 23-09-2026.
+RETRY_BACKOFF_SECONDS = (45.0, 90.0)
+
+# Read timeouts, per model. gpt-5-mini spends hidden reasoning tokens before it
+# emits anything, and on 23-09-2026 four documents were lost to a 180 s read
+# timeout that had nothing to do with what the model could read.
+TIMEOUT_SECONDS = {MODEL_A: 180, MODEL_B: 420}
+
+# Azure's own code for it. A rate limit is the deployment's throughput; it says
+# nothing about the document and must not be recorded as a model that read it.
+RATE_LIMIT_MARKERS = ("429", "ratelimitreached")
 
 REPORTS = Path(__file__).resolve().parents[2] / "reports"
 DOCS = Path(__file__).resolve().parents[2] / "docs"
@@ -91,6 +110,10 @@ class Extraction:
     refusals: tuple = ()                           # (field, violation, detail)
     meta: dict = field(default_factory=dict)
     error: str = ""
+    # What the model said BEFORE any gate touched it. Kept because a refusal that
+    # cannot be replayed cannot be judged -- the R03 lesson from
+    # docs/OVERNIGHT_REPORT_2026_09_14.md §3.
+    proposed: dict = field(default_factory=dict)
 
 
 def sides_from(proposal: Proposal, document: str) -> tuple[dict, tuple]:
@@ -127,7 +150,68 @@ def extract_one(doc: Document, model: str, caller) -> Extraction:
         return Extraction(doc.doc_id, model, False,
                           error=f"{type(e).__name__}: {e}"[:300])
     sides, refusals = sides_from(proposal, doc.text)
-    return Extraction(doc.doc_id, model, True, sides, refusals, dict(meta))
+    proposed = {name: {"value": _jsonable(item.get("value")
+                                          if isinstance(item, dict) else item),
+                       "span": (item.get("span")
+                                if isinstance(item, dict) else None)}
+                for name, item in (proposal.facts or {}).items()}
+    return Extraction(doc.doc_id, model, True, sides, refusals, dict(meta),
+                      proposed=proposed)
+
+
+class Pacer:
+    """Keep at least `gap` seconds between two calls to the SAME deployment.
+
+    The 429 that stopped the first live run is a per-deployment throughput limit.
+    Pacing every call against one clock makes llama wait out gpt-5-mini's latency
+    as well as its own and buys nothing; this waits only the remainder of the gap
+    that deployment actually owes.
+    """
+
+    def __init__(self, gap: float, *, clock=time.monotonic, sleeper=time.sleep):
+        self.gap = gap
+        self._clock = clock
+        self._sleep = sleeper
+        self._last: dict = {}
+
+    def wait(self, model: str) -> None:
+        if self.gap <= 0:
+            return None
+        last = self._last.get(model)
+        now = self._clock()
+        if last is not None:
+            owed = self.gap - (now - last)
+            if owed > 0:
+                self._sleep(owed)
+        self._last[model] = self._clock()
+        return None
+
+
+def is_rate_limited(error: str) -> bool:
+    low = str(error).lower()
+    return any(m in low for m in RATE_LIMIT_MARKERS)
+
+
+def extract_with_retry(doc: Document, model: str, caller, *,
+                       attempts: int = RETRY_ATTEMPTS,
+                       sleeper=time.sleep) -> tuple[Extraction, int]:
+    """(Extraction, attempts made). A rate limit is retried; nothing else is.
+
+    An HTTP 400 or a content filter is an answer about the request, and repeating
+    it spends credit to be told the same thing. A 429 is the deployment's
+    throughput, and accepting it as "this model could not read this document"
+    would quietly drop the largest documents in the corpus -- which are the real
+    filings, and the whole point of the corpus.
+    """
+    last = Extraction(doc.doc_id, model, False, error="no attempt made")
+    for n in range(attempts):
+        last = extract_one(doc, model, caller)
+        if last.ok or not is_rate_limited(last.error):
+            return last, n + 1
+        if n + 1 < attempts:
+            wait = RETRY_BACKOFF_SECONDS[min(n, len(RETRY_BACKOFF_SECONDS) - 1)]
+            sleeper(wait)
+    return last, attempts
 
 
 # ── the ledger ────────────────────────────────────────────────────────────────
@@ -139,6 +223,14 @@ class Ledger:
     tokens_out: dict = field(default_factory=dict)
     unmeasured: dict = field(default_factory=dict)
     priced_inr: float = 0.0
+    attempts: int = 0
+    rate_limited: dict = field(default_factory=dict)
+
+    def spend_attempts(self, n: int, model: str = "") -> None:
+        """Requests that left the machine, answered or refused."""
+        self.attempts += n
+        if model and n > 1:
+            self.rate_limited[model] = self.rate_limited.get(model, 0) + (n - 1)
 
     def record(self, model: str, meta: dict) -> None:
         self.calls[model] = self.calls.get(model, 0) + 1
@@ -169,13 +261,13 @@ class Ledger:
     def total_calls(self) -> int:
         return sum(self.calls.values())
 
-    def would_exceed(self, extra_calls: int = 1) -> str:
+    def would_exceed(self, extra: int = 1) -> str:
         if self.priced_inr > SPEND_CAP_INR:
             return (f"priced spend ₹{self.priced_inr} is over the ₹{SPEND_CAP_INR} "
                     f"job cap")
-        if self.total_calls + extra_calls > MAX_CALLS:
-            return (f"{self.total_calls + extra_calls} calls would pass the "
-                    f"{MAX_CALLS}-call ceiling for this job")
+        if self.attempts + extra > MAX_ATTEMPTS:
+            return (f"{self.attempts + extra} requests would pass the "
+                    f"{MAX_ATTEMPTS}-request ceiling for this job")
         return ""
 
     def as_dict(self) -> dict:
@@ -184,6 +276,8 @@ class Ledger:
             "tokens_in_by_model": dict(self.tokens_in),
             "tokens_out_by_model": dict(self.tokens_out),
             "calls_with_an_unmeasured_token_count": dict(self.unmeasured),
+            "requests_made": self.attempts,
+            "rate_limited_retries_by_model": dict(self.rate_limited),
             "priced_inr": self.priced_inr,
             "priced_by": "backend/budget.cost_inr",
             "unpriced_models": [m for m in self.calls
@@ -194,7 +288,7 @@ class Ledger:
                 "Students credit. Tokens are reported; the rupee cost is OPEN, "
                 "not zero."),
             "spend_cap_inr": SPEND_CAP_INR,
-            "call_ceiling": MAX_CALLS,
+            "request_ceiling": MAX_ATTEMPTS,
         }
 
 
@@ -205,7 +299,8 @@ def _pricing_names() -> tuple[str, ...]:
 
 # ── the run ───────────────────────────────────────────────────────────────────
 def run(docs, caller, *, model_a: str = MODEL_A, model_b: str = MODEL_B,
-        pace: float = 0.0, budget: int = REVIEW_BUDGET_ROWS) -> dict:
+        pace: float = 0.0, budget: int = REVIEW_BUDGET_ROWS,
+        progress=None) -> dict:
     """Two extractions per document, gated, compared, ordered and cut.
 
     `caller(text, model=...) -> (Proposal, meta)`. Injected so the whole pipeline
@@ -214,19 +309,25 @@ def run(docs, caller, *, model_a: str = MODEL_A, model_b: str = MODEL_B,
     ledger = Ledger()
     extractions: list[Extraction] = []
     stopped = ""
+    pacer = Pacer(pace)
+    backoff = time.sleep if pace else (lambda _: None)
 
-    for doc in docs:
+    for n, doc in enumerate(docs, start=1):
         for model in (model_a, model_b):
             reason = ledger.would_exceed()
             if reason:
                 stopped = reason
                 break
-            ex = extract_one(doc, model, caller)
+            pacer.wait(model)
+            ex, made = extract_with_retry(doc, model, caller, sleeper=backoff)
             extractions.append(ex)
+            ledger.spend_attempts(made, model)
             if ex.ok:
                 ledger.record(model, ex.meta)
-            if pace:
-                time.sleep(pace)
+            if progress:
+                progress(f"[{n}/{len(docs)}] {doc.doc_id} {model} "
+                         f"{'ok' if ex.ok else ex.error[:60]} "
+                         f"(attempts={made}, requests={ledger.attempts})")
         if stopped:
             break
 
@@ -279,6 +380,8 @@ def run(docs, caller, *, model_a: str = MODEL_A, model_b: str = MODEL_B,
         "disagreements_kept": [_row_json(r, docs_by_id) for r in kept],
         "disagreements_cut": [_row_json(r, docs_by_id) for r in cut],
         "cut_summary": cmp.cut_summary(cut),
+        "repeated_shapes": shape_summary(
+            [_row_json(r, docs_by_id) for r in cmp.order(all_rows)]),
         "review_budget_rows": budget,
         "counts": {
             "agree": len(agreements),
@@ -293,8 +396,41 @@ def run(docs, caller, *, model_a: str = MODEL_A, model_b: str = MODEL_B,
         "stopped_early": stopped,
         "spend": ledger.as_dict(),
         "runs": [{"document": e.doc_id, "model": e.model, "ok": e.ok,
-                  "error": e.error, "meta": e.meta} for e in extractions],
+                  "error": e.error, "meta": e.meta, "proposed": e.proposed}
+                 for e in extractions],
     }
+
+
+def shape_summary(rows) -> list[dict]:
+    """Group the founder's rows by (field, outcome), mechanically.
+
+    No interpretation: a count, and the distinct values each model produced,
+    verbatim. Seven rows that are the same mistake seven times read very
+    differently from seven unrelated ones, and the difference is visible from the
+    values alone without anyone having to characterise them.
+    """
+    groups: dict = {}
+    for r in rows:
+        key = (r["field"], r["outcome"])
+        g = groups.setdefault(key, {"field": r["field"], "outcome": r["outcome"],
+                                    "count": 0, "model_a_values": [],
+                                    "model_b_values": [], "documents": []})
+        g["count"] += 1
+        g["documents"].append(r["document"])
+        for side, bucket in ((r["model_a"], "model_a_values"),
+                             (r["model_b"], "model_b_values")):
+            shown = _shown_value(side)
+            if shown not in g[bucket]:
+                g[bucket].append(shown)
+    return sorted(groups.values(), key=lambda g: (-g["count"], g["field"]))
+
+
+def _shown_value(side) -> str:
+    if side["state"] == cmp.ADMITTED:
+        return str(side["value"])
+    if side["state"] == cmp.REFUSED:
+        return f"(dropped by {side['refused_by']}) {side['value']}"
+    return "(said nothing)"
 
 
 def _row_json(row, docs_by_id) -> dict:
@@ -338,11 +474,19 @@ def _cell(text: str, width: int = 0) -> str:
 
 
 def _value_cell(side) -> str:
+    """The value AND the span it was read from.
+
+    Without the span a contradiction is unsettleable: two models reading two
+    different sentences of the same notice is the ordinary case on a 60-page AGM
+    notice, and "which sentence did each of them read" is the first question a
+    reviewer asks. It belongs in the cell, not only in the JSON.
+    """
     if side["state"] == cmp.ADMITTED:
-        return f"`{_cell(side['value'], 40)}`"
+        return (f"`{_cell(side['value'], 40)}`<br>read from "
+                f"“{_cell(side['span'], 110)}”")
     if side["state"] == cmp.REFUSED:
         return (f"— proposed `{_cell(side['value'], 28)}`, dropped by "
-                f"`{side['refused_by']}`")
+                f"`{side['refused_by']}`<br>from “{_cell(side['span'], 110)}”")
     return "— (said nothing)"
 
 
@@ -442,6 +586,24 @@ def render_markdown(result: dict) -> str:
         w("| — | — | — | — | — | — | no rows | |")
     w("")
 
+    shapes = result.get("repeated_shapes") or []
+    if shapes:
+        w("## The same shape, repeated")
+        w("")
+        w("Grouped by field and outcome, counted mechanically, with the distinct "
+          "values each model produced shown verbatim. Nothing here is "
+          "characterised — read the values. A row that recurs across many "
+          "documents is one thing to settle, not many.")
+        w("")
+        w("| Field | Outcome | Rows | A · llama-3-3-70b produced | "
+          "B · gpt-5-mini produced |")
+        w("|---|---|---:|---|---|")
+        for g in shapes:
+            w(f"| `{g['field']}` | {g['outcome']} | {g['count']} | "
+              f"{_cell('; '.join(g['model_a_values']), 190)} | "
+              f"{_cell('; '.join(g['model_b_values']), 190)} |")
+        w("")
+
     w("## Agreements — model-verified, NOT expert-verified")
     w("")
     w("Listed so the founder can see what the two models did not disagree about. "
@@ -472,8 +634,16 @@ def render_markdown(result: dict) -> str:
           f"{'₹' + str(s['priced_inr']) if priced else 'unpriced — see below'} |")
     w("")
     w(f"**₹ priced by `backend/budget.cost_inr`: ₹{s['priced_inr']} against the "
-      f"₹{s['spend_cap_inr']} job cap.** {s['unpriced_note']} A call ceiling of "
-      f"{s['call_ceiling']} bounds the credit spend that the rupee cap cannot see.")
+      f"₹{s['spend_cap_inr']} job cap.** {s['unpriced_note']} A ceiling of "
+      f"{s['request_ceiling']} requests bounds the credit spend that the rupee cap "
+      f"cannot see; {s['requests_made']} requests were made.")
+    if s["rate_limited_retries_by_model"]:
+        w("")
+        w("Rate-limited retries (HTTP 429, the deployment's throughput — not a "
+          "model that could not read the document): "
+          + ", ".join(f"`{k}` ×{v}"
+                      for k, v in sorted(s["rate_limited_retries_by_model"].items()))
+          + ".")
     if result["stopped_early"]:
         w("")
         w(f"**The run stopped early:** {result['stopped_early']}")
@@ -522,12 +692,33 @@ def _azure_caller():
         raise SystemExit(
             "AZURE_AI_API_KEY / AZURE_AI_ENDPOINT are not set. Refusing to run: "
             "an empty result is indistinguishable from a corpus with nothing in it.")
-    return azure_model.extract
+
+    def call(text: str, *, model: str):
+        return azure_model.extract(text, model=model,
+                                   timeout=TIMEOUT_SECONDS.get(model, 180))
+    return call
+
+
+def render_only(json_path: Path) -> tuple[Path, Path]:
+    """Re-render the human list from a stored run. Spends nothing.
+
+    The JSON is the record of what the models said; the Markdown is one view of
+    it. Re-rendering must never need another call, or a wording fix would cost
+    another 58 requests -- and worse, a second run's answers would quietly replace
+    the ones the founder was reviewing.
+    """
+    result = json.loads(Path(json_path).read_text(encoding="utf-8"))
+    return write_outputs(result)
 
 
 def main(argv: list[str]) -> int:
     if "--test" in argv:
         _test()
+        return 0
+    if "--render" in argv:
+        j, m = render_only(Path(argv[argv.index("--render") + 1]))
+        print(f"[prelabel] re-rendered from the stored run\n[prelabel] {j}\n"
+              f"[prelabel] {m}")
         return 0
     if "--live" not in argv:
         docs = load_all()
@@ -543,7 +734,10 @@ def main(argv: list[str]) -> int:
     if limit:
         docs = docs[:limit]
     print(f"[prelabel] {len(docs)} documents × 2 models", flush=True)
-    result = run(docs, _azure_caller(), pace=PACE_SECONDS)
+    def say(line: str) -> None:
+        print(f"[prelabel] {line}", flush=True)
+
+    result = run(docs, _azure_caller(), pace=PACE_SECONDS, progress=say)
     j, m = write_outputs(result)
     c = result["counts"]
     print(f"[prelabel] agree={c['agree']} disagree={c['disagree']} "
@@ -683,6 +877,124 @@ def _test() -> None:
           "the reason is Azure's own, recorded verbatim")
     check(r2["documents_compared"] == 0, "and it is not counted as compared")
 
+    # ── the raw proposal is kept, so a refusal can be replayed ────────────────
+    # OVERNIGHT_REPORT_2026_09_14 §3: "without them a refusal can be counted but
+    # never replayed (R03)". A gate that drops 118 values has to be judgeable
+    # afterwards from the record, without paying for the calls again.
+    raw = [run_row for run_row in r["runs"]
+           if run_row["model"] == MODEL_B and run_row["ok"]][0]
+    check(raw["proposed"]["company_class"]["value"] == "public"
+          and raw["proposed"]["net_worth_rupees"]["value"] == 40000000,
+          "every raw proposal is stored, INCLUDING the values the gates dropped")
+    check(all("proposed" in run_row for run_row in r["runs"] if run_row["ok"]),
+          "no successful call is recorded without what the model actually said")
+
+    # ── repeated shapes, counted mechanically ─────────────────────────────────
+    shapes = r["repeated_shapes"]
+    check(any(sh["field"] == "turnover_rupees" and sh["count"] == 1
+              for sh in shapes),
+          f"rows are grouped by (field, outcome) with a count ({shapes})")
+    one = [sh for sh in shapes if sh["field"] == "paid_up_capital_rupees"][0]
+    check(one["model_b_values"] == ["(dropped by FACT_VALUE_UNSUPPORTED) 400000000"],
+          f"the group shows what each model actually produced, verbatim ({one})")
+
+    # ── the per-model timeout is declared, not assumed ────────────────────────
+    check(TIMEOUT_SECONDS[MODEL_B] > TIMEOUT_SECONDS[MODEL_A],
+          "the reasoning model is given the longer read timeout — four documents "
+          "were lost to a 180 s read timeout on 23-09-2026")
+    check(set(TIMEOUT_SECONDS) == {MODEL_A, MODEL_B},
+          "every model this run uses has a declared timeout")
+
+    # ── pacing is per deployment, not per call ────────────────────────────────
+    # The rate limit that produced the 429 is the DEPLOYMENT's. Sleeping between
+    # every call paces llama against gpt-5-mini's clock as well as its own, which
+    # on this corpus doubled the wall time for no throughput gained.
+    class FakeClock:
+        def __init__(self) -> None:
+            self.t = 0.0
+            self.slept: list = []
+
+        def now(self) -> float:
+            return self.t
+
+        def sleep(self, n: float) -> None:
+            self.slept.append(round(n, 2))
+            self.t += n
+
+    fk = FakeClock()
+    pacer = Pacer(10.0, clock=fk.now, sleeper=fk.sleep)
+    pacer.wait("A")
+    check(fk.slept == [], "the first call to a deployment does not wait")
+    fk.t = 3.0
+    pacer.wait("B")
+    check(fk.slept == [], "a different deployment has its own clock")
+    fk.t = 7.0
+    pacer.wait("A")
+    check(fk.slept == [3.0],
+          f"the wait is only the remainder of that deployment's gap ({fk.slept})")
+    pacer.wait("A")
+    check(fk.slept == [3.0, 10.0],
+          f"back-to-back on one deployment waits the full gap ({fk.slept})")
+    check(Pacer(0.0, clock=fk.now, sleeper=fk.sleep).wait("A") is None
+          and fk.slept == [3.0, 10.0],
+          "a zero pace never sleeps — the tests must not spend wall clock")
+
+    # ── a rate limit is a retry, not an answer ────────────────────────────────
+    # Measured 23-09-2026: the Azure for Students llama-3-3-70b deployment answered
+    # HTTP 429 RateLimitReached to a 19,852-token document and answered the same
+    # document class fine after a pause. A 429 is the deployment's throughput, not
+    # the model's reading, and treating it as "no answer" would silently drop the
+    # largest documents in the corpus -- which are the real filings.
+    slept: list = []
+    tries: list = []
+
+    def limited_twice(text: str, *, model: str):
+        tries.append(model)
+        if len(tries) < 3:
+            raise RuntimeError('Azure HTTP 429: {"error":{"code":"RateLimitReached"}}')
+        return replies[MODEL_A], {"temperature": 0, "tokens_in": 5, "tokens_out": 1}
+
+    ex, attempts = extract_with_retry(doc, MODEL_A, limited_twice,
+                                      sleeper=slept.append)
+    check(ex.ok and attempts == 3,
+          f"a rate-limited call is retried and the later answer is used "
+          f"({attempts} attempts)")
+    check(len(slept) == 2 and slept[1] > slept[0],
+          f"the wait grows between attempts ({slept})")
+
+    other: list = []
+
+    def broken(text: str, *, model: str):
+        other.append(model)
+        raise RuntimeError("Azure HTTP 400: unsupported_value temperature")
+
+    ex, attempts = extract_with_retry(doc, MODEL_A, broken, sleeper=other.append)
+    check(not ex.ok and attempts == 1 and len(other) == 1,
+          "an error that is NOT a rate limit is not retried — it is an answer "
+          "about the request, and repeating it would only spend credit")
+
+    always: list = []
+
+    def never_ok(text: str, *, model: str):
+        always.append(model)
+        raise RuntimeError("Azure HTTP 429: RateLimitReached")
+
+    ex, attempts = extract_with_retry(doc, MODEL_A, never_ok, sleeper=lambda _: None)
+    check(not ex.ok and attempts == RETRY_ATTEMPTS and "429" in ex.error,
+          f"retries are bounded at {RETRY_ATTEMPTS} and the last error is kept "
+          f"verbatim ({attempts})")
+
+    check(is_rate_limited("Azure HTTP 429: RateLimitReached")
+          and is_rate_limited("ModelUnavailable: ... 429 ...")
+          and not is_rate_limited("Azure HTTP 400: content_filter"),
+          "a rate limit is recognised by Azure's own code, not by guesswork")
+
+    led = Ledger()
+    led.spend_attempts(RETRY_ATTEMPTS)
+    check(led.attempts == RETRY_ATTEMPTS,
+          "every request that left the machine counts against the ceiling, "
+          "including the ones that were rate-limited")
+
     # ── spend guards ──────────────────────────────────────────────────────────
     led = Ledger()
     led.record(MODEL_A, {"tokens_in": 10, "tokens_out": 2})
@@ -697,9 +1009,9 @@ def _test() -> None:
     check("₹500.0 job cap" in led.would_exceed(),
           "the ₹500 cap stops the run")
     led.priced_inr = 0.0
-    led.calls = {MODEL_A: MAX_CALLS}
-    check("call ceiling" in led.would_exceed(),
-          "the call ceiling stops a runaway that spends credit, not rupees")
+    led.attempts = MAX_ATTEMPTS
+    check("request ceiling" in led.would_exceed(),
+          "the request ceiling stops a runaway that spends credit, not rupees")
 
     spent: list = []
 
@@ -708,8 +1020,8 @@ def _test() -> None:
         return replies[MODEL_A], {"temperature": 0, "tokens_in": 1, "tokens_out": 1}
 
     r3 = run([doc] * 60, counting)
-    check(len(spent) <= MAX_CALLS and r3["stopped_early"],
-          f"a long run stops at the ceiling ({len(spent)} calls) and says so")
+    check(len(spent) <= MAX_ATTEMPTS and r3["stopped_early"],
+          f"a long run stops at the ceiling ({len(spent)} requests) and says so")
 
     # ── the review budget ─────────────────────────────────────────────────────
     r4 = run([doc], stub, budget=1)
@@ -753,6 +1065,12 @@ def _test() -> None:
     blob = json.dumps(r)
     check(json.loads(blob)["not_an_accuracy_claim"] == NOT_A_CLAIM,
           "the machine file carries the same warning as the human one")
+
+    # Re-rendering is free and produces the same document from the same record.
+    check(render_markdown(json.loads(blob)) == md,
+          "the human list re-renders from the stored JSON alone — fixing the "
+          "wording never costs another model call, and never swaps in a second "
+          "run's answers underneath the founder")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:
