@@ -329,10 +329,14 @@ def _test() -> None:
         def fake(endpoint, payload):
             seen.append((endpoint, payload))
             if endpoint == "embeddings":
-                vec = lambda t: [1.0 if w in t.lower() else 0.0      # noqa: E731
-                                 for w in ("meeting", "loan", "related")]
+                # Three signal dimensions, padded to the model's documented width:
+                # parse_embeddings refuses any other, so a 3-float stub would fail the
+                # rule rather than the arm under test.
+                vec = lambda t: vm._stub_vec(                        # noqa: E731
+                    *[1.0 if w in t.lower() else 0.0
+                      for w in ("meeting", "loan", "related")])
                 return {"model": vm.LAW, "usage": {"total_tokens": 5},
-                        "data": [{"index": i, "embedding": vec(t) or [0.0]}
+                        "data": [{"index": i, "embedding": vec(t)}
                                  for i, t in enumerate(payload["input"])]}
             docs = payload["documents"]
             order = sorted(range(len(docs)), key=lambda i: "loan" not in docs[i].lower())
