@@ -99,6 +99,8 @@ PLAYWRIGHT=$HOME/.cache/placedon-ux-tools/node_modules/playwright/index.mjs \
 
 `FONTS_DIR=<dir>` loads the brand fonts (Fraunces, Inter, IBM Plex Mono — the finalized frontend
 self-hosts them from `placedon-claude-legal-3300/brand-kit/fonts/`) for the **file:// screenshots**;
+that repository is not checked out beside this one, so the only copy on this Mac is the
+read-only job clone under `~/.claude/jobs/*/tmp/repos/placedon-claude-legal-3300/brand-kit/fonts`;
 the page itself names them and falls back to system faces, and no font file is copied into this
 repository. It is deliberately not applied to the live-mode screenshots (check 14): the served page
 allows no injected inline style and no font from another origin under its own CSP, so the runner
