@@ -31,9 +31,14 @@
 //   [data-nonanswer="waiting|cancelled|error"]  the one card for it: an <article>, never [data-state]
 //   [data-cancel] [data-send-again]    its buttons
 //
-// FONTS_DIR=<dir> (optional) loads the brand fonts from a local folder for screenshots only --
-// the finalized frontend self-hosts Fraunces / Inter / IBM Plex Mono; the prototype names them and
-// falls back to system faces. No font file is copied into this repository.
+// FONTS_DIR=<dir> (optional) loads the brand fonts from a local folder for the file:// screenshots
+// only -- the finalized frontend self-hosts Fraunces / Inter / IBM Plex Mono; the prototype names
+// them and falls back to system faces. No font file is copied into this repository.
+// It is deliberately NOT applied in live mode (check 14): the served page's own CSP allows no
+// injected inline style and no font from another origin, and the point of a live screenshot is to
+// show the faces a viewer of the demo really gets. Injecting them there made the two mutually
+// exclusive -- FONTS_DIR killed every live check -- and loosening the CSP to suit a screenshot
+// would be the wrong trade.
 import { readFileSync, readdirSync, mkdirSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { resolve, join, basename } from 'node:path';
@@ -698,8 +703,11 @@ async function startServer() {
 // waiting state is observed deterministically and released on cue, or answered by the check.
 async function livePage(ctx, origin) {
   const page = await ctx.newPage();
-  const t = { page, external: [], errors: [], asks: [], held: [], failed: [], hold: false, reply: null };
+  const t = { page, external: [], errors: [], csp: [], asks: [], held: [], failed: [], hold: false, reply: null };
   page.on('pageerror', e => t.errors.push(String(e)));
+  // The served page must live inside its own CSP: a violation is a defect even when the page
+  // still renders, and it is how the brand-font injection used to break every live check.
+  page.on('console', m => { if (/content security policy/i.test(m.text())) t.csp.push(m.text()); });
   page.on('requestfailed', r => { if (r.url().endsWith('/v1/ask')) t.failed.push(r.failure()?.errorText || 'failed'); });
   await page.route('**/*', async r => {
     const req = r.request();
@@ -727,7 +735,8 @@ async function liveQuestion(ctx, origin, spec, w, fixtureIds) {
   const t = await livePage(ctx, origin);
   const { page } = t;
   await page.goto(`${origin}/`, { waitUntil: 'load' });
-  await withFonts(page);
+  // No withFonts() here: see the FONTS_DIR note at the top. The live shots show the system faces
+  // the demo actually renders in.
   const note = await page.$eval('[data-concept]', e => e.innerText).catch(() => '');
   if (/Nothing you type is sent/i.test(note) || !/this computer/i.test(note) || !/no model/i.test(note)) fail(at, w, `live concept note is not the live wording: ${JSON.stringify(note)}`);
   else pass(at, w, 'concept note: sent to the engine on this computer only, no model');
@@ -784,8 +793,8 @@ async function liveQuestion(ctx, origin, spec, w, fixtureIds) {
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
   if (overflow) fail(at, w, 'horizontal overflow'); else pass(at, w, 'no overflow');
   if (shots) await page.screenshot({ path: join(shots, `live-${spec.slug}-${w}.png`), fullPage: true });
-  if (t.errors.length || t.external.length) fail(at, w, `page errors or network: ${[...t.errors, ...t.external].join(' | ').slice(0, 200)}`);
-  else pass(at, w, 'no page errors; nothing left this origin');
+  if (t.errors.length || t.external.length || t.csp.length) fail(at, w, `page errors, network or CSP: ${[...t.errors, ...t.external, ...t.csp].join(' | ').slice(0, 200)}`);
+  else pass(at, w, 'no page errors, no CSP violation; nothing left this origin');
   await page.close();
 }
 
@@ -808,8 +817,8 @@ async function liveFailure(ctx, origin, w, label, reply, stopServer) {
   else pass(at, w, `${label}: the service error, not a state`);
   await checkNonAnswer(page, 'error', q, null, w, at);
   if (shots && w === 1440) await page.screenshot({ path: join(shots, `live-${label.replace(/\W+/g, '-')}-${w}.png`), fullPage: true });
-  if (t.errors.length || t.external.length) fail(at, w, `page errors or network: ${[...t.errors, ...t.external].join(' | ').slice(0, 200)}`);
-  else pass(at, w, `${label}: no page errors; nothing left this origin`);
+  if (t.errors.length || t.external.length || t.csp.length) fail(at, w, `page errors, network or CSP: ${[...t.errors, ...t.external, ...t.csp].join(' | ').slice(0, 200)}`);
+  else pass(at, w, `${label}: no page errors, no CSP violation; nothing left this origin`);
   await page.close();
 }
 
@@ -843,8 +852,8 @@ async function liveFailure(ctx, origin, w, label, reply, stopServer) {
         if (!t.failed.length) fail(at, w, 'Cancel did not abort the request');
         else if (f.kind !== 'cancelled' || f.states || f.box !== 'What does s.173 require?' || f.boxLocked) fail(at, w, `after Cancel: ${f.kind}, ${f.states} state(s), box ${JSON.stringify(f.box)}`);
         else pass(at, w, 'Cancel aborts the request; nothing is rendered from it; the question stays');
-        if (t.errors.length || t.external.length) fail(at, w, `page errors or network: ${[...t.errors, ...t.external].join(' | ').slice(0, 200)}`);
-        else pass(at, w, 'cancel: no page errors; nothing left this origin');
+        if (t.errors.length || t.external.length || t.csp.length) fail(at, w, `page errors, network or CSP: ${[...t.errors, ...t.external, ...t.csp].join(' | ').slice(0, 200)}`);
+        else pass(at, w, 'cancel: no page errors, no CSP violation; nothing left this origin');
         await page.close();
       }
 

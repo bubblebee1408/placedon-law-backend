@@ -98,8 +98,13 @@ PLAYWRIGHT=$HOME/.cache/placedon-ux-tools/node_modules/playwright/index.mjs \
 ```
 
 `FONTS_DIR=<dir>` loads the brand fonts (Fraunces, Inter, IBM Plex Mono — the finalized frontend
-self-hosts them from `placedon-claude-legal-3300/brand-kit/fonts/`) for the screenshots; the page itself
-names them and falls back to system faces, and no font file is copied into this repository.
+self-hosts them from `placedon-claude-legal-3300/brand-kit/fonts/`) for the **file:// screenshots**;
+the page itself names them and falls back to system faces, and no font file is copied into this
+repository. It is deliberately not applied to the live-mode screenshots (check 14): the served page
+allows no injected inline style and no font from another origin under its own CSP, so the runner
+would have to break that policy to fake the brand faces in a shot of a page that cannot load them.
+The live shots therefore show the system faces a viewer of the demo actually gets. (Before this was
+decided, setting `FONTS_DIR` killed every live check: 883/884 and no `live-*` screenshot at all.)
 `CHROMIUM=<path>` overrides the browser binary (the default is the Playwright-cached Chromium on
 macOS). The runner exits non-zero on any failure.
 
@@ -144,9 +149,12 @@ It asserts, for every fixture at 320 / 360 / 768 / 1024 / 1440:
     renders nothing. Four failures each render the service error and are put through check 13's
     whole battery: a 500, a reply whose `schema` is not `placedon.ask/0`, a reply in an unknown
     state, and the server killed under the page. `?fixture=` over http still renders the saved
-    sample and sends nothing; `?state=` over http is still the stand-in.
+    sample and sends nothing; `?state=` over http is still the stand-in. Every live page is also
+    checked for **Content Security Policy violations**, so the page must live inside the policy the
+    server sends rather than the runner loosening it.
 
-Last run: **1031/1031** (2026-09-22, D2): the 883 below plus 148 live-mode checks. 403 across
+Last run: **1031/1031** (2026-09-23, D2 fix round 1, with `FONTS_DIR` set): the 883 below plus 148
+live-mode checks. 403 across
 6 fixtures × 5 widths plus the empty state (unchanged), and 480
 for the three non-answer states × 7 requests × 2 widths (2026-09-18, ASK-3). Before the states
 existed, 114 of check 13's 162 assertions failed (451/565). The 48 that passed hold on any page
