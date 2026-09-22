@@ -24,6 +24,7 @@ import errno
 import json
 import socket
 import socketserver
+import threading
 import sys
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -141,6 +142,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             body = self._read_body()
+        except ClientGone:
+            self.close_connection = True
+            return
         except (ValueError, UnicodeDecodeError) as e:   # JSONDecodeError is a ValueError
             self._json(400, {"error": "bad_request", "detail": f"invalid JSON body: {e}"})
             return
@@ -155,7 +159,13 @@ class Handler(BaseHTTPRequestHandler):
             sys.stderr.write(f"engine failure on POST {ROUTE}: {type(e).__name__}\n")
             self._json(500, dict(ENGINE_FAILURE))
             if isinstance(e, (KeyboardInterrupt, SystemExit)):
-                raise
+                # Answer first, then stop -- but by ASKING the server to stop rather than
+                # re-raising: re-raising escaped the worker thread and the default excepthook
+                # printed a traceback naming this file, which is the very thing this handler
+                # exists to prevent (D2 verifier, minor 2). shutdown() must not run on the
+                # serving thread, so it goes on its own.
+                sys.stderr.write("shutdown requested by the engine; stopping\n")
+                threading.Thread(target=self.server.shutdown, daemon=True).start()
             return
         self._json(status, resp)
 
@@ -165,14 +175,14 @@ class Handler(BaseHTTPRequestHandler):
             return None
         if length > MAX_BODY:
             raise ValueError("request body too large")
-        return json.loads(self.rfile.read(length).decode("utf-8"))
-
-    def handle_error(self, request, client_address) -> None:
-        """socketserver's default prints a traceback with this file's absolute path.
-        A dropped connection is ordinary here (Cancel); anything else is logged by type."""
-        exc = sys.exc_info()[1]
-        if not isinstance(exc, ConnectionError):
-            sys.stderr.write(f"connection error from {client_address[0]}: {type(exc).__name__}\n")
+        try:
+            raw = self.rfile.read(length)
+        except ConnectionError as e:
+            # Headers arrived, the body never did: the client vanished mid-request. There is
+            # nobody to answer, so this is not an error to report -- it is the other half of
+            # the Cancel case, and _send's guard does not cover it.
+            raise ClientGone() from e
+        return json.loads(raw.decode("utf-8"))
 
     def log_message(self, fmt: str, *args) -> None:
         # Method and path only, never the query or the body (the question lives there).
@@ -181,9 +191,24 @@ class Handler(BaseHTTPRequestHandler):
         sys.stderr.write(f"{getattr(self, 'command', None) or '-'} {path}\n")
 
 
+class ClientGone(Exception):
+    """The client disconnected before it could be answered. Not a failure of ours."""
+
+
 class AskServer(ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_port = False     # SO_REUSEPORT would let two servers share the port
+
+    def handle_error(self, request, client_address) -> None:
+        """socketserver's default prints a traceback carrying this file's absolute path.
+        It calls this on the SERVER, not the handler -- an override on the handler (86d23d6)
+        never ran, which the D2 verifier proved by identity against BaseServer's. A dropped
+        connection is ordinary here (Cancel, or a client that vanishes after its headers);
+        anything else is recorded by type only, because the message could quote the request.
+        """
+        exc = sys.exc_info()[1]
+        if not isinstance(exc, (ConnectionError, ClientGone)):
+            sys.stderr.write(f"request from {client_address[0]} failed: {type(exc).__name__}\n")
 
     def server_bind(self) -> None:
         # HTTPServer.server_bind does a reverse DNS lookup of the host; loopback needs none.
