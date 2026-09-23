@@ -19,7 +19,9 @@ sentence is TRACED when, independently of anything the model said about itself:
   2. the citation names a source we actually sent;
   3. the offsets lie inside that source;
   4. `source.text[start:end]` is **byte-identical** to the text the model said it read;
-  5. the cited span is not vacuous -- it carries distinctive words, not " of the ";
+  5. the cited span is neither vacuous (" of the ", which could sit under any
+     sentence) nor overbroad (the whole document, which contains every word any
+     sentence could need);
   6. the sentence introduces no date, no figure and no provision citation that is absent
      from the cited span, and asserts no legal conclusion absent from it
      (`reasoning.review()`, run with the cited span as the verified material);
@@ -120,6 +122,7 @@ SPAN_MISQUOTED = "SPAN_MISQUOTED"
 SPAN_VACUOUS = "SPAN_VACUOUS"
 TERMS_NOT_IN_SPAN = "TERMS_NOT_IN_SPAN"
 LAW_FROM_DOCUMENT = "LAW_FROM_DOCUMENT"
+SPAN_OVERBROAD = "SPAN_OVERBROAD"
 # The four content failures are `reasoning`'s own names, not new ones. They are the same
 # failures it already refuses narration for -- an invented date, an invented figure, a
 # citation to something outside the verified material, a legal conclusion nobody reached --
@@ -127,7 +130,8 @@ LAW_FROM_DOCUMENT = "LAW_FROM_DOCUMENT"
 # span this sentence cited, which is a far narrower bar than the whole document. A second
 # vocabulary for one failure is how two names for one thing start disagreeing.
 VERDICTS = (TRACED, ENTAILED, NO_CITATION, CITATION_NOT_IN_EVIDENCE, SPAN_OUT_OF_RANGE,
-            SPAN_MISQUOTED, SPAN_VACUOUS, TERMS_NOT_IN_SPAN, LAW_FROM_DOCUMENT,
+            SPAN_MISQUOTED, SPAN_VACUOUS, SPAN_OVERBROAD, TERMS_NOT_IN_SPAN,
+            LAW_FROM_DOCUMENT,
             DATE_INVENTED, FIGURE_INVENTED, CITATION_OUTSIDE_PACK, CONCLUSION_ASSERTED)
 
 
@@ -149,6 +153,17 @@ _MIN_SHARED_TERMS = 2
 # Half the sentence's distinctive vocabulary. Below it the sentence is mostly about
 # something other than what it cited.
 _MIN_COVERAGE = 0.5
+# A citation is a quotation of the text this SENTENCE was read from. A span many times
+# longer than the sentence it supports is not a quotation, it is a gesture at the document
+# -- and it defeats every vocabulary test at once, because a whole-document span contains
+# every word the document contains. Measured on this module's own fixture before the bar
+# existed: citing the entire document made "The Company is a small company and the meeting
+# is at Pune" TRACED, a sentence conjoining two facts from opposite ends of the file.
+# Both numbers are a judgement, not a derivation: 20x leaves room for a long statutory
+# paragraph behind a short sentence, and the floor keeps a short sentence from being unable
+# to cite a normal paragraph at all.
+_MAX_SPAN_RATIO = 20
+_MAX_SPAN_FLOOR = 600
 
 # A sentence that says what the law requires, rather than what this document says.
 _LAW_ASSERTION = re.compile(
@@ -390,6 +405,14 @@ def verify_sentence(text: str, citations, sources, *, shares_citation: bool = Fa
         return no(SPAN_VACUOUS,
                   "the cited span carries no distinctive words, so it could stand under "
                   "any sentence at all", anchors=tuple(anchors))
+
+    budget = max(_MAX_SPAN_FLOOR, _MAX_SPAN_RATIO * len(text))
+    if len(span_text) > budget:
+        return no(SPAN_OVERBROAD,
+                  f"the cited span is {len(span_text)} characters behind a "
+                  f"{len(text)}-character sentence. A span that size contains every word "
+                  f"the sentence could need and shows nothing about where it was read; "
+                  f"cite the passage, not the document", anchors=tuple(anchors))
 
     # The wedge. A statement of what the law requires may not rest on the document's own
     # recital of it: that recital is exactly what this product exists to distrust.
@@ -708,6 +731,33 @@ def _test() -> None:
     check(s_eng_law.verdict == TRACED,
           f"a legal position cited to the ENGINE's own output is traced "
           f"({s_eng_law.verdict}: {s_eng_law.reasons})")
+
+    # ── a citation that gestures at the whole document traces nothing ───────
+    # A real filing is 60,000 characters, so the fixture is padded to a length where
+    # "cite the whole document" is the move it would be in production.
+    long_doc = document_source(
+        "agm_notices/vaidya_2025_full",
+        DOC_TEXT + "\n\nThe Board has taken note of the report of the auditors for "
+                   "the financial year under review.\n" * 20)
+    long_sources = (long_doc, eng)
+    whole = Citation(0, 0, len(long_doc.text), long_doc.text)
+    claim = "The Company is a small company and the meeting is at Pune."
+    check(len(long_doc.text) > max(_MAX_SPAN_FLOOR, _MAX_SPAN_RATIO * len(claim)),
+          f"the fixture is long enough for this to be a real test "
+          f"({len(long_doc.text)} characters)")
+    s_broad = verify_sentence(claim, (whole,), long_sources)
+    check(s_broad.verdict == SPAN_OVERBROAD,
+          f"citing the entire document does not trace a sentence that conjoins facts "
+          f"from opposite ends of it ({s_broad.verdict})")
+    s_para = verify_sentence(
+        "The notice records that the meeting is at the registered office at Pune.",
+        (cite(0, "Notice is hereby given that the Twelfth Annual General Meeting of "
+                 "Vaidya Industries\nLimited will be held on Thursday, 14 August 2025 "
+                 "at 11:00 a.m. at the registered\noffice of the Company at Pune"),),
+        sources)
+    check(s_para.verdict == TRACED,
+          f"...while an ordinary paragraph behind a short sentence still traces "
+          f"({s_para.verdict}: {s_para.reasons})")
 
     # ── the reporting frame is not charged against the span ─────────────────
     s_frame = verify_sentence(
