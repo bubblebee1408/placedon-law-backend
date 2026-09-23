@@ -232,13 +232,14 @@ It asserts, for every fixture at 320 / 360 / 768 / 1024 / 1440:
     on the document's date, and the superseded rows drawn. A document that declares no date
     renders the refusal with the engine's words verbatim, with no `[data-state]`, no glyph, no
     dashed or grey abstention mark, and not the service error either; the question stays in the
-    box. A document checked with unread date declarations names that count on the card. Cancel
+    box, and the count of date declarations that could not be read is named on the refusal too.
+    A document checked with unread date declarations names that count on its card as well. Cancel
     aborts the check. A 500 and a reply that is not a turn each render the service error and go
     through check 13's whole battery. Every number on screen must come from the server's own reply
     or its list.
 
-Last run: **1185/1185** (2026-09-23, D3, with `FONTS_DIR` set): the 883 below, plus 148 live-mode
-checks (D2) and **154 for the document path** (D3). Before the document path existed the same
+Last run: **1189/1189** (2026-09-23, D3 fix round 1, with `FONTS_DIR` set): the 883 below, plus
+148 live-mode checks (D2) and **158 for the document path** (D3). Before the document path existed the same
 runner scored **1053/1114**, every one of the 61 failures in check 15. 403 across
 6 fixtures × 5 widths plus the empty state (unchanged), and 480
 for the three non-answer states × 7 requests × 2 widths (2026-09-18, ASK-3). Before the states

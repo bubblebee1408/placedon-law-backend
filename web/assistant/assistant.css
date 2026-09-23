@@ -141,7 +141,9 @@ a { color: inherit; text-underline-offset: 3px; }
 .composer { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: var(--md); }
 .summary { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sm); font-size: 13px; color: var(--muted); }
 .summary[hidden] { display: none; }
-.about { border: 0; padding: 0; margin: 0 0 var(--sm); }
+/* min-inline-size on a fieldset defaults to min-content, so the document <select>'s longest
+   option label used to push the whole composer past 360px (runner check 15, at 360). */
+.about { border: 0; padding: 0; margin: 0 0 var(--sm); min-inline-size: 0; }
 .about legend, .q-label {
   font: 500 12px/1.4 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); padding: 0;
 }
@@ -318,7 +320,8 @@ textarea[aria-disabled="true"] { color: var(--muted); }
 /* The document picker, and the block that says which document a card checked. */
 .docpick { margin: var(--sm) 0 var(--md); }
 .docpick select {
-  width: 100%; max-width: var(--measure); min-height: var(--target);
+  /* min-width: 0 so a long option label cannot set the element's floor and overflow the page. */
+  width: 100%; max-width: 100%; min-width: 0; min-height: var(--target);
   font: inherit; font-size: 15px; color: var(--text);
   background: transparent; border: 1px solid var(--field-line);
   border-radius: var(--radius); padding: 6px 10px;

@@ -941,6 +941,18 @@ function showChosenDocument() {
     : d.why_no_date), 'documents'));
 }
 
+/* The marker the engine kept, drawn. A count that only exists in JSON nobody renders is not a
+ * preserved marker, and one of these lines could name a date that disagrees with the reading.
+ * Shared by the checked card and the refusal card: it is the same fact about the same document,
+ * and it was rendered on only one of them (D3 verifier, finding 3). */
+function unreadLine(n, of) {
+  if (!n) return null;
+  return field(el('p', 'caution', n + ' further date line' + (n === 1 ? '' : 's')
+    + ' in this document could not be read. Nothing in the document was repaired, and one of '
+    + 'them could name a date ' + (of === 'accepted' ? 'other than the one accepted above.'
+      : 'this refusal did not take into account.')), 'document.declarations_unread');
+}
+
 /* Which document a card checked, the date it declares, and what could not be read in it. */
 function documentBlock(doc) {
   var box = el('section', 'docblock');
@@ -951,14 +963,7 @@ function documentBlock(doc) {
     // line saying something else is worse than no locator at all.
     field(el('p', 'caption', 'Dated ' + human(doc.date) + ', read from ' + doc.path
       + ' line ' + doc.date_line + ': "' + doc.date_quote + '"'), 'document.date_quote'));
-  if (doc.declarations_unread) {
-    // The marker the engine kept. A count that only exists in JSON nobody draws is not a
-    // preserved marker, and one of these lines could name a date that disagrees.
-    add(box, field(el('p', 'caution', doc.declarations_unread + ' further date line'
-      + (doc.declarations_unread === 1 ? '' : 's') + ' in this document could not be read. '
-      + 'Nothing in the document was repaired, and one of them could name a different date.'),
-      'document.declarations_unread'));
-  }
+  add(box, unreadLine(doc.declarations_unread, 'accepted'));
   add(box, sourceLine(doc.source, 'The document as its issuer published it',
     'No source link was recorded for this document.', 'document.source'));
   add(box, field(el('p', 'caption', doc.profile_note), 'document.profile_note'));

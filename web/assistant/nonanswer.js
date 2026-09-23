@@ -148,6 +148,10 @@ function showDocumentRefusal(req, payload) {
   add(card, contextBand(req.context), head,
     field(el('p', 'na-said', payload.detail), 'detail'));
   if (payload.reason) add(card, field(el('p', 'caption', payload.reason), 'reason'));
+  // The same unresolved marker the checked card draws. It reaches a refusal too -- the
+  // two-dated Route Mobile filing is refused carrying nine unread declarations -- and leaving
+  // it in the JSON here while drawing it there was the rule applied to one card only.
+  add(card, unreadLine((payload.document || {}).declarations_unread, 'refused'));
   // Looked at the 1440 and 360 shots: this line used to offer "or supply the date this one
   // bears", which this page has no field for. A refusal must not promise a way out that does
   // not exist, so it names only the one that does.
