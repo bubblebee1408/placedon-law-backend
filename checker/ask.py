@@ -333,8 +333,23 @@ def answer(request: dict, *, generated_at: str) -> dict:
         raise BadRequest(f"unknown field(s): {', '.join(sorted(unknown))}. "
                          f"Known: {', '.join(sorted(REQUEST_KEYS))}")
     question = request.get("question")
-    if not isinstance(question, str) or not question.strip():
+    # Three different faults used to collapse into "missing required field", which is
+    # false when the field is present (D2 verifier). Each says what is actually wrong.
+    if question is None:
         raise BadRequest("missing required field: 'question'")
+    if not isinstance(question, str):
+        raise BadRequest(f"'question' must be a string, not {type(question).__name__}")
+    if not question.strip():
+        raise BadRequest("'question' is empty")
+    # A control character is REFUSED, never stripped: the question is rendered verbatim
+    # and hashed into turn_id, so silently editing it would change the user's own words
+    # (and a NUL used to travel straight through into both). Newline and tab are what a
+    # multi-line question is made of, so they stay.
+    bad = sorted({c for c in question if (ord(c) < 32 or ord(c) == 127) and c not in "\n\t"})
+    if bad:
+        shown = ", ".join(f"U+{ord(c):04X}" for c in bad[:5])
+        raise BadRequest(f"'question' holds control character(s) {shown}. Refused rather "
+                         f"than stripped: the question is rendered and hashed verbatim")
     if len(question) > MAX_QUESTION_CHARS:
         raise BadRequest(f"'question' is {len(question)} characters; the limit is "
                          f"{MAX_QUESTION_CHARS}. A document is sent as a document turn, "
@@ -645,9 +660,22 @@ def _test() -> None:
           f"...and the turn says why, in the threshold table's own words "
           f"({[i.get('detail', '')[:40] for i in u['not_confirmed']]})")
 
+    # A multi-line question is ordinary (Shift+Enter in the composer), so newline and tab
+    # survive the control-character refusal.
+    multi = answer({"question": "What does s.173 require?\n\tAnd s.174?"}, generated_at=GEN)
+    check("\n" in multi["question"] and validate(multi) == [],
+          "a multi-line question is kept verbatim, newline and all")
+
     # ── the request fails closed ─────────────────────────────────────────────
     for bad, why in (({}, "a request with no question"),
                      ({"question": ""}, "an empty question"),
+                     ({"question": "   "}, "a question of only spaces"),
+                     ({"question": 123}, "a question that is a number"),
+                     ({"question": ["s.173"]}, "a question that is a list"),
+                     ({"question": "What does s.173\x00 require?"},
+                      "a question carrying a NUL"),
+                     ({"question": "s.173\x1b[2J require?"},
+                      "a question carrying an escape sequence"),
                      ({"question": "x", "figures": ["no.such.key"]},
                       "a figure key the engine does not declare"),
                      ({"question": "x", "provisions": "s.173"},

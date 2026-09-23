@@ -57,6 +57,15 @@
           <label class="choice" data-doc-choice data-chrome><input type="radio" name="about" value="document"
                  aria-disabled="true" aria-describedby="hint-document"> This document</label>
           <p class="hint" id="hint-document" data-doc-hint>Document checks run in the Word add-in.</p>
+          <!-- The only way a document enters this page. There is no file input and no drop
+               target anywhere in it, and there will not be one: nothing a client holds is sent.
+               The list, and the refusal below it, are both the demo server's own words. -->
+          <div class="docpick" data-doc-picker hidden>
+            <label class="q-label" for="doc" data-chrome>Which document</label>
+            <select id="doc" data-doc-select aria-describedby="doc-upload"></select>
+            <p class="hint" id="doc-upload" data-doc-upload></p>
+            <p class="hint" data-doc-meta></p>
+          </div>
         </fieldset>
         <p class="hint" data-chrome>Answers use the Companies Act, 2013 as ingested: a current
           consolidation, not point-in-time law. The as-of date is today only.</p>

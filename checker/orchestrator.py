@@ -77,6 +77,15 @@ class OrchestrationRefused(RuntimeError):
     """A precondition failed. No model was called."""
 
 
+# The refusal a caller gets when the document does not say when it was made. Named
+# so every surface that has to refuse for this reason says it in the same words --
+# the engine's, not its own (scripts/serve_ask.py's document route is the second).
+NO_DOCUMENT_DATE = (
+    "no document date. Every temporal answer here compares the law at "
+    "the document's date with the law now; without one it would compare "
+    "today with today, which answers nothing.")
+
+
 @dataclass(frozen=True)
 class Step:
     """One thing the loop did. The trace is the product, not a debug aid."""
@@ -198,10 +207,7 @@ def run(*, intent: str, document: str, document_date: date | None,
 
     # ── preconditions. Each is owned elsewhere; none is re-implemented here ──
     if document_date is None:
-        raise OrchestrationRefused(
-            "no document date. Every temporal answer here compares the law at "
-            "the document's date with the law now; without one it would compare "
-            "today with today, which answers nothing.")
+        raise OrchestrationRefused(NO_DOCUMENT_DATE)
     try:
         bundle = bundles.route(intent)
     except bundles.NoSuchCapability as e:

@@ -270,3 +270,59 @@ boundary decision in the same pass.
 **Open, and deliberately not decided here:** whether to acquire a cleaner rendering of the same
 instrument (India Code may serve it as structured text rather than a scanned-era PDF). That is
 an acquisition task under the existing source policy, not a repair.
+
+## SD-006 — the letterhead of two Route Mobile filings encodes `1` as `7`, corrupting the CIN
+
+**Found:** 2026-09-23, by the main session, while checking an "agreement" in the D5 two-model
+pre-labelling run (`docs/PRELABEL_REVIEW_2026-09-23.md`). Agent evidence, labelled as such — no
+human has verified it.
+**Where:** `corpus/testdocs/_raw/rm_bm_20250128.pdf` (pages 1, 3, 4) and
+`corpus/testdocs/_raw/rm_bm_20251103.pdf`, in the footer/letterhead block, and therefore in the
+extracted text at `corpus/testdocs/board_outcomes/routemobile_outcome_board_meeting_2025-01-28.txt`
+lines 62, 155, 191 and `...2025-11-03.txt` lines 67, 113.
+
+The letterhead reads:
+
+> CIN No: L72900MH2004PLC**7**46323
+> +**9**7 22 4033 7676/77-99
+
+Both are wrong, and wrong in the same way. Route Mobile's CIN is **L72900MH2004PLC146323** — which
+the *same document* prints correctly on page 2, and which four sibling filings
+(`rm_bm_20240529`, `rm_bm_20260507`, and the 21st and 22nd AGM notices) print consistently. And
+**+97 is not India.** India's country code is +91; the correct `+91224033` appears on page 2 of the
+same file. One glyph, `1`, is being encoded as `7` throughout the affected letterhead blocks.
+
+### Why it is the source and not our reader — two independent engines
+
+| Engine | page 1 | page 2 |
+|---|---|---|
+| `pdfplumber` 0.11.10 (the repo's reader) | `L72900MH2004PLC746323`, `+97 22 4033` | `L72900MH2004PLC146323`, `+91224033` |
+| `poppler` `pdftotext` (independent) | `L72900MH2004PLC746323`, `+97 22 4033` | `L72900MH2004PLC146323`, `+91224033` |
+
+Two engines that share no code agree, on the same pages, on the same substitution. The character
+data itself carries it: the affected run is a single font (`Helvetica`, size 6.2) and the extracted
+glyph is a literal `7`. This is the PDF's own encoding, not a rendering heuristic of ours.
+
+**Handling.** Preserved verbatim. The extracted text is NOT corrected, and the CIN is NOT repaired
+to `146323`, because a pipeline that silently fixes an identifier can no longer say what the filing
+actually contained — and an identifier is exactly the field where a silent "fix" is most dangerous.
+
+### Why this one matters more than a typo
+
+A CIN is an **identity** field: it decides which company an obligation is tested against. A
+corrupted CIN does not produce a visibly wrong answer, it produces a confident answer about the
+wrong company.
+
+And it defeated the control that was supposed to catch it. **Two models independently agreed on
+`L72900MH2004PLC746323`**, and the pre-labelling run recorded that agreement as
+"model-verified". Both models were reading the same defective text and both read it faithfully —
+which is the correct behaviour under the rule above, and is also precisely why agreement cannot
+stand in for correctness. `docs/PRELABEL_REVIEW_2026-09-23.md` says so in its own preamble
+("Both can be wrong in the same way"); this is that sentence with a measurement attached.
+
+**Open:** the review renderer lists this value in its "Agreements — model-verified" table with no
+flag, beside `...146323` for the same company, and a reader scanning that table is given no reason
+to look twice. The mechanical fix is the rule `checker/document_date.py` already applies to dates —
+*every declaration the reader can read must agree, or there is no value* — extended to extracted
+values. Logged rather than hand-patched: the report is generated, so a hand edit would be
+overwritten on the next `--render`.

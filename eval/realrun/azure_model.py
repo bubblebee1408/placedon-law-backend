@@ -122,8 +122,13 @@ def extract(document: str, *, model: str, timeout: int = 180
 
     proposal, parse, raw = parse_reply(text)
     usage = data.get("usage") or {}
+    # tokens_in as well as out: a run whose cost is reported must report the side
+    # of the bill that a 60-page AGM notice actually moves. Azure returns it as
+    # `prompt_tokens`; absent from a reply, it stays None rather than becoming 0,
+    # because an unmeasured cost is not a zero cost.
     meta = {"model": model, "served_by": data.get("model"), "parse": parse,
             "temperature": body.get("temperature"),
+            "tokens_in": usage.get("prompt_tokens"),
             "tokens_out": usage.get("completion_tokens")}
     return proposal, meta | ({"raw": raw[:200]} if parse != "OK" else {})
 
@@ -220,6 +225,9 @@ def _test() -> None:
             chk(meta["temperature"] == 0 and meta["served_by"]
                 == "Llama-3.3-70B-Instruct",
                 "meta records the temperature sent and the model that served it")
+            chk(meta["tokens_out"] == 42 and meta["tokens_in"] is None,
+                "meta records both token counts, and an absent count stays None "
+                "rather than becoming a zero cost")
 
             with replies(reply('{"facts": {"cin": "U74999KA2019PTC123456"}}')):
                 p, _ = extract(doc, model="azure:gpt-5-mini")

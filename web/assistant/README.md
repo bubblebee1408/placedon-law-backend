@@ -20,11 +20,17 @@ python3 scripts/serve_ask.py            # then open http://127.0.0.1:8021
 ```
 
 `scripts/serve_ask.py` binds **127.0.0.1 only** — there is no host option — serves this directory
-read-only, and forwards `POST /v1/ask` to `checker.api.handle` in the same process. The page and the
+read-only, and forwards `POST /v1/ask` to `checker.api.handle` in the same process. It also serves
+`GET /v1/ask/documents` (the public documents it will check) and `POST /v1/ask/document` (check
+one). Those two sit under `/v1/ask` because what they return is a `placedon.ask/0` turn, the
+contract `/v1/ask` already serves; they are deliberately **not** `/v1/document`, which sits one
+character from `checker/api.py`'s existing `/v1/document-check` — a different request and a
+different shape — and they live on this server rather than in the api because they read files
+under `corpus/testdocs/`, which `checker/api.py` never does. The page and the
 route share one origin, so no CORS header is ever sent; a request that names another Host or comes
 from another Origin is refused with a `403`. If port 8021 is already in use the server refuses to
 start rather than share it (`--port N` picks another). `python3 scripts/serve_ask.py --test` runs its
-33 checks; the gate runs them too.
+67 checks; the gate runs them too.
 
 **What live mode does.** Pressing Ask sends `{question, context}` — the words you typed and what the
 About control says — to `/v1/ask` on this machine and nowhere else, and renders the reply through the
@@ -42,6 +48,68 @@ with dated figures is reachable through the route with `facts`, `provisions` and
 fixtures, and `scripts/serve_ask.py --test` — but not by typing into this page. The route's open
 items in [`contract.md`](contract.md)'s notice all still stand; the demo server is the one client the
 notice sanctions, and it is local.
+
+## Check a document (the repository's PUBLIC documents, and only those)
+
+Choose **This document** in the composer, pick one from the list, and press Ask. The page sends
+`{document_id, question}` to `POST /v1/ask/document`; the server reads the date that document
+declares on its own face, runs the document check that already existed (`checker/ask.py`'s
+document branch into `api.document_check`) and returns the `placedon.ask/0` turn beside an entry
+for the document it read. **No model is called on this path either.**
+
+**There is no upload, and there will not be one.** The founder's rule is that no client or
+confidential document goes anywhere, and a demo is where a lawyer would first try one. The page
+has no file input and no drop target, and the server refuses a body naming any field that could
+carry a document (`text`, `document`, `file`, `path`, `base64`, `url`, …) **by the name, before
+the value is looked at** — so the refusal cannot depend on reading what arrived, and what arrived
+is never echoed back. The refusal is shown on the page, where someone would look for the upload
+that is not there:
+
+> There is no upload here, by design. This demo checks the public documents held in this
+> repository (`corpus/testdocs/`) and nothing else: no client document, nothing confidential and
+> nothing you hold is sent anywhere by this page. Choose one of the listed documents instead.
+
+The list itself is `eval/prelabel/corpus.py`'s enumerator (D5's), imported read-only: ONE list
+answers "is this document public", and it refuses any path outside `corpus/testdocs/`. A second
+copy would be a second answer to the only question that keeps a confidential document out.
+
+**The document's own date drives the check, or there is no check.** `checker/document_date.py`
+accepts a line reading `Date: ` and then a bare date, and only that: the colon is required
+(`dated April 13, 2020 and subsequent circulars` is a wrapped sentence about somebody else's
+instrument, and without this rule TCPL's 2025 notice is dated to an MCA circular of 2020), the
+date must begin immediately after it (not `Date of Birth`, not `Date: Friday, June 5, 2026` — a
+record-date table row), and every declaration it can read must agree. Over the 29 public
+documents **9 declare a date and 20 do not**, and the 20 are not failures to tune away: an ICSI
+specimen carries `Date : ______ 20_.` because a specimen has no date, Titan's date line did not
+survive text extraction, and `routemobile_outcome_board_meeting_2025-11-03` genuinely bears two
+(the letter 4 November, the signatures 3 November). A document with no readable date is refused
+in the **engine's own words** (`checker/orchestrator.py`'s `NO_DOCUMENT_DATE`), on its own card —
+not an abstention, because nothing about the law was decided, and not the service error, because
+nothing failed. No date is ever guessed.
+
+**What could not be read is shown, not swallowed.** A date declaration this reader cannot parse
+(`Date: 2026.05.07 21:59:27 +05'30'` — a PDF signature stamp; `Date: 28 Janua ry 2025` — somebody
+else's OCR, left unrepaired) is counted as `declarations_unread` and **printed on the card**:
+`routemobile_outcome_board_meeting_2026-05-07` is checked at 07-May-2026 and says, in the card,
+that twelve further date lines could not be read and one of them could name a different date.
+
+**The company profile is a placeholder, and the card says exactly what it decided.**
+`api._profile` requires `company_class` and `incorporation_date`; these filings state no
+incorporation date, so the profile is the demo's own input. It was claimed here that it could
+decide nothing. **That was false** (D3 check 2, finding 2): `company_class: "public"` alone
+decides `s.2(85)` as `DOES_NOT_APPLY` — "a public company is never a small company" — on any
+document dated after G.S.R. 880(E), while a 2025 document hides it because `s.2(85)` lands in
+`superseded` instead. Measured: no class → `400`; `public` → decides that one row; `private` →
+decides none. `public` is kept, because every real filing here is a listed public company's and
+choosing `private` would buy a quieter card with a fact known to be false of every document on
+the list. The claim is what changed: `_profile_decides()` computes which rows the profile decided
+and the note names them, so the sentence cannot drift from the register. What the turn decides is
+**whether the legal basis of each obligation moved between the date the document declares and
+today** — not what law the document rests on, which nothing here established.
+
+`date_quote` is the declaration line verbatim in the payload; HTML collapses runs of whitespace,
+so a doubled space inside a date (`Date: July 19,  2024`) reads as one on screen. `date_line` is
+the line **in the file**, header included, so `sed -n '<line>p' <path>` opens it.
 
 **Live mode is loopback-only.** Opened from a file, or served from any host but 127.0.0.1 /
 localhost, the page sends nothing and behaves exactly as it did before: fixtures, and a status line
@@ -98,8 +166,15 @@ PLAYWRIGHT=$HOME/.cache/placedon-ux-tools/node_modules/playwright/index.mjs \
 ```
 
 `FONTS_DIR=<dir>` loads the brand fonts (Fraunces, Inter, IBM Plex Mono — the finalized frontend
-self-hosts them from `placedon-claude-legal-3300/brand-kit/fonts/`) for the screenshots; the page itself
-names them and falls back to system faces, and no font file is copied into this repository.
+self-hosts them from `placedon-claude-legal-3300/brand-kit/fonts/`) for the **file:// screenshots**;
+that repository is not checked out beside this one, so the only copy on this Mac is the
+read-only job clone under `~/.claude/jobs/*/tmp/repos/placedon-claude-legal-3300/brand-kit/fonts`;
+the page itself names them and falls back to system faces, and no font file is copied into this
+repository. It is deliberately not applied to the live-mode screenshots (check 14): the served page
+allows no injected inline style and no font from another origin under its own CSP, so the runner
+would have to break that policy to fake the brand faces in a shot of a page that cannot load them.
+The live shots therefore show the system faces a viewer of the demo actually gets. (Before this was
+decided, setting `FONTS_DIR` killed every live check: 883/884 and no `live-*` screenshot at all.)
 `CHROMIUM=<path>` overrides the browser binary (the default is the Playwright-cached Chromium on
 macOS). The runner exits non-zero on any failure.
 
@@ -144,9 +219,27 @@ It asserts, for every fixture at 320 / 360 / 768 / 1024 / 1440:
     renders nothing. Four failures each render the service error and are put through check 13's
     whole battery: a 500, a reply whose `schema` is not `placedon.ask/0`, a reply in an unknown
     state, and the server killed under the page. `?fixture=` over http still renders the saved
-    sample and sends nothing; `?state=` over http is still the stand-in.
+    sample and sends nothing; `?state=` over http is still the stand-in. Every live page is also
+    checked for **Content Security Policy violations**, so the page must live inside the policy the
+    server sends rather than the runner loosening it.
 
-Last run: **1031/1031** (2026-09-22, D2): the 883 below plus 148 live-mode checks. 403 across
+15. **the document path**, at 360 and 1440: the page offers the public list and **no file input
+    or drop target anywhere**; the no-upload refusal is shown; choosing a dated document POSTs
+    `{document_id, question}` once to `/v1/ask/document` and no document text, the ASK-3 waiting
+    card is up with the composer locked while the check runs, and the rendered turn is the
+    server's — its state, its document named on the card, the placeholder profile declared, the
+    scope frame leading the findings, the law-version line saying this is not the law as it stood
+    on the document's date, and the superseded rows drawn. A document that declares no date
+    renders the refusal with the engine's words verbatim, with no `[data-state]`, no glyph, no
+    dashed or grey abstention mark, and not the service error either; the question stays in the
+    box. A document checked with unread date declarations names that count on the card. Cancel
+    aborts the check. A 500 and a reply that is not a turn each render the service error and go
+    through check 13's whole battery. Every number on screen must come from the server's own reply
+    or its list.
+
+Last run: **1185/1185** (2026-09-23, D3, with `FONTS_DIR` set): the 883 below, plus 148 live-mode
+checks (D2) and **154 for the document path** (D3). Before the document path existed the same
+runner scored **1053/1114**, every one of the 61 failures in check 15. 403 across
 6 fixtures × 5 widths plus the empty state (unchanged), and 480
 for the three non-answer states × 7 requests × 2 widths (2026-09-18, ASK-3). Before the states
 existed, 114 of check 13's 162 assertions failed (451/565). The 48 that passed hold on any page
@@ -166,7 +259,10 @@ render and no waiting card to find).
 (`waiting` / `cancelled` / `error`) · `data-cancel` · `data-send-again` · `data-chrome` (a label
 the response did not supply) · `data-f` (the response path an element was rendered from — the audit
 trail behind check 6) · `data-origin` (`fixture` or `live` — where the rendered turn came from) ·
-`data-concept` (the note that says whether anything is sent).
+`data-concept` (the note that says whether anything is sent) · `data-doc-picker` ·
+`data-doc-select` · `data-doc-upload` (the no-upload refusal) · `data-doc-meta` · `data-document`
+(the block naming the document a card checked) · `data-document-refusal` (a document that declares
+no date; not one of the three `data-nonanswer` states, so `?state=` cannot select it).
 
 ## What is deliberately absent
 

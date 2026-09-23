@@ -516,8 +516,11 @@ function stampLine(r) {
 
 /* The request values every card opens with: what it is about, and what it follows. */
 function contextBand(ctx) {
-  return field(el('p', 'band', ctx && ctx.kind === 'document'
-    ? 'About the open document · dated ' + human(ctx.document_date)
+  var doc = ctx && ctx.kind === 'document';
+  return field(el('p', 'band', doc
+    ? 'About the open document · ' + (ctx.document_date
+      ? 'dated ' + human(ctx.document_date)
+      : 'it declares no date on its own face')
     : 'About the Act'), 'context');
 }
 function parentLine(r, parent, card) {
@@ -696,7 +699,9 @@ function setComposer(r, compact) {
     field(hint, 'context.document_date').textContent = 'Checks the open document, dated '
       + human(docDate) + ', against the Companies Act, 2013.';
   } else {
-    genRadio.checked = true;
+    // Only when there is nothing to choose: with the public-document list loaded, the choice
+    // is the user's and a turn arriving must not quietly undo it (D3).
+    if (docRadio.getAttribute('aria-disabled') === 'true') genRadio.checked = true;
     hint.setAttribute('data-chrome', '');
   }
   if (!composerWired) {
@@ -765,7 +770,11 @@ function wireComposer() {
         : 'Type a question first. (Prototype: nothing is sent either way.)');
       return;
     }
-    if (live) { askLive(composerRequest()); return; }
+    if (live) {
+      var req = composerRequest();
+      if (req.document_id) askDocument(req); else askLive(req);
+      return;
+    }
     if (!demo) { status('Prototype: nothing was sent. This page renders saved examples only.'); return; }
     showNonAnswer(demo === 'error' ? 'error' : 'waiting', composerRequest(), true);
   });
@@ -862,6 +871,152 @@ function askLive(req) {
   });
 }
 
+/* ── the document path (D3) ────────────────────────────────────────────────
+ * The page checks one of THIS REPOSITORY'S PUBLIC documents, chosen from the list the
+ * server offers, and nothing else. There is no upload and there will not be one: the
+ * founder's rule is that no client or confidential document goes anywhere, and a demo is
+ * where a lawyer would first try one. The server says so in its own words (`no_upload`),
+ * and this page shows them where somebody would look for the upload that is not there.
+ */
+var DOCS = null;                 // id -> the server's catalogue entry, or null: no list loaded
+
+function loadDocuments() {
+  if (!LIVE || demo) return;                     // a file:// page sends nothing, ever
+  fetch('/v1/ask/documents', { cache: 'no-store', credentials: 'same-origin' })
+    .then(function (res) { if (res.status !== 200) throw new Error('status ' + res.status); return res.json(); })
+    .then(fillDocuments)
+    .catch(function () {
+      // No list, no choice: the document radio stays disabled rather than offering a check
+      // this page cannot make.
+      document.querySelector('[data-doc-hint]').textContent =
+        'The list of public documents could not be loaded, so no document can be checked.';
+    });
+}
+
+function fillDocuments(payload) {
+  var list = (payload && payload.documents) || [];
+  if (!list.length) return;
+  DOCS = {};
+  var sel = document.querySelector('[data-doc-select]');
+  sel.textContent = '';
+  list.forEach(function (d) {
+    DOCS[d.id] = d;
+    var o = el('option', null, d.title + ' — ' + (d.date
+      ? 'dated ' + human(d.date) : 'no date on its own face'));
+    o.value = d.id;
+    sel.appendChild(o);
+  });
+  document.querySelector('[data-doc-upload]').textContent = payload.no_upload || '';
+  document.querySelector('[data-doc-hint]').textContent = 'Checks one of the public documents '
+    + 'held in this repository against the Companies Act, 2013, at the date that document '
+    + 'declares on its own face.';
+  document.querySelector('input[value="document"]').removeAttribute('aria-disabled');
+  sel.addEventListener('change', showChosenDocument);
+  document.querySelector('[data-doc-choice]').addEventListener('change', showChosenDocument);
+  document.querySelector('input[value="general"]').addEventListener('change', showChosenDocument);
+  showChosenDocument();
+}
+
+/* The document the user picked, or null when this is a question about the Act. */
+function chosenDocument() {
+  if (!DOCS) return null;
+  if (!document.querySelector('input[value="document"]').checked) return null;
+  var sel = document.querySelector('[data-doc-select]');
+  return DOCS[sel && sel.value] || null;
+}
+
+/* The picker is only shown when it is what Ask will do, and what it says about the chosen
+ * document is the server's reading of that document, never this page's. */
+function showChosenDocument() {
+  var picker = document.querySelector('[data-doc-picker]');
+  var on = !!DOCS && document.querySelector('input[value="document"]').checked;
+  picker.hidden = !on;
+  var meta = document.querySelector('[data-doc-meta]');
+  meta.textContent = '';
+  var d = chosenDocument();
+  if (!d) return;
+  add(meta, field(el('span', null, d.date
+    ? 'It declares its own date on line ' + d.date_line + ' of ' + d.path + ': "'
+      + d.date_quote + '"'
+    : d.why_no_date), 'documents'));
+}
+
+/* Which document a card checked, the date it declares, and what could not be read in it. */
+function documentBlock(doc) {
+  var box = el('section', 'docblock');
+  box.setAttribute('data-document', doc.id);
+  add(box, field(el('p', 'doc-title', doc.title), 'document.title'),
+    // The file and the line, so a reader can open it: `sed -n '<line>p' <path>`. The line is
+    // the one in the file, header included (serve_ask._entry), because a locator that opens a
+    // line saying something else is worse than no locator at all.
+    field(el('p', 'caption', 'Dated ' + human(doc.date) + ', read from ' + doc.path
+      + ' line ' + doc.date_line + ': "' + doc.date_quote + '"'), 'document.date_quote'));
+  if (doc.declarations_unread) {
+    // The marker the engine kept. A count that only exists in JSON nobody draws is not a
+    // preserved marker, and one of these lines could name a date that disagrees.
+    add(box, field(el('p', 'caution', doc.declarations_unread + ' further date line'
+      + (doc.declarations_unread === 1 ? '' : 's') + ' in this document could not be read. '
+      + 'Nothing in the document was repaired, and one of them could name a different date.'),
+      'document.declarations_unread'));
+  }
+  add(box, sourceLine(doc.source, 'The document as its issuer published it',
+    'No source link was recorded for this document.', 'document.source'));
+  add(box, field(el('p', 'caption', doc.profile_note), 'document.profile_note'));
+  return box;
+}
+
+/* The server's document turn, with the document it was about named above the question. The
+ * findings keep their own order (scope frame first, §8): this block sits with the band. */
+function arriveDocument(doc, turn) {
+  var card = arrive(turn);
+  var band = card.querySelector('.band');
+  card.insertBefore(documentBlock(doc), band ? band.nextSibling : card.firstChild);
+  return card;
+}
+
+function askDocument(req) {
+  var controller = new AbortController();
+  showNonAnswer('waiting', req, true);
+  var mine = pending;
+  mine.abort = function () { controller.abort(); };
+  var q = document.getElementById('q');
+  var live = function () { return pending === mine && mine.kind === 'waiting'; };
+  var refused = null;
+  fetch('/v1/ask/document', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ document_id: req.document_id, question: req.question }),
+    cache: 'no-store',
+    credentials: 'same-origin',
+    signal: controller.signal
+  }).then(function (res) {
+    // 422: the engine will not read a document that does not say when it was made. That is a
+    // decision, not a failure, so it is not the service error -- and not an abstention either.
+    if (res.status === 422) return res.json().then(function (r) { refused = r; return r; });
+    if (res.status !== 200) throw new Error('status ' + res.status);
+    return res.json();
+  }).then(function (r) {
+    if (!live()) return;                                   // cancelled: its card already says so
+    if (refused) {
+      if (refused.error !== 'no_document_date' || !refused.detail) throw new Error('a refusal this client has no words for');
+      showDocumentRefusal(req, refused);
+      return;
+    }
+    if (!r || typeof r !== 'object' || !isAskResponse(r.turn)) throw new Error('not a document turn this client renders');
+    var card = arriveDocument(r.document, r.turn);
+    var question = card.querySelector('[data-f="question"]');
+    if (question) question.focus();
+    mine.card.remove();
+    pending = null;
+    lockComposer(null);
+    q.value = '';
+    status(stateWord(r.turn) + '. ' + r.turn.question, '[data-announce]');
+  }).catch(function () {
+    if (!live()) return;
+    showNonAnswer('error', req, true);
+  });
+}
+
 /* ── boot ──────────────────────────────────────────────────────────────── */
 function byTurnId(id) {
   var names = Object.keys(FIXTURES);
@@ -871,6 +1026,7 @@ function byTurnId(id) {
 
 function render(name) {
   wireComposer();
+  loadDocuments();
   var turns = document.querySelector('[data-turns]');
   conceptNote(!!(name && FIXTURES[name]) && !demo);
   if (!name) { setComposer(null); return; }                     // the empty state

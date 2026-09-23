@@ -131,6 +131,10 @@ REGISTRY: dict[str, int] = {
     "checker.mca_aggregator": RING_1,
     "checker.mca_snapshot": RING_1,
 
+    # ── RING 2 — the Operation Model: reads observations and the register,
+    #    produces work, decides nothing. THEMIS V0 milestone 6.
+    "checker.operations": RING_2,
+
     # ── RING 2 — FEEDS. Classified by PACKAGE below, not listed here. ──────
     # ── RING 3 — INFERENCE. Deliberately empty; see the module docstring. ──
 }

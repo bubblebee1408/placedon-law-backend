@@ -23,6 +23,9 @@ __pycache__/
 corpus/.asks.jsonl
 corpus/.budget.json
 corpus/.checks.jsonl
+# D5 pre-labelling: one line per extraction, so a killed run resumes instead of
+# paying for the same answers again.
+corpus/.prelabel_checkpoint.jsonl
 corpus/raw/*.pdf
 # ...but NOT the source artifacts the provenance chain hashes. A blanket *.pdf
 # kept them out of the repo, so a fresh clone failed five suites and the whole

@@ -301,6 +301,10 @@ textarea[aria-disabled="true"] { color: var(--muted); }
 }
 @media (min-width: 401px) { .nonanswer { padding: var(--lg) clamp(20px, 3vw, 40px); } }
 .nonanswer-error { border-color: var(--field-line); }
+/* The engine refusing a document that does not say when it was made. Not an abstention -- it
+   decided nothing about the law -- and not the service error, which is a failure. Same plain
+   solid box, its own words: no dashed mark, no abstention grey, no glyph, no state. */
+.nonanswer-refusal { border-color: var(--field-line); }
 .nonanswer .band { color: var(--text); border-color: var(--line); }
 .na-head {
   font: 460 22px/1.3 var(--display); letter-spacing: -0.004em;
@@ -311,6 +315,24 @@ textarea[aria-disabled="true"] { color: var(--muted); }
 .na-said { margin-top: var(--sm); font-size: 15px; max-width: var(--measure); }
 .nonanswer .caption { margin-top: var(--sm); }
 .na-actions { margin-top: var(--md); }
+/* The document picker, and the block that says which document a card checked. */
+.docpick { margin: var(--sm) 0 var(--md); }
+.docpick select {
+  width: 100%; max-width: var(--measure); min-height: var(--target);
+  font: inherit; font-size: 15px; color: var(--text);
+  background: transparent; border: 1px solid var(--field-line);
+  border-radius: var(--radius); padding: 6px 10px;
+}
+.docpick select:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.docblock {
+  border-left: 3px solid var(--line); padding: var(--xs) 0 var(--xs) var(--md);
+  margin: var(--sm) 0 var(--md);
+}
+.docblock > * + * { margin-top: var(--xs); }
+.doc-title { font-size: 15px; font-weight: 600; max-width: var(--measure); }
+/* An unresolved marker the reader has to be able to see. Not a defect and not an abstention,
+   so it carries no colour of its own -- it is the body text, said plainly. */
+.caution { font-size: 13px; max-width: var(--measure); }
 .nonanswer .act { color: var(--text); border-color: var(--field-line); }
 .nonanswer .act:hover { border-color: var(--text); }
 
