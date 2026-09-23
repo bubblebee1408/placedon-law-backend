@@ -32,13 +32,18 @@ var pending = null;     // { kind, req, card, abort? }: the one non-answer card 
 /* The request values the user set: the only things a waiting card may carry (§4.4). */
 function composerRequest() {
   var docRadio = document.querySelector('input[value="document"]');
-  var doc = docRadio.checked && base && base.context.kind === 'document';
+  // Live, a document is one the user picked from the server's public list (D3); with a
+  // ?fixture= it is that fixture's own document. Both are document turns; neither is typed.
+  var chosen = typeof chosenDocument === 'function' ? chosenDocument() : null;
+  var doc = docRadio.checked && base && base.context && base.context.kind === 'document';
   return {
     question: document.getElementById('q').value,
     as_of: base ? base.as_of : null,            // null: today, from the client clock
-    context: doc ? base.context : { kind: 'general' },
+    context: chosen ? { kind: 'document', document_date: chosen.date }
+      : doc ? base.context : { kind: 'general' },
     parent_turn_id: base ? base.parent_turn_id : null,
-    parent: base ? base.parent : null
+    parent: base ? base.parent : null,
+    document_id: chosen ? chosen.id : null
   };
 }
 
@@ -123,6 +128,46 @@ function cancelWait() {
   pending.kind = 'cancelled';
   lockComposer(null);
   status('Cancelled. ' + pending.req.question, '[data-announce]');
+}
+
+/* The engine refuses to read a document that does not say when it was made: every temporal
+ * answer compares the law at the document's date with the law now, and without one it would
+ * compare today with today. That is a DECISION, so this card is neither of the other two
+ * things it could be mistaken for -- not an abstention (nothing about the law was decided;
+ * no state, no glyph, no dashed mark, no abstention grey) and not the service error (nothing
+ * failed). The engine's own words are shown verbatim, with the reader's finding beside them,
+ * and no date is ever guessed to get past this. */
+function showDocumentRefusal(req, payload) {
+  var old = pending && pending.card;
+  var card = el('article', 'nonanswer nonanswer-refusal');
+  card.setAttribute('data-document-refusal', '');
+  var head = label('h2', 'na-head', 'Not checked: this document does not say when it was made');
+  head.id = 'na-' + (++uid);
+  head.setAttribute('tabindex', '-1');
+  card.setAttribute('aria-labelledby', head.id);
+  add(card, contextBand(req.context), head,
+    field(el('p', 'na-said', payload.detail), 'detail'));
+  if (payload.reason) add(card, field(el('p', 'caption', payload.reason), 'reason'));
+  // Looked at the 1440 and 360 shots: this line used to offer "or supply the date this one
+  // bears", which this page has no field for. A refusal must not promise a way out that does
+  // not exist, so it names only the one that does.
+  add(card, label('p', 'caption', 'No date was assumed and none was guessed. '
+    + 'Choose a document that carries its own date.'));
+  var bar = el('div', 'na-actions');
+  add(bar, actionButton('Choose another document', 'data-choose-again', function () {
+    var full = document.getElementById('composer-full');
+    if (full) full.hidden = false;
+    var sel = document.querySelector('[data-doc-select]');
+    if (sel) sel.focus();
+  }));
+  add(card, bar);
+  document.querySelector('[data-turns]').appendChild(card);
+  document.querySelector('[data-status]').textContent = '';
+  pending = null;
+  lockComposer(null);
+  head.focus();
+  status('Not checked. ' + (payload.reason || payload.detail), '[data-announce]');
+  if (old) old.remove();
 }
 
 /* ?fixture=…&state=…: the page as it stood while that fixture's request was out -- the request

@@ -701,19 +701,19 @@ async function startServer() {
 
 // A page on the live origin: only that origin is reachable; POST /v1/ask can be held, so the
 // waiting state is observed deterministically and released on cue, or answered by the check.
-async function livePage(ctx, origin) {
+async function livePage(ctx, origin, watch = '/v1/ask') {
   const page = await ctx.newPage();
   const t = { page, external: [], errors: [], csp: [], asks: [], held: [], failed: [], hold: false, reply: null };
   page.on('pageerror', e => t.errors.push(String(e)));
   // The served page must live inside its own CSP: a violation is a defect even when the page
   // still renders, and it is how the brand-font injection used to break every live check.
   page.on('console', m => { if (/content security policy/i.test(m.text())) t.csp.push(m.text()); });
-  page.on('requestfailed', r => { if (r.url().endsWith('/v1/ask')) t.failed.push(r.failure()?.errorText || 'failed'); });
+  page.on('requestfailed', r => { try { if (new URL(r.url()).pathname === watch) t.failed.push(r.failure()?.errorText || 'failed'); } catch { /* not a URL we watch */ } });
   await page.route('**/*', async r => {
     const req = r.request();
     const u = req.url();
     if (!u.startsWith(origin + '/')) { t.external.push(u); return r.abort(); }
-    if (new URL(u).pathname !== '/v1/ask') return r.continue();
+    if (new URL(u).pathname !== watch) return r.continue();
     t.asks.push({ method: req.method(), body: req.postData(), ctype: req.headers()['content-type'] || '' });
     if (t.reply) return r.fulfill(t.reply);
     if (t.hold) { t.held.push(r); return; }
@@ -906,9 +906,263 @@ async function liveFailure(ctx, origin, w, label, reply, stopServer) {
   }
 }
 
+// 15. The document path (D3): the page offers the repository's PUBLIC documents and never an
+//     upload; checking one that declares its own date renders the SERVER's document turn --
+//     scope frame first, the law-version line that says this is not the law at the document's
+//     date, the superseded row -- with the waiting card up while the request is out and Cancel
+//     aborting it; a document that does not declare a date is refused in the ENGINE's own
+//     words and is not an abstention; a server failure is check 13's service error.
+const DOC_WIDTHS = [360, 1440];
+const DOC_DATED = 'agm_notices/tcpl_62nd_agm_notice_2025';
+const DOC_UNDATED = 'icsi_specimens/09_minutes_agm_annexXVI';
+// Accepted, but with twelve date declarations the reader could not parse (PDF signature
+// stamps). Any one of them could in principle disagree with the date that was accepted, so
+// the count is an unresolved marker and must reach the reader, not sit in JSON nobody draws.
+const DOC_UNREAD = 'board_outcomes/routemobile_outcome_board_meeting_2026-05-07';
+const DOC_Q = 'Is the law this document relies on still current?';
+
+// Open the page, load the list, choose the document radio. Returns the tracker plus the
+// catalogue the server sent: every number the picker shows has to come from it.
+async function docPage(ctx, origin, w, at) {
+  const t = await livePage(ctx, origin, '/v1/ask/document');
+  const { page } = t;
+  t.list = null;
+  page.on('response', async r => {
+    try { if (new URL(r.url()).pathname === '/v1/ask/documents') t.list = await r.json(); } catch { /* not the list */ }
+  });
+  await page.goto(`${origin}/`, { waitUntil: 'load' });
+  await page.waitForSelector('[data-doc-select] option', { timeout: 30000 }).catch(() => null);
+  await page.check('input[value="document"]').catch(() => null);
+  await page.waitForTimeout(100);
+  const g = await page.evaluate(() => ({
+    files: document.querySelectorAll('input[type=file]').length,
+    drop: document.querySelectorAll('[ondrop],[data-upload],[data-dropzone]').length,
+    options: [...document.querySelectorAll('[data-doc-select] option')].map(o => o.value),
+    pickerShown: !!document.querySelector('[data-doc-picker]') && !!document.querySelector('[data-doc-picker]').offsetParent,
+    upload: (document.querySelector('[data-doc-upload]') || {}).innerText || '',
+    radioDisabled: document.querySelector('input[value="document"]').getAttribute('aria-disabled'),
+  }));
+  if (g.files || g.drop) fail(at, w, `the page offers an upload: ${g.files} file input(s), ${g.drop} drop target(s)`);
+  else pass(at, w, 'no file input and no drop target anywhere on the page');
+  if (!g.pickerShown || g.options.length < 20 || !g.options.includes(DOC_DATED) || !g.options.includes(DOC_UNDATED)) fail(at, w, `the public document list is not offered: ${g.options.length} option(s), shown ${g.pickerShown}`);
+  else pass(at, w, `the public document list is the only way in (${g.options.length} documents)`);
+  if (!/no upload/i.test(g.upload) || !/nothing confidential/i.test(g.upload)) fail(at, w, `the no-upload refusal is not shown: ${JSON.stringify(g.upload)}`);
+  else pass(at, w, 'the no-upload refusal is shown where someone would look for one');
+  if (g.radioDisabled === 'true') fail(at, w, 'the document choice is still disabled although the list loaded');
+  else pass(at, w, 'the document choice is live once the list has loaded');
+  if (t.list && t.list.documents && t.list.documents.length && t.list.documents.every(d => (d.path || '').startsWith('corpus/testdocs/'))) pass(at, w, 'every document offered lives under corpus/testdocs/');
+  else fail(at, w, 'the list the page loaded is not the public corpus');
+  return t;
+}
+
+async function checkDocument(ctx, origin, w, docId, expect) {
+  const at = `doc ${expect}`;
+  const t = await docPage(ctx, origin, w, at);
+  const { page } = t;
+  await page.selectOption('[data-doc-select]', docId).catch(() => null);
+  t.hold = true;
+  await page.fill('[data-composer] textarea', DOC_Q);
+  await page.focus('[data-composer] textarea');
+  await page.keyboard.press('Enter');
+  for (let i = 0; i < 100 && !t.held.length; i++) await page.waitForTimeout(50);
+  const sent = t.asks[0];
+  let body = null;
+  try { body = JSON.parse((sent && sent.body) || 'null'); } catch { body = null; }
+  const shape = body && JSON.stringify(Object.keys(body).sort()) === '["document_id","question"]'
+    && body.document_id === docId && body.question === DOC_Q;
+  if (t.asks.length !== 1 || !sent || sent.method !== 'POST' || !shape) fail(at, w, `Ask did not POST {document_id, question} once to /v1/ask/document: ${JSON.stringify(t.asks).slice(0, 200)}`);
+  else pass(at, w, 'Ask POSTs {document_id, question} once to /v1/ask/document, and no document text');
+  const f = await naFacts(page);
+  if (f.kind !== 'waiting' || !f.focusCancel || !f.boxLocked) fail(at, w, `no waiting card with focus on Cancel while the document check runs (${f.kind})`);
+  else pass(at, w, 'the ASK-3 waiting card is up, composer locked, while the check runs');
+
+  const replyP = t.held.length ? page.waitForResponse(r => new URL(r.url()).pathname === '/v1/ask/document').catch(() => null) : null;
+  t.hold = false;
+  await release(t);
+  const reply = replyP ? await replyP : null;
+  const r = reply ? await reply.json().catch(() => ({})) : {};
+  const allowed = fixtureNumbers({ payload: r, list: t.list });
+
+  if (expect === 'checked') {
+    await page.waitForSelector('[data-state]', { timeout: 30000 }).catch(() => null);
+    const g = await page.evaluate(() => {
+      const card = document.querySelector('article[data-state]');
+      const order = card ? [...card.querySelectorAll('[data-group],[data-document]')]
+        .map(e => e.hasAttribute('data-document') ? 'document' : e.innerText.trim()) : [];
+      const q = s => (card && card.querySelector(s)) || null;
+      return {
+        states: [...document.querySelectorAll('[data-state]')].map(e => e.getAttribute('data-state')),
+        origin: card && card.getAttribute('data-origin'),
+        band: q('.band') && q('.band').innerText,
+        doc: q('[data-document]') && q('[data-document]').innerText,
+        order,
+        lawVersionText: q('[data-law-version]') && q('[data-law-version]').innerText,
+        superseded: document.querySelectorAll('[data-superseded-item]').length,
+        nonanswer: document.querySelectorAll('[data-nonanswer],[data-document-refusal]').length,
+        locked: document.querySelector('[data-composer] textarea').readOnly,
+      };
+    });
+    const turn = r.turn || {};
+    if (!reply || reply.status() !== 200 || turn.schema !== 'placedon.ask/0') fail(at, w, `server replied ${reply ? reply.status() : 'nothing'}, not a placedon.ask/0 turn`);
+    else pass(at, w, `the server returned a placedon.ask/0 document turn (${turn.state})`);
+    if (g.states.length !== 1 || g.states[0] !== turn.state || g.origin !== 'live') fail(at, w, `rendered ${JSON.stringify(g.states)} (${g.origin}), not the server's ${turn.state}`);
+    else pass(at, w, `renders the server's ${turn.state}, as a live turn`);
+    const title = (r.document && r.document.title) || 'no title in the reply';
+    if (!/About the open document . dated/.test(g.band || '') || !g.doc || g.doc.indexOf(title) === -1) fail(at, w, `the card does not say which document it checked: band ${JSON.stringify(g.band)}, block ${JSON.stringify((g.doc || '').slice(0, 60))}`);
+    else pass(at, w, 'the card names the document it checked and the date it bears');
+    if (!/placeholder/i.test(g.doc || '')) fail(at, w, 'the card does not say the company profile was a placeholder the demo supplied');
+    else pass(at, w, 'the placeholder profile is declared on the card, not implied away');
+    const firstGroup = g.order.filter(x => x !== 'document')[0];
+    if (firstGroup !== 'Scope of this check') fail(at, w, `the scope frame does not lead the findings (first was ${JSON.stringify(firstGroup)})`);
+    else pass(at, w, 'the scope frame leads: what was checked, and what was not');
+    if (!/not the law as it stood|CANNOT supply|not a point-in-time/i.test(g.lawVersionText || '')) fail(at, w, `the law-version line does not say this is not the law at the document's date: ${JSON.stringify((g.lawVersionText || '').slice(0, 120))}`);
+    else pass(at, w, "law version: says it is not the law as it stood on the document's date");
+    if ((turn.superseded || []).length && !g.superseded) fail(at, w, 'the server reported a superseded instrument and the card does not show it');
+    else pass(at, w, `superseded rows rendered (${g.superseded})`);
+    if (g.nonanswer || g.locked) fail(at, w, `after the turn: ${g.nonanswer} non-answer card(s), composer locked ${g.locked}`);
+    else pass(at, w, 'the waiting card is gone and the composer is usable again');
+  } else {
+    await page.waitForSelector('[data-document-refusal]', { timeout: 30000 }).catch(() => null);
+    const g = await page.evaluate(() => {
+      const card = document.querySelector('[data-document-refusal]');
+      const cs = card && getComputedStyle(card);
+      return {
+        n: document.querySelectorAll('[data-document-refusal]').length,
+        states: document.querySelectorAll('[data-state]').length,
+        glyphs: document.querySelectorAll('[data-document-refusal] svg').length,
+        text: card ? card.innerText : '',
+        tag: card && card.tagName,
+        h2: card && card.querySelector('h2') ? card.querySelector('h2').innerText.trim() : null,
+        dashed: cs ? /dashed/.test(cs.borderStyle) : true,
+        abstainHue: cs ? /91,\s*100,\s*114/.test(cs.borderColor + cs.backgroundColor) : true,
+        errorCard: document.querySelectorAll('[data-nonanswer="error"]').length,
+        box: document.querySelector('[data-composer] textarea').value,
+        locked: document.querySelector('[data-composer] textarea').readOnly,
+      };
+    });
+    const engineWords = r.detail || '';
+    if (!reply || reply.status() !== 422 || r.error !== 'no_document_date') fail(at, w, `server replied ${reply ? reply.status() : 'nothing'} ${r.error}, expected 422 no_document_date`);
+    else pass(at, w, 'a document that declares no date is refused by the server, not checked');
+    if (g.n !== 1 || g.tag !== 'ARTICLE' || !g.h2) fail(at, w, `expected one refusal article with its own h2, got ${g.n} (${g.tag})`);
+    else if (!engineWords || g.text.indexOf(engineWords) === -1) fail(at, w, `the refusal does not carry the engine's own words: ${JSON.stringify(g.text.slice(0, 140))}`);
+    else pass(at, w, "the refusal carries the engine's own words, verbatim");
+    if (r.reason && g.text.indexOf(r.reason) === -1) fail(at, w, 'the refusal does not say what the reader found in the document');
+    else pass(at, w, 'the refusal also says what the reader found');
+    if (g.states || g.glyphs || g.dashed || g.abstainHue) fail(at, w, `the refusal reads as an abstention: ${g.states} state(s), ${g.glyphs} glyph(s), dashed ${g.dashed}, abstention grey ${g.abstainHue}`);
+    else pass(at, w, 'the refusal is not an abstention: no state, no glyph, no dashed or grey abstention mark');
+    if (g.errorCard) fail(at, w, 'the refusal was rendered as the service error, which is a different thing');
+    else pass(at, w, 'the refusal is not the service error either');
+    if (!/no date was assumed/i.test(g.text)) fail(at, w, 'the refusal does not say that no date was assumed');
+    else pass(at, w, 'the refusal says plainly that no date was assumed');
+    if (g.box !== DOC_Q || g.locked) fail(at, w, `after the refusal: box ${JSON.stringify(g.box)}, locked ${g.locked}`);
+    else pass(at, w, 'the question stays in the box and the composer is usable');
+  }
+
+  const invented = await inventedNumbers(page, allowed);
+  if (invented.length) fail(at, w, `numbers on screen the server did not supply: ${invented.slice(0, 8).join(', ')}`);
+  else pass(at, w, "every number traceable to the server's own reply or list");
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
+  if (overflow) fail(at, w, 'horizontal overflow'); else pass(at, w, 'no overflow');
+  const motion = await worstMotion(page);
+  if (motion > 200 || (w === 360 && motion > 0)) fail(at, w, `motion ${motion}ms`); else pass(at, w, 'motion within limits');
+  if (shots) await page.screenshot({ path: join(shots, `doc-${expect}-${w}.png`), fullPage: true });
+  if (t.errors.length || t.external.length || t.csp.length) fail(at, w, `page errors, network or CSP: ${[...t.errors, ...t.external, ...t.csp].join(' | ').slice(0, 200)}`);
+  else pass(at, w, 'no page errors, no CSP violation; nothing left this origin');
+  await page.close();
+}
+
+{
+  const b5 = await chromium.launch({ executablePath: exe, headless: true });
+  let srv = null;
+  try {
+    srv = await startServer();
+    for (const w of DOC_WIDTHS) {
+      const ctx = await b5.newContext({ viewport: { width: w, height: 900 }, reducedMotion: w === 360 ? 'reduce' : 'no-preference' });
+      await checkDocument(ctx, srv.origin, w, DOC_DATED, 'checked');
+      await checkDocument(ctx, srv.origin, w, DOC_UNDATED, 'refused');
+
+      // A marker the engine kept must reach the reader, or it was dropped after all.
+      {
+        const at = 'doc unread marker';
+        const t = await docPage(ctx, srv.origin, w, at);
+        const { page } = t;
+        await page.selectOption('[data-doc-select]', DOC_UNREAD).catch(() => null);
+        await page.fill('[data-composer] textarea', DOC_Q);
+        await page.focus('[data-composer] textarea');
+        await page.keyboard.press('Enter');
+        const reply = await page.waitForResponse(r => new URL(r.url()).pathname === '/v1/ask/document').catch(() => null);
+        const r = reply ? await reply.json().catch(() => ({})) : {};
+        await page.waitForSelector('[data-state]', { timeout: 30000 }).catch(() => null);
+        const txt = await page.evaluate(() => {
+          const d = document.querySelector('[data-document]');
+          return d ? d.innerText : '';
+        });
+        const n = (r.document || {}).declarations_unread;
+        if (!n) fail(at, w, `expected unread date declarations on this document, the server said ${n}`);
+        else if (txt.indexOf(String(n)) === -1 || !/could not be read/i.test(txt)) fail(at, w, `the card does not tell the reader that ${n} date declarations could not be read: ${JSON.stringify(txt.slice(0, 160))}`);
+        else pass(at, w, `the unresolved marker reaches the reader (${n} unread date declarations, named on the card)`);
+        await page.close();
+      }
+
+      // Cancel aborts a document check, exactly as it aborts a question.
+      {
+        const at = 'doc cancel';
+        const t = await docPage(ctx, srv.origin, w, at);
+        const { page } = t;
+        await page.selectOption('[data-doc-select]', DOC_DATED).catch(() => null);
+        t.hold = true;
+        await page.fill('[data-composer] textarea', DOC_Q);
+        await page.focus('[data-composer] textarea');
+        await page.keyboard.press('Enter');
+        for (let i = 0; i < 100 && !t.held.length; i++) await page.waitForTimeout(50);
+        await pressOn(page, '[data-cancel]');
+        for (let i = 0; i < 100 && !t.failed.length; i++) await page.waitForTimeout(50);
+        await release(t);
+        await page.waitForTimeout(300);
+        const f = await naFacts(page);
+        const extra = await page.evaluate(() => document.querySelectorAll('[data-state],[data-document-refusal]').length);
+        if (!t.failed.length) fail(at, w, 'Cancel did not abort the document check');
+        else if (f.kind !== 'cancelled' || extra) fail(at, w, `after Cancel: ${f.kind}, ${extra} turn/refusal card(s)`);
+        else pass(at, w, 'Cancel aborts the document check; nothing is rendered from it');
+        await page.close();
+      }
+
+      // A failure on the document route is the service error, never an abstention.
+      const FAILURES = [
+        ['doc reply 500', { status: 500, contentType: 'application/json', body: '{"error":"engine_failure"}' }],
+        ['doc reply not a turn', { status: 200, contentType: 'application/json', body: '{"document":{"id":"x"},"turn":{"schema":"placedon.ask/1","state":"answered"}}' }],
+      ];
+      for (const pair of FAILURES) {
+        const at = pair[0];
+        const t = await docPage(ctx, srv.origin, w, at);
+        const { page } = t;
+        await page.selectOption('[data-doc-select]', DOC_DATED).catch(() => null);
+        t.reply = pair[1];
+        await page.fill('[data-composer] textarea', DOC_Q);
+        await page.focus('[data-composer] textarea');
+        await page.keyboard.press('Enter');
+        await page.waitForSelector('[data-nonanswer="error"]', { timeout: 30000 }).catch(() => null);
+        const f = await naFacts(page);
+        if (f.kind !== 'error' || f.states || !f.focusHead) fail(at, w, `expected "No result", got ${f.kind} (${f.states} state(s))`);
+        else pass(at, w, `${at}: the service error, not a state and not a refusal`);
+        await checkNonAnswer(page, 'error', DOC_Q, null, w, at);
+        if (shots && w === 1440) await page.screenshot({ path: join(shots, `doc-${at.replace(/\W+/g, '-')}-${w}.png`), fullPage: true });
+        await page.close();
+      }
+      await ctx.close();
+    }
+  } catch (e) {
+    fail('doc', 0, `the document path could not run: ${String(e).slice(0, 300)}`);
+  } finally {
+    if (srv && alive(srv.proc)) { srv.proc.kill('SIGTERM'); await srv.exited; }
+    await b5.close();
+  }
+}
+
 const failed = results.filter(r => !r.ok);
 for (const r of failed) console.log(`FAIL ${r.fx} @${r.w}: ${r.msg}`);
 console.log(`ACCEPTANCE ${results.length - failed.length}/${results.length} checks passed across ${fixtures.length} fixtures x ${WIDTHS.length} widths, `
   + `the empty state, ${NA_STATES.length} non-answer states x ${fixtures.length + 1} requests x ${NA_WIDTHS.length} widths, `
-  + `and live mode (${LIVE_QUESTIONS.length} questions, cancel, 4 failures, 2 params) x ${LIVE_WIDTHS.length} widths`);
+  + `live mode (${LIVE_QUESTIONS.length} questions, cancel, 4 failures, 2 params) x ${LIVE_WIDTHS.length} widths, `
+  + `and the document path (checked, refused, unread marker, cancel, 2 failures) x ${DOC_WIDTHS.length} widths`);
 process.exit(failed.length ? 1 : 0);
