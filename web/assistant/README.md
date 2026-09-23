@@ -93,12 +93,23 @@ else's OCR, left unrepaired) is counted as `declarations_unread` and **printed o
 `routemobile_outcome_board_meeting_2026-05-07` is checked at 07-May-2026 and says, in the card,
 that twelve further date lines could not be read and one of them could name a different date.
 
-**The company profile is a placeholder, and the card says so.** `api._profile` requires
-`company_class` and `incorporation_date`; these filings state no incorporation date and this demo
-will not invent a company. No company facts and no evidence are sent, so every obligation row
-comes back `APPLIES_UNDETERMINED` or `CANNOT_DETERMINE` — `scripts/serve_ask.py --test` asserts
-that rather than assuming it. What the turn decides is the law the document rests on, not whether
-anybody complied.
+**The company profile is a placeholder, and the card says exactly what it decided.**
+`api._profile` requires `company_class` and `incorporation_date`; these filings state no
+incorporation date, so the profile is the demo's own input. It was claimed here that it could
+decide nothing. **That was false** (D3 check 2, finding 2): `company_class: "public"` alone
+decides `s.2(85)` as `DOES_NOT_APPLY` — "a public company is never a small company" — on any
+document dated after G.S.R. 880(E), while a 2025 document hides it because `s.2(85)` lands in
+`superseded` instead. Measured: no class → `400`; `public` → decides that one row; `private` →
+decides none. `public` is kept, because every real filing here is a listed public company's and
+choosing `private` would buy a quieter card with a fact known to be false of every document on
+the list. The claim is what changed: `_profile_decides()` computes which rows the profile decided
+and the note names them, so the sentence cannot drift from the register. What the turn decides is
+**whether the legal basis of each obligation moved between the date the document declares and
+today** — not what law the document rests on, which nothing here established.
+
+`date_quote` is the declaration line verbatim in the payload; HTML collapses runs of whitespace,
+so a doubled space inside a date (`Date: July 19,  2024`) reads as one on screen. `date_line` is
+the line **in the file**, header included, so `sed -n '<line>p' <path>` opens it.
 
 **Live mode is loopback-only.** Opened from a file, or served from any host but 127.0.0.1 /
 localhost, the page sends nothing and behaves exactly as it did before: fixtures, and a status line

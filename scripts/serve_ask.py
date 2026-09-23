@@ -73,20 +73,73 @@ NO_UPLOAD = (
 UPLOAD_FIELDS = frozenset({"document", "documents", "text", "content", "body", "file",
                            "filename", "path", "upload", "pdf", "base64", "data", "url"})
 # checker/api.py's document check needs a company profile to decide which obligations are in
-# the frame (_profile requires company_class and incorporation_date). These filings state no
-# incorporation date, and this demo will not invent a company -- so the profile is a DECLARED
-# PLACEHOLDER, named as one in every response and on the page. It cannot produce a finding
-# about anybody: no evidence is sent with it, so every obligation row comes back
-# APPLIES_UNDETERMINED or CANNOT_DETERMINE (asserted by this file's own test). What the turn
-# reports -- the scope frame, the superseded instrument, the law-version line -- is a property
-# of the LAW at the document's date, not of this profile.
+# the frame: api._profile requires company_class and incorporation_date. These filings state no
+# incorporation date, so the profile is a DECLARED PLACEHOLDER, named as one everywhere.
+#
+# It was claimed here -- and in the README, the commit body and the note the page draws -- that
+# it could not decide anything. **That was false, and the D3 verifier proved it.** Measured:
+#
+#   company_class absent  -> 400 "missing required field: 'company_class'"
+#   company_class public  -> 200, decides s.2(85) DOES_NOT_APPLY, "a public company is never
+#                            a small company"
+#   company_class private -> 200, decides nothing
+#
+# So there are exactly two choices, and "supply no class" is not one of them without changing
+# api._profile, which is another job's file and a contract change.
+#
+# **`public` is kept and the false claim is dropped instead.** Every real filing in this corpus
+# is a listed public company's -- the manifest says five distinct listed issuers, and each
+# document is addressed to BSE Limited and the National Stock Exchange on its own face -- so
+# `public` is the one class the corpus supports. Switching to `private` would buy a quieter
+# card by supplying a fact known to be FALSE of every document on the list, so that an
+# obligation resolves the way that looks tidier. That is the failure this product exists to
+# detect, and it would be this repository committing it.
+#
+# What was wrong was the sentence, not the class. `_profile_decides()` now COMPUTES which rows
+# the profile decided on its own and the note names them, so the claim cannot drift from the
+# register: if s.2(85) stops resolving, the sentence changes with it.
 PLACEHOLDER_PROFILE = {"company_class": "public", "incorporation_date": "2014-04-01"}
-PLACEHOLDER_NOTE = (
-    "The company profile used for this check is a placeholder this demo supplied. It was not "
-    "read from the document, which states no incorporation date, and it says nothing about "
-    "the issuer. No company facts and no evidence were sent, so no row below decides whether "
-    "anyone complied \u2014 each is undetermined. What is decided here is the law the document "
-    "rests on.")
+# The only two row states that decide nothing about anybody. Anything else is a decision, and
+# a decision reached from the placeholder alone has to be named as one.
+UNDECIDED = ("APPLIES_UNDETERMINED", "CANNOT_DETERMINE")
+_PROFILE_SUPPLIED = (
+    "The company profile used for this check was supplied by this demo, not read from the "
+    "document: these filings state no incorporation date. No company facts beyond the class "
+    "and no evidence were sent with it. ")
+# Not "the law the document rests on" (finding 5): nothing here established what law it rests
+# on. Its date chose which two register snapshots were compared, and that comparison is the
+# whole of what this turn decides.
+_WHAT_IS_DECIDED = (
+    "What is decided here is whether the legal basis of each obligation moved between the date "
+    "this document declares and today.")
+
+
+def _profile_decides(turn: dict) -> list[dict]:
+    """The rows the placeholder profile decided on its own, with the engine's own basis.
+
+    Nothing the document says reached these. No evidence was sent, so the only input that
+    could have decided them is the profile this demo supplied, and a card that shows them has
+    to say so.
+    """
+    rows = (turn.get("rows") or []) + (turn.get("confirmed") or [])
+    return [{"provision": r.get("provision"), "duty": r.get("duty"),
+             "state": r.get("state"), "basis": r.get("basis")}
+            for r in rows if r.get("state") not in UNDECIDED]
+
+
+def _profile_note(decides: list[dict]) -> str:
+    """What the placeholder is, and exactly what it decided -- never a claim that it decided
+    nothing, which is the sentence that was false."""
+    if not decides:
+        return (_PROFILE_SUPPLIED + "No row below is decided about any company \u2014 each is "
+                "undetermined. " + _WHAT_IS_DECIDED)
+    many = len(decides) != 1
+    named = "; ".join(f"{d['provision']} \u2014 {d['basis']}" for d in decides)
+    return (_PROFILE_SUPPLIED + f"{len(decides)} row{'s' if many else ''} below "
+            f"{'are' if many else 'is'} decided by that profile alone, and by nothing this "
+            f"document says: {named}. Every other row is undetermined. " + _WHAT_IS_DECIDED)
+
+
 TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
          ".css": "text/css; charset=utf-8", ".json": "application/json; charset=utf-8",
          ".md": "text/plain; charset=utf-8"}
@@ -208,8 +261,10 @@ def document_turn(body, *, generated_at: str) -> tuple[int, dict]:
     status, turn = handle("POST", ROUTE, request, generated_at=generated_at)
     if status != 200:
         return status, turn          # the api's own 400 / withheld 500, unchanged
+    decides = _profile_decides(turn)
     return 200, {"document": dict(entry, profile=dict(PLACEHOLDER_PROFILE),
-                                  profile_note=PLACEHOLDER_NOTE),
+                                  profile_decides=decides,
+                                  profile_note=_profile_note(decides)),
                  "turn": turn}
 
 
@@ -655,13 +710,43 @@ def _test() -> int:
               f"...and the instrument that moved under this document "
               f"({[x.get('governs_now', '')[:20] for x in turn.get('superseded') or []]})")
         check(turn.get("uses_model") is False, "no model is called on the document path")
-        decided = {x.get("state") for x in (turn.get("rows") or []) + (turn.get("confirmed") or [])}
-        check(decided and decided <= {"APPLIES_UNDETERMINED", "CANNOT_DETERMINE"},
-              f"the placeholder profile decides nothing about any company ({sorted(decided)})")
+        # NOT "the profile decides nothing about any company": it decides s.2(85) on a 2026
+        # document, and the single 2025 document this test used to run made that claim look
+        # true, because there s.2(85) lands in `superseded` instead. The claim is replaced by
+        # the invariant that survives a changing register -- whatever it decides is NAMED --
+        # checked across four documents spanning both years (D3 verifier, finding 2).
+        spans = ["agm_notices/tcpl_62nd_agm_notice_2025",            # 2025: s.2(85) superseded
+                 "agm_notices/routemobile_22nd_agm_notice_2026",     # 2026: s.2(85) decided
+                 "agm_notices/tataelxsi_37th_agm_notice_2026",
+                 "board_outcomes/routemobile_outcome_board_meeting_2024-05-29"]
+        unnamed, silent, ever = [], [], False
+        for doc_id in spans:
+            st, _, rr = raw(port, "POST", "/v1/ask/document",
+                            json.dumps({"document_id": doc_id}).encode())
+            rr = json.loads(rr)
+            t2, d2 = rr.get("turn") or {}, rr.get("document") or {}
+            rows = (t2.get("rows") or []) + (t2.get("confirmed") or [])
+            got = {(x.get("provision"), x.get("state")) for x in rows
+                   if x.get("state") not in UNDECIDED}
+            named = {(x.get("provision"), x.get("state"))
+                     for x in d2.get("profile_decides") or []}
+            ever = ever or bool(got)
+            if st != 200 or got != named:
+                unnamed.append((doc_id, sorted(got), sorted(named)))
+            if ("decided by that profile alone" in d2.get("profile_note", "")) != bool(got):
+                silent.append((doc_id, len(got)))
+        check(not unnamed,
+              f"every row the placeholder decides is named as one, in both years ({unnamed[:2]})")
+        check(not silent,
+              f"...and the note says so exactly when there is something to say ({silent[:2]})")
+        check(ever, "at least one document in the span really does have a row decided by the "
+                    "profile -- otherwise this check would pass on a register deciding nothing")
+        check("the law the document rests on" not in json.dumps(r),
+              "the note does not claim to have established what law the document rests on")
         doc = r.get("document") or {}
         check(doc.get("id") == DATED and doc.get("profile") == PLACEHOLDER_PROFILE
-              and "placeholder" in doc.get("profile_note", ""),
-              "the response names the document and says the profile was a placeholder")
+              and "supplied by this demo" in doc.get("profile_note", ""),
+              "the response names the document and says the profile was the demo's own")
         check(bool(r.get("turn")) and "state" not in r and "schema" not in r,
               "the demo's own metadata rides beside the turn, never inside it")
         st, h, r2 = raw(port, "POST", "/v1/ask/document",
