@@ -19,6 +19,18 @@ absolute, backslash, NUL, symlink). A port already in use is refused, never shar
 POST /v1/ask goes to checker.api.handle in-process, so its 200s, 400s and its withheld 500
 (`contract_violation`) keep the api's own shapes. The route lets an engine failure propagate
 (contract §6 D12); here it becomes a 500 with no `state` -- never an answer or an abstention.
+
+GET /v1/ask/documents and POST /v1/ask/document (D3) check ONE OF THIS REPOSITORY'S PUBLIC
+TEST DOCUMENTS. They live under /v1/ask because what they return is a `placedon.ask/0` turn
+-- the contract /v1/ask already serves -- and NOT at /v1/document, which sits one character
+from checker/api.py's existing /v1/document-check, a different request and a different shape.
+They also belong to this server rather than to the api: they read files under corpus/testdocs/,
+and checker/api.py has no filesystem document access and must not gain one.
+
+**There is no upload, and there will not be one.** The founder's rule is that no client or
+confidential document goes anywhere; an upload box in a demo invites exactly that, and a demo
+is where a lawyer would first try it. A body carrying document text is refused with NO_UPLOAD
+and nothing is read from it.
 """
 import errno
 import json
@@ -33,13 +45,48 @@ from urllib.parse import unquote
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from checker.api import handle  # noqa: E402 -- after the path insert, as in serve_api.py
+from checker import document_date  # noqa: E402 -- after the path insert, as in serve_api.py
+from checker.api import handle  # noqa: E402
+from checker.orchestrator import NO_DOCUMENT_DATE  # noqa: E402
+# D5's enumerator, imported read-only and never edited here. ONE list answers "is this
+# document public": a second copy would be a second answer to the only question that
+# keeps a confidential document out, and it refuses any path outside corpus/testdocs/.
+from eval.prelabel.corpus import load_all as load_public_documents  # noqa: E402
 
 HOST = "127.0.0.1"
 DEFAULT_PORT = 8021
 ROOT = Path(__file__).resolve().parent.parent / "web" / "assistant"
 MAX_BODY = 256 * 1024         # serve_api.py's cap: a question is small
 ROUTE = "/v1/ask"
+DOC_ROUTE = "/v1/ask/document"          # check one public test document -> a document turn
+DOC_LIST_ROUTE = "/v1/ask/documents"    # the list the page offers; the only way in
+POST_ROUTES = (ROUTE, DOC_ROUTE)
+DOC_REQUEST_KEYS = frozenset({"document_id", "question"})
+DEFAULT_DOC_QUESTION = "Is the law this document relies on still current?"
+NO_UPLOAD = (
+    "There is no upload here, by design. This demo checks the public documents held in "
+    "this repository (corpus/testdocs/) and nothing else: no client document, nothing "
+    "confidential and nothing you hold is sent anywhere by this page. Choose one of the "
+    "listed documents instead.")
+# A body naming any of these is trying to send a document, whatever it holds. Refused by the
+# NAME, before the value is looked at, so the refusal cannot depend on reading what arrived.
+UPLOAD_FIELDS = frozenset({"document", "documents", "text", "content", "body", "file",
+                           "filename", "path", "upload", "pdf", "base64", "data", "url"})
+# checker/api.py's document check needs a company profile to decide which obligations are in
+# the frame (_profile requires company_class and incorporation_date). These filings state no
+# incorporation date, and this demo will not invent a company -- so the profile is a DECLARED
+# PLACEHOLDER, named as one in every response and on the page. It cannot produce a finding
+# about anybody: no evidence is sent with it, so every obligation row comes back
+# APPLIES_UNDETERMINED or CANNOT_DETERMINE (asserted by this file's own test). What the turn
+# reports -- the scope frame, the superseded instrument, the law-version line -- is a property
+# of the LAW at the document's date, not of this profile.
+PLACEHOLDER_PROFILE = {"company_class": "public", "incorporation_date": "2014-04-01"}
+PLACEHOLDER_NOTE = (
+    "The company profile used for this check is a placeholder this demo supplied. It was not "
+    "read from the document, which states no incorporation date, and it says nothing about "
+    "the issuer. No company facts and no evidence were sent, so no row below decides whether "
+    "anyone complied \u2014 each is undetermined. What is decided here is the law the document "
+    "rests on.")
 TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
          ".css": "text/css; charset=utf-8", ".json": "application/json; charset=utf-8",
          ".md": "text/plain; charset=utf-8"}
@@ -80,6 +127,76 @@ def static_path(root: Path, target: str) -> Path | None:
     if not candidate.is_relative_to(base) or not candidate.is_file():
         return None
     return candidate if candidate.suffix in TYPES else None
+
+
+_CATALOGUE: dict[str, dict] | None = None
+
+
+def _entry(doc) -> dict:
+    """One public document as the page sees it: what it is, and the date it declares."""
+    reading = document_date.read(doc.text)
+    return {"id": doc.doc_id, "title": doc.title, "kind": doc.kind, "source": doc.source,
+            "path": doc.path, "chars": doc.chars,
+            "date": reading.value.isoformat() if reading.value else None,
+            "date_line": reading.line, "date_quote": reading.quote,
+            "declarations_unread": reading.unread,
+            "why_no_date": reading.why}
+
+
+def catalogue() -> dict[str, dict]:
+    """Every public test document, by id. Read once: the files do not change under a run."""
+    global _CATALOGUE
+    if _CATALOGUE is None:
+        _CATALOGUE = {d.doc_id: _entry(d) for d in load_public_documents()}
+    return _CATALOGUE
+
+
+def document_turn(body, *, generated_at: str) -> tuple[int, dict]:
+    """POST /v1/ask/document -> (status, payload). No model is called on this path.
+
+    200 is `{"document": <the entry, plus the placeholder profile>, "turn": <placedon.ask/0>}`.
+    The turn is exactly what /v1/ask returns and carries no key the contract does not
+    describe; this demo's own metadata rides beside it, never inside it.
+    """
+    if not isinstance(body, dict):
+        return 400, {"error": "bad_request", "detail": "request body must be a JSON object"}
+    sending = sorted(set(body) & UPLOAD_FIELDS)
+    if sending:
+        return 400, {"error": "upload_refused", "detail": NO_UPLOAD, "fields": sending}
+    unknown = sorted(set(body) - DOC_REQUEST_KEYS)
+    if unknown:
+        return 400, {"error": "bad_request",
+                     "detail": f"unknown field(s): {', '.join(unknown)}. This route takes "
+                               f"{', '.join(sorted(DOC_REQUEST_KEYS))}"}
+    doc_id = body.get("document_id")
+    if not isinstance(doc_id, str) or not doc_id.strip():
+        return 400, {"error": "bad_request",
+                     "detail": "'document_id' names one of the documents "
+                               f"GET {DOC_LIST_ROUTE} lists"}
+    entry = catalogue().get(doc_id)
+    if entry is None:
+        # The id, not the value of anything read: an unknown id is a client bug, and this
+        # message must never become a way to ask whether a path exists on this machine.
+        return 404, {"error": "not_found",
+                     "detail": f"no public test document is named {doc_id!r}. "
+                               f"GET {DOC_LIST_ROUTE} lists every one this demo will check"}
+    if entry["date"] is None:
+        # The engine's own words for this refusal, not this file's: the orchestrator will not
+        # run without a document date, and a guessed one would silently move the law the
+        # check is run against. `reason` is what the reader found, which is a different fact.
+        return 422, {"error": "no_document_date", "detail": NO_DOCUMENT_DATE,
+                     "reason": entry["why_no_date"], "document": entry}
+    request = {"question": body.get("question", DEFAULT_DOC_QUESTION),
+               "as_of": generated_at[:10],
+               "context": {"kind": "document", "document_date": entry["date"]},
+               "facts": dict(PLACEHOLDER_PROFILE, document_date=entry["date"],
+                             as_of=generated_at[:10])}
+    status, turn = handle("POST", ROUTE, request, generated_at=generated_at)
+    if status != 200:
+        return status, turn          # the api's own 400 / withheld 500, unchanged
+    return 200, {"document": dict(entry, profile=dict(PLACEHOLDER_PROFILE),
+                                  profile_note=PLACEHOLDER_NOTE),
+                 "turn": turn}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -124,6 +241,9 @@ class Handler(BaseHTTPRequestHandler):
         if not self._same_origin():
             self._json(403, {"error": "forbidden", "detail": "not this server's origin"})
             return
+        if self.path.split("?", 1)[0].rstrip("/") == DOC_LIST_ROUTE:
+            self._json(200, {"documents": list(catalogue().values()), "no_upload": NO_UPLOAD})
+            return
         path = static_path(self.server.root, self.path)
         if path is None:
             self._json(404, {"error": "not_found", "detail": "no such file"})
@@ -136,9 +256,11 @@ class Handler(BaseHTTPRequestHandler):
         if not self._same_origin():
             self._json(403, {"error": "forbidden", "detail": "not this server's origin"})
             return
-        if self.path.split("?", 1)[0].rstrip("/") != ROUTE:
+        route = self.path.split("?", 1)[0].rstrip("/")
+        if route not in POST_ROUTES:
             self._json(404, {"error": "not_found",
-                             "detail": f"this server forwards POST {ROUTE} only"})
+                             "detail": "this server takes POST "
+                                       + " and ".join(POST_ROUTES) + " only"})
             return
         try:
             body = self._read_body()
@@ -149,14 +271,16 @@ class Handler(BaseHTTPRequestHandler):
             self._json(400, {"error": "bad_request", "detail": f"invalid JSON body: {e}"})
             return
         try:
-            status, resp = handle("POST", ROUTE, body, generated_at=self._now())
+            status, resp = (document_turn(body, generated_at=self._now())
+                            if route == DOC_ROUTE
+                            else handle("POST", ROUTE, body, generated_at=self._now()))
         except BaseException as e:  # noqa: BLE001 -- D12: the route lets every engine failure out
             # BaseException, not Exception: an engine that raises SystemExit or
             # KeyboardInterrupt otherwise left the client with no reply at all and printed a
             # traceback carrying this path. The caller is answered first; a shutdown signal
             # is then re-raised so the server still stops.
             # The type only: the message could quote the request, and the log never does.
-            sys.stderr.write(f"engine failure on POST {ROUTE}: {type(e).__name__}\n")
+            sys.stderr.write(f"engine failure on POST {route}: {type(e).__name__}\n")
             self._json(500, dict(ENGINE_FAILURE))
             if isinstance(e, (KeyboardInterrupt, SystemExit)):
                 # Answer first, then stop -- but by ASKING the server to stop rather than
@@ -471,6 +595,136 @@ def _test() -> int:
               f"a text-only s.173 question -> partial with s.173's text, no row decided "
               f"({st}, {r.get('state')}, {refs})")
         check(r.get("uses_model") is False, "no model was used")
+
+        # ── the public document list, and checking one (D3) ───────────────────
+        # There is no upload and no way to reach a file this repository does not hold.
+        st, h, r = raw(port, "GET", "/v1/ask/documents")
+        docs = json.loads(r) if st == 200 else {}
+        listed = {d["id"]: d for d in docs.get("documents", [])}
+        public = {d.doc_id for d in load_public_documents()}
+        check(st == 200 and listed and set(listed) == public,
+              f"the list is every public corpus document and nothing else "
+              f"({st}, {len(listed)} listed, {len(public)} public)")
+        check("no upload" in docs.get("no_upload", "").lower()
+              or "There is no upload" in docs.get("no_upload", ""),
+              "the list carries the refusal the page shows if anyone tries to upload")
+        check(bool(listed) and all(d["path"].startswith("corpus/testdocs/") for d in listed.values()),
+              "every listed document lives under corpus/testdocs/")
+        check(bool(listed) and not any(k in d for d in listed.values()
+                                       for k in ("text", "content", "body")),
+              "the list carries no document text -- it is a menu, not a copy")
+
+        # A document that declares its date is checked against that date.
+        DATED = "agm_notices/tcpl_62nd_agm_notice_2025"
+        check(listed.get(DATED, {}).get("date") == "2025-04-23",
+              f"the list shows the date the document itself declares "
+              f"({listed.get(DATED, {}).get('date')})")
+        st, h, r = raw(port, "POST", "/v1/ask/document",
+                       json.dumps({"document_id": DATED}).encode())
+        r = json.loads(r)
+        turn = r.get("turn") or {}
+        check(st == 200 and turn.get("schema") == "placedon.ask/0" and validate(turn) == [],
+              f"checking a public document returns a valid placedon.ask/0 turn "
+              f"({st}, {validate(turn)})")
+        check(turn.get("context", {}).get("kind") == "document"
+              and turn["context"].get("document_date") == "2025-04-23",
+              f"...a DOCUMENT turn, dated by the document itself ({turn.get('context')})")
+        check(bool(turn.get("scope_frame")) and turn["scope_frame"].get("checked_count"),
+              "...carrying the scope frame: what was checked, and what was not")
+        lv = turn.get("law_version") or {}
+        check(lv.get("point_in_time_requested") == "2025-04-23"
+              and lv.get("point_in_time_verified") is False
+              and "not the law as it stood" in lv.get("statement", "").lower()
+              or "Do not treat any text below as the law as it stood" in lv.get("statement", ""),
+              "...and the law-version line, which says this is not the law at the document's date")
+        check(any("880(E)" in (x.get("governs_now") or "") for x in turn.get("superseded") or []),
+              f"...and the instrument that moved under this document "
+              f"({[x.get('governs_now', '')[:20] for x in turn.get('superseded') or []]})")
+        check(turn.get("uses_model") is False, "no model is called on the document path")
+        decided = {x.get("state") for x in (turn.get("rows") or []) + (turn.get("confirmed") or [])}
+        check(decided and decided <= {"APPLIES_UNDETERMINED", "CANNOT_DETERMINE"},
+              f"the placeholder profile decides nothing about any company ({sorted(decided)})")
+        doc = r.get("document") or {}
+        check(doc.get("id") == DATED and doc.get("profile") == PLACEHOLDER_PROFILE
+              and "placeholder" in doc.get("profile_note", ""),
+              "the response names the document and says the profile was a placeholder")
+        check(bool(r.get("turn")) and "state" not in r and "schema" not in r,
+              "the demo's own metadata rides beside the turn, never inside it")
+        st, h, r2 = raw(port, "POST", "/v1/ask/document",
+                        json.dumps({"document_id": DATED,
+                                    "question": "Which of these rules moved?"}).encode())
+        check(st == 200 and json.loads(r2)["turn"]["question"] == "Which of these rules moved?",
+              "a typed question is the turn's question, verbatim")
+
+        # ── no date, no check: the engine's own refusal, never a guessed date ──
+        for undated, what in (("icsi_specimens/09_minutes_agm_annexXVI", "a specimen with blanks"),
+                              ("board_outcomes/routemobile_outcome_board_meeting_2025-11-03",
+                               "a filing that bears two dates")):
+            st, h, r = raw(port, "POST", "/v1/ask/document",
+                           json.dumps({"document_id": undated}).encode())
+            r = json.loads(r)
+            check(st == 422 and r.get("error") == "no_document_date"
+                  and r.get("detail") == NO_DOCUMENT_DATE
+                  and "state" not in r and "turn" not in r,
+                  f"{what} is refused in the engine's own words ({st}, {r.get('error')})")
+        st, h, r = raw(port, "POST", "/v1/ask/document",
+                       json.dumps({"document_id":
+                                   "board_outcomes/routemobile_outcome_board_meeting_2025-11-03"}
+                                  ).encode())
+        r = json.loads(r)
+        check("2025-11-03" in r.get("reason", "") and "2025-11-04" in r.get("reason", ""),
+              f"...and the two-dated filing's reason names both dates ({r.get('reason', '')[:50]})")
+
+        # ── no upload, and no way to reach a file off the list ─────────────────
+        for field in ("text", "document", "file", "path", "base64", "url"):
+            st, h, r = raw(port, "POST", "/v1/ask/document",
+                           json.dumps({"document_id": DATED,
+                                       field: "PRIVATE BOARD MINUTES"}).encode())
+            r = json.loads(r)
+            check(st == 400 and r.get("error") == "upload_refused"
+                  and r.get("detail") == NO_UPLOAD and "turn" not in r
+                  and "PRIVATE" not in json.dumps(r),
+                  f"a body carrying {field!r} is refused, and the text is never echoed ({st})")
+        for bad in ("../../CLAUDE.md", "/etc/passwd", "corpus/testdocs/MANIFEST.md", "",
+                    "agm_notices/../../../CLAUDE", 7, None):
+            st, h, r = raw(port, "POST", "/v1/ask/document",
+                           json.dumps({"document_id": bad}).encode())
+            r = json.loads(r)
+            check(st in (400, 404) and "turn" not in r and "Non-negotiable" not in json.dumps(r)
+                  and "root:" not in json.dumps(r),
+                  f"document_id {bad!r} reaches nothing ({st})")
+        st, h, r = raw(port, "POST", "/v1/ask/document",
+                       json.dumps({"document_id": DATED, "facts": {"company_class": "opc"}}).encode())
+        check(st == 400 and json.loads(r).get("error") == "bad_request",
+              f"a field this route does not take is refused, not ignored ({st})")
+
+        # An engine failure on this route is a 500 with no state, like /v1/ask's.
+        import checker.ask as _ask
+        _saved = _ask.answer
+
+        def _boom(body, generated_at):
+            raise RuntimeError("engine exploded")
+        _ask.answer = _boom
+        try:
+            st, h, r = raw(port, "POST", "/v1/ask/document",
+                           json.dumps({"document_id": DATED}).encode())
+        finally:
+            _ask.answer = _saved
+        r = json.loads(r)
+        check(st == 500 and "state" not in r and "turn" not in r
+              and "Traceback" not in json.dumps(r),
+              f"an engine failure on the document route is a 500 with no state ({st})")
+
+        # The document id is a path; the log must not carry it either.
+        import io as _io
+        _err, sys.stderr = sys.stderr, _io.StringIO()
+        try:
+            raw(port, "POST", "/v1/ask/document", json.dumps({"document_id": DATED}).encode())
+            logged = sys.stderr.getvalue()
+        finally:
+            sys.stderr = _err
+        check("tcpl" not in logged and "POST /v1/ask/document" in logged,
+              f"the log names the route, never the document ({logged.strip()[:60]!r})")
 
         # ── errors keep the api's shapes and never carry a state ──────────────
         st, h, r = ask(port, b"{not json")

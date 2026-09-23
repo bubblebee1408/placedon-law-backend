@@ -30,6 +30,7 @@ suites=(
   checker/event_log.py
   checker/staleness.py
   checker/derived_date.py
+  checker/document_date.py
   checker/claim_schema.py
   checker/legal_ref.py
   checker/admission.py
