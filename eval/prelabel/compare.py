@@ -51,10 +51,45 @@ from datetime import date
 
 from checker.document_extract import (DATE_FIELDS, INT_FIELDS, KNOWN_FIELDS,
                                       MONEY_FIELDS)
+from checker.extraction_schema import CIN_GRAMMAR
 
 # The only label an agreement may carry. A constant, so no caller can quietly
 # write a stronger one.
 AGREEMENT_LABEL = "model-verified, NOT expert-verified"
+
+# A value both models admitted, which the SAME document contradicts elsewhere on its own
+# face. Named so the renderer cannot describe it in weaker words than this.
+CONTESTED_NOTE = ("the same document also declares {others} for this field — "
+                  "agreement here measured that both models read the same declaration, "
+                  "not that the document declares one thing")
+
+# Only `cin` is checked, and the restraint is the point. "The document says something
+# different elsewhere" is only mechanically decidable where the field has a grammar strict
+# enough that another occurrence IS another declaration of the same thing. A date or a
+# rupee figure appearing twice in a notice is ordinary and means nothing. A 21-character
+# CIN appearing twice with different digits is a document disagreeing with itself.
+#
+# The rule is `checker/document_date.py`'s, generalised: every declaration the reader can
+# read must agree, or the document does not declare one. That module applies it to dates;
+# this applies it to the one other field where it can be applied honestly.
+_SCANNED_FIELDS = {"cin": re.compile(CIN_GRAMMAR)}
+
+
+def contested_by_document(name: str, value: object, text: str) -> tuple[str, ...]:
+    """Other values of this field that `text` also declares, verbatim and sorted.
+
+    Empty when the document is consistent, when the field has no scanner, or when there is
+    no value to contest. Never repairs and never chooses: it reports that the document
+    disagrees with itself and leaves the settling to a person, which is the same answer
+    `document_date.read()` gives when a filing bears two dates.
+    """
+    scanner = _SCANNED_FIELDS.get(name)
+    if scanner is None or not text or value in (None, ""):
+        return ()
+    here = " ".join(str(value).split()).upper()
+    found = {"".join(m) if isinstance(m, tuple) else m
+             for m in scanner.findall(text)}
+    return tuple(sorted(v for v in found if v.upper() != here))
 
 AGREE = "AGREE"
 DISAGREE = "DISAGREE"
@@ -122,6 +157,7 @@ class Row:
     priority_reason: str
     anchor_span: str = ""            # the span the founder should look at
     verdict: str = ""                # deliberately blank: a person fills this in
+    contested: tuple[str, ...] = ()  # other values the SAME document declares for this field
 
 
 @dataclass(frozen=True)
@@ -180,7 +216,8 @@ def compare_field(name: str, a: Side, b: Side) -> str:
     return NEITHER
 
 
-def compare_document(document: str, a_sides: dict, b_sides: dict) -> Comparison:
+def compare_document(document: str, a_sides: dict, b_sides: dict,
+                     text: str = "") -> Comparison:
     """Compare two models' admitted facts for one document.
 
     `a_sides` / `b_sides` map field name -> Side. A field missing from either map
@@ -198,9 +235,11 @@ def compare_document(document: str, a_sides: dict, b_sides: dict) -> Comparison:
             neither.append(name)
             continue
         rank, reason = FIELD_PRIORITY.get(name, (9, "not a declared obligation input"))
+        admitted = a.value if a.state == ADMITTED else b.value
         row = Row(document=document, field=name, outcome=outcome, a=a, b=b,
                   priority=rank, priority_reason=reason,
-                  anchor_span=(a.span if a.state == ADMITTED else b.span))
+                  anchor_span=(a.span if a.state == ADMITTED else b.span),
+                  contested=contested_by_document(name, admitted, text))
         (agreements if outcome == AGREE else rows).append(row)
 
     return Comparison(document=document, agreements=tuple(agreements),
@@ -352,6 +391,47 @@ def _test() -> None:
     # ── a blank verdict column, because an agent must never self-attest ───────
     check(all(r.verdict == "" for r in order(rows)),
           "every row's verdict is blank — no agent writes a human's verdict")
+
+    # ── a document that contradicts itself about its own CIN (SD-006) ────────
+    # Route Mobile's 2025-01-28 filing prints L72900MH2004PLC746323 in the letterhead
+    # of pages 1, 3 and 4 and L72900MH2004PLC146323 on page 2. Both models read the
+    # letterhead, both read it faithfully, and the comparison called that an agreement.
+    two_cins = ("CIN No: L72900MH2004PLC746323 ... later in the same filing ... "
+                "CIN No: L72900MH2004PLC146323")
+    check(contested_by_document("cin", "L72900MH2004PLC746323", two_cins)
+          == ("L72900MH2004PLC146323",),
+          "a CIN the same document contradicts is reported as contested")
+    check(contested_by_document("cin", "L72900MH2004PLC146323",
+                                "CIN No: L72900MH2004PLC146323 and again "
+                                "L72900MH2004PLC146323") == (),
+          "a document that says the same CIN twice contests nothing")
+    check(contested_by_document("cin", "L72900MH2004PLC146323", "") == ()
+          and contested_by_document("cin", None, two_cins) == (),
+          "no text and no value each contest nothing, rather than raising")
+    check(contested_by_document("document_date", "2025-01-28", two_cins) == (),
+          "a field with no strict grammar is never guessed at")
+    check(contested_by_document("cin", "l72900mh2004plc746323", two_cins)
+          == ("L72900MH2004PLC146323",),
+          "the value's own case does not decide whether it is contested")
+    # The flag has to reach the Row, or it is a function nobody calls.
+    contested_cmp = compare_document(
+        "rm_2025_01_28",
+        {"cin": Side(ADMITTED, "L72900MH2004PLC746323", "CIN No: L72900MH2004PLC746323")},
+        {"cin": Side(ADMITTED, "L72900MH2004PLC746323", "CIN No: L72900MH2004PLC746323")},
+        text=two_cins)
+    agreed = contested_cmp.agreements[0]
+    check(agreed.outcome == AGREE and agreed.contested == ("L72900MH2004PLC146323",),
+          "an AGREE row still carries what the document says against it")
+    clean = compare_document(
+        "clean", {"cin": Side(ADMITTED, "L72900MH2004PLC146323", "x")},
+        {"cin": Side(ADMITTED, "L72900MH2004PLC146323", "x")},
+        text="CIN No: L72900MH2004PLC146323")
+    check(clean.agreements[0].contested == (),
+          "a consistent document leaves the flag empty, not merely falsy")
+    check(compare_document("no-text", {"cin": Side(ADMITTED, "L72900MH2004PLC146323", "x")},
+                           {"cin": Side(ADMITTED, "L72900MH2004PLC146323", "x")}
+                           ).agreements[0].contested == (),
+          "callers that pass no text still work — the flag is additive, not required")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:

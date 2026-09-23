@@ -1,0 +1,3621 @@
+{
+  "generated": "2026-09-23",
+  "not_an_accuracy_claim": "Agreement between two models is NOT evidence that either is correct. Both can be wrong in the same way, and in this repository they already have been — Indian digit grouping has produced the same 10x misreading more than once. Nothing here is an accuracy measurement. Expert review by a practising Company Secretary (research/TASKS.md H-001) is still required.",
+  "agreement_label": "model-verified, NOT expert-verified",
+  "expert_review_task": "research/TASKS.md H-001",
+  "models": {
+    "A": "azure:llama-3-3-70b",
+    "B": "azure:gpt-5-mini"
+  },
+  "temperature_sent": {
+    "azure:llama-3-3-70b": [
+      "0"
+    ],
+    "azure:gpt-5-mini": [
+      "None"
+    ]
+  },
+  "corpus": {
+    "root": "corpus/testdocs",
+    "documents_loaded": 29,
+    "real": 18,
+    "specimen": 11
+  },
+  "documents_compared": 26,
+  "documents_not_compared": [
+    {
+      "document": "agm_notices/routemobile_20th_agm_notice_2024",
+      "reason": "azure:llama-3-3-70b returned no answer",
+      "detail": "ModelUnavailable: Azure HTTP 429: {\"error\":{\"code\":\"RateLimitReached\",\"message\":\"Your requests to Llama-3.3-70B-Instruct for llama-3-3-70b in uaenorth have exceeded rate limit.\",\"details\":\"Your requests to Llama-3.3-70B-Instruct for l",
+      "why_no_rows": "'only one model supported this' is not a true statement when the other model never answered"
+    },
+    {
+      "document": "board_outcomes/routemobile_outcome_board_meeting_2025-01-28",
+      "reason": "azure:gpt-5-mini returned no answer",
+      "detail": "ModelUnavailable: the Azure reply did not finish (finish_reason='length'); a truncated reply is not an answer",
+      "why_no_rows": "'only one model supported this' is not a true statement when the other model never answered"
+    },
+    {
+      "document": "board_outcomes/routemobile_outcome_board_meeting_2026-05-07",
+      "reason": "azure:llama-3-3-70b returned no answer",
+      "detail": "ModelUnavailable: Azure HTTP 429: {\"error\":{\"code\":\"RateLimitReached\",\"message\":\"Your requests to Llama-3.3-70B-Instruct for llama-3-3-70b in uaenorth have exceeded rate limit.\",\"details\":\"Your requests to Llama-3.3-70B-Instruct for l",
+      "why_no_rows": "'only one model supported this' is not a true statement when the other model never answered"
+    }
+  ],
+  "fields_per_document": 10,
+  "agreements": [
+    {
+      "document": "agm_notices/titan_41st_agm_notice_2025",
+      "file": "corpus/testdocs/agm_notices/titan_41st_agm_notice_2025.txt",
+      "kind": "real",
+      "anchor": "corpus/testdocs/agm_notices/titan_41st_agm_notice_2025.txt:928",
+      "anchor_line": 928,
+      "field": "document_date",
+      "priority": 2,
+      "priority_reason": "the as-of date: which text of the law applies, and every deadline counted from the document",
+      "outcome": "AGREE",
+      "model_a": {
+        "state": "ADMITTED",
+        "value": "2025-05-08",
+        "span": "8th May 2025",
+        "refused_by": "",
+        "detail": "",
+        "in_declared_vocabulary": null
+      },
+      "model_b": {
+        "state": "ADMITTED",
+        "value": "2025-05-08",
+        "span": "8th May 2025",
+        "refused_by": "",
+        "detail": "",
+        "in_declared_vocabulary": null
+      },
+      "document_text_at_anchor": "ai - 400083. By Order of the Board of Directors Dinesh Shetty General Counsel & Company Secretary Membership No. F3879 Bengaluru 8th May 2025 CIN: L74999TZ1984PLC001456 Registered Office: No.3, SIPCOT Industrial Complex, Hosur-635 126, Tamil Nadu 13 TITAN COMPANY LIMITED",
+      "verdict": "",
+      "label": "model-verified, NOT expert-verified",
+      "contested_by_document": [],
+      "contested_note": ""
+    },
+    {
+      "document": "agm_notices/titan_42nd_agm_notice_2026",
+      "file": "corpus/testdocs/agm_notices/titan_42nd_agm_notice_2026.txt",
+      "kind": "real",
+      "anchor": "corpus/testdocs/agm_notices/titan_42nd_agm_notice_2026.txt:1025",
+      "anchor_line": 1025,
+      "field": "document_date",
+      "priority": 2,
+      "priority_reason": "the as-of date: which text of the law applies, and every deadline counted from the document",
+      "outcome": "AGREE",
+      "model_a": {
+        "state": "ADMITTED",
+        "value": "2026-06-29",
+        "span": "29th June 2026",
+        "refused_by": "",
+        "detail": "",
+        "in_declared_vocabulary": null
+      },
+      "model_b": {
+        "state": "ADMITTED",
+        "value": "2026-06-29",
+        "span": "29th June 2026",
+        "refused_by": "",
+        "detail": "",
+        "in_declared_vocabulary": null
+      },
+      "document_text_at_anchor": "ai - 400083. By Order of the Board of Directors Dinesh Shetty General Counsel & Company Secretary Membership No. F3879 Bengaluru 29th June 2026 CIN: L74999TZ1984PLC001456 Registered Office: No.3, SIPCOT Industrial Complex, Hosur-635 126, Tamil Nadu Financial Statements Sta",
+      "verdict": "",
+      "label": "model-verified, NOT expert-verified",
+      "contested_by_document": [],
+      "contested_note": ""
+    },
+    {
+      "document": "board_outcomes/sonata_outcome_of_agm_2025",
+      "file": "corpus/testdocs/board_outcomes/sonata_outcome_of_agm_2025.txt",
+      "kind": "real",
+      "anchor": "corpus/testdocs/board_outcomes/sonata_outcome_of_agm_2025.txt:16",
+      "anchor_line": 16,
+      "field": "document_date",
+      "priority": 2,
+      "priority_reason": "the as-of date: which text of the law applies, and every deadline counted from the document",
+      "outcome": "AGREE",
+      "model_a": {
+        "state": "ADMITTED",
+        "value": "2025-07-31",
+        "span": "31st July, 2025",
+        "refused_by": "",
+        "detail": "",
+        "in_declared_vocabulary": null
+      },
+      "model_b": {
+        "state": "ADMITTED",
+        "value": "2025-07-31",
+        "span": "31st July, 2025",
+        "refused_by": "",
+        "detail": "",
+        "in_declared_vocabulary": null
+      },
+      "document_text_at_anchor": "L72200MH1994PLC082110 W: www.sonata-software.com E: info@sonata-software.com T: +91 80 6778 1000 31st July, 2025 National Stock Exchange of India Limited Exchange Plaza, Bandra Kurla Complex, Mumbai Kind Attn: Manager, Listing Dep",
+      "verdict": "",
+      "label": "model-verified, NOT expert-verified",
+      "contested_by_document": [],
+      "contested_note": ""
+    },
+    {
+      "document": "board_outcomes/sonata_outcome_of_agm_2026",
+      "file": "corpus/testdocs/board_outcomes/sonata_outcome_of_agm_2026.txt",
+      "kind": "real",
+      "anchor": "corpus/testdocs/board_outcomes/sonata_outcome_of_agm_2026.txt:17",
+      "anchor_line": 17,
+      "field": "document_date",
+      "priority": 2,
+      "priority_reason": "the as-of date: which text of the law applies, and every deadline counted from the document",
+      "outcome": "AGREE",
+      "model_a": {
+        "state": "ADMITTED",
+        "value": "2026-07-31",
+        "span": "31st July, 2026",
+        "refused_by": "",
+        "detail": "",
+        "in_declared_vocabulary": null
+      },
+      "model_b": {
+        "state": "ADMITTED",
+        "value": "2026-07-31",
+        "span": "31st July, 2026",
+        "refused_by": "",
+        "detail": "",
+        "in_declared_vocabulary": null
+      },
+      "document_text_at_anchor": "60059, India CIN: L72200MH1994PLC082110 W: www.sonata-software.com E: info@sonata-software.com T: +91 80 6778 1000 31st July, 2026 National Stock Exchange of India Limited Exchange Plaza, Bandra Kurla Complex, Mumbai Kind Attn: Manager, Listing Departm",
+      "verdict": "",
+      "label": "model-verified, NOT expert-verified",
+      "contested_by_document": [],
+      "contested_note": ""
+    },
+    {
+      "document": "agm_notices/routemobile_21st_agm_notice_2025",
+      "file": "corpus/testdocs/agm_notices/routemobile_21st_agm_notice_2025.txt",
+      "kind": "real",
+      "anchor": "corpus/testdocs/agm_notices/routemobile_21st_agm_notice_2025.txt:80",
+      "anchor_line": 80,
+      "field": "cin",
+      "priority": 3,
+      "priority_reason": "identity of the company. Decides no threshold; decides which company the thresholds are about",
+      "outcome": "AGREE",
+      "model_a": {
+        "state": "ADMITTED",
+        "value": "L72900MH2004PLC146323",
+        "span": "CIN: L72900MH2004PLC146323",
+        "refused_by": "",
+        "detail": "",
+        "in_declared_vocabulary": null
+      },
+      "model_b": {
+        "state": "ADMITTED",
+        "value": "L72900MH2004PLC146323",
+        "span": "CIN: L72900MH2004PLC146323",
+        "refused_by": "",
+        "detail": "",
+        "in_declared_vocabulary": null
+      },
+      "document_text_at_anchor": "2025 Place: Mumbai Registered Office: SanRaj Corporate Park -4th Dimension, 3rd Floor Mind Space, Malad (West), Mumbai – 400 064 CIN: L72900MH2004PLC146323 Email: investors@routemobile.com Website: www.routemobile.com Tel: 022 - 40337676 Fax: 022 – 40337650 329 Notice NOTES: 1. In acc",
+      "verdict": "",
+      "label": "model-verified, NOT expert-verified",
+      "contested_by_document": [],
+      "contested_note": ""
+    },
+    {
+      "document": "agm_notices/routemobile_22nd_agm_notice_2026",
+      "file": "corpus/testdocs/agm_notices/routemobile_22nd_agm_notice_2026.txt",
+      "kind": "real",
+      "anchor": "corpus/testdocs/agm_notices/routemobile_22nd_agm_notice_2026.txt:74",
+      "anchor_line": 74,
+      "field": "cin",
+      "priority": 3,
+      "priority_reason": "identity of the company. Decides no threshold; decides which company the thresholds are about",
+      "outcome": "AGREE",
+      "model_a": {
+        "state": "ADMITTED",
+        "value": "L72900MH2004PLC146323",
+        "span": "CIN: L72900MH2004PLC146323",
+        "refused_by": "",
+        "detail": "",
+        "in_declared_vocabulary": null
+      },
+      "model_b": {
+        "state": "ADMITTED",
+        "value": "L72900MH2004PLC146323",
+        "span": "CIN: L72900MH2004PLC146323",
+        "refused_by": "",
+        "detail": "",
+        "in_declared_vocabulary": null
+      },
+      "document_text_at_anchor": "026 Place: Mumbai Registered Office: SanRaj Corporate Park - 4th Dimension, 3rd Floor Mind Space, Malad (West), Mumbai – 400 064. CIN: L72900MH2004PLC146323 Email: investors@routemobile.com Website: www.routemobile.com Tel: 022 - 40337676 Fax: 022 – 40337650 Route Mobile | Annual",
+      "verdict": "",
+      "label": "model-verified, NOT expert-verified",
+      "contested_by_document": [],
+      "contested_note": ""
+    },
+    {
+      "document": "agm_notices/sonata_29th_agm_notice_2024",
+      "file": "corpus/testdocs/agm_notices/sonata_29th_agm_notice_2024.txt",
+      "kind": "real",
+      "anchor": "corpus/testdocs/agm_notices/sonata_29th_agm_notice_2024.txt:11",
+      "anchor_line": 11,
+      "field": "cin",
+      "priority": 3,
+      "priority_reason": "identity of the company. Decides no threshold; decides which company the thresholds are about",
+      "outcome": "AGREE",
+      "model_a": {
+        "state": "ADMITTED",
+        "value": "L72200MH1994PLC082110",
+        "span": "(CIN: L72200MH1994PLC082110)",
+        "refused_by": "",
+        "detail": "",
+        "in_declared_vocabulary": null
+      },
+      "model_b": {
+        "state": "ADMITTED",
+        "value": "L72200MH1994PLC082110",
+        "span": "(CIN: L72200MH1994PLC082110)",
+        "refused_by": "",
+        "detail": "",
+        "in_declared_vocabulary": null
+      },
+      "document_text_at_anchor": "Annual Report 2023-24 1 SONATA SOFTWARE LIMITED (CIN: L72200MH1994PLC082110) Registered Office: 208, T V Industrial Estate, 2nd floor, S. K. Ahire Marg, Worli, Mumbai – 400 030 Corporate Office: Tower-A, So",
+      "verdict": "",
+      "label": "model-verified, NOT expert-verified",
+      "contested_by_document": [],
+      "contested_note": ""
+    },
+    {
+      "document": "agm_notices/tataelxsi_37th_agm_notice_2026",
+      "file": "corpus/testdocs/agm_notices/tataelxsi_37th_agm_notice_2026.txt",
+      "kind": "real",
+      "anchor": "corpus/testdocs/agm_notices/tataelxsi_37th_agm_notice_2026.txt:109",
+      "anchor_line": 109,
+      "field": "cin",
+      "priority": 3,
+      "priority_reason": "identity of the company. Decides no threshold; decides which company the thresholds are about",
+      "outcome": "AGREE",
+      "model_a": {
+        "state": "ADMITTED",
+        "value": "L85110KA1989PLC009968",
+        "span": "CIN: L85110KA1989PLC009968",
+        "refused_by": "",
+        "detail": "",
+        "in_declared_vocabulary": null
+      },
+      "model_b": {
+        "state": "ADMITTED",
+        "value": "L85110KA1989PLC009968",
+        "span": "CIN: L85110KA1989PLC009968",
+        "refused_by": "",
+        "detail": "",
+        "in_declared_vocabulary": null
+      },
+      "document_text_at_anchor": "o.: A51279 Tata Elxsi Limited ITPB Road, Whiteﬁeld, Bangalore - 560048 E-mail: investors@tataelxsi.com Website: www.tataelxsi.com CIN: L85110KA1989PLC009968 RESOLVED FURTHER THAT all actions taken by the Board or any person so authorised by the Board, in connection with any matter refe",
+      "verdict": "",
+      "label": "model-verified, NOT expert-verified",
+      "contested_by_document": [],
+      "contested_note": ""
+    },
+    {
+      "document": "agm_notices/tcpl_62nd_agm_notice_2025",
+      "file": "corpus/testdocs/agm_notices/tcpl_62nd_agm_notice_2025.txt",
+      "kind": "real",
+      "anchor": "corpus/testdocs/agm_notices/tcpl_62nd_agm_notice_2025.txt:1125",
+      "anchor_line": 1125,
+      "field": "cin",
+      "priority": 3,
+      "priority_reason": "identity of the company. Decides no threshold; decides which company the thresholds are about",
+      "outcome": "AGREE",
+      "model_a": {
+        "state": "ADMITTED",
+        "value": "L15491WB1962PLC031425",
+        "span": "CIN - L15491WB1962PLC031425",
+        "refused_by": "",
+        "detail": "",
+        "in_declared_vocabulary": null
+      },
+      "model_b": {
+        "state": "ADMITTED",
+        "value": "L15491WB1962PLC031425",
+        "span": "CIN - L15491WB1962PLC031425",
+        "refused_by": "",
+        "detail": "",
+        "in_declared_vocabulary": null
+      },
+      "document_text_at_anchor": "l 23, 2025 Company Secretary Place: Mumbai Membership No.: ACS 73704 Registered Office: 1, Bishop Lefroy Road, Kolkata – 700 020 CIN - L15491WB1962PLC031425 Tel.: 022 6121 8400 E-mail id: investor.relations@tataconsumer.com Website address: www.tataconsumer.com Integrated Annual Report",
+      "verdict": "",
+      "label": "model-verified, NOT expert-verified",
+      "contested_by_document": [],
+      "contested_note": ""
+    },
+    {
+      "document": "agm_notices/tcpl_63rd_agm_notice_2026",
+      "file": "corpus/testdocs/agm_notices/tcpl_63rd_agm_notice_2026.txt",
+      "kind": "real",
+      "anchor": "corpus/testdocs/agm_notices/tcpl_63rd_agm_notice_2026.txt:972",
+      "anchor_line": 972,
+      "field": "cin",
+      "priority": 3,
+      "priority_reason": "identity of the company. Decides no threshold; decides which company the thresholds are about",
+      "outcome": "AGREE",
+      "model_a": {
+        "state": "ADMITTED",
+        "value": "L15491WB1962PLC031425",
+        "span": "CIN - L15491WB1962PLC031425",
+        "refused_by": "",
+        "detail": "",
+        "in_declared_vocabulary": null
+      },
+      "model_b": {
+        "state": "ADMITTED",
+        "value": "L15491WB1962PLC031425",
+        "span": "CIN - L15491WB1962PLC031425",
+        "refused_by": "",
+        "detail": "",
+        "in_declared_vocabulary": null
+      },
+      "document_text_at_anchor": "Place: Mumbai Membership No.: ACS 73704 Registered Office: Tata Centre, 1st Floor, 43, Jawaharlal Nehru Road, Kolkata – 700 071. CIN - L15491WB1962PLC031425 E-mail id: investor.relations@tataconsumer.com Website address: www.tataconsumer.com Tata Consumer Products Limited 501 AGM Notic",
+      "verdict": "",
+      "label": "model-verified, NOT expert-verified",
+      "contested_by_document": [],
+      "contested_note": ""
+    },
+    {
+      "document": "agm_notices/titan_41st_agm_notice_2025",
+      "file": "corpus/testdocs/agm_notices/titan_41st_agm_notice_2025.txt",
+      "kind": "real",
+      "anchor": "corpus/testdocs/agm_notices/titan_41st_agm_notice_2025.txt:929",
+      "anchor_line": 929,
+      "field": "cin",
+      "priority": 3,
+      "priority_reason": "identity of the company. Decides no threshold; decides which company the thresholds are about",
+      "outcome": "AGREE",
+      "model_a": {
+        "state": "ADMITTED",
+        "value": "L74999TZ1984PLC001456",
+        "span": "CIN: L74999TZ1984PLC001456",
+        "refused_by": "",
+        "detail": "",
+        "in_declared_vocabulary": null
+      },
+      "model_b": {
+        "state": "ADMITTED",
+        "value": "L74999TZ1984PLC001456",
+        "span": "CIN: L74999TZ1984PLC001456",
+        "refused_by": "",
+        "detail": "",
+        "in_declared_vocabulary": null
+      },
+      "document_text_at_anchor": "By Order of the Board of Directors Dinesh Shetty General Counsel & Company Secretary Membership No. F3879 Bengaluru 8th May 2025 CIN: L74999TZ1984PLC001456 Registered Office: No.3, SIPCOT Industrial Complex, Hosur-635 126, Tamil Nadu 13 TITAN COMPANY LIMITED Notice As required under S",
+      "verdict": "",
+      "label": "model-verified, NOT expert-verified",
+      "contested_by_document": [],
+      "contested_note": ""
+    },
+    {
+      "document": "agm_notices/titan_42nd_agm_notice_2026",
+      "file": "corpus/testdocs/agm_notices/titan_42nd_agm_notice_2026.txt",
+      "kind": "real",
+      "anchor": "corpus/testdocs/agm_notices/titan_42nd_agm_notice_2026.txt:1026",
+      "anchor_line": 1026,
+      "field": "cin",
+      "priority": 3,
+      "priority_reason": "identity of the company. Decides no threshold; decides which company the thresholds are about",
+      "outcome": "AGREE",
+      "model_a": {
+        "state": "ADMITTED",
+        "value": "L74999TZ1984PLC001456",
+        "span": "CIN: L74999TZ1984PLC001456",
+        "refused_by": "",
+        "detail": "",
+        "in_declared_vocabulary": null
+      },
+      "model_b": {
+        "state": "ADMITTED",
+        "value": "L74999TZ1984PLC001456",
+        "span": "CIN: L74999TZ1984PLC001456",
+        "refused_by": "",
+        "detail": "",
+        "in_declared_vocabulary": null
+      },
+      "document_text_at_anchor": "y Order of the Board of Directors Dinesh Shetty General Counsel & Company Secretary Membership No. F3879 Bengaluru 29th June 2026 CIN: L74999TZ1984PLC001456 Registered Office: No.3, SIPCOT Industrial Complex, Hosur-635 126, Tamil Nadu Financial Statements Statutory Reports Corporate Ov",
+      "verdict": "",
+      "label": "model-verified, NOT expert-verified",
+      "contested_by_document": [],
+      "contested_note": ""
+    },
+    {
+      "document": "board_outcomes/routemobile_outcome_board_meeting_2024-05-29",
+      "file": "corpus/testdocs/board_outcomes/routemobile_outcome_board_meeting_2024-05-29.txt",
+      "kind": "real",
+      "anchor": "corpus/testdocs/board_outcomes/routemobile_outcome_board_meeting_2024-05-29.txt:81",
+      "anchor_line": 81,
+      "field": "cin",
+      "priority": 3,
+      "priority_reason": "identity of the company. Decides no threshold; decides which company the thresholds are about",
+      "outcome": "AGREE",
+      "model_a": {
+        "state": "ADMITTED",
+        "value": "L72900MH2004PLC146323",
+        "span": "CIN No: L72900MH2004PLC146323",
+        "refused_by": "",
+        "detail": "",
+        "in_declared_vocabulary": null
+      },
+      "model_b": {
+        "state": "ADMITTED",
+        "value": "L72900MH2004PLC146323",
+        "span": "CIN No: L72900MH2004PLC146323",
+        "refused_by": "",
+        "detail": "",
+        "in_declared_vocabulary": null
+      },
+      "document_text_at_anchor": "ad (West), Mumbai - 400 064, India +91 22 4033 7676/77-99 I Fax: +91 22 4033 7650 info@routemobile.com I www.routemobi le.com CIN No: L72900MH2004PLC146323",
+      "verdict": "",
+      "label": "model-verified, NOT expert-verified",
+      "contested_by_document": [],
+      "contested_note": ""
+    },
+    {
+      "document": "board_outcomes/routemobile_outcome_board_meeting_2025-11-03",
+      "file": "corpus/testdocs/board_outcomes/routemobile_outcome_board_meeting_2025-11-03.txt",
+      "kind": "real",
+      "anchor": "corpus/testdocs/board_outcomes/routemobile_outcome_board_meeting_2025-11-03.txt:67",
+      "anchor_line": 67,
+      "field": "cin",
+      "priority": 3,
+      "priority_reason": "identity of the company. Decides no threshold; decides which company the thresholds are about",
+      "outcome": "AGREE",
+      "model_a": {
+        "state": "ADMITTED",
+        "value": "L72900MH2004PLC746323",
+        "span": "CIN No: L72900MH2004PLC746323",
+        "refused_by": "",
+        "detail": "",
+        "in_declared_vocabulary": null
+      },
+      "model_b": {
+        "state": "ADMITTED",
+        "value": "L72900MH2004PLC746323",
+        "span": "CIN No: L72900MH2004PLC746323",
+        "refused_by": "",
+        "detail": "",
+        "in_declared_vocabulary": null
+      },
+      "document_text_at_anchor": "ad (West). Mumbai - 400 064, India +97 22 4033 7676/77-99 I Fax: +97 22 4033 7650 info @routemob ile.com I www.routemobile.com CIN No: L72900MH2004PLC746323 3. Lapse of Stock Options granted to an employee: The Board of Directors at its meeting held today, noted and took on r",
+      "verdict": "",
+      "label": "model-verified, NOT expert-verified",
+      "contested_by_document": [
+        "L72900MH2004PLC146323"
+      ],
+      "contested_note": "the same document also declares L72900MH2004PLC146323 for this field — agreement here measured that both models read the same declaration, not that the document declares one thing"
+    },
+    {
+      "document": "board_outcomes/sonata_outcome_of_agm_2025",
+      "file": "corpus/testdocs/board_outcomes/sonata_outcome_of_agm_2025.txt",
+      "kind": "real",
+      "anchor": "corpus/testdocs/board_outcomes/sonata_outcome_of_agm_2025.txt:10",
+      "anchor_line": 10,
+      "field": "cin",
+      "priority": 3,
+      "priority_reason": "identity of the company. Decides no threshold; decides which company the thresholds are about",
+      "outcome": "AGREE",
+      "model_a": {
+        "state": "ADMITTED",
+        "value": "L72200MH1994PLC082110",
+        "span": "CIN: L72200MH1994PLC082110",
+        "refused_by": "",
+        "detail": "",
+        "in_declared_vocabulary": null
+      },
+      "model_b": {
+        "state": "ADMITTED",
+        "value": "L72200MH1994PLC082110",
+        "span": "CIN: L72200MH1994PLC082110",
+        "refused_by": "",
+        "detail": "",
+        "in_declared_vocabulary": null
+      },
+      "document_text_at_anchor": "Tower-A, Sonata Towers, Global Village (Sattva Global City), RVCE Post, Kengeri Hobli, Mysore Road, Bengaluru - 560059, India CIN: L72200MH1994PLC082110 W: www.sonata-software.com E: info@sonata-software.com T: +91 80 6778 1000 31st July, 2025 Nat",
+      "verdict": "",
+      "label": "model-verified, NOT expert-verified",
+      "contested_by_document": [],
+      "contested_note": ""
+    },
+    {
+      "document": "board_outcomes/sonata_outcome_of_agm_2026",
+      "file": "corpus/testdocs/board_outcomes/sonata_outcome_of_agm_2026.txt",
+      "kind": "real",
+      "anchor": "corpus/testdocs/board_outcomes/sonata_outcome_of_agm_2026.txt:10",
+      "anchor_line": 10,
+      "field": "cin",
+      "priority": 3,
+      "priority_reason": "identity of the company. Decides no threshold; decides which company the thresholds are about",
+      "outcome": "AGREE",
+      "model_a": {
+        "state": "ADMITTED",
+        "value": "L72200MH1994PLC082110",
+        "span": "CIN: L72200MH1994PLC082110",
+        "refused_by": "",
+        "detail": "",
+        "in_declared_vocabulary": null
+      },
+      "model_b": {
+        "state": "ADMITTED",
+        "value": "L72200MH1994PLC082110",
+        "span": "CIN: L72200MH1994PLC082110",
+        "refused_by": "",
+        "detail": "",
+        "in_declared_vocabulary": null
+      },
+      "document_text_at_anchor": ": Tower-A, Sonata Towers, Global Village (Sattva Global City), RVCE Post, Kengeri Hobli, Mysore Road, Bengaluru – 560059, India CIN: L72200MH1994PLC082110 W: www.sonata-software.com E: info@sonata-software.com T: +91 80 6778 1000 31st July, 2026 National Stock Exchan",
+      "verdict": "",
+      "label": "model-verified, NOT expert-verified",
+      "contested_by_document": [],
+      "contested_note": ""
+    }
+  ],
+  "disagreements_kept": [
+    {
+      "document": "icsi_specimens/07_egm_notice_annexIII",
+      "file": "corpus/testdocs/icsi_specimens/07_egm_notice_annexIII.txt",
+      "kind": "specimen",
+      "anchor": "corpus/testdocs/icsi_specimens/07_egm_notice_annexIII.txt:144",
+      "anchor_line": 144,
+      "field": "company_class",
+      "priority": 1,
+      "priority_reason": "gates s.2(85) outright: a public company is never small — classify.small_company",
+      "outcome": "DISAGREE",
+      "model_a": {
+        "state": "ADMITTED",
+        "value": "public",
+        "span": "every listed public company",
+        "refused_by": "",
+        "detail": "",
+        "in_declared_vocabulary": true
+      },
+      "model_b": {
+        "state": "ADMITTED",
+        "value": "listed public company",
+        "span": "listed public company",
+        "refused_by": "",
+        "detail": "",
+        "in_declared_vocabulary": false
+      },
+      "document_text_at_anchor": "ble provisions of the Companies Act, 1956. He joined the Board in May 2010. Section 149 of the Companies Act, 2013, provides that every listed public company shall have at least one third of the total number of Directors as Independent Directors. An Independent Director can be appointed",
+      "verdict": "",
+      "label": "",
+      "contested_by_document": [],
+      "contested_note": ""
+    },
+    {
+      "document": "agm_notices/routemobile_21st_agm_notice_2025",
+      "file": "corpus/testdocs/agm_notices/routemobile_21st_agm_notice_2025.txt",
+      "kind": "real",
+      "anchor": "corpus/testdocs/agm_notices/routemobile_21st_agm_notice_2025.txt:10",
+      "anchor_line": 10,
+      "field": "company_class",
+      "priority": 1,
+      "priority_reason": "gates s.2(85) outright: a public company is never small — classify.small_company",
+      "outcome": "ONE_SIDED",
+      "model_a": {
+        "state": "REFUSED",
+        "value": "Public",
+        "span": "L72900MH2004PLC146323",
+        "refused_by": "FACT_VALUE_UNSUPPORTED",
+        "detail": "the span is present but does not support the value ('Public' does not appear in the quoted span)",
+        "in_declared_vocabulary": true
+      },
+      "model_b": {
+        "state": "ADMITTED",
+        "value": "Limited",
+        "span": "Route Mobile Limited (“Company”)",
+        "refused_by": "",
+        "detail": "",
+        "in_declared_vocabulary": false
+      },
+      "document_text_at_anchor": "NOTICE NOTICE is hereby given that the Twenty First (“21st”) Annual General Meeting (“AGM”) of the members of Route Mobile Limited (“Company”) will be held on Friday, September 12, 2025 at 3:30 p.m. (IST) through Video Conferencing (“VC”)/Other Audio-Visual Means (“OAV",
+      "verdict": "",
+      "label": "",
+      "contested_by_document": [],
+      "contested_note": ""
+    },
+    {
+      "document": "agm_notices/tcpl_62nd_agm_notice_2025",
+      "file": "corpus/testdocs/agm_notices/tcpl_62nd_agm_notice_2025.txt",
+      "kind": "real",
+      "anchor": "corpus/testdocs/agm_notices/tcpl_62nd_agm_notice_2025.txt:11",
+      "anchor_line": 11,
+      "field": "company_class",
+      "priority": 1,
+      "priority_reason": "gates s.2(85) outright: a public company is never small — classify.small_company",
+      "outcome": "ONE_SIDED",
+      "model_a": {
+        "state": "REFUSED",
+        "value": "Public",
+        "span": "L15491WB1962PLC031425",
+        "refused_by": "FACT_VALUE_UNSUPPORTED",
+        "detail": "the span is present but does not support the value ('Public' does not appear in the quoted span)",
+        "in_declared_vocabulary": true
+      },
+      "model_b": {
+        "state": "ADMITTED",
+        "value": "Tata Consumer Products Limited",
+        "span": "Tata Consumer Products Limited",
+        "refused_by": "",
+        "detail": "",
+        "in_declared_vocabulary": false
+      },
+      "document_text_at_anchor": "Notice of Annual General Meeting Notice is hereby given that the 62nd Annual General Meeting of Tata Consumer Products Limited will be held on Wednesday, June 18, 2025, at 10:30 a.m. (IST) through Video Conferencing / Other Audio-Visual Means, to transact",
+      "verdict": "",
+      "label": "",
+      "contested_by_document": [],
+      "contested_note": ""
+    },
+    {
+      "document": "agm_notices/titan_41st_agm_notice_2025",
+      "file": "corpus/testdocs/agm_notices/titan_41st_agm_notice_2025.txt",
+      "kind": "real",
+      "anchor": "corpus/testdocs/agm_notices/titan_41st_agm_notice_2025.txt:8",
+      "anchor_line": 8,
+      "field": "company_class",
+      "priority": 1,
+      "priority_reason": "gates s.2(85) outright: a public company is never small — classify.small_company",
+      "outcome": "ONE_SIDED",
+      "model_a": {
+        "state": "REFUSED",
+        "value": "Public",
+        "span": "L74999TZ1984PLC001456",
+        "refused_by": "FACT_VALUE_UNSUPPORTED",
+        "detail": "the span is present but does not support the value ('Public' does not appear in the quoted span)",
+        "in_declared_vocabulary": true
+      },
+      "model_b": {
+        "state": "ADMITTED",
+        "value": "COMPANY LIMITED",
+        "span": "TITAN COMPANY LIMITED",
+        "refused_by": "",
+        "detail": "",
+        "in_declared_vocabulary": false
+      },
+      "document_text_at_anchor": "1 TITAN COMPANY LIMITED Notice Notice Notice is hereby given pursuant to Sections 96 and 101 of the Companies Act, 2013 that the Forty-First Annual Gene",
+      "verdict": "",
+      "label": "",
+      "contested_by_document": [],
+      "contested_note": ""
+    },
+    {
+      "document": "board_outcomes/sonata_outcome_of_agm_2025",
+      "file": "corpus/testdocs/board_outcomes/sonata_outcome_of_agm_2025.txt",
+      "kind": "real",
+      "anchor": "corpus/testdocs/board_outcomes/sonata_outcome_of_agm_2025.txt:6",
+      "anchor_line": 6,
+      "field": "company_class",
+      "priority": 1,
+      "priority_reason": "gates s.2(85) outright: a public company is never small — classify.small_company",
+      "outcome": "ONE_SIDED",
+      "model_a": {
+        "state": "REFUSED",
+        "value": "Public",
+        "span": "Sonata Software Limited - SSL",
+        "refused_by": "FACT_VALUE_UNSUPPORTED",
+        "detail": "the span is present but does not support the value ('Public' does not appear in the quoted span)",
+        "in_declared_vocabulary": true
+      },
+      "model_b": {
+        "state": "ADMITTED",
+        "value": "Limited",
+        "span": "Sonata Software Limited - SSL",
+        "refused_by": "",
+        "detail": "",
+        "in_declared_vocabulary": false
+      },
+      "document_text_at_anchor": "Sonata Software Limited - SSL Registered Office: 208, T V Industrial Estate, 2nd Floor, S K Ahire Marg, Worli, Mumbai – 400 030 Corporate Office: Tower-A, So",
+      "verdict": "",
+      "label": "",
+      "contested_by_document": [],
+      "contested_note": ""
+    },
+    {
+      "document": "icsi_specimens/04_minutes_subsequent_board_meeting_annexVIII",
+      "file": "corpus/testdocs/icsi_specimens/04_minutes_subsequent_board_meeting_annexVIII.txt",
+      "kind": "specimen",
+      "anchor": "corpus/testdocs/icsi_specimens/04_minutes_subsequent_board_meeting_annexVIII.txt:87",
+      "anchor_line": 87,
+      "field": "paid_up_capital_rupees",
+      "priority": 1,
+      "priority_reason": "s.2(85) small company and the Board Powers Rules — classify.small_company",
+      "outcome": "ONE_SIDED",
+      "model_a": {
+        "state": "ADMITTED",
+        "value": 1000000,
+        "span": "10,00,000 equity shares",
+        "refused_by": "",
+        "detail": "",
+        "in_declared_vocabulary": null
+      },
+      "model_b": {
+        "state": "ABSENT",
+        "value": null,
+        "span": "",
+        "refused_by": "",
+        "detail": "",
+        "in_declared_vocabulary": null
+      },
+      "document_text_at_anchor": "ng Rs. 10,00,000, be paid on the ..................... (date), out of the profits of the company for the year ending ........, on 10,00,000 equity shares, to those equity shareholders whose names appear in the Register of Members of the company on the ........ of ........, and that",
+      "verdict": "",
+      "label": "",
+      "contested_by_document": [],
+      "contested_note": ""
+    },
+    {
+      "document": "agm_notices/sonata_29th_agm_notice_2024",
+      "file": "corpus/testdocs/agm_notices/sonata_29th_agm_notice_2024.txt",
+      "kind": "real",
+      "anchor": "corpus/testdocs/agm_notices/sonata_29th_agm_notice_2024.txt:8",
+      "anchor_line": 8,
+      "field": "financial_year",
+      "priority": 2,
+      "priority_reason": "chooses WHICH year's figures a threshold is tested against — company_profile.amount_for refuses a year mismatch",
+      "outcome": "ONE_SIDED",
+      "model_a": {
+        "state": "ADMITTED",
+        "value": "2023-24",
+        "span": "Annual Report 2023-24",
+        "refused_by": "",
+        "detail": "",
+        "in_declared_vocabulary": null
+      },
+      "model_b": {
+        "state": "REFUSED",
+        "value": "2024-03-31",
+        "span": "Adoption of Financial Statements for the Financial Year ended March 31, 2024.",
+        "refused_by": "FACT_VALUE_UNSUPPORTED",
+        "detail": "the span is present but does not support the value ('2024-03-31' does not appear in the quoted span)",
+        "in_declared_vocabulary": null
+      },
+      "document_text_at_anchor": "Annual Report 2023-24 1 SONATA SOFTWARE LIMITED (CIN: L72200MH1994PLC082110) Registered Office: 208, T V Industrial Estate, 2nd floor, S. K. Ahire Marg",
+      "verdict": "",
+      "label": "",
+      "contested_by_document": [],
+      "contested_note": ""
+    },
+    {
+      "document": "agm_notices/tcpl_62nd_agm_notice_2025",
+      "file": "corpus/testdocs/agm_notices/tcpl_62nd_agm_notice_2025.txt",
+      "kind": "real",
+      "anchor": "corpus/testdocs/agm_notices/tcpl_62nd_agm_notice_2025.txt:18",
+      "anchor_line": 18,
+      "field": "financial_year",
+      "priority": 2,
+      "priority_reason": "chooses WHICH year's figures a threshold is tested against — company_profile.amount_for refuses a year mismatch",
+      "outcome": "ONE_SIDED",
+      "model_a": {
+        "state": "ADMITTED",
+        "value": "2025",
+        "span": "for the financial year ended March 31, 2025",
+        "refused_by": "",
+        "detail": "",
+        "in_declared_vocabulary": null
+      },
+      "model_b": {
+        "state": "REFUSED",
+        "value": "2025-03-31",
+        "span": "financial year ended March 31, 2025",
+        "refused_by": "FACT_VALUE_UNSUPPORTED",
+        "detail": "the span is present but does not support the value ('2025-03-31' does not appear in the quoted span)",
+        "in_declared_vocabulary": null
+      },
+      "document_text_at_anchor": "UDITED STANDALONE FINANCIAL STATEMENTS To receive, consider and adopt the Audited Standalone Financial Statements of the Company for the financial year ended March 31, 2025, together with the Reports of the Board of Directors and Auditors thereon. 2. ADOPTION OF AUDITED CONSOLIDATED FINANCIAL STATEMEN",
+      "verdict": "",
+      "label": "",
+      "contested_by_document": [],
+      "contested_note": ""
+    },
+    {
+      "document": "agm_notices/tcpl_63rd_agm_notice_2026",
+      "file": "corpus/testdocs/agm_notices/tcpl_63rd_agm_notice_2026.txt",
+      "kind": "real",
+      "anchor": "corpus/testdocs/agm_notices/tcpl_63rd_agm_notice_2026.txt:110",
+      "anchor_line": 110,
+      "field": "financial_year",
+      "priority": 2,
+      "priority_reason": "chooses WHICH year's figures a threshold is tested against — company_profile.amount_for refuses a year mismatch",
+      "outcome": "ONE_SIDED",
+      "model_a": {
+        "state": "ADMITTED",
+        "value": "2025-26",
+        "span": "Integrated Annual Report 2025-26",
+        "refused_by": "",
+        "detail": "",
+        "in_declared_vocabulary": null
+      },
+      "model_b": {
+        "state": "REFUSED",
+        "value": "2026-03-31",
+        "span": "for the financial year ended March 31, 2026,",
+        "refused_by": "FACT_VALUE_UNSUPPORTED",
+        "detail": "the span is present but does not support the value ('2026-03-31' does not appear in the quoted span)",
+        "in_declared_vocabulary": null
+      },
+      "document_text_at_anchor": "necessary, proper or expedient, to give effect to this resolution and for matters connected therewith or incidental thereto.” 490 Integrated Annual Report 2025-26 Notes: 1. The Ministry of Corporate Affairs (‘MCA’) allows companies to hold AGM through Video Conferencing or Other Audio Visual",
+      "verdict": "",
+      "label": "",
+      "contested_by_document": [],
+      "contested_note": ""
+    },
+    {
+      "document": "agm_notices/titan_42nd_agm_notice_2026",
+      "file": "corpus/testdocs/agm_notices/titan_42nd_agm_notice_2026.txt",
+      "kind": "real",
+      "anchor": "corpus/testdocs/agm_notices/titan_42nd_agm_notice_2026.txt:11",
+      "anchor_line": 11,
+      "field": "financial_year",
+      "priority": 2,
+      "priority_reason": "chooses WHICH year's figures a threshold is tested against — company_profile.amount_for refuses a year mismatch",
+      "outcome": "ONE_SIDED",
+      "model_a": {
+        "state": "ADMITTED",
+        "value": "2025-26",
+        "span": "Annual Report 2025-26",
+        "refused_by": "",
+        "detail": "",
+        "in_declared_vocabulary": null
+      },
+      "model_b": {
+        "state": "REFUSED",
+        "value": "2026-03-31",
+        "span": "31st March 2026",
+        "refused_by": "FACT_VALUE_UNSUPPORTED",
+        "detail": "the span is present but does not support the value ('2026-03-31' does not appear in the quoted span)",
+        "in_declared_vocabulary": null
+      },
+      "document_text_at_anchor": "Financial Statements Statutory Reports Corporate Overview 1 Annual Report 2025-26 Titan Company Limited Notice is hereby given pursuant to Sections 96 and 101 of the Companies Act, 2013 (the Act) that the Forty",
+      "verdict": "",
+      "label": "",
+      "contested_by_document": [],
+      "contested_note": ""
+    },
+    {
+      "document": "board_outcomes/routemobile_outcome_board_meeting_2025-11-03",
+      "file": "corpus/testdocs/board_outcomes/routemobile_outcome_board_meeting_2025-11-03.txt",
+      "kind": "real",
+      "anchor": "corpus/testdocs/board_outcomes/routemobile_outcome_board_meeting_2025-11-03.txt:38",
+      "anchor_line": 38,
+      "field": "financial_year",
+      "priority": 2,
+      "priority_reason": "chooses WHICH year's figures a threshold is tested against — company_profile.amount_for refuses a year mismatch",
+      "outcome": "ONE_SIDED",
+      "model_a": {
+        "state": "REFUSED",
+        "value": "2025-2026",
+        "span": "Ref No: RML/2025-26/626",
+        "refused_by": "FACT_VALUE_UNSUPPORTED",
+        "detail": "the span is present but does not support the value ('2025-2026' does not appear in the quoted span)",
+        "in_declared_vocabulary": null
+      },
+      "model_b": {
+        "state": "ADMITTED",
+        "value": "F.Y. 2025-26",
+        "span": "for the F.Y. 2025-26:",
+        "refused_by": "",
+        "detail": "",
+        "in_declared_vocabulary": null
+      },
+      "document_text_at_anchor": "t www.routemobile.com. 2. Declaration of Second Interim Dividend of Rs. 3/- per equity share of Rs. 10/- each of the Company for the F.Y. 2025-26: Series Equity (EQ) Record Date November 10, 2025 (Pursuant to Regulation 42 of the Listing Regulations, for the purpose of",
+      "verdict": "",
+      "label": "",
+      "contested_by_document": [],
+      "contested_note": ""
+    },
+    {
+      "document": "board_outcomes/sonata_outcome_of_agm_2025",
+      "file": "corpus/testdocs/board_outcomes/sonata_outcome_of_agm_2025.txt",
+      "kind": "real",
+      "anchor": "corpus/testdocs/board_outcomes/sonata_outcome_of_agm_2025.txt:163",
+      "anchor_line": 163,
+      "field": "financial_year",
+      "priority": 2,
+      "priority_reason": "chooses WHICH year's figures a threshold is tested against — company_profile.amount_for refuses a year mismatch",
+      "outcome": "ONE_SIDED",
+      "model_a": {
+        "state": "ADMITTED",
+        "value": "2025",
+        "span": "Financial Year ended 31st March, 2025",
+        "refused_by": "",
+        "detail": "",
+        "in_declared_vocabulary": null
+      },
+      "model_b": {
+        "state": "REFUSED",
+        "value": "2025-03-31",
+        "span": "Adoption of Financial Statements for the Financial Year ended 31st March, 2025;",
+        "refused_by": "FACT_VALUE_UNSUPPORTED",
+        "detail": "the span is present but does not support the value ('2025-03-31' does not appear in the quoted span)",
+        "in_declared_vocabulary": null
+      },
+      "document_text_at_anchor": "th AGM dated 7th May, 2025, were transacted at the Meeting: Ordinary Business: 1. Adoption of Financial Statements for the Financial Year ended 31st March, 2025; 2. Declaration of Final Dividend of ₹ 4.40 per equity share (i.e. 440%) for the Financial Year ended 31 st March, 2025; 3. Ap",
+      "verdict": "",
+      "label": "",
+      "contested_by_document": [],
+      "contested_note": ""
+    }
+  ],
+  "disagreements_cut": [],
+  "cut_summary": {
+    "cut_total": 0,
+    "by_field": {},
+    "by_outcome": {}
+  },
+  "repeated_shapes": [
+    {
+      "field": "financial_year",
+      "outcome": "ONE_SIDED",
+      "count": 6,
+      "model_a_values": [
+        "2023-24",
+        "2025",
+        "2025-26",
+        "(dropped by FACT_VALUE_UNSUPPORTED) 2025-2026"
+      ],
+      "model_b_values": [
+        "(dropped by FACT_VALUE_UNSUPPORTED) 2024-03-31",
+        "(dropped by FACT_VALUE_UNSUPPORTED) 2025-03-31",
+        "(dropped by FACT_VALUE_UNSUPPORTED) 2026-03-31",
+        "F.Y. 2025-26"
+      ],
+      "documents": [
+        "agm_notices/sonata_29th_agm_notice_2024",
+        "agm_notices/tcpl_62nd_agm_notice_2025",
+        "agm_notices/tcpl_63rd_agm_notice_2026",
+        "agm_notices/titan_42nd_agm_notice_2026",
+        "board_outcomes/routemobile_outcome_board_meeting_2025-11-03",
+        "board_outcomes/sonata_outcome_of_agm_2025"
+      ]
+    },
+    {
+      "field": "company_class",
+      "outcome": "ONE_SIDED",
+      "count": 4,
+      "model_a_values": [
+        "(dropped by FACT_VALUE_UNSUPPORTED) Public [a CompanyClass value]"
+      ],
+      "model_b_values": [
+        "Limited [NOT a CompanyClass value]",
+        "Tata Consumer Products Limited [NOT a CompanyClass value]",
+        "COMPANY LIMITED [NOT a CompanyClass value]"
+      ],
+      "documents": [
+        "agm_notices/routemobile_21st_agm_notice_2025",
+        "agm_notices/tcpl_62nd_agm_notice_2025",
+        "agm_notices/titan_41st_agm_notice_2025",
+        "board_outcomes/sonata_outcome_of_agm_2025"
+      ]
+    },
+    {
+      "field": "company_class",
+      "outcome": "DISAGREE",
+      "count": 1,
+      "model_a_values": [
+        "public [a CompanyClass value]"
+      ],
+      "model_b_values": [
+        "listed public company [NOT a CompanyClass value]"
+      ],
+      "documents": [
+        "icsi_specimens/07_egm_notice_annexIII"
+      ]
+    },
+    {
+      "field": "paid_up_capital_rupees",
+      "outcome": "ONE_SIDED",
+      "count": 1,
+      "model_a_values": [
+        "1000000"
+      ],
+      "model_b_values": [
+        "(said nothing)"
+      ],
+      "documents": [
+        "icsi_specimens/04_minutes_subsequent_board_meeting_annexVIII"
+      ]
+    }
+  ],
+  "review_budget_rows": 60,
+  "counts": {
+    "agree": 16,
+    "disagree": 1,
+    "one_sided": 11,
+    "neither": 232
+  },
+  "gate_refusals": [
+    {
+      "document": "agm_notices/routemobile_20th_agm_notice_2024",
+      "model": "azure:gpt-5-mini",
+      "field": "document_date",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "document_date: the span is present but does not support the value (the quoted span states no date this parser recognises)"
+    },
+    {
+      "document": "agm_notices/routemobile_20th_agm_notice_2024",
+      "model": "azure:gpt-5-mini",
+      "field": "financial_year",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "financial_year: the span is present but does not support the value ('2024-03-31' does not appear in the quoted span)"
+    },
+    {
+      "document": "agm_notices/routemobile_20th_agm_notice_2024",
+      "model": "azure:gpt-5-mini",
+      "field": "turnover_rupees",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "turnover_rupees: the span is present but does not support the value (span states 2023, extractor proposed 40233000000)"
+    },
+    {
+      "document": "agm_notices/routemobile_20th_agm_notice_2024",
+      "model": "azure:gpt-5-mini",
+      "field": "cin",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "cin: the span is present but does not support the value ('L\\u200972900MH2004PLC146323' is not a well-formed CIN (L/U, 5-digit activity, state, year, ownership, 6-digit number))"
+    },
+    {
+      "document": "agm_notices/routemobile_21st_agm_notice_2025",
+      "model": "azure:llama-3-3-70b",
+      "field": "document_date",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "document_date: the span is present but does not support the value (the quoted span states no date this parser recognises)"
+    },
+    {
+      "document": "agm_notices/routemobile_21st_agm_notice_2025",
+      "model": "azure:llama-3-3-70b",
+      "field": "incorporation_date",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "incorporation_date: the span is present but does not support the value (the quoted span states no date this parser recognises)"
+    },
+    {
+      "document": "agm_notices/routemobile_21st_agm_notice_2025",
+      "model": "azure:llama-3-3-70b",
+      "field": "company_class",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "company_class: the span is present but does not support the value ('Public' does not appear in the quoted span)"
+    },
+    {
+      "document": "agm_notices/routemobile_21st_agm_notice_2025",
+      "model": "azure:llama-3-3-70b",
+      "field": "financial_year",
+      "violation": "FACT_NOT_GROUNDED",
+      "detail": "financial_year: the quoted span is not in the document"
+    },
+    {
+      "document": "agm_notices/routemobile_21st_agm_notice_2025",
+      "model": "azure:gpt-5-mini",
+      "field": "document_date",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "document_date: the span is present but does not support the value (the quoted span states no date this parser recognises)"
+    },
+    {
+      "document": "agm_notices/routemobile_21st_agm_notice_2025",
+      "model": "azure:gpt-5-mini",
+      "field": "financial_year",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "financial_year: the span is present but does not support the value ('2025-03-31' does not appear in the quoted span)"
+    },
+    {
+      "document": "agm_notices/routemobile_22nd_agm_notice_2026",
+      "model": "azure:llama-3-3-70b",
+      "field": "document_date",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "document_date: the span is present but does not support the value (the quoted span states no date this parser recognises)"
+    },
+    {
+      "document": "agm_notices/routemobile_22nd_agm_notice_2026",
+      "model": "azure:llama-3-3-70b",
+      "field": "incorporation_date",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "incorporation_date: the span is present but does not support the value (the quoted span states no date this parser recognises)"
+    },
+    {
+      "document": "agm_notices/routemobile_22nd_agm_notice_2026",
+      "model": "azure:llama-3-3-70b",
+      "field": "company_class",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "company_class: the span is present but does not support the value ('Public' does not appear in the quoted span)"
+    },
+    {
+      "document": "agm_notices/routemobile_22nd_agm_notice_2026",
+      "model": "azure:llama-3-3-70b",
+      "field": "financial_year",
+      "violation": "FACT_NOT_GROUNDED",
+      "detail": "financial_year: the quoted span is not in the document"
+    },
+    {
+      "document": "agm_notices/routemobile_22nd_agm_notice_2026",
+      "model": "azure:gpt-5-mini",
+      "field": "document_date",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "document_date: the span is present but does not support the value (the quoted span states no date this parser recognises)"
+    },
+    {
+      "document": "agm_notices/routemobile_22nd_agm_notice_2026",
+      "model": "azure:gpt-5-mini",
+      "field": "financial_year",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "financial_year: the span is present but does not support the value ('2026-03-31' does not appear in the quoted span)"
+    },
+    {
+      "document": "agm_notices/sonata_29th_agm_notice_2024",
+      "model": "azure:llama-3-3-70b",
+      "field": "document_date",
+      "violation": "FACT_NOT_GROUNDED",
+      "detail": "document_date: the quoted span is not in the document"
+    },
+    {
+      "document": "agm_notices/sonata_29th_agm_notice_2024",
+      "model": "azure:llama-3-3-70b",
+      "field": "incorporation_date",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "incorporation_date: the span is present but does not support the value (the quoted span states no date this parser recognises)"
+    },
+    {
+      "document": "agm_notices/sonata_29th_agm_notice_2024",
+      "model": "azure:llama-3-3-70b",
+      "field": "company_class",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "company_class: the span is present but does not support the value ('Public' does not appear in the quoted span)"
+    },
+    {
+      "document": "agm_notices/sonata_29th_agm_notice_2024",
+      "model": "azure:gpt-5-mini",
+      "field": "document_date",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "document_date: the span is present but does not support the value (the quoted span states no date this parser recognises)"
+    },
+    {
+      "document": "agm_notices/sonata_29th_agm_notice_2024",
+      "model": "azure:gpt-5-mini",
+      "field": "financial_year",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "financial_year: the span is present but does not support the value ('2024-03-31' does not appear in the quoted span)"
+    },
+    {
+      "document": "agm_notices/tataelxsi_37th_agm_notice_2026",
+      "model": "azure:llama-3-3-70b",
+      "field": "document_date",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "document_date: the span is present but does not support the value (the quoted span states no date this parser recognises)"
+    },
+    {
+      "document": "agm_notices/tataelxsi_37th_agm_notice_2026",
+      "model": "azure:llama-3-3-70b",
+      "field": "incorporation_date",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "incorporation_date: the span is present but does not support the value (the quoted span states no date this parser recognises)"
+    },
+    {
+      "document": "agm_notices/tataelxsi_37th_agm_notice_2026",
+      "model": "azure:llama-3-3-70b",
+      "field": "company_class",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "company_class: the span is present but does not support the value ('Public' does not appear in the quoted span)"
+    },
+    {
+      "document": "agm_notices/tataelxsi_37th_agm_notice_2026",
+      "model": "azure:llama-3-3-70b",
+      "field": "financial_year",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "financial_year: the span is present but does not support the value ('2025-2026' does not appear in the quoted span)"
+    },
+    {
+      "document": "agm_notices/tataelxsi_37th_agm_notice_2026",
+      "model": "azure:llama-3-3-70b",
+      "field": "paid_up_capital_rupees",
+      "violation": "FACT_NOT_GROUNDED",
+      "detail": "paid_up_capital_rupees: the quoted span is not in the document"
+    },
+    {
+      "document": "agm_notices/tataelxsi_37th_agm_notice_2026",
+      "model": "azure:llama-3-3-70b",
+      "field": "turnover_rupees",
+      "violation": "FACT_NOT_GROUNDED",
+      "detail": "turnover_rupees: the quoted span is not in the document"
+    },
+    {
+      "document": "agm_notices/tataelxsi_37th_agm_notice_2026",
+      "model": "azure:llama-3-3-70b",
+      "field": "net_worth_rupees",
+      "violation": "FACT_NOT_GROUNDED",
+      "detail": "net_worth_rupees: the quoted span is not in the document"
+    },
+    {
+      "document": "agm_notices/tataelxsi_37th_agm_notice_2026",
+      "model": "azure:llama-3-3-70b",
+      "field": "net_profit_rupees",
+      "violation": "FACT_NOT_GROUNDED",
+      "detail": "net_profit_rupees: the quoted span is not in the document"
+    },
+    {
+      "document": "agm_notices/tataelxsi_37th_agm_notice_2026",
+      "model": "azure:llama-3-3-70b",
+      "field": "director_count",
+      "violation": "FACT_NOT_GROUNDED",
+      "detail": "director_count: the quoted span is not in the document"
+    },
+    {
+      "document": "agm_notices/tataelxsi_37th_agm_notice_2026",
+      "model": "azure:gpt-5-mini",
+      "field": "document_date",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "document_date: the span is present but does not support the value (the quoted span states no date this parser recognises)"
+    },
+    {
+      "document": "agm_notices/tataelxsi_37th_agm_notice_2026",
+      "model": "azure:gpt-5-mini",
+      "field": "financial_year",
+      "violation": "FACT_NOT_GROUNDED",
+      "detail": "financial_year: the quoted span is not in the document"
+    },
+    {
+      "document": "agm_notices/tataelxsi_37th_agm_notice_2026",
+      "model": "azure:gpt-5-mini",
+      "field": "turnover_rupees",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "turnover_rupees: the span is present but does not support the value (span states 20, extractor proposed 37574200000)"
+    },
+    {
+      "document": "agm_notices/tataelxsi_37th_agm_notice_2026",
+      "model": "azure:gpt-5-mini",
+      "field": "net_worth_rupees",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "net_worth_rupees: the span is present but does not support the value (span states 2025, extractor proposed 1005484000000)"
+    },
+    {
+      "document": "agm_notices/tataelxsi_37th_agm_notice_2026",
+      "model": "azure:gpt-5-mini",
+      "field": "net_profit_rupees",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "net_profit_rupees: the span is present but does not support the value (the quoted span states no unambiguous rupee amount)"
+    },
+    {
+      "document": "agm_notices/tcpl_62nd_agm_notice_2025",
+      "model": "azure:llama-3-3-70b",
+      "field": "document_date",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "document_date: the span is present but does not support the value (the quoted span states no date this parser recognises)"
+    },
+    {
+      "document": "agm_notices/tcpl_62nd_agm_notice_2025",
+      "model": "azure:llama-3-3-70b",
+      "field": "company_class",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "company_class: the span is present but does not support the value ('Public' does not appear in the quoted span)"
+    },
+    {
+      "document": "agm_notices/tcpl_62nd_agm_notice_2025",
+      "model": "azure:llama-3-3-70b",
+      "field": "incorporation_date",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "incorporation_date: the span is present but does not support the value (the quoted span states no date this parser recognises)"
+    },
+    {
+      "document": "agm_notices/tcpl_62nd_agm_notice_2025",
+      "model": "azure:gpt-5-mini",
+      "field": "document_date",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "document_date: the span is present but does not support the value (the quoted span states no date this parser recognises)"
+    },
+    {
+      "document": "agm_notices/tcpl_62nd_agm_notice_2025",
+      "model": "azure:gpt-5-mini",
+      "field": "financial_year",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "financial_year: the span is present but does not support the value ('2025-03-31' does not appear in the quoted span)"
+    },
+    {
+      "document": "agm_notices/tcpl_63rd_agm_notice_2026",
+      "model": "azure:llama-3-3-70b",
+      "field": "document_date",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "document_date: the span is present but does not support the value (the quoted span states no date this parser recognises)"
+    },
+    {
+      "document": "agm_notices/tcpl_63rd_agm_notice_2026",
+      "model": "azure:llama-3-3-70b",
+      "field": "company_class",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "company_class: the span is present but does not support the value ('Public' does not appear in the quoted span)"
+    },
+    {
+      "document": "agm_notices/tcpl_63rd_agm_notice_2026",
+      "model": "azure:llama-3-3-70b",
+      "field": "paid_up_capital_rupees",
+      "violation": "FACT_NOT_GROUNDED",
+      "detail": "paid_up_capital_rupees: the quoted span is not in the document"
+    },
+    {
+      "document": "agm_notices/tcpl_63rd_agm_notice_2026",
+      "model": "azure:llama-3-3-70b",
+      "field": "turnover_rupees",
+      "violation": "FACT_NOT_GROUNDED",
+      "detail": "turnover_rupees: the quoted span is not in the document"
+    },
+    {
+      "document": "agm_notices/tcpl_63rd_agm_notice_2026",
+      "model": "azure:llama-3-3-70b",
+      "field": "net_worth_rupees",
+      "violation": "FACT_NOT_GROUNDED",
+      "detail": "net_worth_rupees: the quoted span is not in the document"
+    },
+    {
+      "document": "agm_notices/tcpl_63rd_agm_notice_2026",
+      "model": "azure:llama-3-3-70b",
+      "field": "net_profit_rupees",
+      "violation": "FACT_NOT_GROUNDED",
+      "detail": "net_profit_rupees: the quoted span is not in the document"
+    },
+    {
+      "document": "agm_notices/tcpl_63rd_agm_notice_2026",
+      "model": "azure:llama-3-3-70b",
+      "field": "director_count",
+      "violation": "FACT_NOT_GROUNDED",
+      "detail": "director_count: the quoted span is not in the document"
+    },
+    {
+      "document": "agm_notices/tcpl_63rd_agm_notice_2026",
+      "model": "azure:gpt-5-mini",
+      "field": "document_date",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "document_date: the span is present but does not support the value (the quoted span states no date this parser recognises)"
+    },
+    {
+      "document": "agm_notices/tcpl_63rd_agm_notice_2026",
+      "model": "azure:gpt-5-mini",
+      "field": "financial_year",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "financial_year: the span is present but does not support the value ('2026-03-31' does not appear in the quoted span)"
+    },
+    {
+      "document": "agm_notices/tcpl_63rd_agm_notice_2026",
+      "model": "azure:gpt-5-mini",
+      "field": "company_class",
+      "violation": "FACT_MISBOUND",
+      "detail": "company_class: the span names cin, not company_class"
+    },
+    {
+      "document": "agm_notices/titan_41st_agm_notice_2025",
+      "model": "azure:llama-3-3-70b",
+      "field": "incorporation_date",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "incorporation_date: the span is present but does not support the value (the quoted span states no date this parser recognises)"
+    },
+    {
+      "document": "agm_notices/titan_41st_agm_notice_2025",
+      "model": "azure:llama-3-3-70b",
+      "field": "company_class",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "company_class: the span is present but does not support the value ('Public' does not appear in the quoted span)"
+    },
+    {
+      "document": "agm_notices/titan_41st_agm_notice_2025",
+      "model": "azure:llama-3-3-70b",
+      "field": "financial_year",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "financial_year: the span is present but does not support the value ('2024-25' does not appear in the quoted span)"
+    },
+    {
+      "document": "agm_notices/titan_41st_agm_notice_2025",
+      "model": "azure:gpt-5-mini",
+      "field": "financial_year",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "financial_year: the span is present but does not support the value ('2025-03-31' does not appear in the quoted span)"
+    },
+    {
+      "document": "agm_notices/titan_42nd_agm_notice_2026",
+      "model": "azure:llama-3-3-70b",
+      "field": "incorporation_date",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "incorporation_date: the span is present but does not support the value (the quoted span states no date this parser recognises)"
+    },
+    {
+      "document": "agm_notices/titan_42nd_agm_notice_2026",
+      "model": "azure:llama-3-3-70b",
+      "field": "company_class",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "company_class: the span is present but does not support the value ('Public' does not appear in the quoted span)"
+    },
+    {
+      "document": "agm_notices/titan_42nd_agm_notice_2026",
+      "model": "azure:gpt-5-mini",
+      "field": "financial_year",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "financial_year: the span is present but does not support the value ('2026-03-31' does not appear in the quoted span)"
+    },
+    {
+      "document": "board_outcomes/routemobile_outcome_board_meeting_2024-05-29",
+      "model": "azure:llama-3-3-70b",
+      "field": "document_date",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "document_date: the span is present but does not support the value (the quoted span states no date this parser recognises)"
+    },
+    {
+      "document": "board_outcomes/routemobile_outcome_board_meeting_2024-05-29",
+      "model": "azure:llama-3-3-70b",
+      "field": "incorporation_date",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "incorporation_date: the span is present but does not support the value (the quoted span states no date this parser recognises)"
+    },
+    {
+      "document": "board_outcomes/routemobile_outcome_board_meeting_2024-05-29",
+      "model": "azure:gpt-5-mini",
+      "field": "document_date",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "document_date: the span is present but does not support the value (the quoted span states no date this parser recognises)"
+    },
+    {
+      "document": "board_outcomes/routemobile_outcome_board_meeting_2025-01-28",
+      "model": "azure:llama-3-3-70b",
+      "field": "document_date",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "document_date: the span is present but does not support the value (the quoted span states no date this parser recognises)"
+    },
+    {
+      "document": "board_outcomes/routemobile_outcome_board_meeting_2025-01-28",
+      "model": "azure:llama-3-3-70b",
+      "field": "incorporation_date",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "incorporation_date: the span is present but does not support the value (the quoted span states no date this parser recognises)"
+    },
+    {
+      "document": "board_outcomes/routemobile_outcome_board_meeting_2025-01-28",
+      "model": "azure:llama-3-3-70b",
+      "field": "company_class",
+      "violation": "FACT_NOT_GROUNDED",
+      "detail": "company_class: the quoted span is not in the document"
+    },
+    {
+      "document": "board_outcomes/routemobile_outcome_board_meeting_2025-01-28",
+      "model": "azure:llama-3-3-70b",
+      "field": "paid_up_capital_rupees",
+      "violation": "FACT_NOT_GROUNDED",
+      "detail": "paid_up_capital_rupees: the quoted span is not in the document"
+    },
+    {
+      "document": "board_outcomes/routemobile_outcome_board_meeting_2025-01-28",
+      "model": "azure:llama-3-3-70b",
+      "field": "turnover_rupees",
+      "violation": "FACT_NOT_GROUNDED",
+      "detail": "turnover_rupees: the quoted span is not in the document"
+    },
+    {
+      "document": "board_outcomes/routemobile_outcome_board_meeting_2025-01-28",
+      "model": "azure:llama-3-3-70b",
+      "field": "net_worth_rupees",
+      "violation": "FACT_NOT_GROUNDED",
+      "detail": "net_worth_rupees: the quoted span is not in the document"
+    },
+    {
+      "document": "board_outcomes/routemobile_outcome_board_meeting_2025-01-28",
+      "model": "azure:llama-3-3-70b",
+      "field": "net_profit_rupees",
+      "violation": "FACT_NOT_GROUNDED",
+      "detail": "net_profit_rupees: the quoted span is not in the document"
+    },
+    {
+      "document": "board_outcomes/routemobile_outcome_board_meeting_2025-01-28",
+      "model": "azure:llama-3-3-70b",
+      "field": "director_count",
+      "violation": "FACT_NOT_GROUNDED",
+      "detail": "director_count: the quoted span is not in the document"
+    },
+    {
+      "document": "board_outcomes/routemobile_outcome_board_meeting_2025-11-03",
+      "model": "azure:llama-3-3-70b",
+      "field": "document_date",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "document_date: the span is present but does not support the value (the quoted span states no date this parser recognises)"
+    },
+    {
+      "document": "board_outcomes/routemobile_outcome_board_meeting_2025-11-03",
+      "model": "azure:llama-3-3-70b",
+      "field": "incorporation_date",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "incorporation_date: the span is present but does not support the value (the quoted span states no date this parser recognises)"
+    },
+    {
+      "document": "board_outcomes/routemobile_outcome_board_meeting_2025-11-03",
+      "model": "azure:llama-3-3-70b",
+      "field": "company_class",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "company_class: the span is present but does not support the value ('Public' does not appear in the quoted span)"
+    },
+    {
+      "document": "board_outcomes/routemobile_outcome_board_meeting_2025-11-03",
+      "model": "azure:llama-3-3-70b",
+      "field": "financial_year",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "financial_year: the span is present but does not support the value ('2025-2026' does not appear in the quoted span)"
+    },
+    {
+      "document": "board_outcomes/routemobile_outcome_board_meeting_2025-11-03",
+      "model": "azure:llama-3-3-70b",
+      "field": "paid_up_capital_rupees",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "paid_up_capital_rupees: the span is present but does not support the value (span states 10, extractor proposed 630000000)"
+    },
+    {
+      "document": "board_outcomes/routemobile_outcome_board_meeting_2025-11-03",
+      "model": "azure:gpt-5-mini",
+      "field": "document_date",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "document_date: the span is present but does not support the value (the quoted span states no date this parser recognises)"
+    },
+    {
+      "document": "board_outcomes/routemobile_outcome_board_meeting_2025-11-03",
+      "model": "azure:gpt-5-mini",
+      "field": "paid_up_capital_rupees",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "paid_up_capital_rupees: the span is present but does not support the value (span states 10, extractor proposed 630000000)"
+    },
+    {
+      "document": "board_outcomes/routemobile_outcome_board_meeting_2025-11-03",
+      "model": "azure:gpt-5-mini",
+      "field": "turnover_rupees",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "turnover_rupees: the span is present but does not support the value (the quoted span states no unambiguous rupee amount)"
+    },
+    {
+      "document": "board_outcomes/routemobile_outcome_board_meeting_2025-11-03",
+      "model": "azure:gpt-5-mini",
+      "field": "net_worth_rupees",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "net_worth_rupees: the span is present but does not support the value (the quoted span states no unambiguous rupee amount)"
+    },
+    {
+      "document": "board_outcomes/routemobile_outcome_board_meeting_2025-11-03",
+      "model": "azure:gpt-5-mini",
+      "field": "net_profit_rupees",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "net_profit_rupees: the span is present but does not support the value (span states 5, extractor proposed 399500000)"
+    },
+    {
+      "document": "board_outcomes/routemobile_outcome_board_meeting_2026-05-07",
+      "model": "azure:gpt-5-mini",
+      "field": "document_date",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "document_date: the span is present but does not support the value (the quoted span states no date this parser recognises)"
+    },
+    {
+      "document": "board_outcomes/routemobile_outcome_board_meeting_2026-05-07",
+      "model": "azure:gpt-5-mini",
+      "field": "financial_year",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "financial_year: the span is present but does not support the value ('2026-03-31' does not appear in the quoted span)"
+    },
+    {
+      "document": "board_outcomes/routemobile_outcome_board_meeting_2026-05-07",
+      "model": "azure:gpt-5-mini",
+      "field": "paid_up_capital_rupees",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "paid_up_capital_rupees: the span is present but does not support the value (span states 11, extractor proposed 630000000)"
+    },
+    {
+      "document": "board_outcomes/routemobile_outcome_board_meeting_2026-05-07",
+      "model": "azure:gpt-5-mini",
+      "field": "turnover_rupees",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "turnover_rupees: the span is present but does not support the value (the quoted span states no unambiguous rupee amount)"
+    },
+    {
+      "document": "board_outcomes/routemobile_outcome_board_meeting_2026-05-07",
+      "model": "azure:gpt-5-mini",
+      "field": "net_profit_rupees",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "net_profit_rupees: the span is present but does not support the value (span states 7, extractor proposed 2569400000)"
+    },
+    {
+      "document": "board_outcomes/sonata_outcome_of_agm_2025",
+      "model": "azure:llama-3-3-70b",
+      "field": "incorporation_date",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "incorporation_date: the span is present but does not support the value (the quoted span states no date this parser recognises)"
+    },
+    {
+      "document": "board_outcomes/sonata_outcome_of_agm_2025",
+      "model": "azure:llama-3-3-70b",
+      "field": "company_class",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "company_class: the span is present but does not support the value ('Public' does not appear in the quoted span)"
+    },
+    {
+      "document": "board_outcomes/sonata_outcome_of_agm_2025",
+      "model": "azure:llama-3-3-70b",
+      "field": "director_count",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "director_count: the span is present but does not support the value (the quoted span states no number)"
+    },
+    {
+      "document": "board_outcomes/sonata_outcome_of_agm_2025",
+      "model": "azure:gpt-5-mini",
+      "field": "financial_year",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "financial_year: the span is present but does not support the value ('2025-03-31' does not appear in the quoted span)"
+    },
+    {
+      "document": "board_outcomes/sonata_outcome_of_agm_2026",
+      "model": "azure:llama-3-3-70b",
+      "field": "incorporation_date",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "incorporation_date: the span is present but does not support the value (the quoted span states no date this parser recognises)"
+    },
+    {
+      "document": "board_outcomes/sonata_outcome_of_agm_2026",
+      "model": "azure:llama-3-3-70b",
+      "field": "company_class",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "company_class: the span is present but does not support the value ('Public Limited' does not appear in the quoted span)"
+    },
+    {
+      "document": "board_outcomes/sonata_outcome_of_agm_2026",
+      "model": "azure:llama-3-3-70b",
+      "field": "financial_year",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "financial_year: the span is present but does not support the value ('2026-03-31' does not appear in the quoted span)"
+    },
+    {
+      "document": "board_outcomes/sonata_outcome_of_agm_2026",
+      "model": "azure:llama-3-3-70b",
+      "field": "paid_up_capital_rupees",
+      "violation": "FACT_NOT_GROUNDED",
+      "detail": "paid_up_capital_rupees: the quoted span is not in the document"
+    },
+    {
+      "document": "board_outcomes/sonata_outcome_of_agm_2026",
+      "model": "azure:llama-3-3-70b",
+      "field": "turnover_rupees",
+      "violation": "FACT_NOT_GROUNDED",
+      "detail": "turnover_rupees: the quoted span is not in the document"
+    },
+    {
+      "document": "board_outcomes/sonata_outcome_of_agm_2026",
+      "model": "azure:llama-3-3-70b",
+      "field": "net_worth_rupees",
+      "violation": "FACT_NOT_GROUNDED",
+      "detail": "net_worth_rupees: the quoted span is not in the document"
+    },
+    {
+      "document": "board_outcomes/sonata_outcome_of_agm_2026",
+      "model": "azure:llama-3-3-70b",
+      "field": "net_profit_rupees",
+      "violation": "FACT_NOT_GROUNDED",
+      "detail": "net_profit_rupees: the quoted span is not in the document"
+    },
+    {
+      "document": "board_outcomes/sonata_outcome_of_agm_2026",
+      "model": "azure:llama-3-3-70b",
+      "field": "director_count",
+      "violation": "FACT_NOT_GROUNDED",
+      "detail": "director_count: the quoted span is not in the document"
+    },
+    {
+      "document": "board_outcomes/sonata_outcome_of_agm_2026",
+      "model": "azure:gpt-5-mini",
+      "field": "financial_year",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "financial_year: the span is present but does not support the value ('2026-03-31' does not appear in the quoted span)"
+    },
+    {
+      "document": "icsi_specimens/03_minutes_first_board_meeting_annexVII",
+      "model": "azure:llama-3-3-70b",
+      "field": "incorporation_date",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "incorporation_date: the span is present but does not support the value (the quoted span states no date this parser recognises)"
+    },
+    {
+      "document": "icsi_specimens/03_minutes_first_board_meeting_annexVII",
+      "model": "azure:llama-3-3-70b",
+      "field": "director_count",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "director_count: the span is present but does not support the value (span states 7, extractor proposed 3)"
+    },
+    {
+      "document": "icsi_specimens/03_minutes_first_board_meeting_annexVII",
+      "model": "azure:llama-3-3-70b",
+      "field": "cin",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "cin: the span is present but does not support the value ('None' is not a well-formed CIN (L/U, 5-digit activity, state, year, ownership, 6-digit number))"
+    },
+    {
+      "document": "icsi_specimens/04_minutes_subsequent_board_meeting_annexVIII",
+      "model": "azure:llama-3-3-70b",
+      "field": "turnover_rupees",
+      "violation": "FACT_NOT_GROUNDED",
+      "detail": "turnover_rupees: the quoted span is not in the document"
+    },
+    {
+      "document": "icsi_specimens/04_minutes_subsequent_board_meeting_annexVIII",
+      "model": "azure:llama-3-3-70b",
+      "field": "net_worth_rupees",
+      "violation": "FACT_NOT_GROUNDED",
+      "detail": "net_worth_rupees: the quoted span is not in the document"
+    },
+    {
+      "document": "icsi_specimens/04_minutes_subsequent_board_meeting_annexVIII",
+      "model": "azure:llama-3-3-70b",
+      "field": "net_profit_rupees",
+      "violation": "FACT_NOT_GROUNDED",
+      "detail": "net_profit_rupees: the quoted span is not in the document"
+    },
+    {
+      "document": "icsi_specimens/04_minutes_subsequent_board_meeting_annexVIII",
+      "model": "azure:llama-3-3-70b",
+      "field": "director_count",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "director_count: the span is present but does not support the value (the quoted span states no number)"
+    },
+    {
+      "document": "icsi_specimens/04_minutes_subsequent_board_meeting_annexVIII",
+      "model": "azure:llama-3-3-70b",
+      "field": "cin",
+      "violation": "FACT_NOT_GROUNDED",
+      "detail": "cin: the quoted span is not in the document"
+    },
+    {
+      "document": "icsi_specimens/04_minutes_subsequent_board_meeting_annexVIII",
+      "model": "azure:llama-3-3-70b",
+      "field": "document_date",
+      "violation": "FACT_NOT_GROUNDED",
+      "detail": "document_date: the quoted span is not in the document"
+    },
+    {
+      "document": "icsi_specimens/04_minutes_subsequent_board_meeting_annexVIII",
+      "model": "azure:llama-3-3-70b",
+      "field": "incorporation_date",
+      "violation": "FACT_NOT_GROUNDED",
+      "detail": "incorporation_date: the quoted span is not in the document"
+    },
+    {
+      "document": "icsi_specimens/04_minutes_subsequent_board_meeting_annexVIII",
+      "model": "azure:llama-3-3-70b",
+      "field": "company_class",
+      "violation": "FACT_NOT_GROUNDED",
+      "detail": "company_class: the quoted span is not in the document"
+    },
+    {
+      "document": "icsi_specimens/04_minutes_subsequent_board_meeting_annexVIII",
+      "model": "azure:llama-3-3-70b",
+      "field": "financial_year",
+      "violation": "FACT_NOT_GROUNDED",
+      "detail": "financial_year: the quoted span is not in the document"
+    },
+    {
+      "document": "icsi_specimens/04_minutes_subsequent_board_meeting_annexVIII",
+      "model": "azure:gpt-5-mini",
+      "field": "director_count",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "director_count: the span is present but does not support the value (the quoted span states no number)"
+    },
+    {
+      "document": "icsi_specimens/06_agm_notice_annexII",
+      "model": "azure:llama-3-3-70b",
+      "field": "financial_year",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "financial_year: the span is present but does not support the value (the proposed value is empty; no span can support it)"
+    },
+    {
+      "document": "icsi_specimens/06_agm_notice_annexII",
+      "model": "azure:llama-3-3-70b",
+      "field": "cin",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "cin: the span is present but does not support the value ('None' is not a well-formed CIN (L/U, 5-digit activity, state, year, ownership, 6-digit number))"
+    },
+    {
+      "document": "icsi_specimens/07_egm_notice_annexIII",
+      "model": "azure:llama-3-3-70b",
+      "field": "cin",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "cin: the span is present but does not support the value ('' is not a well-formed CIN (L/U, 5-digit activity, state, year, ownership, 6-digit number))"
+    },
+    {
+      "document": "icsi_specimens/07_egm_notice_annexIII",
+      "model": "azure:llama-3-3-70b",
+      "field": "director_count",
+      "violation": "FACT_NOT_GROUNDED",
+      "detail": "director_count: the quoted span is not in the document"
+    },
+    {
+      "document": "icsi_specimens/07_egm_notice_annexIII",
+      "model": "azure:llama-3-3-70b",
+      "field": "document_date",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "document_date: the span is present but does not support the value (the quoted span states no date this parser recognises)"
+    },
+    {
+      "document": "icsi_specimens/07_egm_notice_annexIII",
+      "model": "azure:llama-3-3-70b",
+      "field": "financial_year",
+      "violation": "FACT_NOT_GROUNDED",
+      "detail": "financial_year: the quoted span is not in the document"
+    },
+    {
+      "document": "icsi_specimens/07_egm_notice_annexIII",
+      "model": "azure:llama-3-3-70b",
+      "field": "incorporation_date",
+      "violation": "FACT_NOT_GROUNDED",
+      "detail": "incorporation_date: the quoted span is not in the document"
+    },
+    {
+      "document": "icsi_specimens/07_egm_notice_annexIII",
+      "model": "azure:llama-3-3-70b",
+      "field": "net_profit_rupees",
+      "violation": "FACT_NOT_GROUNDED",
+      "detail": "net_profit_rupees: the quoted span is not in the document"
+    },
+    {
+      "document": "icsi_specimens/07_egm_notice_annexIII",
+      "model": "azure:llama-3-3-70b",
+      "field": "net_worth_rupees",
+      "violation": "FACT_NOT_GROUNDED",
+      "detail": "net_worth_rupees: the quoted span is not in the document"
+    },
+    {
+      "document": "icsi_specimens/07_egm_notice_annexIII",
+      "model": "azure:llama-3-3-70b",
+      "field": "paid_up_capital_rupees",
+      "violation": "FACT_NOT_GROUNDED",
+      "detail": "paid_up_capital_rupees: the quoted span is not in the document"
+    },
+    {
+      "document": "icsi_specimens/07_egm_notice_annexIII",
+      "model": "azure:llama-3-3-70b",
+      "field": "turnover_rupees",
+      "violation": "FACT_NOT_GROUNDED",
+      "detail": "turnover_rupees: the quoted span is not in the document"
+    },
+    {
+      "document": "icsi_specimens/09_minutes_agm_annexXVI",
+      "model": "azure:llama-3-3-70b",
+      "field": "financial_year",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "financial_year: the span is present but does not support the value (the proposed value is empty; no span can support it)"
+    },
+    {
+      "document": "icsi_specimens/09_minutes_agm_annexXVI",
+      "model": "azure:llama-3-3-70b",
+      "field": "director_count",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "director_count: the span is present but does not support the value (the quoted span states more than one number (1, 2, 3, 4, 5, 6) and does not say which is director_count)"
+    },
+    {
+      "document": "icsi_specimens/10_minutes_egm_annexXVII",
+      "model": "azure:llama-3-3-70b",
+      "field": "cin",
+      "violation": "FACT_NOT_GROUNDED",
+      "detail": "cin: the quoted span is not in the document"
+    },
+    {
+      "document": "icsi_specimens/10_minutes_egm_annexXVII",
+      "model": "azure:llama-3-3-70b",
+      "field": "company_class",
+      "violation": "FACT_NOT_GROUNDED",
+      "detail": "company_class: the quoted span is not in the document"
+    },
+    {
+      "document": "icsi_specimens/10_minutes_egm_annexXVII",
+      "model": "azure:llama-3-3-70b",
+      "field": "director_count",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "director_count: the span is present but does not support the value (the quoted span states more than one number (1, 2, 3) and does not say which is director_count)"
+    },
+    {
+      "document": "icsi_specimens/10_minutes_egm_annexXVII",
+      "model": "azure:llama-3-3-70b",
+      "field": "document_date",
+      "violation": "FACT_NOT_GROUNDED",
+      "detail": "document_date: the quoted span is not in the document"
+    },
+    {
+      "document": "icsi_specimens/10_minutes_egm_annexXVII",
+      "model": "azure:llama-3-3-70b",
+      "field": "financial_year",
+      "violation": "FACT_NOT_GROUNDED",
+      "detail": "financial_year: the quoted span is not in the document"
+    },
+    {
+      "document": "icsi_specimens/10_minutes_egm_annexXVII",
+      "model": "azure:llama-3-3-70b",
+      "field": "incorporation_date",
+      "violation": "FACT_NOT_GROUNDED",
+      "detail": "incorporation_date: the quoted span is not in the document"
+    },
+    {
+      "document": "icsi_specimens/10_minutes_egm_annexXVII",
+      "model": "azure:llama-3-3-70b",
+      "field": "net_profit_rupees",
+      "violation": "FACT_NOT_GROUNDED",
+      "detail": "net_profit_rupees: the quoted span is not in the document"
+    },
+    {
+      "document": "icsi_specimens/10_minutes_egm_annexXVII",
+      "model": "azure:llama-3-3-70b",
+      "field": "net_worth_rupees",
+      "violation": "FACT_NOT_GROUNDED",
+      "detail": "net_worth_rupees: the quoted span is not in the document"
+    },
+    {
+      "document": "icsi_specimens/10_minutes_egm_annexXVII",
+      "model": "azure:llama-3-3-70b",
+      "field": "paid_up_capital_rupees",
+      "violation": "FACT_NOT_GROUNDED",
+      "detail": "paid_up_capital_rupees: the quoted span is not in the document"
+    },
+    {
+      "document": "icsi_specimens/10_minutes_egm_annexXVII",
+      "model": "azure:llama-3-3-70b",
+      "field": "turnover_rupees",
+      "violation": "FACT_NOT_GROUNDED",
+      "detail": "turnover_rupees: the quoted span is not in the document"
+    },
+    {
+      "document": "icsi_specimens/11_minutes_adjourned_agm_annexXVIII",
+      "model": "azure:llama-3-3-70b",
+      "field": "financial_year",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "financial_year: the span is present but does not support the value (the proposed value is empty; no span can support it)"
+    },
+    {
+      "document": "icsi_specimens/11_minutes_adjourned_agm_annexXVIII",
+      "model": "azure:gpt-5-mini",
+      "field": "director_count",
+      "violation": "FACT_VALUE_UNSUPPORTED",
+      "detail": "director_count: the span is present but does not support the value (the quoted span states more than one number (1, 2, 3, 4, 5) and does not say which is director_count)"
+    }
+  ],
+  "stopped_early": "",
+  "resumed_from_checkpoint": 52,
+  "spend": {
+    "calls_by_model": {
+      "azure:gpt-5-mini": 3
+    },
+    "tokens_in_by_model": {
+      "azure:gpt-5-mini": 20893
+    },
+    "tokens_out_by_model": {
+      "azure:gpt-5-mini": 5366
+    },
+    "calls_with_an_unmeasured_token_count": {},
+    "requests_made": 10,
+    "rate_limited_retries_by_model": {
+      "azure:llama-3-3-70b": 4
+    },
+    "priced_inr": 0.0,
+    "priced_by": "backend/budget.cost_inr",
+    "unpriced_models": [
+      "azure:gpt-5-mini"
+    ],
+    "unpriced_note": "These deployments are not in backend/budget.PRICING, so no rupee figure is computed for them. They are served on the Azure for Students credit. Tokens are reported; the rupee cost is OPEN, not zero.",
+    "spend_cap_inr": 500.0,
+    "request_ceiling": 90
+  },
+  "runs": [
+    {
+      "document": "agm_notices/routemobile_20th_agm_notice_2024",
+      "model": "azure:llama-3-3-70b",
+      "ok": false,
+      "error": "ModelUnavailable: Azure HTTP 429: {\"error\":{\"code\":\"RateLimitReached\",\"message\":\"Your requests to Llama-3.3-70B-Instruct for llama-3-3-70b in uaenorth have exceeded rate limit.\",\"details\":\"Your requests to Llama-3.3-70B-Instruct for l",
+      "meta": {},
+      "proposed": {}
+    },
+    {
+      "document": "agm_notices/routemobile_20th_agm_notice_2024",
+      "model": "azure:gpt-5-mini",
+      "ok": true,
+      "error": "",
+      "meta": {
+        "model": "azure:gpt-5-mini",
+        "served_by": "gpt-5-mini-2025-08-07",
+        "parse": "OK",
+        "temperature": null,
+        "tokens_in": 19852,
+        "tokens_out": 2638
+      },
+      "proposed": {
+        "document_date": {
+          "value": "2024-07-19",
+          "span": "Date: July 19, 2024"
+        },
+        "company_class": {
+          "value": "Route Mobile Limited",
+          "span": "Route Mobile Limited"
+        },
+        "financial_year": {
+          "value": "2024-03-31",
+          "span": "financial year ended March 31, 2024"
+        },
+        "turnover_rupees": {
+          "value": 40233000000,
+          "span": "Company’s annual consolidated turnover for the FY 2023-’24: ₹4,023.3 crores."
+        },
+        "cin": {
+          "value": "L 72900MH2004PLC146323",
+          "span": "CIN: L 72900MH2004PLC146323"
+        }
+      }
+    },
+    {
+      "document": "agm_notices/routemobile_21st_agm_notice_2025",
+      "model": "azure:llama-3-3-70b",
+      "ok": true,
+      "error": "",
+      "meta": {
+        "model": "azure:llama-3-3-70b",
+        "served_by": "Llama-3.3-70B-Instruct",
+        "parse": "OK",
+        "temperature": 0,
+        "tokens_in": 15088,
+        "tokens_out": 200
+      },
+      "proposed": {
+        "document_date": {
+          "value": "2025-07-17",
+          "span": "Date: July 17, 2025"
+        },
+        "incorporation_date": {
+          "value": "2004-01-01",
+          "span": "CIN: L72900MH2004PLC146323"
+        },
+        "company_class": {
+          "value": "Public",
+          "span": "L72900MH2004PLC146323"
+        },
+        "financial_year": {
+          "value": "2024-25",
+          "span": "for the Financial Year (\"FY\") 2024-25"
+        },
+        "cin": {
+          "value": "L72900MH2004PLC146323",
+          "span": "CIN: L72900MH2004PLC146323"
+        }
+      }
+    },
+    {
+      "document": "agm_notices/routemobile_21st_agm_notice_2025",
+      "model": "azure:gpt-5-mini",
+      "ok": true,
+      "error": "",
+      "meta": {
+        "model": "azure:gpt-5-mini",
+        "served_by": "gpt-5-mini-2025-08-07",
+        "parse": "OK",
+        "temperature": null,
+        "tokens_in": 14900,
+        "tokens_out": 2016
+      },
+      "proposed": {
+        "document_date": {
+          "value": "2025-07-17",
+          "span": "Date: July 17, 2025"
+        },
+        "company_class": {
+          "value": "Limited",
+          "span": "Route Mobile Limited (“Company”)"
+        },
+        "financial_year": {
+          "value": "2025-03-31",
+          "span": "financial year ended March 31, 2025"
+        },
+        "cin": {
+          "value": "L72900MH2004PLC146323",
+          "span": "CIN: L72900MH2004PLC146323"
+        }
+      }
+    },
+    {
+      "document": "agm_notices/routemobile_22nd_agm_notice_2026",
+      "model": "azure:llama-3-3-70b",
+      "ok": true,
+      "error": "",
+      "meta": {
+        "model": "azure:llama-3-3-70b",
+        "served_by": "Llama-3.3-70B-Instruct",
+        "parse": "OK",
+        "temperature": 0,
+        "tokens_in": 15284,
+        "tokens_out": 200
+      },
+      "proposed": {
+        "document_date": {
+          "value": "2026-07-23",
+          "span": "Date: July 23, 2026"
+        },
+        "incorporation_date": {
+          "value": "2004-00-00",
+          "span": "CIN: L72900MH2004PLC146323"
+        },
+        "company_class": {
+          "value": "Public",
+          "span": "L72900MH2004PLC146323"
+        },
+        "financial_year": {
+          "value": "2025-26",
+          "span": "for the Financial Year (\"FY\") 2025-26"
+        },
+        "cin": {
+          "value": "L72900MH2004PLC146323",
+          "span": "CIN: L72900MH2004PLC146323"
+        }
+      }
+    },
+    {
+      "document": "agm_notices/routemobile_22nd_agm_notice_2026",
+      "model": "azure:gpt-5-mini",
+      "ok": true,
+      "error": "",
+      "meta": {
+        "model": "azure:gpt-5-mini",
+        "served_by": "gpt-5-mini-2025-08-07",
+        "parse": "OK",
+        "temperature": null,
+        "tokens_in": 15083,
+        "tokens_out": 1793
+      },
+      "proposed": {
+        "document_date": {
+          "value": "2026-07-23",
+          "span": "Date: July 23, 2026"
+        },
+        "financial_year": {
+          "value": "2026-03-31",
+          "span": "financial year ended March 31, 2026"
+        },
+        "cin": {
+          "value": "L72900MH2004PLC146323",
+          "span": "CIN: L72900MH2004PLC146323"
+        }
+      }
+    },
+    {
+      "document": "agm_notices/sonata_29th_agm_notice_2024",
+      "model": "azure:llama-3-3-70b",
+      "ok": true,
+      "error": "",
+      "meta": {
+        "model": "azure:llama-3-3-70b",
+        "served_by": "Llama-3.3-70B-Instruct",
+        "parse": "OK",
+        "temperature": 0,
+        "tokens_in": 14737,
+        "tokens_out": 203
+      },
+      "proposed": {
+        "document_date": {
+          "value": "2024-05-07",
+          "span": "Date: 7th May, 2024"
+        },
+        "incorporation_date": {
+          "value": "1994-08-23",
+          "span": "(CIN: L72200MH1994PLC082110)"
+        },
+        "company_class": {
+          "value": "Public",
+          "span": "SONATA SOFTWARE LIMITED (CIN: L72200MH1994PLC082110)"
+        },
+        "financial_year": {
+          "value": "2023-24",
+          "span": "Annual Report 2023-24"
+        },
+        "cin": {
+          "value": "L72200MH1994PLC082110",
+          "span": "(CIN: L72200MH1994PLC082110)"
+        }
+      }
+    },
+    {
+      "document": "agm_notices/sonata_29th_agm_notice_2024",
+      "model": "azure:gpt-5-mini",
+      "ok": true,
+      "error": "",
+      "meta": {
+        "model": "azure:gpt-5-mini",
+        "served_by": "gpt-5-mini-2025-08-07",
+        "parse": "OK",
+        "temperature": null,
+        "tokens_in": 14526,
+        "tokens_out": 1808
+      },
+      "proposed": {
+        "document_date": {
+          "value": "2024-05-07",
+          "span": "Date: 7\nth May, 2024  ACS: 11861"
+        },
+        "financial_year": {
+          "value": "2024-03-31",
+          "span": "Adoption of Financial Statements for the Financial Year ended March 31, 2024."
+        },
+        "cin": {
+          "value": "L72200MH1994PLC082110",
+          "span": "(CIN: L72200MH1994PLC082110)"
+        }
+      }
+    },
+    {
+      "document": "agm_notices/tataelxsi_37th_agm_notice_2026",
+      "model": "azure:llama-3-3-70b",
+      "ok": true,
+      "error": "",
+      "meta": {
+        "model": "azure:llama-3-3-70b",
+        "served_by": "Llama-3.3-70B-Instruct",
+        "parse": "OK",
+        "temperature": 0,
+        "tokens_in": 17317,
+        "tokens_out": 356
+      },
+      "proposed": {
+        "document_date": {
+          "value": "2026-04-21",
+          "span": "Date: April 21, 2026"
+        },
+        "incorporation_date": {
+          "value": "1989-00-00",
+          "span": "CIN: L85110KA1989PLC009968"
+        },
+        "company_class": {
+          "value": "Public",
+          "span": "L85110KA1989PLC009968"
+        },
+        "financial_year": {
+          "value": "2025-2026",
+          "span": "FY 2025-26"
+        },
+        "paid_up_capital_rupees": {
+          "value": null,
+          "span": ""
+        },
+        "turnover_rupees": {
+          "value": 3757,
+          "span": "Revenue from operations: /uni20B9 3,757.42"
+        },
+        "net_worth_rupees": {
+          "value": null,
+          "span": ""
+        },
+        "net_profit_rupees": {
+          "value": 628,
+          "span": "Pro fit after tax for the year: 628.43"
+        },
+        "director_count": {
+          "value": null,
+          "span": ""
+        },
+        "cin": {
+          "value": "L85110KA1989PLC009968",
+          "span": "CIN: L85110KA1989PLC009968"
+        }
+      }
+    },
+    {
+      "document": "agm_notices/tataelxsi_37th_agm_notice_2026",
+      "model": "azure:gpt-5-mini",
+      "ok": true,
+      "error": "",
+      "meta": {
+        "model": "azure:gpt-5-mini",
+        "served_by": "gpt-5-mini-2025-08-07",
+        "parse": "OK",
+        "temperature": null,
+        "tokens_in": 16978,
+        "tokens_out": 3021
+      },
+      "proposed": {
+        "document_date": {
+          "value": "2026-04-21",
+          "span": "Date: April 21, 2026"
+        },
+        "financial_year": {
+          "value": "2026-03-31",
+          "span": "financial year ended March 31, 2026"
+        },
+        "turnover_rupees": {
+          "value": 37574200000,
+          "span": "/uni20B9 in crore\nParticulars FY 2025-26 FY 2024-25\nRevenue from operations 3,757.42 3,729.05"
+        },
+        "net_worth_rupees": {
+          "value": 1005484000000,
+          "span": "Financial performance of the related party for the immediately preceding ﬁnancial year:\nParticulars FY 2025-26 ( ` in crore)*\nTurnover 2,85,672.68\nProﬁt After Tax (3,042.39)\nNet worth 1,00,548.4\n*On consolidated basis."
+        },
+        "net_profit_rupees": {
+          "value": 6349200000,
+          "span": "Net Proﬁt for the year 634.92 780.17"
+        },
+        "cin": {
+          "value": "L85110KA1989PLC009968",
+          "span": "CIN: L85110KA1989PLC009968"
+        }
+      }
+    },
+    {
+      "document": "agm_notices/tcpl_62nd_agm_notice_2025",
+      "model": "azure:llama-3-3-70b",
+      "ok": true,
+      "error": "",
+      "meta": {
+        "model": "azure:llama-3-3-70b",
+        "served_by": "Llama-3.3-70B-Instruct",
+        "parse": "OK",
+        "temperature": 0,
+        "tokens_in": 16329,
+        "tokens_out": 226
+      },
+      "proposed": {
+        "document_date": {
+          "value": "2025-04-23",
+          "span": "Date: April 23, 2025"
+        },
+        "company_class": {
+          "value": "Public",
+          "span": "L15491WB1962PLC031425"
+        },
+        "financial_year": {
+          "value": "2025",
+          "span": "for the financial year ended March 31, 2025"
+        },
+        "cin": {
+          "value": "L15491WB1962PLC031425",
+          "span": "CIN - L15491WB1962PLC031425"
+        },
+        "incorporation_date": {
+          "value": "1962",
+          "span": "L15491WB1962PLC031425"
+        }
+      }
+    },
+    {
+      "document": "agm_notices/tcpl_62nd_agm_notice_2025",
+      "model": "azure:gpt-5-mini",
+      "ok": true,
+      "error": "",
+      "meta": {
+        "model": "azure:gpt-5-mini",
+        "served_by": "gpt-5-mini-2025-08-07",
+        "parse": "OK",
+        "temperature": null,
+        "tokens_in": 16137,
+        "tokens_out": 1861
+      },
+      "proposed": {
+        "document_date": {
+          "value": "2025-04-23",
+          "span": "Date: April 23, 2025  Company Secretary"
+        },
+        "company_class": {
+          "value": "Tata Consumer Products Limited",
+          "span": "Tata Consumer Products Limited"
+        },
+        "financial_year": {
+          "value": "2025-03-31",
+          "span": "financial year ended March 31, 2025"
+        },
+        "cin": {
+          "value": "L15491WB1962PLC031425",
+          "span": "CIN - L15491WB1962PLC031425"
+        }
+      }
+    },
+    {
+      "document": "agm_notices/tcpl_63rd_agm_notice_2026",
+      "model": "azure:llama-3-3-70b",
+      "ok": true,
+      "error": "",
+      "meta": {
+        "model": "azure:llama-3-3-70b",
+        "served_by": "Llama-3.3-70B-Instruct",
+        "parse": "OK",
+        "temperature": 0,
+        "tokens_in": 17815,
+        "tokens_out": 220
+      },
+      "proposed": {
+        "document_date": {
+          "value": "2026-05-08",
+          "span": "Date: May 08, 2026"
+        },
+        "company_class": {
+          "value": "Public",
+          "span": "L15491WB1962PLC031425"
+        },
+        "financial_year": {
+          "value": "2025-26",
+          "span": "Integrated Annual Report 2025-26"
+        },
+        "paid_up_capital_rupees": {
+          "value": null,
+          "span": null
+        },
+        "turnover_rupees": {
+          "value": null,
+          "span": null
+        },
+        "net_worth_rupees": {
+          "value": null,
+          "span": null
+        },
+        "net_profit_rupees": {
+          "value": null,
+          "span": null
+        },
+        "director_count": {
+          "value": null,
+          "span": null
+        },
+        "cin": {
+          "value": "L15491WB1962PLC031425",
+          "span": "CIN - L15491WB1962PLC031425"
+        }
+      }
+    },
+    {
+      "document": "agm_notices/tcpl_63rd_agm_notice_2026",
+      "model": "azure:gpt-5-mini",
+      "ok": true,
+      "error": "",
+      "meta": {
+        "model": "azure:gpt-5-mini",
+        "served_by": "gpt-5-mini-2025-08-07",
+        "parse": "OK",
+        "temperature": null,
+        "tokens_in": 17616,
+        "tokens_out": 2022
+      },
+      "proposed": {
+        "document_date": {
+          "value": "2026-05-08",
+          "span": "Date: May 08, 2026 Company Secretary"
+        },
+        "financial_year": {
+          "value": "2026-03-31",
+          "span": "for the financial year ended March 31, 2026,"
+        },
+        "company_class": {
+          "value": "PLC",
+          "span": "CIN - L15491WB1962PLC031425"
+        },
+        "cin": {
+          "value": "L15491WB1962PLC031425",
+          "span": "CIN - L15491WB1962PLC031425"
+        }
+      }
+    },
+    {
+      "document": "agm_notices/titan_41st_agm_notice_2025",
+      "model": "azure:llama-3-3-70b",
+      "ok": true,
+      "error": "",
+      "meta": {
+        "model": "azure:llama-3-3-70b",
+        "served_by": "Llama-3.3-70B-Instruct",
+        "parse": "OK",
+        "temperature": 0,
+        "tokens_in": 14330,
+        "tokens_out": 189
+      },
+      "proposed": {
+        "document_date": {
+          "value": "2025-05-08",
+          "span": "8th May 2025"
+        },
+        "incorporation_date": {
+          "value": "1984",
+          "span": "L74999TZ1984PLC001456"
+        },
+        "company_class": {
+          "value": "Public",
+          "span": "L74999TZ1984PLC001456"
+        },
+        "financial_year": {
+          "value": "2024-25",
+          "span": "for the Financial Year ended 31st March 2025"
+        },
+        "cin": {
+          "value": "L74999TZ1984PLC001456",
+          "span": "CIN: L74999TZ1984PLC001456"
+        }
+      }
+    },
+    {
+      "document": "agm_notices/titan_41st_agm_notice_2025",
+      "model": "azure:gpt-5-mini",
+      "ok": true,
+      "error": "",
+      "meta": {
+        "model": "azure:gpt-5-mini",
+        "served_by": "gpt-5-mini-2025-08-07",
+        "parse": "OK",
+        "temperature": null,
+        "tokens_in": 14140,
+        "tokens_out": 1772
+      },
+      "proposed": {
+        "document_date": {
+          "value": "2025-05-08",
+          "span": "8th May 2025"
+        },
+        "company_class": {
+          "value": "COMPANY LIMITED",
+          "span": "TITAN COMPANY LIMITED"
+        },
+        "financial_year": {
+          "value": "2025-03-31",
+          "span": "Financial Year ended 31st March 2025"
+        },
+        "cin": {
+          "value": "L74999TZ1984PLC001456",
+          "span": "CIN: L74999TZ1984PLC001456"
+        }
+      }
+    },
+    {
+      "document": "agm_notices/titan_42nd_agm_notice_2026",
+      "model": "azure:llama-3-3-70b",
+      "ok": true,
+      "error": "",
+      "meta": {
+        "model": "azure:llama-3-3-70b",
+        "served_by": "Llama-3.3-70B-Instruct",
+        "parse": "OK",
+        "temperature": 0,
+        "tokens_in": 13545,
+        "tokens_out": 184
+      },
+      "proposed": {
+        "document_date": {
+          "value": "2026-06-29",
+          "span": "29th June 2026"
+        },
+        "incorporation_date": {
+          "value": "1984",
+          "span": "L74999TZ1984PLC001456"
+        },
+        "company_class": {
+          "value": "Public",
+          "span": "L74999TZ1984PLC001456"
+        },
+        "financial_year": {
+          "value": "2025-26",
+          "span": "Annual Report 2025-26"
+        },
+        "cin": {
+          "value": "L74999TZ1984PLC001456",
+          "span": "CIN: L74999TZ1984PLC001456"
+        }
+      }
+    },
+    {
+      "document": "agm_notices/titan_42nd_agm_notice_2026",
+      "model": "azure:gpt-5-mini",
+      "ok": true,
+      "error": "",
+      "meta": {
+        "model": "azure:gpt-5-mini",
+        "served_by": "gpt-5-mini-2025-08-07",
+        "parse": "OK",
+        "temperature": null,
+        "tokens_in": 13361,
+        "tokens_out": 2198
+      },
+      "proposed": {
+        "document_date": {
+          "value": "2026-06-29",
+          "span": "29th June 2026"
+        },
+        "financial_year": {
+          "value": "2026-03-31",
+          "span": "31st March 2026"
+        },
+        "cin": {
+          "value": "L74999TZ1984PLC001456",
+          "span": "CIN: L74999TZ1984PLC001456"
+        }
+      }
+    },
+    {
+      "document": "board_outcomes/routemobile_outcome_board_meeting_2024-05-29",
+      "model": "azure:llama-3-3-70b",
+      "ok": true,
+      "error": "",
+      "meta": {
+        "model": "azure:llama-3-3-70b",
+        "served_by": "Llama-3.3-70B-Instruct",
+        "parse": "OK",
+        "temperature": 0,
+        "tokens_in": 1078,
+        "tokens_out": 104
+      },
+      "proposed": {
+        "cin": {
+          "value": "L72900MH2004PLC146323",
+          "span": "CIN No: L72900MH2004PLC146323"
+        },
+        "document_date": {
+          "value": "2024-05-29",
+          "span": "Date: May 29, 2024"
+        },
+        "incorporation_date": {
+          "value": "2004",
+          "span": "CIN No: L72900MH2004PLC146323"
+        }
+      }
+    },
+    {
+      "document": "board_outcomes/routemobile_outcome_board_meeting_2024-05-29",
+      "model": "azure:gpt-5-mini",
+      "ok": true,
+      "error": "",
+      "meta": {
+        "model": "azure:gpt-5-mini",
+        "served_by": "gpt-5-mini-2025-08-07",
+        "parse": "OK",
+        "temperature": null,
+        "tokens_in": 1042,
+        "tokens_out": 1156
+      },
+      "proposed": {
+        "document_date": {
+          "value": "2024-05-29",
+          "span": "Date: May 29, 2024"
+        },
+        "cin": {
+          "value": "L72900MH2004PLC146323",
+          "span": "CIN No: L72900MH2004PLC146323"
+        }
+      }
+    },
+    {
+      "document": "board_outcomes/routemobile_outcome_board_meeting_2025-01-28",
+      "model": "azure:llama-3-3-70b",
+      "ok": true,
+      "error": "",
+      "meta": {
+        "model": "azure:llama-3-3-70b",
+        "served_by": "Llama-3.3-70B-Instruct",
+        "parse": "OK",
+        "temperature": 0,
+        "tokens_in": 13070,
+        "tokens_out": 349
+      },
+      "proposed": {
+        "document_date": {
+          "value": "2025-01-28",
+          "span": "Date: January 28, 2025"
+        },
+        "incorporation_date": {
+          "value": "2004-01-01",
+          "span": "CIN No: L72900MH2004PLC146323"
+        },
+        "company_class": {
+          "value": null,
+          "span": ""
+        },
+        "financial_year": {
+          "value": "2024-25",
+          "span": "Re f No: RML/2024-25/546"
+        },
+        "paid_up_capital_rupees": {
+          "value": 6296,
+          "span": "Paid-up equity share capital (face value of Rs. 10/- each) 62.96"
+        },
+        "turnover_rupees": {
+          "value": 118379,
+          "span": "Revenue from operations 1,183.79"
+        },
+        "net_worth_rupees": {
+          "value": null,
+          "span": ""
+        },
+        "net_profit_rupees": {
+          "value": 8547,
+          "span": "Profit for the period / year (3-4) 85.47"
+        },
+        "director_count": {
+          "value": null,
+          "span": ""
+        },
+        "cin": {
+          "value": "L72900MH2004PLC146323",
+          "span": "CIN No: L72900MH2004PLC146323"
+        }
+      }
+    },
+    {
+      "document": "board_outcomes/routemobile_outcome_board_meeting_2025-01-28",
+      "model": "azure:gpt-5-mini",
+      "ok": false,
+      "error": "ModelUnavailable: the Azure reply did not finish (finish_reason='length'); a truncated reply is not an answer",
+      "meta": {},
+      "proposed": {}
+    },
+    {
+      "document": "board_outcomes/routemobile_outcome_board_meeting_2025-11-03",
+      "model": "azure:llama-3-3-70b",
+      "ok": true,
+      "error": "",
+      "meta": {
+        "model": "azure:llama-3-3-70b",
+        "served_by": "Llama-3.3-70B-Instruct",
+        "parse": "OK",
+        "temperature": 0,
+        "tokens_in": 15114,
+        "tokens_out": 248
+      },
+      "proposed": {
+        "document_date": {
+          "value": "2025-11-04",
+          "span": "Date: November 4, 2025"
+        },
+        "incorporation_date": {
+          "value": "2004-01-01",
+          "span": "CIN No: L72900MH2004PLC746323"
+        },
+        "company_class": {
+          "value": "Public",
+          "span": "L72900MH2004PLC746323"
+        },
+        "financial_year": {
+          "value": "2025-2026",
+          "span": "Ref No: RML/2025-26/626"
+        },
+        "paid_up_capital_rupees": {
+          "value": 630000000,
+          "span": "Paid-up equity share capital (face value of  10/- each) 63.00"
+        },
+        "cin": {
+          "value": "L72900MH2004PLC746323",
+          "span": "CIN No: L72900MH2004PLC746323"
+        }
+      }
+    },
+    {
+      "document": "board_outcomes/routemobile_outcome_board_meeting_2025-11-03",
+      "model": "azure:gpt-5-mini",
+      "ok": true,
+      "error": "",
+      "meta": {
+        "model": "azure:gpt-5-mini",
+        "served_by": "gpt-5-mini-2025-08-07",
+        "parse": "OK",
+        "temperature": null,
+        "tokens_in": 14908,
+        "tokens_out": 3973
+      },
+      "proposed": {
+        "document_date": {
+          "value": "2025-11-04",
+          "span": "Date: November 4, 2025 "
+        },
+        "financial_year": {
+          "value": "F.Y. 2025-26",
+          "span": "for the F.Y. 2025-26:"
+        },
+        "paid_up_capital_rupees": {
+          "value": 630000000,
+          "span": "10 Paid-up equity share capital (face value of  10/- each) 63.00                63.00                  62.96                63.00                62.96                63.00               "
+        },
+        "turnover_rupees": {
+          "value": 21702500000,
+          "span": "Total revenue from operations 1,119.42         1,050.83         1,113.41          2,170.25         2,216.83         4,575.62         "
+        },
+        "net_worth_rupees": {
+          "value": 25673200000,
+          "span": "Total equity 2,567.32                       2,464.08                       "
+        },
+        "net_profit_rupees": {
+          "value": 399500000,
+          "span": "(Loss)/ profit for the period/ year (5-6) (18.83)                 58.78                 107.03                39.95               188.19              333.93                 "
+        },
+        "cin": {
+          "value": "L72900MH2004PLC746323",
+          "span": "CIN No: L72900MH2004PLC746323"
+        }
+      }
+    },
+    {
+      "document": "board_outcomes/routemobile_outcome_board_meeting_2026-05-07",
+      "model": "azure:llama-3-3-70b",
+      "ok": false,
+      "error": "ModelUnavailable: Azure HTTP 429: {\"error\":{\"code\":\"RateLimitReached\",\"message\":\"Your requests to Llama-3.3-70B-Instruct for llama-3-3-70b in uaenorth have exceeded rate limit.\",\"details\":\"Your requests to Llama-3.3-70B-Instruct for l",
+      "meta": {},
+      "proposed": {}
+    },
+    {
+      "document": "board_outcomes/routemobile_outcome_board_meeting_2026-05-07",
+      "model": "azure:gpt-5-mini",
+      "ok": true,
+      "error": "",
+      "meta": {
+        "model": "azure:gpt-5-mini",
+        "served_by": "gpt-5-mini-2025-08-07",
+        "parse": "OK",
+        "temperature": null,
+        "tokens_in": 18735,
+        "tokens_out": 2640
+      },
+      "proposed": {
+        "document_date": {
+          "value": "2026-05-07",
+          "span": "Date: May 07, 2026"
+        },
+        "financial_year": {
+          "value": "2026-03-31",
+          "span": "for the financial year ended March 31, 2026"
+        },
+        "paid_up_capital_rupees": {
+          "value": 630000000,
+          "span": "11 Paid-up equity share capital (face value of ₹ 10/- each) 63.00                   63.00                   63.00                   63.00                 63.00                    "
+        },
+        "turnover_rupees": {
+          "value": 44082100000,
+          "span": "Revenue from operations 1,130.90               1,107.06              1,175.00              4,408.21            4,575.62               "
+        },
+        "net_profit_rupees": {
+          "value": 2569400000,
+          "span": "7 Profit for the period/ year (5-6) 114.43                  102.56                 60.28                  256.94              333.93                   "
+        },
+        "cin": {
+          "value": "L72900MH2004PLC146323",
+          "span": "Corporate Identity Number: L72900MH2004PLC146323, Website : www.routemobile.com"
+        }
+      }
+    },
+    {
+      "document": "board_outcomes/sonata_outcome_of_agm_2025",
+      "model": "azure:llama-3-3-70b",
+      "ok": true,
+      "error": "",
+      "meta": {
+        "model": "azure:llama-3-3-70b",
+        "served_by": "Llama-3.3-70B-Instruct",
+        "parse": "OK",
+        "temperature": 0,
+        "tokens_in": 2508,
+        "tokens_out": 375
+      },
+      "proposed": {
+        "cin": {
+          "value": "L72200MH1994PLC082110",
+          "span": "CIN: L72200MH1994PLC082110"
+        },
+        "incorporation_date": {
+          "value": "1994",
+          "span": "CIN: L72200MH1994PLC082110"
+        },
+        "company_class": {
+          "value": "Public",
+          "span": "Sonata Software Limited - SSL"
+        },
+        "document_date": {
+          "value": "2025-07-31",
+          "span": "31st July, 2025"
+        },
+        "financial_year": {
+          "value": "2025",
+          "span": "Financial Year ended 31st March, 2025"
+        },
+        "director_count": {
+          "value": 8,
+          "span": "Mr. Sanjay Asher, Chairman, Independent\nDirector\nParticipated through video conferencing\nfrom Mumbai\nMr. Samir Dhir, Managing Director & CEO Participated through video conferencing\nfrom Bengaluru\nMr. P Srikar Reddy, Executive Vice Chairman &\nWhole-Time Director\nParticipated through video conferencing\nfrom Bengaluru\nMr. Viren Raheja, Non-Executive Director Participated through video conferencing\nfrom Mumbai\nMr. S. B. Ghia, Non -Executive Director and\nChairman of Stakeholders Relationship\nCommittee\nParticipated through video conferencing\nfrom Mumbai\nMr. Surin Shailesh Kapadia, Independent\nDirector and Chairman of Audit Committee, \nNomination and Remuneration Committee\nand Risk Management Committee\nParticipated through video conferencing\nfrom Bengaluru\nMs. Mona Ninad Desai, Independent Director\nand Chairperson of Corporate Social\nResponsibility Committee\nParticipated through video conferencing\nfrom Mumbai"
+        }
+      }
+    },
+    {
+      "document": "board_outcomes/sonata_outcome_of_agm_2025",
+      "model": "azure:gpt-5-mini",
+      "ok": true,
+      "error": "",
+      "meta": {
+        "model": "azure:gpt-5-mini",
+        "served_by": "gpt-5-mini-2025-08-07",
+        "parse": "OK",
+        "temperature": null,
+        "tokens_in": 2430,
+        "tokens_out": 1781
+      },
+      "proposed": {
+        "document_date": {
+          "value": "2025-07-31",
+          "span": "31st July, 2025"
+        },
+        "company_class": {
+          "value": "Limited",
+          "span": "Sonata Software Limited - SSL"
+        },
+        "financial_year": {
+          "value": "2025-03-31",
+          "span": "Adoption of Financial Statements for the Financial Year ended 31st March, 2025;"
+        },
+        "cin": {
+          "value": "L72200MH1994PLC082110",
+          "span": "CIN: L72200MH1994PLC082110"
+        }
+      }
+    },
+    {
+      "document": "board_outcomes/sonata_outcome_of_agm_2026",
+      "model": "azure:llama-3-3-70b",
+      "ok": true,
+      "error": "",
+      "meta": {
+        "model": "azure:llama-3-3-70b",
+        "served_by": "Llama-3.3-70B-Instruct",
+        "parse": "OK",
+        "temperature": 0,
+        "tokens_in": 2387,
+        "tokens_out": 369
+      },
+      "proposed": {
+        "cin": {
+          "value": "L72200MH1994PLC082110",
+          "span": "CIN: L72200MH1994PLC082110"
+        },
+        "incorporation_date": {
+          "value": "1994-01-01",
+          "span": "CIN: L72200MH1994PLC082110"
+        },
+        "document_date": {
+          "value": "2026-07-31",
+          "span": "31st July, 2026"
+        },
+        "company_class": {
+          "value": "Public Limited",
+          "span": "Sonata Software Limited - SSL"
+        },
+        "financial_year": {
+          "value": "2026-03-31",
+          "span": "Financial Year ended 31st March, 2026"
+        },
+        "paid_up_capital_rupees": {
+          "value": null,
+          "span": ""
+        },
+        "turnover_rupees": {
+          "value": null,
+          "span": ""
+        },
+        "net_worth_rupees": {
+          "value": null,
+          "span": ""
+        },
+        "net_profit_rupees": {
+          "value": null,
+          "span": ""
+        },
+        "director_count": {
+          "value": 7,
+          "span": "1. Mr. Sanjay Asher, Chairperson, Independent Director\n2. Mr. P Srikar Reddy, Executive Vice Chairman & Whole-Time Director\n3. Mr. Surin Shailesh Kapadia, Independent Director and Chairperson of Audit Committee,\n4. Mr. Viren Raheja, Non-Executive Director\n5. Mr. S. B. Ghia, Non-Executive Director and Chairperson of Stakeholders Relationship Committee\n6. Ms. Mona Ninad Desai, Independent Director and Chairperson of Corporate Social Responsibility\n7. Mr. Rajsekhar Datta Roy, CEO, Sonata Software Limited"
+        }
+      }
+    },
+    {
+      "document": "board_outcomes/sonata_outcome_of_agm_2026",
+      "model": "azure:gpt-5-mini",
+      "ok": true,
+      "error": "",
+      "meta": {
+        "model": "azure:gpt-5-mini",
+        "served_by": "gpt-5-mini-2025-08-07",
+        "parse": "OK",
+        "temperature": null,
+        "tokens_in": 2326,
+        "tokens_out": 1724
+      },
+      "proposed": {
+        "document_date": {
+          "value": "2026-07-31",
+          "span": "31st July, 2026"
+        },
+        "financial_year": {
+          "value": "2026-03-31",
+          "span": "31st March, 2026"
+        },
+        "cin": {
+          "value": "L72200MH1994PLC082110",
+          "span": "CIN: L72200MH1994PLC082110"
+        }
+      }
+    },
+    {
+      "document": "board_outcomes/tataelxsi_board_report_ss_statement_2025_26",
+      "model": "azure:llama-3-3-70b",
+      "ok": true,
+      "error": "",
+      "meta": {
+        "model": "azure:llama-3-3-70b",
+        "served_by": "Llama-3.3-70B-Instruct",
+        "parse": "OK",
+        "temperature": 0,
+        "tokens_in": 407,
+        "tokens_out": 6
+      },
+      "proposed": {}
+    },
+    {
+      "document": "board_outcomes/tataelxsi_board_report_ss_statement_2025_26",
+      "model": "azure:gpt-5-mini",
+      "ok": true,
+      "error": "",
+      "meta": {
+        "model": "azure:gpt-5-mini",
+        "served_by": "gpt-5-mini-2025-08-07",
+        "parse": "OK",
+        "temperature": null,
+        "tokens_in": 378,
+        "tokens_out": 206
+      },
+      "proposed": {}
+    },
+    {
+      "document": "board_outcomes/tcpl_board_report_ss_statement_2024_25",
+      "model": "azure:llama-3-3-70b",
+      "ok": true,
+      "error": "",
+      "meta": {
+        "model": "azure:llama-3-3-70b",
+        "served_by": "Llama-3.3-70B-Instruct",
+        "parse": "OK",
+        "temperature": 0,
+        "tokens_in": 407,
+        "tokens_out": 6
+      },
+      "proposed": {}
+    },
+    {
+      "document": "board_outcomes/tcpl_board_report_ss_statement_2024_25",
+      "model": "azure:gpt-5-mini",
+      "ok": true,
+      "error": "",
+      "meta": {
+        "model": "azure:gpt-5-mini",
+        "served_by": "gpt-5-mini-2025-08-07",
+        "parse": "OK",
+        "temperature": null,
+        "tokens_in": 380,
+        "tokens_out": 334
+      },
+      "proposed": {}
+    },
+    {
+      "document": "board_outcomes/tcpl_board_report_ss_statement_2025_26",
+      "model": "azure:llama-3-3-70b",
+      "ok": true,
+      "error": "",
+      "meta": {
+        "model": "azure:llama-3-3-70b",
+        "served_by": "Llama-3.3-70B-Instruct",
+        "parse": "OK",
+        "temperature": 0,
+        "tokens_in": 399,
+        "tokens_out": 6
+      },
+      "proposed": {}
+    },
+    {
+      "document": "board_outcomes/tcpl_board_report_ss_statement_2025_26",
+      "model": "azure:gpt-5-mini",
+      "ok": true,
+      "error": "",
+      "meta": {
+        "model": "azure:gpt-5-mini",
+        "served_by": "gpt-5-mini-2025-08-07",
+        "parse": "OK",
+        "temperature": null,
+        "tokens_in": 372,
+        "tokens_out": 270
+      },
+      "proposed": {}
+    },
+    {
+      "document": "icsi_specimens/01_board_meeting_notice_annexII",
+      "model": "azure:llama-3-3-70b",
+      "ok": true,
+      "error": "",
+      "meta": {
+        "model": "azure:llama-3-3-70b",
+        "served_by": "Llama-3.3-70B-Instruct",
+        "parse": "OK",
+        "temperature": 0,
+        "tokens_in": 829,
+        "tokens_out": 6
+      },
+      "proposed": {}
+    },
+    {
+      "document": "icsi_specimens/01_board_meeting_notice_annexII",
+      "model": "azure:gpt-5-mini",
+      "ok": true,
+      "error": "",
+      "meta": {
+        "model": "azure:gpt-5-mini",
+        "served_by": "gpt-5-mini-2025-08-07",
+        "parse": "OK",
+        "temperature": null,
+        "tokens_in": 799,
+        "tokens_out": 398
+      },
+      "proposed": {}
+    },
+    {
+      "document": "icsi_specimens/02_resolution_by_circulation_annexVI",
+      "model": "azure:llama-3-3-70b",
+      "ok": true,
+      "error": "",
+      "meta": {
+        "model": "azure:llama-3-3-70b",
+        "served_by": "Llama-3.3-70B-Instruct",
+        "parse": "OK",
+        "temperature": 0,
+        "tokens_in": 581,
+        "tokens_out": 6
+      },
+      "proposed": {}
+    },
+    {
+      "document": "icsi_specimens/02_resolution_by_circulation_annexVI",
+      "model": "azure:gpt-5-mini",
+      "ok": true,
+      "error": "",
+      "meta": {
+        "model": "azure:gpt-5-mini",
+        "served_by": "gpt-5-mini-2025-08-07",
+        "parse": "OK",
+        "temperature": null,
+        "tokens_in": 553,
+        "tokens_out": 334
+      },
+      "proposed": {}
+    },
+    {
+      "document": "icsi_specimens/03_minutes_first_board_meeting_annexVII",
+      "model": "azure:llama-3-3-70b",
+      "ok": true,
+      "error": "",
+      "meta": {
+        "model": "azure:llama-3-3-70b",
+        "served_by": "Llama-3.3-70B-Instruct",
+        "parse": "OK",
+        "temperature": 0,
+        "tokens_in": 3951,
+        "tokens_out": 141
+      },
+      "proposed": {
+        "incorporation_date": {
+          "value": null,
+          "span": "The Board was informed that the company has been incorporated on .………"
+        },
+        "director_count": {
+          "value": 3,
+          "span": "7. First Directors The Board noted that in terms of Article ............. of the Articles of Association of the company, Mr.………, Mr.….………and Mr.…………… are the first Directors of the company."
+        },
+        "cin": {
+          "value": null,
+          "span": "The Chairman tabled a Seal bearing the company’s name, CIN and the address of the registered office to be adopted as the Common Seal of the company,"
+        }
+      }
+    },
+    {
+      "document": "icsi_specimens/03_minutes_first_board_meeting_annexVII",
+      "model": "azure:gpt-5-mini",
+      "ok": true,
+      "error": "",
+      "meta": {
+        "model": "azure:gpt-5-mini",
+        "served_by": "gpt-5-mini-2025-08-07",
+        "parse": "OK",
+        "temperature": null,
+        "tokens_in": 3893,
+        "tokens_out": 910
+      },
+      "proposed": {}
+    },
+    {
+      "document": "icsi_specimens/04_minutes_subsequent_board_meeting_annexVIII",
+      "model": "azure:llama-3-3-70b",
+      "ok": true,
+      "error": "",
+      "meta": {
+        "model": "azure:llama-3-3-70b",
+        "served_by": "Llama-3.3-70B-Instruct",
+        "parse": "OK",
+        "temperature": 0,
+        "tokens_in": 2197,
+        "tokens_out": 184
+      },
+      "proposed": {
+        "paid_up_capital_rupees": {
+          "value": 1000000,
+          "span": "10,00,000 equity shares"
+        },
+        "turnover_rupees": {
+          "value": null,
+          "span": ""
+        },
+        "net_worth_rupees": {
+          "value": null,
+          "span": ""
+        },
+        "net_profit_rupees": {
+          "value": null,
+          "span": ""
+        },
+        "director_count": {
+          "value": 5,
+          "span": "A.B. Chairman\nC.D. Directors\nE.F.\nI.J.\nK.L. Managing Director"
+        },
+        "cin": {
+          "value": null,
+          "span": ""
+        },
+        "document_date": {
+          "value": null,
+          "span": ""
+        },
+        "incorporation_date": {
+          "value": null,
+          "span": ""
+        },
+        "company_class": {
+          "value": null,
+          "span": ""
+        },
+        "financial_year": {
+          "value": null,
+          "span": ""
+        }
+      }
+    },
+    {
+      "document": "icsi_specimens/04_minutes_subsequent_board_meeting_annexVIII",
+      "model": "azure:gpt-5-mini",
+      "ok": true,
+      "error": "",
+      "meta": {
+        "model": "azure:gpt-5-mini",
+        "served_by": "gpt-5-mini-2025-08-07",
+        "parse": "OK",
+        "temperature": null,
+        "tokens_in": 2137,
+        "tokens_out": 3121
+      },
+      "proposed": {
+        "director_count": {
+          "value": 5,
+          "span": "PRESENT\nA.B. Chairman\nC.D. Directors\nE.F.\nI.J.\nK.L. Managing Director"
+        }
+      }
+    },
+    {
+      "document": "icsi_specimens/05_attendance_slip_annexI",
+      "model": "azure:llama-3-3-70b",
+      "ok": true,
+      "error": "",
+      "meta": {
+        "model": "azure:llama-3-3-70b",
+        "served_by": "Llama-3.3-70B-Instruct",
+        "parse": "OK",
+        "temperature": 0,
+        "tokens_in": 589,
+        "tokens_out": 6
+      },
+      "proposed": {}
+    },
+    {
+      "document": "icsi_specimens/05_attendance_slip_annexI",
+      "model": "azure:gpt-5-mini",
+      "ok": true,
+      "error": "",
+      "meta": {
+        "model": "azure:gpt-5-mini",
+        "served_by": "gpt-5-mini-2025-08-07",
+        "parse": "OK",
+        "temperature": null,
+        "tokens_in": 557,
+        "tokens_out": 398
+      },
+      "proposed": {}
+    },
+    {
+      "document": "icsi_specimens/06_agm_notice_annexII",
+      "model": "azure:llama-3-3-70b",
+      "ok": true,
+      "error": "",
+      "meta": {
+        "model": "azure:llama-3-3-70b",
+        "served_by": "Llama-3.3-70B-Instruct",
+        "parse": "OK",
+        "temperature": 0,
+        "tokens_in": 3861,
+        "tokens_out": 68
+      },
+      "proposed": {
+        "financial_year": {
+          "value": null,
+          "span": "for the financial year ended 31st March, ____"
+        },
+        "cin": {
+          "value": null,
+          "span": "CIN __________"
+        }
+      }
+    },
+    {
+      "document": "icsi_specimens/06_agm_notice_annexII",
+      "model": "azure:gpt-5-mini",
+      "ok": true,
+      "error": "",
+      "meta": {
+        "model": "azure:gpt-5-mini",
+        "served_by": "gpt-5-mini-2025-08-07",
+        "parse": "OK",
+        "temperature": null,
+        "tokens_in": 3793,
+        "tokens_out": 462
+      },
+      "proposed": {}
+    },
+    {
+      "document": "icsi_specimens/07_egm_notice_annexIII",
+      "model": "azure:llama-3-3-70b",
+      "ok": true,
+      "error": "",
+      "meta": {
+        "model": "azure:llama-3-3-70b",
+        "served_by": "Llama-3.3-70B-Instruct",
+        "parse": "OK",
+        "temperature": 0,
+        "tokens_in": 2387,
+        "tokens_out": 224
+      },
+      "proposed": {
+        "cin": {
+          "value": "",
+          "span": "CIN _____________"
+        },
+        "company_class": {
+          "value": "public",
+          "span": "every listed public company"
+        },
+        "director_count": {
+          "value": "",
+          "span": ""
+        },
+        "document_date": {
+          "value": "",
+          "span": "Date : _________"
+        },
+        "financial_year": {
+          "value": "",
+          "span": ""
+        },
+        "incorporation_date": {
+          "value": "",
+          "span": ""
+        },
+        "net_profit_rupees": {
+          "value": "",
+          "span": ""
+        },
+        "net_worth_rupees": {
+          "value": "",
+          "span": ""
+        },
+        "paid_up_capital_rupees": {
+          "value": "",
+          "span": ""
+        },
+        "turnover_rupees": {
+          "value": "",
+          "span": ""
+        }
+      }
+    },
+    {
+      "document": "icsi_specimens/07_egm_notice_annexIII",
+      "model": "azure:gpt-5-mini",
+      "ok": true,
+      "error": "",
+      "meta": {
+        "model": "azure:gpt-5-mini",
+        "served_by": "gpt-5-mini-2025-08-07",
+        "parse": "OK",
+        "temperature": null,
+        "tokens_in": 2338,
+        "tokens_out": 1052
+      },
+      "proposed": {
+        "company_class": {
+          "value": "listed public company",
+          "span": "listed public company"
+        }
+      }
+    },
+    {
+      "document": "icsi_specimens/08_board_resolution_convening_egm_annexIX",
+      "model": "azure:llama-3-3-70b",
+      "ok": true,
+      "error": "",
+      "meta": {
+        "model": "azure:llama-3-3-70b",
+        "served_by": "Llama-3.3-70B-Instruct",
+        "parse": "OK",
+        "temperature": 0,
+        "tokens_in": 598,
+        "tokens_out": 6
+      },
+      "proposed": {}
+    },
+    {
+      "document": "icsi_specimens/08_board_resolution_convening_egm_annexIX",
+      "model": "azure:gpt-5-mini",
+      "ok": true,
+      "error": "",
+      "meta": {
+        "model": "azure:gpt-5-mini",
+        "served_by": "gpt-5-mini-2025-08-07",
+        "parse": "OK",
+        "temperature": null,
+        "tokens_in": 570,
+        "tokens_out": 206
+      },
+      "proposed": {}
+    },
+    {
+      "document": "icsi_specimens/09_minutes_agm_annexXVI",
+      "model": "azure:llama-3-3-70b",
+      "ok": true,
+      "error": "",
+      "meta": {
+        "model": "azure:llama-3-3-70b",
+        "served_by": "Llama-3.3-70B-Instruct",
+        "parse": "OK",
+        "temperature": 0,
+        "tokens_in": 3042,
+        "tokens_out": 126
+      },
+      "proposed": {
+        "financial_year": {
+          "value": null,
+          "span": "31st March, _______"
+        },
+        "director_count": {
+          "value": 7,
+          "span": "1. Mr. W (in the Chair)\n2. Mr. B (Director and Member)\n3. Mr. C (Director)\n4. Mr. D (Director and Member)\n5. Mr. E. (Director and Chairman of Audit Committee)\n6. Mr. F (Company Secretary)"
+        }
+      }
+    },
+    {
+      "document": "icsi_specimens/09_minutes_agm_annexXVI",
+      "model": "azure:gpt-5-mini",
+      "ok": true,
+      "error": "",
+      "meta": {
+        "model": "azure:gpt-5-mini",
+        "served_by": "gpt-5-mini-2025-08-07",
+        "parse": "OK",
+        "temperature": null,
+        "tokens_in": 2978,
+        "tokens_out": 910
+      },
+      "proposed": {}
+    },
+    {
+      "document": "icsi_specimens/10_minutes_egm_annexXVII",
+      "model": "azure:llama-3-3-70b",
+      "ok": true,
+      "error": "",
+      "meta": {
+        "model": "azure:llama-3-3-70b",
+        "served_by": "Llama-3.3-70B-Instruct",
+        "parse": "OK",
+        "temperature": 0,
+        "tokens_in": 1280,
+        "tokens_out": 187
+      },
+      "proposed": {
+        "cin": {
+          "value": null,
+          "span": ""
+        },
+        "company_class": {
+          "value": null,
+          "span": ""
+        },
+        "director_count": {
+          "value": 3,
+          "span": "1. Mr. A (in the Chair)\n2. Mr. B (Director and Member)\n3. Mr. C (Director)"
+        },
+        "document_date": {
+          "value": null,
+          "span": ""
+        },
+        "financial_year": {
+          "value": null,
+          "span": ""
+        },
+        "incorporation_date": {
+          "value": null,
+          "span": ""
+        },
+        "net_profit_rupees": {
+          "value": null,
+          "span": ""
+        },
+        "net_worth_rupees": {
+          "value": null,
+          "span": ""
+        },
+        "paid_up_capital_rupees": {
+          "value": null,
+          "span": ""
+        },
+        "turnover_rupees": {
+          "value": null,
+          "span": ""
+        }
+      }
+    },
+    {
+      "document": "icsi_specimens/10_minutes_egm_annexXVII",
+      "model": "azure:gpt-5-mini",
+      "ok": true,
+      "error": "",
+      "meta": {
+        "model": "azure:gpt-5-mini",
+        "served_by": "gpt-5-mini-2025-08-07",
+        "parse": "OK",
+        "temperature": null,
+        "tokens_in": 1244,
+        "tokens_out": 910
+      },
+      "proposed": {}
+    },
+    {
+      "document": "icsi_specimens/11_minutes_adjourned_agm_annexXVIII",
+      "model": "azure:llama-3-3-70b",
+      "ok": true,
+      "error": "",
+      "meta": {
+        "model": "azure:llama-3-3-70b",
+        "served_by": "Llama-3.3-70B-Instruct",
+        "parse": "OK",
+        "temperature": 0,
+        "tokens_in": 1122,
+        "tokens_out": 24
+      },
+      "proposed": {
+        "financial_year": {
+          "value": null,
+          "span": "31 st March, _______"
+        }
+      }
+    },
+    {
+      "document": "icsi_specimens/11_minutes_adjourned_agm_annexXVIII",
+      "model": "azure:gpt-5-mini",
+      "ok": true,
+      "error": "",
+      "meta": {
+        "model": "azure:gpt-5-mini",
+        "served_by": "gpt-5-mini-2025-08-07",
+        "parse": "OK",
+        "temperature": null,
+        "tokens_in": 1078,
+        "tokens_out": 2020
+      },
+      "proposed": {
+        "director_count": {
+          "value": 5,
+          "span": "The following were present:\n1. Mr. W (in the Chair)\n2. Mr. B (Director and Member)\n3. Mr. C (Director)\n4. Mr. D (Director and Member)\n5. Mr. E. (Director and Chairman of Audit Committee)"
+        }
+      }
+    }
+  ]
+}

@@ -47,7 +47,12 @@ class Verdict(str, Enum):
 # ── the grammars ────────────────────────────────────────────────────────────
 # CIN, 21 chars: listing status | industry | state | year | ownership | serial.
 # e.g. U74999KA2019PTC123456
-_CIN = re.compile(r"^([LU])(\d{5})([A-Z]{2})(\d{4})(PLC|PTC|SGC|GAP|GOI|NPL|OPC|FLC|ULL|ULT)(\d{6})$")
+# The grammar body, exported. Anything that needs to FIND a CIN in running text --
+# `eval/prelabel/compare.py` looks for a document that contradicts itself about its
+# own CIN -- must ask the same question this validator asks. A second pattern would
+# be a second answer to "what is a CIN", and the two would drift.
+CIN_GRAMMAR = r"([LU])(\d{5})([A-Z]{2})(\d{4})(PLC|PTC|SGC|GAP|GOI|NPL|OPC|FLC|ULL|ULT)(\d{6})"
+_CIN = re.compile(rf"^{CIN_GRAMMAR}$")
 _DIN = re.compile(r"^\d{8}$")
 
 # The ownership codes above are the ones this module will vouch for. A code outside

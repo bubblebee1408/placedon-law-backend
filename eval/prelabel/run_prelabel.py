@@ -464,7 +464,7 @@ def run(docs, caller, *, model_a: str = MODEL_A, model_b: str = MODEL_B,
                 "why_no_rows": ("'only one model supported this' is not a true "
                                 "statement when the other model never answered")})
             continue
-        c = cmp.compare_document(doc.doc_id, a.sides, b.sides)
+        c = cmp.compare_document(doc.doc_id, a.sides, b.sides, text=doc.text)
         comparisons.append(c)
         all_rows.extend(c.rows)
         agreements.extend(c.agreements)
@@ -568,6 +568,9 @@ def _row_json(row, docs_by_id) -> dict:
             "(no anchor: no admitted span to locate)",
         "verdict": "",
         "label": (cmp.AGREEMENT_LABEL if row.outcome == cmp.AGREE else ""),
+        "contested_by_document": list(row.contested),
+        "contested_note": (cmp.CONTESTED_NOTE.format(
+            others=", ".join(row.contested)) if row.contested else ""),
     }
 
 
@@ -739,12 +742,30 @@ def render_markdown(result: dict) -> str:
       "**Agreement is not correctness.** These are not verified, and none of them "
       "may be cited as accurate.")
     w("")
+    w("**\"The document against itself\"** is not a model output. It is this repository "
+      "scanning the document for another declaration of the same field and reporting what "
+      "it found, using the same grammar the extractor validates against. A value there "
+      "means the two models agreed on one of the things the document says, while the "
+      "document says another — so the agreement measured that both read the same "
+      "declaration, not that the document declares one thing. It is checked only for "
+      "`cin`, because only a field with a strict grammar makes another occurrence "
+      "*another declaration of the same thing*; a date or a rupee figure repeating in a "
+      "notice is ordinary. The rule is `checker/document_date.py`'s, generalised: every "
+      "declaration the reader can read must agree, or the document does not declare one. "
+      "Nothing is repaired and nothing is chosen — see `docs/SOURCE_DEFECTS.md` SD-006 "
+      "for the filing that made this necessary.")
+    w("")
     if result["agreements"]:
-        w("| Document | Field | Value | Anchor |")
-        w("|---|---|---|---|")
+        w("| Document | Field | Value | The document against itself | Anchor |")
+        w("|---|---|---|---|---|")
         for r in result["agreements"]:
+            # .get: a run stored before this column existed must still re-render.
+            # render_only() reads the JSON as the record of what the models said, and
+            # a wording fix must never require another 58 requests.
+            contested = r.get("contested_by_document") or []
+            against = " ".join(f"`{v}`" for v in contested) if contested else "—"
             w(f"| `{_cell(r['document'], 44)}` | `{r['field']}` | "
-              f"`{_cell(r['model_a']['value'], 40)}` | "
+              f"`{_cell(r['model_a']['value'], 40)}` | {against} | "
               f"`{_cell(r['anchor'], 52)}` |")
     else:
         w("None.")
