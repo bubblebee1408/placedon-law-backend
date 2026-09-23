@@ -108,6 +108,7 @@ class Side:
     value: object = None
     span: str = ""
     refusal: str = ""                # the violation name, when state is REFUSED
+    detail: str = ""                 # the gate's own sentence about why
 
 
 @dataclass(frozen=True)
@@ -276,6 +277,13 @@ def _test() -> None:
           and c.rows[0].b.state == REFUSED
           and c.rows[0].b.refusal == "FACT_VALUE_UNSUPPORTED",
           "a gate-refused value is dropped but its refusal is still named in the row")
+    detailed = Side(REFUSED, "Public", "is a listed company",
+                    "FACT_VALUE_UNSUPPORTED",
+                    "'Public' does not appear in the quoted span")
+    check(detailed.detail.endswith("quoted span"),
+          "a refused side carries the gate's OWN reason, not just the gate's name "
+          "— 'the value is not in the span' and 'the span states a different "
+          "number' are different failures wearing one label")
 
     # ── normalisation is symmetric and does not invent agreement ──────────────
     check(compare_field("paid_up_capital_rupees", adm("40000000"), adm(40000000))

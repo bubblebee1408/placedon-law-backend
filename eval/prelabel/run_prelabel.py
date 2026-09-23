@@ -92,6 +92,44 @@ RATE_LIMIT_MARKERS = ("429", "ratelimitreached")
 REPORTS = Path(__file__).resolve().parents[2] / "reports"
 DOCS = Path(__file__).resolve().parents[2] / "docs"
 
+# Where a field's disagreements are already a known open question, point at the
+# ledger row rather than opening a second one. Each entry is a row that exists in
+# research/TASKS.md today; nothing is invented here.
+def _company_classes() -> tuple:
+    """The classes the product's own type accepts, read from the type itself."""
+    import typing
+
+    from checker.company_profile import CompanyClass
+    return tuple(typing.get_args(CompanyClass))
+
+
+# Fields whose value is a CLOSED set. Read from the declared type rather than
+# retyped here, so this cannot drift away from what the product accepts.
+DECLARED_VOCABULARY = {"company_class": _company_classes()}
+
+
+def in_declared_vocabulary(field_name: str, value: object) -> bool | None:
+    """True / False / None — None meaning the field has no closed vocabulary.
+
+    Not a judgement about the document. It answers one mechanical question: would
+    `CompanyProfile` accept this string at all? "public" yes; "TITAN COMPANY
+    LIMITED" no. That distinction is what separates a value the gate dropped
+    wrongly from a value the gate admitted wrongly, and both were in this corpus
+    on the same field on 23-09-2026.
+    """
+    allowed = DECLARED_VOCABULARY.get(field_name)
+    if allowed is None:
+        return None
+    return str(value or "").strip().lower() in allowed
+
+
+KNOWN_OPEN_TASKS = {
+    "company_class": ("research/TASKS.md L-007 — map document wording to "
+                      "CompanyClass, or keep the extracted class display-only. "
+                      "Open since 14-09-2026, founder-owned, blocked on an "
+                      "interpretive decision"),
+}
+
 NOT_A_CLAIM = (
     "Agreement between two models is NOT evidence that either is correct. Both "
     "can be wrong in the same way, and in this repository they already have been "
@@ -138,7 +176,9 @@ def sides_from(proposal: Proposal, document: str) -> tuple[dict, tuple]:
             proposed = (proposal.facts or {}).get(name)
             value = proposed.get("value") if isinstance(proposed, dict) else proposed
             span = proposed.get("span") if isinstance(proposed, dict) else None
-            sides[name] = cmp.Side(cmp.REFUSED, value, str(span or ""), r.violation)
+            sides[name] = cmp.Side(cmp.REFUSED, value, str(span or ""),
+                                   r.violation,
+                                   r.detail.split(":", 1)[-1].strip())
     return sides, tuple(refusals)
 
 
@@ -185,6 +225,60 @@ class Pacer:
                 self._sleep(owed)
         self._last[model] = self._clock()
         return None
+
+
+# One JSON object per extraction, appended as it is made. Named like the other
+# append-only ledgers in this repository (corpus/.asks.jsonl, corpus/.checks.jsonl).
+CHECKPOINT = Path(__file__).resolve().parents[2] / "corpus" / ".prelabel_checkpoint.jsonl"
+
+
+def _checkpoint_key(row: dict) -> tuple:
+    return (row.get("document"), row.get("model"))
+
+
+def load_checkpoint(path: Path) -> dict:
+    """Stored extractions, keyed by (document, model). A missing file is empty.
+
+    A malformed line is SKIPPED, not repaired and not fatal: the file is written
+    by a process that may be killed mid-line, and half a JSON object is the
+    ordinary way that ends.
+    """
+    out: dict = {}
+    if not Path(path).exists():
+        return out
+    for line in Path(path).read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(row, dict) and row.get("document") and row.get("model"):
+            out[_checkpoint_key(row)] = row
+    return out
+
+
+def append_checkpoint(path: Path, ex: Extraction) -> None:
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    row = {"document": ex.doc_id, "model": ex.model, "ok": ex.ok,
+           "error": ex.error, "meta": ex.meta, "proposed": ex.proposed}
+    with Path(path).open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(row, ensure_ascii=False) + "\n")
+        fh.flush()
+
+
+def replay(row: dict, doc: Document) -> Extraction:
+    """A stored extraction, put back through the SAME gates. Spends nothing.
+
+    The gates run again rather than their verdict being stored, so a resumed run
+    and an uninterrupted one cannot drift apart: if a gate changed between them,
+    the change applies to every document, not only to the ones bought after it.
+    """
+    proposal = Proposal(facts=dict(row.get("proposed") or {}))
+    sides, refusals = sides_from(proposal, doc.text)
+    return Extraction(doc.doc_id, row["model"], True, sides, refusals,
+                      dict(row.get("meta") or {}),
+                      proposed=dict(row.get("proposed") or {}))
 
 
 def is_rate_limited(error: str) -> bool:
@@ -300,7 +394,8 @@ def _pricing_names() -> tuple[str, ...]:
 # ── the run ───────────────────────────────────────────────────────────────────
 def run(docs, caller, *, model_a: str = MODEL_A, model_b: str = MODEL_B,
         pace: float = 0.0, budget: int = REVIEW_BUDGET_ROWS,
-        progress=None) -> dict:
+        progress=None, checkpoint: Path | None = None,
+        resume: bool = False) -> dict:
     """Two extractions per document, gated, compared, ordered and cut.
 
     `caller(text, model=...) -> (Proposal, meta)`. Injected so the whole pipeline
@@ -311,9 +406,23 @@ def run(docs, caller, *, model_a: str = MODEL_A, model_b: str = MODEL_B,
     stopped = ""
     pacer = Pacer(pace)
     backoff = time.sleep if pace else (lambda _: None)
+    stored = load_checkpoint(checkpoint) if (resume and checkpoint) else {}
+    reused = 0
 
     for n, doc in enumerate(docs, start=1):
         for model in (model_a, model_b):
+            # A stored SUCCESS is replayed for free. A stored FAILURE is not an
+            # answer -- a timeout or a 429 is our side of the wire, and resuming
+            # past it would freeze it into the record as the model's silence.
+            row = stored.get((doc.doc_id, model))
+            if row and row.get("ok"):
+                extractions.append(replay(row, doc))
+                reused += 1
+                if progress:
+                    progress(f"[{n}/{len(docs)}] {doc.doc_id} {model} "
+                             f"replayed from the checkpoint (no call)")
+                continue
+
             reason = ledger.would_exceed()
             if reason:
                 stopped = reason
@@ -321,6 +430,8 @@ def run(docs, caller, *, model_a: str = MODEL_A, model_b: str = MODEL_B,
             pacer.wait(model)
             ex, made = extract_with_retry(doc, model, caller, sleeper=backoff)
             extractions.append(ex)
+            if checkpoint:
+                append_checkpoint(checkpoint, ex)
             ledger.spend_attempts(made, model)
             if ex.ok:
                 ledger.record(model, ex.meta)
@@ -394,6 +505,7 @@ def run(docs, caller, *, model_a: str = MODEL_A, model_b: str = MODEL_B,
              "violation": violation, "detail": detail}
             for ex in extractions for name, violation, detail in ex.refusals],
         "stopped_early": stopped,
+        "resumed_from_checkpoint": reused,
         "spend": ledger.as_dict(),
         "runs": [{"document": e.doc_id, "model": e.model, "ok": e.ok,
                   "error": e.error, "meta": e.meta, "proposed": e.proposed}
@@ -426,10 +538,14 @@ def shape_summary(rows) -> list[dict]:
 
 
 def _shown_value(side) -> str:
+    vocab = side.get("in_declared_vocabulary")
+    mark = ("" if vocab is None
+            else " [a CompanyClass value]" if vocab
+            else " [NOT a CompanyClass value]")
     if side["state"] == cmp.ADMITTED:
-        return str(side["value"])
+        return f"{side['value']}{mark}"
     if side["state"] == cmp.REFUSED:
-        return f"(dropped by {side['refused_by']}) {side['value']}"
+        return f"(dropped by {side['refused_by']}) {side['value']}{mark}"
     return "(said nothing)"
 
 
@@ -446,8 +562,8 @@ def _row_json(row, docs_by_id) -> dict:
         "priority": row.priority,
         "priority_reason": row.priority_reason,
         "outcome": row.outcome,
-        "model_a": _side_json(row.a),
-        "model_b": _side_json(row.b),
+        "model_a": _side_json(row.a, row.field),
+        "model_b": _side_json(row.b, row.field),
         "document_text_at_anchor": anchor.quote if anchor else
             "(no anchor: no admitted span to locate)",
         "verdict": "",
@@ -455,9 +571,13 @@ def _row_json(row, docs_by_id) -> dict:
     }
 
 
-def _side_json(side) -> dict:
+def _side_json(side, field_name: str = "") -> dict:
     return {"state": side.state, "value": _jsonable(side.value),
-            "span": side.span, "refused_by": side.refusal}
+            "span": side.span, "refused_by": side.refusal,
+            "detail": side.detail,
+            "in_declared_vocabulary": (
+                in_declared_vocabulary(field_name, side.value)
+                if side.state in (cmp.ADMITTED, cmp.REFUSED) else None)}
 
 
 def _jsonable(v):
@@ -481,12 +601,20 @@ def _value_cell(side) -> str:
     notice, and "which sentence did each of them read" is the first question a
     reviewer asks. It belongs in the cell, not only in the JSON.
     """
+    vocab = side.get("in_declared_vocabulary")
+    flag = ""
+    if vocab is False:
+        flag = "<br>**not a value `CompanyClass` accepts**"
+    elif vocab is True and side["state"] == cmp.REFUSED:
+        flag = "<br>*(this IS a value `CompanyClass` accepts)*"
     if side["state"] == cmp.ADMITTED:
-        return (f"`{_cell(side['value'], 40)}`<br>read from "
+        return (f"`{_cell(side['value'], 40)}`{flag}<br>read from "
                 f"“{_cell(side['span'], 110)}”")
     if side["state"] == cmp.REFUSED:
         return (f"— proposed `{_cell(side['value'], 28)}`, dropped by "
-                f"`{side['refused_by']}`<br>from “{_cell(side['span'], 110)}”")
+                f"`{side['refused_by']}`{flag}<br>gate said: "
+                f"{_cell(side['detail'], 120)}<br>from "
+                f"“{_cell(side['span'], 110)}”")
     return "— (said nothing)"
 
 
@@ -520,7 +648,7 @@ def render_markdown(result: dict) -> str:
     w(f"| Model A | `{a}`, temperature "
       f"{', '.join(result['temperature_sent'][a])} |")
     w(f"| Model B | `{b}`, temperature "
-      f"{', '.join(result['temperature_sent'][b])} (rejects temperature 0) |")
+      f"{', '.join(result['temperature_sent'][b])} |")
     w(f"| Corpus | `corpus/testdocs/` — {result['corpus']['documents_loaded']} "
       f"public documents ({result['corpus']['real']} real filings, "
       f"{result['corpus']['specimen']} ICSI specimens) |")
@@ -596,12 +724,13 @@ def render_markdown(result: dict) -> str:
           "documents is one thing to settle, not many.")
         w("")
         w("| Field | Outcome | Rows | A · llama-3-3-70b produced | "
-          "B · gpt-5-mini produced |")
-        w("|---|---|---:|---|---|")
+          "B · gpt-5-mini produced | Already open as |")
+        w("|---|---|---:|---|---|---|")
         for g in shapes:
             w(f"| `{g['field']}` | {g['outcome']} | {g['count']} | "
               f"{_cell('; '.join(g['model_a_values']), 190)} | "
-              f"{_cell('; '.join(g['model_b_values']), 190)} |")
+              f"{_cell('; '.join(g['model_b_values']), 190)} | "
+              f"{_cell(KNOWN_OPEN_TASKS.get(g['field'], '—'), 170)} |")
         w("")
 
     w("## Agreements — model-verified, NOT expert-verified")
@@ -733,11 +862,14 @@ def main(argv: list[str]) -> int:
     docs = load_all()
     if limit:
         docs = docs[:limit]
-    print(f"[prelabel] {len(docs)} documents × 2 models", flush=True)
+    resume = "--resume" in argv
+    print(f"[prelabel] {len(docs)} documents × 2 models"
+          f"{' (resuming from the checkpoint)' if resume else ''}", flush=True)
     def say(line: str) -> None:
         print(f"[prelabel] {line}", flush=True)
 
-    result = run(docs, _azure_caller(), pace=PACE_SECONDS, progress=say)
+    result = run(docs, _azure_caller(), pace=PACE_SECONDS, progress=say,
+                 checkpoint=CHECKPOINT, resume=resume)
     j, m = write_outputs(result)
     c = result["counts"]
     print(f"[prelabel] agree={c['agree']} disagree={c['disagree']} "
@@ -801,6 +933,11 @@ def _test() -> None:
             "document_date": fact("2025-07-22", "Dated 22 July 2025"),
         }),
     }
+
+    doc2 = Document(
+        doc_id="stub/two", path="corpus/testdocs/stub/two.txt", kind="specimen",
+        title="ICSI SPECIMEN — stub", source="https://www.icsi.edu/x",
+        text=doc.text + " Second specimen.", line_map=tuple(range(6, 9)))
 
     calls: list[tuple] = []
 
@@ -894,8 +1031,11 @@ def _test() -> None:
     check(any(sh["field"] == "turnover_rupees" and sh["count"] == 1
               for sh in shapes),
           f"rows are grouped by (field, outcome) with a count ({shapes})")
+    check(all(k in cmp.KNOWN_FIELDS for k in KNOWN_OPEN_TASKS)
+          and all("research/TASKS.md" in v for v in KNOWN_OPEN_TASKS.values()),
+          "a field pointed at an open task points at a real ledger row")
     one = [sh for sh in shapes if sh["field"] == "paid_up_capital_rupees"][0]
-    check(one["model_b_values"] == ["(dropped by FACT_VALUE_UNSUPPORTED) 400000000"],
+    check(one["model_b_values"] == ["(dropped by FACT_VALUE_UNSUPPORTED) 400000000"],  # noqa: E501
           f"the group shows what each model actually produced, verbatim ({one})")
 
     # ── the per-model timeout is declared, not assumed ────────────────────────
@@ -1022,6 +1162,132 @@ def _test() -> None:
     r3 = run([doc] * 60, counting)
     check(len(spent) <= MAX_ATTEMPTS and r3["stopped_early"],
           f"a long run stops at the ceiling ({len(spent)} requests) and says so")
+
+    # ── two different failures must not wear one label ────────────────────────
+    # Measured 23-09-2026 across 7 real filings: llama proposed "Public" for
+    # company_class and the gate dropped it because the literal word is not in the
+    # span; gpt-5-mini proposed the company NAME and the gate ADMITTED it because
+    # the name is in the span. Filing both as "the models disagreed" hides that
+    # one value is a class our own type accepts and the other is not a class at
+    # all. The vocabulary is read from checker.company_profile.CompanyClass, so it
+    # cannot drift away from what the product actually accepts.
+    check(DECLARED_VOCABULARY["company_class"] == ("private", "public", "opc"),
+          f"the closed vocabulary is READ from CompanyClass, never retyped "
+          f"({DECLARED_VOCABULARY})")
+    check(in_declared_vocabulary("company_class", "Public") is True
+          and in_declared_vocabulary("company_class", "TITAN COMPANY LIMITED")
+          is False,
+          "a class our type accepts and a company name are told apart")
+    check(in_declared_vocabulary("turnover_rupees", 5) is None,
+          "a field with no closed vocabulary is not judged against one")
+
+    vocab_doc = Document(
+        doc_id="stub/three", path="corpus/testdocs/stub/three.txt", kind="real",
+        title="REAL FILED DOCUMENT — stub", source="https://example.gov.in/y",
+        text="NOTICE of TITAN COMPANY LIMITED. The company is listed.",
+        line_map=tuple(range(6, 9)))
+
+    def vocab_reply(text: str, *, model: str):
+        if model == MODEL_A:
+            facts = {"company_class": {"value": "public",
+                                       "span": "The company is listed"}}
+        else:
+            facts = {"company_class": {"value": "TITAN COMPANY LIMITED",
+                                       "span": "NOTICE of TITAN COMPANY LIMITED"}}
+        return Proposal(facts=facts), {"temperature": 0, "tokens_in": 1,
+                                       "tokens_out": 1}
+
+    rv = run([vocab_doc], vocab_reply)
+    row = rv["disagreements_kept"][0]
+    check(row["model_a"]["state"] == cmp.REFUSED
+          and "does not appear in the quoted span" in row["model_a"]["detail"],
+          f"the refused side says WHY in the gate's own words "
+          f"({row['model_a']['detail'][:60]!r})")
+    check(row["model_b"]["state"] == cmp.ADMITTED
+          and row["model_b"]["in_declared_vocabulary"] is False,
+          "the admitted side is flagged when the value is not one the declared "
+          "type accepts — the gate let it through, and that is the finding")
+    check(row["model_a"]["in_declared_vocabulary"] is True,
+          "and the DROPPED value is flagged as one the type does accept")
+    md_v = render_markdown(rv)
+    check("not a value `CompanyClass` accepts" in md_v,
+          "the human list says so on the row, in the table")
+    check("L-007" in md_v,
+          "and points at the ledger row this is already open as")
+
+    # ── a checkpoint, because this run has been killed twice mid-flight ───────
+    # 29 documents x 2 models is half an hour of wall clock, and a run that loses
+    # everything when the process dies is a run that pays for the same answers
+    # again. Each extraction is appended as it is made; a resume re-runs ONLY what
+    # is missing or failed, and rebuilds the rest from the stored proposals
+    # through the same gates, spending nothing.
+    import tempfile as _tmp
+
+    with _tmp.TemporaryDirectory() as td:
+        ck = Path(td) / "ck.jsonl"
+        died: list = []
+
+        def dies_after_three(text: str, *, model: str):
+            died.append(model)
+            if len(died) > 3:
+                raise KeyboardInterrupt("watchdog")
+            return replies[model], {"temperature": 0, "tokens_in": 7,
+                                    "tokens_out": 3}
+
+        try:
+            run([doc, doc2], dies_after_three, checkpoint=ck)
+        except KeyboardInterrupt:
+            pass
+        lines = [json.loads(ln) for ln in ck.read_text().splitlines() if ln.strip()]
+        check(len(lines) == 3 and all("proposed" in ln for ln in lines),
+              f"every extraction is written to the checkpoint AS IT IS MADE, not "
+              f"at the end ({len(lines)} of 4 survived the kill)")
+
+        after: list = []
+
+        def counting_resume(text: str, *, model: str):
+            after.append((text[:12], model))
+            return replies[model], {"temperature": 0, "tokens_in": 7,
+                                    "tokens_out": 3}
+
+        r5 = run([doc, doc2], counting_resume, checkpoint=ck, resume=True)
+        check(len(after) == 1,
+              f"a resume calls the model ONLY for what the checkpoint is missing "
+              f"({len(after)} call(s), not 4)")
+        check(r5["documents_compared"] == 2,
+              "and the finished run covers every document")
+        check(r5["spend"]["calls_by_model"].get(MODEL_A, 0)
+              + r5["spend"]["calls_by_model"].get(MODEL_B, 0) == 1,
+              "the ledger charges only the calls this resume actually made")
+        check(r5["resumed_from_checkpoint"] == 3,
+              f"the report says how many extractions were reused rather than "
+              f"re-bought ({r5['resumed_from_checkpoint']})")
+
+        # The rebuilt side must be the same side, or a resume quietly changes the
+        # answers underneath the founder.
+        fresh = run([doc, doc2], counting_resume)
+        check([(x["field"], x["outcome"]) for x in r5["disagreements_kept"]]
+              == [(x["field"], x["outcome"]) for x in fresh["disagreements_kept"]],
+              "a resumed run yields the same rows as one that never stopped")
+
+        # A FAILED checkpoint entry is retried, not treated as a settled answer.
+        ck2 = Path(td) / "ck2.jsonl"
+        ck2.write_text(json.dumps({
+            "document": doc.doc_id, "model": MODEL_A, "ok": False,
+            "error": "ModelUnavailable: Azure unreachable: timed out",
+            "meta": {}, "proposed": {}}) + "\n")
+        retried: list = []
+
+        def note(text: str, *, model: str):
+            retried.append(model)
+            return replies[model], {"temperature": 0, "tokens_in": 1,
+                                    "tokens_out": 1}
+
+        run([doc], note, checkpoint=ck2, resume=True)
+        check(MODEL_A in retried,
+              "a checkpointed FAILURE is re-attempted — a timeout is not an "
+              "answer, and resuming past it would freeze our impatience into "
+              "the record")
 
     # ── the review budget ─────────────────────────────────────────────────────
     r4 = run([doc], stub, budget=1)
