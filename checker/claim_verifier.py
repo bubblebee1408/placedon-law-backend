@@ -47,7 +47,7 @@ from checker.evidence_pack import EvidencePack
 
 __all__ = ["ClaimVerification", "verify_claim", "verify_all", "VERDICTS", "establishes_support",
            "SUPPORTED", "LEXICAL_CANDIDATE", "PARTIAL", "UNSUPPORTED", "CONTRADICTED", "MISSING",
-           "INVALID_CITATION"]
+           "INVALID_CITATION", "distinctive_terms"]
 
 SUPPORTED = "SUPPORTED"                    # reserved: requires entailment; never returned here
 LEXICAL_CANDIDATE = "LEXICAL_CANDIDATE"    # terms present -- triage only, NOT grounding
@@ -101,6 +101,18 @@ class ClaimVerification:
 
 def _terms(text: str) -> set[str]:
     return {w for w in re.findall(r"[a-z]{4,}", text.lower()) if w not in _STOP}
+
+
+def distinctive_terms(text: str) -> set[str]:
+    """The words that could tell this text apart from another piece of legal prose.
+
+    Public because `lawyer_summary` asks the same question of a summary sentence and a
+    cited DOCUMENT span, where this module's own verdicts do not apply (a document span is
+    not a provision in an evidence pack, and forcing one into that type would fake its
+    provenance). A second stoplist would be a second answer to "what counts as
+    distinctive", and the two would drift.
+    """
+    return _terms(text)
 
 
 def _negated(text: str) -> bool:
@@ -239,6 +251,12 @@ def _test() -> None:
 
     check(all(v.verdict in VERDICTS for v in verify_all((good, bogus, miss), pack)),
           "verify_all returns only valid verdicts")
+
+    # The stoplist has one public reader (lawyer_summary) and must answer the same way.
+    check(distinctive_terms("The company shall be a company under the Act.") == set(),
+          "distinctive_terms strips statutory boilerplate to nothing")
+    check("thirty" in distinctive_terms("within thirty days of incorporation"),
+          "...and keeps the words that distinguish one provision from another")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:

@@ -52,6 +52,7 @@ suites=(
   checker/retrieve.py
   checker/model_adapter.py
   checker/claim_verifier.py
+  checker/lawyer_summary.py
   checker/redteam.py
   checker/provenance.py
   checker/section_index.py
