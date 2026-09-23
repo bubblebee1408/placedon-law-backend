@@ -133,12 +133,26 @@ _CATALOGUE: dict[str, dict] | None = None
 
 
 def _entry(doc) -> dict:
-    """One public document as the page sees it: what it is, and the date it declares."""
+    """One public document as the page sees it: what it is, and the date it declares.
+
+    `date_line` is the line in the FILE, which is the only number a reader can open. It is not
+    what document_date.read() returns: that counts lines in the text it is handed, and what it
+    is handed has had this repository's own `#` provenance header stripped by
+    corpus.read_document -- so the raw number is short by the header. The D3 verifier proved
+    what that costs: tcpl_62nd showed line 1114, the date is on 1121, and 1114 reads "Devices
+    or Tablets or through Laptop connecting via"; on the three board outcomes the pointer
+    landed INSIDE our own header, at `# https://routemobile.com/...`. A locator that opens a
+    line saying something else is worse than no locator. corpus.Document keeps `line_map` for
+    exactly this, and this file's test now opens every dated file and checks the line against
+    what is written there.
+    """
     reading = document_date.read(doc.text)
+    line = (doc.line_map[reading.line - 1]
+            if reading.line and reading.line <= len(doc.line_map) else None)
     return {"id": doc.doc_id, "title": doc.title, "kind": doc.kind, "source": doc.source,
             "path": doc.path, "chars": doc.chars,
             "date": reading.value.isoformat() if reading.value else None,
-            "date_line": reading.line, "date_quote": reading.quote,
+            "date_line": line, "date_quote": reading.quote,
             "declarations_unread": reading.unread,
             "why_no_date": reading.why}
 
@@ -655,6 +669,22 @@ def _test() -> int:
                                     "question": "Which of these rules moved?"}).encode())
         check(st == 200 and json.loads(r2)["turn"]["question"] == "Which of these rules moved?",
               "a typed question is the turn's question, verbatim")
+
+        # The line number is a locator a reader opens. It must be the line in the FILE, and
+        # never a line of this repository's own provenance header (D3 verifier, finding 1).
+        # Every dated document, not one: the single-document test passed while 9 of 9 were wrong.
+        root = Path(__file__).resolve().parent.parent
+        dated = [d for d in listed.values() if d["date"]]
+        astray = []
+        for d in dated:
+            lines = (root / d["path"]).read_text(encoding="utf-8", errors="replace").splitlines()
+            at = d["date_line"] or 0
+            got = lines[at - 1] if 0 < at <= len(lines) else ""
+            if got.strip() != d["date_quote"] or got.startswith("#"):
+                astray.append((d["id"], at, got[:40]))
+        check(len(dated) >= 9 and not astray,
+              f"every date_line opens the line its quote came from, in its own file, never the "
+              f"provenance header ({len(dated)} dated; {astray[:3]})")
 
         # ── no date, no check: the engine's own refusal, never a guessed date ──
         for undated, what in (("icsi_specimens/09_minutes_agm_annexXVI", "a specimen with blanks"),

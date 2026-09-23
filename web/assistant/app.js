@@ -936,7 +936,8 @@ function showChosenDocument() {
   var d = chosenDocument();
   if (!d) return;
   add(meta, field(el('span', null, d.date
-    ? 'It declares its own date on line ' + d.date_line + ': "' + d.date_quote + '"'
+    ? 'It declares its own date on line ' + d.date_line + ' of ' + d.path + ': "'
+      + d.date_quote + '"'
     : d.why_no_date), 'documents'));
 }
 
@@ -945,8 +946,11 @@ function documentBlock(doc) {
   var box = el('section', 'docblock');
   box.setAttribute('data-document', doc.id);
   add(box, field(el('p', 'doc-title', doc.title), 'document.title'),
-    field(el('p', 'caption', 'Dated ' + human(doc.date) + ', read from line ' + doc.date_line
-      + ' of the document itself: "' + doc.date_quote + '"'), 'document.date_quote'));
+    // The file and the line, so a reader can open it: `sed -n '<line>p' <path>`. The line is
+    // the one in the file, header included (serve_ask._entry), because a locator that opens a
+    // line saying something else is worse than no locator at all.
+    field(el('p', 'caption', 'Dated ' + human(doc.date) + ', read from ' + doc.path
+      + ' line ' + doc.date_line + ': "' + doc.date_quote + '"'), 'document.date_quote'));
   if (doc.declarations_unread) {
     // The marker the engine kept. A count that only exists in JSON nobody draws is not a
     // preserved marker, and one of these lines could name a date that disagrees.
