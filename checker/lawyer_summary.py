@@ -23,7 +23,8 @@ sentence is TRACED when, independently of anything the model said about itself:
   6. the sentence introduces no date, no figure and no provision citation that is absent
      from the cited span, and asserts no legal conclusion absent from it
      (`reasoning.review()`, run with the cited span as the verified material);
-  7. the sentence's distinctive vocabulary overlaps the cited span's;
+  7. the sentence's distinctive vocabulary overlaps the cited span's (less the words
+     of a reporting frame, which by construction cannot be in the span);
   8. if it states what the law requires, it is cited to the ENGINE, not to the document.
 
 TRACED IS NOT ENTAILMENT. A sentence can quote a real span, at real offsets, share its
@@ -159,6 +160,18 @@ _REPORTING = re.compile(
     r"\bthe (?:document|notice|minutes|resolution|filing|letter|circular|report|"
     r"intimation|extract|specimen)\b[^.]{0,40}?\b(?:states|stated|records|recites|says|"
     r"sets out|gives|shows|bears|names|lists|declares|is dated)\b", re.I)
+
+# ...and the frame's OWN words are not part of what the sentence claims. The prompt asks
+# for "The notice records that ...", and those words can never appear in the document span
+# by construction, so counting them against the span's coverage charges a sentence for
+# obeying our own instruction. Stripped from the vocabulary check ONLY when the sentence is
+# a reporting frame, and only the frame words themselves -- never a span of text between
+# them, which would be a hole a model could put a claim in. The date, figure, citation and
+# conclusion checks still run over the FULL sentence, so nothing material hides here.
+_FRAME_WORDS = re.compile(
+    r"\b(?:document|notice|minutes|resolution|filing|letter|circular|report|intimation|"
+    r"extract|specimen|states|stated|records|recites|says|sets out|gives|shows|bears|"
+    r"names|lists|declares|dated)\b", re.I)
 
 _SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+(?=[A-Z(\"'“])")
 
@@ -397,7 +410,8 @@ def verify_sentence(text: str, citations, sources, *, shares_citation: bool = Fa
         return no(r.violation, *[x.detail for x in rev.refusals],
                   anchors=tuple(anchors))
 
-    want = distinctive_terms(text)
+    claimed = _FRAME_WORDS.sub(" ", text) if _REPORTING.search(text) else text
+    want = distinctive_terms(claimed)
     if not want:
         return no(TERMS_NOT_IN_SPAN,
                   "the sentence carries no distinctive words of its own, so there is "
@@ -695,6 +709,22 @@ def _test() -> None:
           f"a legal position cited to the ENGINE's own output is traced "
           f"({s_eng_law.verdict}: {s_eng_law.reasons})")
 
+    # ── the reporting frame is not charged against the span ─────────────────
+    s_frame = verify_sentence(
+        "The notice records that the meeting is to be held at the registered office "
+        "of the Company at Pune.",
+        (cite(0, "will be held on Thursday, 14 August 2025 at 11:00 a.m. at the "
+                 "registered\noffice of the Company at Pune"),), sources)
+    check(s_frame.verdict == TRACED,
+          f"a reporting sentence is not charged for the frame words our own prompt "
+          f"asks for ({s_frame.verdict}: {s_frame.reasons})")
+    s_frame_empty = verify_sentence(
+        "The notice records that the auditors resigned during the year.",
+        (cite(0, "registered\noffice of the Company at Pune"),), sources)
+    check(s_frame_empty.verdict == TERMS_NOT_IN_SPAN,
+          f"...and stripping the frame does not let its SUBSTANCE through unchecked "
+          f"({s_frame_empty.verdict})")
+
     # ── a block holding two sentences: each is checked on its own ────────────
     span = "Annual General Meeting of Vaidya Industries\nLimited will be held on Thursday, 14 August 2025"
     blocks = ((
@@ -799,6 +829,41 @@ def _test() -> None:
     check("output_config" not in sent,
           "no output_config, which would 400 alongside citations")
     check(sent["model"] == "claude-opus-5", f"the summary runs on Opus ({sent['model']})")
+
+    # ── the parser reads the SDK's REAL citation shape, not a memory of it ───
+    # Every other check here builds its own stubs, so a field-name drift in the SDK
+    # would be invisible to all of them AND total in production: `blocks_from_response`
+    # would find no citations, every sentence would refuse for NO_CITATION, and the
+    # summary would look principled while being broken. So this one check builds the
+    # installed SDK's own model objects. It still spends nothing and touches no network.
+    try:
+        from anthropic.types import TextBlock
+        from anthropic.types.citation_char_location import CitationCharLocation
+    except ImportError:            # counted in neither column; printed so it is seen
+        print("  [SKIP] the anthropic SDK is not installed here, so the SDK-shape "
+              "check did not run")
+    else:
+        sdk_start, sdk_end = at(doc, "will be held on Thursday, 14 August 2025 at "
+                                     "11:00 a.m. at the registered\noffice of the "
+                                     "Company at Pune")
+        sdk_cit = CitationCharLocation(
+            cited_text=DOC_TEXT[sdk_start:sdk_end], document_index=0,
+            document_title=doc.source_id, start_char_index=sdk_start,
+            end_char_index=sdk_end, type="char_location")
+        sdk_resp = type("R", (), {
+            "content": [TextBlock(text="The notice records that the meeting is to be "
+                                       "held at the registered office of the Company "
+                                       "at Pune.", type="text", citations=[sdk_cit])],
+            "usage": type("U", (), {"input_tokens": 10, "output_tokens": 3})()})()
+        parsed = blocks_from_response(sdk_resp)
+        check(len(parsed) == 1 and len(parsed[0][1]) == 1,
+              "a real SDK TextBlock carrying a real CitationCharLocation parses")
+        got = parsed[0][1][0]
+        check((got.source_index, got.start, got.end) == (0, sdk_start, sdk_end)
+              and got.quoted == DOC_TEXT[sdk_start:sdk_end],
+              "...into the offsets and the quote this module traces against")
+        check(check_blocks(parsed, sources).sentences[0].traced,
+              "...and the sentence it carries traces end to end")
 
     # ── no key: refuse, never a blank summary ────────────────────────────────
     import os as _os
