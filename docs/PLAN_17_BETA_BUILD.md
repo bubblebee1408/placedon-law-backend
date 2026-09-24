@@ -2,8 +2,10 @@
 
 Written 2026-09-24. Status vocabulary is [PLAN_00_INDEX](PLAN_00_INDEX.md)'s.
 Companion documents: [PLAN_16](PLAN_16_RESEARCH_PROGRAMME.md) (the research the
-design rests on) and [STUDY_GUIDE_THEMIS](STUDY_GUIDE_THEMIS.md) (the concepts,
-explained for the founder).
+design rests on), [PLAN_18](PLAN_18_TECHNICAL_DESIGN.md) (the technical design:
+interfaces, schema, API, pipeline, security) and
+[STUDY_GUIDE_THEMIS](STUDY_GUIDE_THEMIS.md) (the concepts, explained for the
+founder).
 
 **How to use this file.** Work the milestones in order. Each one has a goal, the
 files it touches, what "done" means, and a **prompt block to paste into Claude
