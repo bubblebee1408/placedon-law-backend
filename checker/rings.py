@@ -153,6 +153,9 @@ REGISTRY: dict[str, int] = {
 # Observation` names `checker.feeds`, which no submodule entry would match.
 PACKAGE_RINGS: dict[str, int] = {
     "checker.feeds": RING_2,
+    # The MCP surface: read-only tools over the engine, reachable by an agent.
+    # Ring 2 for the same reason feeds are -- a Ring 0 decider must never import it.
+    "checker.mcp": RING_2,
 }
 
 
