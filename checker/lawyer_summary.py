@@ -402,6 +402,16 @@ def sentences_of(text: str) -> tuple[str, ...]:
     return tuple(p.strip() for p in _SENTENCE_SPLIT.split(flat) if p.strip())
 
 
+def _quote_matches(actual: str, quoted: str) -> bool:
+    """Byte-identical, and a named seam rather than an inline `!=`.
+
+    The kill-test harness replaces this with a function that always agrees, and the suite
+    has to notice. An inline comparison could not be mutated, so nothing could prove a test
+    depended on it.
+    """
+    return actual == quoted
+
+
 def clauses_of(text: str) -> tuple[str, ...]:
     """The parts of a sentence that could each be a claim, split on plain conjunctions."""
     return tuple(p.strip() for p in _CLAUSE_SPLIT.split(text) if p and p.strip())
@@ -436,7 +446,7 @@ def verify_sentence(text: str, citations, sources, *, shares_citation: bool = Fa
                       f"{src.source_id} ({len(src.text)} characters). Refused, not "
                       f"clamped: a clamped span is a span nobody chose")
         actual = src.text[c.start:c.end]
-        if actual != c.quoted:
+        if not _quote_matches(actual, c.quoted):
             return no(SPAN_MISQUOTED,
                       f"what the model said it read is not what sits at those offsets, "
                       f"byte for byte: {src.source_id}[{c.start}:{c.end}] is "
@@ -669,20 +679,13 @@ def mixed_prose_probe(sentence: Sentence, sources) -> str:
     return Summary((sentence,), tuple(sources)).prose()
 
 
-def _test() -> None:
-    ok = fail = 0
+def _checks(check) -> None:
+    """Every assertion about this module, as a function of the `check` it reports to.
 
-    def check(cond: bool, label: str) -> None:
-        nonlocal ok, fail
-        if cond:
-            ok += 1
-            print(f"  [PASS] {label}")
-        else:
-            fail += 1
-            print(f"  [FAIL] {label}")
-
-    print("lawyer_summary")
-
+    Factored out so the kill-test harness can run the whole suite again against a mutated
+    implementation. A test that cannot be re-run under mutation cannot be shown to depend
+    on anything.
+    """
     doc = document_source("agm_notices/vaidya_2025", DOC_TEXT)
     eng = engine_source(TURN)
     sources = (doc, eng)
@@ -1071,6 +1074,84 @@ def _test() -> None:
           "the machine-readable record carries the refused sentence too")
     check(all(s["verdict"] in VERDICTS for s in d["sentences"]),
           "every verdict in the record is a declared one")
+
+
+# ── the kill tests ────────────────────────────────────────────────────────────
+# Three vacuous tests were found in this repository in one night: this module's
+# SPAN_OVERBROAD fixture (too short to trip the bar it tested), D3's single-document-id
+# suite, and the "pins both directions" claim in 1aa726f, where reverting the fix left the
+# suite at 57/57 with nothing failing. A green suite is evidence about the tests only if
+# a broken implementation turns it red, and nothing was checking that.
+#
+# So each mutant below breaks one thing on purpose and the suite must notice. A mutant the
+# suite does not notice is not a curiosity: it is a rule with no test behind it, and the
+# gate goes red until there is one.
+_NEVER = re.compile(r"(?!x)x")          # matches nothing, ever
+
+
+def _mutants() -> tuple[tuple[str, dict], ...]:
+    return (
+        ("the reporting-frame strip is disabled", {"_FRAME_WORDS": _NEVER}),
+        ("the reporting-frame detector never fires", {"_REPORTING": _NEVER}),
+        ("the law-assertion detector never fires", {"_LAW_ASSERTION": _NEVER}),
+        ("the clause splitter never splits", {"_CLAUSE_SPLIT": _NEVER}),
+        ("clauses are never substantial enough to check", {"_MIN_CLAUSE_TERMS": 99}),
+        ("the vocabulary bar is removed", {"_MIN_COVERAGE": 0.0}),
+        ("the span-size bars are removed",
+         {"_MAX_SPAN_CHARS": 10 ** 9, "_MAX_SOURCE_FRACTION": 2.0}),
+        ("the byte-identical quote check always agrees",
+         {"_quote_matches": lambda actual, quoted: True}),
+    )
+
+
+def _survives(patch: dict) -> int:
+    """Run the whole suite against a mutated module; return how many checks caught it."""
+    # THIS module's namespace, not `import checker.lawyer_summary`. Run as a file, this
+    # module is __main__, and importing it by name would build a SECOND copy: the mutation
+    # would land on one and the tests on the other, and every mutant would report itself
+    # uncaught. That is exactly what the first version of this harness did, which is a
+    # small proof that a harness needs a harness.
+    g = globals()
+    held = {k: g[k] for k in patch}
+    caught = 0
+
+    def silent(cond: bool, label: str) -> None:
+        nonlocal caught
+        if not cond:
+            caught += 1
+
+    g.update(patch)
+    try:
+        _checks(silent)
+    except Exception:
+        # A mutation that makes the suite raise has also been noticed. Counted, because
+        # the alternative is a harness that reports "not caught" for a suite that died.
+        caught += 1
+    finally:
+        g.update(held)
+    return caught
+
+
+def _test() -> None:
+    ok = fail = 0
+
+    def check(cond: bool, label: str) -> None:
+        nonlocal ok, fail
+        if cond:
+            ok += 1
+            print(f"  [PASS] {label}")
+        else:
+            fail += 1
+            print(f"  [FAIL] {label}")
+
+    print("lawyer_summary")
+    _checks(check)
+
+    print("  -- kill tests: break the implementation, the suite must go red --")
+    for label, patch in _mutants():
+        caught = _survives(patch)
+        check(caught > 0,
+              f"the suite catches it when {label} ({caught} check(s) failed)")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:
