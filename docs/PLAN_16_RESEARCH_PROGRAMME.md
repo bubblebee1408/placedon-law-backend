@@ -127,9 +127,11 @@ What each new stage adds, and why it is not already covered:
   abstaining. Implementation: a sufficiency classifier whose output can only
   *withhold*, never *permit* (it adds refusals, never answers).
 - **Stage 7 (certify)** turns "every sentence is traced" into a statistical
-  guarantee over the claims served: *with probability ≥ 1−δ over the calibration
-  set, the fraction of served claims that are false is ≤ α.* It needs labelled data
-  we do not yet have (§4, C1) — which is why the pilot matters.
+  guarantee. In Mohri & Hashimoto's form: *with probability ≥ 1−α (over a fresh
+  question exchangeable with the calibration set), every claim that survives the
+  filter is true.* It is a per-answer guarantee, not a bound on the fraction of
+  false claims. It needs labelled data we do not yet have (§4, C1) — which is why
+  the pilot matters.
 - **Stages 1, 4 and 6 stay deterministic.** Nothing in the literature above is a
   reason to put a model in a decision path.
 
@@ -144,8 +146,11 @@ can be proven, what data it needs, and what would falsify it.
 ### C1 — Certified abstention for statutory QA
 
 - **Claim.** Composing a deterministic verifier (span tracing) with conformal
-  back-off gives a distribution-free bound on the error rate of *served* claims,
-  and the deterministic stage shrinks the calibration set needed.
+  back-off gives a distribution-free guarantee that a served answer contains no
+  false claim with probability ≥ 1−α, and the deterministic stage shrinks the
+  calibration set needed. (Two different guarantees are in play and must not be
+  conflated: the conformal one is per answer; the PAC row below bounds an error
+  *rate* from a clean audit sample.)
 - **Provable.** Under exchangeability of calibration and test claims, the
   split-conformal guarantee holds (Angelopoulos & Bates; Mohri & Hashimoto).
 - **Data it needs — computed 2026-09-24:**
