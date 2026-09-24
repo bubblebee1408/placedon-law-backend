@@ -108,6 +108,7 @@ Run: python3 checker/lawyer_summary.py      # stubs only: no network, no key, no
 """
 from __future__ import annotations
 
+import hashlib
 import re
 from dataclasses import dataclass
 
@@ -144,6 +145,7 @@ SPAN_VACUOUS = "SPAN_VACUOUS"
 TERMS_NOT_IN_SPAN = "TERMS_NOT_IN_SPAN"
 LAW_FROM_DOCUMENT = "LAW_FROM_DOCUMENT"
 SPAN_OVERBROAD = "SPAN_OVERBROAD"
+UNDETERMINED_AS_ESTABLISHED = "UNDETERMINED_AS_ESTABLISHED"
 # The four content failures are `reasoning`'s own names, not new ones. They are the same
 # failures it already refuses narration for -- an invented date, an invented figure, a
 # citation to something outside the verified material, a legal conclusion nobody reached --
@@ -152,6 +154,7 @@ SPAN_OVERBROAD = "SPAN_OVERBROAD"
 # vocabulary for one failure is how two names for one thing start disagreeing.
 VERDICTS = (TRACED, ENTAILED, NO_CITATION, CITATION_NOT_IN_EVIDENCE, SPAN_OUT_OF_RANGE,
             SPAN_MISQUOTED, SPAN_VACUOUS, SPAN_OVERBROAD, TERMS_NOT_IN_SPAN,
+            UNDETERMINED_AS_ESTABLISHED,
             LAW_FROM_DOCUMENT,
             DATE_INVENTED, FIGURE_INVENTED, CITATION_OUTSIDE_PACK, CONCLUSION_ASSERTED)
 
@@ -205,6 +208,15 @@ _CLAUSE_SPLIT = re.compile(
 _MAX_SPAN_CHARS = 1000
 _MAX_SOURCE_FRACTION = 0.6
 
+# A sentence citing a NOT-DETERMINED region has to carry the uncertainty itself. Note
+# which way this pattern fails: it is the PERMISSIVE side of the rule, so a hedge it does
+# not recognise refuses a true sentence, where the wedge's pattern failing lets a false one
+# through. A pattern standing in for a rule is a weakness either way; this one is arranged
+# to fail safe.
+_UNDETERMINED_VOICE = re.compile(
+    r"\b(?:not|no|nor|cannot|could not|did not|does not|was not|were not|undetermined|"
+    r"unable|nothing|neither|without|unresolved|unknown|unchecked)\b", re.I)
+
 # A sentence that says what the law requires, rather than what this document says.
 _LAW_ASSERTION = re.compile(
     r"\b(?:shall|must|is required to|are required to|requires|required under|mandates|"
@@ -233,10 +245,22 @@ _SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+(?=[A-Z(\"'“])")
 
 @dataclass(frozen=True)
 class Source:
-    """One block of admitted evidence, exactly as it was sent to the model."""
+    """One block of admitted evidence, exactly as it was sent to the model.
+
+    `undetermined` marks the character ranges of text that record something the check did
+    NOT establish -- the `not_confirmed` rows. They are inside the evidence because the
+    model must be able to read them and say so; they are marked because a span taken from
+    one says the opposite of what it looks like. "duty: Hold an annual general meeting" is
+    a row headed NOT DETERMINED, and a sentence quoting the duty out of it turns "we could
+    not tell" into "this is required". Uncertainty may not become an obligation.
+    """
     source_id: str
     kind: str
     text: str
+    undetermined: tuple[tuple[int, int], ...] = ()
+
+    def overlaps_undetermined(self, start: int, end: int) -> bool:
+        return any(start < hi and lo < end for lo, hi in self.undetermined)
 
     def __post_init__(self) -> None:
         if self.kind not in KINDS:
@@ -385,13 +409,28 @@ def engine_source(turn: dict) -> Source:
     con = rows("confirmed", ("duty", "provision", "state", "basis"))
     if con:
         lines += ["confirmed:"] + con
-    nc = rows("not_confirmed", ("kind", "duty", "provision", "detail"))
+    # Belt: each row says NOT DETERMINED on its own face, so a span wide enough to be a
+    # quotation carries the negation with it. Braces: the range is recorded below, so a
+    # span NARROW enough to miss those words is still known to have come from here.
+    nc = ["  - NOT DETERMINED, this check established nothing about this: " + r[4:]
+          for r in rows("not_confirmed", ("kind", "duty", "provision", "detail"))]
+    undetermined: list[tuple[int, int]] = []
     if nc:
-        lines += ["not confirmed:"] + nc
+        lines.append("not confirmed:")
+        for row in nc:
+            start = len("\n".join(lines)) + 1
+            lines.append(row)
+            undetermined.append((start, start + len(row)))
     for note in turn.get("what_it_is_not") or ():
         if isinstance(note, str) and note:
             lines.append(f"what this is not: {note}")
-    return Source(f"engine:{turn.get('turn_id', 'turn')}", ENGINE, "\n".join(lines) + "\n")
+    text = "\n".join(lines) + "\n"
+    # A turn with no turn_id used to anchor as "engine:turn", which is the same anchor for
+    # every such turn -- a reviewer told to look at "engine:turn [40:90]" has not been told
+    # which run. A digest of the rendered text is stable, reproducible and unambiguous.
+    ident = turn.get("turn_id") or ("sha256:" + hashlib.sha256(
+        text.encode("utf-8")).hexdigest()[:12])
+    return Source(f"engine:{ident}", ENGINE, text, tuple(undetermined))
 
 
 def sentences_of(text: str) -> tuple[str, ...]:
@@ -477,6 +516,23 @@ def verify_sentence(text: str, citations, sources, *, shares_citation: bool = Fa
                       f"{cited} of {src.source_id}'s {whole} characters were cited for "
                       f"one sentence. Citing most of a source is gesturing at it, not "
                       f"quoting it, and it defeats every vocabulary test at once",
+                      anchors=tuple(anchors))
+
+    # Uncertainty may not become an obligation. A span taken from a NOT-DETERMINED row
+    # reads like a finding and is the opposite of one, and the earlier defence was
+    # reasoning._CONCLUSIONS, whose pattern covers "must hold" but not "is required
+    # under" -- a pattern standing in for a rule, which is the weakness this repository
+    # keeps rediscovering. This is structural instead: the region is recorded when the
+    # evidence is built, and a sentence resting on one has to say so.
+    for c in cits:
+        src = srcs[c.source_index]
+        if src.overlaps_undetermined(c.start, c.end) \
+                and not _UNDETERMINED_VOICE.search(text):
+            return no(UNDETERMINED_AS_ESTABLISHED,
+                      f"this cites {src.source_id}[{c.start}:{c.end}], which is inside a "
+                      f"row recording something the check did NOT establish, and says it "
+                      f"as though it were established. A duty read out of a "
+                      f"not-determined row is uncertainty turned into an obligation",
                       anchors=tuple(anchors))
 
     # The wedge. A statement of what the law requires may not rest on the document's own
@@ -864,6 +920,51 @@ def _checks(check) -> None:
     check(diluted.text not in mixed_prose_probe(diluted, sources),
           "...and it never reaches the readable body")
 
+    # ── uncertainty may not become an obligation ────────────────────────────
+    # The verifier's finding: a not_confirmed row rendered verbatim let "is required
+    # under" be read out of it as a duty. reasoning._CONCLUSIONS did not catch it because
+    # its pattern covers "must hold", not "is required under".
+    check(len(eng.undetermined) == 1,
+          f"the engine source records the range of its not-determined row "
+          f"({eng.undetermined})")
+    lo, hi = eng.undetermined[0]
+    check("Hold an annual general meeting" in eng.text[lo:hi]
+          and "NOT DETERMINED" in eng.text[lo:hi],
+          "...covering the duty AND the words that deny it")
+    duty_span = "duty: Hold an annual general meeting, and within the statutory gap"
+    s_duty = verify_sentence(
+        "An annual general meeting is required under the statutory gap for this Company.",
+        (cite(1, duty_span),), sources)
+    check(s_duty.verdict == UNDETERMINED_AS_ESTABLISHED,
+          f"a duty read out of a not-determined row is refused ({s_duty.verdict})")
+    check(eng.overlaps_undetermined(*at(eng, duty_span)),
+          "...because the region is recorded when the evidence is built, not matched "
+          "by a pattern over the sentence")
+    # To report the uncertainty you have to cite the part that records it. Citing the
+    # duty alone and hedging in your own words does not trace -- the hedge has to be in
+    # the evidence, not only in the sentence.
+    s_hedge_only = verify_sentence(
+        "The check did not determine whether an annual general meeting was required.",
+        (cite(1, duty_span),), sources)
+    check(s_hedge_only.verdict == TERMS_NOT_IN_SPAN,
+          f"a hedge in the sentence does not import the row's uncertainty "
+          f"({s_hedge_only.verdict})")
+    s_honest = verify_sentence(
+        "The check established nothing about whether an annual general meeting was "
+        "required.",
+        (Citation(1, lo, hi, eng.text[lo:hi]),), sources)
+    check(s_honest.verdict == TRACED,
+          f"...while a sentence citing the row that RECORDS the uncertainty is traced "
+          f"({s_honest.verdict}: {s_honest.reasons})")
+
+    # ── an engine anchor names which run it came from ───────────────────────
+    other = engine_source(dict(TURN, state="abstained"))
+    check(eng.source_id != other.source_id and eng.source_id.startswith("engine:sha256:"),
+          f"two turns with no turn_id get different anchors, not both 'engine:turn' "
+          f"({eng.source_id} vs {other.source_id})")
+    check(engine_source({"turn_id": "t_abc", "state": "partial"}).source_id
+          == "engine:t_abc", "...and a turn that HAS an id is named by it")
+
     # ── the wedge is not bypassed by citing the engine BESIDE the document ───
     law_text = ("A small company must have paid-up share capital within the prescribed "
                 "limit under section 2(85).")
@@ -1101,6 +1202,8 @@ def _mutants() -> tuple[tuple[str, dict], ...]:
          {"_MAX_SPAN_CHARS": 10 ** 9, "_MAX_SOURCE_FRACTION": 2.0}),
         ("the byte-identical quote check always agrees",
          {"_quote_matches": lambda actual, quoted: True}),
+        ("every sentence counts as carrying uncertainty",
+         {"_UNDETERMINED_VOICE": re.compile(r"")}),
     )
 
 
