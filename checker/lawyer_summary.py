@@ -1,4 +1,4 @@
-"""The lawyer summary: prose in which an unsupported sentence has no way in.
+"""The lawyer summary: a sentence is traced to a span, or it is refused and shown as refused.
 
 D4. A checked document produces a `placedon.ask/0` turn (scripts/serve_ask.py) and that
 turn is not what a lawyer reads. Somebody has to say, in sentences, what the document is
@@ -35,8 +35,29 @@ and **never returned**, for the same reason `claim_verifier.SUPPORTED` never is:
 weaker check after a stronger one is the overclaim this repository exists to prevent. A
 reader of `establishes_entailment()` gets False for every verdict this module can produce.
 
-What the checks above do have is teeth in the other direction. Each of them FAILING is
-decisive, and together they close the routes by which an unsupported sentence gets in.
+What the checks above do have is teeth in the other direction: each of them FAILING is
+decisive. They do not close every route, and the first draft of this file claimed they did.
+
+## What still gets through, stated rather than implied
+
+A verifier broke the earlier version of this module four ways, and two of those holes were
+holes in the IDEA, not in the code. What remains after the fixes:
+
+  * **A clause on a conjunction the splitter does not know.** Coverage is a fraction, so a
+    true clause can pay for a false one. That is why coverage is now measured per clause as
+    well as per sentence -- but `_CLAUSE_SPLIT` is a pattern, and a fabrication joined by
+    something it does not list still rides on the sentence's own coverage.
+  * **A law assertion phrased in a way `_LAW_ASSERTION` does not recognise**, which then
+    never has to face the engine-only test. Same limit `reasoning._CONCLUSIONS` states
+    about itself.
+  * **A false statement of law wearing a reporting frame.** "The document states that a
+    small company must ..." is a faithful report of a document and is allowed to cite the
+    document. A reader skimming may still take the clause for law. Mitigation today is
+    presentational -- the frame plus the anchor -- and not mechanical.
+  * **Entailment itself.** Nothing here decides it. See below.
+
+None of these is a reason to trust the traced sentences less than the checks warrant; they
+are the reason the headline of this file says "traced", and not "supported".
 
 ## (8) is the wedge, not a nicety
 
@@ -101,7 +122,7 @@ from checker.reasoning import (CITATION_OUTSIDE_PACK, CONCLUSION_ASSERTED, DATE_
 __all__ = ["Source", "Citation", "Sentence", "Summary", "DOCUMENT", "ENGINE",
            "TRACED", "ENTAILED", "VERDICTS", "establishes_entailment",
            "document_source", "engine_source", "check_blocks", "blocks_from_response",
-           "sentences_of", "verify_sentence", "summarise", "SUMMARISE"]
+           "sentences_of", "clauses_of", "verify_sentence", "summarise", "SUMMARISE"]
 
 # The founder's decision for D4 (plan, DEMO PLAN): Opus for lawyer summaries. Note the
 # tension with anthropic_model's tiering, which puts narration on Sonnet because narration
@@ -145,25 +166,44 @@ def establishes_entailment(verdict: str) -> bool:
     return verdict == ENTAILED
 
 
-# Two shared content terms before a span is even a candidate for a sentence -- the bar
-# ground_span._MIN_OVERLAP already sets for the same question, reused rather than invented
-# a second time. A sentence with fewer than two distinctive terms of its own must have all
-# of them in the span.
-_MIN_SHARED_TERMS = 2
-# Half the sentence's distinctive vocabulary. Below it the sentence is mostly about
-# something other than what it cited.
-_MIN_COVERAGE = 0.5
-# A citation is a quotation of the text this SENTENCE was read from. A span many times
-# longer than the sentence it supports is not a quotation, it is a gesture at the document
-# -- and it defeats every vocabulary test at once, because a whole-document span contains
-# every word the document contains. Measured on this module's own fixture before the bar
-# existed: citing the entire document made "The Company is a small company and the meeting
-# is at Pune" TRACED, a sentence conjoining two facts from opposite ends of the file.
-# Both numbers are a judgement, not a derivation: 20x leaves room for a long statutory
-# paragraph behind a short sentence, and the floor keeps a short sentence from being unable
-# to cite a normal paragraph at all.
-_MAX_SPAN_RATIO = 20
-_MAX_SPAN_FLOOR = 600
+# THE VOCABULARY BAR, and the two lessons that set it.
+#
+# It is a FRACTION, and a fraction dilutes. A verifier demonstrated the failure on this
+# module's own fixture: "the auditors have resigned" refuses on its own, and the SAME
+# fabrication conjoined to a supported clause -- "...will be held on Thursday, 14 August
+# 2025 and that the auditors have resigned" -- reached 0.77 and TRACED, then printed in the
+# readable body with an anchor and no banner. Ten true terms had paid for three false ones.
+# So coverage is measured on each CLAUSE that is substantial enough to be a claim, as well
+# as on the whole sentence, and any one of them failing refuses the sentence.
+#
+# And it was too low. The same verifier showed UNDER-refusal at both thresholds, against a
+# prediction that over-refusal was the likelier failure -- that prediction was wrong, and
+# 0.5 was the number it was wrong about. At 0.7, and on clauses, a sentence has to be
+# mostly about what it cited. It is a judgement, not a derivation, and the kill-test
+# harness below is what stops it from becoming a number nothing depends on.
+_MIN_COVERAGE = 0.7
+# A fragment with fewer distinctive words than this is not a claim of its own -- it is a
+# noun phrase the splitter cut ("books and papers"), and holding it to a coverage bar would
+# refuse ordinary legal prose.
+_MIN_CLAUSE_TERMS = 2
+# The conjunctions a fabricated clause actually arrives on. This is a pattern, so it is
+# narrower than the rule it serves: a conjunction not listed here still carries its clause
+# on the whole sentence's coverage. That residue is stated in the docstring rather than
+# hidden.
+_CLAUSE_SPLIT = re.compile(
+    r"(?:;|\b(?:and|but|while|whereas|although|though|however|also|moreover|furthermore)"
+    r"\b)(?:\s+that\b)?", re.I)
+
+# THE SPAN SIZE BARS. Both are absolute. The first version of this check scaled the budget
+# with the SENTENCE's own length (20x, floor 600), and a verifier broke it twice over: a
+# 387-character sentence bought a 7,740-character budget and swallowed the whole fixture,
+# and the 600 floor sat above the 412-character fixture, so citing an entire short source
+# was never refused at all -- the exact defect the commit was named for, still reachable.
+# A bar a model can widen by writing more is not a bar. So: a span may not exceed
+# _MAX_SPAN_CHARS characters, and the text cited out of any one source may not exceed
+# _MAX_SOURCE_FRACTION of it, whatever the sentence looks like.
+_MAX_SPAN_CHARS = 1000
+_MAX_SOURCE_FRACTION = 0.6
 
 # A sentence that says what the law requires, rather than what this document says.
 _LAW_ASSERTION = re.compile(
@@ -362,6 +402,11 @@ def sentences_of(text: str) -> tuple[str, ...]:
     return tuple(p.strip() for p in _SENTENCE_SPLIT.split(flat) if p.strip())
 
 
+def clauses_of(text: str) -> tuple[str, ...]:
+    """The parts of a sentence that could each be a claim, split on plain conjunctions."""
+    return tuple(p.strip() for p in _CLAUSE_SPLIT.split(text) if p and p.strip())
+
+
 def verify_sentence(text: str, citations, sources, *, shares_citation: bool = False
                     ) -> Sentence:
     """One sentence, checked against the spans it cited. Refuses; never repairs."""
@@ -406,24 +451,48 @@ def verify_sentence(text: str, citations, sources, *, shares_citation: bool = Fa
                   "the cited span carries no distinctive words, so it could stand under "
                   "any sentence at all", anchors=tuple(anchors))
 
-    budget = max(_MAX_SPAN_FLOOR, _MAX_SPAN_RATIO * len(text))
-    if len(span_text) > budget:
+    if len(span_text) > _MAX_SPAN_CHARS:
         return no(SPAN_OVERBROAD,
-                  f"the cited span is {len(span_text)} characters behind a "
-                  f"{len(text)}-character sentence. A span that size contains every word "
-                  f"the sentence could need and shows nothing about where it was read; "
-                  f"cite the passage, not the document", anchors=tuple(anchors))
+                  f"{len(span_text)} characters were cited for one sentence. A span that "
+                  f"size contains every word the sentence could need and shows nothing "
+                  f"about where it was read; cite the passage, not the document",
+                  anchors=tuple(anchors))
+    per_source: dict[str, int] = {}
+    for src, actual in spans:
+        per_source[src.source_id] = per_source.get(src.source_id, 0) + len(actual)
+    for src, _ in spans:
+        cited, whole = per_source[src.source_id], len(src.text)
+        if whole and cited > _MAX_SOURCE_FRACTION * whole:
+            return no(SPAN_OVERBROAD,
+                      f"{cited} of {src.source_id}'s {whole} characters were cited for "
+                      f"one sentence. Citing most of a source is gesturing at it, not "
+                      f"quoting it, and it defeats every vocabulary test at once",
+                      anchors=tuple(anchors))
 
     # The wedge. A statement of what the law requires may not rest on the document's own
     # recital of it: that recital is exactly what this product exists to distrust.
-    if _LAW_ASSERTION.search(text) and not _REPORTING.search(text) \
-            and all(s.kind == DOCUMENT for s, _ in spans):
-        return no(LAW_FROM_DOCUMENT,
-                  "this states what the law requires and cites only the document. The "
-                  "document is not the law — its recital of the law may be the "
-                  "superseded one, which is the defect this check looks for. A legal "
-                  "position must cite the engine's own result",
-                  anchors=tuple(anchors))
+    #
+    # The first version asked whether the sentence cited ONLY the document, which is not
+    # the same rule and a verifier walked through the gap: add one engine citation beside
+    # the document one and the bare statement of law passes, carried by the document's
+    # stale recital. So a law assertion is now checked against the ENGINE spans ALONE. A
+    # document span sitting next to one lends it nothing.
+    if _LAW_ASSERTION.search(text) and not _REPORTING.search(text):
+        engine_spans = [a for s, a in spans if s.kind == ENGINE]
+        if not engine_spans:
+            return no(LAW_FROM_DOCUMENT,
+                      "this states what the law requires and cites no result of the "
+                      "check. The document is not the law — its recital of the law may "
+                      "be the superseded one, which is the defect this check looks for. "
+                      "A legal position must cite the engine's own result",
+                      anchors=tuple(anchors))
+        span_text = "\n".join(engine_spans)
+        span_terms = distinctive_terms(span_text)
+        if not span_terms:
+            return no(SPAN_VACUOUS,
+                      "this states what the law requires, so only the engine's own "
+                      "result can support it, and the engine span cited carries no "
+                      "distinctive words", anchors=tuple(anchors))
 
     # `reasoning.review()`, with the CITED SPAN as the verified material.
     rev = reasoning.review(Proposal(narration=text), declared_intents=(),
@@ -434,20 +503,26 @@ def verify_sentence(text: str, citations, sources, *, shares_citation: bool = Fa
                   anchors=tuple(anchors))
 
     claimed = _FRAME_WORDS.sub(" ", text) if _REPORTING.search(text) else text
-    want = distinctive_terms(claimed)
-    if not want:
+    if not distinctive_terms(claimed):
         return no(TERMS_NOT_IN_SPAN,
                   "the sentence carries no distinctive words of its own, so there is "
                   "nothing in it that the span could be said to support",
                   anchors=tuple(anchors))
-    shared = want & span_terms
-    coverage = len(shared) / len(want)
-    if len(shared) < min(_MIN_SHARED_TERMS, len(want)) or coverage < _MIN_COVERAGE:
-        return no(TERMS_NOT_IN_SPAN,
-                  f"the cited span does not carry what this sentence is about "
-                  f"(coverage {coverage:.2f}; absent: "
-                  f"{', '.join(sorted(want - shared)[:6])})",
-                  anchors=tuple(anchors))
+    # The whole sentence AND every clause substantial enough to be a claim. A true clause
+    # may not buy a false one a passing fraction.
+    for part in (claimed,) + clauses_of(claimed):
+        want = distinctive_terms(part)
+        if part is not claimed and len(want) < _MIN_CLAUSE_TERMS:
+            continue
+        shared = want & span_terms
+        coverage = len(shared) / len(want) if want else 0.0
+        if coverage < _MIN_COVERAGE:
+            where = "this sentence" if part is claimed else f"the clause {part.strip()!r}"
+            return no(TERMS_NOT_IN_SPAN,
+                      f"the cited span does not carry what {where} is about "
+                      f"(coverage {coverage:.2f}; absent: "
+                      f"{', '.join(sorted(want - shared)[:6])})",
+                      anchors=tuple(anchors))
 
     return Sentence(text, TRACED, cits, (), tuple(anchors), shares_citation)
 
@@ -586,6 +661,12 @@ TURN = {
                        "detail": "no company facts were supplied with this check"}],
     "what_it_is_not": ["This is not advice on whether anybody complied."],
 }
+
+
+def mixed_prose_probe(sentence: Sentence, sources) -> str:
+    """The readable body of a summary holding just this sentence. Used by the tests to
+    assert that a refused sentence cannot reach a reader through prose()."""
+    return Summary((sentence,), tuple(sources)).prose()
 
 
 def _test() -> None:
@@ -732,32 +813,74 @@ def _test() -> None:
           f"a legal position cited to the ENGINE's own output is traced "
           f"({s_eng_law.verdict}: {s_eng_law.reasons})")
 
-    # ── a citation that gestures at the whole document traces nothing ───────
-    # A real filing is 60,000 characters, so the fixture is padded to a length where
-    # "cite the whole document" is the move it would be in production.
-    long_doc = document_source(
-        "agm_notices/vaidya_2025_full",
-        DOC_TEXT + "\n\nThe Board has taken note of the report of the auditors for "
-                   "the financial year under review.\n" * 20)
-    long_sources = (long_doc, eng)
-    whole = Citation(0, 0, len(long_doc.text), long_doc.text)
-    claim = "The Company is a small company and the meeting is at Pune."
-    check(len(long_doc.text) > max(_MAX_SPAN_FLOOR, _MAX_SPAN_RATIO * len(claim)),
-          f"the fixture is long enough for this to be a real test "
-          f"({len(long_doc.text)} characters)")
-    s_broad = verify_sentence(claim, (whole,), long_sources)
-    check(s_broad.verdict == SPAN_OVERBROAD,
-          f"citing the entire document does not trace a sentence that conjoins facts "
-          f"from opposite ends of it ({s_broad.verdict})")
+    # ── a citation that gestures at a source traces nothing ─────────────────
+    # Both bars are absolute. A verifier broke the sentence-scaled version twice: a long
+    # sentence bought itself a budget big enough to swallow the source, and the floor sat
+    # above the primary fixture so citing ALL of it was never refused.
+    whole_primary = Citation(0, 0, len(DOC_TEXT), DOC_TEXT)
+    s_whole = verify_sentence("The meeting is at Pune and the capital is small.",
+                              (whole_primary,), sources)
+    check(s_whole.verdict == SPAN_OVERBROAD,
+          f"citing an ENTIRE short source is refused — the case the sentence-scaled "
+          f"floor let through ({s_whole.verdict})")
+    long_sentence = ("The notice records that the Annual General Meeting of the Company "
+                     "will be held at the registered office at Pune, and it further "
+                     "records the paid-up share capital, the class of the company, the "
+                     "meaning of section 2(85), the date it bears and the hour at which "
+                     "the meeting is to commence, all of which appear on its face. " * 2)
+    s_long = verify_sentence(long_sentence, (whole_primary,), sources)
+    check(s_long.verdict == SPAN_OVERBROAD,
+          f"a long sentence does not buy itself a bigger span budget "
+          f"({len(long_sentence)} characters of sentence: {s_long.verdict})")
     s_para = verify_sentence(
         "The notice records that the meeting is at the registered office at Pune.",
-        (cite(0, "Notice is hereby given that the Twelfth Annual General Meeting of "
-                 "Vaidya Industries\nLimited will be held on Thursday, 14 August 2025 "
-                 "at 11:00 a.m. at the registered\noffice of the Company at Pune"),),
-        sources)
+        (cite(0, "will be held on Thursday, 14 August 2025 at 11:00 a.m. at the "
+                 "registered\noffice of the Company at Pune"),), sources)
     check(s_para.verdict == TRACED,
-          f"...while an ordinary paragraph behind a short sentence still traces "
+          f"...while an ordinary passage behind a short sentence still traces "
           f"({s_para.verdict}: {s_para.reasons})")
+
+    # ── a true clause may not buy a false one a passing fraction ─────────────
+    # The verifier's finding, reproduced as a test: the fabrication refuses alone, and
+    # must still refuse when conjoined to something the span does support.
+    span_meeting = ("Annual General Meeting of Vaidya Industries\nLimited will be held "
+                    "on Thursday, 14 August 2025")
+    alone = verify_sentence("The auditors have resigned.", (cite(0, span_meeting),),
+                            sources)
+    check(alone.verdict == TERMS_NOT_IN_SPAN, "the fabrication refuses on its own")
+    diluted = verify_sentence(
+        "The notice records that the Annual General Meeting will be held on Thursday, "
+        "14 August 2025 and that the auditors have resigned.",
+        (cite(0, span_meeting),), sources)
+    check(diluted.verdict == TERMS_NOT_IN_SPAN,
+          f"...and still refuses when conjoined to a clause the span DOES support "
+          f"({diluted.verdict})")
+    check(any("auditors" in r for r in diluted.reasons),
+          f"...naming the clause that failed, not the sentence as a whole "
+          f"({diluted.reasons})")
+    check(diluted.text not in mixed_prose_probe(diluted, sources),
+          "...and it never reaches the readable body")
+
+    # ── the wedge is not bypassed by citing the engine BESIDE the document ───
+    law_text = ("A small company must have paid-up share capital within the prescribed "
+                "limit under section 2(85).")
+    both = verify_sentence(
+        law_text,
+        (cite(0, "small company within the meaning of section 2(85) of the Companies\n"
+                 "Act, 2013"),
+         cite(1, "result state: partial")), sources)
+    check(both.verdict != TRACED,
+          f"a law claim is not laundered by adding an engine citation beside the "
+          f"document one ({both.verdict})")
+    check(both.verdict in (TERMS_NOT_IN_SPAN, SPAN_VACUOUS, CITATION_OUTSIDE_PACK),
+          f"...it is judged against the ENGINE span alone: here the provision it names "
+          f"is not in that span either, so the citation check refuses it first "
+          f"({both.verdict}: {both.reasons})")
+    check(verify_sentence(law_text, (cite(0, "small company within the meaning of "
+                                             "section 2(85) of the Companies\nAct, "
+                                             "2013"),), sources).verdict
+          == LAW_FROM_DOCUMENT,
+          "...and with no engine citation at all it is LAW_FROM_DOCUMENT, as before")
 
     # ── the reporting frame is not charged against the span ─────────────────
     s_frame = verify_sentence(
