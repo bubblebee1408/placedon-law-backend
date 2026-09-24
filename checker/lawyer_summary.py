@@ -59,6 +59,21 @@ holes in the IDEA, not in the code. What remains after the fixes:
 None of these is a reason to trust the traced sentences less than the checks warrant; they
 are the reason the headline of this file says "traced", and not "supported".
 
+One route that WAS open and is now closed structurally rather than by pattern: the check's
+own `not_confirmed` rows read like findings, and a duty quoted out of one turned "we could
+not tell" into "this is required". Those ranges are recorded on the Source when the
+evidence is built, and a sentence resting on one has to carry the uncertainty.
+
+## Why any of this should be believed
+
+Every rule above is pinned by a kill test: the harness at the end of this file breaks one
+rule at a time -- the frame strip, the clause splitter, the vocabulary bar, the span-size
+bars, the byte-identical quote comparison, the law-assertion gate, the undetermined-region
+gate, the shared-citation marker, the null-offset guard -- and the suite has to go red.
+A threshold nothing notices the loss of is a number in a file, not a check, and three
+vacuous tests were found in this repository in one night. Read the mutants before trusting
+the list above; they are the evidence that the list is live.
+
 ## (8) is the wedge, not a nicety
 
 The document's own recital of the law is the thing this product exists to distrust: an
@@ -240,6 +255,13 @@ _FRAME_WORDS = re.compile(
     r"extract|specimen|states|stated|records|recites|says|sets out|gives|shows|bears|"
     r"names|lists|declares|dated)\b", re.I)
 
+# The marker a reviewer needs and was not being given. `shares_citation` reached
+# to_dict() and neither prose() nor render(), so two sentences out of one block printed
+# with the identical anchor and nothing said they were not separately attributed -- while
+# check_blocks' own docstring claimed the reviewer was told.
+_SHARED_NOTE = ("  (this citation was returned for more than one sentence in the same "
+                "block; the attribution is the block's, not this sentence's)")
+
 _SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+(?=[A-Z(\"'“])")
 
 
@@ -343,7 +365,7 @@ class Summary:
             out.append("")
         for i, s in enumerate(self.traced, start=1):
             out.append(f"{i}. {s.text}")
-            out.append(f"   — {'; '.join(s.anchors)}")
+            out.append(f"   — {'; '.join(s.anchors)}{_SHARED_NOTE if s.shares_citation else ''}")
         return "\n".join(out)
 
     def render(self) -> str:
@@ -355,7 +377,8 @@ class Summary:
                     "nothing here is a finding.", ""]
             for s in self.refused:
                 out.append(f"  ✗ {s.text}")
-                out.append(f"    {s.verdict}: {'; '.join(s.reasons)}")
+                out.append(f"    {s.verdict}: {'; '.join(s.reasons)}"
+                           f"{_SHARED_NOTE if s.shares_citation else ''}")
         return "\n".join(out)
 
     def to_dict(self) -> dict:
@@ -611,6 +634,20 @@ def check_blocks(blocks, sources, *, call: Call | None = None) -> Summary:
     return Summary(tuple(out), srcs, call)
 
 
+def _as_offset(value) -> int:
+    """An offset, or -1 so the range checks refuse it. A null is NOT a zero.
+
+    `int(x or 0)` turned a citation whose document_index was explicitly None into a
+    citation of source 0, and a verifier got that to TRACE. A missing field and a null
+    field are the same thing here -- neither names a source or a position -- and -1 is
+    refused by the same check that refuses any other impossible offset.
+    """
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return -1
+
+
 def blocks_from_response(resp) -> tuple[tuple[str, tuple[Citation, ...]], ...]:
     """(text, citations) per returned block. Reads the SDK shape and the dict shape."""
     def field(obj, name, default=None):
@@ -627,9 +664,9 @@ def blocks_from_response(resp) -> tuple[tuple[str, tuple[Citation, ...]], ...]:
             if field(c, "type") != "char_location":
                 # A citation shape we cannot check offsets in is not a citation here.
                 continue
-            cits.append(Citation(int(field(c, "document_index", -1) or 0),
-                                 int(field(c, "start_char_index", -1) or 0),
-                                 int(field(c, "end_char_index", -1) or 0),
+            cits.append(Citation(_as_offset(field(c, "document_index")),
+                                 _as_offset(field(c, "start_char_index")),
+                                 _as_offset(field(c, "end_char_index")),
                                  str(field(c, "cited_text", "") or "")))
         blocks.append((str(field(b, "text", "") or ""), tuple(cits)))
     return tuple(blocks)
@@ -855,6 +892,19 @@ def _checks(check) -> None:
     check(any("not the law" in r or "engine" in r.lower() for r in s_law.reasons),
           f"...and says why: the document is not the law ({s_law.reasons})")
 
+    # ...and the refusal tracks the LAW ASSERTION, not the subject matter: the same
+    # document span, the same small-company subject, traces when the sentence stops
+    # saying what the law requires. Without this the LAW_FROM_DOCUMENT check could pass
+    # on a sentence that was unsupportable for any reason at all.
+    s_control = verify_sentence(
+        "The Company is a small company within the meaning of section 2(85) of the "
+        "Companies Act, 2013.",
+        (cite(0, "The Company is a small company within the meaning of section 2(85) of "
+                 "the Companies\nAct, 2013"),), sources)
+    check(s_control.verdict == TRACED,
+          f"the same span and subject, minus the statement of law, traces "
+          f"({s_control.verdict}: {s_control.reasons})")
+
     s_report = verify_sentence(
         "The notice states that the Company is a small company within the meaning of "
         "section 2(85).",
@@ -1016,6 +1066,32 @@ def _checks(check) -> None:
     check(all(s.shares_citation for s in two.sentences),
           "...both are marked as sharing one block's citation")
 
+    # ── the shared-citation marker reaches the READER, not just the JSON ────
+    two_prose = Summary(two.sentences, sources).prose()
+    check("more than one sentence" in two_prose,
+          "a sentence sharing its block's citation says so in the readable body")
+    check("more than one sentence" in Summary(two.sentences, sources).render(),
+          "...and in the quarantine section too")
+    single = check_blocks(((
+        "The notice records that the Annual General Meeting will be held on Thursday, "
+        "14 August 2025.", (cite(0, span),)),), sources)
+    check("more than one sentence" not in single.prose(),
+          "...and a sentence with its own citation is not labelled as sharing one")
+
+    # ── a null index is not source zero ─────────────────────────────────────
+    null_idx = blocks_from_response({"content": [{
+        "type": "text", "text": "The Company is a small company.",
+        "citations": [{"type": "char_location", "cited_text": "The Company is a small",
+                       "document_index": None, "start_char_index": 0,
+                       "end_char_index": 22}]}]})
+    check(null_idx[0][1][0].source_index == -1,
+          f"an explicit null document_index is not read as source 0 "
+          f"({null_idx[0][1][0].source_index})")
+    check(check_blocks(null_idx, sources).sentences[0].verdict
+          == CITATION_NOT_IN_EVIDENCE,
+          "...and refuses, where `int(None or 0)` once made it trace against the "
+          "document")
+
     # ── the refusal design: kept, quarantined, counted, never deleted ────────
     mixed = check_blocks((
         ("The notice records that the Annual General Meeting will be held on Thursday, "
@@ -1027,7 +1103,7 @@ def _checks(check) -> None:
     body = mixed.prose()
     check("in compliance" not in body,
           "the readable summary does not contain the refused sentence")
-    check("1" in body and "not trace" in body,
+    check("1 of 2 sentence(s)" in body and "did not trace" in body,
           f"...but it says on its face that a sentence did not trace ({body[:120]!r})")
     rendered = mixed.render()
     check("The Company is in compliance with the Companies Act, 2013." in rendered,
@@ -1204,6 +1280,8 @@ def _mutants() -> tuple[tuple[str, dict], ...]:
          {"_quote_matches": lambda actual, quoted: True}),
         ("every sentence counts as carrying uncertainty",
          {"_UNDETERMINED_VOICE": re.compile(r"")}),
+        ("the shared-citation marker is blank", {"_SHARED_NOTE": ""}),
+        ("a null offset reads as zero", {"_as_offset": lambda v: 0}),
     )
 
 
