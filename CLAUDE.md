@@ -112,7 +112,7 @@ Files changed · Tests added or updated · Commands run · Results · Known limi
 | `checker/section_index.py` | `section_by_number("173")` — number -> corpus ID (97.9% mapped) |
 | `checker/legal_ref.py` | Instrument-qualified refs. A provision number is never an identity |
 | `checker/mvp_freeze.py` | Pins the 17 hand-verified MVP mappings against silent drift |
-| `scripts/run_tests.sh` | Runs all 8 suites with PYTHONPATH set — use this, not bare python3 |
+| `scripts/run_tests.sh` | Runs **every** self-testing module with PYTHONPATH set — use this, not bare python3. (It said "all 8 suites" until 2026-09-25; the harness runs 195 today, and the count belongs in its own HARNESS_RESULT line, not in prose that goes stale.) |
 | `scripts/verify_document.py` | Is this PDF real? Cryptographic signature check, CCA India |
 | `scripts/verify_section_index.py` | Our number->id map vs India Code's own API |
 | `checker/robots.py` | Robots + TLS enforcement in the fetch path; fails closed |

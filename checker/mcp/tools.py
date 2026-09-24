@@ -175,20 +175,44 @@ def _instrument_impact(args: dict) -> dict:
     frag = args.get("instrument", "")
     ids = affected_by(frag)
     by_id = {o.obligation_id: o for o in REGISTER}
-    touched = [{"obligation_id": i,
-                "duty": getattr(by_id.get(i), "duty", ""),
-                "provision": getattr(by_id.get(i), "provision", "")} for i in ids]
+    # F1 (bug sweep 2026-09-25): getattr(..., "") turned an id the REGISTER does not
+    # hold into a plausible empty duty. `affected_by` reads currency.DEPENDENCIES, a
+    # separately maintained list; currency.report() guards the direction
+    # "obligation with no dependency" but nothing guards this one. The two agree
+    # today (15 ids, symmetric difference empty), so the bug was dormant -- and the
+    # sentence still said "touches 2 obligation(s)" while naming one. An unknown id
+    # is now said out loud.
+    touched = []
+    unknown: list[str] = []
+    for i in ids:
+        ob = by_id.get(i)
+        if ob is None:
+            unknown.append(i)
+            touched.append({"obligation_id": i, "duty": None, "provision": None,
+                            "error": "named by the currency index but absent from the "
+                                     "obligation register -- one of the two is wrong"})
+        else:
+            touched.append({"obligation_id": i, "duty": ob.duty, "provision": ob.provision})
     if not ids:
         sentence = (f"{frag} is not matched to any obligation this system holds. That is "
                     "not a finding that it changes nothing -- it means the index has no "
                     "threshold attributed to it.")
     else:
         duties = "; ".join(t["duty"] for t in touched if t["duty"])
-        sentence = (f"{frag} touches {len(ids)} obligation(s) this system tracks: {duties}. "
+        named = len(ids) - len(unknown)
+        sentence = (f"{frag} touches {named} obligation(s) this system tracks: {duties}. "
                     "Nobody has read the instrument yet, so nothing follows from it until "
                     "someone acquires and attests it.")
-    return {"_http": 200, "instrument": frag, "affected": touched,
-            "sentence_for_a_lawyer": sentence}
+        if unknown:
+            sentence += (f" WARNING: {len(unknown)} further id(s) ({', '.join(unknown)}) are "
+                         "named by the currency index but absent from the obligation "
+                         "register. That is a defect in this system, not a finding about "
+                         "the instrument.")
+    out = {"_http": 200, "instrument": frag, "affected": touched,
+           "sentence_for_a_lawyer": sentence}
+    if unknown:
+        out["register_mismatch"] = unknown
+    return out
 
 
 def _company_events(args: dict) -> dict:
@@ -387,6 +411,26 @@ def _test() -> None:
           "a known instrument names the obligation it touches")
     check("Nobody has read the instrument yet" in r["sentence_for_a_lawyer"],
           "...and the lawyer sentence says nothing follows until someone reads it")
+    # F1: an id the currency index names but the register does not hold must be SAID,
+    # not rendered as an empty duty. Dormant today (the two agree), so the guard is
+    # the only thing that would catch them drifting apart.
+    import checker.currency as _cur
+    _real = _cur.affected_by
+    try:
+        _cur.affected_by = lambda frag: ["CA13-DOES-NOT-EXIST", "CA13-S96-AGM"]
+        bad = call("themis.get_instrument_impact", {"instrument": "G.S.R. 700(E)"}, **who)
+    finally:
+        _cur.affected_by = _real
+    check(bad.get("register_mismatch") == ["CA13-DOES-NOT-EXIST"],
+          f"an id absent from the register is named as a mismatch ({bad.get('register_mismatch')})")
+    check("WARNING" in bad["sentence_for_a_lawyer"] and "defect in this system" in
+          bad["sentence_for_a_lawyer"],
+          "...and the lawyer sentence calls it a defect in this system, not a finding")
+    check("touches 1 obligation" in bad["sentence_for_a_lawyer"],
+          f"...and counts only the obligations it can actually name")
+    check(any(t.get("error") for t in bad["affected"]),
+          "...and the unknown row carries an error rather than an empty duty")
+
     r = call("themis.get_instrument_impact", {"instrument": "G.S.R. 9999(E)"}, **who)
     check("not a finding that it changes nothing" in r["sentence_for_a_lawyer"],
           "an unmatched instrument is not reported as harmless")

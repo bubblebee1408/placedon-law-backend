@@ -2,11 +2,17 @@
 
 `handle(method, path, body)` is a pure function — (status, response dict) — so it is
 unit-testable without a socket; `scripts/serve_api.py` wraps it in the stdlib HTTP
-server. One real endpoint today:
+server. The routes it serves -- keep this list identical to the 404 fallback's,
+which is the one a caller actually sees:
 
-    POST /v1/compliance-pack   company facts (JSON) -> the cited evidence pack (JSON)
-    POST /v1/ask               one question -> a placedon.ask/0 turn (checker/ask.py)
-    GET  /v1/health            liveness + provenance
+    POST /v1/compliance-pack               company facts -> the cited evidence pack
+    POST /v1/ask                           one question -> a placedon.ask/0 turn
+    POST /v1/document-check                a document -> its currency verdict
+    POST /v1/mca-strip                     master-data strip (engine live, data not wired)
+    GET  /v1/health                        liveness + provenance
+    GET  /v1/company/{cin}/events          the dated, sourced event log
+    GET  /v1/company/{cin}/events/{id}     one event
+    GET  /v1/instruments/{frag}/affected   which obligations an instrument touches
 
 No model is consulted (the register is deterministic), so this API never emits a
 guess. Input is validated at the boundary and rejected with a clear 400; unknown
