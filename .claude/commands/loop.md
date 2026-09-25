@@ -11,19 +11,23 @@ that benefit from an independent pass. Every phase writes its artifact to `.clau
 ## Before anything
 
 ```bash
-python3 scripts/verify.py --fast
+bash scripts/verify_green.sh          # exit 0 is the only green; 1, 3 and 4 are all red
 python3 scripts/search_memory.py "$ARGUMENTS"
 python3 scripts/search_memory.py --memory "$ARGUMENTS"
 ```
 
-**Then check the two numbers that outrank every feature:**
+**Then check the number that outranks every feature:**
 
 ```bash
-python3 -c "import json;p=json.load(open('corpus/provisions/posh_act_2013.json'))['provisions'];print('verified:',sum(1 for x in p if x['verified_by']),'/',len(p))"
+python3 eval/goldset/run.py           # human-labelled entries, and both denominators
 ```
 
-If the task is Q&A-related and verification is 0/30, say so and stop. Building on a gate that is
-closed produces code nobody can use.
+If the task is answer-related and the gold set holds no HUMAN labels, say so. No accuracy claim
+follows from a green suite (`docs/research/GOLDSET_FIRST_RUN_2026_09_25.md`).
+
+(Until 2026-09-25 this block read `corpus/provisions/posh_act_2013.json` and ran
+`scripts/verify.py`. Neither has ever existed in this repository, so the pre-flight failed on its
+first command.)
 
 ## Track-scoped evidence guard
 
@@ -65,15 +69,15 @@ decides, the LLM explains, a lawyer verifies.** Tests live in the module and ass
 ## V — Verify
 
 ```bash
-python3 scripts/verify.py
+bash scripts/verify_green.sh
 ```
 
 **If it touches a UI flow, drive it in a real browser.** Three bugs shipped past a green suite
 (LESSONS L-2). Then spawn `qa-reviewer` on the diff, and `trust-boundary-reviewer` on anything
 making a legal claim.
 
-**If a bug escaped, add a check to `scripts/verify.py` with its story in `because=` BEFORE
-fixing it.** Write the check, watch it fail, then fix. A check written after the fix tests the
+**If a bug escaped, add a failing test to the affected module's `_test()` (run by
+`scripts/run_tests.sh`), with its story in a comment, BEFORE fixing it.** Write the check, watch it fail, then fix. A check written after the fix tests the
 fix; a check written before tests the bug.
 
 Write `.claude/loops/VERIFY_<SLUG>.md` — GO or NO-GO.
