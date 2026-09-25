@@ -178,7 +178,7 @@ def _amendments(args: dict) -> dict:
 
 def _instrument_impact(args: dict) -> dict:
     """The lawyer sentence: what landed, what it touches, and what is not yet known."""
-    from checker.currency import affected_by
+    from checker.currency import acquisition_for, affected_by
     from checker.obligations import REGISTER
     frag = args.get("instrument", "")
     ids = affected_by(frag)
@@ -208,9 +208,26 @@ def _instrument_impact(args: dict) -> dict:
     else:
         duties = "; ".join(t["duty"] for t in touched if t["duty"])
         named = len(ids) - len(unknown)
-        sentence = (f"{frag} touches {named} obligation(s) this system tracks: {duties}. "
-                    "Nobody has read the instrument yet, so nothing follows from it until "
-                    "someone acquires and attests it.")
+        # PLAN_17 M1.3. The second half of this sentence used to be a CONSTANT:
+        # "Nobody has read the instrument yet." G.S.R. 880(E) was registered on
+        # 2026-09-10 -- identity and verbatim clause each checked by a named
+        # reviewer, status CORROBORATED -- and the product went on telling lawyers
+        # nobody had opened it. A false sentence in the direction that makes an
+        # honest system look like it holds nothing.
+        #
+        # `acquisition_for` is asked instead of asserted, and the rule behind it is
+        # the release gate, not a fourth opinion written here.
+        acq = acquisition_for(frag)
+        if acq is not None and acq.read:
+            held = (f"It is held and attested: {acq.instrument}, effective "
+                    f"{acq.effective_from.isoformat()}, evidence state {acq.state}"
+                    + (f", from {acq.source_url}" if acq.source_url else "") + ". "
+                    "Read it before relying on this -- what it touches is indexed, "
+                    "what it MEANS for a given company is not.")
+        else:
+            held = ("Nobody has read the instrument yet, so nothing follows from it "
+                    "until someone acquires and attests it.")
+        sentence = f"{frag} touches {named} obligation(s) this system tracks: {duties}. {held}"
         if unknown:
             sentence += (f" WARNING: {len(unknown)} further id(s) ({', '.join(unknown)}) are "
                          "named by the currency index but absent from the obligation "
@@ -463,8 +480,27 @@ def _test() -> None:
     r = call("themis.get_instrument_impact", {"instrument": "880"}, **who)
     check(r["affected"] and r["affected"][0]["obligation_id"] == "CA13-S2-85-SMALL",
           "a known instrument names the obligation it touches")
-    check("Nobody has read the instrument yet" in r["sentence_for_a_lawyer"],
-          "...and the lawyer sentence says nothing follows until someone reads it")
+    # PLAN_17 M1.3. This check used to pin the FALSE wording: it asserted the
+    # sentence said "Nobody has read the instrument yet" about G.S.R. 880(E), which
+    # a named reviewer acquired, hashed and attested on 2026-09-10. The test passed
+    # for a fortnight because it tested that the constant was still the constant.
+    # Both branches now, so neither can quietly become the only one.
+    from checker.prescribed_thresholds import all_acquired as _all_acq
+    from checker.prescribed_thresholds import none_acquired as _no_acq
+    with _all_acq():
+        held_s = call("themis.get_instrument_impact", {"instrument": "880"},
+                      **who)["sentence_for_a_lawyer"]
+    check("held and attested" in held_s and "Nobody has read" not in held_s,
+          "an attested instrument is reported as held and attested, not as unread")
+    check("2025-12-01" in held_s and "CORROBORATED" in held_s,
+          "...naming its commencement and the evidence state it rests on")
+    check("what it MEANS for a given company is not" in held_s,
+          "...and still refuses the step it has not taken: indexed is not interpreted")
+    with _no_acq():
+        unread_s = call("themis.get_instrument_impact", {"instrument": "880"},
+                        **who)["sentence_for_a_lawyer"]
+    check("Nobody has read the instrument yet" in unread_s,
+          "an unacquired instrument keeps today's wording -- the answer can be either")
     # F1: an id the currency index names but the register does not hold must be SAID,
     # not rendered as an empty duty. Dormant today (the two agree), so the guard is
     # the only thing that would catch them drifting apart.

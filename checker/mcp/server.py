@@ -272,8 +272,9 @@ def _test() -> None:
     lines = [json.loads(x) for x in out.getvalue().strip().splitlines()]
     check(len(lines) == 3, f"three requests, three responses; the notification got none ({len(lines)})")
     impact = json.loads(lines[-1]["result"]["content"][0]["text"])
-    check("Nobody has read the instrument yet" in impact["sentence_for_a_lawyer"],
-          "a full stdio session returns the lawyer sentence, refusal intact")
+    check("held and attested" in impact["sentence_for_a_lawyer"]
+          and "what it MEANS for a given company is not" in impact["sentence_for_a_lawyer"],
+          "a full stdio session returns the lawyer sentence, its refusal intact")
 
     out = io.StringIO()
     serve(io.StringIO("{not json\n"), out, log=lambda _m: None)

@@ -18,7 +18,11 @@ concurrency:
 jobs:
   suites:
     runs-on: ubuntu-latest
-    timeout-minutes: 10   # the suite is ~4s; ten minutes means "hung", not "slow"
+    # MEASURED 2026-09-25: the full sweep is 219s (196 suites) on the author's laptop.
+    # Twenty minutes is ~5x that, so this fires on "hung", never on "a slower runner".
+    # The comment used to say "the suite is ~4s", written when there were 25 suites.
+    # A number in a comment rots; this one carries the date it was taken.
+    timeout-minutes: 20
 
     steps:
       - uses: actions/checkout@v4
@@ -29,16 +33,24 @@ jobs:
           cache: pip
           cache-dependency-path: requirements-dev.txt
 
-      # None of the 25 suites imports a third-party package today -- verified by running the whole
-      # suite green under a venv built with --without-pip. Installed anyway so the CI environment
-      # is a superset of a normal dev machine: the day someone adds a suite that does import
-      # jinja2 or pdfplumber, CI must not go red while every laptop stays green. That divergence
-      # is the exact failure this workflow exists to prevent.
+      # The day anticipated below has arrived, so the claim above it is gone rather than left
+      # to mislead. checker/pdf_pages.py imports pypdf (pinned in requirements-dev.txt), and
+      # checker/sarvam_model.py and sarvam_selftest.py do too. The suite therefore CANNOT run
+      # green without this step, and a workflow asserting otherwise would be the same class of
+      # stale claim as the "~4s" above and the lawyer sentence M1.3 fixed.
+      #
+      # The original reason for installing stands and is now load-bearing rather than
+      # precautionary: CI must be a superset of a normal dev machine, so that a suite importing
+      # a third-party package cannot go red here while every laptop stays green.
       - run: python -m pip install --disable-pip-version-check -r requirements-dev.txt
 
-      # MEASURED, NOT PREDICTED: a checkout of this repo with no local artifacts fails exactly one
-      # suite -- checker/provenance.py -- because both PDFs it hashes are matched by the `*.pdf`
-      # line in .gitignore and are therefore not in the clone. That is a real finding about the
+      # MEASURED, NOT PREDICTED (2026-09-14): a checkout of this repo with no local artifacts
+      # failed exactly one suite -- checker/provenance.py -- because both PDFs it hashes are
+      # matched by the `*.pdf` line in .gitignore and are therefore not in the clone.
+      # NOT RE-MEASURED SINCE. PLAN_17 M1.1 names five suites it expects to fail from a clean
+      # clone (pypdf, a chmod-000 test that a root user can read anyway, a missing s96 witness,
+      # and scripts/review.py --test). Whichever count is right, the first green CI run on a
+      # fresh runner is the measurement -- not this comment, and not the author's laptop. That is a real finding about the
       # repo, not a CI defect, so this workflow does NOT exclude the suite: one definition of
       # green is the whole point. It only labels the failure so nobody spends an hour on it.
       # Resolve by tracking the artifacts (LFS or an unignore rule) or by teaching provenance.py

@@ -240,6 +240,61 @@ def affected_by(instrument_fragment: str) -> list[str]:
                   if set(d.threshold_keys) & hit_keys)
 
 
+@dataclass(frozen=True)
+class Acquisition:
+    """Whether a named instrument has in fact been read, and on what evidence.
+
+    The companion to `affected_by`. That function answers "what would this
+    instrument touch"; this one answers the question a lawyer asks immediately
+    afterwards -- **has anyone actually opened it** -- and it exists because the
+    answer was being asserted rather than looked up.
+
+    `themis.get_instrument_impact("880")` told every caller "Nobody has read the
+    instrument yet, so nothing follows from it until someone acquires and attests
+    it" as a CONSTANT, with no branch. G.S.R. 880(E) was registered on 2026-09-10,
+    identity and verbatim clause both checked by a named reviewer, status
+    CORROBORATED. The product was telling lawyers nobody had read an instrument a
+    person had read a fortnight earlier -- wrong in the direction that makes an
+    honest system look like it holds nothing (PLAN_17 M1.3).
+    """
+
+    instrument: str            # the full name the threshold records, not the fragment asked for
+    read: bool                 # a person has read it AND the release gate permits serving it
+    state: str                 # the provenance evidence state behind that, worst-first
+    source_url: str
+    effective_from: date
+    note: str = ""
+
+
+def acquisition_for(instrument_fragment: str) -> Acquisition | None:
+    """Has anyone read the instrument this fragment names? `None` if none is on record.
+
+    Matched exactly as `affected_by` matches, so the two can never disagree about
+    which instrument a fragment means.
+
+    `read` is deliberately NOT a state comparison written here. It is
+    `Threshold.servable`, which routes through `release.may_release` -- the single
+    gate that decides whether evidence may reach a user as a legal statement. A
+    fourth opinion about what "attested" means is exactly what `CLAUDE.md` forbids,
+    and there are already three modules entitled to hold one.
+
+    When several thresholds rest on the same instrument, the WORST governs: an
+    instrument is read only if every amount resting on it may be served. Taking the
+    best would let one corroborated amount vouch for an unacquired sibling.
+    """
+    frag = instrument_fragment.strip().lower()
+    if not frag:
+        return None
+    hits = [t for t in all_thresholds() if frag in t.instrument.lower()]
+    if not hits:
+        return None
+    worst = min(hits, key=lambda t: (t.servable, t.effective_from))
+    return Acquisition(instrument=worst.instrument,
+                       read=all(t.servable for t in hits),
+                       state=worst.state, source_url=worst.source_url,
+                       effective_from=worst.effective_from, note=worst.note)
+
+
 def _test() -> None:
     ok = fail = 0
 
@@ -384,6 +439,37 @@ def _test() -> None:
         check(not stale(today) or all(s.obligation_id != "CA13-S2-85-SMALL"
                                       for s in stale(today)),
               "...and it drops off the alert list")
+
+
+    # ---- acquisition_for: both branches, and the gate behind them ---------------
+    # PLAN_17 M1.3. The bug was a CONSTANT where a question belonged, so the test
+    # that matters is the one proving the answer can be either.
+    from checker.prescribed_thresholds import all_acquired, none_acquired
+
+    with all_acquired():
+        a = acquisition_for("880")
+        check(a is not None and a.read,
+              "an attested instrument reads as read")
+        check(a.instrument.startswith("G.S.R. 880(E)") and a.effective_from == date(2025, 12, 1),
+              f"...and names itself and its commencement ({a.instrument[:24]}, {a.effective_from})")
+        check(a.state in ("CORROBORATED", "VERIFIED"),
+              f"...on a servable evidence state ({a.state})")
+
+    with none_acquired():
+        a = acquisition_for("880")
+        check(a is not None and not a.read,
+              "an unacquired instrument reads as NOT read -- the answer can be either")
+
+    check(acquisition_for("G.S.R. 9999(E)") is None,
+          "an instrument no threshold rests on is None, not a false negative dressed as one")
+    check(acquisition_for("") is None and acquisition_for("   ") is None,
+          "an empty fragment matches nothing rather than everything")
+    check(acquisition_for("880").instrument == acquisition_for("880").instrument,
+          "the same fragment resolves the same way every time")
+    # The match must be the SAME match affected_by uses, or the two can disagree
+    # about which instrument a fragment means.
+    check(bool(affected_by("880")) == (acquisition_for("880") is not None),
+          "acquisition_for and affected_by agree on whether a fragment names anything")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:
