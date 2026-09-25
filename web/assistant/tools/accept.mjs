@@ -1010,8 +1010,15 @@ async function checkDocument(ctx, origin, w, docId, expect) {
     const title = (r.document && r.document.title) || 'no title in the reply';
     if (!/About the open document . dated/.test(g.band || '') || !g.doc || g.doc.indexOf(title) === -1) fail(at, w, `the card does not say which document it checked: band ${JSON.stringify(g.band)}, block ${JSON.stringify((g.doc || '').slice(0, 60))}`);
     else pass(at, w, 'the card names the document it checked and the date it bears');
-    if (!/placeholder/i.test(g.doc || '')) fail(at, w, 'the card does not say the company profile was a placeholder the demo supplied');
-    else pass(at, w, 'the placeholder profile is declared on the card, not implied away');
+    // Not the word "placeholder": the card has to say whose input the profile was AND name
+    // every row that input decided on its own, because it does decide one on a 2026 document
+    // (D3 verifier, finding 2). A card that shows a decided row and claims none is the defect.
+    const decides = (r.document || {}).profile_decides || [];
+    const missing = decides.filter(d => (g.doc || '').indexOf(d.provision) === -1);
+    if (!/supplied by this demo/i.test(g.doc || '')) fail(at, w, 'the card does not say the company profile was the demo\'s own input');
+    else if (missing.length) fail(at, w, `the card shows ${decides.length} row(s) decided by that profile and names ${decides.length - missing.length}: ${JSON.stringify((g.doc || '').slice(0, 160))}`);
+    else if (!decides.length && !/No row below is decided/i.test(g.doc || '')) fail(at, w, 'the card neither names a decided row nor says there is none');
+    else pass(at, w, `the profile is declared as the demo's own, and the ${decides.length} row(s) it decides are named`);
     const firstGroup = g.order.filter(x => x !== 'document')[0];
     if (firstGroup !== 'Scope of this check') fail(at, w, `the scope frame does not lead the findings (first was ${JSON.stringify(firstGroup)})`);
     else pass(at, w, 'the scope frame leads: what was checked, and what was not');
@@ -1054,6 +1061,12 @@ async function checkDocument(ctx, origin, w, docId, expect) {
     else pass(at, w, 'the refusal is not the service error either');
     if (!/no date was assumed/i.test(g.text)) fail(at, w, 'the refusal does not say that no date was assumed');
     else pass(at, w, 'the refusal says plainly that no date was assumed');
+    // The unresolved marker must reach a reader on the REFUSED card too, not only the checked
+    // one: the count is a fact about the document, and a refusal is still a card someone reads.
+    const nUnread = (r.document || {}).declarations_unread;
+    if (!nUnread) fail(at, w, `expected this refusal to carry unread date declarations, the server said ${nUnread}`);
+    else if (g.text.indexOf(String(nUnread)) === -1 || !/could not be read/i.test(g.text)) fail(at, w, `the refusal does not tell the reader that ${nUnread} date declaration(s) could not be read: ${JSON.stringify(g.text.slice(0, 200))}`);
+    else pass(at, w, `the unresolved marker reaches the reader on the refusal too (${nUnread})`);
     if (g.box !== DOC_Q || g.locked) fail(at, w, `after the refusal: box ${JSON.stringify(g.box)}, locked ${g.locked}`);
     else pass(at, w, 'the question stays in the box and the composer is usable');
   }
@@ -1098,6 +1111,15 @@ async function checkDocument(ctx, origin, w, docId, expect) {
           return d ? d.innerText : '';
         });
         const n = (r.document || {}).declarations_unread;
+        // This is the only document in check 15 dated after G.S.R. 880(E), so it is the only
+        // place the DOM ever sees a row the placeholder profile decided. Without this the
+        // "names what it decides" assertion would run only where there is nothing to name --
+        // the same vacuity that let finding 2 through in the first place.
+        const dec = (r.document || {}).profile_decides || [];
+        const unnamed = dec.filter(d => txt.indexOf(d.provision) === -1);
+        if (!dec.length) fail(at, w, 'expected this 2026 document to have a row decided by the placeholder profile');
+        else if (unnamed.length) fail(at, w, `the card does not name ${unnamed.length} of the ${dec.length} row(s) the profile decided: ${JSON.stringify(txt.slice(0, 200))}`);
+        else pass(at, w, `the card names all ${dec.length} row(s) the placeholder profile decided`);
         if (!n) fail(at, w, `expected unread date declarations on this document, the server said ${n}`);
         else if (txt.indexOf(String(n)) === -1 || !/could not be read/i.test(txt)) fail(at, w, `the card does not tell the reader that ${n} date declarations could not be read: ${JSON.stringify(txt.slice(0, 160))}`);
         else pass(at, w, `the unresolved marker reaches the reader (${n} unread date declarations, named on the card)`);

@@ -98,11 +98,15 @@ that twelve further date lines could not be read and one of them could name a di
 incorporation date, so the profile is the demo's own input. It was claimed here that it could
 decide nothing. **That was false** (D3 check 2, finding 2): `company_class: "public"` alone
 decides `s.2(85)` as `DOES_NOT_APPLY` — "a public company is never a small company" — on any
-document dated after G.S.R. 880(E), while a 2025 document hides it because `s.2(85)` lands in
-`superseded` instead. Measured: no class → `400`; `public` → decides that one row; `private` →
-decides none. `public` is kept, because every real filing here is a listed public company's and
-choosing `private` would buy a quieter card with a fact known to be false of every document on
-the list. The claim is what changed: `_profile_decides()` computes which rows the profile decided
+document dated on or after G.S.R. 880(E) (the boundary is inclusive), while a 2025 document
+hides it because `s.2(85)` lands in `superseded` instead. Measured: no class → `400`; `public` → decides that one row; `private` →
+decides none. `public` is kept, because all 9 documents that declare a date — the only ones the
+profile ever reaches — name BSE Limited and the National Stock Exchange on their own face (2 of
+them also carry an `L…PLC…` CIN), and choosing `private` would buy a quieter card with a class
+contradicted by every document the check can reach. The claim stops there on purpose: 3 of the 18
+real filings are Board's Report extracts naming neither exchange, and 11 of the 29 on the list are
+ICSI specimens for which neither class is established — but none of those 14 declares a date, so
+none is ever checked. The claim is what changed: `_profile_decides()` computes which rows the profile decided
 and the note names them, so the sentence cannot drift from the register. What the turn decides is
 **whether the legal basis of each obligation moved between the date the document declares and
 today** — not what law the document rests on, which nothing here established.
@@ -232,13 +236,14 @@ It asserts, for every fixture at 320 / 360 / 768 / 1024 / 1440:
     on the document's date, and the superseded rows drawn. A document that declares no date
     renders the refusal with the engine's words verbatim, with no `[data-state]`, no glyph, no
     dashed or grey abstention mark, and not the service error either; the question stays in the
-    box. A document checked with unread date declarations names that count on the card. Cancel
+    box, and the count of date declarations that could not be read is named on the refusal too.
+    A document checked with unread date declarations names that count on its card as well. Cancel
     aborts the check. A 500 and a reply that is not a turn each render the service error and go
     through check 13's whole battery. Every number on screen must come from the server's own reply
     or its list.
 
-Last run: **1185/1185** (2026-09-23, D3, with `FONTS_DIR` set): the 883 below, plus 148 live-mode
-checks (D2) and **154 for the document path** (D3). Before the document path existed the same
+Last run: **1189/1189** (2026-09-23, D3 fix round 1, with `FONTS_DIR` set): the 883 below, plus
+148 live-mode checks (D2) and **158 for the document path** (D3). Before the document path existed the same
 runner scored **1053/1114**, every one of the 61 failures in check 15. 403 across
 6 fixtures × 5 widths plus the empty state (unchanged), and 480
 for the three non-answer states × 7 requests × 2 widths (2026-09-18, ASK-3). Before the states

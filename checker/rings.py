@@ -134,6 +134,10 @@ REGISTRY: dict[str, int] = {
     # ── RING 2 — the Operation Model: reads observations and the register,
     #    produces work, decides nothing. THEMIS V0 milestone 6.
     "checker.operations": RING_2,
+    # ── RING 2 — persistence for the Operation Model, plus evidence submission.
+    #    THEMIS V0 milestones 5 and 6. Reads operations and writes local state
+    #    under corpus/.operations/; decides nothing about the law.
+    "checker.operation_store": RING_2,
 
     # ── RING 2 — FEEDS. Classified by PACKAGE below, not listed here. ──────
     # ── RING 3 — INFERENCE. Deliberately empty; see the module docstring. ──
@@ -153,6 +157,9 @@ REGISTRY: dict[str, int] = {
 # Observation` names `checker.feeds`, which no submodule entry would match.
 PACKAGE_RINGS: dict[str, int] = {
     "checker.feeds": RING_2,
+    # The MCP surface: read-only tools over the engine, reachable by an agent.
+    # Ring 2 for the same reason feeds are -- a Ring 0 decider must never import it.
+    "checker.mcp": RING_2,
 }
 
 

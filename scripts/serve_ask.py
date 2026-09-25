@@ -87,13 +87,23 @@ UPLOAD_FIELDS = frozenset({"document", "documents", "text", "content", "body", "
 # So there are exactly two choices, and "supply no class" is not one of them without changing
 # api._profile, which is another job's file and a contract change.
 #
-# **`public` is kept and the false claim is dropped instead.** Every real filing in this corpus
-# is a listed public company's -- the manifest says five distinct listed issuers, and each
-# document is addressed to BSE Limited and the National Stock Exchange on its own face -- so
-# `public` is the one class the corpus supports. Switching to `private` would buy a quieter
-# card by supplying a fact known to be FALSE of every document on the list, so that an
-# obligation resolves the way that looks tidier. That is the failure this product exists to
-# detect, and it would be this repository committing it.
+# **`public` is kept and the false claim is dropped instead.** Counted, after collapsing
+# whitespace (three of them tab-separate the words, which a naive grep misses): all 9 documents
+# that declare a date -- the only ones this profile is ever applied to -- name BSE Limited and
+# the National Stock Exchange of India Limited on their own face, and 2 of those 9 also carry
+# an L.....PLC...... CIN, which is a listed public company's. So `public` is the class the
+# reachable documents support. Switching to `private` would buy a quieter card by supplying a
+# class contradicted by every document the check can actually reach, so that an obligation
+# resolves the way that looks tidier. That is the failure this product exists to detect, and it
+# would be this repository committing it.
+#
+# Narrower than it was, and deliberately (D3 verifier round 2, finding 2). It used to say
+# "each document is addressed to" the two exchanges and "FALSE of every document on the list".
+# Neither reaches that far: 3 of the 18 real filings name neither exchange -- the Board's
+# Report extracts, which are not exchange filings -- and 11 of the 29 on the list are ICSI
+# specimens for which neither class is established. None of those 14 declares a date, so none
+# is ever checked, which is why the conclusion survives the correction and the quantifier
+# does not.
 #
 # What was wrong was the sentence, not the class. `_profile_decides()` now COMPUTES which rows
 # the profile decided on its own and the note names them, so the claim cannot drift from the
@@ -765,11 +775,18 @@ def _test() -> int:
             lines = (root / d["path"]).read_text(encoding="utf-8", errors="replace").splitlines()
             at = d["date_line"] or 0
             got = lines[at - 1] if 0 < at <= len(lines) else ""
-            if got.strip() != d["date_quote"] or got.startswith("#"):
-                astray.append((d["id"], at, got[:40]))
+            # Both halves: the line is the one the quote came from, AND it declares the date
+            # that was served. Quote-only would catch a future change that sourced date_quote
+            # from the wrong line on just 3 of the 9 (D3 verifier round 2).
+            again = document_date.read(got)
+            if (got.strip() != d["date_quote"] or got.startswith("#")
+                    or again.value is None or again.value.isoformat() != d["date"]):
+                astray.append((d["id"], at, got[:40],
+                               again.value.isoformat() if again.value else None))
         check(len(dated) >= 9 and not astray,
-              f"every date_line opens the line its quote came from, in its own file, never the "
-              f"provenance header ({len(dated)} dated; {astray[:3]})")
+              f"every date_line opens the line its quote came from and that line declares the "
+              f"served date, in its own file, never the provenance header "
+              f"({len(dated)} dated; {astray[:3]})")
 
         # ── no date, no check: the engine's own refusal, never a guessed date ──
         for undated, what in (("icsi_specimens/09_minutes_agm_annexXVI", "a specimen with blanks"),

@@ -141,7 +141,18 @@ a { color: inherit; text-underline-offset: 3px; }
 .composer { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: var(--md); }
 .summary { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sm); font-size: 13px; color: var(--muted); }
 .summary[hidden] { display: none; }
-.about { border: 0; padding: 0; margin: 0 0 var(--sm); }
+/* LOAD-BEARING: without `min-inline-size: 0` the composer overflows 360px. A <fieldset>'s
+   min-inline-size defaults to min-content, and the min-content floor here is the unbroken
+   FILE PATH that [data-doc-meta] prints ("... of corpus/testdocs/agm_notices/...txt"). Line 52
+   sets `overflow-wrap: break-word`, which lets a long word wrap when it would otherwise
+   overflow but does NOT lower its min-content contribution -- only `anywhere`/`break-all`
+   would -- so the path sets the floor and the fieldset propagates it to the whole composer.
+   Measured at 360, UA default restored, scrollWidth: meta emptied 360 · 20 chars 360 ·
+   57 chars 409 · 64 chars 456 · the real line 436. It scales with the path's length.
+   NOT the <select>'s option label, which is what a previous comment here claimed: with the
+   meta emptied, 121-character option labels give 360 and nothing past the edge.
+   This one declaration is necessary AND sufficient -- see the note on .docpick select. */
+.about { border: 0; padding: 0; margin: 0 0 var(--sm); min-inline-size: 0; }
 .about legend, .q-label {
   font: 500 12px/1.4 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); padding: 0;
 }
@@ -318,7 +329,14 @@ textarea[aria-disabled="true"] { color: var(--muted); }
 /* The document picker, and the block that says which document a card checked. */
 .docpick { margin: var(--sm) 0 var(--md); }
 .docpick select {
-  width: 100%; max-width: var(--measure); min-height: var(--target);
+  /* `min-width: 0` and `max-width: 100%` here are INERT and protect nothing -- said plainly so
+     nobody mistakes them for the 360px fix and drops the rule that is (.about above). This
+     select carries `width: 100%`, and a percentage width contributes nothing to its parent's
+     intrinsic size, so its option labels cannot set any floor. Measured at 360 with the UA
+     fieldset default restored: these rules vs the ones they replaced give 436 either way, and
+     with `min-inline-size: 0` both give 360. They are kept only because `width: 100%` needs a
+     matching max-width to stay inside its column. */
+  width: 100%; max-width: 100%; min-width: 0; min-height: var(--target);
   font: inherit; font-size: 15px; color: var(--text);
   background: transparent; border: 1px solid var(--field-line);
   border-radius: var(--radius); padding: 6px 10px;
