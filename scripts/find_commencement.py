@@ -47,7 +47,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from checker.commencement import (  # noqa: E402
     CACHE, Notification, from_text, parse_sections, save,
 )
-from checker.robots import USER_AGENT, ssl_context  # noqa: E402
+from checker.robots import (HTML, JSON, PDF, TEXT, USER_AGENT,  # noqa: E402
+                            looks_like_markup, payload_refusal, ssl_context)
 
 API = "https://indiacode.gov.in/server/api"
 IP = "45.127.74.253"
@@ -87,18 +88,10 @@ class Candidate:
 # A caller that checks only the status code therefore believes it has an instrument and
 # has a web page. This module decoded whatever came back as the commencement text of an
 # Act, so the soft-404 would have entered the record as law.
-_SOFT_404 = "text/html"
-
-
-def _looks_like_markup(body: bytes) -> bool:
-    """A payload that opens as HTML, whatever the header claimed.
-
-    Belt and braces to the Content-Type check: a misconfigured host can serve the shell
-    as `text/plain`. Only the opening bytes are examined, because a legitimate statutory
-    text can of course *mention* a tag later on.
-    """
-    head = body[:512].lstrip().lower()
-    return head.startswith((b"<!doctype html", b"<html", b"<?xml-stylesheet"))
+#
+# The guard first landed here (04664f5) and now lives in `checker/robots.py`, shared
+# with every other fetcher. It is imported rather than copied: two guards that must
+# agree and are maintained separately eventually do not agree.
 
 
 def _get(url: str, timeout: float = 45.0, *, expect_markup: bool = False) -> bytes | None:
@@ -107,6 +100,10 @@ def _get(url: str, timeout: float = 45.0, *, expect_markup: bool = False) -> byt
     `expect_markup=True` is for callers that genuinely want a page. Everything else
     refuses markup, because the failure this guards is silent: the status is 200, the
     bytes decode cleanly, and the result reads as the text of an instrument.
+
+    This module asks India Code for JSON (the REST API) and for the plain text of a
+    notification's TEXT bundle; a PDF bitstream is admitted too, because the same
+    helper serves both and refusing one would be a lie about what is expected.
     """
     ctx = ssl_context()
     if ctx is None:
@@ -121,10 +118,9 @@ def _get(url: str, timeout: float = 45.0, *, expect_markup: bool = False) -> byt
             if r.status != 200:
                 return None
             body = r.read()
-            if expect_markup:
-                return body
-            ctype = (r.headers.get("Content-Type") or "").split(";")[0].strip().lower()
-            if ctype == _SOFT_404 or _looks_like_markup(body):
+            expect = (HTML,) if expect_markup else (JSON, TEXT, PDF)
+            if payload_refusal(body, expect=expect,
+                               content_type=r.headers.get("Content-Type") or ""):
                 return None
             return body
     except Exception:
@@ -346,14 +342,14 @@ def _test() -> None:
     # India Code answers an unserved path with 200 and the Angular shell. Decoding that
     # as an instrument's text is the failure this guards, and it is silent: status 200,
     # clean UTF-8, plausible length.
-    check(_looks_like_markup(b"<!DOCTYPE html>\n<html lang=\"hi\">"),
+    check(looks_like_markup(b"<!DOCTYPE html>\n<html lang=\"hi\">"),
           "the DSpace shell is recognised as markup")
-    check(_looks_like_markup(b"   \n  <html>"), "leading whitespace does not hide markup")
-    check(not _looks_like_markup(
+    check(looks_like_markup(b"   \n  <html>"), "leading whitespace does not hide markup")
+    check(not looks_like_markup(
         b"THE COMPANIES ACT, 2013\n\n2(85) small company means a company <other than "
         b"a public company>"),
           "statutory text that merely contains a bracketed phrase is not markup")
-    check(not _looks_like_markup(b""), "empty bytes are not markup (they fail elsewhere)")
+    check(not looks_like_markup(b""), "empty bytes are not markup (they fail elsewhere)")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:
