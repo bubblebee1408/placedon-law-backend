@@ -107,3 +107,74 @@ regression it was being used to justify.
 A `DEV`/`HELDOUT` split was added at the same time. Six of the fourteen are held out
 and were not consulted while writing any fix. They currently score 0/6, which is the
 honest number.
+
+---
+
+# The experiment that inverted the plan
+
+Run immediately after the above, to answer one falsifiable question: **now that the
+gold set has off-topic entries, does it catch the retrieval fix that
+`text_search.py`'s suite caught?**
+
+Expected: yes, the instrument is repaired. **Result: no.**
+
+## Measurement
+
+| | without the fix | with the fix |
+|---|---|---|
+| answered-correctly | 12/19 | **15/19** |
+| refused-rightly | 9/28 | **9/28** |
+| held out | 0/6 | **0/6** |
+
+The fourteen off-topic entries moved **not one row**. The gold set rates the change
+a clean improvement, exactly as it did before they were added.
+
+## What the fix actually does to those questions
+
+```
+"What is the capital of France?"              -> confirmed = [s.378ZB, s.2, s.43]
+"How long should I boil eggs for breakfast?"  -> confirmed = [s.123, s.174, s.178]
+```
+
+It serves three Companies Act provisions in answer to a question about boiling eggs.
+That is a serious regression — and the gold set cannot see it, because **both the
+clean engine and the regressed engine score identically on these rows.** Clean
+returns an empty pack; regressed returns irrelevant provisions; `run.py` classifies
+both as `ANSWERED`, so both are wrong in the same way and by the same amount.
+
+## The conclusion, which is not the one that was expected
+
+**The empty-pack defect blinds the evaluation harness for exactly the reason it
+blinds a lawyer.** When every failure renders as `state: partial`, "answered with
+nothing" and "answered with garbage" become the same observable — to the user and to
+the instrument measuring the user's experience.
+
+So the two findings in this repository are not independent items on a list. They are
+ordered:
+
+1. **The envelope must distinguish its refusals first** (typed refusal codes, PLAN_18
+   §2.4.1). Until then the harness cannot tell a miss from a mismatch.
+2. **Only then can the gold set judge a retrieval change.** Any number it reports
+   before that is measuring one thing while appearing to measure two.
+
+Adding more gold-set entries was the plan before this experiment. It would not have
+helped: the blindness is not in the sample, it is in the observable. A thousand
+off-topic questions scored against a single undifferentiated `partial` still cannot
+separate silence from noise.
+
+## What still works, and what it cost
+
+`checker/text_search.py`'s own suite caught this regression both times — including
+this run, before the revert. Four assertions, written before any of this work, doing
+the job the new instrument could not.
+
+The honest ledger for the retrieval fix: **two independent measurements said ship it
+(12/19 -> 15/19, twice), and it would have made the product answer a breakfast
+question with company law.** The only thing standing between that and a commit was a
+test somebody wrote weeks ago.
+
+## Status
+
+`checker/text_search.py` unchanged, 47/47. Gold set at its baseline. The retrieval
+finding stays OPEN, and is now explicitly **blocked on** the refusal-code work rather
+than on more evaluation data.
