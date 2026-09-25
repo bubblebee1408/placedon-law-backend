@@ -100,6 +100,21 @@ SHOULD_ANSWER = "SHOULD_ANSWER"   # the system holds enough; answering is correc
 SHOULD_REFUSE = "SHOULD_REFUSE"   # out of scope, or not enough held; refusing is correct
 EXPECTATIONS = (SHOULD_ANSWER, SHOULD_REFUSE)
 
+# DEV is what a fix may be developed against. HELDOUT is never looked at while
+# choosing a fix, and is the only honest report of whether one generalised.
+#
+# Added 2026-09-25, the same day a retrieval fix scored 12/19 -> 15/19 on this gold
+# set and was reverted because checker/text_search.py's OWN suite caught it breaking
+# precision ("what is the capital of France" started retrieving, because "capital" is
+# a Companies Act word). The gold set had FOURTEEN refusal entries and every one was
+# about a different body of INDIAN LAW. It contained nothing that was not law at all,
+# so it could not see the failure, and a change that broke the product looked like an
+# improvement. A split does not fix that on its own -- the OFF_TOPIC entries below
+# do -- but without it the next fix gets tuned against the very rows that judge it.
+DEV = "dev"
+HELDOUT = "heldout"
+SPLITS = (DEV, HELDOUT)
+
 # What the system actually did.
 ANSWERED = "ANSWERED"
 REFUSED = "REFUSED"
@@ -143,11 +158,14 @@ class Entry:
     labelled_by: str = ""                # HUMAN: who, by name
     labelled_on: str = ""                # HUMAN: when, ISO date
     source: str = ""                     # where the QUESTION came from
+    split: str = DEV                     # DEV to develop against; HELDOUT judges
     note: str = ""
 
     def __post_init__(self) -> None:
         if self.provenance not in PROVENANCE:
             raise ValueError(f"{self.provenance!r} is not a provenance; one of {PROVENANCE}")
+        if self.split not in SPLITS:
+            raise ValueError(f"{self.split!r} is not a split; one of {SPLITS}")
         if not self.question.strip():
             raise ValueError("a gold-set entry with no question is not an entry")
         if self.expected is not None and self.expected not in EXPECTATIONS:
@@ -212,8 +230,9 @@ class Report:
     skipped_synthetic: int
     unanswered: tuple[str, ...] = ()      # entries with no outcome supplied
 
-    def _split(self, expectation: str) -> tuple[int, int]:
-        rows = [s for s in self.scored if s.entry.expected == expectation]
+    def _split(self, expectation: str, split: str | None = None) -> tuple[int, int]:
+        rows = [s for s in self.scored if s.entry.expected == expectation
+                and (split is None or s.entry.split == split)]
         return sum(1 for s in rows if s.correct), len(rows)
 
     @property
@@ -265,6 +284,16 @@ class Report:
             "GOLD SET -- two denominators, because one would flatter.",
             self._rate("answered-correctly (of those it SHOULD answer)", ar, at),
             self._rate("refused-rightly   (of those it SHOULD refuse)", rr, rt),
+        ]
+        # The held-out split, printed separately and always. A fix tuned on DEV that
+        # does not move HELDOUT has been fitted to the rows that judge it.
+        hr, ht = self._split(SHOULD_REFUSE, HELDOUT)
+        ha, hta = self._split(SHOULD_ANSWER, HELDOUT)
+        if ht or hta:
+            lines += ["  --- HELD OUT (never to be tuned against) ---",
+                      self._rate("  answered-correctly", ha, hta),
+                      self._rate("  refused-rightly   ", hr, ht)]
+        lines += [
             f"  not scored: {self.skipped_synthetic} SYNTHETIC entr"
             f"{'y' if self.skipped_synthetic == 1 else 'ies'} "
             "(candidate questions; a model may not supply its own answer key)",
