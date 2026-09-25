@@ -39,17 +39,20 @@ def _test() -> int:
         else:
             fail += 1; print(f"  [FAIL] {label}")
 
-    check(len(TOOLS) == 14, f"fourteen tools are exposed ({len(TOOLS)})")
+    check(len(TOOLS) == 13, f"thirteen tools are exposed ({len(TOOLS)})")
     check({t.name for t in TOOLS} == set(policy.KNOWN_TOOLS),
           "the registry and the policy list agree")
     check(all(t["name"].startswith("themis.") for t in list_tools()),
           "every tool is namespaced themis.*")
     check(server.PROTOCOL_VERSION and server.SERVER_INFO["name"] == "themis",
           "the server declares a protocol version and a name")
-    # Nothing here may write or attest -- including the one tool that may SUBMIT
-    # evidence to an operation's work queue. Two independent guards, checked together.
-    check(len(policy.SUBMIT_TOOLS) == 1 and policy.SUBMIT_TOOLS <= {t.name for t in TOOLS},
-          f"exactly one tool may submit, and it is registered ({sorted(policy.SUBMIT_TOOLS)})")
+    # Nothing here writes, attests or submits. A submit tool existed for part of
+    # 2026-09-25 and was removed after RT-10: this surface cannot establish who is
+    # calling it, so it grants nothing that could change stored state. See
+    # docs/research/RED_TEAM_OPERATION_STORE_2026_09_25.md and PLAN_17 M6.
+    check(not any("submit" in t.name or "write" in t.name or "attest" in t.name
+                  for t in TOOLS),
+          "no exposed tool submits, writes or attests")
     for action in (policy.WRITE, policy.ATTEST):
         check(not any(policy.decide(policy.Request(tool=t.name, action=action,
                                                    actor="a", purpose="p")).allowed

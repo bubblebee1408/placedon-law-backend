@@ -27,7 +27,15 @@ status enum does.
 ## What is deliberately absent
 
 - **No `submit_evidence`, no `attest`, no write of any kind.** `policy.py` refuses
-  the action; this module never offers the tool. Two independent guards.
+  the actions; this module never offers a tool that could reach them. Two
+  independent guards.
+
+  This sentence was briefly false. `themis.submit_evidence` was added on 2026-09-25
+  and removed the same day after RT-10, RT-14 and PLAN_17 M6 all said a surface that
+  cannot authenticate its caller must not write -- see the comment above
+  `_get_tasks` for the full record. Worse than the tool being wrong: this paragraph
+  went on claiming the tool did not exist for the whole time it did (RT-13), in the
+  file that registered it.
 - **No `get_document`/`get_source` returning raw client files.** This repo holds no
   client data (PLAN_07), and a tool that implies otherwise invites someone to put
   it there.
@@ -48,8 +56,7 @@ from datetime import datetime, timezone
 from typing import Callable
 
 from checker import api
-from checker.mcp.policy import (READ, SUBMIT, SUBMIT_TOOLS, Decision,
-                                Request, decide)
+from checker.mcp.policy import READ, Decision, Request, decide
 
 __all__ = ["TOOLS", "Tool", "call", "list_tools"]
 
@@ -273,42 +280,37 @@ def _get_operation(args: dict) -> dict:
     return {"_http": 200, "operation": op.to_dict()}
 
 
-def _submit_evidence(args: dict) -> dict:
-    """Record evidence against ONE requirement. The only non-read tool.
-
-    Two guards stand between an agent and a closed operation, and neither relies on
-    the other: `policy.SUBMIT_TOOLS` lets only this tool submit at all, and the
-    store refuses an agent closing BLOCKING work on its own account. This function
-    passes `actor_kind` straight through and does not decide anything itself.
-    """
-    from checker.operation_store import (AGENT, HUMAN, OperationCorrupt,
-                                         SubmissionRefused, load, submit_evidence)
-    oid = args.get("operation_id", "")
-    try:
-        op = load(oid)
-    except (OperationCorrupt, ValueError) as exc:
-        return {"_http": 500, "operation_id": oid, "error": str(exc)}
-    if op is None:
-        return {"_http": 404, "operation_id": oid, "error": "no such stored operation"}
-    kind = AGENT if str(args.get("actor_kind", AGENT)).lower() != HUMAN else HUMAN
-    try:
-        updated = submit_evidence(
-            op, requirement_id=args.get("requirement_id", ""),
-            actor=args.get("actor", ""), actor_kind=kind,
-            source=args.get("source", ""), note=args.get("note", ""),
-            closed_by=args.get("closed_by", ""))
-    except SubmissionRefused as exc:
-        # A refusal is the answer, not a failure: 409, with the reason verbatim.
-        return {"_http": 409, "refused": True, "reason": str(exc),
-                "operation_id": oid, "requirement_id": args.get("requirement_id", "")}
-    except (KeyError, ValueError) as exc:
-        return {"_http": 400, "error": str(exc)}
-    b = updated.budget()
-    return {"_http": 200, "operation_id": oid, "accepted": True,
-            "budget": b.sentence(), "can_close": b.can_close,
-            "note": "Recording evidence against a requirement closes that question only. "
-                    "Whether the operation itself may close is governed by its budget, "
-                    "and the terminal human review is the sink."}
+# `_submit_evidence` lived here from 2026-09-25 until later the same day. It is gone,
+# and this comment is the reason rather than a silent deletion.
+#
+# It was added to let an orchestrator execute an operation: create it, then record
+# answers against its requirements. To get it, `policy.py` narrowed a rule it had set
+# two days earlier ("this gateway is read-only"), on the argument that an operation's
+# work queue is neither the corpus nor an attestation.
+#
+# Two findings on 2026-09-25 said the narrowing was wrong, and they agree:
+#
+# * **RT-10 (red team).** The tool took `actor_kind` from its caller. Sending
+#   `actor_kind: "human"` closed BOTH blocking requirements of a live operation --
+#   the terminal human review included -- and reached `can_close: True`, while the
+#   MCP handshake was promising clients that only a human could. Pinning the kind to
+#   AGENT fixes that specific attack, but the shape of the mistake was letting an
+#   unauthenticated claim decide a guarantee, and this surface cannot authenticate
+#   anything. `server.py` says so itself.
+# * **RT-14 (red team).** `operation_store` is tenant-blind -- one mention of the word
+#   "tenant" in the file, in a comment. Any caller asserting any `_tenant` reached
+#   every stored operation. A write path on top of that is a cross-tenant write.
+# * **PLAN_17 M6**, merged the same day and written independently a day earlier:
+#   "submit_evidence(requirement_id, evidence) -- gateway route only (NOT an MCP tool:
+#   the MCP surface stays read-only)." PLAN_18 §2.10: "'Human' is enforced by the
+#   principal type: service and MCP identities carry no member role for writes."
+#
+# So the submission path stays where it was built -- `operation_store.submit_evidence`,
+# in process, with its own refusals and RT-11/RT-12 fixes intact -- and it will be
+# reached by an AUTHENTICATED gateway route at PLAN_17 M6, on tenanted tables from M4.
+# Until that exists, an orchestrator cannot record evidence over MCP. That is a real
+# gap and it is written down here rather than closed with a door that cannot check who
+# is coming through it.
 
 
 def _get_tasks(args: dict) -> dict:
@@ -364,12 +366,6 @@ TOOLS: tuple[Tool, ...] = (
                "trigger": {"type": "object"}}, ("instrument",)), _create_operation),
     Tool("themis.get_operation", "Fetch a stored operation by id.",
          _obj({"operation_id": _STR}, ("operation_id",)), _get_operation),
-    Tool("themis.submit_evidence", "Record evidence against ONE requirement of a stored "
-         "operation. The only non-read tool. An agent may satisfy non-blocking work with "
-         "a named source; only a human may close BLOCKING work.",
-         _obj({"operation_id": _STR, "requirement_id": _STR, "actor": _STR,
-               "actor_kind": _STR, "source": _STR, "note": _STR, "closed_by": _STR},
-              ("operation_id", "requirement_id", "actor")), _submit_evidence),
     Tool("themis.get_tasks", "The open work on an operation, optionally for one "
          "specialist.", _obj({"instrument": _STR, "specialist": _STR,
                               "watchlist": {"type": "array", "items": _STR},
@@ -387,7 +383,7 @@ def call(name: str, arguments: dict | None, *, actor: str = "", tenant: str = ""
          matter: str = "", purpose: str = "") -> dict:
     """Policy-decide, then run. A DENY never reaches the tool."""
     # The one tool that is not a read declares itself; everything else is READ.
-    action = SUBMIT if name in SUBMIT_TOOLS else READ
+    action = READ                      # every tool is a read; see policy.py
     req = Request(tool=name, action=action, actor=actor, tenant=tenant,
                   matter=matter, purpose=purpose)
     d: Decision = decide(req)
@@ -424,7 +420,7 @@ def _test() -> None:
     check(names == set(KNOWN_TOOLS),
           f"every registered tool is policy-known and vice versa "
           f"(only in one: {names ^ set(KNOWN_TOOLS) or 'none'})")
-    check(len(TOOLS) == 14, f"fourteen tools, not a hundred (got {len(TOOLS)})")
+    check(len(TOOLS) == 13, f"thirteen tools, every one a read (got {len(TOOLS)})")
     check(all(t.description.strip() and t.schema.get("type") == "object" for t in TOOLS),
           "every tool has a description and an object schema")
     check(all(t.mcp_descriptor()["inputSchema"]["additionalProperties"] is False
@@ -529,50 +525,43 @@ def _test() -> None:
             check(got["_http"] == 200 and got["operation"]["operation_id"] == _op.operation_id,
                   "a stored operation round-trips through the tool")
 
-            _blk = next(r for r in _op.requirements if r.criticality == _BLK)
-            _open = next(r for r in _op.requirements if r.criticality != _BLK)
-
-            ref = call("themis.submit_evidence",
-                       {"operation_id": _op.operation_id, "requirement_id": _blk.requirement_id,
-                        "actor": "research_agent", "actor_kind": "agent",
-                        "source": "https://egazette.gov.in/x.pdf"}, **who)
-            check(ref["_http"] == 409 and ref.get("refused") is True,
-                  f"an AGENT closing BLOCKING work is refused through the tool ({ref.get('_http')})")
-            check("only by a human reviewer" in ref["reason"],
-                  "...with the store's own reason, verbatim")
-
-            nos = call("themis.submit_evidence",
-                       {"operation_id": _op.operation_id, "requirement_id": _open.requirement_id,
-                        "actor": "research_agent", "actor_kind": "agent", "source": ""}, **who)
-            check(nos["_http"] == 409, "a submission with no source is refused")
-
-            okr = call("themis.submit_evidence",
-                       {"operation_id": _op.operation_id, "requirement_id": _open.requirement_id,
-                        "actor": "research_agent", "actor_kind": "agent",
-                        "source": "MCA filing AOC-4 2025-10-25"}, **who)
-            check(okr["_http"] == 200 and okr["accepted"] is True,
-                  "an agent MAY satisfy non-blocking work with a named source")
-            check(okr["can_close"] is False,
-                  "...and the operation still cannot close, because blocking work remains")
+            # ---- the submit tool is gone, and stays gone (RT-10, RT-14) --------
+            # It existed for part of 2026-09-25. The red team sent
+            # actor_kind: "human" and closed the terminal human-review requirement
+            # of this very operation. These checks are the tripwire on re-adding a
+            # write to a surface that cannot say who is calling it.
+            gone = call("themis.submit_evidence",
+                        {"operation_id": _op.operation_id, "requirement_id": "r_x",
+                         "actor": "research_agent", "source": "x"}, **who)
+            check(gone.get("_http") == 403,
+                  f"themis.submit_evidence is not a tool and is refused ({gone.get('_http')})")
+            check("default deny" in gone.get("_policy", {}).get("reason", ""),
+                  "...by default deny, not by a special case someone could delete")
+            check(not any("submit" in t.name for t in TOOLS),
+                  "no tool on this surface submits anything")
+            _after = _store.load(_op.operation_id, store_dir=_sd)
+            check([r.status for r in _after.requirements] ==
+                  [r.status for r in _op.requirements],
+                  "...and nothing reachable from here moved a requirement")
+            check(_after.budget().can_close is False,
+                  "the operation still cannot close, and no MCP call can change that")
         finally:
             _store.DEFAULT_STORE_DIR, _store.DEFAULT_LOG_PATH = _real_sd, _real_lp
 
     # ---- no write path exists at all ---------------------------------------------
-    # The guarantee changed shape on 2026-09-25 and is now stronger, not weaker: no
-    # tool writes to the corpus or attests anything, and EXACTLY ONE may submit
-    # evidence to an operation's work queue.
+    # This guarantee was narrowed on 2026-09-25 and restored the same day. It is the
+    # oldest rule on this surface and the one most worth a tripwire, because the
+    # argument for narrowing it was persuasive and still wrong (policy.py).
     check(not any("attest" in n or "write" in n or "delete" in n or "admit" in n
-                  for n in names), "no tool offers a write, an attest, an admit or a delete")
-    check({n for n in names if "submit" in n} == set(SUBMIT_TOOLS)
-          and len(SUBMIT_TOOLS) == 1,
-          f"exactly one tool may submit, and policy names it ({sorted(SUBMIT_TOOLS)})")
+                  or "submit" in n for n in names),
+          "no tool offers a write, an attest, an admit, a delete or a submit")
     from checker.mcp.policy import ATTEST as _AT
     from checker.mcp.policy import WRITE as _WR
     from checker.mcp.policy import Request as _Rq
     from checker.mcp.policy import decide as _dec
     check(not any(_dec(_Rq(tool=n, action=a, actor="a", purpose="p")).allowed
                   for n in names for a in (_WR, _AT)),
-          "and no tool -- including the submit tool -- may WRITE or ATTEST")
+          "and no tool may WRITE or ATTEST")
 
     from checker import rings
     check(rings.ring_of("checker.mcp.tools") == rings.RING_2, "this module is Ring 2")

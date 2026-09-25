@@ -107,6 +107,8 @@ from checker.operations import (BLOCKING, CRITICALITY, OPEN, SATISFIED, SPECIALI
 __all__ = ["OperationStoreError", "OperationCorrupt", "SubmissionRefused",
            "HUMAN", "AGENT", "ACTOR_KINDS",
            "save", "load", "list_open", "record", "submit_evidence",
+           "REFUSAL_AGENT_BLOCKING", "REFUSAL_NO_SOURCE", "REFUSAL_SOURCE_UNUSABLE",
+           "REFUSAL_STALE",
            "DEFAULT_STORE_DIR", "DEFAULT_LOG_PATH"]
 
 STATE_SCHEMA = "operation_store/v1"
@@ -139,6 +141,43 @@ REFUSAL_NO_SOURCE = (
     "thing this whole repository refuses (CLAUDE.md), and that binds an "
     "automated actor exactly as hard as any other claim this system makes."
 )
+# RT-12, 2026-09-25. The check above used to be `source.strip()`, so the string
+# "." satisfied it and the red team closed a requirement citing one character.
+# What follows checks SHAPE, not existence -- this module cannot dereference a
+# citation, and saying so is the point. A source that cannot be looked up by a
+# reviewer is not a source, and the minimum test for "could be looked up" is
+# that it contains something to look up.
+_SOURCE_MIN = 8
+REFUSAL_SOURCE_UNUSABLE = (
+    "source {src!r} is refused: it is too short to be looked up by anyone "
+    "reviewing this closure later. This store cannot verify that a source "
+    "exists -- it can only refuse a gesture at one, and {n} characters with a "
+    "word in them is the minimum it will accept as an attempt."
+)
+# RT-11, 2026-09-25. `save()` writes a WHOLE-OPERATION snapshot. Two callers who
+# each loaded the same operation and each closed a different requirement used to
+# produce a state file holding only the second one's work: the first closure was
+# erased from state with nothing saying so. The log held both, which is how the
+# red team saw it, but the store's own answer was simply wrong. `submit_evidence`
+# now refuses rather than overwrites -- the caller re-reads and resubmits, which
+# is the only safe resolution when the losing write is someone else's judgement.
+REFUSAL_STALE = (
+    "operation {oid!r} has changed since it was read: requirement {rid!r} is "
+    "{stored} in the store but {held} in the copy submitted against. Another "
+    "actor closed work on this operation in between, and saving this copy "
+    "would erase theirs. Re-read the operation and submit again."
+)
+
+
+def _source_usable(source: str) -> bool:
+    """Whether `source` is long enough and substantive enough to be chased.
+
+    Deliberately weak and deliberately honest: this is a shape test. It cannot
+    tell a real citation from a plausible-looking invented one, and no check at
+    this layer can. It exists to stop "." and "n/a", not to validate evidence.
+    """
+    s = source.strip()
+    return len(s) >= _SOURCE_MIN and any(c.isalnum() for c in s)
 
 
 class OperationStoreError(Exception):
@@ -407,6 +446,8 @@ def submit_evidence(op: Operation, *, requirement_id: str, actor: str, actor_kin
               "would overwrite a prior closure with no record of what changed")
     if not source.strip():
         refuse(REFUSAL_NO_SOURCE)
+    if not _source_usable(source):
+        refuse(REFUSAL_SOURCE_UNUSABLE.format(src=source.strip(), n=_SOURCE_MIN))
     if target.criticality == BLOCKING:
         if actor_kind != HUMAN:
             refuse(REFUSAL_AGENT_BLOCKING.format(rid=requirement_id))
@@ -416,6 +457,19 @@ def submit_evidence(op: Operation, *, requirement_id: str, actor: str, actor_kin
         if not note.strip():
             refuse(f"requirement {requirement_id!r} is BLOCKING: a human reviewer must "
                   "carry a reason (note) to close it")
+
+    # RT-11: the copy in hand may be stale. `save()` below writes the whole
+    # operation, so submitting against a stale copy would silently erase
+    # whatever another actor closed in between. Compare against what is
+    # actually stored and refuse rather than overwrite.
+    stored = load(op.operation_id, store_dir=store_dir)
+    if stored is not None:
+        held = {r.requirement_id: r.status for r in op.requirements}
+        for r in stored.requirements:
+            if held.get(r.requirement_id) != r.status:
+                refuse(REFUSAL_STALE.format(oid=op.operation_id, rid=r.requirement_id,
+                                            stored=r.status,
+                                            held=held.get(r.requirement_id, "absent")))
 
     new_reqs = tuple(
         Requirement(**{**r.__dict__, "status": SATISFIED})
@@ -758,6 +812,69 @@ def _test() -> None:
     check(BLOCKING in CRITICALITY, "BLOCKING is a real criticality this module keys off of")
     check("HUMAN_REVIEW" in SPECIALISTS,
           "the specialist vocabulary is imported from operations.py, not redefined here")
+
+    # ---- RT-12: a source must be chaseable, not merely non-empty ----------------
+    # The red team closed a requirement citing ".". The old check was
+    # `source.strip()`, which "." passes. These are drift-forcing: loosen
+    # `_source_usable` and they fail.
+    with tempfile.TemporaryDirectory() as d:
+        store_dir = Path(d); log_path = store_dir / "log.jsonl"
+        op = operation_for_instrument("880", trigger=trigger, watchlist=wl)
+        save(op, store_dir=store_dir, log_path=log_path)
+        nb = [r for r in op.requirements if r.criticality != BLOCKING]
+        for junk in (".", "-", "n/a", "   x  "):
+            try:
+                submit_evidence(op, requirement_id=nb[0].requirement_id, actor="agent-1",
+                                actor_kind=AGENT, source=junk,
+                                store_dir=store_dir, log_path=log_path)
+                check(False, f"source {junk!r} was accepted as a named source")
+                break
+            except SubmissionRefused:
+                pass
+        else:
+            check(True, "a one-character or throwaway source is refused, not merely a blank one")
+        got = submit_evidence(op, requirement_id=nb[0].requirement_id, actor="agent-1",
+                              actor_kind=AGENT, source="G.S.R. 880(E), page 3",
+                              store_dir=store_dir, log_path=log_path)
+        check(any(r.status == SATISFIED for r in got.requirements),
+              "...and a real citation still goes through")
+        check("cannot verify that a source exists" in REFUSAL_SOURCE_UNUSABLE,
+              "the refusal admits this is a shape test, not verification")
+
+    # ---- RT-11: a stale copy is refused, never silently overwritten -------------
+    # Two callers load the same operation and each close a different requirement.
+    # Before this fix the second save erased the first closure from state with
+    # nothing saying so; the log held both, so the store's own answer was simply
+    # wrong. This is the RT-08 family, one layer up.
+    with tempfile.TemporaryDirectory() as d:
+        store_dir = Path(d); log_path = store_dir / "log.jsonl"
+        op = operation_for_instrument("880", trigger=trigger, watchlist=wl)
+        save(op, store_dir=store_dir, log_path=log_path)
+        a = load(op.operation_id, store_dir=store_dir)
+        b = load(op.operation_id, store_dir=store_dir)      # same state, two readers
+        nb = [r for r in a.requirements if r.criticality != BLOCKING]
+        submit_evidence(a, requirement_id=nb[0].requirement_id, actor="A",
+                        actor_kind=AGENT, source="A's evidence, filed 2026-09-25",
+                        store_dir=store_dir, log_path=log_path)
+        try:
+            submit_evidence(b, requirement_id=nb[1].requirement_id, actor="B",
+                            actor_kind=AGENT, source="B's evidence, filed 2026-09-25",
+                            store_dir=store_dir, log_path=log_path)
+            check(False, "a stale copy was accepted, erasing another actor's closure")
+        except SubmissionRefused as exc:
+            check("has changed since it was read" in str(exc),
+                  "a submission against a stale copy is refused, naming the conflict")
+        after = load(op.operation_id, store_dir=store_dir)
+        by_id = {r.requirement_id: r.status for r in after.requirements}
+        check(by_id[nb[0].requirement_id] == SATISFIED,
+              "...and the first actor's closure survives in state, not only in the log")
+        fresh = load(op.operation_id, store_dir=store_dir)
+        submit_evidence(fresh, requirement_id=nb[1].requirement_id, actor="B",
+                        actor_kind=AGENT, source="B's evidence, filed 2026-09-25",
+                        store_dir=store_dir, log_path=log_path)
+        final = load(op.operation_id, store_dir=store_dir)
+        check(sum(1 for r in final.requirements if r.status == SATISFIED) == 2,
+              "...and re-reading then resubmitting keeps both closures")
 
     # ---- the ring boundary -----------------------------------------------------
     from checker import rings

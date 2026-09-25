@@ -35,11 +35,29 @@ that says what it is.
 Write to the corpus, or attest anything. `policy.decide` refuses `WRITE` and
 `ATTEST` outright, for every actor, with no allow path.
 
-Exactly one tool is not a read: `themis.submit_evidence` records an answer against
-ONE requirement of a stored operation (`policy.SUBMIT`). It reaches the operation
-store and nothing else -- never the corpus, never an instrument's admission state.
-And the store independently refuses an agent closing BLOCKING work, so that
-guarantee survives someone loosening the policy without reading the store.
+**Nor close an operation's work.** For part of 2026-09-25 exactly one tool was not a
+read -- `themis.submit_evidence`, recording an answer against ONE requirement of a
+stored operation. It is gone, and the reason belongs here rather than in a commit
+message nobody reads:
+
+The tool took `actor_kind` from its caller. The red team sent `"human"`, closed both
+BLOCKING requirements of a live operation -- the terminal human review included --
+and reached `can_close: True`, while these very instructions were promising every
+client that only a human reviewer could (RT-10). The store's refusal was not
+defective; it was told by the caller that the caller was a person, and believed the
+only thing it had been given.
+
+The lesson is not that the opening was too wide. It is that **a permission is only as
+strong as the identity it is granted against**, and the section above says plainly
+that this server's identities are claims. Reads survive that. Writes do not. So this
+surface grants nothing that changes stored state, whoever the caller says they are.
+
+The submission path itself is unchanged in `checker/operation_store.py` and will be
+reached by the AUTHENTICATED gateway at PLAN_17 M6, where the actor's kind comes from
+a validated token instead of a JSON field. Until then an orchestrator cannot record
+evidence over MCP: a real gap, written down rather than closed with a door that
+cannot check who is coming through it.
+See `docs/research/RED_TEAM_OPERATION_STORE_2026_09_25.md`.
 """
 from __future__ import annotations
 
@@ -100,11 +118,12 @@ def handle_message(msg: dict) -> dict | None:
             "capabilities": {"tools": {"listChanged": False}},
             "serverInfo": SERVER_INFO,
             "instructions": (
-                "Themis serves verified Indian corporate-law evidence. Thirteen of the "
-                "fourteen tools are read-only; themis.submit_evidence records an answer "
-                "against one requirement of a stored operation, and may not close "
-                "BLOCKING work -- only a human reviewer can. Nothing here writes to the "
-                "corpus or attests a source. Answers carry their own refusals -- "
+                "Themis serves verified Indian corporate-law evidence. Every tool is "
+                "read-only. This server cannot establish who you are -- identity arrives "
+                "as a claim in your own arguments -- so it grants nothing that could "
+                "change stored state, whoever you say you are. Nothing here writes to the "
+                "corpus, closes an operation's work, or attests a source. Answers carry "
+                "their own refusals -- "
                 "out_of_scope, CANNOT_DETERMINE, NOT_ESTABLISHED -- and those refusals "
                 "are part of the answer, not an error to route around. No tool returns a "
                 "legal conclusion. Call themis.scope first: only one of nine in-scope "
@@ -143,8 +162,7 @@ def serve(stdin: TextIO | None = None, stdout: TextIO | None = None,
     stdin = stdin or sys.stdin
     stdout = stdout or sys.stdout
     log = log or (lambda m: print(m, file=sys.stderr, flush=True))
-    log(f"themis-mcp: serving {len(toolmod.TOOLS)} tools on stdio "
-        "(read-only except themis.submit_evidence)")
+    log(f"themis-mcp: serving {len(toolmod.TOOLS)} tools on stdio (all read-only)")
     for line in stdin:
         line = line.strip()
         if not line:
@@ -184,12 +202,13 @@ def _test() -> None:
     check(r["result"]["protocolVersion"] == PROTOCOL_VERSION, "initialize declares a version")
     check(r["result"]["serverInfo"]["name"] == "themis", "...and names the server")
     inst = r["result"]["instructions"]
-    check("read-only" in inst and "submit_evidence" in inst,
-          "...and tells the client which tools are read-only and which is not")
-    check("only a human reviewer can" in inst,
-          "...and that BLOCKING work is human-only, before it tries")
-    check("Every tool is read-only" not in inst,
-          "...and no longer claims every tool is read-only, which stopped being true")
+    check("Every tool is read-only" in inst,
+          "...and tells the client, truthfully again, that every tool is read-only")
+    check("cannot establish who you are" in inst,
+          "...and why: it says plainly that it cannot authenticate the caller (RT-10)")
+    check("submit_evidence" not in inst and "only a human reviewer" not in inst,
+          "...and promises no human-only guarantee, having been unable to tell a human "
+          "from an agent that simply claimed to be one")
     check("refusals are part of the answer" in r["result"]["instructions"],
           "...and that a refusal is not an error to route around")
 
@@ -200,8 +219,9 @@ def _test() -> None:
     # ---- tools/list -----------------------------------------------------------------
     r = handle_message({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
     names = [t["name"] for t in r["result"]["tools"]]
-    check(len(names) == 14 and "themis.ask" in names, f"tools/list returns fourteen ({len(names)})")
-    check("themis.submit_evidence" in names, "...including the one submit tool")
+    check(len(names) == 13 and "themis.ask" in names, f"tools/list returns thirteen ({len(names)})")
+    check("themis.submit_evidence" not in names,
+          "...and not the submit tool, which this surface cannot safely offer (RT-10)")
     check(all("inputSchema" in t for t in r["result"]["tools"]), "every descriptor has a schema")
 
     # ---- tools/call, and identity travelling in arguments ----------------------------
