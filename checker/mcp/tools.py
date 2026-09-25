@@ -48,7 +48,8 @@ from datetime import datetime, timezone
 from typing import Callable
 
 from checker import api
-from checker.mcp.policy import READ, Decision, Request, decide
+from checker.mcp.policy import (READ, SUBMIT, SUBMIT_TOOLS, Decision,
+                                Request, decide)
 
 __all__ = ["TOOLS", "Tool", "call", "list_tools"]
 
@@ -253,12 +254,61 @@ def _create_operation(args: dict) -> dict:
 
 
 def _get_operation(args: dict) -> dict:
-    # Operations are not persisted yet (no store). Saying so beats returning an
-    # empty result that reads like "this operation does not exist".
-    return {"_http": 501, "operation_id": args.get("operation_id", ""),
-            "error": "operations are not persisted yet: create_operation returns the "
-                     "operation in full, and nothing stores it between calls. Recorded "
-                     "as a gap rather than answered with an empty result."}
+    """Fetch a stored operation. Returned its own 501 until the store landed."""
+    from checker.operation_store import OperationCorrupt, load
+    oid = args.get("operation_id", "")
+    try:
+        op = load(oid)
+    except OperationCorrupt as exc:
+        # An unreadable store is NOT an empty store, and must never read as "no
+        # such operation" -- that would turn a corrupt file into a clean absence.
+        return {"_http": 500, "operation_id": oid, "error": f"stored but unreadable: {exc}"}
+    except ValueError as exc:
+        return {"_http": 400, "operation_id": oid, "error": str(exc)}
+    if op is None:
+        return {"_http": 404, "operation_id": oid,
+                "error": "no operation with that id has been stored",
+                "note": "This is an absence, not a failure to read. A corrupt record "
+                        "answers 500, so the two can be told apart."}
+    return {"_http": 200, "operation": op.to_dict()}
+
+
+def _submit_evidence(args: dict) -> dict:
+    """Record evidence against ONE requirement. The only non-read tool.
+
+    Two guards stand between an agent and a closed operation, and neither relies on
+    the other: `policy.SUBMIT_TOOLS` lets only this tool submit at all, and the
+    store refuses an agent closing BLOCKING work on its own account. This function
+    passes `actor_kind` straight through and does not decide anything itself.
+    """
+    from checker.operation_store import (AGENT, HUMAN, OperationCorrupt,
+                                         SubmissionRefused, load, submit_evidence)
+    oid = args.get("operation_id", "")
+    try:
+        op = load(oid)
+    except (OperationCorrupt, ValueError) as exc:
+        return {"_http": 500, "operation_id": oid, "error": str(exc)}
+    if op is None:
+        return {"_http": 404, "operation_id": oid, "error": "no such stored operation"}
+    kind = AGENT if str(args.get("actor_kind", AGENT)).lower() != HUMAN else HUMAN
+    try:
+        updated = submit_evidence(
+            op, requirement_id=args.get("requirement_id", ""),
+            actor=args.get("actor", ""), actor_kind=kind,
+            source=args.get("source", ""), note=args.get("note", ""),
+            closed_by=args.get("closed_by", ""))
+    except SubmissionRefused as exc:
+        # A refusal is the answer, not a failure: 409, with the reason verbatim.
+        return {"_http": 409, "refused": True, "reason": str(exc),
+                "operation_id": oid, "requirement_id": args.get("requirement_id", "")}
+    except (KeyError, ValueError) as exc:
+        return {"_http": 400, "error": str(exc)}
+    b = updated.budget()
+    return {"_http": 200, "operation_id": oid, "accepted": True,
+            "budget": b.sentence(), "can_close": b.can_close,
+            "note": "Recording evidence against a requirement closes that question only. "
+                    "Whether the operation itself may close is governed by its budget, "
+                    "and the terminal human review is the sink."}
 
 
 def _get_tasks(args: dict) -> dict:
@@ -314,6 +364,12 @@ TOOLS: tuple[Tool, ...] = (
                "trigger": {"type": "object"}}, ("instrument",)), _create_operation),
     Tool("themis.get_operation", "Fetch a stored operation by id.",
          _obj({"operation_id": _STR}, ("operation_id",)), _get_operation),
+    Tool("themis.submit_evidence", "Record evidence against ONE requirement of a stored "
+         "operation. The only non-read tool. An agent may satisfy non-blocking work with "
+         "a named source; only a human may close BLOCKING work.",
+         _obj({"operation_id": _STR, "requirement_id": _STR, "actor": _STR,
+               "actor_kind": _STR, "source": _STR, "note": _STR, "closed_by": _STR},
+              ("operation_id", "requirement_id", "actor")), _submit_evidence),
     Tool("themis.get_tasks", "The open work on an operation, optionally for one "
          "specialist.", _obj({"instrument": _STR, "specialist": _STR,
                               "watchlist": {"type": "array", "items": _STR},
@@ -330,7 +386,9 @@ def list_tools() -> list[dict]:
 def call(name: str, arguments: dict | None, *, actor: str = "", tenant: str = "",
          matter: str = "", purpose: str = "") -> dict:
     """Policy-decide, then run. A DENY never reaches the tool."""
-    req = Request(tool=name, action=READ, actor=actor, tenant=tenant,
+    # The one tool that is not a read declares itself; everything else is READ.
+    action = SUBMIT if name in SUBMIT_TOOLS else READ
+    req = Request(tool=name, action=action, actor=actor, tenant=tenant,
                   matter=matter, purpose=purpose)
     d: Decision = decide(req)
     if not d.allowed:
@@ -366,7 +424,7 @@ def _test() -> None:
     check(names == set(KNOWN_TOOLS),
           f"every registered tool is policy-known and vice versa "
           f"(only in one: {names ^ set(KNOWN_TOOLS) or 'none'})")
-    check(len(TOOLS) == 13, f"thirteen tools, not a hundred (got {len(TOOLS)})")
+    check(len(TOOLS) == 14, f"fourteen tools, not a hundred (got {len(TOOLS)})")
     check(all(t.description.strip() and t.schema.get("type") == "object" for t in TOOLS),
           "every tool has a description and an object schema")
     check(all(t.mcp_descriptor()["inputSchema"]["additionalProperties"] is False
@@ -442,13 +500,79 @@ def _test() -> None:
     check("cannot be closed" in r["budget"], "...with the budget's refusal attached")
     r = call("themis.get_tasks", {"instrument": "880", "specialist": "ASTROLOGY"}, **who)
     check(r["_http"] == 400, "an unknown specialist is a 400, not an empty list")
-    r = call("themis.get_operation", {"operation_id": "op_x"}, **who)
-    check(r["_http"] == 501 and "not persisted yet" in r["error"],
-          "an unbuilt capability says so, rather than returning an empty result")
+    # get_operation was a truthful 501 until the store landed (2026-09-25). The
+    # replacement must keep the distinction that mattered: an ABSENCE and an
+    # UNREADABLE record are different answers, and neither may read as the other.
+    r = call("themis.get_operation", {"operation_id": "op_definitely_absent"}, **who)
+    check(r["_http"] == 404 and "no operation with that id" in r["error"],
+          f"an id never stored is a 404 absence (got {r.get('_http')})")
+    check("not a failure to read" in r.get("note", ""),
+          "...and says so, because a corrupt record answers 500 instead")
+
+    # A real round trip through the store, via the tools only.
+    import pathlib as _pl
+    import tempfile as _tf
+
+    from checker import operation_store as _store
+    from checker.operations import BLOCKING as _BLK
+    from checker.operations import Watchlist as _WL
+    from checker.operations import operation_for_instrument as _mkop
+    _wl = _WL(); _wl.add("U72200KA2019PTC123456")
+    _op = _mkop("880", trigger={"gazette_id": "CG-DL-E-01122025-268124"}, watchlist=_wl)
+    with _tf.TemporaryDirectory() as _d:
+        _sd, _lp = _pl.Path(_d) / "ops", _pl.Path(_d) / "log.jsonl"
+        _real_sd, _real_lp = _store.DEFAULT_STORE_DIR, _store.DEFAULT_LOG_PATH
+        _store.DEFAULT_STORE_DIR, _store.DEFAULT_LOG_PATH = _sd, _lp
+        try:
+            _store.save(_op, store_dir=_sd, log_path=_lp)
+            got = call("themis.get_operation", {"operation_id": _op.operation_id}, **who)
+            check(got["_http"] == 200 and got["operation"]["operation_id"] == _op.operation_id,
+                  "a stored operation round-trips through the tool")
+
+            _blk = next(r for r in _op.requirements if r.criticality == _BLK)
+            _open = next(r for r in _op.requirements if r.criticality != _BLK)
+
+            ref = call("themis.submit_evidence",
+                       {"operation_id": _op.operation_id, "requirement_id": _blk.requirement_id,
+                        "actor": "research_agent", "actor_kind": "agent",
+                        "source": "https://egazette.gov.in/x.pdf"}, **who)
+            check(ref["_http"] == 409 and ref.get("refused") is True,
+                  f"an AGENT closing BLOCKING work is refused through the tool ({ref.get('_http')})")
+            check("only by a human reviewer" in ref["reason"],
+                  "...with the store's own reason, verbatim")
+
+            nos = call("themis.submit_evidence",
+                       {"operation_id": _op.operation_id, "requirement_id": _open.requirement_id,
+                        "actor": "research_agent", "actor_kind": "agent", "source": ""}, **who)
+            check(nos["_http"] == 409, "a submission with no source is refused")
+
+            okr = call("themis.submit_evidence",
+                       {"operation_id": _op.operation_id, "requirement_id": _open.requirement_id,
+                        "actor": "research_agent", "actor_kind": "agent",
+                        "source": "MCA filing AOC-4 2025-10-25"}, **who)
+            check(okr["_http"] == 200 and okr["accepted"] is True,
+                  "an agent MAY satisfy non-blocking work with a named source")
+            check(okr["can_close"] is False,
+                  "...and the operation still cannot close, because blocking work remains")
+        finally:
+            _store.DEFAULT_STORE_DIR, _store.DEFAULT_LOG_PATH = _real_sd, _real_lp
 
     # ---- no write path exists at all ---------------------------------------------
-    check(not any("submit" in n or "attest" in n or "write" in n or "delete" in n
-                  for n in names), "no tool offers a write, a submit, or an attest")
+    # The guarantee changed shape on 2026-09-25 and is now stronger, not weaker: no
+    # tool writes to the corpus or attests anything, and EXACTLY ONE may submit
+    # evidence to an operation's work queue.
+    check(not any("attest" in n or "write" in n or "delete" in n or "admit" in n
+                  for n in names), "no tool offers a write, an attest, an admit or a delete")
+    check({n for n in names if "submit" in n} == set(SUBMIT_TOOLS)
+          and len(SUBMIT_TOOLS) == 1,
+          f"exactly one tool may submit, and policy names it ({sorted(SUBMIT_TOOLS)})")
+    from checker.mcp.policy import ATTEST as _AT
+    from checker.mcp.policy import WRITE as _WR
+    from checker.mcp.policy import Request as _Rq
+    from checker.mcp.policy import decide as _dec
+    check(not any(_dec(_Rq(tool=n, action=a, actor="a", purpose="p")).allowed
+                  for n in names for a in (_WR, _AT)),
+          "and no tool -- including the submit tool -- may WRITE or ATTEST")
 
     from checker import rings
     check(rings.ring_of("checker.mcp.tools") == rings.RING_2, "this module is Ring 2")

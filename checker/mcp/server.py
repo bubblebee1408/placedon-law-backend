@@ -14,7 +14,7 @@ repository's one production incident from a dependency (`jinja2`) is recorded in
 ## The three methods
 
     initialize      handshake; declares protocol version and capabilities
-    tools/list      the thirteen descriptors from checker/mcp/tools.py
+    tools/list      the fourteen descriptors from checker/mcp/tools.py
     tools/call      policy-decide, run, return the result as MCP content
 
 ## The identity problem, stated rather than hidden
@@ -32,9 +32,14 @@ that says what it is.
 
 ## What a client cannot do through this
 
-Write anything. `policy.decide` refuses `WRITE` and `ATTEST` outright and the tool
-registry offers no such tool, so the refusal holds even if one were added in one
-place and forgotten in the other.
+Write to the corpus, or attest anything. `policy.decide` refuses `WRITE` and
+`ATTEST` outright, for every actor, with no allow path.
+
+Exactly one tool is not a read: `themis.submit_evidence` records an answer against
+ONE requirement of a stored operation (`policy.SUBMIT`). It reaches the operation
+store and nothing else -- never the corpus, never an instrument's admission state.
+And the store independently refuses an agent closing BLOCKING work, so that
+guarantee survives someone loosening the policy without reading the store.
 """
 from __future__ import annotations
 
@@ -95,12 +100,15 @@ def handle_message(msg: dict) -> dict | None:
             "capabilities": {"tools": {"listChanged": False}},
             "serverInfo": SERVER_INFO,
             "instructions": (
-                "Themis serves verified Indian corporate-law evidence. Every tool is "
-                "read-only. Answers carry their own refusals -- out_of_scope, "
-                "CANNOT_DETERMINE, NOT_ESTABLISHED -- and those refusals are part of "
-                "the answer, not an error to route around. No tool returns a legal "
-                "conclusion. Call themis.scope first: only one of nine in-scope bodies "
-                "of law is currently held."),
+                "Themis serves verified Indian corporate-law evidence. Thirteen of the "
+                "fourteen tools are read-only; themis.submit_evidence records an answer "
+                "against one requirement of a stored operation, and may not close "
+                "BLOCKING work -- only a human reviewer can. Nothing here writes to the "
+                "corpus or attests a source. Answers carry their own refusals -- "
+                "out_of_scope, CANNOT_DETERMINE, NOT_ESTABLISHED -- and those refusals "
+                "are part of the answer, not an error to route around. No tool returns a "
+                "legal conclusion. Call themis.scope first: only one of nine in-scope "
+                "bodies of law is currently held."),
         })
 
     if method == "tools/list":
@@ -135,7 +143,8 @@ def serve(stdin: TextIO | None = None, stdout: TextIO | None = None,
     stdin = stdin or sys.stdin
     stdout = stdout or sys.stdout
     log = log or (lambda m: print(m, file=sys.stderr, flush=True))
-    log(f"themis-mcp: serving {len(toolmod.TOOLS)} read-only tools on stdio")
+    log(f"themis-mcp: serving {len(toolmod.TOOLS)} tools on stdio "
+        "(read-only except themis.submit_evidence)")
     for line in stdin:
         line = line.strip()
         if not line:
@@ -174,7 +183,13 @@ def _test() -> None:
     r = handle_message({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}})
     check(r["result"]["protocolVersion"] == PROTOCOL_VERSION, "initialize declares a version")
     check(r["result"]["serverInfo"]["name"] == "themis", "...and names the server")
-    check("read-only" in r["result"]["instructions"], "...and tells the client the tools are read-only")
+    inst = r["result"]["instructions"]
+    check("read-only" in inst and "submit_evidence" in inst,
+          "...and tells the client which tools are read-only and which is not")
+    check("only a human reviewer can" in inst,
+          "...and that BLOCKING work is human-only, before it tries")
+    check("Every tool is read-only" not in inst,
+          "...and no longer claims every tool is read-only, which stopped being true")
     check("refusals are part of the answer" in r["result"]["instructions"],
           "...and that a refusal is not an error to route around")
 
@@ -185,7 +200,8 @@ def _test() -> None:
     # ---- tools/list -----------------------------------------------------------------
     r = handle_message({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
     names = [t["name"] for t in r["result"]["tools"]]
-    check(len(names) == 13 and "themis.ask" in names, f"tools/list returns thirteen ({len(names)})")
+    check(len(names) == 14 and "themis.ask" in names, f"tools/list returns fourteen ({len(names)})")
+    check("themis.submit_evidence" in names, "...including the one submit tool")
     check(all("inputSchema" in t for t in r["result"]["tools"]), "every descriptor has a schema")
 
     # ---- tools/call, and identity travelling in arguments ----------------------------

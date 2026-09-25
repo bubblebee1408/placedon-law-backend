@@ -41,13 +41,33 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-__all__ = ["Request", "Decision", "decide", "READ", "WRITE", "ATTEST",
-           "ACTIONS", "ALLOW", "DENY"]
+__all__ = ["Request", "Decision", "decide", "READ", "SUBMIT", "WRITE", "ATTEST",
+           "ACTIONS", "ALLOW", "DENY", "SUBMIT_TOOLS"]
 
 READ = "READ"          # look at what is held
-WRITE = "WRITE"        # change stored state
+SUBMIT = "SUBMIT"      # record evidence against ONE operation requirement -- see below
+WRITE = "WRITE"        # change stored state (the corpus, the register, a record)
 ATTEST = "ATTEST"      # declare a source verified -- human only, never an agent
-ACTIONS = (READ, WRITE, ATTEST)
+ACTIONS = (READ, SUBMIT, WRITE, ATTEST)
+
+# SUBMIT was added 2026-09-25, and it narrows a rule this module set two days
+# earlier ("this gateway is read-only: no tool may change stored state"). That rule
+# was written to protect two things: THE CORPUS, and ATTESTATION. An operation's
+# work queue is neither -- it is a list of open questions, and an orchestrator that
+# cannot record an answer to one cannot execute an operation at all, which was the
+# point of building the Operation Model.
+#
+# So SUBMIT is deliberately the narrowest possible opening:
+#   * exactly ONE tool may use it (SUBMIT_TOOLS below);
+#   * it reaches `checker/operation_store.py` and nothing else -- never the corpus,
+#     never a register, never an instrument's admission state;
+#   * WRITE and ATTEST remain refused outright, for every actor, with no allow path;
+#   * and the store refuses an agent closing BLOCKING work INDEPENDENTLY of this
+#     module (`REFUSAL_AGENT_BLOCKING`), so the guarantee survives someone loosening
+#     the policy here without reading the store.
+# Two guards, neither relying on the other. That is the only reason this opening is
+# defensible at all.
+SUBMIT_TOOLS: frozenset[str] = frozenset({"themis.submit_evidence"})
 
 ALLOW = "ALLOW"
 DENY = "DENY"
@@ -68,12 +88,13 @@ KNOWN_TOOLS: frozenset[str] = frozenset({
     "themis.get_operation",
     "themis.get_tasks",
     "themis.scope",
+    "themis.submit_evidence",
 })
 
-# Tools that may only ever be READ. Every tool is on this list today; the list
-# exists so that adding a writable tool is a deliberate edit here, seen in review,
-# rather than a side effect of registering it elsewhere.
-READ_ONLY_TOOLS: frozenset[str] = KNOWN_TOOLS
+# Tools that may only ever be READ. Everything except the single SUBMIT tool; the
+# list exists so that making a tool writable is a deliberate edit here, seen in
+# review, rather than a side effect of registering it elsewhere.
+READ_ONLY_TOOLS: frozenset[str] = KNOWN_TOOLS - SUBMIT_TOOLS
 
 
 @dataclass(frozen=True)
@@ -128,13 +149,18 @@ def decide(req: Request) -> Decision:
         return no("ATTEST is human-only: attestation is what makes a source servable, "
                   "and an agent that can attest can manufacture evidence. No tool may do it.")
     if req.action == WRITE:
-        return no("this gateway is read-only: no tool may change stored state")
+        return no("this gateway does not write to the corpus, a register, or any "
+                  "record of the law. Evidence against one operation requirement uses "
+                  "SUBMIT, which reaches the operation store and nothing else.")
 
     if req.tool not in KNOWN_TOOLS:
         return no(f"unknown tool {req.tool!r}: default deny, so a tool is live only "
                   "once its policy is written")
     if req.tool in READ_ONLY_TOOLS and req.action != READ:
         return no(f"{req.tool} is read-only; {req.action} is not permitted on it")
+    if req.action == SUBMIT and req.tool not in SUBMIT_TOOLS:
+        return no(f"{req.tool} may not SUBMIT: only {sorted(SUBMIT_TOOLS)} may record "
+                  "evidence, and only against an operation requirement")
     if not req.actor.strip():
         return no("no actor named: an unattributed call cannot be recorded, and an "
                   "unrecorded call cannot be reviewed")
@@ -142,7 +168,8 @@ def decide(req: Request) -> Decision:
         return no("no purpose given: a tool call a reviewer cannot explain is one "
                   "nobody can audit afterwards")
 
-    return Decision(ALLOW, "read permitted for a named actor with a stated purpose",
+    verb = "read" if req.action == READ else "evidence submission"
+    return Decision(ALLOW, f"{verb} permitted for a named actor with a stated purpose",
                     req, {**rec, "verdict": ALLOW})
 
 
@@ -176,6 +203,24 @@ def _test() -> None:
     check("manufacture evidence" in decide(Request(tool="themis.ask", action=ATTEST,
                                                    **base)).reason,
           "...and the ATTEST refusal says why, in the product's own terms")
+
+    # ---- SUBMIT: the narrowest opening, and its edges -----------------------------
+    sub = decide(Request(tool="themis.submit_evidence", action=SUBMIT, **base))
+    check(sub.allowed and "evidence submission" in sub.reason,
+          "the one submit tool may SUBMIT, for a named actor with a purpose")
+    for t in sorted(KNOWN_TOOLS - SUBMIT_TOOLS):
+        if decide(Request(tool=t, action=SUBMIT, **base)).allowed:
+            check(False, f"{t} was allowed to SUBMIT"); break
+    else:
+        check(True, f"no other tool may SUBMIT ({len(KNOWN_TOOLS) - 1} checked)")
+    for act in (WRITE, ATTEST):
+        d2 = decide(Request(tool="themis.submit_evidence", action=act, **base))
+        check(not d2.allowed, f"even the submit tool is refused {act}")
+    check("corpus" in decide(Request(tool="themis.health", action=WRITE, **base)).reason,
+          "the WRITE refusal names what it is protecting")
+    check(not decide(Request(tool="themis.submit_evidence", action=SUBMIT,
+                             **{**base, "actor": ""})).allowed,
+          "an unattributed submission is refused like any other call")
 
     # ---- default deny -----------------------------------------------------------
     u = decide(Request(tool="themis.delete_everything", action=READ, **base))

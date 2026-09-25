@@ -39,6 +39,7 @@ suites=(
   checker/pdf_pages.py
   checker/rings.py
   checker/operations.py
+  checker/operation_store.py
   checker/mcp/policy.py
   checker/mcp/tools.py
   checker/mcp/server.py

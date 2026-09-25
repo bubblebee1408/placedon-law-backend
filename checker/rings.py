@@ -134,6 +134,10 @@ REGISTRY: dict[str, int] = {
     # ── RING 2 — the Operation Model: reads observations and the register,
     #    produces work, decides nothing. THEMIS V0 milestone 6.
     "checker.operations": RING_2,
+    # ── RING 2 — persistence for the Operation Model, plus evidence submission.
+    #    THEMIS V0 milestones 5 and 6. Reads operations and writes local state
+    #    under corpus/.operations/; decides nothing about the law.
+    "checker.operation_store": RING_2,
 
     # ── RING 2 — FEEDS. Classified by PACKAGE below, not listed here. ──────
     # ── RING 3 — INFERENCE. Deliberately empty; see the module docstring. ──

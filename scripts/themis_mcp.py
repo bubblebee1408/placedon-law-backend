@@ -39,14 +39,17 @@ def _test() -> int:
         else:
             fail += 1; print(f"  [FAIL] {label}")
 
-    check(len(TOOLS) == 13, f"thirteen tools are exposed ({len(TOOLS)})")
+    check(len(TOOLS) == 14, f"fourteen tools are exposed ({len(TOOLS)})")
     check({t.name for t in TOOLS} == set(policy.KNOWN_TOOLS),
           "the registry and the policy list agree")
     check(all(t["name"].startswith("themis.") for t in list_tools()),
           "every tool is namespaced themis.*")
     check(server.PROTOCOL_VERSION and server.SERVER_INFO["name"] == "themis",
           "the server declares a protocol version and a name")
-    # Nothing here may write. Two independent guards, checked together.
+    # Nothing here may write or attest -- including the one tool that may SUBMIT
+    # evidence to an operation's work queue. Two independent guards, checked together.
+    check(len(policy.SUBMIT_TOOLS) == 1 and policy.SUBMIT_TOOLS <= {t.name for t in TOOLS},
+          f"exactly one tool may submit, and it is registered ({sorted(policy.SUBMIT_TOOLS)})")
     for action in (policy.WRITE, policy.ATTEST):
         check(not any(policy.decide(policy.Request(tool=t.name, action=action,
                                                    actor="a", purpose="p")).allowed
