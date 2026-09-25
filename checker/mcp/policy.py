@@ -41,33 +41,37 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-__all__ = ["Request", "Decision", "decide", "READ", "SUBMIT", "WRITE", "ATTEST",
-           "ACTIONS", "ALLOW", "DENY", "SUBMIT_TOOLS"]
+__all__ = ["Request", "Decision", "decide", "READ", "WRITE", "ATTEST",
+           "ACTIONS", "ALLOW", "DENY"]
 
 READ = "READ"          # look at what is held
-SUBMIT = "SUBMIT"      # record evidence against ONE operation requirement -- see below
 WRITE = "WRITE"        # change stored state (the corpus, the register, a record)
 ATTEST = "ATTEST"      # declare a source verified -- human only, never an agent
-ACTIONS = (READ, SUBMIT, WRITE, ATTEST)
+ACTIONS = (READ, WRITE, ATTEST)
 
-# SUBMIT was added 2026-09-25, and it narrows a rule this module set two days
-# earlier ("this gateway is read-only: no tool may change stored state"). That rule
-# was written to protect two things: THE CORPUS, and ATTESTATION. An operation's
-# work queue is neither -- it is a list of open questions, and an orchestrator that
-# cannot record an answer to one cannot execute an operation at all, which was the
-# point of building the Operation Model.
+# A SUBMIT action lived here for part of 2026-09-25, to let one tool record evidence
+# against an operation requirement, and it is recorded rather than quietly reverted.
 #
-# So SUBMIT is deliberately the narrowest possible opening:
-#   * exactly ONE tool may use it (SUBMIT_TOOLS below);
-#   * it reaches `checker/operation_store.py` and nothing else -- never the corpus,
-#     never a register, never an instrument's admission state;
-#   * WRITE and ATTEST remain refused outright, for every actor, with no allow path;
-#   * and the store refuses an agent closing BLOCKING work INDEPENDENTLY of this
-#     module (`REFUSAL_AGENT_BLOCKING`), so the guarantee survives someone loosening
-#     the policy here without reading the store.
-# Two guards, neither relying on the other. That is the only reason this opening is
-# defensible at all.
-SUBMIT_TOOLS: frozenset[str] = frozenset({"themis.submit_evidence"})
+# The argument for it was good: an orchestrator that cannot answer a requirement cannot
+# execute an operation, and an operation's work queue is neither the corpus nor an
+# attestation -- so the read-only rule could be narrowed without touching what it was
+# written to protect. The argument was also wrong, for a reason that had nothing to do
+# with what SUBMIT could reach:
+#
+#   this module cannot authenticate anybody, and it says so above.
+#
+# The submit tool took `actor_kind` from the same untrusted place `actor` and `tenant`
+# come from. The red team sent "human" and closed the terminal human-review requirement
+# of a live operation (RT-10). `operation_store` is also tenant-blind (RT-14), so the
+# write crossed tenants too. PLAN_17 M6, written a day earlier and merged the same day,
+# had already settled it: "submit_evidence -- gateway route only (NOT an MCP tool: the
+# MCP surface stays read-only)."
+#
+# The lesson is not "SUBMIT was too wide". It is that a permission is only as strong as
+# the identity it is granted against, and this module's identities are claims. Read
+# actions survive that; writes do not. The submission path is unchanged in
+# `operation_store.submit_evidence` and will be reached by the authenticated gateway at
+# PLAN_17 M6, where `actor_kind` comes from a validated token instead of a JSON field.
 
 ALLOW = "ALLOW"
 DENY = "DENY"
@@ -88,13 +92,12 @@ KNOWN_TOOLS: frozenset[str] = frozenset({
     "themis.get_operation",
     "themis.get_tasks",
     "themis.scope",
-    "themis.submit_evidence",
 })
 
-# Tools that may only ever be READ. Everything except the single SUBMIT tool; the
-# list exists so that making a tool writable is a deliberate edit here, seen in
-# review, rather than a side effect of registering it elsewhere.
-READ_ONLY_TOOLS: frozenset[str] = KNOWN_TOOLS - SUBMIT_TOOLS
+# Every known tool is read-only. The list exists so that making a tool writable is a
+# deliberate edit here, seen in review, rather than a side effect of registering it
+# elsewhere -- and on 2026-09-25 that is exactly what it caught.
+READ_ONLY_TOOLS: frozenset[str] = KNOWN_TOOLS
 
 
 @dataclass(frozen=True)
@@ -149,18 +152,17 @@ def decide(req: Request) -> Decision:
         return no("ATTEST is human-only: attestation is what makes a source servable, "
                   "and an agent that can attest can manufacture evidence. No tool may do it.")
     if req.action == WRITE:
-        return no("this gateway does not write to the corpus, a register, or any "
-                  "record of the law. Evidence against one operation requirement uses "
-                  "SUBMIT, which reaches the operation store and nothing else.")
+        return no("this gateway does not write to the corpus, a register, an operation "
+                  "or any record of the law. It cannot establish who is asking, and a "
+                  "write granted against a claimed identity is a write granted to "
+                  "anyone who can type the claim. Evidence reaches an operation through "
+                  "the authenticated gateway, not through here.")
 
     if req.tool not in KNOWN_TOOLS:
         return no(f"unknown tool {req.tool!r}: default deny, so a tool is live only "
                   "once its policy is written")
     if req.tool in READ_ONLY_TOOLS and req.action != READ:
         return no(f"{req.tool} is read-only; {req.action} is not permitted on it")
-    if req.action == SUBMIT and req.tool not in SUBMIT_TOOLS:
-        return no(f"{req.tool} may not SUBMIT: only {sorted(SUBMIT_TOOLS)} may record "
-                  "evidence, and only against an operation requirement")
     if not req.actor.strip():
         return no("no actor named: an unattributed call cannot be recorded, and an "
                   "unrecorded call cannot be reviewed")
@@ -168,8 +170,7 @@ def decide(req: Request) -> Decision:
         return no("no purpose given: a tool call a reviewer cannot explain is one "
                   "nobody can audit afterwards")
 
-    verb = "read" if req.action == READ else "evidence submission"
-    return Decision(ALLOW, f"{verb} permitted for a named actor with a stated purpose",
+    return Decision(ALLOW, "read permitted for a named actor with a stated purpose",
                     req, {**rec, "verdict": ALLOW})
 
 
@@ -204,23 +205,24 @@ def _test() -> None:
                                                    **base)).reason,
           "...and the ATTEST refusal says why, in the product's own terms")
 
-    # ---- SUBMIT: the narrowest opening, and its edges -----------------------------
-    sub = decide(Request(tool="themis.submit_evidence", action=SUBMIT, **base))
-    check(sub.allowed and "evidence submission" in sub.reason,
-          "the one submit tool may SUBMIT, for a named actor with a purpose")
-    for t in sorted(KNOWN_TOOLS - SUBMIT_TOOLS):
-        if decide(Request(tool=t, action=SUBMIT, **base)).allowed:
-            check(False, f"{t} was allowed to SUBMIT"); break
+    # ---- no action but READ exists at all, and no tool escapes it ---------------
+    # RT-10's lesson, pinned: this module grants permissions against identities it
+    # cannot verify, so the only safe grant is one that changes nothing.
+    check(set(ACTIONS) == {READ, WRITE, ATTEST},
+          f"there are exactly three actions and none of them writes on a claim ({ACTIONS})")
+    check(READ_ONLY_TOOLS == KNOWN_TOOLS,
+          "every known tool is read-only -- no tool is exempt")
+    check("themis.submit_evidence" not in KNOWN_TOOLS,
+          "the submit tool is gone: a surface that cannot authenticate must not write "
+          "(RT-10, RT-14, PLAN_17 M6)")
+    for t in sorted(KNOWN_TOOLS):
+        if any(decide(Request(tool=t, action=a, **base)).allowed for a in (WRITE, ATTEST)):
+            check(False, f"{t} was allowed a non-read action"); break
     else:
-        check(True, f"no other tool may SUBMIT ({len(KNOWN_TOOLS) - 1} checked)")
-    for act in (WRITE, ATTEST):
-        d2 = decide(Request(tool="themis.submit_evidence", action=act, **base))
-        check(not d2.allowed, f"even the submit tool is refused {act}")
-    check("corpus" in decide(Request(tool="themis.health", action=WRITE, **base)).reason,
-          "the WRITE refusal names what it is protecting")
-    check(not decide(Request(tool="themis.submit_evidence", action=SUBMIT,
-                             **{**base, "actor": ""})).allowed,
-          "an unattributed submission is refused like any other call")
+        check(True, f"no tool permits any non-read action ({len(KNOWN_TOOLS)} checked)")
+    check("cannot establish who is asking" in decide(Request(tool="themis.health",
+                                                             action=WRITE, **base)).reason,
+          "...and the WRITE refusal names the real reason: unverified identity")
 
     # ---- default deny -----------------------------------------------------------
     u = decide(Request(tool="themis.delete_everything", action=READ, **base))
