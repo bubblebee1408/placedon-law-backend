@@ -106,6 +106,7 @@ suites=(
   eval/temporal/harness.py
   eval/prelabel/compare.py
   eval/goldset/__init__.py
+  eval/goldset/split.py
   eval/prelabel/corpus.py
   checker/env.py
   checker/s185.py
