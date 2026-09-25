@@ -6,7 +6,7 @@ out of five files per item -- the artifact hash, the page range, the extraction'
 the rule number is where it should be, which Act sections the rule names -- and lays them beside the
 questions. The decision column is deliberately blank.
 
-Why it exists: 30 items each needing eight checks is 240 lookups. A reviewer who has to perform
+Why it exists: ~30 items each needing eight checks is ~240 lookups. A reviewer who has to perform
 those lookups by hand will start trusting the parser instead, which defeats the review. Assembling
 evidence is assistance; supplying a conclusion is not, and this script does only the former.
 
@@ -96,7 +96,7 @@ def main() -> None:
     doc = json.loads(RULES_DOC.read_text())
 
     out = [
-        "# Reviewer brief — 30 queued items", "",
+        f"# Reviewer brief — {len(items)} queued items", "",
         "Assembled evidence only. **Every decision column is blank and stays blank until you fill "
         "it.** Nothing here recommends an outcome.", "",
         f"- Source: `{PDF.relative_to(ROOT)}` ({doc['pages']} pages)",
@@ -143,7 +143,7 @@ def main() -> None:
     for s in sorted(by_scope):
         print(f"  {s:<12} {len(by_scope[s])}")
     print(f"written       : {OUT.relative_to(ROOT)}")
-    print("\nNothing was decided. All 30 remain PENDING.")
+    print(f"\nNothing was decided. All {len(items)} remain PENDING.")
 
 
 def _check() -> None:
