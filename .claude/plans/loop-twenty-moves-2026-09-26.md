@@ -1,78 +1,109 @@
-# Twenty moves — the PLAN 16 build, run as a loop
+# Loop runbook — the next twenty moves
 
-Opened 26-09-2026 ~04:30, founder asleep. Supersedes `loop-next10-2026-09-17.md`, which is complete.
-Source of truth for WHAT: `docs/PLAN_16_BACKEND_ARCHITECTURE.md` (Parts I–III).
+Written 2026-09-26. Extends PLAN_19's G0–G7 roadmap; does not replace it. Where
+PLAN_19 decides something this file cites it. Where measurement has overruled
+PLAN_19, that is stated with the evidence.
 
-## Iteration protocol
-1. Read this file; `git log --oneline -5`; `git status --short`.
-2. If a job is `running`, wait — schedule a fallback wakeup. Completions arrive as notifications.
-3. Otherwise take the first `ready` row whose dependencies are `complete`. Launch its **implementer**
-   (background Agent). Record the agent id. Status → `running`.
-4. Implementer returns → Status `verifying`; launch an independent **verifier** (fresh context,
-   read-only). Record its id.
-5. Verifier returns → **check 3** in the main session: read the diff, re-run the gate, hand-check two
-   claims, then push. PASS → `complete`. FAIL → send findings back, `fixing`. Two behavioural FAILs
-   → `blocked`, reason recorded.
-6. Never two code jobs on overlapping paths. Read-only jobs may run beside one code job.
-7. If an agent dies (spend/session/weekly limit, watchdog, network): check `git log`, `git status`
-   and the files it names BEFORE relaunching; resume with SendMessage, never a fresh agent.
-8. **Long commands belong to the main session**, in a `run_in_background` Bash job. An agent that
-   blocks silently gets killed by the 600 s watchdog — this cost the last loop several hours.
-9. When every row is `complete` or `blocked`: write `docs/TWENTY_MOVES_REPORT_2026_09_26.md`,
-   commit, push, PushNotification, stop.
+**Pattern `sequential`, mode `safe`. ONE subagent at a time, never two in parallel** —
+five of six subagents launched on 25-09 died on the shared usage limit, and two
+parallel agents on 26-09 both died at once. Each subagent spends the same budget the
+main session needs.
 
-## Checked three times (the founder's rule)
-- **1 implementer**: test first, seen failing (RED), then passing; full gate GREEN; commit. No push.
-- **2 verifier**: different agent, no stake. Reads the diff, re-runs the gate, makes ≥3 concrete
-  attempts to break the claim. PASS/FAIL with evidence. Never edits, never commits.
-- **3 main session**: reads the diff, re-runs the gate, hand-checks two claims, then pushes.
+## Standing rules (unchanged, and every one has been paid for)
 
-**Doubt every result, including a verifier's.** This loop's predecessor had three verifier findings
-that were themselves wrong, and one research claim ("a CIN has a check digit") that was false and
-would have shipped. A confident report is the kind that gets believed without checking.
+1. **The gate is the contract.** `bash scripts/verify_green.sh`, exit 0 only.
+   Baseline **200 suites**. A move that lowers it is reverted, not debugged forward.
+2. **Never `SKIP_TESTS=1`.** It announces itself loudly and leaves the tree unverified.
+3. **A peer session shares this tree.** Stage explicit paths. Never `git add -A`.
+   Never delete another session's `.git/index.lock` — wait it out.
+   Do not touch `checker/provenance.py`, `checker/claim_verifier.py`,
+   `checker/lawyer_summary.py`, `scripts/register_*.py`.
+4. **Nothing is installed.** No new runtime dependency without a written reason.
+5. **No rate below n = 30.** Print the count and the Wilson interval. The gold set
+   enforces this in code (`eval/goldset/__init__.py:MIN_N_FOR_A_RATE`).
+6. **Never score the test split twice** against the same code hash. `run.py` refuses.
+7. **A doubt pass before code** (PLAN_19 §2.1): restate "done when" as the failing
+   test, list the files, read them in full.
+8. **An architect record before any schema, ring or dependency change** (§2.2).
 
-## Shared-repo rules (another Claude session commits to this branch)
-`git status --short` before every commit · stage paths explicitly, **never `git add -A`** (a sibling
-session swept an agent's work-in-progress into an unrelated commit on 25-09) · retry on "cannot lock
-ref HEAD" · never revert/rebase/amend another session's commit · watch for a staged deletion of a
-file that still exists.
+## What the last two days actually established
 
-## Stop rules
-Never edit `~/PlacedOn/Placedon-law-business-plan` (PUBLIC) · never deploy · **never push the
-frontend repo** (a branch push triggers a Vercel preview) · no captcha/WAF bypass · downloads only
-from official hosts · **never run a record-writing command against a live record** — copy it to a
-scratch dir first; re-running a seeder that rebuilds records from scratch is how a review queue gets
-wiped · **never self-attest a human check** · preserve uncertainty, never repair a source · one
-logical change per commit.
+These are the reasons the order below is what it is, not commentary.
 
-**Spend:** model calls allowed for moves marked (M). Public documents only. Keys from `.env`, never
-printed. The Anthropic account had **no credit** at 25-09 — any move needing a live Opus call is
-`blocked` until the founder tops up, and must say so rather than faking a result.
+| Finding | Where | Consequence for this plan |
+|---|---|---|
+| **One response for four situations.** Law not held, law held but not retrieved, not a legal question, and wrong jurisdiction all return byte-identical `state: partial, confirmed: [], not_confirmed: [pack_missing]` | `docs/research/EMPTY_PACK_2026_09_25.md` | **M1 is refusal codes.** Nothing downstream can be measured until the envelope can tell these apart |
+| **The gold set cannot judge retrieval.** A fix that made the engine answer *"how long should I boil eggs"* with `s.123, s.174, s.178` scored **identically** to the clean engine | same doc, §"the experiment that inverted the plan" | G0.4 (abbreviations) is **blocked on M1**, not on more data |
+| **The cover gate discards correctly-ranked hits.** `s.177` is top hit at `score=0.819`, cut by `cover=0.377` | `docs/research/RETRIEVAL_DEFECT_2026_09_25.md` | Do NOT touch `MIN_COVER`/`SCORE_FLOOR`. The 25-09 relaxation regressed the nonsense tests |
+| **The scope gate is a keyword matcher.** Named statute 7/7 refused; practitioner phrasing 2/7 | `docs/research/GOLDSET_FIRST_RUN_2026_09_25.md` | G0.3's lexicon, after M1 |
+| **A permission is only as strong as the identity it is granted against** | `docs/research/RED_TEAM_OPERATION_STORE_2026_09_25.md` | No WRITE verb over MCP, ever, before M9 |
+| **Human labels: 0 of 59** | `eval/goldset/` | No move below produces an accuracy claim. Only H-C can |
 
-## The moves
+## The twenty moves
 
-| # | ID | Move | Depends | Status | Impl | Ver | Commits |
-|---|---|---|---|---|---|---|---|
-| 1 | BUD-1 | `budget.py`: distinguish the spend-cap 429 (`enforced_spend_limit_reached`, no `retry-after`) from a rate-limit 429. Retrying the former fails for the rest of the month. | — | ready | | | |
-| 2 | BUD-2 | `cost_inr()` takes **four** counters: `input`, `cache_creation`, `cache_read`, `output`. `input_tokens` counts only tokens after the last cache breakpoint — treating it as total under-bills by up to 90%. | BUD-1 | ready | | | |
-| 3 | BUD-3 | Tokens-per-page **per model**. Claude 4.7+ produces ~30% more tokens for identical text, so `PRICING` alone is half a cost model. | BUD-2 | ready | | | |
-| 4 | BUD-4 | `Store` Protocol gains `reserve`/`settle`. Reserve the worst case (`count_tokens` + `max_tokens`); settle to actual. A guard that only records after the fact cannot refuse. | BUD-3 | ready | | | |
-| 5 | FETCH-1 | Generalise `04664f5`: every fetcher asserts Content-Type and magic bytes, not status alone. `checker/robots.py`, `commencement.py`, `revocation.py`, the watchers. | — | ready | | | |
-| 6 | FETCH-2 | `provenance.py`: re-admit `www.indiacode.nic.in` (it serves the real PDFs) **with** the FETCH-1 content check, and record why the earlier exclusion was wrong. | FETCH-1 | ready | | | |
-| 7 | PIT-1 | `applicable(company_facts, obligation, as_at_date) -> decision + instrument version relied on`. Never a boolean stored against a company. "Is this a small company?" has had five answers. | — | ready | | | |
-| 8 | PIT-2 | Threshold history as data: s.2(85) (13-02-2015, 09-02-2018, 01-04-2021, 15-09-2022, 01-12-2025), s.135 (19-09-2018), s.177 (07-05-2018), s.204 (01-04-2020). Each with its instrument. | PIT-1 | ready | | | |
-| 9 | PIT-3 | The in-force-at-date lookup must reach **circulars**, not only Acts and Rules. SEBI reg. 27(2)(a) has no timeline in the regulation; the 30-day figure lives in a Dec-2024 circular. | PIT-1 | ready | | | |
-| 10 | AGM-1 | Store `agm_actual` and `agm_due` separately; derive MGT-7 (60d), AOC-4 (30d), ADT-1 (15d) from the pivot. Handle the Registrar's 3-month extension (not for a first AGM) and the OPC carve-out (AOC-4 at 180d, no AGM). | PIT-1 | ready | | | |
-| 11 | KYC-1 | The DIR-3 KYC row — **the demo**. Triennial since G.S.R. 943(E) w.e.f. 31-03-2026; next due 30-06-2028. Every pre-2026 calendar says "30 September, annually" and is wrong. **Pull the gazette first**; the finding is secondary-sourced and must not enter the register on a blog post. | PIT-2 | ready | | | |
-| 12 | PROV-1 | Every retrieved chunk carries `(instrument, section, version, in_force_from, in_force_to)`. Precondition for a safe answer cache; this is retrieval work, not cache work. | — | ready | | | |
-| 13 | BITEMP-1 | Bitemporal statutory facts: `valid_time` (rewritten by a retrospective amendment, including into the past) and `transaction_time` (append-only). Without the second axis we cannot distinguish "we were wrong" from "the law changed" — the entire liability position. | PROV-1 | ready | | | |
-| 14 | CACHE-1 | Answer cache keyed on `H(document)·H(question)·prompt_version·model+params·H(law_state_vector)`, where the vector is the provenance **actually used**. A hit whose versions have moved is a miss **plus an alert**. | BITEMP-1 | ready | | | |
-| 15 | CACHE-2 | Reverse index `(instrument, section, version) -> answer_ids`, so "which tenants received which answers relying on s.X between A and B" is answerable. Invalidation is a notification workflow, not a `DEL`. | CACHE-1 | ready | | | |
-| 16 | RAG-1 | Order retrieved chunks by **position in the source document**, not relevance. OP-RAG: 16K retrieved scored F1 44.43 against 34.32 for a full 128K context. Free accuracy. | PROV-1 | ready | | | |
-| 17 | RAG-2 | Self-Route: one cheap call decides "can I answer from these chunks?", escalating only on no. Maps onto the existing `normal · budget · offline` ladder. (M) | RAG-1 | ready | | | |
-| 18 | ASK-V | Re-verify `/v1/ask`. Its three blocking defects were fixed 19-09 and it has sat "awaiting independent verification" since; nothing may wire a client until that passes. | — | ready | | | |
-| 19 | MCP-1 | MCP server gains OAuth 2.1 + PKCE (S256) and a remote transport, making it BYOMCP-pluggable into Harvey. Thirteen read-only tools, no write of any kind — which is the safe thing to hand an agent. | — | ready | | | |
-| 20 | D4-2 | Wire the lawyer summary into the server and page. **BLOCKED** on Anthropic credit — no Opus call has ever run through the tracer, and its thresholds are unvalidated against real prose. Do not wire an unproven live call. (M) | credit | blocked | | | |
+### Phase A — make failure legible (nothing else can be measured first)
 
-## Log
-- 26-09 04:30 opened. Predecessor loop complete and reported in `docs/NEXT10_REPORT_2026_09_17.md`.
+| # | Move | Done when | Who |
+|---|---|---|---|
+| **1** | **Refusal codes on `placedon.ask/0`.** A typed `refusal` field naming which of the four situations occurred. `ask_scope` already returns `body=None`, `retrieve` returns `ROUTE_ABSTAIN`, `search()` returns `[]` — three distinguishable states collapsing into one output. Codes from PLAN_18 §2.4.1 | The four cases return four different codes; `web/assistant/contract.md` fixtures still pass; a transport error is still NOT a refusal | architect → me |
+| **2** | **Gold set reads the refusal code.** `run.py` stops inferring REFUSED from `state`; it reads the code | The boil-eggs regression from 25-09 is now CAUGHT by the gold set. Re-apply the reverted retrieval fix and prove the gold set rejects it | me |
+| **3** | **G0.3 scope lexicon.** Per-body signal terms from each Act's own text, each citing its provision. UNVERIFIED terms are recorded and NOT used | Dev split: 7/7 practitioner phrasings refuse. No held-law question newly refused. Test split run ONCE | subagent → me |
+| **4** | **G0.4 abbreviation lexicon** from s.2 definitions, each entry citing its provision. Expansion **visible** in the pack, never silent. Do NOT touch `MIN_COVER`/`SCORE_FLOOR` | McNemar vs incumbent on the test split. If n too small: **"undecided at n=…"**, never "improved" | subagent → me |
+| **5** | **G0.5 evidence order** — is `UNFETCHED_CORROBORATION` stronger than `INFERRED`? A legal question, decided and written down, then `provenance.EVIDENCE_ORDER` as a `lattice.Lattice` | Every `STATES` member appears exactly once; the reasoning is in `docs/` | legal reasoning → me |
+
+### Phase B — trust what already exists
+
+| # | Move | Done when | Who |
+|---|---|---|---|
+| **6** | **CI on.** Blocked: the token lacks `workflow`. Web-UI route documented | A PR runs the suite on a clean runner | **FOUNDER** |
+| **7** | **The clean-clone measurement** (PLAN_17 M1.1). Five suites are expected to fail off this laptop — `pypdf`, a `chmod 000` test that root can read, a missing s96 witness, `review.py --test` | Each root cause named. **No assertion weakened.** A missing witness is a SKIP with a reason, never a pass | me |
+| **8** | **`.nic.in` is alive again.** `provenance.py` still excludes it "on purpose: it is dead" — CLAUDE.md records the host now serves real PDFs. The permitted-host list refuses a host that works | A fetch asserts `Content-Type` **and** `%PDF` magic bytes, never status alone | peer session owns `provenance.py` — coordinate |
+| **9** | **Red-team the registry** built in move 0 (G0.1), RT-08…RT-14 style | Findings logged; each fixed with a test or recorded as accepted | subagent → me |
+
+### Phase C — the ontology and the algebra (PLAN_19 G1, G2)
+
+| # | Move | Done when | Who |
+|---|---|---|---|
+| **10** | `checker/ontology.py` — PLAN_19 03 §2. `LINK_TYPES` from `entity_graph.Rel` | A dataclass-field scan proves no `Individual` carries a name/DIN/PAN field | architect → subagent |
+| **11** | `checker/observation_store.py` — append, `as_of`, history, retract. Log first, atomic write. **Read the operation-store red team first** | Theorem 6 replay: append, retract, query at the old `known_at` → byte-identical. A grep test proves no path rewrites or deletes a row | subagent → me |
+| **12** | `event_log` reads `known_at` from the store | The docstring's stated limitation is removed, **and only then** | me |
+| **13** | `checker/derivation.py` — PLAN_19 03 §4 | Property tests, seeded RNG, 500 cases: semiring axioms, minimal-witness == full-DNF, monotonicity. Same-value guard raises | subagent → me |
+| **14** | **The differential test.** Every obligation served today gives an identical verdict and witness through `derivation` | **Zero diffs, or the phase stops.** Do not "fix" the old path to match | me |
+| **15** | `scripts/revocation_report.py` — retract a fact, list the conclusions affected | Demonstrated on G.S.R. 880(E) against a copy of the store | me |
+
+### Phase D — one engine, three surfaces (PLAN_19 G4 = PLAN_17 M3 + M9)
+
+| # | Move | Done when | Who |
+|---|---|---|---|
+| **16** | **Record fixtures of every route and tool FIRST**, before `verbs.py` exists | Byte-exact fixtures committed | me |
+| **17** | `checker/verbs.py` wrapping today's 8 routes and 13 tools. **No behaviour change** | Parity: verb sets equal across surfaces; payloads byte-identical to move 16's fixtures. **No WRITE or ATTEST verb reaches MCP** (RT-10) | subagent → me |
+| **18** | MCP tools generated from `verbs` | `scripts/themis_mcp.py` tests pass **unchanged** | me |
+| **19** | CLI `scripts/themis` generated | `themis company events <cin> --as-of …` equals the HTTP payload byte for byte | subagent → me |
+
+### Phase E — the only move that changes what may be claimed
+
+| # | Move | Done when | Who |
+|---|---|---|---|
+| **20** | **H-C: one practising Company Secretary labels answers.** Open since 4 September — 22 days | ≥ 1 label. At 59, PLAN_16 C1's first calibration becomes possible | **FOUNDER** |
+
+## After each move
+
+Report in CLAUDE.md's code-task format: Files changed · Tests added · Commands run ·
+Results · Known limitations · Commit hash. Plus one line: the next move, and whether
+its entry gate is met.
+
+## Stop conditions (PLAN_19 §4)
+
+- `verify_green.sh` not exit 0 after ONE fix attempt on my own change.
+- A red suite belonging to a peer session → **wait, do not touch it**.
+- A reviewer veto.
+- A blocked or egress-denied source → record `[BLOCKED]`, move to the next unblocked step.
+- A schema, ring or dependency change with no architect record.
+- Any temptation to state a rate below n = 30, or to score a test split twice.
+- Three consecutive moves with no commit → report why rather than continuing.
+
+## Not a stop condition
+
+"The plan is complete." Moves 6 and 20 are the two that matter most and neither is
+mine. Nineteen of these twenty moves can be done without a single lawyer seeing the
+product, which is the failure mode this repository documents about itself.
