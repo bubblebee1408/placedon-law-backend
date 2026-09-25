@@ -364,3 +364,126 @@ Note for India: **astrealegal.com is an Indian law firm**, not a vendor. Easy to
 5. **Bitemporal statutory facts.** Not deferrable — it is the liability position, and retrofitting a
    second time axis after answers exist is much harder than starting with it.
 6. Order retrieved chunks by source position; implement Self-Route onto the existing mode ladder.
+
+
+---
+
+# Part III — compliance, DPDP, and a repo belief that has gone stale (26-09-2026)
+
+The third stream returned. It read primary sources: the India Code consolidated Act with amendment
+footnotes, SEBI LODR as amended to 22-01-2026, SEBI circular 185 of 31-12-2024, and the CERT-In
+s.70B directions. Rule-level items (forms, thresholds in subordinate legislation) are mostly
+secondary and it says so — **no [I]-tagged rule-level deadline enters the corpus without the G.S.R.**
+
+## 9. A verified correction to CLAUDE.md, found while checking the report's method
+
+The report cited `www.indiacode.nic.in`. `CLAUDE.md` states that host "403s everything", that the
+live host is `indiacode.gov.in`, and that "any hardcoded `.nic.in` URL is dead". **Measured today,
+that is false, and the truth is worse than merely being out of date:**
+
+| URL | Content-Type | Result |
+|---|---|---|
+| `www.indiacode.nic.in/bitstream/123456789/2114/5/A2013-18.pdf` | `application/pdf` | **200, 3.2 MB, a real 370-page Companies Act 2013** — parsed by our own reader, contains s.2(85) |
+| `indiacode.gov.in/bitstream/123456789/2114/5/A2013-18.pdf` | `text/html` | **200, 6.7 KB — the DSpace Angular shell.** A soft-404. |
+
+Two consequences, and the second is the dangerous one:
+
+1. The `.nic.in` host is **not** dead for bitstream paths. `checker/provenance.py:55` excludes it "on
+   purpose: it is dead", so our permitted-host list currently refuses a host that serves the
+   authoritative file.
+2. **`indiacode.gov.in` returns HTTP 200 with an HTML page for bitstream paths.** Any fetcher that
+   checks only the status code gets an Angular shell where it believes it has a PDF. That is the
+   silent-failure class this repository exists to refuse, sitting in the one host we do permit.
+
+**Buildable requirement:** the fetch path must assert `Content-Type` and magic bytes, not status
+code. A 200 that is not `application/pdf` starting `%PDF` is a failure, and must be recorded as one.
+The REST API (`indiacode.gov.in/server/api`) is unaffected and remains correct.
+
+## 10. The three findings that change what we build
+
+### 10.1 DIR-3 KYC stopped being annual, and nobody's calendar knows
+
+G.S.R. 943(E) of 31-12-2025, w.e.f. **31-03-2026**, replaced annual director KYC with a **triennial**
+filing due 30 June of every third financial year. Directors current at the changeover are next due
+**30 June 2028**. *Every compliance calendar published before 2026 says "30 September, annually" and
+is now wrong.*
+
+**This is the demo.** It is a live, checkable, recent instance of exactly the failure the product
+exists to catch, in a filing every company secretary knows. It is worth more than any synthetic
+example — and note we removed "DIR-3 KYC" from the website copy last week because no such obligation
+row exists in the register. Building the row is now the highest-value single obligation we could add.
+Pull the gazette before shipping it; the finding is secondary-sourced.
+
+### 10.2 G.S.R. 880(E) consumed all the statutory headroom
+
+The small-company thresholds now sit at **₹10 cr paid-up / ₹100 cr turnover** — which are the Act's
+own ceilings in s.2(85) ("not more than ten crore", "not more than one hundred crore"). **The rule
+has used up all available room; the next expansion needs an amending Act, not a rule.**
+
+The consequence is not cosmetic. A large population became "small" on 01-12-2025 and thereby dropped
+from **4 board meetings with a 120-day maximum gap to 2 meetings with a 90-day gap** (s.173(5)), and
+from MGT-7 to MGT-7A. Applying today's threshold to an FY2024-25 document produces exactly the wrong
+answer — and 880(E) is already the instrument our provenance chain holds and serves.
+
+### 10.3 Applicability has had five answers, and that is the product
+
+"Is this a small company?" changed on **13-02-2015, 09-02-2018, 01-04-2021, 15-09-2022 and
+01-12-2025.** The same pattern holds for the s.135 CSR test period (19-09-2018), the s.177 net
+(07-05-2018), the s.204 loan limb (FYs from 01-04-2020) and DIR-3 KYC's entire periodicity
+(31-03-2026).
+
+**So the data model is `applicable(company_facts, obligation, as_at_date) -> decision + the
+instrument version relied on` — never a boolean stored against a company record.** That sentence is
+the architecture. A stored flag is wrong the moment a rule moves, and wrong silently.
+
+## 11. DPDP — the honest answer, which is not the expected one
+
+**As of today, essentially no DPDP obligation binds a data fiduciary.** ss.3–17 of the Act and Rules
+3, 5–16 commence **13 May 2027**. The law actually governing a client document sent to a US endpoint
+today is still **IT Act s.43A + the SPDI Rules 2011**, under which transfer is lawful on a
+consent-plus-contract basis with **no country whitelist and no approval step**.
+
+From 13-05-2027 the test becomes s.16 + Rule 15 — and DPDP is **blacklist**, not adequacy: transfer
+is permitted by default and becomes unlawful only to a country the Government notifies. No country
+has been notified.
+
+**So a US endpoint is lawful now and probably lawful in 2027.** The risks that are real are
+different from the ones usually cited:
+
+- **Rule 13(4)** lets the Government bar offshore transfer of specified categories for a Significant
+  Data Fiduciary — a blank cheque not yet filled in. Buildable requirement: a per-tenant **"no data
+  leaves India" mode that is a real deployment**, not a setting that still calls a US endpoint.
+- **CERT-In's 180-day log retention is in force now** and is a localisation requirement today.
+- **Professional confidentiality is where an Indian CS or advocate will actually push back**, and it
+  is not a data-protection question at all. A board resolution or shareholders' agreement is mostly
+  *corporate* information; a DPDP analysis does not answer the confidentiality objection and must not
+  be allowed to stand in for one.
+
+### 11.1 "India region" almost never means in-region inference
+
+| Provider | Reality |
+|---|---|
+| **AWS Bedrock** ap-south-1/2 | Current Claude models are reached via **Global cross-region inference — requests from Mumbai/Hyderabad route to AWS commercial Regions, i.e. inference leaves India.** Logs stay in-region; inference does not. |
+| **Anthropic first-party** | No India region. US/EU/CH/AU. |
+| **Azure OpenAI** | Central/South/West India regions; the strongest residency story — **verify per model**, since new models land in India late or not at all. |
+| **Google Vertex** | asia-south1/2 with real residency control, but a thin in-region model catalogue. |
+| **OpenAI** | India residency reported as **at-rest only, with inference still on US infrastructure** — which would not satisfy a Rule 13(4)-style obligation. Unverified; confirm with OpenAI directly. |
+
+**The pattern: "India region" is data-at-rest residency, not frontier-model inference in India.** A
+promise that documents never leave India currently costs either an older in-region model, Azure
+OpenAI with per-model verification, or self-hosting open weights. That segment — listed companies,
+PSUs, banks — is disproportionately the one that pays most.
+
+## 12. The three constraints that bind hardest
+
+1. **The "in force at date D" lookup must reach circulars, not only Acts and Rules.** SEBI reg.
+   27(2)(a) now contains **no timeline at all** — it says "as specified by the Board from time to
+   time", and the 30-day figure lives in a December 2024 circular. MCA's CCFS-2026 relief existed
+   only between 15-04-2026 and 31-08-2026. An engine admitting only statutes silently produces "no
+   deadline" or the wrong one.
+2. **Applicability is a computed, dated predicate** (§10.3).
+3. **Almost every annual deadline hangs off one stored event — the actual AGM date — and the fallback
+   when it is absent is worded differently in s.92(4) and s.137(2).** Store `agm_actual` and
+   `agm_due` separately; derive MGT-7 (60d), AOC-4 (30d), ADT-1 (15d) from the pivot; handle the
+   Registrar's 3-month extension (unavailable for a first AGM) and the OPC carve-out (AOC-4 at 180
+   days from FY close, no AGM at all). Getting this wrong is wrong for every company, every year.
