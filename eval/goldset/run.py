@@ -39,11 +39,13 @@ def ask(question: str) -> tuple[Outcome | None, str]:
     if code >= 500:
         return None, f"HTTP {code}: {str(body)[:120]}"
     state = str(body.get("state", ""))
+    refs = tuple(str(c.get("ref", "")) for c in (body.get("confirmed") or [])
+                 if isinstance(c, dict))
     text = body.get("answer") or body.get("reason") or str(body)
     refused = (state in _REFUSAL_STATES
                or code == 422
                or bool(body.get("refused")))
-    return Outcome("", REFUSED if refused else ANSWERED, str(text)), ""
+    return Outcome("", REFUSED if refused else ANSWERED, str(text), refs), ""
 
 
 def main(argv: list[str]) -> int:
@@ -59,7 +61,7 @@ def main(argv: list[str]) -> int:
         if got is None:
             errors.append((e.question_id, err))
             continue
-        outcomes.append(Outcome(e.question_id, got.behaviour, got.text))
+        outcomes.append(Outcome(e.question_id, got.behaviour, got.text, got.refs))
     rep = score(entries, outcomes)
     print(rep.sentence())
     if errors:

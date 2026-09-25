@@ -128,7 +128,17 @@ class Entry:
     question: str
     provenance: str
     expected: str | None = None          # SHOULD_ANSWER / SHOULD_REFUSE, or None
-    expected_substrings: tuple[str, ...] = ()   # must appear in a correct answer
+    expected_substrings: tuple[str, ...] = ()   # must appear in a correct answer's prose
+    # The corpus refs that must reach the evidence pack, e.g.
+    # "ACT:COMPANIES_ACT_2013:S173". Added 2026-09-25 because `expected_substrings`
+    # was the wrong instrument for what this engine actually produces. It returns an
+    # evidence PACK, not prose -- `answer` is empty and the content lives in
+    # `confirmed` -- so a substring test would have been matching against a JSON dump
+    # of the whole response. That passes whenever the phrase appears ANYWHERE,
+    # including inside a provision retrieved for an unrelated reason, and would have
+    # scored retrieval noise as correctness. Asking "did the right provision reach
+    # the pack" is a question this system can actually be wrong about.
+    expected_refs: tuple[str, ...] = ()
     rule: str = ""                       # MECHANICAL: the check, stated
     labelled_by: str = ""                # HUMAN: who, by name
     labelled_on: str = ""                # HUMAN: when, ISO date
@@ -176,6 +186,7 @@ class Outcome:
     question_id: str
     behaviour: str                        # ANSWERED / REFUSED
     text: str = ""
+    refs: tuple[str, ...] = ()            # refs that reached the evidence pack
 
     def __post_init__(self) -> None:
         if self.behaviour not in BEHAVIOURS:
@@ -294,10 +305,17 @@ def score(entries, outcomes) -> Report:
             if got.behaviour == REFUSED:
                 ok, why = False, "refused a question it should have been able to answer"
             else:
-                miss = [s for s in e.expected_substrings if s.lower() not in got.text.lower()]
-                ok = not miss
-                why = ("answered, and every required element is present" if ok else
-                       f"answered, but omitted: {', '.join(miss)}")
+                miss_refs = [r for r in e.expected_refs if r not in got.refs]
+                miss_sub = [s for s in e.expected_substrings
+                            if s.lower() not in got.text.lower()]
+                ok = not miss_refs and not miss_sub
+                if miss_refs:
+                    why = (f"answered, but the governing provision never reached the pack: "
+                           f"{', '.join(miss_refs)}")
+                elif miss_sub:
+                    why = f"answered, but omitted: {', '.join(miss_sub)}"
+                else:
+                    why = "answered, and the governing provision is in the pack"
         scored.append(Scored(e, got, ok, why))
     return Report(tuple(scored), synthetic, tuple(missing))
 
@@ -315,6 +333,7 @@ def load(path: Path | None = None) -> tuple[Entry, ...]:
         try:
             d = json.loads(line)
             d["expected_substrings"] = tuple(d.get("expected_substrings") or ())
+            d["expected_refs"] = tuple(d.get("expected_refs") or ())
             out.append(Entry(**d))
         except Exception as exc:                          # noqa: BLE001
             raise ValueError(f"{p}:{i}: {type(exc).__name__}: {exc}") from exc
@@ -328,6 +347,7 @@ def save(entries, path: Path | None = None) -> Path:
     for e in entries:
         d = asdict(e)
         d["expected_substrings"] = list(d["expected_substrings"])
+        d["expected_refs"] = list(d["expected_refs"])
         rows.append(json.dumps(d, ensure_ascii=False, sort_keys=True))
     p.write_text("\n".join(rows) + ("\n" if rows else ""), encoding="utf-8")
     return p
