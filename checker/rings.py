@@ -102,6 +102,7 @@ REGISTRY: dict[str, int] = {
     # ── RING 0 — statute, obligations, deciders, currency, entailment ──────
     "applicability": RING_0,
     "checker.obligations": RING_0,
+    "checker.instrument_registry": RING_0,  # pointers to the register scripts; PLAN_19 G0.1
     "checker.s180": RING_0,             # borrowing-limit decider, same family as s185/6/8
     "checker.s184": RING_0,             # director-interest decider, same family as s185/6/8
     "checker.s185": RING_0,
