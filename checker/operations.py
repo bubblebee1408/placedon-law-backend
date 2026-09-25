@@ -62,7 +62,7 @@ import re
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 
-from checker.currency import affected_by
+from checker.currency import acquisition_for, affected_by
 from checker.obligations import REGISTER
 
 __all__ = ["Requirement", "Operation", "EvidenceBudget", "Watchlist", "WatchedCompany",
@@ -276,23 +276,32 @@ def operation_for_instrument(instrument: str, *, trigger: dict,
     by_id = {o.obligation_id: o for o in REGISTER}
     reqs: list[Requirement] = []
 
-    # R0, always first and always blocking: has anyone actually read the instrument?
-    # Every other requirement below is downstream of this one, because the reverse
-    # index matched a NAME, not a text. `affected_by` matches an instrument string
-    # against declared thresholds; it does not open the Gazette.
+    # R0: has anyone actually read the instrument? Every other requirement below is
+    # downstream of this one, because the reverse index matched a NAME, not a text.
+    # `affected_by` matches an instrument string against declared thresholds; it does
+    # not open the Gazette.
+    #
+    # PLAN_17 M1.3: this requirement used to be created UNCONDITIONALLY. G.S.R. 880(E)
+    # was acquired, hashed and attested by a named reviewer on 2026-09-10, and every
+    # operation raised on it still opened with a blocking demand to go and acquire it.
+    # Work a person has already done, demanded again, is not caution -- it is a queue
+    # nobody can ever empty, and it teaches a reviewer to close requirements without
+    # reading them. Asked rather than assumed, through the same gate as everywhere else.
     read_id = _rid(instrument, "read")
-    reqs.append(Requirement(
-        requirement_id=read_id,
-        question=(f"Acquire and attest {instrument}: does its text in fact change the "
-                  "threshold the register attributes to it, and from what date?"),
-        obligation_id="(instrument)",
-        provision=instrument,
-        specialist=LEGAL_RESEARCH,
-        criticality=BLOCKING,
-        minimum_evidence="the instrument acquired from the Gazette, hashed, and human-attested",
-        note=("The reverse index matched this instrument by NAME against declared "
-              "thresholds. Nobody has read it yet."),
-    ))
+    acq = acquisition_for(instrument)
+    if acq is None or not acq.read:
+        reqs.append(Requirement(
+            requirement_id=read_id,
+            question=(f"Acquire and attest {instrument}: does its text in fact change the "
+                      "threshold the register attributes to it, and from what date?"),
+            obligation_id="(instrument)",
+            provision=instrument,
+            specialist=LEGAL_RESEARCH,
+            criticality=BLOCKING,
+            minimum_evidence="the instrument acquired from the Gazette, hashed, and human-attested",
+            note=("The reverse index matched this instrument by NAME against declared "
+                  "thresholds. Nobody has read it yet."),
+        ))
 
     for oid in obligation_ids:
         ob = by_id.get(oid)
@@ -459,12 +468,34 @@ def _test() -> None:
     check(not any(hasattr(r, "finding") for r in op.requirements),
           "no requirement has anywhere to record a legal conclusion")
 
-    # ---- the first requirement is 'has anyone read it' --------------------------
-    first = op.requirements[0]
+    # ---- 'has anyone read it' is ASKED, not assumed ------------------------------
+    # PLAN_17 M1.3. This block used to assert the acquire-and-attest requirement was
+    # always created and always first. G.S.R. 880(E) was acquired, hashed and
+    # attested by a named reviewer on 2026-09-10, and every operation raised on it
+    # still opened by demanding someone go and acquire it. A queue that regrows work
+    # already done teaches a reviewer to close requirements without reading them.
+    from checker.prescribed_thresholds import all_acquired, none_acquired
+
+    with none_acquired():
+        unread = operation_for_instrument("880", trigger=trigger, watchlist=wl)
+    first = unread.requirements[0]
     check(first.criticality == BLOCKING and "Acquire and attest" in first.question,
-          "the first blocking requirement is to acquire and attest the instrument")
+          "an UNACQUIRED instrument still opens with a blocking acquire-and-attest")
     check("matched this instrument by NAME" in first.note,
           "...and it says the index matched a name, not a text")
+
+    with all_acquired():
+        done = operation_for_instrument("880", trigger=trigger, watchlist=wl)
+    check(not any("Acquire and attest" in r.question for r in done.requirements),
+          "an ATTESTED instrument creates no requirement to go and acquire it")
+    check(len(done.requirements) == len(unread.requirements) - 1,
+          f"...exactly one requirement fewer, not a reshuffle "
+          f"({len(done.requirements)} vs {len(unread.requirements)})")
+    check(not done.budget().can_close,
+          "...and the operation still cannot close: the terminal human review remains")
+    check(any(r.specialist == HUMAN_REVIEW and r.criticality == BLOCKING
+              for r in done.requirements),
+          "...because a person still has to decide what follows, which is the point")
 
     # ---- three specialist types, and the human is one of them -------------------
     used = {r.specialist for r in op.requirements}
@@ -486,8 +517,17 @@ def _test() -> None:
     check(not b.can_close, "...and cannot be closed")
     check("no conclusion may be drawn" in b.sentence(),
           "the budget sentence refuses a conclusion while blocking work is open")
-    check(isinstance(b.blocking_open, tuple) and len(b.blocking_open) >= 2,
-          f"the acquire and the review requirements both block ({len(b.blocking_open)})")
+    # 880(E) is attested, so the only blocker left is the terminal human review --
+    # and that is the correct answer, not a weakened one. The two-blocker case is
+    # asserted where it is real: on an instrument nobody has read.
+    check(isinstance(b.blocking_open, tuple) and b.blocking_open,
+          f"the budget names its blockers by id, not merely counts them ({b.blocking_open})")
+    check(set(b.blocking_open) <= {r.requirement_id for r in op.requirements},
+          "...and every id it names is a requirement of this operation")
+    with none_acquired():
+        b2 = operation_for_instrument("880", trigger=trigger, watchlist=wl).budget()
+    check(len(b2.blocking_open) == len(b.blocking_open) + 1,
+          f"an unread instrument blocks on the acquire AND the review ({len(b2.blocking_open)})")
     check(sum(b.open_by_specialist.values()) == b.total - b.satisfied,
           "open work is accounted for per specialist")
 
