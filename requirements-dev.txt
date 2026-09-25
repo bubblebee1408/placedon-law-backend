@@ -1,10 +1,15 @@
 -r requirements.txt
 uvicorn==0.42.0
 pdfplumber==0.11.10
-# Page-level PDF extraction for OFFLINE tooling only (checker/pdf_pages.py).
-# BSD-3-Clause, pure Python, zero mandatory transitive deps. Never imported by
-# checker/api.py or backend/ -- pdf_pages._test() asserts that boundary, so the
-# README's "no dependencies outside the standard library" stays true of the
-# served path. pdfplumber above is retained as the INDEPENDENT oracle in
-# scripts/text_layer_census.py; a single reader cannot judge itself.
+# TWO readers, and which is which was SWAPPED on 25-09-2026 (D-002b).
+# pdfplumber above is now the page-level extractor for OFFLINE tooling
+# (checker/pdf_pages.py); pypdf below is now the INDEPENDENT oracle in
+# scripts/text_layer_census.py. The roles swapped rather than merging, because a
+# single reader cannot judge itself -- that independence is what caught SD-006.
+# Why the swap: pypdf invented spaces inside words ("Board an d its", 4 artifacts
+# where pdfplumber and poppler each had 0) and emitted /uniXXXX glyph NAMES for
+# the bilingual gazette's Devanagari (2,423 real chars vs pdfplumber's 18,775).
+# Neither is imported by checker/api.py or backend/ -- pdf_pages._test() asserts
+# that boundary, so the README's "no dependencies outside the standard library"
+# stays true of the served path.
 pypdf==6.16.1
