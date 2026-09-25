@@ -80,7 +80,34 @@ class Candidate:
     list_item: str | None = None
 
 
-def _get(url: str, timeout: float = 45.0) -> bytes | None:
+# India Code answers a path it does not serve with **HTTP 200 and the DSpace Angular
+# shell** rather than a 404. Measured 26-09-2026:
+# `indiacode.gov.in/bitstream/123456789/2114/5/A2013-18.pdf` -> 200, `text/html`, 6.7 KB,
+# while the same path on `www.indiacode.nic.in` -> 200, `application/pdf`, 3.2 MB, 370 pages.
+# A caller that checks only the status code therefore believes it has an instrument and
+# has a web page. This module decoded whatever came back as the commencement text of an
+# Act, so the soft-404 would have entered the record as law.
+_SOFT_404 = "text/html"
+
+
+def _looks_like_markup(body: bytes) -> bool:
+    """A payload that opens as HTML, whatever the header claimed.
+
+    Belt and braces to the Content-Type check: a misconfigured host can serve the shell
+    as `text/plain`. Only the opening bytes are examined, because a legitimate statutory
+    text can of course *mention* a tag later on.
+    """
+    head = body[:512].lstrip().lower()
+    return head.startswith((b"<!doctype html", b"<html", b"<?xml-stylesheet"))
+
+
+def _get(url: str, timeout: float = 45.0, *, expect_markup: bool = False) -> bytes | None:
+    """The bytes at `url`, or None. **Never HTML where HTML was not asked for.**
+
+    `expect_markup=True` is for callers that genuinely want a page. Everything else
+    refuses markup, because the failure this guards is silent: the status is 200, the
+    bytes decode cleanly, and the result reads as the text of an instrument.
+    """
     ctx = ssl_context()
     if ctx is None:
         return None
@@ -91,7 +118,15 @@ def _get(url: str, timeout: float = 45.0) -> bytes | None:
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     try:
         with urllib.request.urlopen(req, timeout=timeout, context=ctx) as r:
-            return r.read() if r.status == 200 else None
+            if r.status != 200:
+                return None
+            body = r.read()
+            if expect_markup:
+                return body
+            ctype = (r.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+            if ctype == _SOFT_404 or _looks_like_markup(body):
+                return None
+            return body
     except Exception:
         return None
 
@@ -306,6 +341,19 @@ def _test() -> None:
           "section 31 is commenced by the 7 May 2018 instrument")
     check(not any(x["date"] == "2018-02-09" for x in r31["hits"]),
           "section 31 is not attributed to the 9 Feb instrument")
+
+    # ── the soft-404 (26-09-2026) ────────────────────────────────────────────
+    # India Code answers an unserved path with 200 and the Angular shell. Decoding that
+    # as an instrument's text is the failure this guards, and it is silent: status 200,
+    # clean UTF-8, plausible length.
+    check(_looks_like_markup(b"<!DOCTYPE html>\n<html lang=\"hi\">"),
+          "the DSpace shell is recognised as markup")
+    check(_looks_like_markup(b"   \n  <html>"), "leading whitespace does not hide markup")
+    check(not _looks_like_markup(
+        b"THE COMPANIES ACT, 2013\n\n2(85) small company means a company <other than "
+        b"a public company>"),
+          "statutory text that merely contains a bracketed phrase is not markup")
+    check(not _looks_like_markup(b""), "empty bytes are not markup (they fail elsewhere)")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:
