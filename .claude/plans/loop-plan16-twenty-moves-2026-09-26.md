@@ -53,11 +53,11 @@ printed. The Anthropic account had **no credit** at 25-09 — any move needing a
 
 | # | ID | Move | Depends | Status | Impl | Ver | Commits |
 |---|---|---|---|---|---|---|---|
-| 1 | BUD-1 | `budget.py`: distinguish the spend-cap 429 (`enforced_spend_limit_reached`, no `retry-after`) from a rate-limit 429. Retrying the former fails for the rest of the month. | — | **running** | a2ad2c389a8b5bb9d | | |
-| 2 | BUD-2 | `cost_inr()` takes **four** counters: `input`, `cache_creation`, `cache_read`, `output`. `input_tokens` counts only tokens after the last cache breakpoint — treating it as total under-bills by up to 90%. | BUD-1 | **running** | a2ad2c389a8b5bb9d | | |
-| 3 | BUD-3 | Tokens-per-page **per model**. Claude 4.7+ produces ~30% more tokens for identical text, so `PRICING` alone is half a cost model. | BUD-2 | **running** | a2ad2c389a8b5bb9d | | |
-| 4 | BUD-4 | `Store` Protocol gains `reserve`/`settle`. Reserve the worst case (`count_tokens` + `max_tokens`); settle to actual. A guard that only records after the fact cannot refuse. | BUD-3 | **running** | a2ad2c389a8b5bb9d | | |
-| 5 | FETCH-1 | Generalise `04664f5`: every fetcher asserts Content-Type and magic bytes, not status alone. `checker/robots.py`, `commencement.py`, `revocation.py`, the watchers. | — | **running** | ac3998707ad496e80 | | |
+| 1 | BUD-1 | `budget.py`: distinguish the spend-cap 429 (`enforced_spend_limit_reached`, no `retry-after`) from a rate-limit 429. Retrying the former fails for the rest of the month. | — | **verifying** | a2ad2c389a8b5bb9d | a3b19d0cdf969bada | `66c9a5c` |
+| 2 | BUD-2 | `cost_inr()` takes **four** counters: `input`, `cache_creation`, `cache_read`, `output`. `input_tokens` counts only tokens after the last cache breakpoint — treating it as total under-bills by up to 90%. | BUD-1 | **verifying** | a2ad2c389a8b5bb9d | a3b19d0cdf969bada | `6553cc4` |
+| 3 | BUD-3 | Tokens-per-page **per model**. Claude 4.7+ produces ~30% more tokens for identical text, so `PRICING` alone is half a cost model. | BUD-2 | **verifying** | a2ad2c389a8b5bb9d | a3b19d0cdf969bada | `28bc194` |
+| 4 | BUD-4 | `Store` Protocol gains `reserve`/`settle`. Reserve the worst case (`count_tokens` + `max_tokens`); settle to actual. A guard that only records after the fact cannot refuse. | BUD-3 | **verifying** | a2ad2c389a8b5bb9d | a3b19d0cdf969bada | `7f50c89` |
+| 5 | FETCH-1 | Generalise `04664f5`: every fetcher asserts Content-Type and magic bytes, not status alone. `checker/robots.py`, `commencement.py`, `revocation.py`, the watchers. | — | **verifying** | ac3998707ad496e80 | ae5d88d9536b68422 | `1c0ca81` `8e27345` |
 | 6 | FETCH-2 | `provenance.py`: re-admit `www.indiacode.nic.in` (it serves the real PDFs) **with** the FETCH-1 content check, and record why the earlier exclusion was wrong. | FETCH-1 | ready | | | |
 | 7 | PIT-1 | `applicable(company_facts, obligation, as_at_date) -> decision + instrument version relied on`. Never a boolean stored against a company. "Is this a small company?" has had five answers. | — | ready | | | |
 | 8 | PIT-2 | Threshold history as data: s.2(85) (13-02-2015, 09-02-2018, 01-04-2021, 15-09-2022, 01-12-2025), s.135 (19-09-2018), s.177 (07-05-2018), s.204 (01-04-2020). Each with its instrument. | PIT-1 | ready | | | |
@@ -113,3 +113,28 @@ printed. The Anthropic account had **no credit** at 25-09 — any move needing a
   two append-only ledgers in one repo is how they drift, which is the same warning I had just given
   BUD about its `reserve`/`settle` persistence. I came within one launch of shipping the duplicate I
   was warning about, and only checking the commits stopped it.
+- 27-09 00:00 **all five in-flight moves committed; both verifiers launched.** BUD-1…4 =
+  `66c9a5c` `6553cc4` `28bc194` `7f50c89`; FETCH-1 = `1c0ca81` `8e27345`.
+- 27-09 **FETCH-1 found a LIVE fail-open, not a latent one, and it is the best thing this loop has
+  produced so far.** `robots.fetch_rules` treated an HTML page served at `/robots.txt` as a
+  successfully loaded ruleset with no directives — and `allowed()` reads "loaded, no rules" as **full
+  permission**. Measured: `www.treasury.gov/robots.txt` 301s to `home.treasury.gov/`, an HTML
+  homepage; urllib follows it; `parse()` finds no directives in markup. **A web page was being used
+  as robots policy.** Now `loaded=False`. Verified by the main session from the diff and corroborated
+  at `checker/feeds/ofac_sdn.py:15`.
+  It also disproved one of its own comments rather than shipping it: it had written that the existing
+  count check "would miss a page stating no Record_Count", measured it, and found `_publish_info`
+  already returns `stated=None` for a page so `poll()` already held. Its guard is not what stops a web
+  page becoming a zero-entry sanctions list on that path — the count check is. It rewrote the comment
+  to say what it measured, including that the count check does the work there.
+- 27-09 **A correction to FETCH-1's git lesson, which is wrong in a way that matters.** Its report
+  says *"'stage by name' is not sufficient in this repo... `git commit --only <paths>` is the form
+  that is actually safe."* The hazard it describes is real — it caught a peer staging
+  `docs/plan19/decisions/M13_DERIVATION.md` into the shared index while its own commit sat inside the
+  multi-minute pre-commit hook, and a **bare** `git commit` would have swallowed it. But the remedy is
+  misstated. `git commit --help`: *"-o, --only ... **This is the default mode of operation of git
+  commit if any paths are given on the command line**, in which case this option can be omitted."*
+  So `git commit -F - -- <paths>`, which this loop and its agents have used throughout, **already has
+  `--only` semantics and was never at risk.** The danger is specifically a bare `git commit` with no
+  pathspec. Recorded because the wrong lesson — "explicit paths do not protect you" — would make the
+  next agent distrust a form that is safe, or invent a more elaborate one that is not safer.
