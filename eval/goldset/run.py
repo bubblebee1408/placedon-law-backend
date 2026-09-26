@@ -178,11 +178,16 @@ def ask(question: str) -> tuple[Outcome | None, str]:
     state = str(body.get("state", ""))
     refs = tuple(str(c.get("ref", "")) for c in (body.get("confirmed") or [])
                  if isinstance(c, dict))
+    # The route the retriever took. Served in the payload since before this harness
+    # existed; not read until 2026-09-26, which is why the harness could not see a
+    # regression that turned `abstain` into `search` on an off-topic question.
+    route = str(((body.get("evidence_pack") or {}) if isinstance(body.get("evidence_pack"), dict)
+                 else {}).get("route", ""))
     text = body.get("answer") or body.get("reason") or str(body)
     refused = (state in _REFUSAL_STATES
                or code == 422
                or bool(body.get("refused")))
-    return Outcome("", REFUSED if refused else ANSWERED, str(text), refs), ""
+    return Outcome("", REFUSED if refused else ANSWERED, str(text), refs, route), ""
 
 
 def main(argv: list[str]) -> int:
@@ -220,7 +225,7 @@ def main(argv: list[str]) -> int:
         if got is None:
             errors.append((e.question_id, err))
             continue
-        outcomes.append(Outcome(e.question_id, got.behaviour, got.text, got.refs))
+        outcomes.append(Outcome(e.question_id, got.behaviour, got.text, got.refs, got.route))
     rep = score(selected, outcomes)
     print(rep.sentence())
     if errors:

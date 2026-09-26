@@ -178,3 +178,74 @@ test somebody wrote weeks ago.
 `checker/text_search.py` unchanged, 47/47. Gold set at its baseline. The retrieval
 finding stays OPEN, and is now explicitly **blocked on** the refusal-code work rather
 than on more evaluation data.
+
+---
+
+# Correction, 2026-09-26: "byte-identical" was too strong, and one field already exists
+
+Checked while designing the fix (move 1 of `.claude/plans/loop-twenty-moves-2026-09-26.md`).
+Two corrections to the above, one narrowing the claim and one materially changing the
+design.
+
+## 1. The payloads are not byte-identical. They differ in one field, and it is the input
+
+A field-by-field diff of the full `placedon.ask/0` response across all four cases:
+
+```
+2 s.92 (held, missed)   differs from case 1 in: ['evidence_pack']
+3 off-topic             differs from case 1 in: ['evidence_pack']
+4 wrong jurisdiction    differs from case 1 in: ['evidence_pack']
+```
+
+and inside `evidence_pack`, the **only** differing key is `retrieval_query` — the
+question echoed back. Every other field matches: `state`, `confirmed`,
+`not_confirmed`, `law_version`, `context`, `route`.
+
+So the honest statement is **"identical apart from the question echoed back"**, and
+an echo of the input is not a signal about the answer. The finding stands; the word
+"byte-identical" did not, and is withdrawn.
+
+## 2. `evidence_pack.route` is already served — and is `abstain` for all four
+
+This matters more. The response already carries a typed retrieval route
+(`checker/retrieve.py:42-44`: `exact` / `search` / `abstain`), and a client can
+already read it. The problem is not that there is nowhere to put a reason. It is that
+**one route value covers four situations**:
+
+| Case | `route` |
+|---|---|
+| DPDP — body not held | `abstain` |
+| s.92 — held, retrieval missed it | `abstain` |
+| boiling eggs — not a legal question | `abstain` |
+| Delaware — wrong jurisdiction | `abstain` |
+
+## What this changes about the fix
+
+The earlier version of this document proposed a new top-level refusal field. That was
+designed against a wrong premise. The smaller and more honest change is to **make the
+existing vocabulary finer** rather than add a parallel one beside it — a second field
+meaning almost the same thing as `route` is how two notions of truth start.
+
+It also means `web/assistant/contract.md` §6 D4 is more nearly right than the earlier
+text credited. The contract **already** names typed reasons for the `partial` case —
+`NOTHING_DECIDED`, `TEXT_NO_FACTS`, `TEXT_NO_ROW`, `LEXICAL`, `FACTS_NOT_APPLIED`,
+`UNRESTED` — with the rule that each is "used **only where it is true**". The gap is
+narrower and more specific than "there is no vocabulary": **`NOTHING_DECIDED` is
+doing the work of four different facts**, and nothing distinguishes "we do not hold
+this body of law" from "we hold it and did not find it".
+
+## What does NOT change
+
+The experiment still stands, and it is the reason this is move 1. A retrieval fix
+that made the engine answer *"how long should I boil eggs"* with `s.123, s.174,
+s.178` scored **identically** on the gold set to the clean engine. `route` was
+`abstain` before and `search` after — so a harness reading `route` would have caught
+it, and `run.py` did not read `route`. That is now move 2's job, and it is a smaller
+job than it looked.
+
+## Method note on this correction
+
+The overstatement was mine and went into a commit (`052c8a5`). It survived because I
+compared `state` and `not_confirmed` by eye and generalised to the whole payload
+without diffing it. The diff took four minutes. The claim was directionally right,
+which is exactly the kind of claim that does not get checked.

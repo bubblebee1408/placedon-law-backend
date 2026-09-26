@@ -205,6 +205,14 @@ class Outcome:
     behaviour: str                        # ANSWERED / REFUSED
     text: str = ""
     refs: tuple[str, ...] = ()            # refs that reached the evidence pack
+    # `evidence_pack.route` -- "exact" | "search" | "abstain" (checker/retrieve.py).
+    # Read from 2026-09-26. Without it this harness could not tell "answered with
+    # nothing" from "answered with garbage": a retrieval change that made the engine
+    # return s.123/174/178 for "how long should I boil eggs" scored IDENTICALLY to the
+    # clean engine, because both classify as ANSWERED. `route` was `abstain` before
+    # that change and `search` after, so the signal was in the payload all along and
+    # this file was not reading it.
+    route: str = ""
 
     def __post_init__(self) -> None:
         if self.behaviour not in BEHAVIOURS:
@@ -234,6 +242,19 @@ class Report:
         rows = [s for s in self.scored if s.entry.expected == expectation
                 and (split is None or s.entry.split == split)]
         return sum(1 for s in rows if s.correct), len(rows)
+
+    @property
+    def served_when_refusing(self) -> tuple[Scored, ...]:
+        """SHOULD_REFUSE rows where the engine actually RETRIEVED provisions.
+
+        Strictly worse than an empty pack, and the distinction the harness was blind
+        to until 2026-09-26. An empty pack on an off-topic question is unhelpful; three
+        Companies Act sections on "how long should I boil eggs" is the product being
+        wrong out loud.
+        """
+        return tuple(s for s in self.scored
+                     if s.entry.expected == SHOULD_REFUSE
+                     and (s.outcome.refs or s.outcome.route in ("exact", "search")))
 
     @property
     def answered(self) -> tuple[int, int]:
@@ -303,6 +324,15 @@ class Report:
                          f"{'y' if len(self.unanswered) == 1 else 'ies'}: "
                          f"{', '.join(self.unanswered[:5])}"
                          f"{' ...' if len(self.unanswered) > 5 else ''}")
+        served = self.served_when_refusing
+        if served:
+            lines.append(
+                f"  !! {len(served)} question(s) it SHOULD have refused came back with "
+                f"retrieved provisions, not merely an empty pack. That is the worse "
+                f"failure and it is counted separately because a rate hides it:")
+            for s in served[:6]:
+                lines.append(f"       {s.entry.question_id}: route={s.outcome.route or '?'} "
+                             f"refs={list(s.outcome.refs)[:4]}")
         human = sum(1 for s in self.scored if s.entry.provenance == HUMAN)
         if human == 0:
             lines.append("  NO HUMAN LABELS. Every scored row is mechanical -- checkable "
