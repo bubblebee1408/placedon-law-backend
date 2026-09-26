@@ -25,6 +25,7 @@ Run:  python3 backend/budget.py
 from __future__ import annotations
 
 import json
+import math
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -51,6 +52,63 @@ PRICING: dict[str, tuple[float, float]] = {
 # admitting calls it should refuse. Over-estimating costs us headroom; under-estimating costs us
 # the guarantee. So the ₹1.94 is a discount we receive without spending against it.
 DEFAULT_MODEL = "claude-sonnet-5"
+
+# ── BUD-3: tokens per page, per model (PLAN_16 §5.5) ─────────────────────────
+# PRICING is half a cost model. Claude 4.7+ models (Opus 5/5.5, Sonnet 5, Fable 5.x) use a
+# tokenizer that produces ~30% more tokens for byte-identical text than Sonnet 4.6 /
+# Haiku 4.5. A price table alone therefore makes every estimate for a 4.7+ model ~30% low —
+# a price rise no price list shows, and the same failure shape as encoding a discount.
+#
+# So: a tokens-per-word figure per tokenizer family, and a model -> family map that must
+# cover every model in PRICING (a scan test enforces that, so a price cannot be added
+# without a tokenizer).
+TOKENIZER: dict[str, str] = {
+    "claude-haiku-4-5": "pre-4.7",
+    "claude-sonnet-5":  "4.7+",
+    "claude-opus-5":    "4.7+",
+}
+
+# Tokens per word of Indian statutory prose — provisos, explanations, non-obstante clauses,
+# section cross-references, and the bracketed amendment footnotes we carry. Both figures are
+# the TOP of their range on purpose (1.5, and 1.35x that): §5.5 puts the 4.7+ inflation at
+# ~30% and Anthropic's own migration guidance at up to 1.35x, so the guard takes 1.35.
+# These are estimates and they are named as such — `count_tokens` is the only authority, and
+# `reserve()` takes a real count when the caller has one.
+TOKENS_PER_WORD: dict[str, float] = {"pre-4.7": 1.50, "4.7+": 2.03}
+
+# A dense A4 page of statutory text. Deliberately on the high side.
+WORDS_PER_PAGE = 500
+
+
+def tokens_per_word(model: str) -> float:
+    if model not in TOKENIZER:
+        raise ValueError(
+            f"no tokenizer on record for {model!r} — add it to TOKENIZER. A cost estimate "
+            f"from PRICING alone is ~30% low on a 4.7+ model")
+    return TOKENS_PER_WORD[TOKENIZER[model]]
+
+
+def tokens_per_page(model: str) -> int:
+    """Upper-bound tokens in one page of statutory text, for this model's tokenizer."""
+    return math.ceil(WORDS_PER_PAGE * tokens_per_word(model))
+
+
+def estimate_tokens(model: str, *, words: int | None = None, pages: float | None = None) -> int:
+    """Estimated tokens for a body of text. Rounds UP, and refuses to guess the unit.
+
+    Exactly one of `words` or `pages`. Both, or neither, is an ambiguity the caller has to
+    resolve — a guard that quietly picks one would be wrong in whichever direction the
+    caller did not mean.
+    """
+    if (words is None) == (pages is None):
+        raise ValueError("give exactly one of words= or pages=")
+    if words is not None:
+        if words < 0:
+            raise ValueError(f"words must be >= 0, got {words}")
+        return math.ceil(words * tokens_per_word(model))
+    if pages < 0:
+        raise ValueError(f"pages must be >= 0, got {pages}")
+    return math.ceil(pages * tokens_per_page(model))
 
 Mode = Literal["normal", "budget", "offline"]
 
@@ -601,6 +659,38 @@ if __name__ == "__main__":
           attempt(lambda: cost_of_usage("claude-haiku-4-5", _Usage())), true_cost)
     check("  ...and refuses a usage body carrying none of the four",
           refused(lambda: cost_of_usage("claude-haiku-4-5", {"tokens": 5})), True)
+
+
+    # ── BUD-3: tokens per page, per model (PLAN_16 §5.5) ─────────────────────
+    check("every priced model has a tokenizer on record",
+          sorted(attempt(lambda: set(PRICING) - set(TOKENIZER)) or []), [])
+    check("a 4.7+ page is at least 30% more tokens than a pre-4.7 page",
+          attempt(lambda: tokens_per_page("claude-sonnet-5")
+                  >= 1.30 * tokens_per_page("claude-haiku-4-5")), True)
+    check("Opus 5 and Sonnet 5 share the 4.7+ tokenizer",
+          attempt(lambda: tokens_per_page("claude-opus-5") == tokens_per_page("claude-sonnet-5")),
+          True)
+    check("a model with no tokenizer is refused, not defaulted",
+          refused(lambda: tokens_per_page("claude-sonnet-4-6")), True)
+    check("pages are the page constant times the page count",
+          attempt(lambda: estimate_tokens("claude-opus-5", pages=10)),
+          attempt(lambda: 10 * tokens_per_page("claude-opus-5")))
+    check("an estimate rounds UP, never down",
+          attempt(lambda: estimate_tokens("claude-opus-5", words=1)), 3)     # 2.03 -> 3
+    check("words= and pages= together is an ambiguity, not a preference",
+          refused(lambda: estimate_tokens("claude-opus-5", words=1, pages=1)), True)
+    check("neither words= nor pages= is refused too",
+          refused(lambda: estimate_tokens("claude-opus-5")), True)
+
+    # The point of the whole move: a 370-page Act priced through the 4.7+ tokenizer is
+    # materially dearer than the same Act priced through the old one, at identical text.
+    old_way = attempt(lambda: cost_inr("claude-opus-5",
+                                       estimate_tokens("claude-haiku-4-5", pages=370), 700))
+    new_way = attempt(lambda: cost_inr("claude-opus-5",
+                                       estimate_tokens("claude-opus-5", pages=370), 700))
+    check("costing a 4.7+ model on the old tokenizer is >20% low",
+          isinstance(old_way, float) and isinstance(new_way, float)
+          and (1 - old_way / new_way) > 0.20, True)
 
     print(f"\n{total - failures}/{total} passed")
     raise SystemExit(1 if failures else 0)
