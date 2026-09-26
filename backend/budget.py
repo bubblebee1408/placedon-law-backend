@@ -27,11 +27,12 @@ from __future__ import annotations
 import json
 import math
 import os
-from collections.abc import Mapping
+import uuid
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from pathlib import Path
-from typing import Literal, Protocol
+from typing import Literal, Protocol, runtime_checkable
 
 # ── The numbers. Change these here, nowhere else. ────────────────────────────
 MONTHLY_CAP_INR = 3_500.0
@@ -314,19 +315,74 @@ class Verdict:
     reason: str
     spent_today: float
     spent_month: float
+    # Money committed to calls that have been admitted but have not returned. Not spent,
+    # and not available either. Defaulted so every existing positional construction of a
+    # Verdict keeps working.
+    reserved: float = 0.0
 
     @property
     def remaining_month(self) -> float:
-        return round(MONTHLY_CAP_INR - self.spent_month, 2)
+        return round(MONTHLY_CAP_INR - self.spent_month - self.reserved, 2)
+
+
+@dataclass(frozen=True)
+class Reservation:
+    """The outcome of `reserve()`. `id` is None when nothing was reserved."""
+
+    id: str | None
+    amount_inr: float
+    verdict: Verdict
+
+    @property
+    def allowed(self) -> bool:
+        return self.verdict.allowed
+
+
+def _reserved_total(reservations: Mapping[str, float]) -> float:
+    return round(sum(reservations.values()), 4)
 
 
 class Store(Protocol):
+    """Where the ledger row lives. `read` and `write` are the whole requirement.
+
+    A store may ALSO offer `update()` (see `AtomicStore`). `reserve()` and `settle()` are
+    read-modify-write, and a store that cannot do that atomically can lose a reservation
+    when two writers interleave — an under-count, which is wrong in the CHEAP direction.
+    """
+
     def read(self) -> dict: ...
     def write(self, data: dict) -> None: ...
 
 
+@runtime_checkable
+class AtomicStore(Protocol):
+    """A `Store` that can apply a read-modify-write as one indivisible step.
+
+    `update(fn)` reads the row, applies `fn(raw) -> row`, persists it, and returns what it
+    persisted — with no window in which another writer can read the old row. That is a
+    property of the STORAGE (a Redis transaction, a Postgres `UPDATE ... RETURNING`, a
+    Supabase RPC), which is why it lives here and not in `BudgetTracker`: the cap
+    arithmetic must have exactly one implementation, but atomicity cannot.
+
+    Optional. `BudgetTracker` uses it when a store provides it and falls back to
+    read-modify-write when it does not.
+    """
+
+    def read(self) -> dict: ...
+    def write(self, data: dict) -> None: ...
+    def update(self, fn: Callable[[dict], dict]) -> dict: ...
+
+
 class FileStore:
-    """Good enough for one instance. Swap for Supabase/Redis when there are several."""
+    """Good enough for ONE WRITER. Swap for Supabase/Redis when there are several.
+
+    `write` is atomic — `tmp.replace` — but read-modify-write is not, and FileStore
+    deliberately does not implement `AtomicStore.update`. A lock file would make the
+    one-box multi-process case safe while leaving the multi-instance case this module was
+    written for (see the Persistence note at the top) still broken, and would put a second,
+    weaker notion of atomicity beside the real one. The honest fix is the store that has a
+    transaction, not a lock beside the one that does not.
+    """
 
     def __init__(self, path: Path | str = "corpus/.budget.json") -> None:
         self.path = Path(path)
@@ -353,22 +409,75 @@ class BudgetTracker:
         self._today = today or date.today()
 
     # ── state ────────────────────────────────────────────────────────────
-    def _state(self) -> dict:
-        raw = self.store.read()
+    def _normalise(self, raw: dict) -> dict:
+        """The stored row, read as state for `self._today`.
+
+        Every key this returns is present on every path, corrupt included: a writer that
+        reads a key the corrupt branch omits raises KeyError at the exact moment the ledger
+        is least able to afford an exception.
+        """
         if raw.get("corrupt"):
-            return {"corrupt": True, "day": "", "month": "", "day_inr": 0.0, "month_inr": 0.0}
+            return {"corrupt": True, "day": "", "month": "", "day_inr": 0.0,
+                    "month_inr": 0.0, "calls_today": 0, "spend_cap": False,
+                    "reservations": {}}
         day_key, month_key = self._today.isoformat(), self._today.strftime("%Y-%m")
+        same_day = raw.get("day") == day_key
+        raw_res = raw.get("reservations")
         return {
             "corrupt": False,
             "day": day_key,
             "month": month_key,
             # Counters reset when the calendar rolls over, not by a cron job nobody runs.
-            "day_inr": float(raw.get("day_inr", 0.0)) if raw.get("day") == day_key else 0.0,
+            "day_inr": float(raw.get("day_inr", 0.0)) if same_day else 0.0,
             "month_inr": float(raw.get("month_inr", 0.0)) if raw.get("month") == month_key else 0.0,
-            "calls_today": int(raw.get("calls_today", 0)) if raw.get("day") == day_key else 0,
+            "calls_today": int(raw.get("calls_today", 0)) if same_day else 0,
             # Scoped to the month, so it clears itself exactly when the provider's cap does.
             "spend_cap": raw.get("spend_cap_month") == month_key,
+            # Scoped to the DAY on purpose. A process that dies between reserve and settle
+            # leaks a reservation, and a leak has to be bounded: this one costs the rest of
+            # that day and never reaches the month. Mid-day expiry is refused — releasing a
+            # reservation whose call may in fact have completed is the cheap direction.
+            "reservations": ({str(k): float(v) for k, v in raw_res.items()}
+                             if same_day and isinstance(raw_res, dict) else {}),
         }
+
+    def _state(self) -> dict:
+        return self._normalise(self.store.read())
+
+    # ── the one write path ───────────────────────────────────────────────
+    def _row(self, s: dict, **overrides) -> dict:
+        """The row to persist. Omitting a field silently clears it, so nothing is omitted."""
+        row = {
+            "day": s["day"], "month": s["month"],
+            "day_inr": s["day_inr"], "month_inr": s["month_inr"],
+            "calls_today": s["calls_today"],
+        }
+        if s["spend_cap"]:
+            row["spend_cap_month"] = s["month"]
+        if s["reservations"]:
+            row["reservations"] = dict(s["reservations"])
+        row.update(overrides)
+        if not row.get("reservations"):
+            row.pop("reservations", None)
+        return row
+
+    def _mutate(self, build: Callable[[dict], dict]) -> dict:
+        """Persist `build(state)`. Atomic where the store can be; documented where it cannot.
+
+        Under a plain `Store` this is read-modify-write and two concurrent writers can lose
+        one another's reservation. See `AtomicStore` and `FileStore`.
+        """
+        if isinstance(self.store, AtomicStore):
+            return self.store.update(lambda raw: build(self._normalise(raw)))
+        row = build(self._state())
+        self.store.write(row)
+        return row
+
+    def _unrecordable(self, actual_inr: float) -> Verdict:
+        return Verdict(False, "offline",
+                       f"ledger unreadable — ₹{actual_inr} WAS spent and could not be "
+                       f"recorded; writing would invent a balance over the real one",
+                       0.0, 0.0)
 
     # ── the gate ─────────────────────────────────────────────────────────
     def can_make_call(self, estimated_inr: float | None = None, *, model: str = DEFAULT_MODEL,
@@ -389,43 +498,41 @@ class BudgetTracker:
             return Verdict(False, "offline",
                            f"provider spend cap reached — no call succeeds before "
                            f"{spend_cap_resets_at(self._today):%Y-%m-%d %H:%M UTC}",
-                           s["day_inr"], s["month_inr"])
+                           s["day_inr"], s["month_inr"], _reserved_total(s["reservations"]))
 
-        if s["month_inr"] + estimated_inr > MONTHLY_CAP_INR:
-            return Verdict(False, "budget",
-                           f"monthly cap reached: ₹{s['month_inr']:.2f} spent of ₹{MONTHLY_CAP_INR:.0f}",
-                           s["day_inr"], s["month_inr"])
+        # Outstanding reservations are committed money. Counting only what has been spent is
+        # what lets a hundred concurrent calls all pass a gate that has seen none of them.
+        reserved = _reserved_total(s["reservations"])
 
-        if s["day_inr"] + estimated_inr > DAILY_CAP_INR:
+        if s["month_inr"] + reserved + estimated_inr > MONTHLY_CAP_INR:
             return Verdict(False, "budget",
-                           f"daily cap reached: ₹{s['day_inr']:.2f} of ₹{DAILY_CAP_INR:.2f}. "
+                           f"monthly cap reached: ₹{s['month_inr']:.2f} spent "
+                           f"+ ₹{reserved:.2f} reserved of ₹{MONTHLY_CAP_INR:.0f}",
+                           s["day_inr"], s["month_inr"], reserved)
+
+        if s["day_inr"] + reserved + estimated_inr > DAILY_CAP_INR:
+            return Verdict(False, "budget",
+                           f"daily cap reached: ₹{s['day_inr']:.2f} spent + ₹{reserved:.2f} "
+                           f"reserved of ₹{DAILY_CAP_INR:.2f}. "
                            f"Monthly still has ₹{MONTHLY_CAP_INR - s['month_inr']:.2f}.",
-                           s["day_inr"], s["month_inr"])
+                           s["day_inr"], s["month_inr"], reserved)
 
-        return Verdict(True, "normal", "within budget", s["day_inr"], s["month_inr"])
-
-    def _persist(self, s: dict, **overrides) -> None:
-        """Every write goes through here.
-
-        A write that omits a field silently clears it, and the field most costly to
-        clear is `spend_cap_month` — losing it re-admits calls the provider will refuse.
-        """
-        row = {
-            "day": s["day"], "month": s["month"],
-            "day_inr": s["day_inr"], "month_inr": s["month_inr"],
-            "calls_today": s["calls_today"],
-        }
-        if s["spend_cap"]:
-            row["spend_cap_month"] = s["month"]
-        row.update(overrides)
-        self.store.write(row)
+        return Verdict(True, "normal", "within budget",
+                       s["day_inr"], s["month_inr"], reserved)
 
     def record_call(self, actual_inr: float) -> Verdict:
-        s = self._state()
-        day = round(s["day_inr"] + actual_inr, 4)
-        month = round(s["month_inr"] + actual_inr, 4)
-        self._persist(s, day_inr=day, month_inr=month, calls_today=s["calls_today"] + 1)
-        return Verdict(True, "normal", "recorded", day, month)
+        """Record a call whose cost is already known. `settle()` is the reserved path."""
+        if actual_inr < 0:
+            raise ValueError(f"actual cost must be >= 0, got {actual_inr}")
+        if self._state()["corrupt"]:
+            return self._unrecordable(actual_inr)
+        row = self._mutate(lambda st: self._row(
+            st,
+            day_inr=round(st["day_inr"] + actual_inr, 4),
+            month_inr=round(st["month_inr"] + actual_inr, 4),
+            calls_today=st["calls_today"] + 1))
+        return Verdict(True, "normal", "recorded", row["day_inr"], row["month_inr"],
+                       _reserved_total(row.get("reservations", {})))
 
     def record_provider_spend_cap(self) -> Verdict:
         """The provider said `enforced_spend_limit_reached`. Remember it.
@@ -439,11 +546,87 @@ class BudgetTracker:
             # Nothing can be written against an unreadable ledger. The corrupt path already
             # refuses every call, so the flag would change nothing.
             return self.can_make_call()
-        self._persist(s, spend_cap_month=s["month"])
+        self._mutate(lambda st: self._row(st, spend_cap_month=st["month"]))
         return Verdict(False, "offline",
                        f"provider spend cap recorded — access returns "
                        f"{spend_cap_resets_at(self._today):%Y-%m-%d %H:%M UTC}",
-                       s["day_inr"], s["month_inr"])
+                       s["day_inr"], s["month_inr"], _reserved_total(s["reservations"]))
+
+    # ── BUD-4: reserve / settle (PLAN_16 §5.4) ───────────────────────────
+    # A call's cost is unknown until it returns, so a guard that only records afterwards
+    # enforces nothing: a hundred concurrent calls all pass a gate that has seen none of
+    # them. So the gate takes the money first, at the WORST case, and gives back what was
+    # not used.
+    #
+    #     reserved = count_tokens(request) x input_price + max_tokens x output_price
+    #
+    # `max_tokens` does not count toward rate limits, but it is the only ceiling the
+    # reservation can be sized from, so it is a REQUIRED argument here. There is no default:
+    # a guessed ceiling is a guessed reservation, and this file does not guess. Pass the same
+    # number the request passes the API; the per-action ceiling belongs with the action.
+    #
+    # On the ledger: this is a BALANCE, not a history. It is a single small row rewritten in
+    # place, which is why it is not built on `checker/observation_store.py` — see the commit
+    # body. Nothing here is append-only and nothing here is bitemporal.
+    def reserve(self, *, model: str = DEFAULT_MODEL, input_tokens: int, max_tokens: int,
+                cache_creation_input_tokens: int = 0, cache_read_input_tokens: int = 0,
+                cache_ttl: str = DEFAULT_CACHE_TTL, batch: bool = False,
+                reservation_id: str | None = None) -> Reservation:
+        """Hold the worst-case cost of one call against the caps before making it.
+
+        A refused reservation writes NOTHING: a gate that charged for the calls it turned
+        away would ratchet itself shut.
+        """
+        worst = cost_inr(model, input_tokens, max_tokens,
+                         cache_creation_input_tokens=cache_creation_input_tokens,
+                         cache_read_input_tokens=cache_read_input_tokens,
+                         cache_ttl=cache_ttl, batch=batch)
+        verdict = self.can_make_call(worst)
+        if not verdict.allowed:
+            return Reservation(None, worst, verdict)
+
+        rid = reservation_id or uuid.uuid4().hex[:12]
+        if rid in self._state()["reservations"]:
+            raise ValueError(f"reservation {rid!r} is already outstanding — settle it first")
+        self._mutate(lambda st: self._row(
+            st, reservations={**st["reservations"], rid: worst}))
+        return Reservation(rid, worst, verdict)
+
+    def settle(self, reservation_id: str, actual_inr: float) -> Verdict:
+        """Record what the call actually cost and release the rest of its reservation.
+
+        A call that never billed — a connection error, or the spend-cap 429 of BUD-1 —
+        settles at 0.0. A call that may have billed but whose usage never came back should
+        settle at the reserved amount, not at 0.0: an unknown cost is an expensive one.
+        """
+        if actual_inr < 0:
+            raise ValueError(f"actual cost must be >= 0, got {actual_inr}")
+        s = self._state()
+        if s["corrupt"]:
+            return self._unrecordable(actual_inr)
+        held = s["reservations"].get(reservation_id)
+
+        row = self._mutate(lambda st: self._row(
+            st,
+            day_inr=round(st["day_inr"] + actual_inr, 4),
+            month_inr=round(st["month_inr"] + actual_inr, 4),
+            calls_today=st["calls_today"] + 1,
+            reservations={k: v for k, v in st["reservations"].items()
+                          if k != reservation_id}))
+        reserved = _reserved_total(row.get("reservations", {}))
+
+        if held is None:
+            # Never silently: the spend is real and is recorded, but something is out of
+            # step — a double settle, or the day rolled over and released the hold.
+            return Verdict(True, "normal",
+                           f"settled ₹{actual_inr} against an unknown reservation "
+                           f"{reservation_id!r} — the spend IS recorded; the reservation was "
+                           f"already settled, or a day rollover released it",
+                           row["day_inr"], row["month_inr"], reserved)
+        return Verdict(True, "normal",
+                       f"settled: held ₹{held}, actual ₹{actual_inr}, "
+                       f"released ₹{round(held - actual_inr, 4)}",
+                       row["day_inr"], row["month_inr"], reserved)
 
     def mode(self) -> Mode:
         return self.can_make_call().mode
@@ -691,6 +874,160 @@ if __name__ == "__main__":
     check("costing a 4.7+ model on the old tokenizer is >20% low",
           isinstance(old_way, float) and isinstance(new_way, float)
           and (1 - old_way / new_way) > 0.20, True)
+
+
+    # ── BUD-4: reserve / settle (PLAN_16 §5.4) ───────────────────────────────
+    # Cost is unknown until the call returns, so a guard that only records afterwards
+    # enforces nothing: 100 concurrent calls all pass a gate that has seen none of them.
+    WORST = attempt(lambda: cost_inr("claude-haiku-4-5", 6_700, 64_000))
+    check("the worst case is input + max_tokens priced as output", WORST, 31.1116)
+
+    r1 = attempt(lambda: BudgetTracker(Mem(), today=date(2026, 8, 8)).reserve(
+        model="claude-haiku-4-5", input_tokens=6_700, max_tokens=64_000))
+    check("a reservation is taken at the worst case, not the typical case",
+          getattr(r1, "amount_inr", r1), 31.1116)
+    check("  ...and it is allowed, and carries an id",
+          bool(getattr(r1, "allowed", False)) and bool(getattr(r1, "id", None)), True)
+
+    # Four worst-case reservations breach the daily cap. The same four calls, costed at
+    # what they typically cost, would not have come close — which is the whole point.
+    mem = Mem()
+    t4 = BudgetTracker(mem, today=date(2026, 8, 8))
+    ids = [attempt(lambda i=i: t4.reserve(model="claude-haiku-4-5", input_tokens=6_700,
+                                          max_tokens=64_000, reservation_id=f"r{i}"))
+           for i in range(3)]
+    check("three worst-case reservations are admitted",
+          [bool(getattr(x, "allowed", False)) for x in ids], [True, True, True])
+    fourth = attempt(lambda: t4.reserve(model="claude-haiku-4-5", input_tokens=6_700,
+                                        max_tokens=64_000, reservation_id="r3"))
+    check("the fourth is refused — outstanding reservations count against the cap",
+          bool(getattr(fourth, "allowed", False)), False)
+    check("  ...whereas four TYPICAL calls would have been nowhere near the cap",
+          4 * cost_inr("claude-haiku-4-5", 6_700, 700) < DAILY_CAP_INR, True)
+    check("  ...and the refused reservation wrote nothing",
+          len(attempt(lambda: mem.d.get("reservations", {})) or {}), 3)
+    check("  ...so the gate reports what is reserved, not only what is spent",
+          attempt(lambda: t4.can_make_call().reserved), 93.3348)
+
+    # Settling releases the difference: the ledger ends up holding the ACTUAL cost.
+    actual = cost_inr("claude-haiku-4-5", 6_700, 700)
+    v6 = attempt(lambda: t4.settle("r0", actual))
+    check("settle records the actual cost, not the reservation",
+          getattr(v6, "spent_today", v6), actual)
+    check("  ...and releases the reserved amount",
+          getattr(v6, "reserved", None), round(2 * 31.1116, 4))
+    check("  ...which frees the day again", attempt(lambda: t4.can_make_call().allowed), True)
+
+    # A call that never happened, or 429'd before billing, settles at zero.
+    attempt(lambda: t4.settle("r1", 0.0))
+    check("settling at zero releases a reservation without spending",
+          attempt(lambda: t4.can_make_call().reserved), 31.1116)
+
+    v7 = attempt(lambda: t4.settle("nosuchid", 0.5))
+    check("settling an unknown reservation still records the spend",
+          isinstance(v7, Verdict) and v7.spent_today > actual, True)
+    # "unknown" alone is not enough: it survives in "against an unknown reservation" even
+    # if the clause that says the money WAS recorded is deleted. Assert both.
+    check("  ...and says so rather than swallowing it",
+          all(w in getattr(v7, "reason", "") for w in ("unknown", "recorded")), True)
+
+    check("a duplicate reservation id is refused",
+          refused(lambda: t4.reserve(model="claude-haiku-4-5", input_tokens=1,
+                                     max_tokens=1, reservation_id="r2")), True)
+    check("a negative settlement is refused — it would credit the ledger",
+          refused(lambda: t4.settle("r2", -1.0)), True)
+
+    # A leaked reservation (process died between reserve and settle) is bounded: it is
+    # day-scoped, so it costs at most the rest of that day and never leaks into the month.
+    leaked = Mem()
+    leaked.d = {"day": "2026-08-08", "month": "2026-08", "day_inr": 0.0, "month_inr": 0.0,
+                "calls_today": 0, "reservations": {"orphan": 100.0}}
+    check("a leaked reservation blocks the day it was taken on",
+          BudgetTracker(leaked, today=date(2026, 8, 8)).can_make_call(50.0).allowed, False)
+    check("  ...and is gone the next day, so the leak is bounded",
+          BudgetTracker(leaked, today=date(2026, 8, 9)).can_make_call(50.0).allowed, True)
+
+    check("remaining_month subtracts what is reserved as well as what is spent",
+          BudgetTracker(leaked, today=date(2026, 8, 8)).can_make_call().remaining_month,
+          round(MONTHLY_CAP_INR - 100.0, 2))
+
+    # FileStore is the only Store that ships. It has to survive the round trip.
+    import pathlib
+    import tempfile
+    tmpdir = tempfile.mkdtemp()
+    fs = FileStore(pathlib.Path(tmpdir) / "budget.json")
+    tf = BudgetTracker(fs, today=date(2026, 8, 8))
+    rf = attempt(lambda: tf.reserve(model="claude-haiku-4-5", input_tokens=6_700,
+                                    max_tokens=64_000, reservation_id="disk"))
+    check("FileStore persists a reservation to disk", bool(getattr(rf, "allowed", False)), True)
+    check("  ...and a fresh tracker over the same file still sees it reserved",
+          attempt(lambda: BudgetTracker(FileStore(pathlib.Path(tmpdir) / "budget.json"),
+                                        today=date(2026, 8, 8)).can_make_call().reserved), 31.1116)
+    attempt(lambda: tf.settle("disk", actual))
+    check("  ...and the settled cost survives the round trip too",
+          attempt(lambda: BudgetTracker(FileStore(pathlib.Path(tmpdir) / "budget.json"),
+                                        today=date(2026, 8, 8)).can_make_call().spent_today),
+          actual)
+
+    # A corrupt ledger must not be written to at all: a write invents zeros over whatever
+    # real spend is in the file. Before BUD-4 this raised KeyError from inside _persist.
+    class Corrupt2:
+        def __init__(self) -> None: self.writes = 0
+        def read(self) -> dict: return {"corrupt": True}
+        def write(self, data: dict) -> None: self.writes += 1
+    c2 = Corrupt2()
+    tcorrupt = BudgetTracker(c2, today=date(2026, 8, 8))
+    vc = attempt(lambda: tcorrupt.record_call(1.0))
+    check("recording a call against a corrupt ledger refuses instead of raising",
+          isinstance(vc, Verdict) and not vc.allowed, True)
+    check("  ...and writes nothing over the real spend", c2.writes, 0)
+    check("  ...and a reservation against it is refused too",
+          bool(getattr(attempt(lambda: tcorrupt.reserve(model="claude-haiku-4-5",
+                                                        input_tokens=1, max_tokens=1)),
+                       "allowed", False)), False)
+
+    # The one thing that belongs to the Store and not to the guard: atomicity.
+    class AtomicMem:
+        def __init__(self) -> None:
+            self.d: dict = {}
+            self.updates = 0
+            self.writes = 0
+        def read(self) -> dict: return dict(self.d)
+        def write(self, data: dict) -> None:
+            self.writes += 1
+            self.d = dict(data)
+        def update(self, fn):
+            self.updates += 1
+            self.d = dict(fn(dict(self.d)))
+            return dict(self.d)
+
+    am = AtomicMem()
+    ta = BudgetTracker(am, today=date(2026, 8, 8))
+    attempt(lambda: ta.reserve(model="claude-haiku-4-5", input_tokens=10, max_tokens=10,
+                               reservation_id="a1"))
+    check("a store offering atomic update() is used for the mutation", am.updates >= 1, True)
+    check("  ...and read-modify-write is not used behind its back", am.writes, 0)
+    check("  ...while a store without update() still works (FileStore has none)",
+          bool(getattr(attempt(lambda: BudgetTracker(Mem(), today=date(2026, 8, 8)).reserve(
+              model="claude-haiku-4-5", input_tokens=10, max_tokens=10)), "allowed", False)), True)
+
+    # A mutant that dropped `reserved` from the MONTHLY gate survived the first version of
+    # these tests: the only monthly check used remaining_month, and the leaked-reservation
+    # check was refused by the DAILY cap either way. Numbers chosen so the monthly gate is
+    # the only one that can refuse, and so the same call fits with nothing reserved.
+    nm = Mem()
+    nm.d = {"day": "2026-08-08", "month": "2026-08", "day_inr": 0.0,
+            "month_inr": 3_496.0, "calls_today": 0, "reservations": {"m1": 2.0}}
+    vm = BudgetTracker(nm, today=date(2026, 8, 8)).can_make_call()
+    check("a reservation can be the thing that breaches the MONTHLY cap", vm.allowed, False)
+    check("  ...and the refusal names the monthly cap", "monthly" in vm.reason, True)
+    nm2 = Mem()
+    nm2.d = {"day": "2026-08-08", "month": "2026-08", "day_inr": 0.0,
+             "month_inr": 3_496.0, "calls_today": 0}
+    check("  ...whereas the identical call with nothing reserved is admitted",
+          BudgetTracker(nm2, today=date(2026, 8, 8)).can_make_call().allowed, True)
+    check("  ...and the day was never the binding constraint in either case",
+          0.0 + 2.0 + cost_inr(DEFAULT_MODEL, 6_700, 700) < DAILY_CAP_INR, True)
 
     print(f"\n{total - failures}/{total} passed")
     raise SystemExit(1 if failures else 0)
