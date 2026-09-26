@@ -127,6 +127,7 @@ REGISTRY: dict[str, int] = {
 
     # ── RING 1 — entity graph, public registers, event log ─────────────────
     "checker.entity_graph": RING_1,
+    "checker.ontology": RING_1,          # typed objects; PLAN_19 G1.1
     "checker.event_log": RING_1,
     "checker.corporate_data": RING_1,
     "checker.mca_aggregator": RING_1,
