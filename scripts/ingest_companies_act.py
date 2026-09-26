@@ -17,6 +17,7 @@ import hashlib
 import json
 import re
 import ssl
+import pathlib
 import sys
 import time
 import urllib.request
@@ -93,7 +94,7 @@ def fetch_section(sid: str) -> dict:
     }
 
 
-def main() -> None:
+def main() -> int:
     limit = None
     if "--limit" in sys.argv:
         limit = int(sys.argv[sys.argv.index("--limit") + 1])
@@ -101,6 +102,25 @@ def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     ids = enumerate_sections()
     print(f"enumerated {len(ids)} section ids", flush=True)
+
+    # **An empty enumeration is a failed enumeration, never a corpus of nothing.**
+    # The manifest write used to sit here unconditionally, so a page that parsed to zero
+    # section ids replaced the record of what this corpus should contain with
+    # `count: 0, section_ids: []` and a FRESH `enumerated_at` -- and returned exit 0.
+    # The section JSONs survived (the loop below iterates an empty list), so the damage
+    # was invisible: 529 files on disk and a manifest saying the Act has no sections.
+    #
+    # It is reachable. Measured 2026-09-26: `indiacode.gov.in/handle/123456789/2114`
+    # answers **200 `text/html`, 6,762 bytes** -- the DSpace Angular shell -- with zero
+    # `sectionId=` matches. The payload guard in `checker/robots.py` cannot catch this one,
+    # because HTML is exactly what this page is supposed to be; the shape of the result is
+    # the only evidence, which is why the check belongs here.
+    if not ids:
+        print(f"REFUSED: {ACT_PAGE} parsed to 0 section ids. A page that yields no "
+              f"sections is a source we could not read, not an Act with no sections -- "
+              f"the manifest is left as it was.", flush=True)
+        return 1
+
     (OUT / "_manifest.json").write_text(json.dumps(
         {"act_id": ACT_ID, "section_ids": ids, "count": len(ids),
          "enumerated_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}, indent=2))
@@ -126,7 +146,64 @@ def main() -> None:
         time.sleep(PAUSE)
 
     print(f"done. fetched={fetched} skipped={skipped} failed={failed}", flush=True)
+    # A per-section failure is not a failed run: the loop reports it and the manifest is
+    # already correct. Only an unreadable enumeration (above) refuses.
+    return 0
 
+
+
+def _test() -> int:
+    """Stub-only. No network: `enumerate_sections` is replaced, never called for real."""
+    ok = fail = 0
+
+    def check(cond: bool, label: str) -> None:
+        nonlocal ok, fail
+        if cond:
+            ok += 1; print(f"  [PASS] {label}")
+        else:
+            fail += 1; print(f"  [FAIL] {label}")
+
+    print("ingest_companies_act")
+    import tempfile
+    global OUT, enumerate_sections
+    real_out, real_enum = OUT, enumerate_sections
+
+    # The defect: a soft-404 parses to zero ids. The manifest must survive it.
+    with tempfile.TemporaryDirectory() as d:
+        OUT = pathlib.Path(d)
+        good = {"act_id": ACT_ID, "section_ids": ["1", "2"], "count": 527,
+                "enumerated_at": "2026-08-18T22:15:46+00:00"}
+        (OUT / "_manifest.json").write_text(json.dumps(good, indent=2))
+        enumerate_sections = lambda: []                                  # noqa: E731
+        rc = main()
+        after = json.loads((OUT / "_manifest.json").read_text())
+        check(rc != 0, f"an empty enumeration exits non-zero (got {rc})")
+        check(after == good,
+              "the manifest is byte-identical after a zero-section enumeration")
+        check(after["count"] == 527 and after["enumerated_at"] == good["enumerated_at"],
+              "neither the count nor enumerated_at is touched -- no fresh timestamp on a failure")
+
+    # And the happy path still writes.
+    with tempfile.TemporaryDirectory() as d:
+        OUT = pathlib.Path(d)
+        enumerate_sections = lambda: ["11", "12", "13"]                  # noqa: E731
+        global fetch_section
+        real_fetch = fetch_section
+        fetch_section = lambda sid: {"id": sid, "content": "x"}          # noqa: E731
+        try:
+            rc = main()
+            m = json.loads((OUT / "_manifest.json").read_text())
+            check(rc == 0, "a real enumeration exits 0")
+            check(m["count"] == 3 and m["section_ids"] == ["11", "12", "13"],
+                  "a real enumeration is written to the manifest")
+        finally:
+            fetch_section = real_fetch
+
+    OUT, enumerate_sections = real_out, real_enum
+    print(f"\n{ok}/{ok + fail} passed")
+    return 1 if fail else 0
 
 if __name__ == "__main__":
-    main()
+    if "--test" in sys.argv:
+        raise SystemExit(_test())
+    raise SystemExit(main())

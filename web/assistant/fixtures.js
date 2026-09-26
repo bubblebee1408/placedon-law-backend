@@ -22,8 +22,10 @@ window.PLACEDON_ASK_FIXTURES = {
    "kind": "general"
   },
   "evidence_pack": {
+   "abstain_reason": "",
    "insufficient_evidence": false,
    "missing": [],
+   "query_expansions": [],
    "retrieval_query": "s.2(85)",
    "route": "exact",
    "unusable_keys": [],
@@ -336,8 +338,10 @@ window.PLACEDON_ASK_FIXTURES = {
    "kind": "general"
   },
   "evidence_pack": {
+   "abstain_reason": "",
    "insufficient_evidence": false,
    "missing": [],
+   "query_expansions": [],
    "retrieval_query": "s.2(85)",
    "route": "exact",
    "unusable_keys": [],
@@ -417,11 +421,13 @@ window.PLACEDON_ASK_FIXTURES = {
    "kind": "general"
   },
   "evidence_pack": {
+   "abstain_reason": "HELD_NOT_ADMITTED",
    "insufficient_evidence": true,
    "missing": [
     "RULE:COMPANIES_MEETINGS_BOARD_POWERS_2014:R2 (Definitions) was cited and DOES exist, but is not admitted for model use: UNREVIEWED. Its text is unknown to you.",
     "No provision was retrieved at all. This pack is empty."
    ],
+   "query_expansions": [],
    "retrieval_query": "rule 2(1)(t)",
    "route": "abstain",
    "unusable_keys": [],
@@ -483,10 +489,12 @@ window.PLACEDON_ASK_FIXTURES = {
    "action": "tell_us_blocking"
   },
   "evidence_pack": {
+   "abstain_reason": "",
    "insufficient_evidence": false,
    "missing": [
     "ACT:COMPANIES_ACT_2013:S16 exists in state SUSPENDED but is not admitted for model use"
    ],
+   "query_expansions": [],
    "retrieval_query": "s.173 and s.16",
    "route": "exact",
    "unusable_keys": [],

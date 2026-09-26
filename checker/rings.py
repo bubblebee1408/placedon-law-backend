@@ -102,6 +102,7 @@ REGISTRY: dict[str, int] = {
     # ── RING 0 — statute, obligations, deciders, currency, entailment ──────
     "applicability": RING_0,
     "checker.obligations": RING_0,
+    "checker.instrument_registry": RING_0,  # pointers to the register scripts; PLAN_19 G0.1
     "checker.s180": RING_0,             # borrowing-limit decider, same family as s185/6/8
     "checker.s184": RING_0,             # director-interest decider, same family as s185/6/8
     "checker.s185": RING_0,
@@ -126,6 +127,9 @@ REGISTRY: dict[str, int] = {
 
     # ── RING 1 — entity graph, public registers, event log ─────────────────
     "checker.entity_graph": RING_1,
+    "checker.ontology": RING_1,          # typed objects; PLAN_19 G1.1
+    "checker.observation_store": RING_1, # append-only bitemporal store; PLAN_19 G1.2
+    "checker.derivation": RING_1,        # evidence semiring; PLAN_19 G2.1
     "checker.event_log": RING_1,
     "checker.corporate_data": RING_1,
     "checker.mca_aggregator": RING_1,

@@ -62,7 +62,7 @@ import re
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 
-from checker.currency import acquisition_for, affected_by
+from checker.currency import AMBIGUOUS, PENDING, acquisition_for, affected_by
 from checker.obligations import REGISTER
 
 __all__ = ["Requirement", "Operation", "EvidenceBudget", "Watchlist", "WatchedCompany",
@@ -287,9 +287,46 @@ def operation_for_instrument(instrument: str, *, trigger: dict,
     # Work a person has already done, demanded again, is not caution -- it is a queue
     # nobody can ever empty, and it teaches a reviewer to close requirements without
     # reading them. Asked rather than assumed, through the same gate as everywhere else.
+    # PLAN_19 G0.1. `read_id` MUST NOT change: downstream requirements carry
+    # depends_on=(read_id,), so a new id would orphan the graph.
     read_id = _rid(instrument, "read")
     acq = acquisition_for(instrument)
-    if acq is None or not acq.read:
+    if acq is not None and acq.status == PENDING:
+        # The middle state that used to be invisible. Demanding someone ACQUIRE a
+        # file already downloaded and hashed is the "queue nobody can ever empty"
+        # this module's own comment warns about -- and it teaches a reviewer to close
+        # requirements without reading them. What is actually outstanding is a
+        # person's attestation, which is review, not research.
+        reqs.append(Requirement(
+            requirement_id=read_id,
+            question=(f"Attest {acq.instrument}: a named reviewer must confirm its identity "
+                      "and that the operative clause is verbatim. It is already held and "
+                      "registered."),
+            obligation_id="(instrument)",
+            provision=instrument,
+            specialist=HUMAN_REVIEW,
+            criticality=BLOCKING,
+            minimum_evidence="a named reviewer's attestation recorded against the existing registration",
+            note=(f"On record via {acq.answered_from}, status {acq.state or 'unstated'}. "
+                  "Held and hashed; no person has attested it, so nothing may be served "
+                  "from it yet."),
+        ))
+    elif acq is not None and acq.status == AMBIGUOUS:
+        # The trigger named several instruments. That is a defect in the observation,
+        # not a fact about the law, and a person has to say which one was meant
+        # before any of this work means anything.
+        reqs.append(Requirement(
+            requirement_id=read_id,
+            question=(f"Which instrument does {instrument!r} mean? It matches more than one, "
+                      "and the work below is addressed to whichever was intended."),
+            obligation_id="(instrument)",
+            provision=instrument,
+            specialist=HUMAN_REVIEW,
+            criticality=BLOCKING,
+            minimum_evidence="the instrument named unambiguously by a person",
+            note=acq.note,
+        ))
+    elif acq is None:
         reqs.append(Requirement(
             requirement_id=read_id,
             question=(f"Acquire and attest {instrument}: does its text in fact change the "

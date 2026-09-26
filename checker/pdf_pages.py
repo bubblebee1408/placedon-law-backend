@@ -80,6 +80,7 @@ An encrypted document raises rather than returning plausible blanks.
 """
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 __all__ = ["extract_pages", "page_count"]
@@ -95,30 +96,20 @@ def _reader(path: str | Path):
     if not p.is_file():
         raise PdfUnreadable(f"no such PDF: {p}")
     try:
-        from pypdf import PdfReader
+        import pdfplumber
     except ImportError as exc:                                    # pragma: no cover
         raise PdfUnreadable(
-            "pypdf is required for page extraction and is declared in "
+            "pdfplumber is required for page extraction and is declared in "
             "requirements-dev.txt. This module is offline tooling only."
         ) from exc
 
     try:
-        r = PdfReader(str(p))
+        return pdfplumber.open(str(p))
     except Exception as exc:
+        # pdfplumber raises its own type for an encrypted file; both land here, and
+        # both must raise rather than yield a pile of empty pages -- that is the
+        # toolchain-as-evidence failure this module exists to refuse.
         raise PdfUnreadable(f"{p.name}: not readable as a PDF ({exc})") from exc
-
-    # An encrypted document must not come back as a pile of empty pages: that is the
-    # toolchain-as-evidence failure this module exists to refuse. Try the empty user
-    # password, which is what permissions-only encryption uses, and raise otherwise.
-    if getattr(r, "is_encrypted", False):
-        try:
-            if not r.decrypt(""):
-                raise PdfUnreadable(f"{p.name}: encrypted, and not with an empty password")
-        except PdfUnreadable:
-            raise
-        except Exception as exc:
-            raise PdfUnreadable(f"{p.name}: encrypted and undecryptable ({exc})") from exc
-    return r
 
 
 def extract_pages(path: str | Path) -> list[str]:
@@ -131,21 +122,22 @@ def extract_pages(path: str | Path) -> list[str]:
     Raises `PdfUnreadable` rather than returning [] — an empty list from a real
     document is the silent failure this module replaced.
     """
-    r = _reader(path)
     out: list[str] = []
-    for page in r.pages:
-        try:
-            out.append(page.extract_text() or "")
-        except Exception:
-            # One unreadable page must not lose the other 168. Preserve the slot,
-            # say nothing about its content.
-            out.append("")
+    with _reader(path) as doc:
+        for page in doc.pages:
+            try:
+                out.append(page.extract_text() or "")
+            except Exception:
+                # One unreadable page must not lose the other 168. Preserve the slot,
+                # say nothing about its content.
+                out.append("")
     return out
 
 
 def page_count(path: str | Path) -> int:
     """How many pages the document declares, without extracting any text."""
-    return len(_reader(path).pages)
+    with _reader(path) as doc:
+        return len(doc.pages)
 
 
 def _test() -> None:
@@ -211,6 +203,29 @@ def _test() -> None:
     else:
         print("  [SKIP] stored Rules PDF not present")
 
+    # ---- the reader must not invent spaces inside words (D-002b) ----------------
+    # Measured 25-09-2026 on the Rules gazette: pdfplumber and poppler both render
+    # "Board and its"; pypdf rendered "Board an d its". Two independent readers
+    # disagreeing with us is the INVERSE of SD-006, where both agreed with us and the
+    # source was genuinely defective -- here the source says "and", so the split was
+    # ours. pypdf's `space_width` is not the cause: artifacts stayed flat at 4 across
+    # 200/120/80/60/40, so the spaces come from content-stream positioning.
+    # A split word is not cosmetic. It is what a reviewer would be asked to adjudicate,
+    # and it is what put 15 rules into HUMAN_REVIEW_PENDING.
+    if stored.is_file():
+        joined = " ".join(extract_pages(stored))
+        split_probe = re.compile(r"\ban\sd\b|\bBoar\sd\b|\b1\s+st\b", re.I)
+        hits = split_probe.findall(joined)
+        check(not hits, f"no word is split by an invented space (found {len(hits)}: {hits[:4]})")
+        check("Board and its" in joined,
+              "the title reads 'Board and its', as two independent readers render it")
+        # The gazette is bilingual. A reader that emits /uniXXXX glyph NAMES instead of
+        # characters inflates its own character count with garbage and loses the Hindi.
+        devanagari = sum(1 for c in joined if "\u0900" <= c <= "\u097f")
+        check(devanagari > 10000,
+              f"the Hindi half decodes to Devanagari, not glyph names (got {devanagari})")
+        check("/uni0" not in joined, "no /uniXXXX glyph names leak into the text")
+
     # ---- failing loudly ----------------------------------------------------------
     try:
         extract_pages(root / "definitely-not-here-9x.pdf")
@@ -220,9 +235,9 @@ def _test() -> None:
 
     import logging
     import tempfile
-    # pypdf logs its own parse failure to stderr. That is correct of pypdf and noise
+    # pdfminer logs its own parse failure to stderr. That is correct of it and noise
     # here: the raise IS the assertion. Silence it so a real error stays visible.
-    _pypdf_log = logging.getLogger("pypdf")
+    _pypdf_log = logging.getLogger("pdfminer")
     _prior = _pypdf_log.level
     _pypdf_log.setLevel(logging.CRITICAL)
     try:

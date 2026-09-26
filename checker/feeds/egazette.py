@@ -79,6 +79,7 @@ from datetime import datetime, timezone
 
 from checker.feeds import FLOOR, LICENCE_UNVERIFIED, FetchResult, Observation
 from checker.feeds.common.fetch import fetch as _fetch
+from checker.robots import HTML
 from checker.provenance import ACCESSIBLE
 
 __all__ = ["EGazetteFeed", "GazetteItem", "parse_listing", "watch", "pdf_url",
@@ -278,7 +279,10 @@ class EGazetteFeed:
         self._opener = opener
 
     def fetch(self, entry_url: str = ENTRY_URL) -> FetchResult:
-        kw = {"rules": self._rules, "allow_redirect_hosts": (HOST,)}
+        # FETCH-1: this source IS a web listing, so HTML is what it legitimately
+        # expects and it says so. Declaring it is what lets every other adapter
+        # refuse a page -- a default that accepted anything would protect nobody.
+        kw = {"rules": self._rules, "allow_redirect_hosts": (HOST,), "expect": (HTML,)}
         if self._opener is not None:
             kw["opener"] = self._opener
         return _fetch(self.source_id, entry_url, **kw)
@@ -379,6 +383,22 @@ def _test() -> None:
     r = feed.fetch()
     check(r.source_behaviour == ACCESSIBLE, "the same-host session redirect is followed")
     check(r.url == ENTRY_URL and "(S(" not in r.url, "the session token is never the stored identity")
+
+    # ---- FETCH-1: HTML is what this source legitimately IS ------------------
+    # This adapter declares expect=(HTML,), so a 200 of HTML is still evidence here --
+    # correctly, because the source is a web listing. What the declaration buys is that
+    # the payload guard now refuses a non-page: a PDF or other binary arriving where the
+    # listing was expected used to reach parse_listing(), which would find no rows and
+    # report a quiet day. It is also what lets every OTHER adapter refuse a page, since
+    # the guard has no permissive default to fall back on.
+    pdf = _FakeResponse(200, b"%PDF-1.7\n%\xe2\xe3\xcf\xd3 370 pages of the Act",
+                        headers={"Content-Type": "application/pdf"})
+    r_pdf = EGazetteFeed(rules=allow_all,
+                         opener=lambda url, *, timeout: pdf).fetch()
+    check(r_pdf.source_behaviour != ACCESSIBLE and not r_pdf.content,
+          "a PDF where the gazette LISTING was expected is refused, not parsed for rows")
+    check("HTML" in r_pdf.note and "application/pdf" in r_pdf.note,
+          f"...and the note names both sides of the mismatch ({r_pdf.note})")
 
     # ---- parsing ----
     items = parse_listing(page)

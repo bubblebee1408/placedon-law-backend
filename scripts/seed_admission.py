@@ -84,7 +84,7 @@ def main() -> None:
     rules_inst = walk("INSTRUMENT", RULES, [
         (adm.ACQUIRED, "downloaded from eGazette, content id 159201", ()),
         (adm.TECHNICALLY_VERIFIED, "VERIFIED_PRINCIPAL by scripts/acquire_rules.py", ()),
-        (adm.STRUCTURED, "parsed into 15 rules with page provenance", ()),
+        (adm.STRUCTURED, f"parsed into {len(rules_doc['rules'])} rules with page provenance", ()),
         (adm.HUMAN_REVIEW_PENDING, "nobody has read this against the gazette", ())])
 
     specs = [{"scope": "INSTRUMENT", "target_id": RULES, "priority": "HIGH",

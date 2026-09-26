@@ -178,7 +178,8 @@ def _amendments(args: dict) -> dict:
 
 def _instrument_impact(args: dict) -> dict:
     """The lawyer sentence: what landed, what it touches, and what is not yet known."""
-    from checker.currency import acquisition_for, affected_by
+    from checker.currency import (AMBIGUOUS, PENDING, acquisition_for,
+                                   affected_by)
     from checker.obligations import REGISTER
     frag = args.get("instrument", "")
     ids = affected_by(frag)
@@ -219,11 +220,25 @@ def _instrument_impact(args: dict) -> dict:
         # the release gate, not a fourth opinion written here.
         acq = acquisition_for(frag)
         if acq is not None and acq.read:
-            held = (f"It is held and attested: {acq.instrument}, effective "
-                    f"{acq.effective_from.isoformat()}, evidence state {acq.state}"
+            # `effective_from` is None for an instrument known only from its
+            # registration record -- those carry no commencement date, and inventing
+            # one would be a fabricated legal date. Unguarded, this raised
+            # AttributeError on the first attested registry-only instrument.
+            when = (f"effective {acq.effective_from.isoformat()}, "
+                    if acq.effective_from is not None else "commencement not recorded, ")
+            held = (f"It is held and attested: {acq.instrument}, {when}"
+                    f"evidence state {acq.state or 'unstated'}"
                     + (f", from {acq.source_url}" if acq.source_url else "") + ". "
                     "Read it before relying on this -- what it touches is indexed, "
                     "what it MEANS for a given company is not.")
+        elif acq is not None and acq.status == PENDING:
+            # PLAN_19 G0.1: the state that used to be reported as "nobody has read
+            # it". Someone downloaded and hashed it; what is missing is a reviewer.
+            held = (f"It is registered and held ({acq.answered_from}), status "
+                    f"{acq.state or 'unstated'}, but NO REVIEWER HAS ATTESTED IT, so "
+                    "nothing may be served from it yet.")
+        elif acq is not None and acq.status == AMBIGUOUS:
+            held = (f"{acq.note}. Name one of them before relying on any of this.")
         else:
             held = ("Nobody has read the instrument yet, so nothing follows from it "
                     "until someone acquires and attests it.")

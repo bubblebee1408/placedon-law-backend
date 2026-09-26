@@ -139,10 +139,17 @@ Files changed · Tests added or updated · Commands run · Results · Known limi
 - MVP sections verified against India Code's own REST API: 12/12, 0 mismatches
   (`scripts/verify_section_index.py`). The checker also reports **STALE_TEXT** — holding live
   text for a provision the source marks omitted, i.e. serving repealed law as current.
-- **India Code moved domain.** `indiacode.nic.in` 403s everything; the live host is
-  **`indiacode.gov.in`**, running DSpace with an open REST API (no key, no auth) exposing
-  `dc.identifier.section_number`, `section_id`, `section_footnote`, `act_name`. The 403 that
-  blocked us since 21 Aug was a dead domain, not a block. Any hardcoded `.nic.in` URL is dead.
+- **India Code: both hosts are alive and they serve different things.** `indiacode.gov.in`
+  runs DSpace with an open REST API (no key, no auth) at `/server/api`, exposing
+  `dc.identifier.section_number`, `section_id`, `section_footnote`, `act_name`. **But its
+  `/bitstream/` paths return HTTP 200 with `text/html` — the Angular shell, a soft-404.**
+  `www.indiacode.nic.in/bitstream/...` serves the real files: measured 26-09-2026, the Companies Act
+  2013 came back `application/pdf`, 3.2 MB, 370 pages, parsed by `checker/pdf_pages`.
+  The earlier claim here — that `.nic.in` 403s everything and any `.nic.in` URL is dead — was true
+  of the 21 Aug outage and is **false now**. `checker/provenance.py` still excludes `.nic.in` "on
+  purpose: it is dead", so the permitted-host list refuses a host that works.
+  **A fetch must assert `Content-Type` and the `%PDF` magic bytes, never the status code alone** —
+  a 200 of HTML where a PDF was expected is the silent failure this repository exists to refuse.
 - Point-in-time reconstruction: **boundary behaviour proved** on s.177, s.447 and s.35 —
   6/6 boundaries, text changes across each, effective dates inclusive
   (`scripts/prove_temporal.py`, `docs/TEMPORAL_PROOF.md`). EXACT there rests on 5 insertions

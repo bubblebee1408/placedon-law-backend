@@ -12,6 +12,10 @@ suites=(
   checker/acquisition_log.py
   checker/amendment.py
   checker/as_of.py
+  checker/instrument_registry.py
+  checker/ontology.py
+  checker/observation_store.py
+  checker/derivation.py
   checker/prompt_safety.py
   checker/anthropic_model.py
   checker/gemini_model.py
@@ -31,6 +35,7 @@ suites=(
   checker/staleness.py
   checker/derived_date.py
   checker/document_date.py
+  backend/budget.py
   checker/claim_schema.py
   checker/legal_ref.py
   checker/admission.py
@@ -106,6 +111,7 @@ suites=(
   eval/temporal/harness.py
   eval/prelabel/compare.py
   eval/goldset/__init__.py
+  eval/goldset/split.py
   eval/prelabel/corpus.py
   checker/env.py
   checker/s185.py
@@ -175,7 +181,7 @@ if [ -n "${HARNESS_EXTRA_SUITE:-}" ]; then
 fi
 
 # --test flag rather than a bare run: this one takes a PDF argument in normal use.
-extra=("scripts/acquire_rules.py --test" "scripts/register_gsr700e.py --test" "scripts/register_gsr880e.py --test" "scripts/register_kmp_rules.py --test" "scripts/register_sebi_lodr.py --test" "scripts/register_pas_rules.py --test" "scripts/sweep_folder.py --test" "scripts/holdings.py --test" "scripts/provenance_census.py --test" "eval/realrun/run.py --test" "eval/realrun/text_field_probe.py --test" "eval/realrun/azure_model.py" "scripts/text_layer_census.py --test" "scripts/assistant_contract.py --test" "scripts/register_s188_rule15.py --test" "scripts/benchmark_refreeze_request.py --test" "scripts/parse_board_rules.py --test" "scripts/baseline_eval.py --test" "scripts/review.py --test" "scripts/review_brief.py --check" "scripts/slice_s96.py --test" "scripts/slice_s173.py --test" "scripts/serve_matrix.py --test" "scripts/serve_api.py --test" "scripts/record_interview.py --test" "scripts/verify_document.py --test" "scripts/verify_section_index.py --test" "scripts/resolve_missing_sections.py --test" "scripts/prove_temporal.py --test" "scripts/batch1_omissions.py --test" "scripts/batch1_review.py --test" "scripts/find_commencement.py --test" "scripts/watch_gazette.py --test" "scripts/watch_ofac.py --test" "scripts/gazette_digest.py --test" "scripts/themis_slice.py --test" "scripts/themis_mcp.py --test" "scripts/bakeoff_retrieval.py --test" "scripts/bakeoff_indic.py --test" "scripts/smoke_adapters.py --test" "eval/prelabel/run_prelabel.py --test" "eval/goldset/run.py --test")
+extra=("scripts/acquire_rules.py --test" "scripts/register_gsr700e.py --test" "scripts/register_gsr880e.py --test" "scripts/register_kmp_rules.py --test" "scripts/register_sebi_lodr.py --test" "scripts/register_pas_rules.py --test" "scripts/sweep_folder.py --test" "scripts/holdings.py --test" "scripts/provenance_census.py --test" "eval/realrun/run.py --test" "eval/realrun/text_field_probe.py --test" "eval/realrun/azure_model.py" "scripts/text_layer_census.py --test" "scripts/assistant_contract.py --test" "scripts/register_s188_rule15.py --test" "scripts/benchmark_refreeze_request.py --test" "scripts/parse_board_rules.py --test" "scripts/baseline_eval.py --test" "scripts/review.py --test" "scripts/review_brief.py --check" "scripts/slice_s96.py --test" "scripts/slice_s173.py --test" "scripts/serve_matrix.py --test" "scripts/serve_api.py --test" "scripts/record_interview.py --test" "scripts/verify_document.py --test" "scripts/ingest_companies_act.py --test" "scripts/verify_section_index.py --test" "scripts/resolve_missing_sections.py --test" "scripts/prove_temporal.py --test" "scripts/batch1_omissions.py --test" "scripts/batch1_review.py --test" "scripts/find_commencement.py --test" "scripts/watch_gazette.py --test" "scripts/watch_ofac.py --test" "scripts/gazette_digest.py --test" "scripts/themis_slice.py --test" "scripts/themis_mcp.py --test" "scripts/bakeoff_retrieval.py --test" "scripts/bakeoff_indic.py --test" "scripts/smoke_adapters.py --test" "eval/prelabel/run_prelabel.py --test" "eval/goldset/run.py --test")
 
 # The Ask demo server (D2): 127.0.0.1 only, serves web/assistant, forwards POST /v1/ask.
 extra+=("scripts/serve_ask.py --test")

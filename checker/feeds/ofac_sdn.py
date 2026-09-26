@@ -111,6 +111,7 @@ from datetime import datetime, timezone
 
 from checker.feeds import (EITHER, LICENCE_UNVERIFIED, FetchResult, Observation)
 from checker.feeds.common.fetch import fetch as _fetch
+from checker.robots import XML
 from checker.provenance import ACCESSIBLE
 
 __all__ = ["OfacSdnFeed", "ENTRY_URL", "PAYLOAD_HOST", "entries", "screen", "normalise",
@@ -317,7 +318,11 @@ class OfacSdnFeed:
         self._opener = opener
 
     def fetch(self, entry_url: str = ENTRY_URL) -> FetchResult:
-        kw = {"rules": self._rules, "allow_redirect_hosts": (PAYLOAD_HOST,)}
+        # FETCH-1: the SDN list is XML. The bytes arrive from a pre-signed S3 object
+        # whose link expires in an hour, and an expired or denied S3 request answers
+        # with an XML/HTML error document, not the list. Declaring the expectation is
+        # cheap; discovering the error page after hashing and caching it is not.
+        kw = {"rules": self._rules, "allow_redirect_hosts": (PAYLOAD_HOST,), "expect": (XML,)}
         if self._opener is not None:
             kw["opener"] = self._opener
         return _fetch(self.source_id, entry_url, **kw)
@@ -419,6 +424,39 @@ def _test() -> None:
     check(r.url == ENTRY_URL, "the result's identity is the stable entry URL, never the signed one")
     check("X-Amz" not in r.url, "the expiring signed URL is not stored anywhere on the result")
     check(r.resolved_host == PAYLOAD_HOST, "the payload host is recorded as metadata")
+
+    # ---- FETCH-1: a 200 from the S3 host is not evidence that it is the list --
+    # The bytes arrive from a pre-signed object whose link expires in an hour. An
+    # expired or denied S3 request answers 200/403 with an error DOCUMENT, and the
+    # same soft-404 shape was re-measured on India Code on 26-09-2026: HTTP 200,
+    # text/html, 6,762 bytes where a 3.2 MB PDF was expected. Unguarded, that page
+    # would have been hashed, written to checker/feeds/common/cache.py, and handed to
+    # `entries()` as OFAC's list -- and an empty screening result read as "not
+    # sanctioned".
+    def page_opener(ctype: str):
+        page = (b'<!DOCTYPE html>\n<html><body>Sorry, page not found</body></html>')
+        def opener(url, *, timeout):
+            if "sanctionslistservice" in url:
+                h = Message()
+                h["Location"] = f"https://{PAYLOAD_HOST}/Published/x/SDN.XML?X-Amz-Expires=3600"
+                raise urllib.error.HTTPError(url, 302, "Found", h, None)
+            return _FakeResponse(200, page, headers={"Content-Type": ctype})
+        return opener
+
+    r_page = OfacSdnFeed(rules=allow_all, opener=page_opener("text/html")).fetch()
+    check(r_page.source_behaviour != ACCESSIBLE,
+          "an HTML page from the trusted payload host is NOT an accessible fetch")
+    check(not r_page.content,
+          "...and carries no bytes, so nothing can parse it as the sanctions list")
+    check("XML" in r_page.note and "text/html" in r_page.note,
+          f"...and the note names what was served and what was expected ({r_page.note})")
+    obs_page = OfacSdnFeed(rules=allow_all, opener=page_opener("text/html")).parse(
+        r_page, observed_at=_now())
+    check(not obs_page.payload,
+          "the Observation carries NO payload -- a web page is evidence of nothing")
+    r_mislabelled = OfacSdnFeed(rules=allow_all, opener=page_opener("text/plain")).fetch()
+    check(r_mislabelled.source_behaviour != ACCESSIBLE,
+          "...and the page is still refused when the host calls it text/plain")
 
     # ---- parsing and the free integrity check --------------------------------
     obs = feed.parse(r, observed_at=_now())

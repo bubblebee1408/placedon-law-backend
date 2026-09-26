@@ -100,6 +100,21 @@ SHOULD_ANSWER = "SHOULD_ANSWER"   # the system holds enough; answering is correc
 SHOULD_REFUSE = "SHOULD_REFUSE"   # out of scope, or not enough held; refusing is correct
 EXPECTATIONS = (SHOULD_ANSWER, SHOULD_REFUSE)
 
+# DEV is what a fix may be developed against. HELDOUT is never looked at while
+# choosing a fix, and is the only honest report of whether one generalised.
+#
+# Added 2026-09-25, the same day a retrieval fix scored 12/19 -> 15/19 on this gold
+# set and was reverted because checker/text_search.py's OWN suite caught it breaking
+# precision ("what is the capital of France" started retrieving, because "capital" is
+# a Companies Act word). The gold set had FOURTEEN refusal entries and every one was
+# about a different body of INDIAN LAW. It contained nothing that was not law at all,
+# so it could not see the failure, and a change that broke the product looked like an
+# improvement. A split does not fix that on its own -- the OFF_TOPIC entries below
+# do -- but without it the next fix gets tuned against the very rows that judge it.
+DEV = "dev"
+HELDOUT = "heldout"
+SPLITS = (DEV, HELDOUT)
+
 # What the system actually did.
 ANSWERED = "ANSWERED"
 REFUSED = "REFUSED"
@@ -128,16 +143,29 @@ class Entry:
     question: str
     provenance: str
     expected: str | None = None          # SHOULD_ANSWER / SHOULD_REFUSE, or None
-    expected_substrings: tuple[str, ...] = ()   # must appear in a correct answer
+    expected_substrings: tuple[str, ...] = ()   # must appear in a correct answer's prose
+    # The corpus refs that must reach the evidence pack, e.g.
+    # "ACT:COMPANIES_ACT_2013:S173". Added 2026-09-25 because `expected_substrings`
+    # was the wrong instrument for what this engine actually produces. It returns an
+    # evidence PACK, not prose -- `answer` is empty and the content lives in
+    # `confirmed` -- so a substring test would have been matching against a JSON dump
+    # of the whole response. That passes whenever the phrase appears ANYWHERE,
+    # including inside a provision retrieved for an unrelated reason, and would have
+    # scored retrieval noise as correctness. Asking "did the right provision reach
+    # the pack" is a question this system can actually be wrong about.
+    expected_refs: tuple[str, ...] = ()
     rule: str = ""                       # MECHANICAL: the check, stated
     labelled_by: str = ""                # HUMAN: who, by name
     labelled_on: str = ""                # HUMAN: when, ISO date
     source: str = ""                     # where the QUESTION came from
+    split: str = DEV                     # DEV to develop against; HELDOUT judges
     note: str = ""
 
     def __post_init__(self) -> None:
         if self.provenance not in PROVENANCE:
             raise ValueError(f"{self.provenance!r} is not a provenance; one of {PROVENANCE}")
+        if self.split not in SPLITS:
+            raise ValueError(f"{self.split!r} is not a split; one of {SPLITS}")
         if not self.question.strip():
             raise ValueError("a gold-set entry with no question is not an entry")
         if self.expected is not None and self.expected not in EXPECTATIONS:
@@ -176,6 +204,15 @@ class Outcome:
     question_id: str
     behaviour: str                        # ANSWERED / REFUSED
     text: str = ""
+    refs: tuple[str, ...] = ()            # refs that reached the evidence pack
+    # `evidence_pack.route` -- "exact" | "search" | "abstain" (checker/retrieve.py).
+    # Read from 2026-09-26. Without it this harness could not tell "answered with
+    # nothing" from "answered with garbage": a retrieval change that made the engine
+    # return s.123/174/178 for "how long should I boil eggs" scored IDENTICALLY to the
+    # clean engine, because both classify as ANSWERED. `route` was `abstain` before
+    # that change and `search` after, so the signal was in the payload all along and
+    # this file was not reading it.
+    route: str = ""
 
     def __post_init__(self) -> None:
         if self.behaviour not in BEHAVIOURS:
@@ -201,9 +238,23 @@ class Report:
     skipped_synthetic: int
     unanswered: tuple[str, ...] = ()      # entries with no outcome supplied
 
-    def _split(self, expectation: str) -> tuple[int, int]:
-        rows = [s for s in self.scored if s.entry.expected == expectation]
+    def _split(self, expectation: str, split: str | None = None) -> tuple[int, int]:
+        rows = [s for s in self.scored if s.entry.expected == expectation
+                and (split is None or s.entry.split == split)]
         return sum(1 for s in rows if s.correct), len(rows)
+
+    @property
+    def served_when_refusing(self) -> tuple[Scored, ...]:
+        """SHOULD_REFUSE rows where the engine actually RETRIEVED provisions.
+
+        Strictly worse than an empty pack, and the distinction the harness was blind
+        to until 2026-09-26. An empty pack on an off-topic question is unhelpful; three
+        Companies Act sections on "how long should I boil eggs" is the product being
+        wrong out loud.
+        """
+        return tuple(s for s in self.scored
+                     if s.entry.expected == SHOULD_REFUSE
+                     and (s.outcome.refs or s.outcome.route in ("exact", "search")))
 
     @property
     def answered(self) -> tuple[int, int]:
@@ -254,6 +305,16 @@ class Report:
             "GOLD SET -- two denominators, because one would flatter.",
             self._rate("answered-correctly (of those it SHOULD answer)", ar, at),
             self._rate("refused-rightly   (of those it SHOULD refuse)", rr, rt),
+        ]
+        # The held-out split, printed separately and always. A fix tuned on DEV that
+        # does not move HELDOUT has been fitted to the rows that judge it.
+        hr, ht = self._split(SHOULD_REFUSE, HELDOUT)
+        ha, hta = self._split(SHOULD_ANSWER, HELDOUT)
+        if ht or hta:
+            lines += ["  --- HELD OUT (never to be tuned against) ---",
+                      self._rate("  answered-correctly", ha, hta),
+                      self._rate("  refused-rightly   ", hr, ht)]
+        lines += [
             f"  not scored: {self.skipped_synthetic} SYNTHETIC entr"
             f"{'y' if self.skipped_synthetic == 1 else 'ies'} "
             "(candidate questions; a model may not supply its own answer key)",
@@ -263,6 +324,15 @@ class Report:
                          f"{'y' if len(self.unanswered) == 1 else 'ies'}: "
                          f"{', '.join(self.unanswered[:5])}"
                          f"{' ...' if len(self.unanswered) > 5 else ''}")
+        served = self.served_when_refusing
+        if served:
+            lines.append(
+                f"  !! {len(served)} question(s) it SHOULD have refused came back with "
+                f"retrieved provisions, not merely an empty pack. That is the worse "
+                f"failure and it is counted separately because a rate hides it:")
+            for s in served[:6]:
+                lines.append(f"       {s.entry.question_id}: route={s.outcome.route or '?'} "
+                             f"refs={list(s.outcome.refs)[:4]}")
         human = sum(1 for s in self.scored if s.entry.provenance == HUMAN)
         if human == 0:
             lines.append("  NO HUMAN LABELS. Every scored row is mechanical -- checkable "
@@ -294,10 +364,17 @@ def score(entries, outcomes) -> Report:
             if got.behaviour == REFUSED:
                 ok, why = False, "refused a question it should have been able to answer"
             else:
-                miss = [s for s in e.expected_substrings if s.lower() not in got.text.lower()]
-                ok = not miss
-                why = ("answered, and every required element is present" if ok else
-                       f"answered, but omitted: {', '.join(miss)}")
+                miss_refs = [r for r in e.expected_refs if r not in got.refs]
+                miss_sub = [s for s in e.expected_substrings
+                            if s.lower() not in got.text.lower()]
+                ok = not miss_refs and not miss_sub
+                if miss_refs:
+                    why = (f"answered, but the governing provision never reached the pack: "
+                           f"{', '.join(miss_refs)}")
+                elif miss_sub:
+                    why = f"answered, but omitted: {', '.join(miss_sub)}"
+                else:
+                    why = "answered, and the governing provision is in the pack"
         scored.append(Scored(e, got, ok, why))
     return Report(tuple(scored), synthetic, tuple(missing))
 
@@ -315,6 +392,7 @@ def load(path: Path | None = None) -> tuple[Entry, ...]:
         try:
             d = json.loads(line)
             d["expected_substrings"] = tuple(d.get("expected_substrings") or ())
+            d["expected_refs"] = tuple(d.get("expected_refs") or ())
             out.append(Entry(**d))
         except Exception as exc:                          # noqa: BLE001
             raise ValueError(f"{p}:{i}: {type(exc).__name__}: {exc}") from exc
@@ -328,6 +406,7 @@ def save(entries, path: Path | None = None) -> Path:
     for e in entries:
         d = asdict(e)
         d["expected_substrings"] = list(d["expected_substrings"])
+        d["expected_refs"] = list(d["expected_refs"])
         rows.append(json.dumps(d, ensure_ascii=False, sort_keys=True))
     p.write_text("\n".join(rows) + ("\n" if rows else ""), encoding="utf-8")
     return p

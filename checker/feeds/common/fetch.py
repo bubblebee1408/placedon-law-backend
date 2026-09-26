@@ -73,7 +73,8 @@ from urllib.parse import urlsplit
 
 from checker.feeds import EMPTY_SHA256, FetchResult
 from checker.provenance import ACCESSIBLE, BLOCKED, NOT_FOUND, UNREACHABLE
-from checker.robots import USER_AGENT, Rules, allowed, fetch_rules, ssl_context
+from checker.robots import (HTML, JSON, PDF, TEXT, XML, USER_AGENT, Rules, allowed,
+                            fetch_rules, payload_refusal, ssl_context)
 
 # Measured 2026-09-15: OFAC SDN XML is 29,076,910 bytes. 64MB is headroom above the
 # largest payload measured against this module, not an arbitrary round number.
@@ -159,6 +160,7 @@ def _refused(source_id: str, entry_url: str, behaviour: str, *,
 
 
 def fetch(source_id: str, entry_url: str, *,
+         expect: tuple[str, ...],
          rules: Rules | None = None,
          allow_redirect_hosts: tuple[str, ...] = (),
          opener: Callable[..., object] = _default_opener,
@@ -169,6 +171,11 @@ def fetch(source_id: str, entry_url: str, *,
     that host appears in `allow_redirect_hosts`; either way, `.url` on the result is
     always `entry_url`, never a resolved target. See this module's docstring for
     the measured OFAC case that shaped these choices.
+
+    `expect` names the payload kind(s) this adapter asks for -- `checker.robots`'s
+    PDF/HTML/XML/JSON/TEXT/DER. It has no default ON PURPOSE (see FETCH-1 below): an
+    adapter that has not decided what it is asking for has not decided whether it got
+    it, and that is exactly the failure being guarded.
     """
     origin = f"{urlsplit(entry_url).scheme}://{urlsplit(entry_url).netloc}"
     live_rules = rules if rules is not None else fetch_rules(origin)
@@ -181,16 +188,16 @@ def fetch(source_id: str, entry_url: str, *,
         resp = opener(entry_url, timeout=timeout)
     except urllib.error.HTTPError as exc:
         return _handle_http_error(source_id, entry_url, exc, allow_redirect_hosts, opener,
-                                  timeout, max_bytes)
+                                  timeout, max_bytes, expect)
     except (urllib.error.URLError, OSError) as exc:
         return _refused(source_id, entry_url, UNREACHABLE, note=f"unreachable: {exc}")
 
-    return _finish(source_id, entry_url, resp, max_bytes)
+    return _finish(source_id, entry_url, resp, max_bytes, expect=expect)
 
 
 def _handle_http_error(source_id: str, entry_url: str, exc: urllib.error.HTTPError,
                        allow_redirect_hosts: tuple[str, ...], opener, timeout: float,
-                       max_bytes: int) -> FetchResult:
+                       max_bytes: int, expect: tuple[str, ...]) -> FetchResult:
     if exc.code == 404:
         return _refused(source_id, entry_url, NOT_FOUND, http_status=404,
                         note="404: the entry host answered and said no such resource")
@@ -226,7 +233,7 @@ def _handle_http_error(source_id: str, entry_url: str, exc: urllib.error.HTTPErr
         except (urllib.error.URLError, OSError) as exc2:
             return _refused(source_id, entry_url, UNREACHABLE,
                             note=f"entry redirected to trusted host {target_host}, then unreachable: {exc2}")
-        return _finish(source_id, entry_url, resp, max_bytes,
+        return _finish(source_id, entry_url, resp, max_bytes, expect=expect,
                        resolved_host=target_host,
                        note=f"served via redirect: {entry_host} -> {target_host}")
 
@@ -238,7 +245,7 @@ def _handle_http_error(source_id: str, entry_url: str, exc: urllib.error.HTTPErr
 
 
 def _finish(source_id: str, entry_url: str, resp, max_bytes: int, *,
-           resolved_host: str = "", note: str = "") -> FetchResult:
+           expect: tuple[str, ...], resolved_host: str = "", note: str = "") -> FetchResult:
     try:
         too_large, content = _read_capped(resp, max_bytes)
     except _Truncated as exc:
@@ -252,6 +259,17 @@ def _finish(source_id: str, entry_url: str, resp, max_bytes: int, *,
         return _refused(source_id, entry_url, BLOCKED, http_status=status,
                         note=f"body exceeds {max_bytes} bytes ({note + '; ' if note else ''}"
                              f"refused to buffer it rather than truncate it silently)")
+    # FETCH-1: the payload is not what was asked for. UNREACHABLE rather than
+    # BLOCKED or NOT_FOUND, for the same reason a truncated transfer is: the host
+    # answered, but not about the thing we asked for. We cannot tell a soft-404 from
+    # a WAF interstitial from an S3 error page by looking at it, so we claim neither
+    # -- the note records what was actually served and lets a person decide.
+    ctype = resp.getheader("Content-Type") if hasattr(resp, "getheader") else None
+    why = payload_refusal(content, expect=expect, content_type=ctype or "")
+    if why:
+        return _refused(source_id, entry_url, UNREACHABLE, http_status=status,
+                        note=f"payload is not what was asked for: {why}"
+                             f"{'; ' + note if note else ''}")
     return FetchResult(source_id=source_id, url=entry_url, sha256=_sha256(content).hexdigest(),
                        content=content, source_behaviour=ACCESSIBLE, http_status=status,
                        resolved_host=resolved_host, note=note)
@@ -300,7 +318,7 @@ def _test() -> None:
     def _tripwire(url, *, timeout):
         calls.append(url); raise AssertionError("opener must not be called when robots denies")
 
-    r = fetch("TEST", "https://x.invalid/a", rules=deny_all, opener=_tripwire)
+    r = fetch("TEST", "https://x.invalid/a", rules=deny_all, expect=(TEXT,), opener=_tripwire)
     check(r.source_behaviour == BLOCKED, "a fetch through a blocked robots path fails CLOSED (BLOCKED), not empty-but-ACCESSIBLE")
     check(not r.content and not calls, "...and never even asks the transport for bytes")
     check("not loaded" in r.note, f"...and says why: {r.note}")
@@ -309,14 +327,15 @@ def _test() -> None:
     # ── an explicit Disallow behaves the same way, via real robots.parse() ──
     from checker.robots import parse as robots_parse
     disallowing = robots_parse("User-agent: *\nDisallow: /secret/\n")
-    r = fetch("TEST", "https://x.invalid/secret/x", rules=disallowing, opener=_tripwire)
+    r = fetch("TEST", "https://x.invalid/secret/x", rules=disallowing, expect=(TEXT,), opener=_tripwire)
     check(r.source_behaviour == BLOCKED, "an explicit robots Disallow also fails closed")
 
     # ── a plain 200 ───────────────────────────────────────────────────────────
     def opener_200(url, *, timeout):
         return _FakeResponse(200, b"<sdn>hello</sdn>", headers={"Content-Length": "16"})
 
-    r = fetch("SDN_TEST", "https://ofac.example.gov/sdn.xml", rules=allow_all, opener=opener_200)
+    r = fetch("SDN_TEST", "https://ofac.example.gov/sdn.xml", rules=allow_all, expect=(XML,),
+               opener=opener_200)
     check(r.source_behaviour == ACCESSIBLE and r.content == b"<sdn>hello</sdn>",
           "an allowed, answered fetch returns ACCESSIBLE with the real bytes")
     check(r.sha256 == _sha256(b"<sdn>hello</sdn>").hexdigest(), "the hash matches the actual content")
@@ -326,7 +345,7 @@ def _test() -> None:
     def opener_404(url, *, timeout):
         raise urllib.error.HTTPError(url, 404, "Not Found", None, None)
 
-    r = fetch("TEST", "https://x.gov/missing", rules=allow_all, opener=opener_404)
+    r = fetch("TEST", "https://x.gov/missing", rules=allow_all, expect=(TEXT,), opener=opener_404)
     check(r.source_behaviour == NOT_FOUND and not r.content,
           "a 404 comes back as NOT_FOUND with no content -- never as an empty success")
 
@@ -334,14 +353,14 @@ def _test() -> None:
     def opener_down(url, *, timeout):
         raise OSError("Connection refused")
 
-    r = fetch("TEST", "https://x.gov/y", rules=allow_all, opener=opener_down)
+    r = fetch("TEST", "https://x.gov/y", rules=allow_all, expect=(TEXT,), opener=opener_down)
     check(r.source_behaviour == UNREACHABLE, "a socket failure is UNREACHABLE, distinct from NOT_FOUND")
 
     # ── a 403 (WAF) is BLOCKED, not UNREACHABLE ──────────────────────────────
     def opener_403(url, *, timeout):
         raise urllib.error.HTTPError(url, 403, "Forbidden", None, None)
 
-    r = fetch("TEST", "https://x.gov/z", rules=allow_all, opener=opener_403)
+    r = fetch("TEST", "https://x.gov/z", rules=allow_all, expect=(TEXT,), opener=opener_403)
     check(r.source_behaviour == BLOCKED and r.http_status == 403,
           "a 403 is BLOCKED, distinct from a socket-level UNREACHABLE")
 
@@ -349,7 +368,7 @@ def _test() -> None:
     def opener_503(url, *, timeout):
         raise urllib.error.HTTPError(url, 503, "Service Unavailable", None, None)
 
-    r = fetch("TEST", "https://x.gov/w", rules=allow_all, opener=opener_503)
+    r = fetch("TEST", "https://x.gov/w", rules=allow_all, expect=(TEXT,), opener=opener_503)
     check(r.source_behaviour == UNREACHABLE, "a 5xx is UNREACHABLE, not confused with a WAF block")
 
     # ── the OFAC-shaped case: cross-host redirect refused by default ────────
@@ -362,7 +381,7 @@ def _test() -> None:
         raise urllib.error.HTTPError(url, 302, "Found", hdrs, None)
 
     r = fetch("OFAC_SDN", "https://www.treasury.gov/ofac/downloads/sdn.xml",
-             rules=allow_all, opener=opener_redirect)
+             rules=allow_all, expect=(XML,), opener=opener_redirect)
     check(r.source_behaviour == BLOCKED,
           "a cross-host redirect is refused by DEFAULT, not silently followed")
     check(r.url == "https://www.treasury.gov/ofac/downloads/sdn.xml",
@@ -381,7 +400,7 @@ def _test() -> None:
         return _FakeResponse(200, b"<sdn>the real 29MB-shaped payload</sdn>")
 
     r = fetch("OFAC_SDN", "https://www.treasury.gov/ofac/downloads/sdn.xml",
-             rules=allow_all, opener=opener_redirect_then_body,
+             rules=allow_all, expect=(XML,), opener=opener_redirect_then_body,
              allow_redirect_hosts=("wc2h-sls-prod-public-published.s3.us-gov-west-1.amazonaws.com",))
     check(r.source_behaviour == ACCESSIBLE, "an explicitly-trusted redirect target is followed")
     check(r.url == "https://www.treasury.gov/ofac/downloads/sdn.xml",
@@ -394,7 +413,8 @@ def _test() -> None:
     def opener_huge_declared(url, *, timeout):
         return _FakeResponse(200, b"x" * 10, headers={"Content-Length": "999999999"})
 
-    r = fetch("TEST", "https://x.gov/huge", rules=allow_all, opener=opener_huge_declared, max_bytes=1024)
+    r = fetch("TEST", "https://x.gov/huge", rules=allow_all, expect=(TEXT,),
+              opener=opener_huge_declared, max_bytes=1024)
     check(r.source_behaviour == BLOCKED and "exceeds" in r.note,
           f"a declared Content-Length over max_bytes refuses without reading the body: {r.note}")
 
@@ -402,7 +422,8 @@ def _test() -> None:
     def opener_huge_actual(url, *, timeout):
         return _FakeResponse(200, b"y" * 5000)  # no Content-Length header at all
 
-    r = fetch("TEST", "https://x.gov/huge2", rules=allow_all, opener=opener_huge_actual, max_bytes=1024)
+    r = fetch("TEST", "https://x.gov/huge2", rules=allow_all, expect=(TEXT,),
+              opener=opener_huge_actual, max_bytes=1024)
     check(r.source_behaviour == BLOCKED and not r.content,
           "an oversized body with no declared length is still caught mid-read, never buffered whole")
 
@@ -410,7 +431,8 @@ def _test() -> None:
     def opener_ok_size(url, *, timeout):
         return _FakeResponse(200, b"z" * 1000)
 
-    r = fetch("TEST", "https://x.gov/ok", rules=allow_all, opener=opener_ok_size, max_bytes=1024)
+    r = fetch("TEST", "https://x.gov/ok", rules=allow_all, expect=(TEXT,),
+              opener=opener_ok_size, max_bytes=1024)
     check(r.source_behaviour == ACCESSIBLE and len(r.content) == 1000,
           "a body under the cap is returned whole")
 
@@ -423,29 +445,86 @@ def _test() -> None:
     def _rel_opener(url, *, timeout):
         h = _Msg(); h["Location"] = "/elsewhere/file.xml"
         raise urllib.error.HTTPError(url, 302, "Found", h, None)
-    rr = fetch("t", "https://example.gov/x", rules=allow_all, opener=_rel_opener)
+    rr = fetch("t", "https://example.gov/x", rules=allow_all, expect=(TEXT,), opener=_rel_opener)
     check(rr.source_behaviour == BLOCKED, "a relative redirect is still refused")
     check("relative path" in rr.note and "no Location header" not in rr.note,
           f"...and the refusal names the relative path, not a missing header ({rr.note[:60]})")
 
     # ---- RT-04: a body shorter than its declared Content-Length ----------------
     short = _FakeResponse(200, b"half a document", headers={"Content-Length": "999999"})
-    r = fetch("t", "https://example.gov/x", rules=allow_all,
+    r = fetch("t", "https://example.gov/x", rules=allow_all, expect=(TEXT,),
               opener=lambda url, *, timeout: short)
     check(r.source_behaviour == UNREACHABLE and r.content == b"",
           "a truncated transfer is refused, carrying no bytes")
     check("truncated" in r.note,
           "...and says so, rather than presenting a partial document as complete")
     exact = _FakeResponse(200, b"whole", headers={"Content-Length": "5"})
-    r2 = fetch("t", "https://example.gov/x", rules=allow_all,
+    r2 = fetch("t", "https://example.gov/x", rules=allow_all, expect=(TEXT,),
                opener=lambda url, *, timeout: exact)
     check(r2.source_behaviour == ACCESSIBLE and r2.content == b"whole",
           "a body that matches its declared length still succeeds")
     nolen = _FakeResponse(200, b"no header here")
-    r3 = fetch("t", "https://example.gov/x", rules=allow_all,
+    r3 = fetch("t", "https://example.gov/x", rules=allow_all, expect=(TEXT,),
                opener=lambda url, *, timeout: nolen)
     check(r3.source_behaviour == ACCESSIBLE,
           "no Content-Length at all is not treated as truncation")
+
+    # ---- FETCH-1: a 200 is not evidence of WHAT came back ---------------------
+    # India Code answers a path it does not serve with 200 and the DSpace Angular
+    # shell (re-measured 26-09-2026: 6,762 bytes of text/html). The same shape reaches
+    # this module as a WAF interstitial or an S3 error page where a feed expected XML.
+    # Nothing here looked past the status code, so the page would have been hashed,
+    # cached by checker/feeds/common/cache.py, and handed to a parser as the source.
+    shell = b'<!DOCTYPE html>\n<html lang="en"><body>Not found</body></html>'
+    page = _FakeResponse(200, shell, headers={"Content-Type": "text/html; charset=UTF-8"})
+    r = fetch("OFAC_SDN", "https://sanctionslistservice.example/SDN.XML", rules=allow_all,
+              expect=(XML,), opener=lambda url, *, timeout: page)
+    check(r.source_behaviour != ACCESSIBLE,
+          "an HTML page where XML was expected is NOT an accessible fetch")
+    check(not r.content, "...and carries no bytes, so nothing downstream can parse it")
+    check("text/html" in r.note and "XML" in r.note,
+          f"...and the note names what was served and what was expected ({r.note})")
+
+    mislabelled = _FakeResponse(200, shell, headers={"Content-Type": "text/plain"})
+    r = fetch("OFAC_SDN", "https://sanctionslistservice.example/SDN.XML", rules=allow_all,
+              expect=(XML,), opener=lambda url, *, timeout: mislabelled)
+    check(r.source_behaviour != ACCESSIBLE and not r.content,
+          "...and still refused when a misconfigured host calls the page text/plain")
+
+    real_xml = _FakeResponse(200, b'<?xml version="1.0"?><sdnList><sdnEntry/></sdnList>',
+                             headers={"Content-Type": "text/xml"})
+    r = fetch("OFAC_SDN", "https://sanctionslistservice.example/SDN.XML", rules=allow_all,
+              expect=(XML,), opener=lambda url, *, timeout: real_xml)
+    check(r.source_behaviour == ACCESSIBLE and b"<sdnList>" in r.content,
+          "the real XML payload is unaffected")
+
+    listing = _FakeResponse(200, b'<html><span id="rpt_Extra_lbl_MinistryE_0">x</span></html>',
+                            headers={"Content-Type": "text/html"})
+    r = fetch("EGAZETTE", "https://egazette.example/", rules=allow_all, expect=(HTML,),
+              opener=lambda url, *, timeout: listing)
+    check(r.source_behaviour == ACCESSIBLE and b"rpt_Extra" in r.content,
+          "a feed that genuinely wants a page says so, and gets it")
+
+    # The cross-host redirect path must carry the expectation too, or the one fetch
+    # that leaves the entry host is the one that goes unchecked.
+    def opener_redirect_to_page(url, *, timeout):
+        if "treasury.example" in url:
+            h = email.message.Message()
+            h["Location"] = "https://s3.example/sdn.xml"
+            raise urllib.error.HTTPError(url, 302, "Found", h, None)
+        return _FakeResponse(200, shell, headers={"Content-Type": "text/html"})
+
+    r = fetch("OFAC_SDN", "https://treasury.example/sdn.xml", rules=allow_all,
+              expect=(XML,), opener=opener_redirect_to_page,
+              allow_redirect_hosts=("s3.example",))
+    check(r.source_behaviour != ACCESSIBLE and not r.content,
+          "an error page served by a TRUSTED redirect target is refused just the same")
+
+    try:
+        fetch("TEST", "https://x.gov/y", rules=allow_all, opener=opener_200)  # type: ignore[call-arg]
+        check(False, "a fetch that declares no expected payload kind must not be possible")
+    except TypeError:
+        check(True, "`expect` is required: there is no default that accepts anything")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:

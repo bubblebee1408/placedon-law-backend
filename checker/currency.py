@@ -227,6 +227,40 @@ def stale(as_of: date) -> list[Finding]:
     return [f for f in report(as_of) if f.needs_action]
 
 
+def _matches(fragment: str, instrument_name: str) -> bool:
+    """Does `fragment` name `instrument_name`? The ONLY containment test in this module.
+
+    Extracted 2026-09-26 (PLAN_19 G0.1) because `affected_by` and `acquisition_for`
+    each had their own copy and they had already drifted: `affected_by` did not strip
+    and did not refuse an empty fragment, so **`affected_by("")` returned
+    `['CA13-S2-85-SMALL']`** while `acquisition_for("")` returned `None`.
+    `acquisition_for`'s docstring claimed "Matched exactly as `affected_by` matches",
+    and that was false the day it was written.
+
+    The empty case is not a tidy-up. `operations.py` feeds a Gazette trigger straight
+    in, so an empty or whitespace trigger was manufacturing an operation against the
+    small-company threshold -- work created by a source that named nothing.
+
+    Deliberately NOT anchored. PLAN_19 G0.1 asked for anchoring to whole registered
+    instrument ids; the decision doc records why that was refused (§6.2): every live
+    caller passes a Gazette-style NAME fragment, no caller holds an id, and anchoring
+    would have reinstated the false "Nobody has read the instrument yet" sentence
+    removed in 8d578f3.
+    """
+    frag = fragment.strip().lower()
+    if not frag:
+        return False
+    # RT: a punctuation-only fragment named nothing, and got a substantive answer.
+    # Found 2026-09-26 red-teaming this module: "." , "-" and "(" each matched several
+    # instrument titles by substring and came back AMBIGUOUS -- literally true and
+    # useless, because a caller passing "." asked no question. The same shape as the
+    # one-character SOURCE that closed a requirement in operation_store (RT-12): a
+    # check for "non-empty" is not a check for "means something".
+    if not any(c.isalnum() for c in frag):
+        return False
+    return frag in instrument_name.lower()
+
+
 def affected_by(instrument_fragment: str) -> list[str]:
     """The Monitors primitive: which obligations would this instrument touch?
 
@@ -234,10 +268,22 @@ def affected_by(instrument_fragment: str) -> list[str]:
     obligation ids whose declared thresholds are set by a matching instrument.
     This is what turns 'a new Gazette arrived' into 'these obligations change'.
     """
-    frag = instrument_fragment.lower()
-    hit_keys = {t.key for t in all_thresholds() if frag in t.instrument.lower()}
+    hit_keys = {t.key for t in all_thresholds()
+                if _matches(instrument_fragment, t.instrument)}
     return sorted(d.obligation_id for d in DEPENDENCIES
                   if set(d.threshold_keys) & hit_keys)
+
+
+ACQUIRED = "ACQUIRED"   # attested, and the deciding module permits reliance on it
+PENDING = "PENDING"     # a registration record exists; no person has attested it
+# A fragment that names SEVERAL instruments names none of them. Measured 2026-09-26:
+# "G.S.R." matches five distinct instruments and "Companies Act 2013" matches two, and
+# both used to come back read=True off whichever row sorted first -- an answer about an
+# instrument the caller never asked about. This is NOT `None`: something is on record,
+# and saying "no record" would be the same conflation G0.1 exists to remove. `read` is
+# False, so both callers' existing `not acq.read` branch handles it conservatively.
+AMBIGUOUS = "AMBIGUOUS"
+ACQUISITION_STATUS = (ACQUIRED, PENDING, AMBIGUOUS)
 
 
 @dataclass(frozen=True)
@@ -258,12 +304,39 @@ class Acquisition:
     honest system look like it holds nothing (PLAN_17 M1.3).
     """
 
-    instrument: str            # the full name the threshold records, not the fragment asked for
-    read: bool                 # a person has read it AND the release gate permits serving it
-    state: str                 # the provenance evidence state behind that, worst-first
-    source_url: str
-    effective_from: date
+    instrument: str            # the full name the record holds, not the fragment asked for
+    read: bool                 # == (status == ACQUIRED). Derived, never independent.
+    state: str                 # the answering record's OWN evidence word, verbatim
+    source_url: str            # "" when the record names none -- never invented
+    # None when nothing dated is on record. A registration record carries no
+    # commencement date in general, and inventing one would be a fabricated legal
+    # date -- the thing this repository refuses most consistently.
+    effective_from: date | None
     note: str = ""
+    # PLAN_19 G0.1. `None` used to mean two different things: "never heard of it" and
+    # "downloaded, hashed, and waiting for a reviewer". The second was being reported
+    # as the first, so an operation demanded someone acquire a file already on disk.
+    status: str = ACQUIRED
+    # Which record answered. The states come from two vocabularies -- provenance
+    # states on the threshold path, `PENDING_HUMAN_REVIEW` and the like on the
+    # registry path -- and a reader who cannot tell which they are looking at cannot
+    # use either. A verdict with no witness is unusable.
+    answered_from: str = ""
+
+
+def _ambiguous(fragment: str, names: list[str], answered_from: str) -> Acquisition:
+    """The answer when a fragment names more than one instrument.
+
+    It names them all, in `note`, rather than picking one. A caller that silently got
+    the first of five would have no way to know it had asked a question with several
+    answers.
+    """
+    return Acquisition(
+        instrument=f"{len(names)} instruments match {fragment.strip()!r}",
+        read=False, state="", source_url="", effective_from=None,
+        note=("this fragment does not name one instrument; it matches: "
+              + "; ".join(n[:70] for n in names)),
+        status=AMBIGUOUS, answered_from=answered_from)
 
 
 def acquisition_for(instrument_fragment: str) -> Acquisition | None:
@@ -282,17 +355,58 @@ def acquisition_for(instrument_fragment: str) -> Acquisition | None:
     instrument is read only if every amount resting on it may be served. Taking the
     best would let one corroborated amount vouch for an unacquired sibling.
     """
-    frag = instrument_fragment.strip().lower()
-    if not frag:
+    hits = [t for t in all_thresholds() if _matches(instrument_fragment, t.instrument)]
+    if hits:
+        names = {t.instrument for t in hits}
+        if len(names) > 1:
+            return _ambiguous(instrument_fragment, sorted(names),
+                              "checker.prescribed_thresholds")
+        # Threshold path FIRST and unchanged, so 700(E) and 880(E) cannot regress.
+        worst = min(hits, key=lambda t: (t.servable, t.effective_from))
+        servable = all(t.servable for t in hits)
+        if servable:
+            status = ACQUIRED
+        else:
+            # A non-servable threshold does NOT tell us which of two things is true:
+            # a record exists and no person has attested it, or nothing was ever
+            # acquired. Mapping both to PENDING would be the very conflation G0.1
+            # removes, committed on the other path -- caught 2026-09-26 by the
+            # `none_acquired()` tests written for M1.3, which stub the registration
+            # away and correctly expect "nobody has read it".
+            from checker import instrument_registry as _ir
+            on_record = any(_matches(instrument_fragment, r.title)
+                            for r in _ir.records())
+            if not on_record:
+                return None
+            status = PENDING
+        return Acquisition(instrument=worst.instrument, read=servable,
+                           state=worst.state, source_url=worst.source_url,
+                           effective_from=worst.effective_from, note=worst.note,
+                           status=status,
+                           answered_from="checker.prescribed_thresholds")
+
+    # Registry SECOND: an instrument may be on record without setting any threshold
+    # this system declares. KMP, PAS, SEBI LODR and Rule 15 are all in that position,
+    # and every one of them used to come back as `None` -- indistinguishable from an
+    # instrument nobody has ever downloaded.
+    from checker import instrument_registry          # lazy: it imports scripts.*
+    reg = [r for r in instrument_registry.records()
+           if _matches(instrument_fragment, r.title)]
+    if not reg:
         return None
-    hits = [t for t in all_thresholds() if frag in t.instrument.lower()]
-    if not hits:
-        return None
-    worst = min(hits, key=lambda t: (t.servable, t.effective_from))
-    return Acquisition(instrument=worst.instrument,
-                       read=all(t.servable for t in hits),
-                       state=worst.state, source_url=worst.source_url,
-                       effective_from=worst.effective_from, note=worst.note)
+    titles = {r.title for r in reg}
+    if len(titles) > 1:
+        return _ambiguous(instrument_fragment, sorted(titles),
+                          ", ".join(sorted(r.module for r in reg)))
+    # The WORST governs, as on the threshold path: one attested record must not vouch
+    # for an unattested sibling matched by the same fragment.
+    worst_r = min(reg, key=lambda r: r.attested)
+    return Acquisition(instrument=worst_r.title,
+                       read=all(r.attested for r in reg),
+                       state=worst_r.state, source_url=worst_r.source_url,
+                       effective_from=None,
+                       note="", status=ACQUIRED if worst_r.attested else PENDING,
+                       answered_from=worst_r.module)
 
 
 def _test() -> None:
@@ -456,9 +570,62 @@ def _test() -> None:
               f"...on a servable evidence state ({a.state})")
 
     with none_acquired():
-        a = acquisition_for("880")
-        check(a is not None and not a.read,
-              "an unacquired instrument reads as NOT read -- the answer can be either")
+        # With the registration stubbed away there is no record at all, so `None` is
+        # the honest answer -- not PENDING. This assertion changed on 2026-09-26: it
+        # used to demand an Acquisition here, and G0.1 made "no record" and
+        # "record, unattested" different answers.
+        check(acquisition_for("880") is None,
+              "with no registration on record at all, the answer is None, not PENDING")
+
+    # ---- G0.1: three states, and none of them is the other ----------------------
+    check(acquisition_for("nonexistent-instrument-xyz") is None,
+          "an instrument nothing holds is None")
+    for frag, mod in (("Managerial Personnel", "register_kmp_rules"),
+                      ("Prospectus and Allotment", "register_pas_rules"),
+                      ("SEBI", "register_sebi_lodr")):
+        a = acquisition_for(frag)
+        if a is None or a.status != PENDING or mod not in a.answered_from:
+            check(False, f"{frag!r} should be PENDING via {mod} (got "
+                         f"{None if a is None else (a.status, a.answered_from)})")
+            break
+    else:
+        check(True, "an instrument registered but NOT attested is PENDING, naming the "
+                    "module that said so -- KMP, PAS and SEBI LODR")
+    a = acquisition_for("Managerial Personnel")
+    check(a.read is False and a.effective_from is None,
+          "...not read, and with no invented commencement date")
+
+    # An over-broad fragment names several instruments, so it names none of them.
+    for frag, n in (("Companies Act 2013", 2), ("G.S.R.", 2)):
+        a = acquisition_for(frag)
+        if a is None or a.status != AMBIGUOUS or a.read:
+            check(False, f"{frag!r} must be AMBIGUOUS and not read "
+                         f"(got {None if a is None else (a.status, a.read)})")
+            break
+    else:
+        check(True, "a fragment matching several instruments is AMBIGUOUS, never "
+                    "read=True off whichever row sorted first")
+    check("matches:" in acquisition_for("G.S.R.").note,
+          "...and it names the candidates rather than silently picking one")
+    check(acquisition_for("880").status == ACQUIRED and acquisition_for("880").read,
+          "880(E) is still ACQUIRED -- the threshold path is unchanged")
+
+    # ---- the shared matcher, and the bug it closed -------------------------------
+    check(affected_by("") == [] and affected_by("   ") == [],
+          "affected_by('') is empty: an empty Gazette trigger manufactured work until "
+          "2026-09-26, matching the small-company threshold on a fragment naming nothing")
+    check(_matches("880", "G.S.R. 880(E), x") and not _matches("", "anything"),
+          "_matches is the one containment test, and it refuses an empty fragment")
+    # RT 2026-09-26: punctuation matched many titles and answered AMBIGUOUS.
+    for junk in (".", "-", "(", ",", "()", "--", " . "):
+        if acquisition_for(junk) is not None:
+            check(False, f"a punctuation-only fragment {junk!r} got a substantive answer")
+            break
+    else:
+        check(True, "a fragment with no alphanumeric character names nothing -- "
+                    "'non-empty' is not 'means something' (RT-12's shape, one layer up)")
+    check(not _matches("...", "G.S.R. 880(E)") and _matches("880", "G.S.R. 880(E)"),
+          "...and a real fragment still matches")
 
     check(acquisition_for("G.S.R. 9999(E)") is None,
           "an instrument no threshold rests on is None, not a false negative dressed as one")
