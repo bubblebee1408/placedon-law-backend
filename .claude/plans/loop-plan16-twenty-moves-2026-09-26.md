@@ -65,7 +65,7 @@ printed. The Anthropic account had **no credit** at 25-09 — any move needing a
 | 10 | AGM-1 | Store `agm_actual` and `agm_due` separately; derive MGT-7 (60d), AOC-4 (30d), ADT-1 (15d) from the pivot. Handle the Registrar's 3-month extension (not for a first AGM) and the OPC carve-out (AOC-4 at 180d, no AGM). | PIT-1 | ready | | | |
 | 11 | KYC-1 | The DIR-3 KYC row — **the demo**. Triennial since G.S.R. 943(E) w.e.f. 31-03-2026; next due 30-06-2028. Every pre-2026 calendar says "30 September, annually" and is wrong. **Pull the gazette first**; the finding is secondary-sourced and must not enter the register on a blog post. | PIT-2 | ready | | | |
 | 12 | PROV-1 | Every retrieved chunk carries `(instrument, section, version, in_force_from, in_force_to)`. Precondition for a safe answer cache; this is retrieval work, not cache work. | — | ready | | | |
-| 13 | BITEMP-1 | Bitemporal statutory facts: `valid_time` (rewritten by a retrospective amendment, including into the past) and `transaction_time` (append-only). Without the second axis we cannot distinguish "we were wrong" from "the law changed" — the entire liability position. | PROV-1 | ready | | | |
+| 13 | BITEMP-1 | Bitemporal statutory facts: `valid_time` (rewritten by a retrospective amendment, including into the past) and `transaction_time` (append-only). Without the second axis we cannot distinguish "we were wrong" from "the law changed" — the entire liability position. | PROV-1 | **complete — built by the other session**, not by this loop | Themis session | | `090efb8` `990bd09` |
 | 14 | CACHE-1 | Answer cache keyed on `H(document)·H(question)·prompt_version·model+params·H(law_state_vector)`, where the vector is the provenance **actually used**. A hit whose versions have moved is a miss **plus an alert**. | BITEMP-1 | ready | | | |
 | 15 | CACHE-2 | Reverse index `(instrument, section, version) -> answer_ids`, so "which tenants received which answers relying on s.X between A and B" is answerable. Invalidation is a notification workflow, not a `DEL`. | CACHE-1 | ready | | | |
 | 16 | RAG-1 | Order retrieved chunks by **position in the source document**, not relevance. OP-RAG: 16K retrieved scored F1 44.43 against 34.32 for a full 128K context. Free accuracy. | PROV-1 | ready | | | |
@@ -90,3 +90,26 @@ printed. The Anthropic account had **no credit** at 25-09 — any move needing a
   Worth recording as a hazard in its own right: two sessions independently chose the same obvious
   filename on the same day. Plan files should carry the plan they serve in the name, which is why
   this one now says `plan16`.
+- 26-09 14:50 both implementers resumed past the 13:30 reset. **BUD-1 committed** (`66c9a5c`, the
+  spend-cap 429 distinction). Note `backend/budget.py` is clean in the working tree, so BUD-2 and
+  BUD-3 live only in that agent's scratch copy — it was told to check the scratch survived before
+  assuming it did. FETCH-1 has five dirty files and is verifying a claim one of its own comments
+  makes rather than asserting it, which is the right instinct and is exactly how the `assistant.css`
+  overflow comment and the `CLAUDE.md` dead-host claim went wrong.
+- 26-09 14:52 **move 13 (BITEMP-1) is already built, by the other session, and better motivated than
+  my runbook entry.** `checker/observation_store.py` (`090efb8`) is an append-only bitemporal store
+  for `ontology.Observed` whose stated purpose is *"What did Themis tell this client on 31 March, and
+  on what basis?"* — answerable years later because a correction is a NEW observation with a later
+  `known_at`, never an edit. `990bd09` then makes `event_log` distinguish a **recorded** transaction
+  time from a **defaulted** one, on the reasoning that a defaulted `known_at` which looks recorded is
+  the silent-default failure.
+  Their no-index decision is derived from a red-team finding of theirs (RT-11): `operation_store.save`
+  wrote whole-object snapshots, so two callers who each closed a different requirement produced a file
+  holding only the second one's work. An append-only log cannot lose a row that way — but an index is
+  a mutable whole-file structure, so rebuilding it after two concurrent appends is RT-11 one layer
+  down. That is a better argument than anything in my row 13.
+  **Consequences for this loop:** row 13 is complete and credited to them. **Rows 14 and 15 (the answer
+  cache and its reverse index) must build on `observation_store.py`, not a second store beside it** —
+  two append-only ledgers in one repo is how they drift, which is the same warning I had just given
+  BUD about its `reserve`/`settle` persistence. I came within one launch of shipping the duplicate I
+  was warning about, and only checking the commits stopped it.
