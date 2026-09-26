@@ -24,6 +24,7 @@
   "abstain_reason": "",
   "insufficient_evidence": false,
   "missing": [],
+  "query_expansions": [],
   "retrieval_query": "s.2(85)",
   "route": "exact",
   "unusable_keys": [],

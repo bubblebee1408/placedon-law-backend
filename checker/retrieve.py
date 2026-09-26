@@ -194,6 +194,8 @@ def retrieve(query: str, *, top_k: int = SEARCH_TOP_K,
                                            else CITATION_UNRESOLVED)),
                 ROUTE_ABSTAIN)
 
+    from checker.text_search import expand_query
+    _, expansions = expand_query(query)
     found = search(query, top_k=top_k)
     rows, blocked = _admission_filter(found, mode)
     blocked = blocked + rule_notices
@@ -205,7 +207,7 @@ def retrieve(query: str, *, top_k: int = SEARCH_TOP_K,
     # not found". That is the honest shape: the model is told something was asked for and is not
     # here, without being handed the inadmissible text itself.
     pack = build_pack(rows, query=query, mode=mode, withheld_notices=tuple(blocked),
-                      abstain_reason=reason)
+                      abstain_reason=reason, query_expansions=expansions)
     return pack, (ROUTE_SEARCH if rows else ROUTE_ABSTAIN)
 
 
@@ -252,11 +254,19 @@ def _test() -> None:
     # The honest limit, pinned so nobody later adds an OFF_TOPIC code: the engine cannot
     # tell an off-topic question from held law it failed to retrieve. Both are the same
     # fact about the engine, and separating them needs a model deciding scope.
-    check(_reason("How long should I boil eggs for breakfast?")
-          == _reason("Within how many days of the AGM must the annual return be filed?")
-          == NOTHING_RETRIEVED,
-          "an off-topic question and held law we could not find are the SAME reason -- "
-          "the engine cannot distinguish them and does not pretend to")
+    # Asserted STRUCTURALLY, not by a behavioural coincidence. The first version of this
+    # check paired an off-topic question with "Within how many days of the AGM must the
+    # annual return be filed?" and asserted both gave NOTHING_RETRIEVED. Move 4's
+    # abbreviation lexicon then FIXED the second one -- "AGM" now expands to "annual
+    # general meeting" and it retrieves s.92 -- so the check started failing on a
+    # genuine improvement. A test pinned to today's failures fails when they are fixed;
+    # what must hold is the RULE.
+    check("OFF_TOPIC" not in ABSTAIN_REASONS and len(ABSTAIN_REASONS) == 3,
+          "there is no OFF_TOPIC reason: the engine cannot tell an off-topic question "
+          "from held law it failed to retrieve, and inventing a code for it would be a "
+          "lie with a clean interface")
+    check(_reason("How long should I boil eggs for breakfast?") == NOTHING_RETRIEVED,
+          "...so an off-topic question says only what is true: we searched and found nothing")
     check(not pack.to_dict()["provisions"], "'rule 4' returns NO provisions")
     check(pack.insufficient_evidence, "'rule 4' reports insufficient evidence")
 
