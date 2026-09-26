@@ -53,11 +53,11 @@ printed. The Anthropic account had **no credit** at 25-09 — any move needing a
 
 | # | ID | Move | Depends | Status | Impl | Ver | Commits |
 |---|---|---|---|---|---|---|---|
-| 1 | BUD-1 | `budget.py`: distinguish the spend-cap 429 (`enforced_spend_limit_reached`, no `retry-after`) from a rate-limit 429. Retrying the former fails for the rest of the month. | — | **verifying** | a2ad2c389a8b5bb9d | a3b19d0cdf969bada | `66c9a5c` |
-| 2 | BUD-2 | `cost_inr()` takes **four** counters: `input`, `cache_creation`, `cache_read`, `output`. `input_tokens` counts only tokens after the last cache breakpoint — treating it as total under-bills by up to 90%. | BUD-1 | **verifying** | a2ad2c389a8b5bb9d | a3b19d0cdf969bada | `6553cc4` |
-| 3 | BUD-3 | Tokens-per-page **per model**. Claude 4.7+ produces ~30% more tokens for identical text, so `PRICING` alone is half a cost model. | BUD-2 | **verifying** | a2ad2c389a8b5bb9d | a3b19d0cdf969bada | `28bc194` |
-| 4 | BUD-4 | `Store` Protocol gains `reserve`/`settle`. Reserve the worst case (`count_tokens` + `max_tokens`); settle to actual. A guard that only records after the fact cannot refuse. | BUD-3 | **verifying** | a2ad2c389a8b5bb9d | a3b19d0cdf969bada | `7f50c89` |
-| 5 | FETCH-1 | Generalise `04664f5`: every fetcher asserts Content-Type and magic bytes, not status alone. `checker/robots.py`, `commencement.py`, `revocation.py`, the watchers. | — | **verifying** | ac3998707ad496e80 | ae5d88d9536b68422 | `1c0ca81` `8e27345` |
+| 1 | BUD-1 | `budget.py`: distinguish the spend-cap 429 (`enforced_spend_limit_reached`, no `retry-after`) from a rate-limit 429. Retrying the former fails for the rest of the month. | — | **fixing** — verifier FAIL (cheap-direction holes) | a2ad2c389a8b5bb9d | a3b19d0cdf969bada | `66c9a5c` |
+| 2 | BUD-2 | `cost_inr()` takes **four** counters: `input`, `cache_creation`, `cache_read`, `output`. `input_tokens` counts only tokens after the last cache breakpoint — treating it as total under-bills by up to 90%. | BUD-1 | **fixing** | a2ad2c389a8b5bb9d | a3b19d0cdf969bada | `6553cc4` |
+| 3 | BUD-3 | Tokens-per-page **per model**. Claude 4.7+ produces ~30% more tokens for identical text, so `PRICING` alone is half a cost model. | BUD-2 | **fixing** — its own failure mode left in the default path | a2ad2c389a8b5bb9d | a3b19d0cdf969bada | `28bc194` |
+| 4 | BUD-4 | `Store` Protocol gains `reserve`/`settle`. Reserve the worst case (`count_tokens` + `max_tokens`); settle to actual. A guard that only records after the fact cannot refuse. | BUD-3 | **fixing** — mechanism unadopted by the only live caller | a2ad2c389a8b5bb9d | a3b19d0cdf969bada | `7f50c89` |
+| 5 | FETCH-1 | Generalise `04664f5`: every fetcher asserts Content-Type and magic bytes, not status alone. `checker/robots.py`, `commencement.py`, `revocation.py`, the watchers. | — | **verifier PASS**, 8 findings back with the implementer | ac3998707ad496e80 | ae5d88d9536b68422 | `1c0ca81` `8e27345` + main-session `e561f2a` |
 | 6 | FETCH-2 | `provenance.py`: re-admit `www.indiacode.nic.in` (it serves the real PDFs) **with** the FETCH-1 content check, and record why the earlier exclusion was wrong. | FETCH-1 | ready | | | |
 | 7 | PIT-1 | `applicable(company_facts, obligation, as_at_date) -> decision + instrument version relied on`. Never a boolean stored against a company. "Is this a small company?" has had five answers. | — | ready | | | |
 | 8 | PIT-2 | Threshold history as data: s.2(85) (13-02-2015, 09-02-2018, 01-04-2021, 15-09-2022, 01-12-2025), s.135 (19-09-2018), s.177 (07-05-2018), s.204 (01-04-2020). Each with its instrument. | PIT-1 | ready | | | |
@@ -138,3 +138,47 @@ printed. The Anthropic account had **no credit** at 25-09 — any move needing a
   `--only` semantics and was never at risk.** The danger is specifically a bare `git commit` with no
   pathspec. Recorded because the wrong lesson — "explicit paths do not protect you" — would make the
   next agent distrust a form that is safe, or invent a more elaborate one that is not safer.
+- 27-09 **FETCH-1: verifier PASS (8 findings). BUD-1…4: verifier FAIL (14 findings, 7 cheap-direction).**
+  Both verifications were unusually good and both are worth reading in full. The FETCH verifier blocked
+  the network **at the socket layer** and then *verified the blocker blocked* before trusting the
+  no-network claim; the BUD verifier ran **54 mutants and killed 48**, reproducing all four claimed RED
+  counts to the check (18/34, 35/48, 48/57, 67/89).
+  **Check 3 in the main session split three ways, which is the point of doing it:**
+  * **Confirmed:** `backend/budget.py` was **not in the gate at all** — `grep budget scripts/run_tests.sh`
+    returned 0, so all 89 checks enforced nothing, three commits after BUD-1's body disclosed it.
+    And `store or FileStore()` discarded any **falsy** store (a dict-backed one defining `__len__` is
+    falsy when empty), so on the serverless deployment this module's own header cites, each instance
+    would keep a private ledger and enforce the full cap separately — N× the cap, silently.
+    Both fixed in `c8cc971`, with the new check proven to have teeth: 92/92 with the fix, 91/92
+    reverted, and **89/89 with the fix reverted before it existed** — nothing pinned it.
+  * **Confirmed and WORSE than reported:** `can_make_call`'s default estimate. `DEFAULT_MODEL` is
+    `claude-sonnet-5`, which the module's own `TOKENIZER` marks `4.7+`, while the default 6,700 input
+    tokens is the docstring's figure **measured on Haiku 4.5** — a pre-4.7 count. The verifier said
+    18.8% low; measured here it is **26.1%** (₹2.9140 against ₹3.9431). This is precisely the §5.5
+    failure BUD-3 was commissioned to close, sitting in the gate's own default path, and
+    `estimate_tokens` ships **wired to nothing**. Handed back rather than patched, because whether the
+    default routes through `estimate_tokens` or disappears entirely is a design call.
+  * **NOT REPRODUCED, and the implementer was told not to act on it:** F3's claim that a negative
+    persisted ledger "manufactures unlimited budget" with `remaining_month=1_003_500.0`. Measured, a
+    negative ledger reads **identically to an honest zero** — `spent_day=0.0`, `spent_month=0.0`,
+    `remaining_month=3500.0`. The floor already exists. A verifier gets doubted like everything else,
+    and this is the third time in this repo that a verifier finding has itself been wrong.
+- 27-09 **The FETCH verifier's F1 changed the build order, and it was right to.**
+  `scripts/ingest_companies_act.py` wrote the manifest **before** the fetch loop, unconditionally, so a
+  page parsing to zero section ids replaced a 527-section provenance record with `count: 0` and a
+  **fresh `enumerated_at`**, and returned exit 0. The section JSONs survive — the loop iterates an empty
+  list — which is exactly what made it invisible: 529 files on disk and a manifest saying the Act has
+  none. Measured: `indiacode.gov.in/handle/123456789/2114` answers **200 `text/html`, 6,762 bytes**,
+  zero `sectionId=` matches. **Move 6 (FETCH-2) re-admits the India Code hosts and would have armed
+  this**, so it was fixed first, in `e561f2a`: refuse on empty, exit non-zero, five stub tests, and the
+  script is now in the gate — it had neither before. The live manifest was diffed before and after and
+  is byte-identical, still `count=527`.
+  Note the guard class here: the payload check **cannot** catch this one, because HTML is exactly what
+  that page is meant to be. The shape of the result is the only evidence, so the check has to live at
+  the call site. A content-type guard and a shape assertion are different tools and this loop now has
+  both.
+- 27-09 **FETCH-2 held deliberately.** Two code jobs are already running on disjoint paths (BUD in
+  `backend/budget.py`, FETCH-1 in `checker/robots.py` and the feeds). Move 6's entry gate is met —
+  `payload_refusal` is importable and `www.indiacode.nic.in` is measured serving `application/pdf` —
+  and the manifest wipe it would have armed is now closed, so it is genuinely ready. It waits for a
+  slot rather than for a dependency.
