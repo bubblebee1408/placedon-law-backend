@@ -129,6 +129,7 @@ REGISTRY: dict[str, int] = {
     "checker.entity_graph": RING_1,
     "checker.ontology": RING_1,          # typed objects; PLAN_19 G1.1
     "checker.observation_store": RING_1, # append-only bitemporal store; PLAN_19 G1.2
+    "checker.derivation": RING_1,        # evidence semiring; PLAN_19 G2.1
     "checker.event_log": RING_1,
     "checker.corporate_data": RING_1,
     "checker.mca_aggregator": RING_1,

@@ -15,6 +15,7 @@ suites=(
   checker/instrument_registry.py
   checker/ontology.py
   checker/observation_store.py
+  checker/derivation.py
   checker/prompt_safety.py
   checker/anthropic_model.py
   checker/gemini_model.py
