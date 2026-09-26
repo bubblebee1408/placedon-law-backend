@@ -405,7 +405,13 @@ class FileStore:
 
 class BudgetTracker:
     def __init__(self, store: Store | None = None, *, today: date | None = None) -> None:
-        self.store = store or FileStore()
+        # `store or FileStore()` swapped any FALSY store for the default file. A store
+        # that defines __len__ and happens to be empty is falsy, which is ordinary for a
+        # dict- or UserDict-backed one -- and in the serverless deployment this module's
+        # own header cites, every instance would then keep a private local ledger and each
+        # enforce the full cap separately. Total spend up to N x the cap, in the cheap
+        # direction, with no sound. Identity, not truthiness.
+        self.store = store if store is not None else FileStore()
         self._today = today or date.today()
 
     # ── state ────────────────────────────────────────────────────────────
@@ -1028,6 +1034,25 @@ if __name__ == "__main__":
           BudgetTracker(nm2, today=date(2026, 8, 8)).can_make_call().allowed, True)
     check("  ...and the day was never the binding constraint in either case",
           0.0 + 2.0 + cost_inr(DEFAULT_MODEL, 6_700, 700) < DAILY_CAP_INR, True)
+
+    # ── a falsy store is still a store (found by BUD verification) ───────────
+    # `store or FileStore()` discarded any store that was FALSY. A dict- or
+    # UserDict-backed store defining __len__ is falsy when empty, which is ordinary --
+    # and on the serverless deployment this module's header cites, each instance would
+    # then keep a private FileStore ledger and enforce the full cap separately, spending
+    # up to N x the cap with no sound. Identity, not truthiness.
+    class _EmptyFalsyStore:
+        def __init__(self) -> None: self.d: dict = {}
+        def __len__(self) -> int: return len(self.d)     # falsy while empty
+        def read(self) -> dict: return dict(self.d)
+        def write(self, data: dict) -> None: self.d = dict(data)
+
+    _falsy = _EmptyFalsyStore()
+    check("a falsy store is kept, not swapped for FileStore",
+          BudgetTracker(_falsy).store is _falsy, True)
+    check("  ...and it really was falsy when handed over", bool(_falsy), False)
+    check("  ...while None still falls back to the default FileStore",
+          isinstance(BudgetTracker(None).store, FileStore), True)
 
     print(f"\n{total - failures}/{total} passed")
     raise SystemExit(1 if failures else 0)

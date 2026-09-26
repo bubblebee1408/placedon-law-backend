@@ -35,6 +35,7 @@ suites=(
   checker/staleness.py
   checker/derived_date.py
   checker/document_date.py
+  backend/budget.py
   checker/claim_schema.py
   checker/legal_ref.py
   checker/admission.py
