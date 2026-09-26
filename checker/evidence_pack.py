@@ -468,6 +468,19 @@ class EvidencePack:
     missing: tuple[str, ...] = ()
     query: str = ""
     mode: str = "MODEL"
+    # WHY the route abstained, when it did. One of retrieve.ABSTAIN_REASONS, or "".
+    #
+    # Additive (PLAN_17 M7 rule 1) and "" rather than None, so the field's TYPE never
+    # varies -- a client that reads it always gets a string. `route` itself could not
+    # carry this: scripts/assistant_contract.py:266 pins route == "abstain" on a
+    # committed fixture, so its values are contract, not implementation.
+    #
+    # It exists because one `abstain` covered three provable situations and a lawyer
+    # could not tell them apart: a citation whose rows were all withheld by admission,
+    # a citation that could not be resolved, and a search that found nothing. See
+    # docs/plan19/decisions/M1_ABSTAIN_REASON.md and
+    # docs/research/EMPTY_PACK_2026_09_25.md.
+    abstain_reason: str = ""
 
     @property
     def usable(self) -> tuple[PackedProvision, ...]:
@@ -501,6 +514,7 @@ class EvidencePack:
             "mode": self.mode,
             "provisions": [p.to_dict() for p in self.provisions],
             "missing": list(self.missing),
+            "abstain_reason": self.abstain_reason,
         }
 
     def prompt_block(self) -> str:
@@ -690,7 +704,8 @@ def build_pack(rows: list[dict], *, query: str = "", mode: str = "MODEL",
                requested_sections: tuple[str, ...] = (),
                withheld_notices: tuple[str, ...] = (),
                point_in_time_request: date | str | None = None,
-               instrument_id: str = DEFAULT_INSTRUMENT) -> EvidencePack:
+               instrument_id: str = DEFAULT_INSTRUMENT,
+               abstain_reason: str = "") -> EvidencePack:
     """Build the pack from retrieved rows.
 
     `requested_sections` lets the caller name what it asked for, so the pack can say a provision
@@ -729,7 +744,7 @@ def build_pack(rows: list[dict], *, query: str = "", mode: str = "MODEL",
         missing.append("No provision was retrieved at all. This pack is empty.")
 
     return EvidencePack(provisions=provisions, as_of=as_of, missing=tuple(missing),
-                        query=query, mode=mode)
+                        query=query, mode=mode, abstain_reason=abstain_reason)
 
 
 # --- self-test ------------------------------------------------------------------------------------

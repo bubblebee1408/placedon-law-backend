@@ -181,8 +181,13 @@ def ask(question: str) -> tuple[Outcome | None, str]:
     # The route the retriever took. Served in the payload since before this harness
     # existed; not read until 2026-09-26, which is why the harness could not see a
     # regression that turned `abstain` into `search` on an off-topic question.
-    route = str(((body.get("evidence_pack") or {}) if isinstance(body.get("evidence_pack"), dict)
-                 else {}).get("route", ""))
+    _ep = body.get("evidence_pack") if isinstance(body.get("evidence_pack"), dict) else {}
+    route = str((_ep or {}).get("route", ""))
+    # WHY it abstained, when it did (move 1). `route` alone could not tell a search that
+    # found nothing from a rule that is held and unadmitted.
+    reason = str((_ep or {}).get("abstain_reason", ""))
+    if reason:
+        route = f"{route}:{reason}"
     text = body.get("answer") or body.get("reason") or str(body)
     refused = (state in _REFUSAL_STATES
                or code == 422

@@ -25,6 +25,7 @@
   "action": "tell_us_blocking"
  },
  "evidence_pack": {
+  "abstain_reason": "",
   "insufficient_evidence": false,
   "missing": [
    "ACT:COMPANIES_ACT_2013:S16 exists in state SUSPENDED but is not admitted for model use"

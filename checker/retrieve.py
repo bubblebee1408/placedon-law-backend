@@ -34,6 +34,8 @@ from checker.legal_retrieval import Hit, names_a_provision, resolve
 from checker.text_search import search
 
 __all__ = ["retrieve", "ROUTE_EXACT", "ROUTE_SEARCH", "ROUTE_ABSTAIN",
+           "HELD_NOT_ADMITTED", "CITATION_UNRESOLVED", "NOTHING_RETRIEVED",
+           "ABSTAIN_REASONS",
            "MODE_MODEL", "MODE_REVIEW"]
 
 MODE_MODEL = adm.MODE_MODEL
@@ -42,6 +44,22 @@ MODE_REVIEW = adm.MODE_REVIEW
 ROUTE_EXACT = "exact"
 ROUTE_SEARCH = "search"
 ROUTE_ABSTAIN = "abstain"
+
+# WHY an abstain happened. `route` cannot carry this -- assistant_contract.py:266 pins
+# route == "abstain" on a committed fixture -- and one value covering three situations
+# is what made "we do not hold this body of law" indistinguishable from "we hold it and
+# did not find it" (docs/research/EMPTY_PACK_2026_09_25.md).
+#
+# There is deliberately NO code for "the question was not about law". The engine cannot
+# know it: "How long should I boil eggs" and "Within how many days of the AGM must the
+# annual return be filed" both retrieve nothing, and they are the same fact about this
+# engine. Telling them apart needs a model deciding scope, and scope.py is the
+# authority (CLAUDE.md). NOTHING_RETRIEVED is honest; an OFF_TOPIC code would be a lie
+# with a clean interface.
+HELD_NOT_ADMITTED = "HELD_NOT_ADMITTED"        # rows exist; admission withheld every one
+CITATION_UNRESOLVED = "CITATION_UNRESOLVED"    # a provision was cited and cannot be resolved
+NOTHING_RETRIEVED = "NOTHING_RETRIEVED"        # searched what we hold; nothing cleared the bar
+ABSTAIN_REASONS = (HELD_NOT_ADMITTED, CITATION_UNRESOLVED, NOTHING_RETRIEVED)
 
 SEARCH_TOP_K = 3
 
@@ -154,23 +172,40 @@ def retrieve(query: str, *, top_k: int = SEARCH_TOP_K,
     if hits:
         rows, blocked = _admission_filter(_rows(hits), mode)
         blocked = blocked + rule_notices
-        pack = build_pack(rows, query=query, mode=mode, withheld_notices=tuple(blocked))
+        # The citation RESOLVED, so anything missing here was withheld, not absent.
+        pack = build_pack(rows, query=query, mode=mode, withheld_notices=tuple(blocked),
+                          abstain_reason="" if rows else HELD_NOT_ADMITTED)
         return pack, (ROUTE_EXACT if rows else ROUTE_ABSTAIN)
 
     if names_a_provision(query):
         # Cited, unresolvable. Do NOT search -- see the module docstring. But if the citation names
         # a rule we HOLD and have not admitted, say so. Abstaining silently here tells the reader
         # the same thing as "no such rule exists", and one of those is false.
+        # Two facts hide here too, and this branch already computes the difference.
+        # If `_named_rule_notice` produced anything, the cited rule IS held and merely
+        # unadmitted -- which this function's own docstring insists must be said,
+        # because abstaining silently "tells the reader the same thing as 'no such
+        # rule exists', and one of those is false". Only a citation that resolves to
+        # nothing we hold is genuinely unresolvable.
+        named = _named_rule_notice(query)
         return (build_pack([], query=query, mode=mode,
-                           withheld_notices=tuple(rule_notices + _named_rule_notice(query))),
+                           withheld_notices=tuple(rule_notices + named),
+                           abstain_reason=(HELD_NOT_ADMITTED if (named or rule_notices)
+                                           else CITATION_UNRESOLVED)),
                 ROUTE_ABSTAIN)
 
-    rows, blocked = _admission_filter(search(query, top_k=top_k), mode)
+    found = search(query, top_k=top_k)
+    rows, blocked = _admission_filter(found, mode)
     blocked = blocked + rule_notices
+    # Two different abstains hide behind this branch, and they are not the same fact:
+    # search found nothing at all, or it found rows and admission withheld all of them.
+    # The first is "we could not find it"; the second is "it exists and is not reviewed".
+    reason = "" if rows else (HELD_NOT_ADMITTED if found else NOTHING_RETRIEVED)
     # Withheld items ride in `requested_sections`, which the pack already renders as "sought and
     # not found". That is the honest shape: the model is told something was asked for and is not
     # here, without being handed the inadmissible text itself.
-    pack = build_pack(rows, query=query, mode=mode, withheld_notices=tuple(blocked))
+    pack = build_pack(rows, query=query, mode=mode, withheld_notices=tuple(blocked),
+                      abstain_reason=reason)
     return pack, (ROUTE_SEARCH if rows else ROUTE_ABSTAIN)
 
 
@@ -192,6 +227,36 @@ def _test() -> None:
     # The regression this module exists for.
     pack, route = retrieve("rule 4")
     check(route == ROUTE_ABSTAIN, "'rule 4' abstains rather than searching")
+
+    # ---- WHY it abstained. One `abstain` used to cover three different facts, and a
+    # lawyer could not tell "we do not hold this body of law" from "we hold it and did
+    # not find it" (docs/research/EMPTY_PACK_2026_09_25.md). `route` itself may NOT
+    # carry this: scripts/assistant_contract.py:266 pins route == "abstain".
+    def _reason(q: str) -> str:
+        return retrieve(q)[0].abstain_reason
+
+    check(_reason("rule 4 of the Board Rules") == HELD_NOT_ADMITTED,
+          "a cited rule we HOLD and have not admitted says so, rather than abstaining "
+          "silently -- which would read as 'no such rule exists'")
+    check(_reason("section 9999") == CITATION_UNRESOLVED,
+          "a citation that resolves to nothing we hold is UNRESOLVED, not withheld")
+    check(_reason("Do we need consent before sharing employee data with a vendor?")
+          == NOTHING_RETRIEVED,
+          "a search that found nothing says so -- it does not claim the body of law is "
+          "out of scope, which ask_scope decides separately")
+    check(_reason("s.173") == "",
+          "a route that did NOT abstain carries an empty reason, never a stale one")
+    check(all(r in ABSTAIN_REASONS for r in
+              (_reason("rule 4"), _reason("section 9999"), _reason("xyzzy plugh"))),
+          "every reason given is one of the declared constants")
+    # The honest limit, pinned so nobody later adds an OFF_TOPIC code: the engine cannot
+    # tell an off-topic question from held law it failed to retrieve. Both are the same
+    # fact about the engine, and separating them needs a model deciding scope.
+    check(_reason("How long should I boil eggs for breakfast?")
+          == _reason("Within how many days of the AGM must the annual return be filed?")
+          == NOTHING_RETRIEVED,
+          "an off-topic question and held law we could not find are the SAME reason -- "
+          "the engine cannot distinguish them and does not pretend to")
     check(not pack.to_dict()["provisions"], "'rule 4' returns NO provisions")
     check(pack.insufficient_evidence, "'rule 4' reports insufficient evidence")
 

@@ -21,6 +21,7 @@
   "kind": "general"
  },
  "evidence_pack": {
+  "abstain_reason": "",
   "insufficient_evidence": false,
   "missing": [],
   "retrieval_query": "s.2(85)",
