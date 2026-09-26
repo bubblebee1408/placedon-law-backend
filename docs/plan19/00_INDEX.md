@@ -54,7 +54,7 @@ refuses every source that cannot carry it.
 | 06 | [Loop prompts](06_LOOP_PROMPTS.md) | Claude Code | One prompt per step, with a subagent, a definition of done, and stop conditions |
 | 07 | [Investor brief](07_INVESTOR_BRIEF.md) | investors | Two pages. No metric that has not been measured |
 | 08 | [Self-critique](08_SELF_CRITIQUE.md) | founder | What would make each part worthless, and the kill criterion for each |
-| 09 | [How it works and why it matters](09_HOW_IT_WORKS_AND_WHY_IT_MATTERS.md) | founder, non-engineers | Plain-language walkthrough: the building, one question end to end, the seven rules, market impact |
+| 09 | [Project Themis: how it works and why it matters](09_HOW_IT_WORKS_AND_WHY_IT_MATTERS.md) | founder, non-engineers | What Themis is (name, engine vs product, history), how it is built, one question end to end, the seven rules, market impact |
 
 ## Tags used throughout
 

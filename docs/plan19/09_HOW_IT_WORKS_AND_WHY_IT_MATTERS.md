@@ -1,7 +1,73 @@
-# 09: How Placedon is built, what matters, and how it could change legal work in India
+# 09: Project Themis: how it is built, what matters, and how it could change legal work in India
 
 *Written for the founder, 2026-09-26. Plain language first, technical names in brackets so you can
 find the code. Nothing here is a measured market figure unless it says where it was measured.*
+
+---
+
+## Part 0: What Project Themis is
+
+### The name, and what it stands for
+
+**Themis** was adopted as the project name on your decision of 16 September 2026
+(`docs/THEMIS_STATUS_AND_NEXT_2026_09_17.md` §0). In Greek, Θέμις means *"that which is laid
+down"*: established law, as distinct from argument. That is the project in one word:
+
+- Themis serves only what is **laid down**: a provision, the instrument that changed it, and the
+  date it took effect.
+- Anything that is not established well enough is **refused, visibly**.
+
+The motto in the README says the same thing in three sentences:
+
+> **The model may propose. The system must verify. The reviewer decides.**
+
+### Themis and Placedon: engine and product
+
+| Name | What it is | Decided |
+|---|---|---|
+| **Themis** | **The engine.** The code that holds the law, reasons over it, checks every answer, and refuses when it cannot prove one. Everything in `checker/`, the Themis MCP tools (`themis.ask`, `themis.search_law`, `themis.get_obligations` and the rest) and scripts such as `scripts/themis_mcp.py` and `scripts/themis_slice.py` | Engine named 16 Sep 2026 |
+| **Placedon** | **The product and brand** a customer buys and logs into. The website, the web app, pricing and the company | PLAN_16 decision 5, 24 Sep 2026 |
+
+A useful comparison: Placedon is the car a customer drives, and Themis is the engine. Every plan
+from PLAN_16 onward, the study guide (`docs/STUDY_GUIDE_THEMIS.md`) and the technical report
+(`docs/THEMIS_TECHNICAL_REPORT_2026_09_17.md`) is about Themis.
+
+### Where Themis came from
+
+| When | What happened |
+|---|---|
+| 12 Aug 2026 | The repository starts on a different law: PoSH (workplace sexual harassment) tooling, e.g. District Officer letters. Retired since; only its refusal and `docs/RETIRED_POSH.md` remain |
+| 20 Aug | Scope changes to Indian corporate law (`research/TASKS.md` R-011). The Companies Act corpus, scanner and date logic follow |
+| 11 Sep (PLAN_08) | Two layers are proposed: **Bookmark** (a company and entity graph, "Bloomberg for Indian corporate law") and **God's Eye** (live data feeds). A source audit finds that most market-wide data in India cannot lawfully be reused |
+| 16 Sep | **Themis** replaces both names as the project name |
+| 17 Sep | The Themis technical report: deterministic core verified, and three weaknesses named (a broken PDF reader, an amendment corpus frozen since 2023, no lawyer review) |
+| 23 Sep | **Themis V0 vertical slice** (`scripts/themis_slice.py`) runs end to end on live Gazette data: *Gazette event → affected obligation → watchlist → operation → tasks → human review* |
+| 24 Sep | PLAN_16 (research), PLAN_17 (beta build) and PLAN_18 (technical design) written for Themis. Placedon confirmed as the product name, Themis as the engine |
+| 25 Sep | The Themis MCP server ships 13 read-only tools. The gold set gives Themis its first honest measurement, which shows where it is wrong |
+| 25–26 Sep | PLAN_19: the roadmap from Themis-the-engine to a Gotham-grade workbench for lawyers (parts 00–09) |
+
+### The three things that make Themis Themis
+
+1. **A deterministic core.** Code, not a model, decides what the law requires. Same question,
+   same answer, every time.
+2. **A record of the law over time.** Themis knows when each provision changed, so a question
+   about 2021 is answered with 2021's law.
+3. **A check on everything a model writes.** Every sentence must trace to its source exactly, or
+   it is shown as refused.
+
+And one gate that holds them together: the **admission gate** (`checker/admission.py`).
+*"Existence is not admissibility."* A source can be downloaded, hashed and searchable and still
+not be safe to state as law. Only material that has passed admission reaches an answer. This is
+the literal meaning of the name: only what is *laid down* is served.
+
+### A risk carried with the name
+
+`Themis Solutions Inc.` is recorded as the registered name of Clio, a large legal
+practice-management vendor, and other "Themis" businesses trade in legal and compliance services.
+Trademark clearance is **UNVERIFIED and likely contested** (THEMIS_STATUS §0). Keeping Themis as
+the *internal engine* name while customers see *Placedon* reduces that exposure. It does not
+remove it if "Themis" is ever used in marketing. Get a trademark lawyer's view before it appears
+on the website.
 
 ---
 
@@ -38,9 +104,9 @@ So a lawyer who asks "is this company a small company?" can get a confident, wro
 person, a website or an AI. **None of them tells you which notification the answer rests on, or
 that it may be out of date.**
 
-### What Placedon does about it
+### What Themis does about it
 
-Placedon (the product; its engine is called **Themis**) answers only when it can show:
+Themis (the engine inside Placedon) answers only when it can show:
 
 1. **the exact provision:** s.2(85), the definition of small company;
 2. **the instrument that last changed it:** G.S.R. 880(E);
@@ -50,12 +116,12 @@ Placedon (the product; its engine is called **Themis**) answers only when it can
 and when it **cannot** show those, it **abstains** and says what is missing. It never guesses and
 never stays silent.
 
-**The one-line difference:** most legal tools help you *find* law. Placedon *checks* whether the
+**The one-line difference:** most legal tools help you *find* law. Themis *checks* whether the
 law you are relying on is the right law, for the right company, on the right date, and proves it.
 
 ---
 
-## Part 2: How it is built, explained as a building
+## Part 2: How Themis is built, explained as a building
 
 Think of it as a building with six floors. **A floor may only rest on the floors below it, never
 above.** This is enforced by code (`checker/rings.py`), not by good intentions. If an engineer
@@ -70,7 +136,7 @@ makes the legal core depend on a news feed, the build fails.
  FLOOR 0  LEGAL CORE      the Companies Act text, obligations, date logic, currency — pure rules
 ```
 
-### Floor 0: the legal core (the foundation, and the most valuable part)
+### Floor 0: the legal core (the heart of Themis, and the most valuable part)
 
 - **What it holds:** 529 sections of the Companies Act, 2013, each hash-stamped so any change to
   the text is detectable (`corpus/companies_act/`).
@@ -137,7 +203,7 @@ One engine, several doors:
   already use. Today it offers 13 read-only tools (`checker/mcp/`).
 - **Word add-in:** checks a draft where it is written.
 
-PLAN_19 generates all of these from **one list of commands** (the "verb table"), so the web app,
+PLAN_19 generates all of these from **one list of Themis commands** (the "verb table"), so the web app,
 the CLI and the AI connector can never give different answers to the same question.
 
 ### Floor 5: operations (how we know it works)
@@ -154,7 +220,7 @@ the CLI and the AI connector can never give different answers to the same questi
   So Placedon has **no accuracy figure**, and we do not publish one. Getting that first
   human-checked set is the most important non-code task (H-001).
 
-### The journey of one question, floor by floor
+### The journey of one question through Themis, floor by floor
 
 > A lawyer asks: *"Is ABC Pvt Ltd a small company as of 31 March 2026? Its capital is ₹7 crore
 > and turnover ₹60 crore."*
@@ -183,11 +249,13 @@ the CLI and the AI connector can never give different answers to the same questi
 Ask the same question **as of 30 November 2025** and the answer flips: ₹7 crore is above the old
 ₹4 crore limit. **That flip, shown with its reason, is the product.**
 
-### The journey of one law change (what PLAN_19 adds: "watching")
+### The journey of one law change (what the V0 slice started and PLAN_19 completes: "watching")
 
 > The government publishes a new notification in the Gazette.
 
-1. The Gazette feed picks it up (Floor 1).
+1. The Gazette feed picks it up (Floor 1). This part already runs: the Themis V0 slice
+   (`scripts/themis_slice.py`) does it on live data. One honest limit it found: a Gazette listing
+   does not name the instrument inside it, so the first task is always a human opening the PDF.
 2. The engine finds which sections it changes, which obligations rest on those sections, which of
    a customer's companies those obligations apply to, and which matters those companies are in.
 3. Each affected customer gets an **alert that states its reason as a chain**:
@@ -201,9 +269,9 @@ Ask the same question **as of 30 November 2025** and the answer flips: ₹7 cror
 
 ---
 
-## Part 3: What is important (the seven rules that are the real asset)
+## Part 3: What is important (the seven Themis rules that are the real asset)
 
-Code can be copied. These rules, held in every line, are what make Placedon different. If any one
+Code can be copied. These rules, held in every line of Themis, are what make Placedon different. If any one
 is broken to ship faster, the product loses the reason it exists.
 
 | # | Rule | Why it matters to a lawyer |
@@ -221,7 +289,7 @@ These come from `CLAUDE.md`, and each one was learned from a mistake recorded in
 
 ---
 
-## Part 4: What is built and what is not (honest, 26 Sep 2026)
+## Part 4: What of Themis is built and what is not (honest, 26 Sep 2026)
 
 | Part | Status |
 |---|---|
@@ -235,13 +303,14 @@ These come from `CLAUDE.md`, and each one was learned from a mistake recorded in
 | Gold set | **Built**, with 0 lawyer-checked questions |
 | Login, multi-customer separation, Vault | **Designed** (PLAN_18), not built |
 | Web app for customers | **Designed**, not built |
+| Themis V0 slice: Gazette → affected obligation → tasks → human review | **Built** (`scripts/themis_slice.py`); produces work, never a legal conclusion |
 | Watching and alerts, replay, recall | **Designed** (PLAN_19 G1–G3) |
 | Case-law checker ("has this judgment been overruled?") | **Designed** (PLAN_19 G5); needs counsel's view on the data licence |
 | Continuous automated testing on GitHub (CI) | **Waiting on you:** add the workflow file through the GitHub website |
 
 ---
 
-## Part 5: How this could change the market for lawyers
+## Part 5: How Themis could change the market for lawyers
 
 This part separates what is **observed** (with a source) from what is **reasoning** (marked [I]).
 No market-size number is given, because none has been measured for this segment (R-011 in
@@ -264,9 +333,9 @@ No market-size number is given, because none has been measured for this segment 
   firms (Karza/Perfios, Probe42 and others) check registers, but have no drafting or legal-review
   surface. Verification exists and drafting exists; nothing joins them.
 
-### 5.2 The shift Placedon pushes: from "search" to "verify and watch"
+### 5.2 The shift Themis pushes: from "search" to "verify and watch"
 
-| Today | With Placedon [I] |
+| Today | With Themis inside Placedon [I] |
 |---|---|
 | Lawyer searches, reads, and hopes the source is current | The lawyer gets the provision **and proof it was current on the date that matters** |
 | Checking a document's legal currency is manual, done by a senior person | A first-pass audit flags stale figures, wrong document types and missing information, **each with its source**, and the senior person reviews the flags rather than the whole document |
@@ -310,6 +379,7 @@ No market-size number is given, because none has been measured for this segment 
   (PLAN_00 falsifier 3).
 - **Legal:** whether an AI product's analysis counts as "commentary" under Copyright Act
   s.52(1)(q)(ii), on which the corpus rests, is a question for counsel.
+- **The name:** see Part 0. "Themis" is likely contested as a trademark in legal software.
 - **Scope:** only the Companies Act is held today. Listed companies also need SEBI law, which is
   not held. The product is narrow until more law is acquired, and it says so.
 
@@ -347,7 +417,10 @@ No market-size number is given, because none has been measured for this segment 
 
 | Term | Meaning |
 |---|---|
-| **Themis** | The engine inside Placedon |
+| **Themis** | The engine inside Placedon. Greek for "that which is laid down"; project name since 16 Sep 2026 |
+| **Placedon** | The product and brand customers buy |
+| **Admission gate** | The Themis check that decides whether a source is established enough to be served |
+| **V0 slice** | The first end-to-end run of Themis on live Gazette data (`scripts/themis_slice.py`) |
 | **Abstain** | Decline to answer, and say what is missing |
 | **Instrument** | A notification, rule or amending Act that changes the law, e.g. G.S.R. 880(E) |
 | **Evidence state** | How strongly a fact is supported: VERIFIED, CORROBORATED, INFERRED, UNRESOLVED or RETRACTED |
