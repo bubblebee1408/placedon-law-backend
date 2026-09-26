@@ -54,16 +54,96 @@ DEFAULT_MODEL = "claude-sonnet-5"
 
 Mode = Literal["normal", "budget", "offline"]
 
+# ── BUD-2: four counters, not two (PLAN_16 §5.2) ─────────────────────────────
+# A usage event has FOUR billable categories, not two: `input_tokens`,
+# `cache_creation_input_tokens`, `cache_read_input_tokens`, `output_tokens`.
+#
+# The trap is `input_tokens`: it counts **only the tokens after the last cache
+# breakpoint**. Read as "total input" it under-bills a cached call by up to 90%, and the
+# statutory prefix — the thing we cache — is nearly the whole request. That is the largest
+# single error this file could contain, because it is invisible: the ledger simply runs
+# slow and the cap admits calls it should have refused.
+#
+# Cache write is 1.25x the base input rate at the 5-minute TTL and 2x at the 1-hour TTL.
+# Cache read is 0.1x.
+CACHE_WRITE_MULTIPLIER: dict[str, float] = {"5m": 1.25, "1h": 2.00}
+CACHE_READ_MULTIPLIER = 0.10
 
-def cost_inr(model: str, input_tokens: int, output_tokens: int, *, batch: bool = False) -> float:
-    """Rupee cost of one call. Batch API is 50% off."""
+# The default is the 1-HOUR multiplier — the expensive one — even though the API's own
+# default TTL is 5 minutes. Deliberate, and the same rule as the list price above: a caller
+# that asks the API for `ttl: "1h"` and forgets to say so here under-bills 37.5% of its
+# write, silently, for as long as nobody notices. A caller on the 5-minute default that
+# forgets over-bills 60% of its write and loses headroom. Only one of those two mistakes
+# can admit a call the cap should have refused.
+DEFAULT_CACHE_TTL = "1h"
+
+# Cache reads are cheaper still on some models (0.05x is documented for Opus 5.5). That is
+# NOT encoded here, for the same reason the Sonnet 5 introductory price is not: a
+# model-specific discount makes every estimate for that model too low the moment the
+# discount changes, and §5.5 names this exact failure shape. 0.1x everywhere over-estimates
+# where the discount is real, which is the safe direction.
+
+_USAGE_FIELDS = ("input_tokens", "cache_creation_input_tokens",
+                 "cache_read_input_tokens", "output_tokens")
+
+
+def cost_inr(model: str, input_tokens: int = 0, output_tokens: int = 0, *,
+             cache_creation_input_tokens: int = 0, cache_read_input_tokens: int = 0,
+             cache_ttl: str = DEFAULT_CACHE_TTL, batch: bool = False) -> float:
+    """Rupee cost of one call across all four billable counters. Batch API is 50% off.
+
+    `input_tokens` and `output_tokens` stay positional so every existing two-argument call
+    keeps working unchanged; the two cache counters are keyword-only, so there is no
+    argument order in which they can be confused for each other. A two-argument call now
+    means exactly one thing — "no cache was in play" — and `cost_of_usage()` exists so the
+    cached path never has to be spelled out by hand.
+    """
     if model not in PRICING:
         raise ValueError(f"unknown model {model!r} — add it to PRICING with its published rates")
+    if cache_ttl not in CACHE_WRITE_MULTIPLIER:
+        raise ValueError(f"unknown cache TTL {cache_ttl!r} — one of {sorted(CACHE_WRITE_MULTIPLIER)}")
+    counts = (input_tokens, output_tokens, cache_creation_input_tokens, cache_read_input_tokens)
+    if any(c < 0 for c in counts):
+        # A negative counter would credit the ledger, i.e. manufacture budget out of a
+        # malformed usage record. Refuse it at the boundary.
+        raise ValueError(f"token counts must be >= 0, got {counts}")
+
     inp, out = PRICING[model]
-    usd = (input_tokens / 1_000_000) * inp + (output_tokens / 1_000_000) * out
+    usd = (
+        (input_tokens / 1_000_000) * inp
+        + (cache_creation_input_tokens / 1_000_000) * inp * CACHE_WRITE_MULTIPLIER[cache_ttl]
+        + (cache_read_input_tokens / 1_000_000) * inp * CACHE_READ_MULTIPLIER
+        + (output_tokens / 1_000_000) * out
+    )
     if batch:
         usd *= 0.5
     return round(usd * USD_INR, 4)
+
+
+def cost_of_usage(model: str, usage: object, *, cache_ttl: str = DEFAULT_CACHE_TTL,
+                  batch: bool = False) -> float:
+    """Cost of a call from the provider's own `response.usage`, dict or object.
+
+    The correct path made the short one. Every field the response reports is read, so a
+    cached call cannot be costed as though its prefix were free. A usage body carrying none
+    of the four known fields raises rather than costing 0.0 — a silent zero is how a
+    ledger stops counting.
+    """
+    def field(name: str) -> object:
+        if isinstance(usage, Mapping):
+            return usage.get(name)
+        return getattr(usage, name, None)
+
+    got = {name: field(name) for name in _USAGE_FIELDS}
+    if all(v is None for v in got.values()):
+        raise ValueError(
+            f"usage carries none of {_USAGE_FIELDS} — refusing to cost it as zero")
+    return cost_inr(model,
+                    int(got["input_tokens"] or 0),
+                    int(got["output_tokens"] or 0),
+                    cache_creation_input_tokens=int(got["cache_creation_input_tokens"] or 0),
+                    cache_read_input_tokens=int(got["cache_read_input_tokens"] or 0),
+                    cache_ttl=cache_ttl, batch=batch)
 
 
 # ── BUD-1: the 429 that must never be retried (PLAN_16 §5.3) ─────────────────
@@ -448,6 +528,79 @@ if __name__ == "__main__":
           tc.can_make_call().allowed, False)
     check("  ...but next month the flag is gone",
           BudgetTracker(capped, today=date(2026, 9, 1)).can_make_call().allowed, True)
+
+
+    def refused(fn) -> bool:
+        """True only when fn() raised ValueError.
+
+        `isinstance(attempt(fn), str)` is not enough: a NameError from a function that
+        does not exist yet is also a string, so such a check passes before the code is
+        written and proves nothing.
+        """
+        r = attempt(fn)
+        return isinstance(r, str) and r.startswith("ValueError")
+
+    # ── BUD-2: four counters, not two (PLAN_16 §5.2) ─────────────────────────
+    M = 1_000_000
+    check("the two-argument call is unchanged by the four-counter signature",
+          cost_inr("claude-haiku-4-5", 6_700, 700), 0.9713)
+    check("a cache READ is a tenth of an input token",
+          attempt(lambda: cost_inr("claude-haiku-4-5", 0, 0, cache_read_input_tokens=M)), 9.523)
+    check("a cache WRITE at the 5-minute TTL is 1.25x",
+          attempt(lambda: cost_inr("claude-haiku-4-5", 0, 0,
+                                   cache_creation_input_tokens=M, cache_ttl="5m")), 119.0375)
+    check("a cache WRITE at the 1-hour TTL is 2x",
+          attempt(lambda: cost_inr("claude-haiku-4-5", 0, 0,
+                                   cache_creation_input_tokens=M, cache_ttl="1h")), 190.46)
+    # Stated as the literal 1-hour figure, not as "equals the 1h call": comparing two
+    # calls to the same missing function is a check that passes before the code exists.
+    check("the DEFAULT write multiplier is the expensive one (1h, not the API's 5m)",
+          attempt(lambda: cost_inr("claude-haiku-4-5", 0, 0, cache_creation_input_tokens=M)),
+          190.46)
+    check("an unknown TTL is refused rather than guessed",
+          refused(lambda: cost_inr("claude-haiku-4-5", 0, 0,
+                                   cache_creation_input_tokens=M, cache_ttl="7d")), True)
+    check("a negative counter is refused — it would credit the ledger",
+          refused(lambda: cost_inr("claude-haiku-4-5", -1, 0)), True)
+
+    # The failure §5.2 names: `input_tokens` counts only what follows the last cache
+    # breakpoint, so a cached call passed through the two-argument door under-bills badly.
+    naive = cost_inr("claude-haiku-4-5", 700, 700)
+    true_cost = attempt(lambda: cost_inr("claude-haiku-4-5", 700, 700,
+                                         cache_read_input_tokens=200_000))
+    check("a 200k cached prefix costs real money the two-arg call cannot see",
+          isinstance(true_cost, float) and true_cost > naive, True)
+    check("  ...and the two-arg call under-bills it by more than 80%",
+          isinstance(true_cost, float) and (1 - naive / true_cost) > 0.80, True)
+
+    check("the four counters sum rather than collapse",
+          attempt(lambda: cost_inr("claude-opus-5", 1_000, 2_000,
+                                   cache_creation_input_tokens=3_000,
+                                   cache_read_input_tokens=4_000, cache_ttl="5m")),
+          round(((1_000 * 5.0) + (2_000 * 25.0) + (3_000 * 5.0 * 1.25)
+                 + (4_000 * 5.0 * 0.10)) / 1_000_000 * USD_INR, 4))
+    # Within one unit of the ledger's own 4-decimal rounding: the halving happens in USD
+    # before the conversion, so `batch * 2 == full` only up to that last place.
+    check("batch still halves the whole four-counter bill",
+          attempt(lambda: abs(cost_inr("claude-opus-5", 1_000, 2_000,
+                                       cache_read_input_tokens=4_000, batch=True) * 2
+                              - cost_inr("claude-opus-5", 1_000, 2_000,
+                                         cache_read_input_tokens=4_000)) < 1e-3), True)
+
+    usage = {"input_tokens": 700, "cache_creation_input_tokens": 0,
+             "cache_read_input_tokens": 200_000, "output_tokens": 700}
+    check("cost_of_usage reads all four counters off a usage dict",
+          attempt(lambda: cost_of_usage("claude-haiku-4-5", usage)), true_cost)
+
+    class _Usage:                       # what the SDK actually hands back
+        input_tokens = 700
+        cache_creation_input_tokens = 0
+        cache_read_input_tokens = 200_000
+        output_tokens = 700
+    check("  ...and off the SDK's usage object, not only a dict",
+          attempt(lambda: cost_of_usage("claude-haiku-4-5", _Usage())), true_cost)
+    check("  ...and refuses a usage body carrying none of the four",
+          refused(lambda: cost_of_usage("claude-haiku-4-5", {"tokens": 5})), True)
 
     print(f"\n{total - failures}/{total} passed")
     raise SystemExit(1 if failures else 0)
