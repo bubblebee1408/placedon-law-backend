@@ -250,6 +250,14 @@ def _matches(fragment: str, instrument_name: str) -> bool:
     frag = fragment.strip().lower()
     if not frag:
         return False
+    # RT: a punctuation-only fragment named nothing, and got a substantive answer.
+    # Found 2026-09-26 red-teaming this module: "." , "-" and "(" each matched several
+    # instrument titles by substring and came back AMBIGUOUS -- literally true and
+    # useless, because a caller passing "." asked no question. The same shape as the
+    # one-character SOURCE that closed a requirement in operation_store (RT-12): a
+    # check for "non-empty" is not a check for "means something".
+    if not any(c.isalnum() for c in frag):
+        return False
     return frag in instrument_name.lower()
 
 
@@ -608,6 +616,16 @@ def _test() -> None:
           "2026-09-26, matching the small-company threshold on a fragment naming nothing")
     check(_matches("880", "G.S.R. 880(E), x") and not _matches("", "anything"),
           "_matches is the one containment test, and it refuses an empty fragment")
+    # RT 2026-09-26: punctuation matched many titles and answered AMBIGUOUS.
+    for junk in (".", "-", "(", ",", "()", "--", " . "):
+        if acquisition_for(junk) is not None:
+            check(False, f"a punctuation-only fragment {junk!r} got a substantive answer")
+            break
+    else:
+        check(True, "a fragment with no alphanumeric character names nothing -- "
+                    "'non-empty' is not 'means something' (RT-12's shape, one layer up)")
+    check(not _matches("...", "G.S.R. 880(E)") and _matches("880", "G.S.R. 880(E)"),
+          "...and a real fragment still matches")
 
     check(acquisition_for("G.S.R. 9999(E)") is None,
           "an instrument no threshold rests on is None, not a false negative dressed as one")
