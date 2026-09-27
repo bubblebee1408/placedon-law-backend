@@ -707,7 +707,7 @@ def summarise(sources, *, question: str = "", client=None, model: str = SUMMARIS
                 "with no sentences in it reads as a document with nothing to report.")
         import anthropic
         client = anthropic.Anthropic()
-    if budget is not None and not budget.can_make_call():
+    if budget is not None and not budget.can_make_call().allowed:
         raise ModelUnavailable("budget exhausted; no call was made")
 
     content = [{"type": "document",
@@ -1234,8 +1234,12 @@ def _checks(check) -> None:
             _os.environ["ANTHROPIC_API_KEY"] = held
 
     class Broke:
-        def can_make_call(self):
-            return False
+        # A REAL Verdict, not a bare `False`. The bare False this used to return is a type
+        # BudgetTracker never produces, and returning it is what hid the fail-open: the
+        # guard read `not <falsy>` here and `not <always-truthy Verdict>` in production.
+        def can_make_call(self, *a, **k):
+            from backend.budget import Verdict
+            return Verdict(False, "budget", "monthly cap reached", 0.0, 3_500.0)
 
     try:
         summarise(sources, client=fc, budget=Broke())

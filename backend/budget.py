@@ -10,7 +10,11 @@ This is the master spec's best idea (§4.3), with three corrections:
 
   * **The cost model.** The spec's ₹3-5/call prices a mid-tier model at Opus rates. Measured on
     Haiku 4.5 (~6,700 in / ~700 out) an answer is **~₹0.97**, so the real ceiling is ~120
-    answers/day, not the spec's 50.
+    answers/day, not the spec's 50. **That figure is Haiku's and only Haiku's.** It is a token
+    COUNT as much as a price, and a count does not travel between tokenizers: the same words
+    through a 4.7+ tokenizer are ~1.35x more tokens, so on DEFAULT_MODEL the same answer costs
+    ~₹3.95 and the ceiling is ~29/day. `typical_call_inr()` is the figure to quote, because it
+    re-measures the same WORDS through whichever tokenizer is actually being billed.
 
   * **Persistence.** The spec's tracker holds counters on `self`. On serverless every invocation
     may be a fresh process, so an in-memory tracker resets to zero on each request and enforces
@@ -111,6 +115,22 @@ def estimate_tokens(model: str, *, words: int | None = None, pages: float | None
         raise ValueError(f"pages must be >= 0, got {pages}")
     return math.ceil(pages * tokens_per_page(model))
 
+# ── BUD-F2: the typical call, carried in WORDS rather than tokens ────────────
+# `can_make_call` defaulted to `input_tokens=6_700, output_tokens=700` — the Haiku 4.5
+# measurement in this module's own header — while DEFAULT_MODEL is a 4.7+ model. A token count
+# is tokenizer-specific, so that default priced Sonnet 5's typical call at ₹2.91 when it costs
+# ₹3.95: **26.2% low, in the one direction a budget guard may never be wrong.** BUD-3 shipped
+# `estimate_tokens` to close exactly this gap and then wired it to nothing.
+#
+# The fix is to carry the typical call as WORDS — which are tokenizer-independent — and put them
+# back through the billed model's own tokenizer at the point of use. The words are DERIVED from
+# the header's measurement rather than re-guessed, so the ₹0.97 Haiku figure survives to the
+# paisa, and they round up for the same reason every other figure in this file does.
+_HAIKU_MEASURED_INPUT_TOKENS = 6_700      # this module's header, measured on Haiku 4.5
+_HAIKU_MEASURED_OUTPUT_TOKENS = 700
+TYPICAL_PROMPT_WORDS = math.ceil(_HAIKU_MEASURED_INPUT_TOKENS / TOKENS_PER_WORD["pre-4.7"])
+TYPICAL_ANSWER_WORDS = math.ceil(_HAIKU_MEASURED_OUTPUT_TOKENS / TOKENS_PER_WORD["pre-4.7"])
+
 Mode = Literal["normal", "budget", "offline"]
 
 # ── BUD-2: four counters, not two (PLAN_16 §5.2) ─────────────────────────────
@@ -177,6 +197,17 @@ def cost_inr(model: str, input_tokens: int = 0, output_tokens: int = 0, *,
     if batch:
         usd *= 0.5
     return round(usd * USD_INR, 4)
+
+
+def typical_call_inr(model: str = DEFAULT_MODEL) -> float:
+    """Rupee cost of one typical answer on `model`, measured through ITS OWN tokenizer.
+
+    This is the figure to gate on and the figure to quote. Quoting a token count instead
+    silently assumes a tokenizer, which is the defect this function exists to close.
+    """
+    return cost_inr(model,
+                    estimate_tokens(model, words=TYPICAL_PROMPT_WORDS),
+                    estimate_tokens(model, words=TYPICAL_ANSWER_WORDS))
 
 
 def cost_of_usage(model: str, usage: object, *, cache_ttl: str = DEFAULT_CACHE_TTL,
@@ -323,6 +354,18 @@ class Verdict:
     @property
     def remaining_month(self) -> float:
         return round(MONTHLY_CAP_INR - self.spent_month - self.reserved, 2)
+
+    def __bool__(self) -> bool:
+        # `if not tracker.can_make_call():` READS like a budget check and is not one. A
+        # dataclass instance is unconditionally truthy, so that line is always False and the
+        # guard never fires however exhausted the budget is. Three call sites shipped it
+        # (gemini_model, anthropic_model, lawyer_summary) and all three tests passed, because
+        # each stubbed `can_make_call` to return a bare `False` -- a falsy type this class
+        # never returns. The stub was the only thing the test proved. Refusing truthiness
+        # turns a silent fail-open into a TypeError at the call site that has the bug.
+        raise TypeError(
+            "a Verdict has no truth value -- read .allowed. `if not verdict:` is always "
+            "False, so it admits the very call the verdict refused")
 
 
 @dataclass(frozen=True)
@@ -487,9 +530,18 @@ class BudgetTracker:
 
     # ── the gate ─────────────────────────────────────────────────────────
     def can_make_call(self, estimated_inr: float | None = None, *, model: str = DEFAULT_MODEL,
-                      input_tokens: int = 6_700, output_tokens: int = 700) -> Verdict:
+                      input_tokens: int | None = None, output_tokens: int | None = None
+                      ) -> Verdict:
+        # A half-given pair is refused rather than zero-filled, on `estimate_tokens`' rule:
+        # supplying the missing half quietly is wrong in whichever direction the caller did
+        # not mean, and a zero-filled OUTPUT count is wrong in the cheap one.
+        if (input_tokens is None) != (output_tokens is None):
+            raise ValueError(
+                "give both input_tokens= and output_tokens=, or neither. One alone would "
+                "price the other at zero, which under-estimates the call")
         if estimated_inr is None:
-            estimated_inr = cost_inr(model, input_tokens, output_tokens)
+            estimated_inr = (typical_call_inr(model) if input_tokens is None else
+                             cost_inr(model, input_tokens, output_tokens))
 
         s = self._state()
         if s["corrupt"]:
@@ -1033,7 +1085,7 @@ if __name__ == "__main__":
     check("  ...whereas the identical call with nothing reserved is admitted",
           BudgetTracker(nm2, today=date(2026, 8, 8)).can_make_call().allowed, True)
     check("  ...and the day was never the binding constraint in either case",
-          0.0 + 2.0 + cost_inr(DEFAULT_MODEL, 6_700, 700) < DAILY_CAP_INR, True)
+          0.0 + 2.0 + typical_call_inr(DEFAULT_MODEL) < DAILY_CAP_INR, True)
 
     # ── a falsy store is still a store (found by BUD verification) ───────────
     # `store or FileStore()` discarded any store that was FALSY. A dict- or
@@ -1053,6 +1105,75 @@ if __name__ == "__main__":
     check("  ...and it really was falsy when handed over", bool(_falsy), False)
     check("  ...while None still falls back to the default FileStore",
           isinstance(BudgetTracker(None).store, FileStore), True)
+
+
+    # ── The gate's own default estimate, which BUD-3 did not reach ────────────
+    # The default was `input_tokens=6_700`, a figure the module docstring records as
+    # "Measured on Haiku 4.5" — a PRE-4.7 token count — applied to DEFAULT_MODEL, which
+    # TOKENIZER marks 4.7+. BUD-3 shipped the fix and wired it to nothing.
+    check("the typical call is priced with the model's OWN tokenizer",
+          attempt(lambda: typical_call_inr("claude-sonnet-5")),
+          attempt(lambda: cost_inr("claude-sonnet-5",
+                                   estimate_tokens("claude-sonnet-5", words=TYPICAL_PROMPT_WORDS),
+                                   estimate_tokens("claude-sonnet-5", words=TYPICAL_ANSWER_WORDS))))
+    check("  ...so a 4.7+ model costs more than the old hard-coded token count implied",
+          attempt(lambda: typical_call_inr("claude-sonnet-5")
+                  > 1.30 * cost_inr("claude-sonnet-5", 6_700, 700)), True)
+    check("  ...and an absolute floor, so the whole table cannot be scaled down quietly",
+          attempt(lambda: typical_call_inr("claude-sonnet-5") >= 3.90), True)
+    check("the Haiku figure the docstring MEASURED is preserved to the paisa",
+          attempt(lambda: round(typical_call_inr("claude-haiku-4-5"), 2)), 0.97)
+    check("  ...which is where the ~120 answers/day ceiling comes from",
+          attempt(lambda: int(DAILY_CAP_INR / typical_call_inr("claude-haiku-4-5"))), 120)
+
+    check("can_make_call's default now uses that, not a foreign tokenizer's count",
+          attempt(lambda: BudgetTracker(Mem(), today=date(2026, 8, 8)).can_make_call(
+              model="claude-sonnet-5").remaining_month),
+          attempt(lambda: round(MONTHLY_CAP_INR, 2)))
+    near = Mem()
+    near.d = {"day": "2026-08-08", "month": "2026-08", "day_inr": 0.0,
+              "month_inr": MONTHLY_CAP_INR - 3.50, "calls_today": 0}
+    check("a default-estimate call that only FITS at pre-4.7 rates is now refused",
+          BudgetTracker(near, today=date(2026, 8, 8)).can_make_call(model="claude-sonnet-5").allowed,
+          False)
+    check("  ...and it fitted under the old 6,700-token default, which is the defect",
+          MONTHLY_CAP_INR - 3.50 + cost_inr("claude-sonnet-5", 6_700, 700) <= MONTHLY_CAP_INR, True)
+
+    check("giving one token count without the other is refused, not zero-filled",
+          refused(lambda: BudgetTracker(Mem(), today=date(2026, 8, 8)).can_make_call(
+              input_tokens=1_000)), True)
+    check("  ...while giving both still works, as the caller's own declared count",
+          attempt(lambda: BudgetTracker(Mem(), today=date(2026, 8, 8)).can_make_call(
+              model="claude-haiku-4-5", input_tokens=6_700, output_tokens=700).allowed), True)
+    check("mode() still answers without being handed a hypothetical call",
+          attempt(lambda: BudgetTracker(Mem(), today=date(2026, 8, 8)).mode()), "normal")
+
+    # ── BUD-F13: the fail-open the four counters could not see ───────────────
+    # Three modules shipped `if budget is not None and not budget.can_make_call():`. That
+    # line never fires: a frozen dataclass is unconditionally truthy, so `not verdict` is
+    # False no matter how exhausted the budget is, and the paid call went out anyway. All
+    # three tests passed because each stub returned a bare `False`, a type this class never
+    # returns -- the tests proved the stubs, not the guards.
+    #
+    # `__bool__` is the structural fix, and it needs its own check: the mutant that DELETES
+    # it survived every other assertion in this file, which makes it silently removable.
+    _refusing = BudgetTracker(near, today=date(2026, 8, 8)).can_make_call(model="claude-sonnet-5")
+    check("the verdict under test really is a refusal", _refusing.allowed, False)
+
+    def _bool_error() -> str:
+        try:
+            if not _refusing:        # the exact expression all three call sites shipped
+                return "evaluated as falsy -- the guard would fire"
+            return "evaluated as TRUTHY -- the guard is a no-op and the call goes out"
+        except TypeError as e:
+            return f"TypeError: {e}"
+
+    check("`not verdict` raises rather than silently admitting the refused call",
+          _bool_error().startswith("TypeError:"), True)
+    check("  ...and the message names the attribute to read instead",
+          "allowed" in _bool_error(), True)
+    check("  ...while .allowed itself still reads normally",
+          (not _refusing.allowed), True)
 
     print(f"\n{total - failures}/{total} passed")
     raise SystemExit(1 if failures else 0)

@@ -168,7 +168,7 @@ def extract(document: str, *, budget=None, model: str = EXTRACT,
 
     # The budget guard runs BEFORE the call, so an exhausted budget degrades
     # rather than being discovered in a log afterwards.
-    if budget is not None and not budget.can_make_call():
+    if budget is not None and not budget.can_make_call().allowed:
         raise ModelUnavailable("budget exhausted; no call was made")
 
     resp = _client.messages.create(
@@ -315,7 +315,12 @@ def _test() -> None:
 
     # ── budget guard fires before the call ───────────────────────────────────
     class Broke:
-        def can_make_call(self): return False
+        # A REAL Verdict, not a bare `False`. The bare False this used to return is a type
+        # BudgetTracker never produces, and returning it is what hid the fail-open: the
+        # guard read `not <falsy>` here and `not <always-truthy Verdict>` in production.
+        def can_make_call(self, *a, **k):
+            from backend.budget import Verdict
+            return Verdict(False, "budget", "monthly cap reached", 0.0, 3_500.0)
     try:
         extract("doc", budget=Broke(), _client=FakeClient(FakeResp()))
         check(False, "an exhausted budget refuses BEFORE the call")
