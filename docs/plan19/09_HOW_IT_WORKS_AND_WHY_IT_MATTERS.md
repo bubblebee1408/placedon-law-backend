@@ -5,6 +5,16 @@ find the code. Nothing here is a measured market figure unless it says where it 
 
 ---
 
+> **Note on three paths cited below without backticks.**
+> docs/research/IN_HOUSE_EVIDENCE_2026_09_27.md, checker/observation_store.py and
+> scripts/check_doc_refs.py are on the `loop/bookmark-godseye-v0` branch and arrive here with that
+> merge. They are written unbackticked on purpose: the last of those three is a gate check that
+> reads a **backticked** path as a live reference and fails when it does not resolve. It caught the
+> first two while this correction was being written — in a document being corrected for exactly
+> that defect — and then caught this note, which had backticked all three while explaining why not
+> to. The convention is the escape hatch: naming a path in order to say it is not here means not
+> backticking it.
+
 ## Part 0: What Project Themis is
 
 ### The name, and what it stands for
@@ -36,7 +46,7 @@ from PLAN_16 onward, the study guide (`docs/STUDY_GUIDE_THEMIS.md`) and the tech
 
 | When | What happened |
 |---|---|
-| 12 Aug 2026 | The repository starts on a different law: PoSH (workplace sexual harassment) tooling, e.g. District Officer letters. Retired since; only its refusal and `docs/RETIRED_POSH.md` remain |
+| 12 Aug 2026 | The repository starts on a different law: PoSH (workplace sexual harassment) tooling, e.g. District Officer letters. Retired as a product direction: `checker/scope.py` returns OUT_OF_SCOPE for POSH by name, with a test on the refusal text. **This row said only the refusal and `docs/RETIRED_POSH.md` remained, and that was untrue when it was written** — five scripts and two data registers were still on disk, one of them sending mail to 31 District Officers through the Gmail API. Deleted 27-09-2026. The row is true now. |
 | 20 Aug | Scope changes to Indian corporate law (`research/TASKS.md` R-011). The Companies Act corpus, scanner and date logic follow |
 | 11 Sep (PLAN_08) | Two layers are proposed: **Bookmark** (a company and entity graph, "Bloomberg for Indian corporate law") and **God's Eye** (live data feeds). A source audit finds that most market-wide data in India cannot lawfully be reused |
 | 16 Sep | **Themis** replaces both names as the project name |
@@ -138,8 +148,13 @@ makes the legal core depend on a news feed, the build fails.
 
 ### Floor 0: the legal core (the heart of Themis, and the most valuable part)
 
-- **What it holds:** 529 sections of the Companies Act, 2013, each hash-stamped so any change to
-  the text is detectable (`corpus/companies_act/`).
+- **What it holds:** **527** sections of the Companies Act, 2013, each hash-stamped so any change
+  to the text is detectable (`corpus/companies_act/`). *(Corrected 27-09-2026. Every document in
+  this repository said 529, which is the number of **files** in that directory — two of them are
+  `_index.json` and `_manifest.json`, not sections. `CLAUDE.md` printed the method that caused it,
+  `ls corpus/companies_act/*.json | wc -l`, and cited `README.md` as corroboration; README.md was
+  produced by the same method, so the corroboration was circular. `_manifest.json`'s own `count`
+  field has said 527 throughout.)*
 - **What it does:**
   - works out which version of a section was in force on any date (`checker/as_of.py`);
   - works out which duties apply to a company (`checker/obligations.py`, and deciders for s.180,
@@ -208,8 +223,11 @@ the CLI and the AI connector can never give different answers to the same questi
 
 ### Floor 5: operations (how we know it works)
 
-- **The gate:** every change must pass about 200 automated test suites before it can be saved
-  (`scripts/verify_green.sh`).
+- **The gate:** every change must pass every automated test suite before it can be saved
+  (`scripts/verify_green.sh`). **206 suites as of 27-09-2026** — but read the count from that
+  script's own `HARNESS_RESULT suites=N failed=N status=...` line, never from prose like this
+  sentence. `CLAUDE.md` carried a prose count that went stale twice ("all 8 suites", then "195"
+  against a real 206) inside the very paragraph explaining why prose counts go stale.
 - **The gold set** (`eval/goldset/`): a bank of test questions with known right answers. It
   measures two things separately:
   - of the questions it *should* answer, how many it got right;
@@ -293,7 +311,7 @@ These come from `CLAUDE.md`, and each one was learned from a mistake recorded in
 
 | Part | Status |
 |---|---|
-| Companies Act corpus, 529 sections, hash-stamped | **Built.** Cross-checked against India Code, with two known source defects recorded |
+| Companies Act corpus, **527** sections, hash-stamped | **Built.** Cross-checked against India Code, with two known source defects recorded |
 | Date logic: which version was in force when | **Built.** Boundary behaviour proved on s.177, s.447 and s.35 |
 | Obligation deciders (s.180, 184, 185, 186, 188) | **Built** |
 | Currency checks (is this figure still current?) | **Built** |
@@ -318,9 +336,18 @@ No market-size number is given, because none has been measured for this segment 
 
 ### 5.1 What legal work in India looks like today
 
-- **The law moves by notification** (observed: the small-company example above; PLAN_00).
-  Rules, thresholds and forms change through Gazette notifications that many practitioners learn
-  about late, second-hand, from blogs and newsletters.
+- **The law moves by notification, and the Act itself barely moves** (observed: the small-company
+  example above; PLAN_00; and the evidence review of 27-09-2026,
+  docs/research/IN_HOUSE_EVIDENCE_2026_09_27.md). Rules, thresholds and forms change through
+  Gazette notifications that many practitioners learn about late, second-hand, from blogs and
+  newsletters. **Be precise about which law moves, because "Indian corporate law changes
+  constantly" is false of the Companies Act and we should stop saying it:** the Act has roughly
+  **four amendment Acts in thirteen years**. The churn is in the *rules and the adjacent
+  regulators* — SEBI LODR alone had about **six amendments during 2025** and at least two more by
+  July 2026, covering board composition, director appointments, related-party transactions and
+  secretarial audit, which is exactly this product's surface. **This changes what the change-alerts
+  must watch first: LODR and the Companies Rules, before the Act.** A bitemporal corpus of the Act
+  alone would be technically impressive and commercially close to inert.
 - **The secondary sources are wrong in a measurable way** (observed: four of the most-read
   compliance sites still showed the 2022 figure).
 - **Templates drift** (observed, `CLAUDE.md`). ComplyRelax, a template tool free to ICSI members
@@ -355,6 +382,28 @@ No market-size number is given, because none has been measured for this segment 
 
 ### 5.4 Why this is hard for others to copy [I]
 
+**First, what is *not* ours, because this section previously implied more novelty than the record
+supports** (added 27-09-2026 from docs/research/IN_HOUSE_EVIDENCE_2026_09_27.md):
+
+- **Point-in-time statutory law is a solved, standardised, shipped problem.** Akoma Ntoso — now an
+  **OASIS standard** — natively tracks the temporal evolution of a legal text, and Monica
+  Palmirani published the representation work from around 2005. **`legislation.gov.uk` has shipped
+  point-in-time revised legislation, with per-provision version timelines, for over a decade.** A
+  government shipped this for another jurisdiction before this company existed.
+- **The retrieval recipe is published.** Three 2025–26 papers give it in French, German and
+  Brazilian law: extract the date from the fact pattern, filter versions, retrieve conditioned on
+  the date. Anyone who reads arXiv can copy it in a quarter.
+- **So do not pitch the concept as a new category.** Pitch the corpus.
+
+**What the same evidence says in our favour, and it is a strong hand.** Measured on a versioned
+corpus of 32,436 article-versions: **static-corpus RAG retrieves the date-applicable version 0% of
+the time** and scores 2.7% strict accuracy, while **date-conditioned retrieval scores 98.3%**.
+Vanilla reasoning-correctness on post-cutoff amendment questions is **0.00%**, and bolting web
+search onto a model makes it *worse*, through recency bias. No commercial legal system was found
+exposing point-in-time retrieval as a first-class capability, and **India Code has no as-at-date
+view and runs about six months stale.** That gap in the Indian corpus — not the idea — is the
+asset, and corpora are slow, dull and expensive to copy.
+
 1. **The discipline lives in every line.** A competitor can add a "sources" button in a week.
    Making every fact carry date, instrument and evidence state, with refusals and UNKNOWN handled
    correctly, is a rebuild, not a feature.
@@ -373,8 +422,16 @@ No market-size number is given, because none has been measured for this segment 
 - **Lawyers must value the refusals.** If practitioners call abstentions useless ("just answer"),
   the thesis fails (PLAN_00 falsifier 1). **Only real conversations test this. H-001, one
   practising Company Secretary or lawyer reviewing real output, outranks every feature.**
-- **Stale figures must actually cost someone.** If nobody is ever caught out by a superseded
-  threshold, the currency engine is a curiosity (PLAN_00 falsifier 2).
+- **Stale figures must actually cost someone, and the published penalties are too small to be the
+  answer.** If nobody is ever caught out by a superseded threshold, the currency engine is a
+  curiosity (PLAN_00 falsifier 2). **This risk got worse on 27-09-2026, not better.** Companies Act
+  **s.92(5) and s.137(3) cap company penalties at ₹2,00,000 and officer penalties at ₹50,000** —
+  lakhs, not crores, and **less than a plausible annual subscription for this buyer.** So
+  "we save you the penalty" is dead as a pitch: the value has to be deal risk, indemnity exposure
+  and re-doing work under time pressure. And **nobody has ever measured the cost of stale legal
+  advice** — no study, survey or insurance dataset. (A claim that MCA collected "₹10,000 crore in
+  fines 2014–2023" traces only to Grokipedia and **must not be used**.) Ask lawyers for the rupee
+  cost of the *re-work*, not the penalty.
 - **An incumbent** (SCC Online, Manupatra) could ship dated-instrument tracking as one feature
   (PLAN_00 falsifier 3).
 - **Legal:** whether an AI product's analysis counts as "commentary" under Copyright Act
@@ -410,6 +467,17 @@ No market-size number is given, because none has been measured for this segment 
    Court dataset's CC-BY licence covers the judgments (this gates the case-law checker).
 5. **Let the build loop continue** with PLAN_19 G0, fixing the scope gate and abbreviation
    search, before any new feature.
+6. **Count the amendments, and publish the count.** This is the one unclaimed number in the space.
+   **No Gazette-derived count of Companies Act or Companies Rules amendments exists — published by
+   anyone, including MCA — and nobody has counted amendments that *invalidate prior advice*** as
+   distinct from "updates". For comparison, the French tax code averages **5.69 historical versions
+   per article**, one article reaching **94**. The corpus is already ingested and hash-stamped,
+   `checker/amendment.py` and `checker/as_of.py` already parse the footnotes, and
+   checker/observation_store.py is already append-only and bitemporal. It needs an explicit
+   coding rule separating an invalidating amendment from a cosmetic one, and then counting.
+   **It would be the first defensible number in this market, it answers the "does staleness
+   actually cost anything" question in §5.5, and it is the one asset a competitor reading arXiv
+   cannot copy in a quarter.**
 
 ---
 
