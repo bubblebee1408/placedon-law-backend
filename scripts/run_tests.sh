@@ -8,6 +8,36 @@ set -uo pipefail
 cd "$(dirname "$0")/.."
 export PYTHONPATH="$PWD"
 
+# ── Dependencies first, because a missing one is not a failing test ───────────
+# Reported 2026-09-27 from an environment without pypdf: the sweep said
+# "checker/sarvam_model.py FAIL" with NO result line, because sarvam_selftest reached an
+# optional-dependency path and the SarvamUnavailable refusal propagated out of the suite.
+# That reads as a broken suite and sends the reader to the wrong file -- the suite is fine
+# and the environment is not. `scripts/check_deps.py` already knows the answer (it reads
+# requirements.txt AND requirements-dev.txt); nothing was asking it before the sweep.
+#
+# BLOCKED is a third status, distinct from GREEN and RED on purpose: no suite ran, so
+# reporting `failed=0 status=RED` would claim a measurement nobody took.
+if ! missing=$(python3 scripts/check_deps.py 2>&1); then
+  cat >&2 <<MSG
+==============================================================================
+ ENVIRONMENT NOT READY -- no suite was run
+==============================================================================
+  $missing
+
+  These are pinned in requirements.txt / requirements-dev.txt and are absent here.
+  Install them, then re-run:
+
+      python3 -m pip install -r requirements.txt -r requirements-dev.txt
+      # or: ./setup.sh   (idempotent; installs both)
+
+  This is NOT a failing test. Nothing about the suite is known yet.
+==============================================================================
+MSG
+  printf 'HARNESS_RESULT suites=0 failed=0 status=BLOCKED\n'
+  exit 5
+fi
+
 suites=(
   checker/acquisition_log.py
   checker/amendment.py
