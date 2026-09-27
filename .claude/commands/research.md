@@ -19,7 +19,8 @@ Order matters: **the bare Act or the Gazette** → an official portal → everyt
 news site reproducing a notification is a secondary source and must be recorded as one
 (`corpus/provisions/companies_accounts_rules_2014.json` shows the shape).
 
-Spawn **`market-researcher`** or **`hr-ops-researcher`** by track.
+Spawn **`legal-source-researcher`** for what the law says, or **`market-researcher`** for what
+the market will pay. Tag every market figure with its source class.
 
 ## 3. Write it up honestly
 

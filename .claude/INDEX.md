@@ -37,7 +37,7 @@ agents that already exist and are more specific:
 
 | Spec role | Use |
 |---|---|
-| Investigator | `market-researcher`, `hr-ops-researcher`, `corpus-engineer` |
+| Investigator | `market-researcher`, `legal-source-researcher`, `corpus-engineer` |
 | Architect | `architect`, `product-planner` |
 | Engineer | `developer` |
 | QA | `qa-reviewer`, `trust-boundary-reviewer`, `legal-verifier` |

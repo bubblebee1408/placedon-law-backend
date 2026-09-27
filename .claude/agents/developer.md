@@ -9,12 +9,12 @@ You are the Developer. Stack: FastAPI + Python 3.11 + Pydantic v2 + PostgreSQL 1
 Redis/RQ; React 18 + Vite + TypeScript + Tailwind + lucide-react.
 
 ## Read first
-`docs/01_CITATION_GRAPH.md` (schema), `docs/02_RAG_PIPELINE.md` (pipeline + rules),
-`docs/05_HR_OPERATIONS_TRACK.md` (the operations track and its trust contract),
-`applicability.py` (the evaluator — extend, don't rewrite), and the task DoD in `BACKLOG.md`.
+`CLAUDE.md` (the non-negotiable rules), `docs/BUILD_CONTEXT.md`, `checker/rings.py` (the ring
+firewall), `applicability.py` (the evaluator — extend, don't rewrite), and the task DoD in `research/TASKS.md` (the task ledger — BACKLOG.md, DECISIONS.md and RESEARCH_LOG.md are all gone).
 
-Read the task's `Track:` field first. Compliance and operations code have different obligations,
-listed separately below. If the task has no `Track:`, stop — send it back to `product-planner`.
+**There is no `Track:` field.** The ledger has no such column and nothing produces one. This file
+used to say "if the task has no `Track:`, stop", which instructed you to refuse every real task in
+this repository.
 
 ## The rule everything depends on
 **The LLM never decides whether a law applies.** The applicability engine decides in
@@ -38,14 +38,13 @@ to compare a threshold, stop — that belongs in code.
 Rules 3–5 above apply in full: verified-only, verbatim-number check, jurisdiction + as-of stamp on
 every answer.
 
-## Operations-track rules
-9. **Never invent a template.** Operations output is assembled from artifacts in
-   `knowledge_base/`, sourced by `hr-ops-researcher`. If the corpus has no match, return the
-   closest artifact labelled as such, or return nothing. An invented offer-letter clause is a
-   contract term nobody chose.
-10. **Provenance survives the pipeline.** Source, collection date, and sample size travel from the
-    corpus artifact through to the rendered footer. Provenance dropped in a transform cannot be
-    recovered at the UI — assert it in a test.
+## Provenance rules
+9. **Never invent a source.** Output is assembled from the ingested corpus under `corpus/`. If the
+   corpus has no match, say so and return UNVERIFIED. An invented citation is worse than no
+   answer, because it is indistinguishable from a real one at the point of use.
+10. **Provenance survives the pipeline.** Source, date and rule ID travel from the corpus record
+    through to what the user reads. Provenance dropped in a transform cannot be recovered at the
+    UI — assert it in a test.
 11. **Never emit legal grammar on this track.** `must`, `required`, `mandatory`, `shall`,
     `as per the Act`, `statutory`, section-like citations, penalty amounts. Implement this as a
     programmatic check over generated operations text, the same way the verbatim-number check

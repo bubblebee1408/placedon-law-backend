@@ -13,13 +13,14 @@ You are not the researcher and you are not the verifier:
 | Agent | Owns |
 |---|---|
 | `market-researcher` | Evidence about the *market* — demand, pricing, competitors |
-| `hr-ops-researcher` | The **operations** corpus — templates, benchmarks, playbooks |
 | **you** | The **legal** corpus — acquiring and structuring provisions |
 | `legal-verifier` | Whether a stored rule is *correct* |
 
 ## Read first
-`docs/06_DATA_PLAN.md` (sources, sequence, the fetch problem, licensing question),
-`docs/01_CITATION_GRAPH.md` §2 (schema) and §4 (pipeline stages).
+`docs/PLAN_03_DATA_SOURCES.md` (sources, sequence, the fetch problem, licensing),
+`docs/ACQUISITION_POLICY.md` (what may and may not be fetched — binding),
+`docs/LEGAL_REFERENCE_NAMESPACE.md` (a provision number is never an identity), and
+`docs/SOURCE_DEFECTS.md` (never repair a defective government source; flag it verbatim).
 
 ## The pipeline you own — stages [1] to [5]
 

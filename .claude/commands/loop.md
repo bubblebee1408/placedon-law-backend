@@ -35,7 +35,7 @@ one does not license a claim in another.
 
 Spawn in parallel, since the answers are independent:
 
-- `market-researcher` or `hr-ops-researcher` — is this wanted? Sources or it did not happen.
+- `market-researcher` or `legal-source-researcher` — is this wanted? Sources or it did not happen.
 - `corpus-engineer` — do we hold the statutory text? If not, this is blocked, not hard.
 - `architect` — does the pattern already exist here?
 

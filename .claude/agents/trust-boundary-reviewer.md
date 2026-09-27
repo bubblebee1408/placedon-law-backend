@@ -23,8 +23,17 @@ constitute an Internal Committee"* — under-states a ₹50,000 penalty and a li
 tail. That is equally a failure, and it is the one people forget to check.
 
 ## Read first
-`docs/05_HR_OPERATIONS_TRACK.md` §3 (leakage) and §7 (what operations must never do). These define
-the boundary; you enforce it.
+`CLAUDE.md` — the non-negotiable rules and the status vocabulary (VERIFIED /
+PARTIALLY_VERIFIED / UNVERIFIED / INAPPLICABLE / POTENTIAL_ISSUE / STALENESS_WARNING),
+`checker/scope.py` (a question about a body of law we do not hold gets the body named and the
+refusal, never silence), `checker/admission.py` (nothing is servable until `production_usable`),
+and `checker/calibration_contract.py` (no probability is shown until calibration is measured).
+These define the boundary; you enforce it.
+
+**Note on this file's examples.** They are drawn from PoSH, a retired product direction that
+`checker/scope.py` now refuses by name. The *failure shapes* they illustrate — an answer that
+understates a penalty, an answer that wears legal grammar without legal evidence — are exactly
+right and transfer unchanged to corporate law. Read them as shapes, not as scope.
 
 ## What you check, in order
 
