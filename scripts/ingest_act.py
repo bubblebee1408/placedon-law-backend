@@ -52,7 +52,56 @@ from checker.robots import USER_AGENT, ssl_context      # noqa: E402
 
 UA = {"User-Agent": USER_AGENT}
 PAUSE = 0.4                      # be a polite client
-CONTENT_EP = "https://www.indiacode.nic.in/SectionPageContent?actid={act}&sectionID={sid}"
+
+# ── One host, and it is indiacode.gov.in (founder instruction, 2026-09-27) ────
+# Measured the same day, from this machine, so the rule is recorded with its evidence
+# rather than as a preference:
+#
+#   www.indiacode.nic.in/handle/123456789/2114   HTTP 000 -- no answer. DNS resolves
+#                                               (184.84.232.9), so this is a connection
+#                                               or TLS failure: UNREACHABLE in
+#                                               docs/ACQUISITION_POLICY.md's taxonomy,
+#                                               which is the one retryable class.
+#   indiacode.gov.in/handle/123456789/2114       HTTP 200, text/html, 6,762 bytes, and
+#                                               ZERO sectionId= matches -- the DSpace
+#                                               Angular shell. A soft-404 in the shape
+#                                               this repository exists to refuse.
+#
+# So the HTML handle page enumerates on NEITHER host today, and `enumerate_sections`
+# below would return [] for both -- which the empty-enumeration guard correctly refuses
+# rather than writing an empty manifest.
+#
+# What DOES work on indiacode.gov.in is the DSpace 7 REST API: `/server/api` answers 200
+# application/hal+json with 80 link relations, and
+# /server/api/discover/search/objects?query=dc.identifier.section_number:*&dsoType=item
+# reports **74,821** items carrying `dc.identifier.section_number`, each with
+# `dc.identifier.section_id`, `section_number`, `section_footnote` and `dc.title`. That is
+# a better enumeration surface than the HTML ever was, and it is on the permitted host.
+# Scoping it to ONE Act is not yet established -- see enumerate_sections' docstring.
+PERMITTED_HOST = "indiacode.gov.in"
+CONTENT_EP = ("https://indiacode.gov.in/SectionPageContent"
+              "?actid={act}&sectionID={sid}")
+
+
+class HostRefused(ValueError):
+    """A URL outside the permitted host. Raised before any request is made."""
+
+
+def check_host(url: str) -> str:
+    """`url` unchanged, or raise. The netloc must BE the permitted host or a subdomain.
+
+    A substring test would accept `indiacode.gov.in.evil.example`, so the comparison is
+    on the parsed netloc with an explicit dot-suffix rule.
+    """
+    from urllib.parse import urlsplit
+    netloc = urlsplit(url).netloc.lower().split("@")[-1].split(":")[0]
+    if netloc != PERMITTED_HOST and not netloc.endswith("." + PERMITTED_HOST):
+        raise HostRefused(
+            f"{netloc or url!r} is not {PERMITTED_HOST}. Only that host is permitted for "
+            f"statute acquisition (founder instruction 2026-09-27). www.indiacode.nic.in "
+            f"answered HTTP 000 when measured that day; whatever it serves, it is not "
+            f"reachable from here and it is not the declared source.")
+    return url
 
 # A corpus directory name, and nothing that could escape `corpus/`.
 _KEY_OK = re.compile(r"^[a-z][a-z0-9_]{2,39}$")
@@ -77,8 +126,11 @@ class Act:
 ACTS: dict[str, Act] = {a.key: a for a in (
     Act("companies_act", "Companies Act, 2013",
         "AC_CEN_22_29_00008_201318_1517807327856",
-        "https://www.indiacode.nic.in/handle/123456789/2114",
-        "Held. 527 sections, hash-stamped. The only Act ingested through this path so far."),
+        "https://indiacode.gov.in/handle/123456789/2114",
+        "Held: 527 sections, hash-stamped. The handle moved from www.indiacode.nic.in to "
+        "indiacode.gov.in on 2026-09-27 to satisfy the one-host rule. The 527 records "
+        "already on disk carry .nic.in source_urls, which is what they were fetched from "
+        "and must not be rewritten -- provenance records where a thing CAME from."),
 
     # Everything below is DECLARED in the plan and PENDING_ID here. Confirm the actid and the
     # handle URL on India Code, paste both, and record where you found them. Do not guess:
@@ -110,6 +162,7 @@ def corpus_dir(act: Act, root: Path = ROOT) -> Path:
 
 
 def _get(url: str, tries: int = 3) -> str:
+    check_host(url)                  # before the socket, not after
     ctx = ssl_context()
     if ctx is None:
         raise RuntimeError("no CA bundle available; refusing to fetch a statute over an "
@@ -127,7 +180,22 @@ def _get(url: str, tries: int = 3) -> str:
 
 
 def enumerate_sections(act: Act, get=_get) -> list[str]:
-    """Section ids in document order, parsed off the act page. One fetch returns all of them."""
+    """Section ids in document order, parsed off the act page. One fetch returns all of them.
+
+    **This mechanism does not currently work on any permitted host, and that is measured,
+    not assumed.** `indiacode.gov.in`'s handle page is the DSpace Angular shell: 200,
+    text/html, 6,762 bytes, zero `sectionId=` matches. It returns `[]`, and `ingest()`
+    refuses an empty enumeration rather than writing a manifest of nothing -- so the
+    failure is loud and nothing is corrupted.
+
+    The replacement is the DSpace REST API on the same host, which is live and open (see
+    PERMITTED_HOST above for the measured totals). It is NOT built here, because scoping
+    its 74,821 section-bearing items to one Act is unestablished: the handle did not
+    resolve through `/server/api/pid/find?id=hdl:123456789/2114` (404), so the
+    handle -> collection mapping has to be found before an Act can be enumerated. Writing
+    a plausible query that silently returns another Act's sections is the failure this
+    repository refuses most consistently.
+    """
     html = get(act.handle)
     ids: list[str] = []
     seen: set[str] = set()
@@ -189,10 +257,28 @@ def ingest(act: Act, *, limit: int | None = None, root: Path = ROOT,
     # `act_key` and `act_id` are both written, so a manifest can never be read as another Act's.
     # The old single-Act manifest carried act_id alone, which was unambiguous only while there
     # was exactly one corpus.
-    manifest.write_text(json.dumps(
-        {"act_key": act.key, "act_id": act.act_id, "act_title": act.title,
-         "section_ids": ids, "count": len(ids),
-         "enumerated_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}, indent=2))
+    #
+    # **Rewritten only when the enumeration actually changed.** A re-run is supposed to be a
+    # no-op, and it was not: the manifest was rewritten unconditionally with a fresh
+    # `enumerated_at`, so every re-run dirtied a TRACKED file for no new information. Found
+    # by asserting byte-identity across two runs rather than only "nothing was refetched" --
+    # the section files were identical and the manifest was not. An unchanged id list means
+    # the enumeration did not change, and a timestamp saying otherwise is churn, not news.
+    record = {"act_key": act.key, "act_id": act.act_id, "act_title": act.title,
+              "section_ids": ids, "count": len(ids)}
+    previous = None
+    if manifest.exists():
+        try:
+            previous = json.loads(manifest.read_text())
+        except (OSError, json.JSONDecodeError):
+            previous = None          # unreadable or corrupt: rewrite it
+    if not (previous and {k: previous.get(k) for k in record} == record):
+        manifest.write_text(json.dumps(
+            {**record,
+             "enumerated_at": datetime.now(timezone.utc).isoformat(timespec="seconds")},
+            indent=2))
+    else:
+        print(f"{act.key}: enumeration unchanged; manifest left as it was", flush=True)
 
     if limit:
         ids = ids[:limit]
@@ -232,6 +318,38 @@ def main(argv: list[str]) -> int:
         print(f"\nRun: python3 scripts/ingest_act.py <key> [--limit N]")
         return 0 if "--list" in argv else 1
 
+    # An Act not in the register can be named directly: --act-key plus --handle and
+    # --act-id. All three are required together, because two of them are not enough to
+    # fetch anything and a partial set would otherwise fall back to a register entry --
+    # i.e. silently ingest a different Act than the one named.
+    if "--handle" in argv or "--act-id" in argv or "--act-key" in argv:
+        def opt(name):
+            return argv[argv.index(name) + 1] if name in argv else None
+        key, handle, act_id = opt("--act-key"), opt("--handle"), opt("--act-id")
+        missing = [n for n, v in (("--act-key", key), ("--handle", handle),
+                                  ("--act-id", act_id)) if not v]
+        if missing:
+            print(f"REFUSED: {', '.join(missing)} missing. An ad-hoc Act needs all three: "
+                  f"--act-key (the corpus directory), --handle (the act page) and --act-id "
+                  f"(the India Code actid). Two of the three cannot fetch anything, and "
+                  f"falling back to the register would ingest a DIFFERENT Act than the one "
+                  f"named.", flush=True)
+            return 1
+        if key in ACTS:
+            print(f"REFUSED: {key!r} is already in the register. Edit ACTS rather than "
+                  f"passing it on the command line, so the actid is recorded with the URL "
+                  f"it was confirmed at.", flush=True)
+            return 1
+        try:
+            ad_hoc = Act(key, f"(ad hoc) {key}", act_id, check_host(handle),
+                         "Named on the command line, not in the register.")
+            corpus_dir(ad_hoc)                       # validates the key before any fetch
+        except (HostRefused, ValueError) as e:
+            print(f"REFUSED: {e}", flush=True)
+            return 1
+        limit = int(argv[argv.index("--limit") + 1]) if "--limit" in argv else None
+        return ingest(ad_hoc, limit=limit)
+
     key = args[0]
     if key not in ACTS:
         print(f"REFUSED: {key!r} is not in the register. Known: {', '.join(known_keys())}.\n"
@@ -257,6 +375,14 @@ def _test() -> int:
         else:
             fail += 1
             print(f"  [FAIL] {label}")
+
+    def attempt(fn):
+        """The exception fn() raised, or None. Its TYPE is what the caller asserts on."""
+        try:
+            fn()
+        except Exception as e:                      # noqa: BLE001 - inspected by the test
+            return e
+        return None
 
     print("ingest_act")
     CA = ACTS["companies_act"]
@@ -349,6 +475,88 @@ def _test() -> int:
         check(seen == ["11"], "--limit truncates what is fetched")
         check(m["count"] == 3,
               "...but the manifest still records all 3 -- a partial fetch is not a smaller Act")
+
+    # ── the one-host rule ────────────────────────────────────────────────────
+    for good in ("https://indiacode.gov.in/handle/1", "https://www.indiacode.gov.in/x",
+                 "https://indiacode.gov.in:443/y"):
+        check(check_host(good) == good, f"permitted: {good}")
+    for bad in ("https://www.indiacode.nic.in/handle/1",      # the old host
+                "https://indiacode.gov.in.evil.example/x",    # suffix attack
+                "https://evil.example/?u=indiacode.gov.in",   # substring attack
+                "http://localhost/x", "https://indiacode.gov.in@evil.example/x"):
+        check(isinstance(attempt(lambda u=bad: check_host(u)), HostRefused),
+              f"refused: {bad}")
+    check("indiacode.gov.in" in CONTENT_EP and "nic.in" not in CONTENT_EP,
+          "the section-content endpoint is on the permitted host")
+    check(all("nic.in" not in (a.handle or "") for a in ACTS.values()),
+          "no Act in the register points at nic.in")
+
+    # ── an offline fixture, per record shape ─────────────────────────────────
+    # A captured SectionPageContent response. Offline on purpose: the shape is what this
+    # test is about, and a live fetch would make it a network test that passes or fails
+    # for reasons unrelated to the record.
+    FIXTURE = json.dumps({
+        "content": "<p>2. Definitions.\u2014In this Act, unless the context otherwise "
+                   "requires,\u2014</p>",
+        "footnote": "1. Subs. by Act 1 of 2018, s. 2 (w.e.f. 9-2-2018).",
+        "extra_field_we_do_not_read": "ignored",
+    })
+    rec = fetch_section(CA, "100467", get=lambda u: FIXTURE)
+    want_keys = {"section_id", "act_key", "act_id", "act_title", "content", "footnote",
+                 "sha256", "source_url", "fetched_at"}
+    check(set(rec) == want_keys, f"the record has exactly the declared keys ({set(rec) ^ want_keys or 'exact'})")
+    check(rec["section_id"] == "100467" and rec["act_key"] == "companies_act"
+          and rec["act_id"] == CA.act_id,
+          "...identifying both the section and WHICH Act it belongs to")
+    check(rec["sha256"] == hashlib.sha256(rec["content"].encode("utf-8")).hexdigest(),
+          "...hash-stamped over the content, and the stamp verifies")
+    check(rec["footnote"].startswith("1. Subs. by Act 1 of 2018"),
+          "...carrying the footnote verbatim, which is where amendment history lives")
+    check("indiacode.gov.in" in rec["source_url"] and "100467" in rec["source_url"],
+          f"...and recording the URL it came from ({rec['source_url']})")
+    check(rec["content"].startswith("<p>2. Definitions."),
+          "...with the content unaltered -- never repair a government source")
+    empty = fetch_section(CA, "1", get=lambda u: json.dumps({}))
+    check(empty["content"] == "" and empty["footnote"] == ""
+          and empty["sha256"] == hashlib.sha256(b"").hexdigest(),
+          "a response with neither field yields empty strings and the empty-string hash, "
+          "not a KeyError")
+
+    # ── a re-run is a no-op ──────────────────────────────────────────────────
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        calls: list[str] = []
+
+        def counting(a: Act, sid: str) -> dict:
+            calls.append(sid)
+            return {"section_id": sid, "act_key": a.key, "content": f"s{sid}"}
+
+        ids = ["11", "12", "13"]
+        rc1 = ingest(CA, root=root, enumerate_fn=lambda a: ids, fetch_fn=counting)
+        first = sorted(p.name for p in (root / "corpus/companies_act").iterdir())
+        bytes1 = {p.name: p.read_bytes() for p in (root / "corpus/companies_act").iterdir()}
+        n_after_first = len(calls)
+
+        rc2 = ingest(CA, root=root, enumerate_fn=lambda a: ids, fetch_fn=counting)
+        second = sorted(p.name for p in (root / "corpus/companies_act").iterdir())
+        bytes2 = {p.name: p.read_bytes() for p in (root / "corpus/companies_act").iterdir()}
+
+        check(rc1 == 0 and rc2 == 0, "both runs exit 0")
+        check(n_after_first == 3 and len(calls) == 3,
+              f"the second run fetched NOTHING ({len(calls) - n_after_first} new calls)")
+        check(first == second, "the same files are present after the re-run")
+        check(bytes1 == bytes2,
+              "...and every file is byte-identical, MANIFEST INCLUDED -- a re-run rewrites "
+              "nothing at all")
+        check("enumerated_at" in json.loads(bytes2["_manifest.json"]),
+              "...while the manifest still carries enumerated_at from the run that wrote it")
+
+        # But a CHANGED enumeration must be written: the no-op must not become a refusal
+        # to record news.
+        rc3 = ingest(CA, root=root, enumerate_fn=lambda a: ids + ["14"], fetch_fn=counting)
+        m3 = json.loads((root / "corpus/companies_act/_manifest.json").read_text())
+        check(rc3 == 0 and m3["count"] == 4 and m3["section_ids"][-1] == "14",
+              "a changed enumeration IS written -- unchanged means quiet, not deaf")
 
     # ── an unknown key refuses and names what is known ──────────────────────
     check(main(["no_such_act"]) == 1, "an unknown key refuses")
