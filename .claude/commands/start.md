@@ -9,7 +9,7 @@ Do these in order. Do not skip to building.
 ## 1. Read the brain
 
 ```bash
-python3 scripts/verify.py --fast          # is the tree healthy?
+./scripts/verify_green.sh                # is the tree healthy? (no --fast mode; all or nothing)
 cat .claude/today/TODAY.md                # where did we stop?
 cat .claude/memory/BLOCKERS.md            # what is actually blocked?
 ```

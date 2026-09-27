@@ -11,7 +11,7 @@ that benefit from an independent pass. Every phase writes its artifact to `.clau
 ## Before anything
 
 ```bash
-python3 scripts/verify.py --fast
+./scripts/verify_green.sh          # no --fast mode exists; it is all or nothing
 python3 scripts/search_memory.py "$ARGUMENTS"
 python3 scripts/search_memory.py --memory "$ARGUMENTS"
 ```
@@ -65,16 +65,17 @@ decides, the LLM explains, a lawyer verifies.** Tests live in the module and ass
 ## V — Verify
 
 ```bash
-python3 scripts/verify.py
+./scripts/verify_green.sh
 ```
 
 **If it touches a UI flow, drive it in a real browser.** Three bugs shipped past a green suite
 (LESSONS L-2). Then spawn `qa-reviewer` on the diff, and `trust-boundary-reviewer` on anything
 making a legal claim.
 
-**If a bug escaped, add a check to `scripts/verify.py` with its story in `because=` BEFORE
-fixing it.** Write the check, watch it fail, then fix. A check written after the fix tests the
-fix; a check written before tests the bug.
+**If a bug escaped, add its check to the MODULE'S OWN `_test()` BEFORE fixing it** — there is no
+central check file and no `because=` parameter; both were retired with `scripts/verify.py`. Write
+the check, watch it fail, then fix. A check written after the fix tests the fix; a check written
+before tests the bug.
 
 Write `.claude/loops/VERIFY_<SLUG>.md` — GO or NO-GO.
 

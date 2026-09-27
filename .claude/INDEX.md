@@ -6,7 +6,7 @@ Version 1.1 · 2026-08-08
 
 ```bash
 ./setup.sh                    # idempotent; installs deps, builds the index, runs verify
-python3 scripts/verify.py     # GO / NO-GO, 21 checks
+./scripts/verify_green.sh     # GO / NO-GO. Read its HARNESS_RESULT line, never prose
 ```
 
 Then in Claude Code: `/start`, then `/build <feature>` or `/fix <bug>` or `/research <topic>`.

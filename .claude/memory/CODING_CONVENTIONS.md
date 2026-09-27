@@ -20,7 +20,8 @@ decision. Never move an applicability decision into a prompt.
 - `@dataclass(frozen=True)` for anything crossing a boundary. Return new objects; never mutate.
 - **Tests live in `if __name__ == "__main__":` in the module they test.** Unusual, deliberate:
   one file to open, no fixture indirection, and `python3 checker/ic_order.py` is the whole
-  contract. `scripts/verify.py` runs them all.
+  contract. `scripts/run_tests.sh` runs them all, and `./scripts/verify_green.sh` is the only
+  thing permitted to say whether they passed.
 - Assert against **the ingested corpus**, not against constants. `ic_order.py`'s tests read
   `posh_act_2013.json` — so if the corpus changes, the tests notice.
 - Never `except: pass`. Every error is handled, logged, or raised.
@@ -48,12 +49,13 @@ decision. Never move an applicability decision into a prompt.
 - Every claim carries its citation, and the citation must actually support it. `checker/rules.py`
   documents the case where ours did not.
 - **Abstention is a feature.** If the corpus does not hold it, say so and say why.
-- Never assert verification that has not happened. `scripts/verify.py` enforces this.
+- Never assert verification that has not happened. `checker/admission.py` and
+  `checker/calibration_contract.py` enforce this in code.
 
 ## Before saying anything is done
 
 ```
-python3 scripts/verify.py          # GO / NO-GO, 19 checks
+./scripts/verify_green.sh          # GO / NO-GO. The count lives in HARNESS_RESULT, not here
 ```
 
 And if it touches a UI flow, drive it in a browser. Three bugs shipped past a green suite;

@@ -46,7 +46,7 @@ Tests go in the module, and assert against the **ingested corpus** rather than c
 ## V — Verify
 
 ```bash
-python3 scripts/verify.py
+./scripts/verify_green.sh
 ```
 
 GO or NO-GO. If it touches a UI flow, **drive it in a real browser** — three bugs shipped past a
@@ -55,8 +55,7 @@ green suite (LESSONS L-2).
 Then spawn **`trust-boundary-reviewer`** on anything that makes a legal claim, and
 **`qa-reviewer`** on the diff.
 
-**If a bug escaped, add a check to `scripts/verify.py` with its story in `because=` before
-fixing anything else.** That is the ratchet — the bug gets paid for once.
+**If a bug escaped, add its check to the MODULE'S OWN `_test()` before fixing anything else** — a `check(cond, label)` call beside the code it guards, in whatever shape that module's `_test()` already uses, then make sure the module is listed in `scripts/run_tests.sh`. That is the ratchet: the bug gets paid for once. (There is no `because=` parameter and no central check file; both were retired with `scripts/verify.py`.)
 
 ## L — Learn
 

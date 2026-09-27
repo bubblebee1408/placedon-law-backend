@@ -26,15 +26,23 @@ source text, provenance recorded alongside every claim, and a golden set a lawye
 `checker/retrieval.py` documents the arithmetic: 30 sections, ~2 GB of torch to beat a 0.05 ms
 scan. Revisit at roughly 500 sections, i.e. when the labour codes land. Not before.
 
-## The register rule
+## A claim is recordable only with its source
 
-A date exists in `corpus/reference/notified_dates.json` only alongside the reply it came from.
-Enforced in three places: `scripts/build_register.py` refuses `--record` without `--reply`,
-`checker/register.py` raises rather than describe a date with no source, and
-`scripts/verify.py::_register_dates_have_sources` refuses the state in the file.
+This was "the register rule", stated over `corpus/reference/notified_dates.json` and enforced by
+`scripts/build_register.py`, `checker/register.py` and `scripts/verify.py`. **All of those are now
+gone.** POSH is a retired product direction — `checker/scope.py` returns OUT_OF_SCOPE for it by
+name, with a test on the refusal text, and `docs/RETIRED_POSH.md` is the record.
 
-**An empty register is correct.** "Asked, no reply" is a publishable finding, not a gap to fill.
-`asked_on` means a letter was actually sent — a rendered letter in `outbox/` is not an ask.
+Until 27-09-2026 this section told an agent the rule was "enforced in three places", two of which
+had not existed for weeks. A constraints file that describes absent machinery is worse than a
+silent one: it reads as a guarantee. That is why it is corrected here rather than deleted.
+
+**The rule outlived the machinery, because it was never about POSH.** A date, a threshold or a
+prior wording is recordable only alongside the evidence it came from. `verified_by` enforces it on
+the corpus, `checker/observation_store.py` enforces it by being append-only, and
+`checker/provenance.py` enforces it on a source. **An empty register is correct** — "asked, no
+reply" is a publishable finding, not a gap to fill, and UNVERIFIED and OPEN carry the same meaning
+today.
 
 ## Research priority
 
