@@ -10,7 +10,7 @@ much, and in what order.
 
 ## Read first
 `docs/PLAN_20_INHOUSE_CORPORATE.md` (the customer decision: in-house legal teams first, then
-law firms, then individuals), `docs/PLAN_20_EVIDENCE_CORRECTIONS.md` (**read this before quoting
+law firms, then individuals), `docs/EVIDENCE_CORRECTIONS_PLAN_20.md` (**read this before quoting
 any number** — it lists four claims in PLAN 20 that the evidence contradicts),
 `docs/research/IN_HOUSE_EVIDENCE_2026_09_27.md` (every claim tagged `[A]`/`[G]`/`[I]`/`[V]`/`[U]`,
 and a closing list of fifteen things the numbers do NOT support),

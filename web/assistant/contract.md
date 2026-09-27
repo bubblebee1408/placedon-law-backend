@@ -71,7 +71,7 @@ violation as a `500` (§6 D18). Fixture builder and the validator's tests:
 >   `partial`. A missed refusal is the safe direction, and the terms of art are the register's to
 >   extend.
 
-Plan: [`docs/PLAN_13_ASSISTANT_UX_PLAN.md`](../../docs/PLAN_13_ASSISTANT_UX_PLAN.md). Evidence:
+Plan: [`docs/ASSISTANT_UX_PLAN.md`](../../docs/ASSISTANT_UX_PLAN.md). Evidence:
 [`docs/research/ux/INTERNAL_ASK_AUDIT.md`](../../docs/research/ux/INTERNAL_ASK_AUDIT.md) (§R2 is the
 draft this corrects).
 

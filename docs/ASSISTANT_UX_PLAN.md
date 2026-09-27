@@ -1,5 +1,14 @@
 # PLAN_13 — the Ask section (grounded assistant): research, design, prototype
 
+> **Renamed from `PLAN_13_ASSISTANT_UX_PLAN.md` on 2026-09-27.** Two files carried PLAN_13.
+> The number stays with the design spec, `docs/PLAN_13_ASSISTANT_UX.md`, because that is what
+> everything cites: `web/assistant/contract.md` and `web/assistant/README.md` reference
+> "PLAN_13 §4.1", "§7.12", "§11" and "§13", and those sections exist only in the spec. This
+> document is the plan the spec was built from — constraints C1–C10, the harsh questions, the
+> acceptance checks — and it is out of the numbered series, not demoted.
+> Dated records still saying `PLAN_13_ASSISTANT_UX_PLAN.md` were left alone on purpose.
+
+
 Written 2026-09-15, before an unattended loop. Runbook: `.claude/plans/loop-assistant-ux-2026-09-15.md`.
 Markers as in [PLAN_00](PLAN_00_INDEX.md): BUILT · MEASURED · SOURCED · INFERRED · UNVERIFIED · BLOCKED.
 

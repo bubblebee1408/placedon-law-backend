@@ -106,6 +106,11 @@ HISTORY_PREFIXES = ("docs/research/", ".claude/plans/", ".claude/loops/")
 # than not having it.
 DESIGN_PREFIXES = ("docs/PLAN_", "docs/plan19/")
 
+# ...except an INDEX, which is present tense by definition: it says what exists, and its whole
+# job is that every link in it resolves. Found 27-09-2026 while rebuilding PLAN_00_INDEX -- the
+# prefix rule above had quietly exempted the one PLAN_ document that most needs checking.
+DESIGN_EXCEPTIONS = ("docs/PLAN_00_INDEX.md", "docs/plan19/00_INDEX.md")
+
 # A filename carrying a date is a dated artifact wherever it lives.
 DATED = re.compile(r"20\d\d[-_]\d\d[-_]\d\d")
 
@@ -164,10 +169,15 @@ _QUOTED = re.compile(r"`([A-Za-z0-9_][A-Za-z0-9_./-]*\.(?:py|sh|json|md|ts|tsx))
 _INVOKED = re.compile(r"(?:python3 |bash |\./)((?:scripts|checker|backend|eval)/"
                       r"[A-Za-z0-9_/]+\.(?:py|sh))")
 
+# A Markdown link target. Added 27-09-2026: PLAN_00_INDEX had been listing 7 documents out of 22,
+# and rebuilding it exposed that NO link was being checked -- `references()` reads backticks only,
+# and an index is written in links. An index whose links rot is worse than no index.
+_LINK = re.compile(r"\[[^\]]+\]\(([^)\s]+)\)")
+
 
 def is_design(doc: str) -> bool:
     """True when the document specifies what is to be BUILT, so a missing path is the point."""
-    return doc.startswith(DESIGN_PREFIXES)
+    return doc.startswith(DESIGN_PREFIXES) and doc not in DESIGN_EXCEPTIONS
 
 
 def is_history(doc: str) -> bool:
@@ -191,6 +201,36 @@ def references(text: str) -> set[str]:
     found = set(_QUOTED.findall(text)) | set(_INVOKED.findall(text))
     return {m for m in found
             if "/" in m and not m.startswith(NOT_OURS)}
+
+
+def link_targets(text: str, doc: str) -> set[str]:
+    """Repo-relative targets of every Markdown link, resolved against the citing document.
+
+    Separate from `references()` because a link is relative to the file it lives in --
+    `[PLAN_01](PLAN_01_ARCHITECTURE.md)` inside `docs/` means `docs/PLAN_01_ARCHITECTURE.md` --
+    while a backticked path is always repo-relative. Conflating the two would report every
+    same-directory link as missing.
+    """
+    base = os.path.dirname(doc)
+    out = set()
+    for raw in _LINK.findall(text):
+        if raw.startswith(("http://", "https://", "#", "mailto:", "//")):
+            continue
+        target = raw.split("#")[0].strip()
+        if not target or not target.lower().endswith(
+                (".py", ".sh", ".json", ".md", ".ts", ".tsx")):
+            continue
+        # NOT_OURS is tested on the RAW target as well as the resolved one. Resolving first
+        # prepends the citing document's directory, so `Placedon-law-business-plan/...` cited
+        # from docs/ becomes `docs/Placedon-law-business-plan/...` and stops matching the
+        # prefix -- which is how another repository's tree slipped back in.
+        if target.startswith(NOT_OURS):
+            continue
+        rel = os.path.normpath(os.path.join(base, target)).replace(os.sep, "/")
+        if rel.startswith("..") or rel.startswith(NOT_OURS):
+            continue            # outside the repo, or another repo's tree
+        out.add(rel)
+    return out
 
 
 def markdown_files(root: str) -> list[str]:
@@ -218,7 +258,7 @@ def dangling(root: str = ROOT) -> set[tuple[str, str]]:
                 text = fh.read()
         except (OSError, UnicodeDecodeError):
             continue
-        for path in references(text):
+        for path in references(text) | link_targets(text, doc):
             if not os.path.exists(os.path.join(root, path)):
                 bad.add((doc, path))
     return bad
@@ -290,6 +330,22 @@ def _test() -> None:
     check("checker/x.py" in references("import from `checker/x.py` please"),
           "checker/ paths are in scope")
 
+    # ── Markdown links, which are relative to the file they live in ──────────
+    check(link_targets("[a](PLAN_01.md)", "docs/PLAN_00_INDEX.md") == {"docs/PLAN_01.md"},
+          "a same-directory link resolves against the citing document, not the repo root")
+    check(link_targets("[a](plan19/00_INDEX.md)", "docs/PLAN_00_INDEX.md")
+          == {"docs/plan19/00_INDEX.md"}, "...and so does a subdirectory link")
+    check(link_targets("[a](../web/x.md)", "docs/A.md") == {"web/x.md"},
+          "...and one that climbs out of docs/")
+    check(link_targets("[a](https://x.com/y.md) [b](#anchor)", "docs/A.md") == set(),
+          "an external URL and a bare anchor are not repo paths")
+    check(link_targets("[a](PLAN_01.md#section-3)", "docs/PLAN_00_INDEX.md")
+          == {"docs/PLAN_01.md"}, "an anchor suffix is stripped before resolving")
+    check(link_targets("[a](../../outside.md)", "docs/A.md") == set(),
+          "a link that escapes the repository is not ours to resolve")
+    check(link_targets("[a](Placedon-law-business-plan/docs/X.md)", "docs/A.md") == set(),
+          "...nor is another repository's tree")
+
     # ── the active / history distinction ─────────────────────────────────────
     check(is_history("docs/RETIRED_POSH.md"), "an explicit history file is history")
     check(is_history("docs/research/ANYTHING.md"), "a dated research tree is history")
@@ -305,6 +361,8 @@ def _test() -> None:
     # ── the future tense ─────────────────────────────────────────────────────
     check(is_design("docs/PLAN_18_TECHNICAL_DESIGN.md"),
           "a PLAN_ document is DESIGN -- it names what is to be built")
+    check(not is_design("docs/PLAN_00_INDEX.md") and is_checked("docs/PLAN_00_INDEX.md"),
+          "...but an INDEX is present tense and IS checked -- every link in it must resolve")
     check(is_design("docs/plan19/03_ARCHITECTURE.md"), "so is the plan19 tree")
     check(not is_design("CLAUDE.md") and not is_design(".claude/commands/build.md"),
           "CLAUDE.md and a slash command are NOT design: an agent executes them")

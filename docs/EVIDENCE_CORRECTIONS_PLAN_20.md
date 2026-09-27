@@ -1,5 +1,13 @@
 # PLAN 20 — evidence corrections
 
+> **Renamed from `PLAN_20_EVIDENCE_CORRECTIONS.md` on 2026-09-27.** Two files carried PLAN_20.
+> This one is not a plan — it is a correction to one, and it now sits outside the numbered
+> series so that PLAN_20 means exactly `docs/PLAN_20_INHOUSE_CORPORATE.md`.
+> One consequence worth knowing: `scripts/check_doc_refs.py` treats `docs/PLAN_*` as
+> future-tense DESIGN documents and skips them, so this file is now checked in the present
+> tense, which is correct — it states what IS true, not what will be built.
+
+
 Written 27-09-2026, hours after `PLAN_20_INHOUSE_CORPORATE.md`, against a commissioned
 evidence review (`docs/research/IN_HOUSE_EVIDENCE_2026_09_27.md`, 423 lines, every claim
 tagged `[A]` academic / `[G]` government / `[I]` industry-with-method / `[V]` vendor /
