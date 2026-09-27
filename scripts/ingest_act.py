@@ -48,7 +48,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-from checker.robots import USER_AGENT, ssl_context      # noqa: E402
+from checker.robots import USER_AGENT, allowed, fetch_rules, ssl_context   # noqa: E402
 
 UA = {"User-Agent": USER_AGENT}
 PAUSE = 0.4                      # be a polite client
@@ -85,6 +85,28 @@ CONTENT_EP = ("https://indiacode.gov.in/SectionPageContent"
 
 class HostRefused(ValueError):
     """A URL outside the permitted host. Raised before any request is made."""
+
+
+class RobotsRefused(ValueError):
+    """robots.txt does not permit this fetch. Raised before any request is made.
+
+    Found 2026-09-28 by a corpus agent, in code I had written the day before: `_get` called
+    `check_host()` and then `urlopen`, and imported only `USER_AGENT` and `ssl_context` from
+    `checker.robots` -- the two helpers, and not the part that says no. **The one script in
+    this repository that fetches statutes was the one script robots.txt could not stop**,
+    and the Companies Act's 527 sections came through it.
+
+    It is not hypothetical. Measured the same day: `indiacode.gov.in/robots.txt` answers
+    **HTTP 500**, and `checker.robots.fetch_rules` fails closed on 5xx per RFC 9309
+    (a 4xx means "no rules published", so fetching is allowed; a 5xx means "rules exist but
+    are undetermined", so it is not). The repo's own gate already said
+    `allowed('https://indiacode.gov.in/server/api/core/items', rules) == False`. Nothing was
+    asking it.
+
+    That is also why "the REST API is live" and "the REST API is permitted" are different
+    statements, and why I had conflated them: I measured the first with curl, which goes
+    around the gate.
+    """
 
 
 def check_host(url: str) -> str:
@@ -161,8 +183,31 @@ def corpus_dir(act: Act, root: Path = ROOT) -> Path:
     return root / "corpus" / act.key
 
 
-def _get(url: str, tries: int = 3) -> str:
+# One robots ruleset per origin, fetched once. Without the cache this would re-request
+# robots.txt before every section -- hundreds of times per Act, which is impolite to the
+# host and slow, and would make a mid-run robots change apply to half a corpus.
+_RULES: dict[str, object] = {}
+
+
+def rules_for(url: str, *, fetch=None) -> object:
+    from urllib.parse import urlsplit
+    parts = urlsplit(url)
+    origin = f"{parts.scheme}://{parts.netloc}"
+    if origin not in _RULES:
+        _RULES[origin] = (fetch or fetch_rules)(origin)
+    return _RULES[origin]
+
+
+def _get(url: str, tries: int = 3, *, rules_fetch=None) -> str:
     check_host(url)                  # before the socket, not after
+    rules = rules_for(url, fetch=rules_fetch)
+    if not allowed(url, rules):
+        raise RobotsRefused(
+            f"robots.txt does not permit {url} (ruleset: "
+            f"{getattr(rules, 'source', '?')}, loaded={getattr(rules, 'loaded', '?')}). "
+            f"checker.robots fails CLOSED: an unloaded ruleset grants nothing, and a 5xx on "
+            f"robots.txt means the rules are undetermined rather than absent. This is a fact "
+            f"about the host, not about the law -- escalate to a human read.")
     ctx = ssl_context()
     if ctx is None:
         raise RuntimeError("no CA bundle available; refusing to fetch a statute over an "
@@ -490,6 +535,52 @@ def _test() -> int:
           "the section-content endpoint is on the permitted host")
     check(all("nic.in" not in (a.handle or "") for a in ACTS.values()),
           "no Act in the register points at nic.in")
+
+    # ── robots.txt is consulted, and it fails CLOSED ─────────────────────────
+    # The defect this replaces: `_get` called check_host() and urlopen, and imported only
+    # USER_AGENT and ssl_context from checker.robots -- the helpers, not the part that says
+    # no. Found by a corpus agent on 2026-09-28, in code written the day before.
+    from checker.robots import Rules, parse as _parse_robots
+
+    _RULES.clear()
+    unloaded = Rules()                       # what a 5xx robots.txt produces
+    check(not unloaded.loaded, "an unloaded ruleset is what a 5xx robots.txt yields")
+    e = attempt(lambda: _get("https://indiacode.gov.in/handle/1",
+                             rules_fetch=lambda origin: unloaded))
+    check(isinstance(e, RobotsRefused),
+          f"_get REFUSES when robots.txt did not load -- no socket is opened ({type(e).__name__})")
+    check("fails CLOSED" in str(e) and "not about the law" in str(e),
+          "...and the refusal says it is a fact about the host, not about the law")
+
+    _RULES.clear()
+    disallowing = _parse_robots("User-agent: *\nDisallow: /server/\n")
+    check(disallowing.loaded, "a well-formed ruleset loads")
+    check(isinstance(attempt(lambda: _get("https://indiacode.gov.in/server/api/core/items",
+                                          rules_fetch=lambda o: disallowing)), RobotsRefused),
+          "_get refuses a path the ruleset disallows, even on the permitted host")
+
+    # The host guard must still come FIRST: a forbidden host is refused before robots is
+    # even fetched, so a bad host cannot be laundered through a permissive ruleset.
+    _RULES.clear()
+    permissive = _parse_robots("User-agent: *\nDisallow:\n")
+    check(isinstance(attempt(lambda: _get("https://evil.example/x",
+                                          rules_fetch=lambda o: permissive)), HostRefused),
+          "a forbidden host is refused BEFORE robots, so a permissive ruleset cannot launder it")
+
+    # One robots fetch per origin, not one per section.
+    _RULES.clear()
+    fetched: list[str] = []
+
+    def counting_rules(origin):
+        fetched.append(origin)
+        return permissive
+
+    for sid in ("1", "2", "3"):
+        attempt(lambda s=sid: _get(f"https://indiacode.gov.in/x/{s}",
+                                   rules_fetch=counting_rules))
+    check(fetched == ["https://indiacode.gov.in"],
+          f"robots.txt is fetched ONCE per origin, not once per section ({fetched})")
+    _RULES.clear()
 
     # ── an offline fixture, per record shape ─────────────────────────────────
     # A captured SectionPageContent response. Offline on purpose: the shape is what this
