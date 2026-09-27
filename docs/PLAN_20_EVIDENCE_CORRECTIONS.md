@@ -227,7 +227,7 @@ copy in a quarter.
 | §5 arithmetic | **Restate** at ₹3.95/answer. Consider raising the ceiling above ₹5,00,000. |
 | §2 no-fine-tuning | **Keep.** Nothing in the evidence disturbs it; "weights cannot be as-of-dated" is unaffected. |
 | new | Add the Gazette amendment-density count as a first-class deliverable, not a research nicety. |
-| §preamble path | **Fix.** It cites `docs/BUSINESS_PLAN.md`, which is not in this repo — the file is `Placedon-law-business-plan/docs/BUSINESS_PLAN.md`, in the **public** repo that must never be edited from here. PLAN 20 says it "must be rewritten" while pointing at a local path that does not exist. Any rewrite is a draft handed to the founder, never a commit. |
+| §preamble path | **Fix.** It cites docs/BUSINESS_PLAN.md (unbackticked here on purpose -- it does not exist), which is not in this repo — the file is `Placedon-law-business-plan/docs/BUSINESS_PLAN.md`, in the **public** repo that must never be edited from here. PLAN 20 says it "must be rewritten" while pointing at a local path that does not exist. Any rewrite is a draft handed to the founder, never a commit. |
 
 ---
 

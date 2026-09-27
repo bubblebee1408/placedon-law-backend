@@ -55,7 +55,8 @@ green suite (LESSONS L-2).
 Then spawn **`trust-boundary-reviewer`** on anything that makes a legal claim, and
 **`qa-reviewer`** on the diff.
 
-**If a bug escaped, add its check to the MODULE'S OWN `_test()` before fixing anything else** — a `check(cond, label)` call beside the code it guards, in whatever shape that module's `_test()` already uses, then make sure the module is listed in `scripts/run_tests.sh`. That is the ratchet: the bug gets paid for once. (There is no `because=` parameter and no central check file; both were retired with `scripts/verify.py`.)
+**If a bug escaped, add its check to the MODULE'S OWN `_test()` before fixing anything else** — a `check(cond, label)` call beside the code it guards, in whatever shape that module's `_test()` already uses, then make sure the module is listed in `scripts/run_tests.sh`. That is the ratchet: the bug gets paid for once. (There is no `because=` parameter and no central check file; both were retired with
+scripts/verify.py -- unbackticked on purpose, since it no longer exists.)
 
 ## L — Learn
 

@@ -19,11 +19,13 @@ decision. Never move an applicability decision into a prompt.
 - Type annotations on every signature. `from __future__ import annotations` at the top.
 - `@dataclass(frozen=True)` for anything crossing a boundary. Return new objects; never mutate.
 - **Tests live in `if __name__ == "__main__":` in the module they test.** Unusual, deliberate:
-  one file to open, no fixture indirection, and `python3 checker/ic_order.py` is the whole
+  one file to open, no fixture indirection, and `python3 checker/as_of.py` is the whole
   contract. `scripts/run_tests.sh` runs them all, and `./scripts/verify_green.sh` is the only
   thing permitted to say whether they passed.
-- Assert against **the ingested corpus**, not against constants. `ic_order.py`'s tests read
-  `posh_act_2013.json` — so if the corpus changes, the tests notice.
+- Assert against **the ingested corpus**, not against constants. `checker/as_of.py`'s tests read
+  the records under `corpus/companies_act/` — so if the corpus changes, the tests notice. (This
+  bullet named `ic_order.py` and `posh_act_2013.json` until 27-09-2026; both were PoSH-era and
+  neither had existed for weeks. The convention was right, the example was dead.)
 - Never `except: pass`. Every error is handled, logged, or raised.
 - No magic numbers. `MAX_TERM_YEARS = 3` with the citation beside it.
 

@@ -73,7 +73,8 @@ decides, the LLM explains, a lawyer verifies.** Tests live in the module and ass
 making a legal claim.
 
 **If a bug escaped, add its check to the MODULE'S OWN `_test()` BEFORE fixing it** — there is no
-central check file and no `because=` parameter; both were retired with `scripts/verify.py`. Write
+central check file and no `because=` parameter; both were retired with scripts/verify.py
+(unbackticked on purpose: it no longer exists). Write
 the check, watch it fail, then fix. A check written after the fix tests the fix; a check written
 before tests the bug.
 
