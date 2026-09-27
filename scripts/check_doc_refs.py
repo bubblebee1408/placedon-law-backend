@@ -96,7 +96,15 @@ HISTORY_FILES = (
 )
 
 # Whole trees of dated artifacts: research passes, loop runbooks, phase reports.
-HISTORY_PREFIXES = ("docs/research/", ".claude/plans/", ".claude/loops/")
+#
+# `docs/LOOP_` joined this on 2026-09-27. A loop runbook or report is the record of one loop --
+# the same artifact as `.claude/plans/loop-*.md`, just filed elsewhere -- and it names what it
+# found, including files since deleted. Four of them carry no date in the FILENAME
+# (LOOP_BOOKMARK_V0, LOOP_EVENT_LOG, LOOP_INTELLIGENCE_V0, LOOP_THEMIS_20_MOVES_REPORT) so the
+# DATED rule below missed them, and the last of those failed this check the moment
+# scripts/ingest_companies_act.py was deleted -- for correctly reporting, in the past tense, a
+# red-team finding in a file that no longer exists.
+HISTORY_PREFIXES = ("docs/research/", ".claude/plans/", ".claude/loops/", "docs/LOOP_")
 
 # Documents written in the FUTURE tense: they specify artifacts to be built, so naming one that
 # does not exist yet is the document doing its job. Added 27-09-2026 when merging origin/main
@@ -155,7 +163,6 @@ KNOWN_DEBT = {
     # checker/dense_index.py.
     ("docs/COMPETITOR_PATTERN_ANALYSIS.md", "checker/retrieval.py"),
     ("docs/COMPETITOR_PATTERN_ANALYSIS.md", "docs/CLAUDE.md"),
-    ("docs/LOOP_INTELLIGENCE_V0.md", "checker/pending.py"),
 
 
     # (The PLAN_12/19/20 entries that stood here were removed 27-09-2026: PLAN_* and plan19/ are
@@ -351,6 +358,11 @@ def _test() -> None:
     check(is_history("docs/research/ANYTHING.md"), "a dated research tree is history")
     check(is_history("docs/LOOP_THEMIS_20_MOVES_2026_09_17.md"),
           "a dated filename is history wherever it lives")
+    check(is_history("docs/LOOP_THEMIS_20_MOVES_REPORT.md"),
+          "a loop REPORT is history even with no date in its filename")
+    check(is_history("docs/LOOP_BOOKMARK_V0.md"), "...and so is a loop runbook under docs/")
+    check(not is_history("docs/PLAN_05_ROADMAP.md"),
+          "but a PLAN is not history -- it is design, and checked as such")
     check(not is_history("docs/BUILD_CONTEXT.md"),
           "a constraints file is ACTIVE -- it is read as a guarantee")
     check(not is_history(".claude/commands/build.md"),
