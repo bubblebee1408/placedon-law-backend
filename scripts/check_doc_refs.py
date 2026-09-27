@@ -22,6 +22,16 @@ repository's Markdown. The worst of them were not merely stale, they were instru
 A document listing those findings would rot the same way. **This is the invariant
 version.** `docs/DOC_DEBT_2026_09_27.md` is its narrative; this file is what holds.
 
+## Three tenses, and only one of them is checkable
+
+  * **Past** -- `docs/RETIRED_POSH.md` cites the script it retired. Correct.
+  * **Future** -- `docs/PLAN_18_TECHNICAL_DESIGN.md` cites `checker/conformal.py`, which is what
+    it is specifying. A design document that could only name files already built would be a
+    description, not a plan.
+  * **Present** -- `CLAUDE.md`, `docs/BUILD_CONTEXT.md`, a slash command, `.claude/memory/*`.
+    These tell a reader what IS. **Only these are checked**, and they are the ones that mislead:
+    an agent does not execute PLAN_18, it executes `/build`.
+
 ## The distinction that makes this checkable
 
 Not every missing path is a defect. `docs/RETIRED_POSH.md` cites the script it retired.
@@ -88,6 +98,14 @@ HISTORY_FILES = (
 # Whole trees of dated artifacts: research passes, loop runbooks, phase reports.
 HISTORY_PREFIXES = ("docs/research/", ".claude/plans/", ".claude/loops/")
 
+# Documents written in the FUTURE tense: they specify artifacts to be built, so naming one that
+# does not exist yet is the document doing its job. Added 27-09-2026 when merging origin/main
+# brought PLAN_17, PLAN_18 and docs/plan19/, and 24 of their 26 "dangling" references turned out
+# to be specifications -- `checker/conformal.py`, `gateway/worker.py`, `docs/RUNBOOK_BETA.md`.
+# Treating a spec as a defect would have taught everyone to ignore this check, which is worse
+# than not having it.
+DESIGN_PREFIXES = ("docs/PLAN_", "docs/plan19/")
+
 # A filename carrying a date is a dated artifact wherever it lives.
 DATED = re.compile(r"20\d\d[-_]\d\d[-_]\d\d")
 
@@ -129,22 +147,15 @@ KNOWN_DEBT = {
     ("docs/FAILURE_MODES.md", "corpus/.budget.json"),
 
     # Modules built under other names. checker/retrieval.py became checker/text_search.py and
-    # checker/dense_index.py; the others need someone to confirm the mapping before it is written.
+    # checker/dense_index.py.
     ("docs/COMPETITOR_PATTERN_ANALYSIS.md", "checker/retrieval.py"),
     ("docs/COMPETITOR_PATTERN_ANALYSIS.md", "docs/CLAUDE.md"),
-    ("docs/PLAN_12_DOCUMENT_INTAKE_ARCHITECTURE.md", "checker/pages.py"),
-    ("docs/PLAN_12_DOCUMENT_INTAKE_ARCHITECTURE.md", "checker/intake.py"),
     ("docs/LOOP_INTELLIGENCE_V0.md", "checker/pending.py"),
 
-    # PLAN 20 cites docs/BUSINESS_PLAN.md, which is in the PUBLIC repo, not this one. Fixing it
-    # means editing PLAN 20's preamble, which is a live product document -- founder's call.
-    ("docs/PLAN_20_INHOUSE_CORPORATE.md", "docs/BUSINESS_PLAN.md"),
 
-    # PLAN 19 decision records annotating a spec that lives on origin/main, not this branch.
-    # The fix is a merge, not an edit. See docs/REPO_AUDIT_2026_09_27.md.
-    ("docs/plan19/decisions/G0_1_INSTRUMENT_REGISTRY.md", "corpus/sources/index.json"),
-    ("docs/plan19/decisions/M13_DERIVATION.md", "scripts/revocation_report.py"),
-    ("docs/plan19/decisions/M13_DERIVATION.md", "docs/plan19/04_MATHS_AND_ALGORITHMS.md"),
+    # (The PLAN_12/19/20 entries that stood here were removed 27-09-2026: PLAN_* and plan19/ are
+    # DESIGN documents, and one of them -- docs/plan19/04_MATHS_AND_ALGORITHMS.md -- simply arrived
+    # with the origin/main merge.)
 }
 
 # A backticked path, and a shell-invoked script. The second matters most: it is the
@@ -154,11 +165,21 @@ _INVOKED = re.compile(r"(?:python3 |bash |\./)((?:scripts|checker|backend|eval)/
                       r"[A-Za-z0-9_/]+\.(?:py|sh))")
 
 
+def is_design(doc: str) -> bool:
+    """True when the document specifies what is to be BUILT, so a missing path is the point."""
+    return doc.startswith(DESIGN_PREFIXES)
+
+
 def is_history(doc: str) -> bool:
     """True when the document speaks in the past tense, so a missing path is correct."""
     return (doc in HISTORY_FILES
             or doc.startswith(HISTORY_PREFIXES)
             or bool(DATED.search(os.path.basename(doc))))
+
+
+def is_checked(doc: str) -> bool:
+    """Only present-tense documents are checked. See "Three tenses" above."""
+    return not (is_history(doc) or is_design(doc))
 
 
 def references(text: str) -> set[str]:
@@ -190,7 +211,7 @@ def dangling(root: str = ROOT) -> set[tuple[str, str]]:
     """(document, path) for every path an ACTIVE document cites that does not exist."""
     bad = set()
     for doc in markdown_files(root):
-        if is_history(doc):
+        if not is_checked(doc):
             continue
         try:
             with open(os.path.join(root, doc), encoding="utf-8") as fh:
@@ -214,7 +235,8 @@ def report(root: str = ROOT) -> int:
     missing_docs = sorted(d for d in allow_listed
                           if not os.path.exists(os.path.join(root, d)))
 
-    print(f"active documents scanned : {sum(1 for d in markdown_files(root) if not is_history(d))}")
+    print(f"present-tense docs scanned: {sum(1 for d in markdown_files(root) if is_checked(d))}"
+          f"   (skipped: {sum(1 for d in markdown_files(root) if not is_checked(d))} history/design)")
     print(f"dangling references      : {len(bad)}  (known debt {len(KNOWN_DEBT)})")
 
     if new:
@@ -279,6 +301,17 @@ def _test() -> None:
           "a slash command is ACTIVE -- an agent executes it")
     check(not is_history(".claude/today/TODAY.md"),
           "a stale daily note is ACTIVE, not history: it presents itself as today")
+
+    # ── the future tense ─────────────────────────────────────────────────────
+    check(is_design("docs/PLAN_18_TECHNICAL_DESIGN.md"),
+          "a PLAN_ document is DESIGN -- it names what is to be built")
+    check(is_design("docs/plan19/03_ARCHITECTURE.md"), "so is the plan19 tree")
+    check(not is_design("CLAUDE.md") and not is_design(".claude/commands/build.md"),
+          "CLAUDE.md and a slash command are NOT design: an agent executes them")
+    check(not is_checked("docs/PLAN_18_TECHNICAL_DESIGN.md")
+          and not is_checked("docs/RETIRED_POSH.md")
+          and is_checked("docs/BUILD_CONTEXT.md"),
+          "only present-tense documents are checked -- past and future are skipped")
 
     # ── the scan itself, on a synthetic tree ─────────────────────────────────
     # A real dangling reference must be FOUND, and the same reference inside a history

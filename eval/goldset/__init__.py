@@ -58,7 +58,7 @@ Every rate goes through `checker.calibration_contract.render_number`, which refu
 a number whose observable lattice is coarser than the claim it would make. At n=12
 the finest observable difference is 1/12 = 0.083, so "we are at 91%" is not a
 statement the data can carry -- and this module will say so rather than print it.
-`PLAN_16` C1 sets the first honest measurement at n >= 59.
+`PLAN_21` C1 sets the first honest measurement at n >= 59.
 
 ## Where the questions come from
 
@@ -125,7 +125,7 @@ GOLDSET_PATH = _ROOT / "eval/goldset/questions.jsonl"
 
 # Below this n, only the count is printed. 30 is not a magic threshold for truth --
 # it is the point where the lattice spacing (1/n = 0.033) is finer than the
-# differences anyone would act on. PLAN_16 C1 sets the first HUMAN-labelled
+# differences anyone would act on. PLAN_21 C1 sets the first HUMAN-labelled
 # measurement at n>=59; this is the floor for showing any fraction at all.
 MIN_N_FOR_A_RATE = 30
 
@@ -337,7 +337,7 @@ class Report:
         if human == 0:
             lines.append("  NO HUMAN LABELS. Every scored row is mechanical -- checkable "
                          "against text we hold. That measures self-consistency, not whether "
-                         "a lawyer was helped. PLAN_16 C1 needs n>=59 human labels before "
+                         "a lawyer was helped. PLAN_21 C1 needs n>=59 human labels before "
                          "any claim about accuracy is meaningful.")
         return "\n".join(lines)
 
@@ -548,7 +548,7 @@ def _test() -> None:
     check(isinstance(live, tuple), f"the committed gold set loads ({len(live)} entries)")
     human = [e for e in live if e.provenance == HUMAN]
     print(f"\n  gold set today: {len(live)} entries, {len(human)} human-labelled. "
-          f"PLAN_16 C1 needs 59.")
+          f"PLAN_21 C1 needs 59.")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:
