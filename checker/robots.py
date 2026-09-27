@@ -163,16 +163,65 @@ _DECLARED_KIND = {
     "application/pkix-crl": DER, "application/x-pkcs7-crl": DER,
 }
 
-# Only the first 512 bytes are examined, so a statutory text that merely CONTAINS an
-# angle bracket later on is unaffected -- s.2(85) says "a company <other than a public
-# company>" and must not be mistaken for a web page.
+# Only the first 512 bytes are EXAMINED (the whole body is read; this is a window over
+# it), so a statutory text that merely CONTAINS an angle bracket later on is unaffected
+# -- s.2(85) says "a company <other than a public company>" and must not be mistaken
+# for a web page.
 _HEAD = 512
 _MARKUP_OPENINGS = (b"<!doctype html", b"<html", b"<?xml-stylesheet")
+_BOM = b"\xef\xbb\xbf"
+
+
+def _after_prologue(head: bytes) -> bytes | None:
+    """`head` with a BOM, whitespace, leading comments and an XML declaration removed,
+    or None when the prologue does not finish inside the window.
+
+    Until 2026-09-27 this did not exist and `looks_like_markup` matched three literal
+    openings, so THE FAIL-OPEN THIS MODULE'S GUARD WAS WRITTEN TO CLOSE WAS STILL
+    REACHABLE: a verifier drove a comment-first page, a BOM-prefixed page and an XHTML
+    page straight through `fetch_rules` to `loaded=True` and `allowed(anything)=True`.
+    Skipping the prologue rather than lengthening the openings list is the difference
+    between handling the spellings someone has already met and handling the shape.
+
+    `None` means "could not tell", which callers treat as markup. 512 bytes of
+    unterminated comment is not a robots file, a CRL or a statute.
+    """
+    for _ in range(8):                     # a handful of prologue items, not a parser
+        head = head.lstrip()
+        if head.startswith(_BOM):
+            head = head[len(_BOM):]
+            continue
+        if head.startswith(b"<!--"):
+            end = head.find(b"-->")
+            if end == -1:
+                return None
+            head = head[end + 3:]
+            continue
+        # An XML declaration is a prologue; `<?xml-stylesheet` is a processing
+        # instruction the DSpace shell itself carries, and stays an opening.
+        if head.startswith(b"<?xml") and not head.startswith(b"<?xml-stylesheet"):
+            end = head.find(b"?>")
+            if end == -1:
+                return None
+            head = head[end + 2:]
+            continue
+        return head
+    return head
 
 
 def looks_like_markup(body: bytes) -> bool:
-    """A payload that opens as HTML, whatever the header claimed."""
-    return body[:_HEAD].lstrip().lower().startswith(_MARKUP_OPENINGS)
+    """A payload that opens as HTML, whatever the header claimed.
+
+    KNOWN LIMIT, stated rather than claimed away: this recognises a document that
+    opens -- after its prologue -- with a doctype, `<html`, or the shell's own
+    stylesheet instruction. A page whose first element is something else (`<div`,
+    `<meta`, a framework wrapper) is NOT caught by this half, and only the
+    `Content-Type` half of `payload_refusal` will refuse it.
+    """
+    head = _after_prologue(body[:_HEAD].lower())
+    if head is None:
+        return True                        # fail closed: we could not see past it
+    return head.startswith(_MARKUP_OPENINGS)
 
 
 def declared_kind(content_type: str) -> str | None:
@@ -181,7 +230,12 @@ def declared_kind(content_type: str) -> str | None:
 
 
 def _opens_with(body: bytes) -> bytes:
-    return body[:_HEAD].lstrip()[:1]
+    """The first meaningful byte, past a BOM and whitespace. A UTF-8 BOM in front of a
+    JSON or XML body is the source's business, not a reason to refuse it."""
+    head = body[:_HEAD].lstrip()
+    if head.startswith(_BOM):
+        head = head[len(_BOM):].lstrip()
+    return head[:1]
 
 
 def _is_binary(body: bytes) -> bool:
@@ -210,10 +264,18 @@ def _satisfies(kind: str, body: bytes) -> bool:
 def payload_refusal(body: bytes, *, expect, content_type: str = "") -> str | None:
     """Why `body` is not one of `expect`, or None when it is.
 
-    There is deliberately no permissive default and no "any" kind: a caller that has
-    not decided what it is asking for has not decided whether it got it, and that is
-    the whole failure being guarded. A fetcher that genuinely wants a page says
-    `expect=(HTML,)`; everything else refuses markup.
+    There is no default and no "any" kind: a caller that has not decided what it is
+    asking for has not decided whether it got it, and that is the whole failure being
+    guarded. A fetcher that genuinely wants a page says `expect=(HTML,)`.
+
+    `expect` naming EVERY kind is refused too. `PAYLOAD_KINDS` is exported for
+    validation and error messages, and `expect=PAYLOAD_KINDS` was therefore a
+    one-token "any" built out of this module's own public names -- the permissive
+    default, wearing an argument. An expectation that admits everything is not an
+    expectation.
+
+    What this canNOT do: say whether the RIGHT document arrived. A genuine PDF of the
+    wrong Act passes.
     """
     kinds = tuple(expect)
     if not kinds:
@@ -222,6 +284,9 @@ def payload_refusal(body: bytes, *, expect, content_type: str = "") -> str | Non
     unknown = [k for k in kinds if k not in PAYLOAD_KINDS]
     if unknown:
         raise ValueError(f"{unknown} are not payload kinds; one of {PAYLOAD_KINDS}")
+    if set(kinds) == set(PAYLOAD_KINDS):
+        raise ValueError("expect names every payload kind, which is not an expectation "
+                         "-- name the kind(s) this fetch actually asks for")
 
     wanted = "/".join(kinds)
     served = (content_type or "").split(";")[0].strip().lower()
@@ -422,18 +487,23 @@ class Fetcher:
         self.rules = rules if rules is not None else fetch_rules(self.origin)
         self._last = 0.0
 
-    def get(self, url: str, *, expect: tuple[str, ...] = (HTML, TEXT),
+    def get(self, url: str, *, expect: tuple[str, ...],
             timeout: float = 30.0) -> tuple[int, str]:
         """Returns (status, body). Status 999 means we declined to ask -- or declined
         to believe the answer.
 
-        This fetcher returns `str`, so its declared domain is text-shaped payloads and
-        `expect` defaults to naming exactly that rather than to accepting anything: its
-        one caller (`checker/corroborate.py`) reads Indian Kanoon HTML, and pages are a
-        legitimate expectation here. What the default does NOT admit is a binary: a PDF
-        handed to this method used to be decoded with `errors="replace"` into mojibake
-        that looked like a short, empty document. A caller wanting a PDF must fetch it
-        somewhere that returns bytes.
+        `expect` is REQUIRED, and that is the whole of F3. It defaulted to `(HTML, TEXT)`,
+        which reads like a modest default and is not one: a soft-404 -- the Angular shell
+        served with HTTP 200 and `text/html` where a document was expected -- IS an HTML
+        page, so the default admitted precisely the failure this module exists to refuse.
+        A default expectation is a guess at what the caller wanted, and a guard may not
+        guess; the caller knows whether it asked for a page or a document, so the caller
+        says. There is no permissive default here because there is no default.
+
+        This fetcher returns `str`, so a binary is out of its domain whatever is expected:
+        a PDF handed to this method used to be decoded with `errors="replace"` into
+        mojibake that looked like a short, empty document. A caller wanting a PDF must
+        fetch it somewhere that returns bytes.
         """
         if not url.startswith(self.origin):
             return 999, f"refused: {url} is outside {self.origin}"
@@ -455,7 +525,13 @@ class Fetcher:
         try:
             with urllib.request.urlopen(req, timeout=timeout, context=ctx) as r:
                 raw = r.read()
-                if r.status == 200:
+                # Every 2xx, not just 200. The premise of this guard is that a success
+                # status is not evidence about the BODY, and that premise says nothing
+                # special about 200: a 206 Partial Content, a 203, or a 200-with-a-range
+                # carries a body on exactly the same terms. Keying the check to 200 alone
+                # left a hole whose shape is "return the payload unchecked, with a status
+                # the caller will read as success".
+                if 200 <= r.status < 300:
                     why = payload_refusal(raw, expect=expect,
                                           content_type=r.headers.get("Content-Type") or "")
                     if why:
@@ -484,9 +560,10 @@ def _test() -> None:
     # Fail-closed is the property that matters most; test it first.
     check(not allowed("https://x.org/doc/1/", Rules()),
           "an unloaded ruleset denies everything")
-    check(not Fetcher("https://x.org", rules=Rules()).get("https://x.org/a")[0] == 200,
+    check(not Fetcher("https://x.org", rules=Rules()).get("https://x.org/a",
+                                                          expect=(HTML,))[0] == 200,
           "a fetcher with no rules refuses to fetch")
-    st, msg = Fetcher("https://x.org", rules=Rules()).get("https://x.org/a")
+    st, msg = Fetcher("https://x.org", rules=Rules()).get("https://x.org/a", expect=(HTML,))
     check(st == 999 and "not loaded" in msg,
           "...and says why, rather than reporting a network error")
 
@@ -533,7 +610,7 @@ def _test() -> None:
           "a double-slash denylist entry still refuses the single-slash URL")
 
     check(Fetcher("https://a.org", rules=parse("User-agent: *\n"))
-          .get("https://b.org/x")[0] == 999,
+          .get("https://b.org/x", expect=(HTML,))[0] == 999,
           "a cross-origin URL is refused rather than fetched")
 
     # A 404 means "no rules exist"; a 503 means "no answer". Only the first grants
@@ -562,6 +639,23 @@ def _test() -> None:
     check(not allowed("https://x.org/a", Rules(source="timeout")),
           "an unreachable robots.txt still denies everything")
 
+    # A response double for every fetch test below. No network, ever.
+    from unittest import mock as _mock
+
+    class _Resp:
+        def __init__(self, body: bytes, ctype: str, status: int = 200):
+            self.status, self._b = status, body
+            self.headers = {"Content-Type": ctype}
+
+        def read(self) -> bytes:
+            return self._b
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
     # ── the payload guard: a 200 is not evidence of WHAT came back ───────────
     # India Code answers a path it does not serve with HTTP 200 and the DSpace Angular
     # shell rather than a 404. Re-measured 26-09-2026:
@@ -578,6 +672,71 @@ def _test() -> None:
         b"a public company>"),
           "statutory text that merely contains a bracketed phrase is not markup")
     check(not looks_like_markup(b""), "empty bytes are not markup (they fail elsewhere)")
+
+    # ── F2: the three escapes a verifier drove end-to-end through fetch_rules ──
+    # The openings list recognised exactly three spellings, so a page that opens with
+    # anything else reached parse() as a ruleset and yielded loaded=True with no
+    # directives -- which allowed() reads as FULL PERMISSION. The fail-open this guard
+    # was written to close was still reachable, three ways. The fix is to SKIP the
+    # prologue rather than to grow the list, because the list can only ever hold the
+    # spellings someone has already met.
+    check(looks_like_markup(b"<!-- saved from url -->\n<html><body>x</body></html>"),
+          "a page behind a leading comment is still a page")
+    check(looks_like_markup(b"\xef\xbb\xbf<!DOCTYPE html>\n<html>"),
+          "a BOM does not hide a doctype")
+    check(looks_like_markup(b'<?xml version="1.0"?>\n<!DOCTYPE html><html xmlns="x">'),
+          "an XHTML page opens with an XML prolog and is still a page")
+    check(looks_like_markup(b"\xef\xbb\xbf  <!-- x -->\n\n<html>"),
+          "BOM, comment and whitespace together do not hide it either")
+    check(looks_like_markup(b"<!-- " + b"y" * 600),
+          "a comment that does not close inside the window fails CLOSED, not open")
+    # ...and the prologue skip must not start refusing real data that opens the same way.
+    check(not looks_like_markup(b'<?xml version="1.0"?><sdnList><sdnEntry/></sdnList>'),
+          "a real XML document with an XML prolog is NOT markup")
+    check(not looks_like_markup(b"<!-- generated -->\n<sdnList><sdnEntry/></sdnList>"),
+          "...nor one behind a comment")
+    check(payload_refusal(b'<?xml version="1.0"?><sdnList/>', expect=(XML,),
+                          content_type="text/xml") is None,
+          "...and it is still accepted where XML was expected")
+    check(payload_refusal(b"\xef\xbb\xbf{\"ok\": true}", expect=(JSON,),
+                          content_type="application/json") is None,
+          "a BOM does not stop a JSON body being recognised as JSON")
+
+    # End to end through the real fetch_rules: the escape the verifier actually drove.
+    for label, body, ctype in (
+        ("a comment-first page", b"<!-- hi -->\n<html><body>Home</body></html>", "text/html"),
+        ("a BOM-prefixed page", b"\xef\xbb\xbf<!DOCTYPE html>\n<html></html>", "text/html"),
+        ("a comment-first page with NO Content-Type",
+         b"<!-- hi -->\n<html><body>Home</body></html>", ""),
+    ):
+        with _mock.patch.object(urllib.request, "urlopen", return_value=_Resp(body, ctype)):
+            rr = fetch_rules("https://www.example.gov")
+        check(not rr.loaded and not allowed("https://www.example.gov/anything", rr),
+              f"{label} grants NO permission")
+
+    # ── F3: "no permissive default" must be true of this module's own surface ──
+    # Fetcher.get defaulted expect=(HTML, TEXT), which admits a soft-404 page; and
+    # PAYLOAD_KINDS is exported, so expect=PAYLOAD_KINDS was a one-token "any" built
+    # from our own public names. Both are closed: expect is required, and an
+    # expectation that admits every kind is not an expectation.
+    try:
+        payload_refusal(b"x", expect=PAYLOAD_KINDS, content_type="text/plain")
+        check(False, "an expectation naming every kind must be refused")
+    except ValueError as e:
+        check("every" in str(e) or "all" in str(e),
+              f"naming every payload kind is rejected as no expectation at all: {e}")
+    import inspect as _inspect
+    _sig = _inspect.signature(Fetcher.get)
+    check(_sig.parameters["expect"].default is _inspect.Parameter.empty,
+          "Fetcher.get has NO default expectation -- the caller must say what it wants")
+
+    # ── F7: a guard whose premise is "a 200 is not evidence" must cover every 2xx ──
+    with _mock.patch.object(urllib.request, "urlopen",
+                            return_value=_Resp(b"%PDF-1.7\n", "application/pdf", status=206)):
+        st_206, _ = Fetcher("https://ik.example", rules=parse("User-agent: *\n")).get(
+            "https://ik.example/x", expect=(HTML,))
+    check(st_206 == 999,
+          "a 206 carrying a PDF is refused too -- the check is not keyed to 200 alone")
 
     # Both halves are checked, because either alone is defeated by a real host.
     check(payload_refusal(shell, expect=(PDF,), content_type="text/html; charset=UTF-8"),
@@ -637,22 +796,6 @@ def _test() -> None:
     # fetch_rules: the measured live case. www.treasury.gov/robots.txt 301s to an HTML
     # homepage; parse() finds no directives in it and returns loaded=True with no rules,
     # which `allowed()` reads as FULL PERMISSION. A web page was being used as policy.
-    from unittest import mock as _mock
-
-    class _Resp:
-        def __init__(self, body: bytes, ctype: str, status: int = 200):
-            self.status, self._b = status, body
-            self.headers = {"Content-Type": ctype}
-
-        def read(self) -> bytes:
-            return self._b
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *a):
-            return False
-
     homepage = b'<!DOCTYPE html><html><head><title>Home</title></head><body>x</body></html>'
     with _mock.patch.object(urllib.request, "urlopen",
                             return_value=_Resp(homepage, "text/html; charset=utf-8")):
@@ -677,13 +820,15 @@ def _test() -> None:
     with _mock.patch.object(urllib.request, "urlopen",
                             return_value=_Resp(b"%PDF-1.7\n%\xe2\xe3\xcf\xd3", "application/pdf")):
         st_pdf, body_pdf = Fetcher("https://ik.example",
-                                   rules=parse("User-agent: *\n")).get("https://ik.example/x")
+                                   rules=parse("User-agent: *\n")).get("https://ik.example/x",
+                                                                       expect=(HTML,))
     check(st_pdf == 999 and not body_pdf.startswith("%PDF"),
           "a PDF handed to the text fetcher is refused, not decoded into mojibake")
     with _mock.patch.object(urllib.request, "urlopen",
                             return_value=_Resp(b"<html><a href='/doc/1/'>x</a></html>", "text/html")):
         st_ok, body_ok = Fetcher("https://ik.example",
-                                 rules=parse("User-agent: *\n")).get("https://ik.example/x")
+                                 rules=parse("User-agent: *\n")).get("https://ik.example/x",
+                                                                     expect=(HTML,))
     check(st_ok == 200 and "/doc/1/" in body_ok,
           "the Indian Kanoon HTML path this fetcher exists for is unaffected")
 
