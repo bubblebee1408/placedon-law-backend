@@ -109,16 +109,16 @@ Files changed · Tests added or updated · Commands run · Results · Known limi
 | Path | Contents |
 |---|---|
 | `checker/` | Verifier, applicability, retrieval, provision graph, amendment parser, as_of, derived_date |
-| `checker/section_index.py` | `section_by_number("173")` — number -> corpus ID (97.9% mapped) |
+| `checker/section_index.py` | `section_by_number("173")` — number -> corpus ID. **474/474 live provisions carry an id** (measured 27-09-2026). "Mapped" is not "verified" — see Verification status |
 | `checker/legal_ref.py` | Instrument-qualified refs. A provision number is never an identity |
 | `checker/mvp_freeze.py` | Pins the 17 hand-verified MVP mappings against silent drift |
-| `scripts/run_tests.sh` | Runs **every** self-testing module with PYTHONPATH set — use this, not bare python3. (It said "all 8 suites" until 2026-09-25; the harness runs 195 today, and the count belongs in its own HARNESS_RESULT line, not in prose that goes stale.) |
+| `scripts/run_tests.sh` | Runs **every** self-testing module with PYTHONPATH set — use this, not bare python3. (It said "all 8 suites" until 2026-09-25, then "195" until 2026-09-27 — by which date the measured figure was 205. The count belongs in the `HARNESS_RESULT` line and **nowhere else**: this sentence has now gone stale twice while explaining why it would. Read `HARNESS_RESULT suites=N failed=N status=...`, never prose.) **It cannot be run concurrently.** `scripts/serve_ask.py --test` binds 127.0.0.1:8021 with `allow_reuse_port = False`, on purpose, so a second overlapping gate run fails to bind and the suite reports FAIL with no count line at all. Seen 27-09-2026: a commit was blocked by it while the same suite passed 5/5 in isolation minutes later. A spurious RED is more dangerous than a slow gate, because it is what tempts someone into `SKIP_TESTS=1`. One gate at a time. |
 | `scripts/verify_document.py` | Is this PDF real? Cryptographic signature check, CCA India |
 | `scripts/verify_section_index.py` | Our number->id map vs India Code's own API |
 | `checker/robots.py` | Robots + TLS enforcement in the fetch path; fails closed |
 | `checker/corroborate.py` | Prior wording vs the amending Act — the non-circular check |
 | `checker/ss/` | Secretarial Standards defect scanner + evidenced RULES.md |
-| `corpus/companies_act/` | 529 ingested sections, hash-stamped (`ls corpus/companies_act/*.json \| wc -l`, measured 2026-09-17; matches README.md) |
+| `corpus/companies_act/` | **527** ingested sections, hash-stamped — and **529 files**, because `_index.json` and `_manifest.json` live in the same directory. The old entry said 529 *sections* and printed its own method, `ls corpus/companies_act/*.json \| wc -l`, which counts the index and the manifest as sections; it then cited README.md as corroboration, and README.md repeated the same miscount from the same method. `_manifest.json`'s own `count` field says **527**, and has all along. Corrected 27-09-2026. |
 | `corpus/testdocs/` | Real + ICSI-specimen documents for scanner validation |
 | `corpus/reference/` | SS-1 and SS-2 full text |
 | `scripts/` | Ingestion and verification harnesses |
@@ -136,6 +136,21 @@ Files changed · Tests added or updated · Commands run · Results · Known limi
   which resolve to None by design. 10 sections our PDF parse left ambiguous — s.51 and nine
   Producer Company provisions — were resolved from India Code's API and carry
   `confidence: source-confirmed` (`scripts/resolve_missing_sections.py`).
+  **Three denominators, because three different things get measured and the file used to print
+  two of them 22 lines apart as though they were one:**
+  - **474/517 = 91.7%** of index *entries* carry an id. The 43 without are the omitted ones.
+  - **474/474 = 100%** of *live* provisions carry an id. This is the number that matters, and
+    it is what makes "0 live sections unresolved" true.
+  - **464/474 = 97.9%** is what `docs/CLAIMS_LEDGER.md` records, and that entry is **correct and
+    must stay**: it is dated 2026-08-21, it was true then, and it says in terms that its
+    denominator "must not be quietly restated later". What was wrong was *this* file citing it as
+    a present-tense capability after `resolve_missing_sections.py` closed the last 10. The ledger
+    is a history; the repository map is a status. Superseded by a new dated ledger entry, not by
+    editing the old one.
+
+  And **mapped is not verified.** Confidence across the 474 is not uniform — 449 `high`, 15
+  `medium`, 10 `source-confirmed`. Independent cross-validation against India Code's own API is
+  12/12, and that is the MVP sections only, not the 474.
 - MVP sections verified against India Code's own REST API: 12/12, 0 mismatches
   (`scripts/verify_section_index.py`). The checker also reports **STALE_TEXT** — holding live
   text for a provision the source marks omitted, i.e. serving repealed law as current.
