@@ -61,7 +61,39 @@ from checker.reasoning import Proposal
 # available to new users". Measured 14-09-2026 on a fresh key. A capability list
 # that advertises what the call refuses is worth knowing about.
 FLASH = "gemini-3.6-flash"
-FLASH_LITE = "gemini-2.5-flash-lite"
+
+# FLASH_LITE pointed at `gemini-2.5-flash-lite` from the day it was written and was
+# referenced by nothing, so nothing ever ran it. It has been dead the whole time:
+# measured 28-09-2026 on this key it returns **HTTP 404, "This model
+# models/gemini-2.5-flash-lite is no longer available to new users"** -- the same
+# retirement the FLASH comment above records for 2.5-flash, which we noticed only
+# because that constant was actually called.
+#
+# Repointed to the only Flash-Lite that answered. The full sweep, same key, same
+# minute, `generateContent` with a two-word prompt:
+#
+#     gemini-2.5-flash-lite       404  retired for new keys  <- the old pin
+#     gemini-3.1-flash-lite       200  'ok'                  <- the new pin
+#     gemini-3.5-flash-lite       503  high demand
+#     gemini-flash-lite-latest    503  high demand
+#     gemini-3.6-flash            200  'ok'   (503 under load minutes later)
+#     gemini-3.7-flash            200  'ok'
+#
+# 3.5-flash-lite is newer and may well be the better model; it is not pinned because
+# a 503 is not a measurement. A pin here means "this answered", and only 3.1 did.
+FLASH_LITE = "gemini-3.1-flash-lite"
+
+# 404 and 503 arrived in the same sweep and mean opposite things, and `_post` raised
+# the same exception for both. A caller cannot act on that: retrying a retired model
+# never succeeds however long it waits, and abandoning a busy one throws away a route
+# that works. Split, because the free-tier fallback in router.py has to tell "this
+# model is gone, a person must repoint it" from "come back in a minute".
+class ModelRetired(ModelUnavailable):
+    """The pinned model is gone for this key. Retrying cannot fix it; a person must."""
+
+
+class ModelBusy(ModelUnavailable):
+    """Capacity, not configuration. The identical call may succeed a minute later."""
 
 _ENDPOINT = ("https://generativelanguage.googleapis.com/v1beta/models/"
              "{model}:generateContent")
@@ -145,6 +177,30 @@ def _route(model: str, *, _token=None) -> tuple[str, dict]:
     return url, headers | {"Authorization": f"Bearer {(_token or _vertex_token)()}"}
 
 
+def _classify_http(model: str, code: int, body: str) -> ModelUnavailable:
+    """Which kind of unavailable. Pure, so the branches are testable without a socket.
+
+    Returns the exception rather than raising it, so a caller reading this function can
+    see that every branch produces one -- an `if` chain that raises has no such property
+    and a missing `else` reads as if it simply continues.
+    """
+    # 429 is the free tier's TPM limit, and it is a capacity fact rather than a bug --
+    # say so, so a caller does not treat it as a broken key.
+    if code == 429:
+        return ModelUnavailable(f"rate limited (HTTP 429). {RATE_NOTE} Body: {body}")
+    if code == 503:
+        return ModelBusy(
+            f"{model} is busy (HTTP 503). This is capacity, not configuration: the same "
+            f"call may succeed shortly, and the pin is still correct. Body: {body}")
+    if code == 404:
+        return ModelRetired(
+            f"{model} does not answer for this key (HTTP 404). Google retires a model by "
+            f"leaving it listed on /models while generateContent refuses it, so a "
+            f"capability listing is not evidence the call works. No retry fixes this -- "
+            f"repoint the constant in {__name__} after measuring a replacement. Body: {body}")
+    return ModelUnavailable(f"Gemini HTTP {code}: {body}")
+
+
 def _post(model: str, payload: dict, timeout: int = 90) -> dict:
     url, headers = _route(model)
     req = urllib.request.Request(
@@ -169,13 +225,7 @@ def _post(model: str, payload: dict, timeout: int = 90) -> dict:
         with urllib.request.urlopen(req, timeout=timeout, context=ctx) as r:
             return json.loads(r.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
-        body = e.read().decode("utf-8", "replace")[:300]
-        # 429 is the free tier's TPM limit, and it is a capacity fact rather than
-        # a bug -- say so, so a caller does not treat it as a broken key.
-        if e.code == 429:
-            raise ModelUnavailable(
-                f"rate limited (HTTP 429). {RATE_NOTE} Body: {body}") from None
-        raise ModelUnavailable(f"Gemini HTTP {e.code}: {body}") from None
+        raise _classify_http(model, e.code, e.read().decode("utf-8", "replace")[:300]) from None
     except urllib.error.URLError as e:
         raise ModelUnavailable(f"Gemini unreachable: {e.reason}") from None
 
@@ -330,6 +380,27 @@ def _test() -> None:
         check(False, "an exhausted budget refuses before the call")
     except ModelUnavailable:
         check(not called, "an exhausted budget refuses BEFORE the call — none was made")
+
+    # ── retired is not busy, and the old pin was retired ─────────────────────
+    check(FLASH_LITE != "gemini-2.5-flash-lite",
+          f"FLASH_LITE is off the pin that 404s for new keys ({FLASH_LITE})")
+    retired = _classify_http(FLASH_LITE, 404, "no longer available to new users")
+    busy = _classify_http(FLASH, 503, "This model is currently experiencing high demand.")
+    check(isinstance(retired, ModelRetired) and not isinstance(retired, ModelBusy),
+          "a 404 is a RETIRED model -- no retry fixes it")
+    check(isinstance(busy, ModelBusy) and not isinstance(busy, ModelRetired),
+          "a 503 is a BUSY model -- the same call may succeed shortly")
+    check("repoint the constant" in str(retired),
+          "...and the retired message says what a person has to do, since no retry will")
+    check("the pin is still correct" in str(busy),
+          "...while the busy one says the pin is fine, so nobody repoints on a blip")
+    check(isinstance(retired, ModelUnavailable) and isinstance(busy, ModelUnavailable),
+          "both remain ModelUnavailable, so every existing `except` still catches them")
+    check(type(_classify_http(FLASH, 429, "quota")) is ModelUnavailable
+          and "tokens-per-minute" in str(_classify_http(FLASH, 429, "quota")),
+          "429 is still the rate-limit message, carrying RATE_NOTE")
+    check(type(_classify_http(FLASH, 500, "boom")) is ModelUnavailable,
+          "an unclassified status is plain ModelUnavailable, not guessed into a category")
 
     # ── a successful free call is RECORDED, or the request cap never fires ──
     # The refusal check above proves the gate is read. It cannot prove the counter moves,
