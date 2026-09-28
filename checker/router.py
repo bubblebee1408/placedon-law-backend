@@ -28,13 +28,39 @@ route says that it did.
 
 ## The routing table, and the evidence under it
 
-    PAGE_IMAGE  -> Gemini 2.5 Flash    86.3 chrF++ on real Devanagari scans, the
-                                       best independently measured, ahead of
-                                       Claude Opus 82.2, EasyOCR 58.3, olmOCR 40.5
-    TEXT/HIGH   -> Claude Opus 5       extraction: an error becomes a wrong answer
-    TEXT/LOW    -> Claude Haiku 4.5    classification, measured Rs 0.97/call
-    NARRATE     -> Claude Sonnet 5     cannot introduce a fact -- review() drops
-                                       the whole sentence if it tries
+    PAGE_IMAGE    -> Gemini Flash        86.3 chrF++ on real Devanagari scans, the
+                                         best independently measured, ahead of
+                                         Claude Opus 82.2, EasyOCR 58.3, olmOCR 40.5
+    TEXT/HIGH     -> Claude Opus 5       extraction: an error becomes a wrong answer
+      fallback    -> Ollama, local       no credit; UNMEASURED, requires_review set
+    TEXT/LOW      -> Claude Haiku 4.5    classification, measured Rs 0.97/call
+      fallback    -> Gemini Flash-Lite   free tier, then Gemini Flash
+    NARRATION     -> Claude Sonnet 5     cannot introduce a fact -- review() drops
+      fallback    -> Gemini Flash        the whole sentence if it tries
+
+Three of those rows were prose until 28-09-2026. NARRATE was imported into this
+file and appeared in no table, so every narration task raised "no route declared"
+for a row this comment declares. The table is keyed on a TaskProfile now --
+(modality, consequence, purpose) -- because narration and classification are both
+LOW-consequence text and route to different models for different reasons.
+
+## The fallbacks, and the rule they bend
+
+The founder has no Anthropic credit: the key is live and the API answers HTTP 400.
+Every Claude row above is still FIRST, because none of them has been beaten --
+unreachable is not the same as wrong, and the day credit returns the routes return
+with it.
+
+Difference 2 below says a HIGH-consequence task REFUSES rather than degrading. That
+is now bent, not abandoned: a HIGH task served by a fallback is served, because a
+system that refuses everything helps nobody, and it carries `requires_review=True`.
+`degraded` alone could not say it -- a degraded LOW classification is ordinary, and
+a degraded HIGH extraction is a legal answer from a model nobody measured.
+
+And "local" is checked rather than assumed. `ollama list` here returns
+`kimi-k2.6:cloud` beside the local models: same client, same localhost URL, and the
+prompt leaves the machine. The Ollama row refuses it by name, because not leaving
+the machine is the entire reason that row is allowed to exist.
 
 This is NOT cost routing, which measurably buys nothing: routers with hard numbers
 target *retaining* 90-95% of the best model's quality more cheaply. It is routing
@@ -86,10 +112,35 @@ CONSEQUENCES = (HIGH, LOW)
 
 ANTHROPIC = "anthropic"
 GEMINI = "gemini"
+OLLAMA = "ollama"
+
+# ── purpose: the axis the table's own docstring already used and the code did not ──
+# The header above lists four rows, and one of them -- NARRATE -- was never routable:
+# `anthropic_model.NARRATE` was imported here and appeared in no table, so every
+# narration task fell through `_PREFERENCE.get(...)` to `[]` and raised NoRoute saying
+# no route was DECLARED. It was declared, in prose, at the top of this file.
+#
+# (modality, consequence) cannot express it, because narration is LOW-consequence text
+# and so is classification, and they route to different models for different reasons.
+# The missing axis is what the model is being ASKED TO DO.
+EXTRACTION = "EXTRACTION"          # read a document and quote what it said
+CLASSIFICATION = "CLASSIFICATION"  # put a document in a bucket
+NARRATION = "NARRATION"            # restate a decision already made, in plainer words
+TRANSCRIPTION = "TRANSCRIPTION"    # turn pixels into characters
+PURPOSES = (EXTRACTION, CLASSIFICATION, NARRATION, TRANSCRIPTION)
 
 
 class NoRoute(LookupError):
     """No model is available for this task, and substituting one is not allowed."""
+
+
+@dataclass(frozen=True)
+class TaskProfile:
+    """What is being routed, as the three facts the table is keyed on."""
+
+    modality: str
+    consequence: str
+    purpose: str
 
 
 @dataclass(frozen=True)
@@ -98,6 +149,12 @@ class Task:
     modality: str
     consequence: str
     volume: int = 1
+    # Defaulted, and derived rather than guessed: PAGE_IMAGE is transcription,
+    # HIGH text is extraction, LOW text is classification -- which is exactly what the
+    # three pre-existing rows meant, so every Task built before this field existed keeps
+    # the route it had. NARRATION is the one that has to be asked for, because nothing
+    # about (TEXT, LOW) distinguishes it from classification.
+    purpose: str | None = None
 
     def __post_init__(self) -> None:
         if self.modality not in MODALITIES:
@@ -106,6 +163,15 @@ class Task:
             raise ValueError(f"unknown consequence {self.consequence!r}")
         if self.volume < 1:
             raise ValueError("volume must be at least 1")
+        if self.purpose is not None and self.purpose not in PURPOSES:
+            raise ValueError(f"unknown purpose {self.purpose!r}")
+
+    @property
+    def profile(self) -> TaskProfile:
+        purpose = self.purpose or (
+            TRANSCRIPTION if self.modality == PAGE_IMAGE else
+            EXTRACTION if self.consequence == HIGH else CLASSIFICATION)
+        return TaskProfile(self.modality, self.consequence, purpose)
 
 
 @dataclass(frozen=True)
@@ -116,20 +182,63 @@ class Route:
     est_cost_inr: float
     batch: bool = False
     degraded: bool = False
+    # A HIGH-consequence task served by anything but its first choice. Set by `route()`,
+    # never by a caller. This file used to REFUSE that case outright; it now serves it,
+    # because the founder has no Anthropic credit and a refused system helps nobody --
+    # but the thing the old refusal protected must survive the change, and this flag is
+    # what carries it. `degraded` alone would not: a degraded LOW classification is
+    # ordinary, and a degraded HIGH extraction is a legal answer produced by a model
+    # nobody measured on the job.
+    requires_review: bool = False
 
 
 # ── the table. Preference order per (modality, consequence). ──────────────────
 from checker.anthropic_model import CLASSIFY, EXTRACT, NARRATE, cost_inr
-from checker.gemini_model import FLASH
+from checker.gemini_model import FLASH, FLASH_LITE
 
+# The Ollama row names no model. There is no default local model and there must not be:
+# `ollama_runner` records the model in every attestation, so which artefact answered is
+# an operator's decision. Resolved at route time from OLLAMA_MODEL, and refused if the
+# operator named a `:cloud` one -- see ollama_runner.local_model().
+OPERATOR_NAMED = "<OLLAMA_MODEL>"
+
+# ── the fallback rows, added 28-09-2026 ──────────────────────────────────────
+# The founder has no Anthropic credit: the key is live and the API answers HTTP 400,
+# "Your credit balance is too low to access the Anthropic API". Every Claude row below
+# is still FIRST, because none of them has been beaten -- they are unreachable today,
+# which is a different thing from wrong, and the day credit returns the routes return
+# with it and nothing here needs editing.
+#
+# What the fallbacks are NOT: cheaper models chosen to save money. Routing on price
+# measurably buys nothing (see the header). These are the models that answer when the
+# preferred one cannot be called at all, and every one of them is marked degraded.
 _PREFERENCE = {
-    (PAGE_IMAGE, HIGH): [(GEMINI, FLASH,
+    TaskProfile(PAGE_IMAGE, HIGH, TRANSCRIPTION): [(GEMINI, FLASH,
         "86.3 chrF++ on Devanagari word/phrase crops (Sanskrit typeset, arXiv 2606.29213) -- the best independently measured, and UNVERIFIED here until reproduced")],
-    (PAGE_IMAGE, LOW): [(GEMINI, FLASH, "free tier, and best on Indic pages")],
-    (TEXT, HIGH): [(ANTHROPIC, EXTRACT,
-        "extraction: an error here becomes a wrong legal answer")],
-    (TEXT, LOW): [(ANTHROPIC, CLASSIFY, "measured Rs 0.97 per call on this shape"),
-                  (GEMINI, FLASH, "free tier")],
+    TaskProfile(PAGE_IMAGE, LOW, TRANSCRIPTION): [(GEMINI, FLASH, "free tier, and best on Indic pages")],
+
+    TaskProfile(TEXT, HIGH, EXTRACTION): [
+        (ANTHROPIC, EXTRACT, "extraction: an error here becomes a wrong legal answer"),
+        (OLLAMA, OPERATOR_NAMED,
+         "no Anthropic credit, so extraction runs on the operator's own machine rather "
+         "than not at all. UNMEASURED on this task and the route says so: requires_review "
+         "is set, because a legal answer from a model nobody benchmarked is a draft")],
+
+    TaskProfile(TEXT, LOW, CLASSIFICATION): [
+        (ANTHROPIC, CLASSIFY, "measured Rs 0.97 per call on this shape"),
+        (GEMINI, FLASH_LITE,
+         "free tier; gemini-3.1-flash-lite answered on 28-09-2026 and is the cheapest "
+         "thing that does. UNMEASURED on this task"),
+        (GEMINI, FLASH, "free tier; the larger model, when Flash-Lite is refused or busy")],
+
+    TaskProfile(TEXT, LOW, NARRATION): [
+        (ANTHROPIC, NARRATE,
+         "cannot introduce a fact -- reasoning.review() drops the whole sentence if it tries"),
+        (GEMINI, FLASH,
+         "free tier. Narration is the one job where the model choice is least load-bearing: "
+         "the context is pre-retrieved and pre-gated, review() drops any sentence carrying "
+         "a proposition that is not in the evidence, and an 8B model at temperature 0 would "
+         "do it (PROVIDER_DECISION.md §4)")],
 }
 
 # ── candidates: wired, not preferred. route() never reads this table. ─────────
@@ -185,21 +294,40 @@ def estimate_inr(provider: str, model: str, task: Task) -> float:
     tin, tout = _SHAPE[task.modality]
     if provider == GEMINI:
         return 0.0                       # free tier; paid rates UNVERIFIED here
+    if provider == OLLAMA:
+        # Zero MARGINAL cost, which is the number a budget gate needs. It is not zero
+        # cost -- it is the founder's own hardware and the wall-clock of a laptop doing
+        # inference -- and neither of those is billed to MONTHLY_CAP_INR.
+        return 0.0
     return round(cost_inr(model, tin * task.volume, tout * task.volume), 2)
 
 
 def route(task: Task, *, available: tuple[str, ...],
           budget_inr: float | None = None) -> Route:
     """Pick a model, or refuse. Never substitutes silently on a HIGH task."""
-    options = _PREFERENCE.get((task.modality, task.consequence), [])
+    profile = task.profile
+    options = _PREFERENCE.get(profile, [])
     if not options:
-        raise NoRoute(f"no route declared for {task.modality}/{task.consequence}")
+        raise NoRoute(f"no route declared for {profile.modality}/{profile.consequence}/"
+                      f"{profile.purpose}")
 
     first = True
+    refusals: list[str] = []
     for provider, model, why in options:
         if provider not in available:
             first = False
             continue
+        if provider == OLLAMA:
+            # Resolved here rather than in the table, and a `:cloud` model is refused:
+            # it reaches the same localhost URL through the same client and the prompt
+            # still leaves the machine, which voids the only reason this row exists.
+            from checker import ollama_runner
+            try:
+                model = ollama_runner.local_model()
+            except ollama_runner.NotConfigured as e:
+                refusals.append(f"{OLLAMA}: {e}")
+                first = False
+                continue
         est = estimate_inr(provider, model, task)
         if budget_inr is not None and est > budget_inr:
             # Affordability is not a reason to quietly use a weaker model on a
@@ -212,22 +340,53 @@ def route(task: Task, *, available: tuple[str, ...],
                     f"not a fallback.")
             first = False
             continue
+        degraded = not first
         return Route(provider, model, why, est,
                      batch=task.volume >= BATCH_THRESHOLD,
-                     degraded=not first)
+                     degraded=degraded,
+                     # A HIGH task on anything but its first choice is a legal answer
+                     # produced by a model nobody measured on the job. It is served --
+                     # refusing everything helps nobody when there is no credit -- but
+                     # it is served as a draft, and this is the flag that says so.
+                     requires_review=degraded and task.consequence == HIGH)
     raise NoRoute(
-        f"{task.name}: no available model for {task.modality}/{task.consequence}. "
-        f"Available providers: {', '.join(available) or '(none)'}. This system does "
-        f"not substitute a model it has not measured for the job.")
+        f"{task.name}: no available model for {profile.modality}/{profile.consequence}/"
+        f"{profile.purpose}. Available providers: {', '.join(available) or '(none)'}. "
+        f"This system does not substitute a model it has not measured for the job."
+        + (" " + " ".join(refusals) if refusals else ""))
 
 
-def providers_available() -> tuple[str, ...]:
-    from checker import anthropic_model, gemini_model
+def providers_available(*, credit_exhausted=None) -> tuple[str, ...]:
+    """Which providers can actually be called, not which ones are configured.
+
+    Every adapter's `available()` means A KEY EXISTS, and that is the wrong question the
+    moment a key exists and does not work. The founder's ANTHROPIC_API_KEY is live and
+    every call it makes returns HTTP 400, "Your credit balance is too low" -- so a router
+    asking `anthropic_model.available()` is told yes, routes to Anthropic, and the whole
+    free-tier fallback below never fires. Shipping that would be shipping a feature that
+    cannot run.
+
+    `credit_exhausted` is injected so this stays testable without a ledger on disk, in
+    the same style as every other injected callable in this repo.
+    """
+    from checker import anthropic_model, gemini_model, ollama_runner
+    if credit_exhausted is None:
+        def credit_exhausted() -> bool:
+            from backend.budget import BudgetTracker
+            try:
+                return BudgetTracker().credit_exhausted()
+            except (OSError, ValueError):
+                # An unreadable ledger is not evidence the balance is empty. Fail toward
+                # offering the provider: the worst case is one wasted 400 that records
+                # the fact properly.
+                return False
     out = []
-    if anthropic_model.available():
+    if anthropic_model.available() and not credit_exhausted():
         out.append(ANTHROPIC)
     if gemini_model.available():
         out.append(GEMINI)
+    if ollama_runner.available():
+        out.append(OLLAMA)
     return tuple(out)
 
 
@@ -241,6 +400,7 @@ def plan(tasks: tuple[Task, ...], *, available: tuple[str, ...],
             total += r.est_cost_inr
             flags = " [batch]" if r.batch else ""
             flags += " [degraded]" if r.degraded else ""
+            flags += " [REQUIRES REVIEW]" if r.requires_review else ""
             lines.append(f"  {t.name:26} {r.provider}/{r.model}{flags}")
             lines.append(f"  {'':26} Rs {r.est_cost_inr:<9} {r.why}")
         except NoRoute as e:
@@ -375,6 +535,123 @@ def _test() -> None:
           "candidates(role) filters by role")
     check(set(providers_available()) <= {ANTHROPIC, GEMINI},
           "providers_available() still lists only routable providers, never candidates")
+
+    # ── the free-model fallbacks (28-09-2026) ────────────────────────────────
+    import os as _os
+    from checker import ollama_runner as _ol
+
+    def _with_ollama(model: str):
+        """Temporarily name a local model, so these checks do not depend on a laptop."""
+        return {_ol.BASE_URL_ENV: "http://127.0.0.1:11434", _ol.MODEL_ENV: model}
+
+    def _env(d):
+        held = {k: _os.environ.get(k) for k in d}
+        _os.environ.update(d)
+        return held
+
+    def _restore(held):
+        for k, v in held.items():
+            if v is None:
+                _os.environ.pop(k, None)
+            else:
+                _os.environ[k] = v
+
+    # NARRATE was imported into this file and appeared in no table, so every narration
+    # task raised "no route declared" -- for a row the header declares in prose.
+    rn = route(Task("narrate", TEXT, LOW, purpose=NARRATION), available=BOTH)
+    check(rn.model == NARRATE and not rn.degraded,
+          f"NARRATION is routable at last, and Claude is still first ({rn.model})")
+    rn2 = route(Task("narrate", TEXT, LOW, purpose=NARRATION), available=(GEMINI,))
+    check(rn2.provider == GEMINI and rn2.degraded and not rn2.requires_review,
+          f"...falling back to Gemini, marked degraded, and NOT flagged for review -- "
+          f"it is LOW consequence and review() drops any sentence it invents ({rn2.provider})")
+    check(route(Task("classify", TEXT, LOW), available=BOTH).model == CLASSIFY
+          and route(Task("narrate", TEXT, LOW, purpose=NARRATION),
+                    available=BOTH).model == NARRATE,
+          "classification and narration are both (TEXT, LOW) and route differently -- "
+          "which is why purpose had to become part of the key")
+
+    # LOW classification prefers Flash-Lite over Flash, and both over nothing.
+    rc = route(Task("classify", TEXT, LOW), available=(GEMINI,))
+    check(rc.model == FLASH_LITE and rc.degraded,
+          f"a LOW classification falls back to Flash-Lite first ({rc.model})")
+    check("28-09-2026" in rc.why and "UNMEASURED" in rc.why,
+          "...and the route says both when it was measured to answer and that it has "
+          "not been measured on THIS task")
+
+    # HIGH extraction: the policy change, and the thing that must survive it.
+    held = _env(_with_ollama("llama3:latest"))
+    try:
+        rh = route(Task("extract", TEXT, HIGH), available=(OLLAMA,))
+        check(rh.provider == OLLAMA and rh.model == "llama3:latest",
+              f"HIGH extraction falls back to the operator's local model ({rh.model})")
+        check(rh.degraded and rh.requires_review,
+              "...marked degraded AND requires_review -- this file used to refuse a "
+              "degraded HIGH task outright, and the flag is what carries forward the "
+              "thing that refusal protected")
+        check(rh.est_cost_inr == 0.0,
+              "...at zero MARGINAL cost, which is the number a budget gate needs")
+        check(not route(Task("extract", TEXT, HIGH), available=BOTH).requires_review,
+              "...while a first-choice HIGH route needs no review")
+        check(not route(Task("classify", TEXT, LOW), available=(GEMINI,)).requires_review,
+              "...and a degraded LOW task is not flagged either -- degraded alone would "
+              "have flagged it, which is why requires_review is its own field")
+        check("[REQUIRES REVIEW]" in plan((Task("extract", TEXT, HIGH),), available=(OLLAMA,)),
+              "the plan prints the review flag, so it is visible before anything is spent")
+    finally:
+        _restore(held)
+
+    # A :cloud model is not local, and the whole reason for the row is that it is.
+    held = _env(_with_ollama("kimi-k2.6:cloud"))
+    try:
+        route(Task("extract", TEXT, HIGH), available=(OLLAMA,))
+        check(False, "a :cloud Ollama model is refused")
+    except NoRoute as e:
+        check("leaves this machine" in str(e),
+              "an Ollama CLOUD model is refused: same localhost URL, same client, and "
+              "the prompt still leaves the machine -- which voids the only reason a "
+              "HIGH task may run there at all")
+    finally:
+        _restore(held)
+
+    held = _env({_ol.BASE_URL_ENV: "http://127.0.0.1:11434", _ol.MODEL_ENV: ""})
+    try:
+        route(Task("extract", TEXT, HIGH), available=(OLLAMA,))
+        check(False, "an unnamed local model is refused")
+    except NoRoute as e:
+        check("names no default model" in str(e),
+              "...and with no OLLAMA_MODEL named it refuses rather than picking one -- "
+              "the model is what the attestation records")
+    finally:
+        _restore(held)
+
+    # Claude stays FIRST everywhere. Unreachable is not the same as beaten.
+    firsts = {prof: opts[0][0] for prof, opts in _PREFERENCE.items()}
+    check(all(p == ANTHROPIC for prof, p in firsts.items() if prof.modality == TEXT),
+          f"every TEXT row still prefers Anthropic ({firsts})")
+    check(all(len(opts) > 1 for prof, opts in _PREFERENCE.items() if prof.modality == TEXT),
+          "...and every TEXT row now has somewhere to go when it cannot be called")
+
+    # providers_available() must not report a provider that answers HTTP 400.
+    check(ANTHROPIC not in providers_available(credit_exhausted=lambda: True),
+          "a key with no credit is NOT an available provider -- `available()` means a "
+          "key exists, and the founder's key exists and cannot be called")
+    from checker import anthropic_model as _am
+    check(((ANTHROPIC in providers_available(credit_exhausted=lambda: False))
+           == _am.available()),
+          "...while with credit it is reported exactly when a key exists, so the new "
+          "check subtracts a provider and never adds one")
+
+    # The profile is derived for every Task built before `purpose` existed.
+    check(Task("x", TEXT, HIGH).profile.purpose == EXTRACTION
+          and Task("x", TEXT, LOW).profile.purpose == CLASSIFICATION
+          and Task("x", PAGE_IMAGE, HIGH).profile.purpose == TRANSCRIPTION,
+          "a Task built without a purpose derives the one its old row meant")
+    try:
+        Task("x", TEXT, LOW, purpose="VIBES")
+        check(False, "an unknown purpose is rejected")
+    except ValueError:
+        check(True, "an unknown purpose is rejected at construction")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:

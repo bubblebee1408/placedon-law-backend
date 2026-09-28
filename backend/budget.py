@@ -365,6 +365,37 @@ def classify_429(headers: Mapping[str, str] | None = None,
     return Rejection("rate_limit", secs, None, f"rate limit — retry after {secs:g}s")
 
 
+# ── credit exhaustion: a 400, not a 429, and it has no reset date ────────────
+# A spend cap is the provider refusing to let you spend more this month, and it clears
+# on the 1st. An empty prepaid balance is a different thing wearing similar words: it
+# arrives as HTTP 400 `invalid_request_error` with "Your credit balance is too low to
+# access the Anthropic API", and it clears the instant someone tops up -- which could be
+# five minutes from now.
+#
+# It matters here because `available()` on every adapter in this repo means A KEY EXISTS.
+# The founder's key exists and every call it makes returns this 400, so a router asking
+# "is Anthropic available?" is told yes and routes to a model that cannot answer. The
+# free-tier fallback would never fire. Recording the observed refusal is what makes
+# `router.providers_available()` report something true.
+CREDIT_EXHAUSTED_MARKER = "credit balance is too low"
+
+
+def is_credit_exhausted(body: Mapping[str, object] | None) -> bool:
+    """True for the 400 that means the prepaid balance is empty. Pure, like classify_429.
+
+    Reads data off the network, so it may not raise on a malformed body: an exception
+    here would be indistinguishable from "not exhausted" at every call site that wraps
+    it, and would keep routing to a dead provider.
+    """
+    if not isinstance(body, Mapping):
+        return False
+    err = body.get("error")
+    if not isinstance(err, Mapping):
+        return False
+    msg = err.get("message")
+    return isinstance(msg, str) and CREDIT_EXHAUSTED_MARKER in msg.lower()
+
+
 def spend_cap_resets_at(today: date | None = None) -> datetime:
     """00:00 UTC on the 1st of the next month, when provider access returns."""
     d = today or date.today()
@@ -501,7 +532,7 @@ class BudgetTracker:
         if raw.get("corrupt"):
             return {"corrupt": True, "day": "", "month": "", "day_inr": 0.0,
                     "month_inr": 0.0, "calls_today": 0, "spend_cap": False,
-                    "reservations": {}}
+                    "credit_exhausted": False, "reservations": {}}
         day_key, month_key = self._today.isoformat(), self._today.strftime("%Y-%m")
         same_day = raw.get("day") == day_key
         raw_res = raw.get("reservations")
@@ -515,6 +546,12 @@ class BudgetTracker:
             "calls_today": int(raw.get("calls_today", 0)) if same_day else 0,
             # Scoped to the month, so it clears itself exactly when the provider's cap does.
             "spend_cap": raw.get("spend_cap_month") == month_key,
+            # Scoped to the DAY, unlike the spend cap above, because the two clear on
+            # different clocks: a spend cap clears on the 1st and an empty balance clears
+            # the moment someone tops up. A month-scoped flag would lock a funded account
+            # out for weeks; a day-scoped one re-tries tomorrow without anyone rememberng
+            # to clear it, and costs at most one wasted 400 to find out.
+            "credit_exhausted": raw.get("credit_exhausted_day") == day_key,
             # Scoped to the DAY on purpose. A process that dies between reserve and settle
             # leaks a reservation, and a leak has to be bounded: this one costs the rest of
             # that day and never reaches the month. Mid-day expiry is refused — releasing a
@@ -536,6 +573,8 @@ class BudgetTracker:
         }
         if s["spend_cap"]:
             row["spend_cap_month"] = s["month"]
+        if s["credit_exhausted"]:
+            row["credit_exhausted_day"] = s["day"]
         if s["reservations"]:
             row["reservations"] = dict(s["reservations"])
         row.update(overrides)
@@ -636,6 +675,26 @@ class BudgetTracker:
             calls_today=st["calls_today"] + 1))
         return Verdict(True, "normal", "recorded", row["day_inr"], row["month_inr"],
                        _reserved_total(row.get("reservations", {})))
+
+    def record_credit_exhausted(self) -> bool:
+        """The provider said the balance is empty. Remember it for the rest of today.
+
+        Returns whether it was recorded; False on a corrupt ledger, where writing would
+        invent state over an unknown one.
+        """
+        if self._state()["corrupt"]:
+            return False
+        self._mutate(lambda st: self._row({**st, "credit_exhausted": True}))
+        return True
+
+    def credit_exhausted(self) -> bool:
+        """Whether a call today already found the balance empty.
+
+        False on a corrupt ledger: unknown is not exhausted, and answering True would
+        take a working provider away on no evidence.
+        """
+        s = self._state()
+        return bool(s["credit_exhausted"]) and not s["corrupt"]
 
     def record_provider_spend_cap(self) -> Verdict:
         """The provider said `enforced_spend_limit_reached`. Remember it.
@@ -1259,6 +1318,41 @@ if __name__ == "__main__":
     _zv = _z.record_call(0.0)
     check("a ₹0.00 call still consumes a request", _z._state()["calls_today"], 1)
     check("  ...while spending nothing", _zv.spent_day if hasattr(_zv, "spent_day") else _zv.spent_today, 0.0)
+
+    # ── credit exhaustion: a 400, and available() cannot see it ──────────────
+    check("a 400 naming an empty balance is recognised",
+          is_credit_exhausted({"error": {"type": "invalid_request_error", "message":
+              "Your credit balance is too low to access the Anthropic API. Please go to "
+              "Plans & Billing to upgrade or purchase credits."}}), True)
+    check("  ...case-insensitively, because the wording is the provider's to change",
+          is_credit_exhausted({"error": {"message": "CREDIT BALANCE IS TOO LOW"}}), True)
+    check("an ordinary 400 is not credit exhaustion",
+          is_credit_exhausted({"error": {"message": "max_tokens: must be >= 1"}}), False)
+    check("a spend-cap 429 body is not credit exhaustion either -- different clock",
+          is_credit_exhausted({"error": {"details": {"error_code": SPEND_CAP_ERROR_CODE}}}),
+          False)
+    for junk in (None, {}, {"error": "boom"}, {"error": {"message": 7}}, "not a dict"):
+        check(f"a malformed body is not exhaustion: {junk!r}",
+              attempt(lambda j=junk: is_credit_exhausted(j)), False)
+
+    _ce = Mem()
+    _t = BudgetTracker(_ce, today=date(2026, 8, 8))
+    check("a fresh ledger reports credit available", _t.credit_exhausted(), False)
+    check("recording succeeds on a readable ledger", _t.record_credit_exhausted(), True)
+    check("  ...and it is remembered", _t.credit_exhausted(), True)
+    check("  ...without touching the money counters",
+          (_t._state()["day_inr"], _t._state()["month_inr"]), (0.0, 0.0))
+    check("  ...and it clears tomorrow on its own, because a top-up needs no ceremony",
+          BudgetTracker(_ce, today=date(2026, 8, 9)).credit_exhausted(), False)
+    check("  ...while a spend cap, on the other clock, does NOT clear tomorrow",
+          (lambda m: (BudgetTracker(m, today=date(2026, 8, 8)).record_provider_spend_cap(),
+                      BudgetTracker(m, today=date(2026, 8, 9))._state()["spend_cap"])[1])(Mem()),
+          True)
+    check("an unreadable ledger reports NOT exhausted -- unknown is not exhausted, and "
+          "saying True would take a working provider away on no evidence",
+          BudgetTracker(Corrupt(), today=date(2026, 8, 8)).credit_exhausted(), False)
+    check("  ...and refuses to record, rather than inventing state over an unknown one",
+          BudgetTracker(Corrupt(), today=date(2026, 8, 8)).record_credit_exhausted(), False)
 
     print(f"\n{total - failures}/{total} passed")
     raise SystemExit(1 if failures else 0)

@@ -55,7 +55,6 @@ from dataclasses import dataclass, field
 DEFAULT_TIMEOUT_S = 120
 DEFAULT_OPTIONS = {"temperature": 0.0, "seed": 0, "top_p": 1.0}
 
-
 class NotConfigured(RuntimeError):
     """Raised rather than silently falling back. A stub answering in production while
     the caller believes a real model ran is the worst available failure."""
@@ -64,6 +63,67 @@ class NotConfigured(RuntimeError):
 class ModelUnavailable(RuntimeError):
     """The server did not answer. Fails loud: a legal answer must never be produced by
     a fallback the caller did not ask for."""
+
+
+# ── "local" has to mean something, or it is just a word in a comment ─────────
+# `ollama list` on this machine returns gemma3:1b, llama3:latest AND kimi-k2.6:cloud.
+# The last one is served by Ollama's hosted runners: same client, same API, same
+# `localhost` in the URL -- and the prompt leaves the machine. Every argument for
+# sending a client matter to "the local model" rests on it not leaving, so a `:cloud`
+# tag silently voids the reason the route exists at all. It is refused by name.
+CLOUD_SUFFIX = ":cloud"
+MODEL_ENV = "OLLAMA_MODEL"
+BASE_URL_ENV = "OLLAMA_BASE_URL"
+
+
+class NotLocal(NotConfigured):
+    """An Ollama model that is not on this machine. The API shape is identical; the
+    privacy property is the opposite, and the privacy property is the whole reason."""
+
+
+def is_local(model: str) -> bool:
+    return bool(model) and not model.endswith(CLOUD_SUFFIX)
+
+
+def local_model() -> str:
+    """The model the operator named, or a refusal saying which half is missing.
+
+    There is no default, for the same reason there is no default host: a module that
+    quietly picks a model picks what a legal answer was produced by, and that is the
+    single thing an attestation exists to record.
+    """
+    name = os.environ.get(MODEL_ENV, "").strip()
+    if not name:
+        raise NotConfigured(
+            f"{MODEL_ENV} is not set. This module names no default model -- the model is "
+            f"what the attestation records, so it is an operator's decision, not a "
+            f"fallback. `ollama list` shows what is pulled.")
+    if not is_local(name):
+        raise NotLocal(
+            f"{name} is an Ollama CLOUD model: the call goes through localhost and the "
+            f"prompt still leaves this machine. Routing anything here on the grounds "
+            f"that it is local would be false. Name a pulled model instead.")
+    return name
+
+
+def available() -> bool:
+    """True only when a local model is fully named. Never raises -- callers ask this
+    to decide whether to offer the route at all."""
+    try:
+        return bool(os.environ.get(BASE_URL_ENV)) and bool(local_model())
+    except NotConfigured:
+        return False
+
+
+def why_unavailable() -> str:
+    """The reason `available()` is False, for a refusal that has to say something."""
+    if not os.environ.get(BASE_URL_ENV):
+        return f"{BASE_URL_ENV} is not set"
+    try:
+        local_model()
+    except NotConfigured as e:
+        return str(e)
+    return ""
 
 
 @dataclass(frozen=True)
