@@ -7,7 +7,7 @@ the main session to record. Status: open / ready / in-progress / blocked / compl
 |---|---|---|---|---|---|---|
 | R-001 | Diagnose six rollback failures | benchmark-engineer | **complete** | 4 engine defects found; undated amendments 13→3 | `28e7b41` | — |
 | R-002 | Real document corpus for scanner | document-classifier | **complete** | 30 docs, 18 real from 5 listed issuers + 11 ICSI specimens | — | — |
-| R-003 | Scope rules by document type | scanner-engineer | **in-progress** | gating added; T1.4a/T1.6a/b/c/T1.7 still over-fire | — | needs rule-by-rule rework |
+| R-003 | Scope rules by document type | scanner-engineer | **in-progress** | **CROSS-TYPE leakage is now 0 and guarded.** Measured 2026-09-28 over all 30 text specimens: 360 findings, 37 DEFECT, 263 N/A, all four doc types present, and zero minutes-only checks firing on a notice or outcome. Gated in `checker/ss/defects.py` non-vacuously — 3 mutants killed, incl. `classify()` always returning "minutes", which is the vacuity a naive version of this test would miss. **Not closed:** whether these rules over-fire WITHIN their applicable types is a different question and is unmeasured. | — | the remaining half needs rule-by-rule rework |
 | R-011 | Rebuild market model for the LAWYER segment | main | **open** | current model is CS-based, now secondary | — | scope change 20 Aug |
 | R-004 | Non-circular reconstruction benchmark | benchmark-engineer | **open** | prior benchmark retracted (R-1) | — | need independent as-amended source |
 | R-005 | Stale-claim study, 42 comments | product-evidence-auditor | **in-progress** | 1 confirmed SUPERSEDED (DIR-3 KYC) | `9285108` | agent mid-run |
