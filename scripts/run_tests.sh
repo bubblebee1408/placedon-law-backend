@@ -52,6 +52,7 @@ suites=(
   checker/router.py
   checker/voyage_model.py
   checker/public_only.py
+  checker/quoted_span.py
   checker/sarvam_model.py
   checker/orchestrator.py
   checker/bundles.py
