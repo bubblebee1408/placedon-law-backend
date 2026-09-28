@@ -188,6 +188,12 @@ def extract(document: str, *, budget=None, model: str = EXTRACT,
     tin = getattr(usage, "input_tokens", 0) or 0
     tout = getattr(usage, "output_tokens", 0) or 0
     call = Call(model, tin, tout, cost_inr(model, tin, tout), raw)
+    # The same omission as `gemini_model.extract` had, and here it costs money: a caller
+    # that passed `budget=` got a gate checked before every call and advanced by none, so
+    # the ledger stayed at zero while the card was charged. `model_adapter` and
+    # `services/llm` record their own; this path recorded nothing.
+    if budget is not None:
+        budget.record_call(call.cost_inr)
     return Proposal(facts=_parse(raw)), call
 
 
@@ -327,6 +333,20 @@ def _test() -> None:
     except ModelUnavailable as e:
         check("no call was made" in str(e),
               "an exhausted budget refuses before the call, not after")
+
+    # ── and a call that DID go out is recorded at its measured cost ──────────
+    # The refusal above proves the gate is read. It cannot prove the counter moves, and
+    # this path moved none: the ledger stayed at zero while the card was charged.
+    class Ledger:
+        def __init__(self): self.calls = []
+        def can_make_call(self, *a, **k):
+            from backend.budget import Verdict
+            return Verdict(True, "normal", "within budget", 0.0, 0.0)
+        def record_call(self, inr): self.calls.append(inr)
+    led = Ledger()
+    _, _call = extract("doc", budget=led, _client=FakeClient(FakeResp()))
+    check(led.calls == [_call.cost_inr] and _call.cost_inr > 0,
+          f"a paid call is recorded at the cost it actually incurred ({led.calls})")
 
 
     # ── E2/E3: the clause is carried, and the document is NOT delimited ──────

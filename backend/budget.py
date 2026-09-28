@@ -131,6 +131,39 @@ _HAIKU_MEASURED_OUTPUT_TOKENS = 700
 TYPICAL_PROMPT_WORDS = math.ceil(_HAIKU_MEASURED_INPUT_TOKENS / TOKENS_PER_WORD["pre-4.7"])
 TYPICAL_ANSWER_WORDS = math.ceil(_HAIKU_MEASURED_OUTPUT_TOKENS / TOKENS_PER_WORD["pre-4.7"])
 
+# ── BUD-F14: a free tier is bounded by REQUESTS, and every gate above is in rupees ──
+# The founder has no Anthropic credit, so LOW-consequence work now routes to a free-tier
+# model. That breaks an assumption every gate in this file rests on: a free call costs
+# ₹0.00, `router.estimate_inr` returns 0.0 for Gemini, and `gemini_model.extract` records
+# `cost_inr: 0.0`. So `s["month_inr"] + 0.0 > MONTHLY_CAP_INR` is false forever and the
+# monthly and daily gates admit an UNBOUNDED number of free calls. A cap denominated in
+# money cannot bind a provider that charges none.
+#
+# The limit that does bind is the provider's rate limit, and per docs/PROVIDER_DECISION.md
+# §2 the binding one is TOKENS PER MINUTE, not requests per day — that document exists
+# partly because an earlier plan here read RPD and was ~50x optimistic. So this cap is
+# DERIVED from a TPM figure and this workload's own measured token shape, the same way
+# DAILY_CAP_INR is derived from MONTHLY_CAP_INR rather than asserted:
+#
+#     6,000 tokens/min x 1,440 min/day / 7,400 tokens/answer = 1,167 answers/day
+#
+# **Whose 6,000 TPM, and why it is used for a different provider.** It is GROQ's free tier,
+# sourced in PROVIDER_DECISION.md §2. It is not Gemini's, and this repository holds no
+# measurement of Gemini's: `gemini_model.RATE_NOTE` says in terms that those limits are not
+# hardcoded there because they move. It is used as the LOWEST free-tier TPM this repo has a
+# source for, which makes the derived number a FLOOR. If Gemini's tier is larger we
+# under-use it, and under-use is the cheap direction for a rate limit — over-use costs 429s
+# and, repeated, the key itself. Replace it with a measured Gemini figure and this number
+# moves on its own; nothing downstream hardcodes 1,167.
+#
+# PROVIDER_DECISION.md prints 1,168 for this arithmetic because it rounds 1,167.57 up. A
+# cap floors. Rounding a ceiling up admits one call beyond the budget it was derived from,
+# and one call is still the direction a guard may never be wrong in.
+FREE_TIER_TPM = 6_000
+MINUTES_PER_DAY = 1_440
+MEASURED_TOKENS_PER_ANSWER = _HAIKU_MEASURED_INPUT_TOKENS + _HAIKU_MEASURED_OUTPUT_TOKENS
+DAILY_REQUEST_CAP = (FREE_TIER_TPM * MINUTES_PER_DAY) // MEASURED_TOKENS_PER_ANSWER
+
 Mode = Literal["normal", "budget", "offline"]
 
 # ── BUD-2: four counters, not two (PLAN_16 §5.2) ─────────────────────────────
@@ -573,6 +606,18 @@ class BudgetTracker:
                            f"daily cap reached: ₹{s['day_inr']:.2f} spent + ₹{reserved:.2f} "
                            f"reserved of ₹{DAILY_CAP_INR:.2f}. "
                            f"Monthly still has ₹{MONTHLY_CAP_INR - s['month_inr']:.2f}.",
+                           s["day_inr"], s["month_inr"], reserved)
+
+        # Counted, not priced. This is the only gate a ₹0.00 call can fail, and it is
+        # checked last so a paid call that breaches both still reports the money first —
+        # that is the number a person can act on.
+        if s["calls_today"] >= DAILY_REQUEST_CAP:
+            return Verdict(False, "budget",
+                           f"daily request cap reached: {s['calls_today']} calls of "
+                           f"{DAILY_REQUEST_CAP}, derived from {FREE_TIER_TPM:,} tokens/min "
+                           f"over {MEASURED_TOKENS_PER_ANSWER:,} tokens per answer. Free-tier "
+                           f"limits bind on tokens per minute, so this caps the request rate "
+                           f"even when the call costs nothing.",
                            s["day_inr"], s["month_inr"], reserved)
 
         return Verdict(True, "normal", "within budget",
@@ -1174,6 +1219,46 @@ if __name__ == "__main__":
           "allowed" in _bool_error(), True)
     check("  ...while .allowed itself still reads normally",
           (not _refusing.allowed), True)
+
+    # ── BUD-F14: the cap that binds a provider charging nothing ──────────────
+    # Every check above this point spends money to reach a refusal. A free-tier call
+    # cannot: it adds ₹0.00 to both counters, so the monthly and daily gates are
+    # satisfied no matter how many have gone out. These checks are written at ₹0.00 for
+    # that reason — the mutant that deletes the request gate survives every rupee
+    # assertion in this file, and only a ledger with no money in it can see the hole.
+    check("the request cap is derived from TPM and the measured answer, not asserted",
+          DAILY_REQUEST_CAP, (FREE_TIER_TPM * MINUTES_PER_DAY) // MEASURED_TOKENS_PER_ANSWER)
+    check("  ...which is 1,167 answers/day on the 6,000 TPM floor", DAILY_REQUEST_CAP, 1_167)
+    check("  ...and it FLOORS, where PROVIDER_DECISION.md rounds 1,167.57 up to 1,168",
+          DAILY_REQUEST_CAP < FREE_TIER_TPM * MINUTES_PER_DAY / MEASURED_TOKENS_PER_ANSWER, True)
+
+    _free = Mem()
+    _free.d = {"day": "2026-08-08", "month": "2026-08", "day_inr": 0.0, "month_inr": 0.0,
+               "calls_today": DAILY_REQUEST_CAP}
+    _fv = BudgetTracker(_free, today=date(2026, 8, 8)).can_make_call()
+    check("a ledger with ₹0.00 spent and the cap in requests REFUSES", _fv.allowed, False)
+    check("  ...naming the request cap, because no money gate could have fired",
+          "daily request cap" in _fv.reason, True)
+    check("  ...and both rupee gates would have admitted it",
+          (0.0 + typical_call_inr() <= DAILY_CAP_INR
+           and 0.0 + typical_call_inr() <= MONTHLY_CAP_INR), True)
+
+    _free.d["calls_today"] = DAILY_REQUEST_CAP - 1
+    check("one request below the cap is still allowed",
+          BudgetTracker(_free, today=date(2026, 8, 8)).can_make_call().allowed, True)
+
+    # The counter is day-scoped by `_normalise`, so yesterday's exhaustion must not
+    # carry. Without this a single busy day would close the free tier permanently.
+    check("a day at the cap does not block the next day",
+          BudgetTracker(_free, today=date(2026, 8, 9)).can_make_call().allowed, True)
+
+    # And the cap is only real if a free call is recorded at all. Nothing in
+    # `gemini_model` recorded one before this change, which would have left the counter
+    # at zero forever and the gate above unreachable.
+    _z = BudgetTracker(Mem(), today=date(2026, 8, 8))
+    _zv = _z.record_call(0.0)
+    check("a ₹0.00 call still consumes a request", _z._state()["calls_today"], 1)
+    check("  ...while spending nothing", _zv.spent_day if hasattr(_zv, "spent_day") else _zv.spent_today, 0.0)
 
     print(f"\n{total - failures}/{total} passed")
     raise SystemExit(1 if failures else 0)

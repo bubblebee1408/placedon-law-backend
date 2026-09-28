@@ -219,6 +219,13 @@ def extract(document: str, *, budget=None, model: str = FLASH,
             "tokens_out": usage.get("candidatesTokenCount", 0),
             "cost_inr": 0.0,          # free tier. Paid rates UNVERIFIED here.
             "raw": raw}
+    # Recorded even at ₹0.00. `can_make_call` above is the only gate this path has, and
+    # `budget.DAILY_REQUEST_CAP` counts REQUESTS because a free tier is rate-limited, not
+    # billed. Nothing incremented that counter before: the guard was checked on every call
+    # and advanced by none, so it could never fire however many went out. Same shape as
+    # BUD-F13 -- a guard that reads correctly and cannot fire.
+    if budget is not None:
+        budget.record_call(0.0)
     return Proposal(facts=_parse(raw)), meta
 
 
@@ -323,6 +330,21 @@ def _test() -> None:
         check(False, "an exhausted budget refuses before the call")
     except ModelUnavailable:
         check(not called, "an exhausted budget refuses BEFORE the call — none was made")
+
+    # ── a successful free call is RECORDED, or the request cap never fires ──
+    # The refusal check above proves the gate is read. It cannot prove the counter moves,
+    # and a counter that never moves makes budget.DAILY_REQUEST_CAP unreachable -- the one
+    # cap that binds a provider charging nothing.
+    class Ledger:
+        def __init__(self): self.calls = []
+        def can_make_call(self, *a, **k):
+            from backend.budget import Verdict
+            return Verdict(True, "normal", "within budget", 0.0, 0.0)
+        def record_call(self, inr): self.calls.append(inr)
+    led = Ledger()
+    extract("doc", budget=led, _transport=lambda m, pay, timeout=90: GOOD)
+    check(led.calls == [0.0],
+          f"a successful free call consumes one request at Rs 0.00 ({led.calls})")
 
     # ── it plugs into the same harness, unchanged ────────────────────────────
     from checker.bundles import capabilities
