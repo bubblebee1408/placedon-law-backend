@@ -230,16 +230,16 @@ def _post(model: str, payload: dict, timeout: int = 90) -> dict:
         raise ModelUnavailable(f"Gemini unreachable: {e.reason}") from None
 
 
-def extract(document: str, *, budget=None, model: str = FLASH,
-            _transport=None) -> tuple[Proposal, dict]:
-    """Ask Gemini to read a document and quote what it read.
+def _payload(document: str) -> dict:
+    """The request body. Split out of `extract` so its E1 properties are testable.
 
-    Returns a Proposal for `reasoning.review()` to check. Nothing here is trusted.
+    `extract` now requires a public-corpus clearance, and the prompt-injection specimens
+    this has to be tested against (`prompt_safety.INJECTIONS`) are synthetic -- there is
+    no published file they appear in, nor should there be. Building the payload here lets
+    the delimiting be proved on hostile text without inventing a clearance for it, and
+    `extract` is checked separately for sending exactly what this returns.
     """
-    if budget is not None and not budget.can_make_call().allowed:
-        raise ModelUnavailable("budget exhausted; no call was made")
-
-    payload = {
+    return {
         "systemInstruction": {"parts": [{"text": _EXTRACT_SYSTEM}]},
         "contents": [{"role": "user", "parts": [
             # E1. Gemini takes the document as a CONCATENATED STRING -- unlike
@@ -252,7 +252,29 @@ def extract(document: str, *, budget=None, model: str = FLASH,
         ]}],
         "generationConfig": {"temperature": 0, "maxOutputTokens": 4096},
     }
-    data = (_transport or _post)(model, payload)
+
+
+def extract(document: str, *, origin, budget=None, model: str = FLASH,
+            _transport=None) -> tuple[Proposal, dict]:
+    """Ask Gemini to read a document and quote what it read.
+
+    Returns a Proposal for `reasoning.review()` to check. Nothing here is trusted.
+
+    `origin` is REQUIRED and has no default, the same way `robots.Fetcher.get`'s `expect`
+    is required: a keyword with a safe-looking default is a keyword nobody passes, and the
+    one call site that forgets is exactly the one sending a client's board minute to a
+    free tier whose terms let it be used for training. There is no bypass -- see
+    `checker/public_only.py` for why a provenance LABEL would not be one either.
+    """
+    # Before the budget check, and before anything else. Whether text may leave at all is
+    # not a question whose answer depends on how much money is left.
+    from checker.public_only import verify as _verify_public
+    _verify_public(document, origin)
+
+    if budget is not None and not budget.can_make_call().allowed:
+        raise ModelUnavailable("budget exhausted; no call was made")
+
+    data = (_transport or _post)(model, _payload(document))
 
     try:
         parts = data["candidates"][0]["content"]["parts"]
@@ -279,10 +301,22 @@ def extract(document: str, *, budget=None, model: str = FLASH,
     return Proposal(facts=_parse(raw)), meta
 
 
-def as_shadow_model(budget=None, model: str = FLASH, _transport=None):
-    """Same callable shape `shadow.run()` already scores. Swap providers freely."""
+def as_shadow_model(budget=None, model: str = FLASH, _transport=None, *, origin=None):
+    """Same callable shape `shadow.run()` already scores. Swap providers freely.
+
+    `shadow.run()` hands the callable a bare document string, so the clearance cannot be
+    derived per call here. It is bound once, when the adapter is built, by the caller that
+    knows which published file the cases came out of -- and it is still REQUIRED: an
+    adapter built without one refuses at construction rather than at the first call, so a
+    harness cannot get halfway through a run before discovering it has no clearance.
+    """
+    if origin is None:
+        raise TypeError(
+            "as_shadow_model(origin=...) is required: the callable it returns takes a bare "
+            "string, so the published file the text came from has to be named here")
+
     def _m(document: str) -> Proposal:
-        proposal, _ = extract(document, budget=budget, model=model,
+        proposal, _ = extract(document, origin=origin, budget=budget, model=model,
                               _transport=_transport)
         return proposal
     return _m
@@ -302,6 +336,18 @@ def _test() -> None:
 
     print("gemini_model")
 
+    # ── every call below carries a real public-corpus clearance ──────────────
+    # Not a stub. `extract` re-reads the file named in the Origin, so a fake would be
+    # refused -- which is the property being relied on, and the reason these tests use a
+    # slice of an actually-published file rather than the string "doc".
+    from checker import public_only
+    _PUB = (public_only.ROOT / "corpus" / "testdocs" / "agm_notices"
+            / "tcpl_63rd_agm_notice_2026.txt")
+    _full = _PUB.read_text()
+    _at = _full.index("Shriram Capital Private Limited")
+    DOC = _full[_at - 200:_at + 200]
+    ORIGIN = public_only.clear_text(DOC, path=_PUB)
+
     # ── the prompt is IDENTICAL to the Anthropic extractor's ─────────────────
     from checker.anthropic_model import _EXTRACT_SYSTEM as ANTH_PROMPT
     check(_EXTRACT_SYSTEM is ANTH_PROMPT,
@@ -314,7 +360,7 @@ def _test() -> None:
     try:
         check(not available(), "with no key, available() is False")
         try:
-            extract("doc")
+            extract(DOC, origin=ORIGIN)
             check(False, "with no key, extract() raises")
         except ModelUnavailable as e:
             check("indistinguishable from a document with nothing in it" in str(e),
@@ -325,9 +371,13 @@ def _test() -> None:
                 os.environ[k] = v
 
     # ── a fake transport proves the path without a key or a call ─────────────
-    GOOD = {"candidates": [{"content": {"parts": [{"text":
-              '{"facts": {"company_class": {"value": "private", '
-              '"span": "is a private company"}}}'}]}}],
+    # The span the fake model "quotes" is a verbatim slice of DOC, because
+    # `shadow.run()` scores an answer as CAUGHT when its span is not in the document --
+    # correctly. A hand-written span stopped being in the document the moment these
+    # tests started using real published text, which is the harness doing its job.
+    _SPAN = "Shriram Capital Private Limited"
+    GOOD = {"candidates": [{"content": {"parts": [{"text": json.dumps(
+              {"facts": {"company_class": {"value": "private", "span": _SPAN}}})}]}}],
             "usageMetadata": {"promptTokenCount": 900, "candidatesTokenCount": 60}}
     seen = {}
 
@@ -335,8 +385,8 @@ def _test() -> None:
         seen["model"], seen["payload"] = model, payload
         return GOOD
 
-    prop, meta = extract("The Company is a private company.", _transport=fake)
-    check(prop.facts["company_class"]["span"] == "is a private company",
+    prop, meta = extract(DOC, origin=ORIGIN, _transport=fake)
+    check(prop.facts["company_class"]["span"] == _SPAN,
           "a well-formed response becomes a Proposal carrying its span")
     check(meta["model"] == FLASH and meta["cost_inr"] == 0.0,
           f"...on the free tier, at zero cost ({meta['model']})")
@@ -349,7 +399,7 @@ def _test() -> None:
     def blocked(model, payload, timeout=90):
         return {"promptFeedback": {"blockReason": "SAFETY"}}
     try:
-        extract("doc", _transport=blocked)
+        extract(DOC, origin=ORIGIN, _transport=blocked)
         check(False, "a blocked/empty candidate is refused")
     except ModelRefused as e:
         check("no usable candidate" in str(e),
@@ -359,7 +409,7 @@ def _test() -> None:
         return {"candidates": [{"content": {"parts": [{"text":
                  "I could not find any structured facts, sorry!"}]}}]}
     try:
-        extract("doc", _transport=prose)
+        extract(DOC, origin=ORIGIN, _transport=prose)
         check(False, "prose with no JSON is refused")
     except ModelRefused:
         check(True, "prose with no JSON is refused, not salvaged")
@@ -376,7 +426,7 @@ def _test() -> None:
     def spy(model, payload, timeout=90):
         called.append(1); return GOOD
     try:
-        extract("doc", budget=Broke(), _transport=spy)
+        extract(DOC, origin=ORIGIN, budget=Broke(), _transport=spy)
         check(False, "an exhausted budget refuses before the call")
     except ModelUnavailable:
         check(not called, "an exhausted budget refuses BEFORE the call — none was made")
@@ -413,20 +463,161 @@ def _test() -> None:
             return Verdict(True, "normal", "within budget", 0.0, 0.0)
         def record_call(self, inr): self.calls.append(inr)
     led = Ledger()
-    extract("doc", budget=led, _transport=lambda m, pay, timeout=90: GOOD)
+    extract(DOC, origin=ORIGIN, budget=led, _transport=lambda m, pay, timeout=90: GOOD)
     check(led.calls == [0.0],
           f"a successful free call consumes one request at Rs 0.00 ({led.calls})")
 
     # ── it plugs into the same harness, unchanged ────────────────────────────
     from checker.bundles import capabilities
     from checker.shadow import CORRECT, ShadowCase, run, tally
-    cases = (ShadowCase("G1", "The Company is a private company.",
-                        {"company_class": "private"}, "fake-transport case"),)
-    res = run(cases, as_shadow_model(_transport=fake),
+    cases = (ShadowCase("G1", DOC, {"company_class": "private"}, "fake-transport case"),)
+    res = run(cases, as_shadow_model(_transport=fake, origin=ORIGIN),
               declared_intents=capabilities(), verified_text="")
     check(tally(res)[CORRECT] == 1,
           f"Gemini scores through the SAME shadow harness as Anthropic "
           f"({res[0].outcome}) — providers are comparable on one scale")
+
+    # ── the Vault/matter path: enforced, and proved shut across the repo ─────
+    # A client document sent while NAMING a published file. This is the shape a
+    # provenance LABEL would wave through, and it is the one that matters: the text is
+    # checked against the file, so the name buys nothing.
+    from checker.public_only import NotPublic
+    untouched = []
+    def _never(model, payload, timeout=90):
+        untouched.append(1); return GOOD
+    try:
+        extract("The Board of Acme Private Limited resolved to acquire Beta Ltd for "
+                "Rs 40 crore, subject to due diligence.", origin=ORIGIN, _transport=_never)
+        check(False, "a matter document under a public Origin is refused")
+    except NotPublic as e:
+        check("is not in" in str(e) and not untouched,
+              "a matter document sent under a real public Origin is refused, and NO "
+              "call was made -- the check runs before the transport, not after")
+
+    class _FakeOrigin:
+        basis, path, blob = "PUBLIC_CORPUS", "corpus/testdocs/MANIFEST.md", "0" * 40
+    try:
+        extract(DOC, origin=_FakeOrigin(), _transport=_never)
+        check(False, "a look-alike origin object is refused")
+    except NotPublic as e:
+        check("Origin is required" in str(e) and not untouched,
+              "an object that merely LOOKS like an Origin is refused -- duck typing is "
+              "not a clearance")
+
+    # And the guard must not be reachable around: `origin` has no default, so a call
+    # site that forgets it fails at import-time signature binding rather than sending.
+    import inspect as _inspect
+    _sig = _inspect.signature(extract)
+    check(_sig.parameters["origin"].default is _inspect.Parameter.empty
+          and _sig.parameters["origin"].kind is _inspect.Parameter.KEYWORD_ONLY,
+          "origin= is keyword-only and has NO default -- a safe-looking default is a "
+          "keyword nobody passes")
+    try:
+        as_shadow_model(_transport=fake)   # public-origin: deliberate
+        check(False, "as_shadow_model without an origin is refused")
+    except TypeError as e:
+        check("required" in str(e),
+              "as_shadow_model refuses at construction, so a harness cannot get halfway "
+              "through a run before discovering it has no clearance")
+
+    # ── the AST sweep: no call site anywhere reaches Gemini without one ──────
+    # The signature above stops a forgotten keyword at runtime, on the call that runs.
+    # This fails at gate time instead, for every call site in the tree at once --
+    # including ones no test exercises, which is where the path would actually open.
+    import ast as _ast
+    from pathlib import Path as _Path
+    _root = _Path(__file__).resolve().parent.parent
+    _ENTRY = {"extract", "as_shadow_model"}
+    _WAIVER = "public-origin: deliberate"
+    offenders, waived, swept = [], [], 0
+    for f in sorted(_root.rglob("*.py")):
+        if any(part in {".git", "__pycache__", ".claude"} for part in f.parts):
+            continue
+        try:
+            tree = _ast.parse(f.read_text())
+        except (SyntaxError, UnicodeDecodeError):
+            continue
+        swept += 1
+        # Which local names in this file mean gemini_model's entry points?
+        local = set()
+        gemini_alias = set()
+        for n in _ast.walk(tree):
+            if isinstance(n, _ast.ImportFrom) and (n.module or "").endswith("gemini_model"):
+                local |= {(a.asname or a.name) for a in n.names if a.name in _ENTRY}
+            if isinstance(n, _ast.Import):
+                gemini_alias |= {(a.asname or a.name.split(".")[-1])
+                                 for a in n.names if a.name.endswith("gemini_model")}
+            if isinstance(n, _ast.ImportFrom) and (n.module or "") == "checker":
+                gemini_alias |= {(a.asname or a.name) for a in n.names
+                                 if a.name == "gemini_model"}
+        if f.resolve() == _Path(__file__).resolve():
+            local |= _ENTRY          # this module's own unqualified calls
+        for n in _ast.walk(tree):
+            if not isinstance(n, _ast.Call):
+                continue
+            fn = n.func
+            hit = ((isinstance(fn, _ast.Name) and fn.id in local)
+                   or (isinstance(fn, _ast.Attribute) and fn.attr in _ENTRY
+                       and isinstance(fn.value, _ast.Name) and fn.value.id in gemini_alias))
+            if hit and not any(k.arg == "origin" for k in n.keywords):
+                where = f"{f.relative_to(_root)}:{n.lineno}"
+                # One waiver marker, read off the line itself so it cannot drift from
+                # the call it excuses. Ratcheted below: a second one fails the gate.
+                if _WAIVER in f.read_text().splitlines()[n.lineno - 1]:
+                    waived.append(where)
+                    continue
+                offenders.append(where)
+    check(swept > 150, f"the sweep read the whole tree ({swept} modules)")
+    check(len(waived) == 1 and waived[0].startswith("checker/gemini_model.py"),
+          f"exactly one waiver exists, and it is the negative test above ({waived}) -- "
+          f"a second one fails this check rather than passing quietly")
+    check(not offenders,
+          f"no call reaches a Gemini entry point without a public-corpus origin= "
+          f"({len(offenders)} offender(s): {offenders[:4]})")
+    # The sweep must be able to SEE an offender, or `not offenders` is vacuous.
+    _probe = _ast.parse("from checker.gemini_model import extract\nextract(doc)\n")
+    _calls = [n for n in _ast.walk(_probe) if isinstance(n, _ast.Call)]
+    check(len(_calls) == 1 and not any(k.arg == "origin" for k in _calls[0].keywords),
+          "...and the sweep's own shape detects a call written without origin=, so a "
+          "clean result is a measurement rather than a pattern that matches nothing")
+
+    # ── the back door: _post takes a payload, so the text guard cannot see it ─
+    # `extract()` is the guarded door. `_post()` is a hole beside it: it takes an
+    # already-built payload, so no clearance is possible there and none is attempted.
+    # That is acceptable only while every user of it is known and named. Listed here so
+    # a new one fails the gate instead of quietly becoming the way round the guard.
+    _POST_USERS = {"scripts/bakeoff_indic.py"}   # page IMAGES from a public benchmark
+    found = set()
+    for f in sorted(_root.rglob("*.py")):
+        if (any(part in {".git", "__pycache__", ".claude"} for part in f.parts)
+                or f.resolve() == _Path(__file__).resolve()):
+            continue
+        try:
+            tree = _ast.parse(f.read_text())
+        except (SyntaxError, UnicodeDecodeError, OSError):
+            continue
+        # By reference, not by substring: `_PREFERENCE` and `_post_process` both contain
+        # the characters and mean nothing. Only `<gemini alias>._post` or a direct
+        # `from ...gemini_model import _post` counts.
+        alias = set()
+        for n in _ast.walk(tree):
+            if isinstance(n, _ast.Import):
+                alias |= {(a.asname or a.name.split(".")[-1])
+                          for a in n.names if a.name.endswith("gemini_model")}
+            if isinstance(n, _ast.ImportFrom):
+                mod = n.module or ""
+                if mod.endswith("gemini_model") and any(a.name == "_post" for a in n.names):
+                    found.add(f.relative_to(_root).as_posix())
+                if mod == "checker":
+                    alias |= {(a.asname or a.name) for a in n.names if a.name == "gemini_model"}
+        for n in _ast.walk(tree):
+            if (isinstance(n, _ast.Attribute) and n.attr == "_post"
+                    and isinstance(n.value, _ast.Name) and n.value.id in alias):
+                found.add(f.relative_to(_root).as_posix())
+    check(found == _POST_USERS,
+          f"_post() is reached only from the files that are allowed to ({sorted(found)} "
+          f"vs {sorted(_POST_USERS)}) -- it takes a payload, so no clearance is possible "
+          f"there, and an unlisted user would be the way round extract()'s guard")
 
     # ── the rate-limit reality is recorded, not assumed ──────────────────────
     check("tokens-per-minute" in RATE_NOTE and "50x" in RATE_NOTE,
@@ -445,7 +636,9 @@ def _test() -> None:
 
     hostile = ("Resolved that the Company do allot shares. "
                + INJECTIONS[0] + " Dated 14 June 2026.")
-    extract(hostile, _transport=_spy)
+    # Proved on _payload, because hostile text has no published file to be cleared
+    # against and inventing one would be the bypass this whole module exists to refuse.
+    captured["payload"] = _payload(hostile)
     sent = captured["payload"]["contents"][0]["parts"][0]["text"]
 
     check(contains_untrusted_block(sent),
@@ -459,6 +652,10 @@ def _test() -> None:
           "command")
     check(hostile in sent,
           "the document text itself is byte-identical inside the block")
+    extract(DOC, origin=ORIGIN, _transport=_spy)
+    check(captured["payload"] == _payload(DOC),
+          "...and extract() sends exactly what _payload() builds, so proving the "
+          "delimiting there proves it on the wire")
 
     # ── Vertex AI: the same call, billed to a Cloud project, no API key ──────
     # The AI Studio free tier ran out mid-benchmark and blocked a re-run for a

@@ -51,6 +51,7 @@ suites=(
   checker/gemini_model.py
   checker/router.py
   checker/voyage_model.py
+  checker/public_only.py
   checker/sarvam_model.py
   checker/orchestrator.py
   checker/bundles.py
