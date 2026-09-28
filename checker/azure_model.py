@@ -58,6 +58,17 @@ _REASONING = ("gpt-5", "o1", "o3", "o4")
 REASONING_BUDGET = 4000
 COMPLETION_BUDGET = 700
 
+# Narration needs its own, and 700 was measured too small on 29-09-2026: the first live
+# pass of the research fixtures refused F5 (s.134, what must be attached to financial
+# statements) with finish_reason='length'. 700 is the limit local_model gives Ollama for
+# EXTRACTION, where the reply is one JSON object; a narration reply is a sentence and its
+# verbatim quote per proposition, so a long provision answers longer than the thing it
+# quotes. 4096 is what gemini_model.generate already allows, and matching it keeps a
+# difference between the two providers a difference in the models rather than in what they
+# were allowed to say. The refusal was correct -- a truncated answer is not a short answer
+# -- so this raises the ceiling and does not soften the guard.
+NARRATION_BUDGET = 4096
+
 # The key is sent in a header, so the endpoint is checked before it is used.
 _AZURE_HOSTS = (".openai.azure.com", ".services.ai.azure.com",
                 ".cognitiveservices.azure.com")
@@ -77,12 +88,18 @@ def _url() -> str:
     return f"https://{u.hostname}/openai/v1/chat/completions"
 
 
-def chat_body(prompt: str, deployment: str) -> dict:
-    """The request for one prompt. Shared so eval and the engine ask identically."""
+def chat_body(prompt: str, deployment: str, *,
+              max_tokens: int = COMPLETION_BUDGET) -> dict:
+    """The request for one prompt. Shared so eval and the engine ask identically.
+
+    `max_tokens` defaults to the extraction budget, so the eval harness is unchanged.
+    """
     body = {"model": deployment, "messages": [{"role": "user", "content": prompt}]}
     if deployment.startswith(_REASONING):
-        return body | {"max_completion_tokens": REASONING_BUDGET}
-    return body | {"max_tokens": COMPLETION_BUDGET, "temperature": 0}
+        # Hidden reasoning is billed against this limit too, so it takes whichever is
+        # larger rather than the caller's figure alone.
+        return body | {"max_completion_tokens": max(REASONING_BUDGET, max_tokens)}
+    return body | {"max_tokens": max_tokens, "temperature": 0}
 
 
 def reply_text(data: dict) -> str:
@@ -140,7 +157,7 @@ def narrate(prompt: str, *, origin, model: str = DEFAULT_DEPLOYMENT, budget=None
         raise ModelUnavailable("budget exhausted; no call was made")
 
     deployment = model.removeprefix(PREFIX)
-    body = chat_body(prompt, deployment)
+    body = chat_body(prompt, deployment, max_tokens=NARRATION_BUDGET)
     if _transport is not None:
         data = _transport(deployment, body)
     else:
@@ -222,6 +239,12 @@ def _test() -> None:
     b5 = chat_body("hello", "gpt-5-mini")
     check(b70["temperature"] == 0 and b70["max_tokens"] == COMPLETION_BUDGET,
           "an ordinary deployment gets temperature 0 and a token cap")
+    check(chat_body("hello", "llama-3-3-70b",
+                    max_tokens=NARRATION_BUDGET)["max_tokens"] == NARRATION_BUDGET
+          and NARRATION_BUDGET > COMPLETION_BUDGET,
+          "narration asks for a larger budget than extraction: a reply that is one "
+          "sentence-plus-quote per proposition runs longer than one JSON object, and 700 "
+          "truncated a real answer about s.134 on 29-09-2026")
     check("temperature" not in b5 and b5["max_completion_tokens"] == REASONING_BUDGET,
           "a reasoning deployment gets NO temperature (it answers 400) and a larger "
           "budget, because its hidden reasoning is billed against the completion limit")
@@ -263,6 +286,10 @@ def _test() -> None:
           "a prompt whose every delimited block is published goes through")
     check(sent[0][0] == DEFAULT_DEPLOYMENT,
           f"...to the measured default deployment ({DEFAULT_DEPLOYMENT})")
+    check(sent[0][1]["max_tokens"] == NARRATION_BUDGET,
+          f"...asking for the NARRATION budget, not the extraction one "
+          f"({sent[0][1]['max_tokens']}): this is the line that was 700, and F5 came "
+          f"back finish_reason='length' because of it")
 
     sent.clear()
     secret = "Answer using only this.\n" + _wrap(
