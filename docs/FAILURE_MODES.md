@@ -702,7 +702,7 @@ The diagnosis is exactly right and the remedy reintroduces the bug. `FileStore` 
 - `/tmp` is **per-instance and ephemeral**, so even if the path were moved there, N concurrent
   instances each read `{}`, each allow spending up to the full cap, and each write their own
   counter. The cap becomes per-instance, not global;
-- `.gitignore:11` excludes `corpus/.budget.json`, so the file is never in the bundle and
+- `.gitignore:24` excludes `corpus/.budget.json`, so the file is never in the bundle and
   `read()` always returns `{}` → `spent_today = 0` → **every call is allowed**.
 
 Then the failure is swallowed. `checker/model_adapter.py:322-330`:

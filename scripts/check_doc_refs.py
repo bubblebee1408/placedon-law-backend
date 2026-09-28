@@ -63,6 +63,7 @@ from __future__ import annotations
 
 import os
 import re
+import subprocess
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -254,9 +255,36 @@ def markdown_files(root: str) -> list[str]:
     return sorted(out)
 
 
-def dangling(root: str = ROOT) -> set[tuple[str, str]]:
-    """(document, path) for every path an ACTIVE document cites that does not exist."""
-    bad = set()
+def _ignored(paths: list[str], root: str, *, git=None) -> frozenset[str]:
+    """Of `paths`, the ones git is told to ignore. One batched call, not one per path."""
+    if git is not None:
+        return frozenset(git(paths))
+    # No work tree -- a synthetic tree in a test -- so nothing is known to be unpublished.
+    if not paths or not os.path.exists(os.path.join(root, ".git")):
+        return frozenset()
+    r = subprocess.run(["git", "check-ignore", "--stdin"], input="\n".join(paths),
+                       capture_output=True, text=True, cwd=root)
+    # 0 = some ignored, 1 = none ignored. Anything else is a broken invocation, and
+    # reading it as "nothing is ignored" would restore the very flap this fixes.
+    if r.returncode not in (0, 1):
+        raise RuntimeError(
+            f"git check-ignore failed ({r.returncode}): {r.stderr.strip()[:200]}")
+    return frozenset(line.strip() for line in r.stdout.splitlines() if line.strip())
+
+
+def dangling(root: str = ROOT, *, git=None) -> set[tuple[str, str]]:
+    """(document, path) for every path an ACTIVE document cites that this repo does not publish.
+
+    Existence is resolved against what the repository PUBLISHES, not against what happens
+    to be on this disk. `corpus/.budget.json` is gitignored runtime state: absent on a
+    fresh clone, present on any machine that has run a live model. Resolving it from the
+    filesystem alone made this suite GREEN in CI and RED on the operator's laptop -- a
+    gate that reports where it ran rather than what changed. Measured 29-09-2026: of 205
+    cited paths present on disk, exactly one is ignored, so this narrows the scan by one
+    path and makes it the same answer everywhere. Same distinction checker/public_only.py
+    draws between a file on disk and a file this repository stands behind.
+    """
+    cited: list[tuple[str, set[str]]] = []
     for doc in markdown_files(root):
         if not is_checked(doc):
             continue
@@ -265,10 +293,12 @@ def dangling(root: str = ROOT) -> set[tuple[str, str]]:
                 text = fh.read()
         except (OSError, UnicodeDecodeError):
             continue
-        for path in references(text) | link_targets(text, doc):
-            if not os.path.exists(os.path.join(root, path)):
-                bad.add((doc, path))
-    return bad
+        cited.append((doc, references(text) | link_targets(text, doc)))
+
+    on_disk = {p for _, refs in cited
+               for p in refs if os.path.exists(os.path.join(root, p))}
+    published = on_disk - _ignored(sorted(on_disk), root, git=git)
+    return {(doc, p) for doc, refs in cited for p in refs if p not in published}
 
 
 def report(root: str = ROOT) -> int:
@@ -410,6 +440,17 @@ def _test() -> None:
             fh.write("see `docs/NEVER_WRITTEN.md`\n")
         check(("docs/NEW.md", "docs/NEVER_WRITTEN.md") in dangling(tmp),
               "a NEWLY added dangling reference is caught -- the ratchet bites")
+
+        # ...and a path that EXISTS but is gitignored is not published either. Without
+        # this, the suite passed on a fresh clone and failed on the operator's laptop
+        # the moment a live model run wrote corpus/.budget.json.
+        check(("docs/ACTIVE.md", "scripts/real.py")
+              in dangling(tmp, git=lambda paths: {"scripts/real.py"}),
+              "a path that exists but is gitignored still dangles -- runtime state is "
+              "not something this repository publishes")
+        check(("docs/ACTIVE.md", "scripts/real.py") not in dangling(tmp, git=lambda p: set()),
+              "...and with nothing ignored it is published again, so the git answer "
+              "is what moved it")
 
     # ── the allow-list cannot quietly rot ───────────────────────────────────
     live = dangling()
