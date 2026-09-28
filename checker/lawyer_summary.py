@@ -135,7 +135,7 @@ from checker.prompt_safety import UNTRUSTED_CLAUSE
 from checker.reasoning import (CITATION_OUTSIDE_PACK, CONCLUSION_ASSERTED, DATE_INVENTED,
                                FIGURE_INVENTED, Proposal)
 
-__all__ = ["Source", "Citation", "Sentence", "Summary", "DOCUMENT", "ENGINE",
+__all__ = ["Source", "Citation", "Sentence", "Summary", "DOCUMENT", "ENGINE", "STATUTE",
            "TRACED", "ENTAILED", "VERDICTS", "establishes_entailment",
            "document_source", "engine_source", "check_blocks", "blocks_from_response",
            "sentences_of", "clauses_of", "verify_sentence", "summarise", "SUMMARISE"]
@@ -148,7 +148,20 @@ SUMMARISE = EXTRACT
 
 DOCUMENT = "DOCUMENT"      # the checked document: evidence of what the document says
 ENGINE = "ENGINE"          # the deterministic turn: evidence of what the check found
-KINDS = (DOCUMENT, ENGINE)
+STATUTE = "STATUTE"        # primary law, retrieved by the deterministic layer
+KINDS = (DOCUMENT, ENGINE, STATUTE)
+
+# Which kinds a statement of LAW may rest on. Rule 8 said "the ENGINE", and for a
+# document check that was the whole list: the only two sources were the document and the
+# turn, and a duty read out of the document's own recital may be a stale recital.
+#
+# Research on the Act itself has a third source that is neither -- the provision text,
+# pulled by `structural_retrieve`. Labelling it DOCUMENT to make it fit would be a lie in
+# the data AND would refuse every law assertion in a research answer, since rule 8 then
+# rejects it. Labelling it ENGINE would be a quieter lie and would pass. It is its own
+# kind, and the rule asks the question it always meant: is this source primary law, or is
+# it somebody's recital of it?
+LAW_BEARING = (ENGINE, STATUTE)
 
 TRACED = "TRACED"
 ENTAILED = "ENTAILED"                        # reserved; never returned. See the docstring.
@@ -567,7 +580,7 @@ def verify_sentence(text: str, citations, sources, *, shares_citation: bool = Fa
     # stale recital. So a law assertion is now checked against the ENGINE spans ALONE. A
     # document span sitting next to one lends it nothing.
     if _LAW_ASSERTION.search(text) and not _REPORTING.search(text):
-        engine_spans = [a for s, a in spans if s.kind == ENGINE]
+        engine_spans = [a for s, a in spans if s.kind in LAW_BEARING]
         if not engine_spans:
             return no(LAW_FROM_DOCUMENT,
                       "this states what the law requires and cites no result of the "
@@ -1337,6 +1350,30 @@ def _test() -> None:
         caught = _survives(patch)
         check(caught > 0,
               f"the suite catches it when {label} ({caught} check(s) failed)")
+
+    # ── STATUTE: primary law is law-bearing, a recital of it is not ──────────
+    # Rule 8 rejects a law assertion cited to the document, because a document's own
+    # recital of the law may be stale. A provision pulled from the Act is not a recital.
+    _law = "A company shall hold an annual general meeting in each year."
+    _body = ("96. Annual general meeting.\n" + _law + "\nThe meeting shall be held "
+             "during business hours, between 9 a.m. and 6 p.m., on a day that is not a "
+             "National Holiday, at the registered office of the company.")
+    _stat = Source("Companies Act 2013, s.96", STATUTE, _body)
+    _doc = Source("notice.pdf", DOCUMENT, _body)
+    _at = _body.index(_law)
+
+    def _cit(src):
+        return Citation(0, _at, _at + len(_law), src.text[_at:_at + len(_law)])
+    _via_statute = verify_sentence(_law, (_cit(_stat),), (_stat,))
+    _via_doc = verify_sentence(_law, (_cit(_doc),), (_doc,))
+    check(_via_statute.verdict == TRACED,
+          f"a statement of law cited to the ACT traces ({_via_statute.verdict})")
+    check(_via_doc.verdict != TRACED,
+          f"...while the identical sentence cited to a DOCUMENT does not -- the "
+          f"document may be reciting law that has since been superseded "
+          f"({_via_doc.verdict})")
+    check(STATUTE in KINDS and set(LAW_BEARING) == {ENGINE, STATUTE},
+          "LAW_BEARING names exactly the two kinds that carry primary law")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:

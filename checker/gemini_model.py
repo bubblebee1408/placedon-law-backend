@@ -301,6 +301,54 @@ def extract(document: str, *, origin, budget=None, model: str = FLASH,
     return Proposal(facts=_parse(raw)), meta
 
 
+def generate(prompt: str, *, origin, model: str = FLASH, budget=None,
+             _transport=None) -> str:
+    """A plain text-in/text-out call, under the same clearance as `extract`.
+
+    `extract` returns a Proposal and is the only door this module had. `quoted_span`
+    needs prose back, and routing it through `_post` would be the back door the AST
+    ratchet in this file exists to keep shut -- so it gets a front door instead.
+
+    `origin` here is an Origin or a tuple of them, and the check is `verify_prompt`:
+    every DELIMITED untrusted block in the prompt must clear against one of them. That
+    is the multi-source form of the same rule. Everything outside the delimiters is our
+    own instructions; everything inside has to be published, and a prompt with no
+    delimiters at all is refused, because then nothing in it can be told apart.
+    """
+    from checker.public_only import verify_prompt
+    verify_prompt(prompt, origin)
+
+    if budget is not None and not budget.can_make_call().allowed:
+        raise ModelUnavailable("budget exhausted; no call was made")
+
+    payload = {"contents": [{"role": "user", "parts": [{"text": prompt}]}],
+               "generationConfig": {"temperature": 0, "maxOutputTokens": 4096}}
+    data = (_transport or _post)(model, payload)
+    try:
+        parts = data["candidates"][0]["content"]["parts"]
+    except (KeyError, IndexError, TypeError):
+        raise ModelRefused(
+            f"no usable candidate in the response: {json.dumps(data)[:200]}") from None
+    if budget is not None:
+        budget.record_call(0.0)
+    return "".join(p.get("text", "") for p in parts)
+
+
+def as_text_model(*, origin, model: str = FLASH, budget=None, _transport=None):
+    """`generate` as the Callable[[str], str] that `quoted_span.summarise` takes.
+
+    The clearance is bound once, here, by the caller that knows which published files the
+    evidence came from -- the same reason `as_shadow_model` takes one.
+    """
+    if origin is None:
+        raise TypeError("as_text_model(origin=...) is required")
+
+    def _m(prompt: str) -> str:
+        return generate(prompt, origin=origin, model=model, budget=budget,
+                        _transport=_transport)
+    return _m
+
+
 def as_shadow_model(budget=None, model: str = FLASH, _transport=None, *, origin=None):
     """Same callable shape `shadow.run()` already scores. Swap providers freely.
 
@@ -527,7 +575,7 @@ def _test() -> None:
     import ast as _ast
     from pathlib import Path as _Path
     _root = _Path(__file__).resolve().parent.parent
-    _ENTRY = {"extract", "as_shadow_model"}
+    _ENTRY = {"extract", "as_shadow_model", "generate", "as_text_model"}
     _WAIVER = "public-origin: deliberate"
     offenders, waived, swept = [], [], 0
     for f in sorted(_root.rglob("*.py")):
@@ -580,6 +628,38 @@ def _test() -> None:
     check(len(_calls) == 1 and not any(k.arg == "origin" for k in _calls[0].keywords),
           "...and the sweep's own shape detects a call written without origin=, so a "
           "clean result is a measurement rather than a pattern that matches nothing")
+
+    # ── generate(): the front door for prose, under the same clearance ───────
+    from checker.prompt_safety import wrap_untrusted as _wrap
+    _act = public_only.ROOT / "corpus" / "companies_act" / "1220.json"
+    _o = public_only.clear_file(_act)
+    import json as _json
+    _prov = _json.loads(_act.read_text())["content"][:300]
+    _prompt = "Answer using only this.\n" + _wrap(_prov, "s1") + "\nWhat does it say?"
+    _said = {"candidates": [{"content": {"parts": [{"text": "It says something."}]}}]}
+    check(generate(_prompt, origin=_o, _transport=lambda m, p, timeout=90: _said)
+          == "It says something.",
+          "generate() returns prose, so quoted_span does not have to go through _post")
+    _bad = ("Answer.\n" + _wrap("The Board of Acme Private Limited resolved to acquire "
+                                "Beta Ltd.", "matter") + "\nWhat does it say?")
+    _untouched = []
+    try:
+        generate(_bad, origin=_o, _transport=lambda m, p, t=90: _untouched.append(1))
+        check(False, "a matter document in the prompt is refused")
+    except NotPublic as e:
+        check("is in none of the" in str(e) and not _untouched,
+              "a matter document inside the prompt is refused, and no call was made")
+    try:
+        generate("Answer. " + _prov, origin=_o,
+                 _transport=lambda m, p, t=90: _untouched.append(1))
+        check(False, "an undelimited prompt is refused")
+    except NotPublic as e:
+        check("no delimited untrusted block" in str(e) and not _untouched,
+              "...and evidence pasted in without delimiters is refused too, because "
+              "nothing in it can be told from our own words")
+    check(_inspect.signature(generate).parameters["origin"].default
+          is _inspect.Parameter.empty,
+          "generate()'s origin= has no default either")
 
     # ── the back door: _post takes a payload, so the text guard cannot see it ─
     # `extract()` is the guarded door. `_post()` is a hole beside it: it takes an

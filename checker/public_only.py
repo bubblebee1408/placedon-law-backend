@@ -227,6 +227,57 @@ def verify(text: str, origin: Origin, *, git=None) -> Origin:
     return clear_text(text, path=ROOT / origin.path, git=git)
 
 
+_BLOCK = re.compile(r"<source>[^\n]*\n(.*?)\n</source>", re.DOTALL)
+
+
+def untrusted_blocks(prompt: str) -> tuple[str, ...]:
+    """The delimited untrusted passages in a built prompt.
+
+    `prompt_safety.wrap_untrusted` refuses text that carries a tag of its own, so the
+    delimiters are unambiguous and this cannot be confused by the content it wraps.
+    """
+    return tuple(_BLOCK.findall(prompt))
+
+
+def verify_prompt(prompt: str, origins) -> tuple[str, ...]:
+    """Every untrusted passage in `prompt` clears against one of `origins`, or refuse.
+
+    This is what makes a MULTI-SOURCE prompt checkable. `verify()` answers "is this one
+    string public?"; a research prompt carries several provisions plus our own
+    instructions, and the question becomes "is everything in here that did not come from
+    us public?". Delimiting is what separates the two, and it is already required on this
+    path -- the prompt is a concatenation, so CLAUDE.md says wrap, and the wrapper's own
+    boundaries are then the list of things to check.
+
+    Returns the blocks it cleared. A prompt with NO untrusted block is refused rather
+    than passed: it means either the evidence was concatenated undelimited, or there is
+    no evidence -- and the first is the failure this exists to catch.
+    """
+    origins = (origins,) if isinstance(origins, Origin) else tuple(origins)
+    if not origins:
+        raise NotPublic("no origin given; there is nothing to clear the prompt against")
+    blocks = untrusted_blocks(prompt)
+    if not blocks:
+        raise NotPublic(
+            "the prompt carries no delimited untrusted block. Either the evidence was "
+            "concatenated without wrap_untrusted -- in which case nothing in it can be "
+            "checked -- or there is no evidence in it at all.")
+    for i, block in enumerate(blocks):
+        for o in origins:
+            try:
+                clear_text(block, path=ROOT / o.path)
+                break
+            except NotPublic:
+                continue
+        else:
+            raise NotPublic(
+                f"untrusted block {i} of {len(blocks)} is in none of the "
+                f"{len(origins)} published file(s) given "
+                f"({', '.join(o.path for o in origins)}). {len(block)} characters, "
+                f"beginning {block[:60]!r}. {_HOW}")
+    return blocks
+
+
 def _test() -> None:
     ok = fail = 0
 
@@ -325,6 +376,34 @@ def _test() -> None:
     check("unknown basis" in refused(
         lambda: verify(body, Origin("TRUST_ME", "corpus/testdocs/MANIFEST.md", o.blob))),
         "an invented basis is refused")
+
+    # ── a multi-source prompt: everything that is not ours must be public ────
+    from checker.prompt_safety import wrap_untrusted
+    act2 = ROOT / "corpus" / "companies_act" / "1221.json"
+    o1, o2 = clear_file(act), clear_file(act2)
+    s1 = json.loads(act.read_text())["content"][:300]
+    s2 = json.loads(act2.read_text())["content"][:300]
+    good = ("Instructions we wrote.\n" + wrap_untrusted(s1, "s1") + "\n"
+            + wrap_untrusted(s2, "s2") + "\nAnswer the question.")
+    check(len(verify_prompt(good, (o1, o2))) == 2,
+          "a prompt carrying two published provisions clears, block by block")
+    check("is in none of the" in refused(lambda: verify_prompt(good, (o1,))),
+          "...and naming only one of them refuses the other, rather than passing "
+          "because SOME block cleared")
+    hostile = ("Instructions we wrote.\n" + wrap_untrusted(s1, "s1") + "\n"
+               + wrap_untrusted("The Board of Acme Private Limited resolved to acquire "
+                                "Beta Ltd for Rs 40 crore.", "matter") + "\nAnswer.")
+    check("is in none of the" in refused(lambda: verify_prompt(hostile, (o1, o2))),
+          "a matter document smuggled in beside two real provisions is refused -- every "
+          "block is checked, not a sample")
+    check("carries no delimited untrusted block" in refused(
+        lambda: verify_prompt("Instructions we wrote. " + s1, (o1,))),
+        "evidence concatenated WITHOUT delimiters is refused, because nothing in it "
+        "can be told apart from our own words")
+    check("nothing to clear the prompt against" in refused(lambda: verify_prompt(good, ())),
+          "an empty origin list clears nothing")
+    check(untrusted_blocks(good) == (s1, s2),
+          "the block extractor returns the passages verbatim")
 
     # ── the roots are a decision, not a glob ─────────────────────────────────
     named = {p.name for p in PUBLIC_ROOTS}
