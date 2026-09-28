@@ -113,6 +113,14 @@ CONSEQUENCES = (HIGH, LOW)
 ANTHROPIC = "anthropic"
 GEMINI = "gemini"
 OLLAMA = "ollama"
+# Azure AI Foundry. A provider rather than a candidate: route() serves it. It exists
+# because the operator's laptop holds 8.6 GB of unified memory and a 12B model ran Ollama
+# out of GPU memory on 14-09-2026, so "fall back to local" means an 8B or nothing.
+AZURE = "azure"
+# The deployment on the `placedon-law-eval` resource. Named here rather than imported so
+# this table reads as a table; checker/azure_model.DEFAULT_DEPLOYMENT is the same string
+# and its own test asserts the default it serves.
+AZURE_LLAMA_70B = "llama-3-3-70b"
 
 # ── purpose: the axis the table's own docstring already used and the code did not ──
 # The header above lists four rows, and one of them -- NARRATE -- was never routable:
@@ -242,6 +250,12 @@ _PREFERENCE = {
         (GEMINI, FLASH_LITE,
          "free tier, and the one that was actually answering on 28-09-2026 while "
          "gemini-3.6-flash returned 503 six times running"),
+        (AZURE, AZURE_LLAMA_70B,
+         "a 70B served from Azure AI. BELOW the Gemini rows because those are free and "
+         "this spends student credit; ABOVE the Ollama row because Ollama on this machine "
+         "means an 8B model or an out-of-memory error, and while narration is the job "
+         "where model choice matters least, 'least' is not 'not at all'. Measured "
+         "28-09-2026 on the realrun probes: 18 of 18 cases, 0 errors"),
         (OLLAMA, OPERATOR_NAMED,
          "the operator's own machine: no key, no quota, no credit. Last because it is "
          "the slowest and unmeasured, and because it is the row that CANNOT run out -- "
@@ -303,6 +317,14 @@ def estimate_inr(provider: str, model: str, task: Task) -> float:
     tin, tout = _SHAPE[task.modality]
     if provider == GEMINI:
         return 0.0                       # free tier; paid rates UNVERIFIED here
+    if provider == AZURE:
+        # Zero against MONTHLY_CAP_INR, which is the number a rupee budget gate needs --
+        # and NOT a claim that the call is free. It is billed to Azure for Students
+        # credit, a different pot with its own exhaustion date, and no counter in this
+        # repo watches it. The day that credit becomes a paid subscription this must
+        # become a real rate, and `can_make_call` will be asking the wrong question
+        # until it does.
+        return 0.0
     if provider == OLLAMA:
         # Zero MARGINAL cost, which is the number a budget gate needs. It is not zero
         # cost -- it is the founder's own hardware and the wall-clock of a laptop doing
@@ -389,7 +411,7 @@ def providers_available(*, credit_exhausted=None) -> tuple[str, ...]:
     `credit_exhausted` is injected so this stays testable without a ledger on disk, in
     the same style as every other injected callable in this repo.
     """
-    from checker import anthropic_model, gemini_model, ollama_runner
+    from checker import anthropic_model, azure_model, gemini_model, ollama_runner
     if credit_exhausted is None:
         def credit_exhausted() -> bool:
             from backend.budget import BudgetTracker
@@ -405,6 +427,8 @@ def providers_available(*, credit_exhausted=None) -> tuple[str, ...]:
         out.append(ANTHROPIC)
     if gemini_model.available():
         out.append(GEMINI)
+    if azure_model.available():
+        out.append(AZURE)
     if ollama_runner.available():
         out.append(OLLAMA)
     return tuple(out)
@@ -553,8 +577,33 @@ def _test() -> None:
           "every candidate's adoption rule requires non-overlapping intervals")
     check(candidates(PAGE_IMAGE)[0].provider == SARVAM and not candidates("AUDIO"),
           "candidates(role) filters by role")
-    check(set(providers_available()) <= {ANTHROPIC, GEMINI},
+    check(set(providers_available()) <= {ANTHROPIC, GEMINI, AZURE, OLLAMA},
           "providers_available() still lists only routable providers, never candidates")
+    check(not ({VOYAGE, SARVAM} & set(providers_available())),
+          "...and a CANDIDATE never appears there, which is the half that matters: the "
+          "set above grows every time a provider is wired, so it cannot carry the rule")
+
+    # ── Azure: the row for a model this laptop cannot hold (29-09-2026) ──────
+    ra = route(Task("narrate", TEXT, LOW, purpose=NARRATION), available=(AZURE,))
+    check(ra.provider == AZURE and ra.model == AZURE_LLAMA_70B,
+          f"with only Azure available, NARRATION routes to the 70B ({ra.provider}/{ra.model})")
+    check(ra.degraded and not ra.requires_review,
+          "...marked degraded, because Claude was preferred and did not serve -- but not "
+          "flagged for review: narration is LOW and every sentence is span-checked after")
+    check(ra.est_cost_inr == 0.0,
+          f"...and it estimates against the RUPEE cap as 0.0 ({ra.est_cost_inr}) rather "
+          f"than raising out of cost_inr on a model with no rupee rate")
+    try:
+        route(Task("extract", TEXT, HIGH, purpose=EXTRACTION), available=(AZURE,))
+        check(False, "with only Azure, a HIGH extraction refuses")
+    except NoRoute:
+        check(True, "with only Azure, a HIGH EXTRACTION refuses: there is no Azure row "
+                    "for it, so wiring a provider for narration did not quietly make it "
+                    "the extractor as well")
+    check([p for p, _m, _w in _PREFERENCE[TaskProfile(TEXT, LOW, NARRATION)]]
+          == [ANTHROPIC, GEMINI, GEMINI, AZURE, OLLAMA],
+          "the narration order is paid-best, free, Azure credit, then the laptop -- so a "
+          "free tier is spent before credit is, and credit before an 8B is trusted")
 
     # ── the free-model fallbacks (28-09-2026) ────────────────────────────────
     import os as _os

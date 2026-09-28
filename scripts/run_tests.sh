@@ -48,6 +48,7 @@ suites=(
   checker/derivation.py
   checker/prompt_safety.py
   checker/anthropic_model.py
+  checker/azure_model.py
   checker/gemini_model.py
   checker/router.py
   checker/voyage_model.py
