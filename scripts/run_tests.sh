@@ -121,6 +121,7 @@ suites=(
   checker/entail_role.py
   checker/entail_qualifier.py
   checker/cascade.py
+  checker/entailment_gate.py
   checker/company_profile.py
   checker/prescribed_thresholds.py
   checker/classify.py

@@ -14,12 +14,32 @@ questions: an all-affirmative baseline scored **F1 0.73 against Westlaw AI's
 
 ## The gate — four conditions, all required
 
-| condition | threshold | current |
+| condition | threshold | current (re-measured 2026-09-28) |
 |---|---|---|
-| false-accept ceiling | ≤ 10 | **8** |
-| F1 floor | ≥ 0.40 | **0.48** |
+| false-accept ceiling | ≤ 10 | **2** |
+| F1 floor | ≥ 0.40 | **0.625** |
 | abstention cap | ≤ 0.25 | **0.00** |
 | per-bucket reporting | required | 3 buckets |
+
+**The "current" column was stale.** It read 8 / 0.48 / 0.00 against a set of 71; the strict
+set is now **n=67** (20 ENTAILED, 47 NOT_ENTAILED — 70% negative, not 66%) and the shipped
+cascade scores 2 / 0.625 / 0.00. `metric_policy.py`'s own comment — *"cascade currently 2 with
+the E6 gate, 13 without"* — was right and this table was not. It is now re-measured by
+`checker/entailment_gate.py` on **every suite run**, through `cascade.judge_row`, so it cannot
+drift again without the harness going red.
+
+**Precision and recall, with intervals, on the same frozen set** (tp 10, fp 2, fn 10, tn 45):
+
+| metric | point | 95% CI (Wilson) |
+|---|---|---|
+| precision | 0.833 | [0.552, 0.953] |
+| recall | 0.500 | [0.299, 0.701] |
+
+**Read the intervals, not the points.** At n=67 with only 20 positives, recall's interval runs
+from 0.30 to 0.70 — the cascade finds half the entailments and the data cannot say much more
+precisely than that. The gate passes on F1 because F1 is not gated on recall alone, and that
+is a deliberate choice recorded here rather than an accident: a verifier that accepts almost
+nothing is safe and useless, which is why the abstention cap exists alongside the F1 floor.
 
 False accepts are capped in **absolute count**, not as a rate, because a rate
 hides how many wrong answers a reviewer actually sees.
