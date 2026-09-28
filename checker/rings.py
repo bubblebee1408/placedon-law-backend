@@ -164,6 +164,20 @@ PACKAGE_RINGS: dict[str, int] = {
     # The MCP surface: read-only tools over the engine, reachable by an agent.
     # Ring 2 for the same reason feeds are -- a Ring 0 decider must never import it.
     "checker.mcp": RING_2,
+    # The HTTP gateway (PLAN_18 §2.1): auth, tenancy, Postgres, audit. Ring 2 for the
+    # identical reason -- an I/O surface over the engine, reachable from outside.
+    #
+    # **Registered because the guard CANNOT catch it otherwise, not because it would fail
+    # without it.** `_leaks_upward` constrains only Ring 0/1 importers, and `ring_of`
+    # returning None is never flagged ("this guard enforces one declared rule, it does not
+    # invent opinions about the rest of the codebase"). So an unregistered `gateway` passes
+    # today AND would keep passing on the day a decider imports it. Registering it is what
+    # brings "no Ring 0 decider may import the gateway" into existence as a rule at all.
+    #
+    # By PACKAGE, not by module: `ring_of("gateway.routes.matters")` then resolves even for
+    # a file nobody remembered to register, which is the hole the checker.feeds package rule
+    # was created to close.
+    "gateway": RING_2,
 }
 
 
@@ -541,6 +555,16 @@ def _test() -> None:
         helper.unlink(missing_ok=True); decider.unlink(missing_ok=True)
     check(not [v for v in violations() if "_rt02_probe" in v],
           "the probe cleans up after itself -- no residue in the registry or on disk")
+
+    # ── the gateway is Ring 2, by package ────────────────────────────────────
+    check(ring_of("gateway") == RING_2, "the gateway package is Ring 2")
+    check(ring_of("gateway.routes.matters") == RING_2,
+          "...and so is a module inside it nobody registered by name")
+    check(ring_of("gateway.audit") == RING_2, "...and gateway.audit")
+    # The reason it had to be registered: an UNREGISTERED package is never flagged, so
+    # without this entry the rule "no Ring 0 decider may import the gateway" would not exist.
+    check(ring_of("no_such_package.thing") is None,
+          "an unregistered module has no ring -- which is why registering gateway matters")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:
