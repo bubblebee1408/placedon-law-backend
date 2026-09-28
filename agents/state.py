@@ -58,8 +58,17 @@ OUT_OF_SCOPE_LAW = "OUT_OF_SCOPE_LAW"    # a body of law we do not hold
 NOT_APPROVED = "NOT_APPROVED"            # a human declined at an approval gate
 CANCELLED = "CANCELLED"                  # a human stopped the run
 CORRECTIONS_EXHAUSTED = "CORRECTIONS_EXHAUSTED"
+# Two refusals the research path produces, and they are not the same refusal. NO_EVIDENCE
+# is the retrieval layer abstaining -- the question cited something unresolvable, or
+# matched nothing admissible, and no model was called. NOTHING_TRACED is a model that
+# answered and whose every sentence failed to trace to the evidence it was given. The
+# first says we did not look the question up; the second says we did, and would not
+# repeat what came back. Collapsing them would hide which.
+NO_EVIDENCE = "NO_EVIDENCE"
+NOTHING_TRACED = "NOTHING_TRACED"
 REFUSAL_CODES = (NO_BUDGET, NO_MODEL, UNKNOWN_INTENT, OUT_OF_SCOPE_LAW,
-                 NOT_APPROVED, CANCELLED, CORRECTIONS_EXHAUSTED)
+                 NOT_APPROVED, CANCELLED, CORRECTIONS_EXHAUSTED,
+                 NO_EVIDENCE, NOTHING_TRACED)
 
 _ISO = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
 

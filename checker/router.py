@@ -238,7 +238,16 @@ _PREFERENCE = {
          "free tier. Narration is the one job where the model choice is least load-bearing: "
          "the context is pre-retrieved and pre-gated, review() drops any sentence carrying "
          "a proposition that is not in the evidence, and an 8B model at temperature 0 would "
-         "do it (PROVIDER_DECISION.md §4)")],
+         "do it (PROVIDER_DECISION.md §4)"),
+        (GEMINI, FLASH_LITE,
+         "free tier, and the one that was actually answering on 28-09-2026 while "
+         "gemini-3.6-flash returned 503 six times running"),
+        (OLLAMA, OPERATOR_NAMED,
+         "the operator's own machine: no key, no quota, no credit. Last because it is "
+         "the slowest and unmeasured, and because it is the row that CANNOT run out -- "
+         "the free tier is 20 requests/day/model (measured 28-09-2026), which is a "
+         "demo's worth, so a system that only had free-tier rows would be down by "
+         "mid-morning")],
 }
 
 # ── candidates: wired, not preferred. route() never reads this table. ─────────
@@ -303,8 +312,19 @@ def estimate_inr(provider: str, model: str, task: Task) -> float:
 
 
 def route(task: Task, *, available: tuple[str, ...],
-          budget_inr: float | None = None) -> Route:
-    """Pick a model, or refuse. Never substitutes silently on a HIGH task."""
+          budget_inr: float | None = None,
+          exclude_models: frozenset[str] = frozenset()) -> Route:
+    """Pick a model, or refuse. Never substitutes silently on a HIGH task.
+
+    `exclude_models` skips models a caller has just found BUSY. A 503 is not the
+    provider being unavailable -- the key works, the quota is fine, that one model is
+    under load -- and dropping the whole provider on one would refuse a question the
+    next row could answer. Measured 28-09-2026: gemini-3.6-flash returned 503 for six
+    consecutive calls while gemini-3.1-flash-lite returned 200 throughout, so this is
+    the ordinary case rather than an edge one. The exclusion is per-call and never
+    persisted: a busy model is busy for a minute, and remembering it would be wrong by
+    the time anyone read the memory.
+    """
     profile = task.profile
     options = _PREFERENCE.get(profile, [])
     if not options:
@@ -314,7 +334,7 @@ def route(task: Task, *, available: tuple[str, ...],
     first = True
     refusals: list[str] = []
     for provider, model, why in options:
-        if provider not in available:
+        if provider not in available or model in exclude_models:
             first = False
             continue
         if provider == OLLAMA:

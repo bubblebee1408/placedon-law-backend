@@ -95,6 +95,18 @@ class ModelRetired(ModelUnavailable):
 class ModelBusy(ModelUnavailable):
     """Capacity, not configuration. The identical call may succeed a minute later."""
 
+
+class ModelRateLimited(ModelUnavailable):
+    """The free tier's quota, which is a fact about the plan rather than about the call.
+
+    Split from ModelBusy because the two want opposite responses. A 503 is this model
+    being loaded, and the next model in the row will very likely answer -- so retry
+    sideways. A 429 is the project's quota for this model, measured at 20 requests per
+    day (backend/budget.FREE_TIER_RPD_PER_MODEL), and retrying sideways spends the next
+    model's 20 as well. Waiting is the only thing that helps, and `retryDelay` in the
+    body says how long.
+    """
+
 _ENDPOINT = ("https://generativelanguage.googleapis.com/v1beta/models/"
              "{model}:generateContent")
 
@@ -187,7 +199,7 @@ def _classify_http(model: str, code: int, body: str) -> ModelUnavailable:
     # 429 is the free tier's TPM limit, and it is a capacity fact rather than a bug --
     # say so, so a caller does not treat it as a broken key.
     if code == 429:
-        return ModelUnavailable(f"rate limited (HTTP 429). {RATE_NOTE} Body: {body}")
+        return ModelRateLimited(f"rate limited (HTTP 429). {RATE_NOTE} Body: {body}")
     if code == 503:
         return ModelBusy(
             f"{model} is busy (HTTP 503). This is capacity, not configuration: the same "
@@ -494,9 +506,14 @@ def _test() -> None:
           "...while the busy one says the pin is fine, so nobody repoints on a blip")
     check(isinstance(retired, ModelUnavailable) and isinstance(busy, ModelUnavailable),
           "both remain ModelUnavailable, so every existing `except` still catches them")
-    check(type(_classify_http(FLASH, 429, "quota")) is ModelUnavailable
-          and "tokens-per-minute" in str(_classify_http(FLASH, 429, "quota")),
-          "429 is still the rate-limit message, carrying RATE_NOTE")
+    _rl = _classify_http(FLASH, 429, "quota")
+    check(isinstance(_rl, ModelRateLimited) and "tokens-per-minute" in str(_rl),
+          "429 is a rate limit, carrying RATE_NOTE")
+    check(not isinstance(_rl, ModelBusy) and not isinstance(busy, ModelRateLimited),
+          "...and it is NOT ModelBusy: a 503 wants a retry sideways to the next model, "
+          "a 429 wants a wait, and retrying sideways spends the next model's quota too")
+    check(isinstance(_rl, ModelUnavailable),
+          "...while still being ModelUnavailable, so existing handlers are unchanged")
     check(type(_classify_http(FLASH, 500, "boom")) is ModelUnavailable,
           "an unclassified status is plain ModelUnavailable, not guessed into a category")
 

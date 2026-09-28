@@ -164,6 +164,51 @@ MINUTES_PER_DAY = 1_440
 MEASURED_TOKENS_PER_ANSWER = _HAIKU_MEASURED_INPUT_TOKENS + _HAIKU_MEASURED_OUTPUT_TOKENS
 DAILY_REQUEST_CAP = (FREE_TIER_TPM * MINUTES_PER_DAY) // MEASURED_TOKENS_PER_ANSWER
 
+# ── measured 28-09-2026, and it corrects the sentence above ──────────────────
+# The daily cap above is derived from a TOKENS-PER-MINUTE figure because
+# PROVIDER_DECISION.md §2 says in terms that the binding free-tier limit is TPM and not
+# requests. That document is right about Groq and **wrong about Gemini**, and it took a
+# live run of the research fixtures to find out: six consecutive questions came back
+# HTTP 429, and Google's own quota object names the limit.
+#
+#     quotaId  GenerateRequestsPerMinutePerProjectPerModel-FreeTier
+#     value    5
+#     retry    45s
+#
+# Five requests per MINUTE, per model, per project. Not tokens, and not per day. The
+# daily cap is still a real bound and still floors in the safe direction, but it could
+# never have prevented what actually happened: 1,167/day permits all five of a minute's
+# budget in the first second, and then a 429 for the rest of it. A daily number cannot
+# express a per-minute limit, which is the same class of mistake PROVIDER_DECISION.md
+# §2 was written to correct -- reading the wrong unit off the provider's page -- caught
+# here by a live call rather than by reading a page at all.
+#
+# Per model, per project, so two models are two budgets: the fallback row in router.py
+# is not only a hedge against one model being retired, it is a second bucket.
+FREE_TIER_RPM = 5
+SECONDS_BETWEEN_FREE_CALLS = 60.0 / FREE_TIER_RPM      # 12.0
+
+# And then the same live run, on a REAL prompt rather than a two-token probe, named a
+# second quota that is worse and that settles the question:
+#
+#     quotaId  GenerateRequestsPerDayPerProjectPerModel-FreeTier
+#     value    20
+#
+# **Twenty requests per day, per model.** DAILY_REQUEST_CAP above derives 1,167 from
+# Groq's 6,000 TPM and calls it a conservative FLOOR, on the argument that if Gemini's
+# tier is larger we merely under-use it. That argument is now measured wrong: the number
+# is 58x too permissive, and a cap that is too permissive is a cap that is not there. It
+# is kept and corrected rather than deleted, because it is still a real bound on a
+# TPM-limited provider and because the reasoning that produced it is the thing worth
+# reading -- a floor taken from the wrong provider is not a floor.
+#
+# It is NOT folded into DAILY_REQUEST_CAP, and that is deliberate: `can_make_call` counts
+# every call in one counter, so capping it at 20 would cap the PAID Anthropic path at 20
+# a day, where the rupee cap allows ~120. A per-provider counter is what this actually
+# needs, and that is a change with its own tests, named here rather than half-done.
+# Until it lands, this is the number a free-tier caller has to respect for itself.
+FREE_TIER_RPD_PER_MODEL = 20
+
 Mode = Literal["normal", "budget", "offline"]
 
 # ── BUD-2: four counters, not two (PLAN_16 §5.2) ─────────────────────────────
@@ -1353,6 +1398,21 @@ if __name__ == "__main__":
           BudgetTracker(Corrupt(), today=date(2026, 8, 8)).credit_exhausted(), False)
     check("  ...and refuses to record, rather than inventing state over an unknown one",
           BudgetTracker(Corrupt(), today=date(2026, 8, 8)).record_credit_exhausted(), False)
+
+    check("the free-tier RPM is the measured one, not the TPM figure's implication",
+          FREE_TIER_RPM, 5)
+    check("the free tier's real daily limit is measured, and it is 20 per model",
+          FREE_TIER_RPD_PER_MODEL, 20)
+    check("  ...which the TPM-derived cap overshoots by more than 50x, in the "
+          "permissive direction -- so it was never the floor it claimed to be",
+          DAILY_REQUEST_CAP > 50 * FREE_TIER_RPD_PER_MODEL, True)
+    check("  ...and it is deliberately NOT folded into DAILY_REQUEST_CAP, which counts "
+          "paid calls in the same counter and would cap them at 20 too",
+          DAILY_REQUEST_CAP != FREE_TIER_RPD_PER_MODEL, True)
+    check("  ...spacing derived from it, not chosen", SECONDS_BETWEEN_FREE_CALLS, 12.0)
+    check("  ...and the daily cap could never have prevented a per-minute burst: it "
+          "permits a whole minute's budget in one second",
+          DAILY_REQUEST_CAP > FREE_TIER_RPM, True)
 
     print(f"\n{total - failures}/{total} passed")
     raise SystemExit(1 if failures else 0)
