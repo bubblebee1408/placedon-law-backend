@@ -47,6 +47,8 @@ from fastapi.responses import Response                       # noqa: E402
 
 from gateway import audit as audit_mod                       # noqa: E402
 from gateway.auth import AuthError, KeyStore, bearer          # noqa: E402
+from gateway.store import (MEMORY, POSTGRES, MemoryBackend,   # noqa: E402
+                           PostgresBackend, database_url)
 
 V1_PREFIX = "/v1"
 HEALTH_PATH = "/v1/health"
@@ -102,9 +104,13 @@ PUBLIC_ROUTES = frozenset({HEALTH_PATH})
 
 
 def create_app(*, deployment: Deployment | None = None, clock=None, handler=None,
-               keys: KeyStore | None = None):
+               keys: KeyStore | None = None, db_url: str | None = None):
     """The FastAPI app. Every dependency injected so the test reaches no network or clock."""
-    dep = deployment or Deployment()
+    # The store is SELECTED, and /v1/health reports what was selected rather than what
+    # was hoped for. `db_url=""` forces memory, which is what the gate uses so a developer
+    # with PLACEDON_DATABASE_URL exported does not silently gate against their database.
+    url = database_url() if db_url is None else (db_url or None)
+    dep = deployment or Deployment(POSTGRES if url else MEMORY)
     now = clock or utc_now
     handle = handler
     if handle is None:
@@ -114,9 +120,21 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
     app.state.deployment = dep
     # The in-memory store, named on app.state so a test can reach it and a future
     # Postgres store can replace it without touching a route.
-    from agents.runtime import MemoryStore
-    app.state.run_store = MemoryStore()
-    app.state.documents = {}
+    app.state.db_url = url
+    # One shared backend in memory, so two requests in a process see each other's rows.
+    # For Postgres a backend is built PER REQUEST, bound to the tenant the key resolved
+    # to, because app.tenant_id is what the row-level security policies compare against.
+    app.state.memory_backend = MemoryBackend()
+
+    def backend_for(tenant_id: str):
+        if app.state.db_url:
+            return PostgresBackend(app.state.db_url, tenant_id=tenant_id)
+        app.state.memory_backend.tenant_id = tenant_id
+        return app.state.memory_backend
+
+    app.state.backend_for = backend_for
+    app.state.run_store = app.state.memory_backend
+    app.state.documents = app.state.memory_backend.documents
     app.state.keys = keys if keys is not None else KeyStore()
     # The audit chain, in memory with the rest of it. Append-only and hash-chained already
     # (gateway/audit.py); what is missing is Postgres, not the chain.
@@ -186,8 +204,7 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
     # ── /v2, generated from the verb table. No route is written by hand here ──
     from gateway.verbs import VERBS, Context, rest_path
 
-    ctx = Context(store=app.state.run_store, documents=app.state.documents,
-                  clock=now)
+
 
     def _mount(verb):
         path = rest_path(verb)
@@ -197,6 +214,9 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
                 principal = _principal(request)
             except AuthError:
                 return _unauthorised()
+            store = app.state.backend_for(principal.tenant_id)
+            ctx = Context(tenant=principal.tenant_id, actor=principal.actor,
+                          store=store, documents=app.state.documents, clock=now)
             args = dict(request.path_params)
             if verb.method == "POST":
                 raw = await request.body()
@@ -306,7 +326,9 @@ def _test() -> None:
     A = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
     keys = KeyStore()
     KEY, PRINCIPAL = keys.mint(tenant_id=T, actor=A, label="gate")
-    app = create_app(deployment=Deployment(MEMORY_STORE), clock=lambda: GEN, keys=keys)
+    # db_url="" forces memory REGARDLESS of the environment, so the gate is the same on a
+    # developer's laptop with PLACEDON_DATABASE_URL exported as it is in a clean checkout.
+    app = create_app(clock=lambda: GEN, keys=keys, db_url="")
     client = TestClient(app, headers={"Authorization": f"Bearer {KEY}"})
     anon = TestClient(app)
 
@@ -350,7 +372,8 @@ def _test() -> None:
           "...naming the migrations that have not been applied")
 
     pg = TestClient(create_app(deployment=Deployment(POSTGRES_STORE), clock=lambda: GEN,
-                               keys=keys), headers={"Authorization": f"Bearer {KEY}"})
+                               keys=keys, db_url=""),
+                    headers={"Authorization": f"Bearer {KEY}"})
     got_pg = json.loads(pg.get(HEALTH_PATH).content)
     check(got_pg["store"]["kind"] == POSTGRES_STORE
           and got_pg["store"]["degraded"] is False,
@@ -468,6 +491,29 @@ def _test() -> None:
     check(len(app.state.audit) == n,
           "an unauthorised call writes NO row: there is no tenant to attribute it to, and "
           "audit.py refuses a row that cannot be joined to one")
+
+    # ── the store is SELECTED, and health reports what was selected ─────────
+    from gateway.store import MEMORY as M_KIND
+    from gateway.store import POSTGRES as P_KIND
+    check(json.loads(client.get(HEALTH_PATH).content)["store"]["kind"] == M_KIND,
+          "with no URL configured, health reports in-memory")
+    forced = create_app(clock=lambda: GEN, keys=keys, db_url="postgresql://h/db")
+    fc = TestClient(forced, headers={"Authorization": f"Bearer {KEY}"})
+    check(json.loads(fc.get(HEALTH_PATH).content)["store"]["kind"] == P_KIND,
+          "with a URL configured, health reports postgres -- derived from the selection, "
+          "not from a flag someone set separately")
+    check(json.loads(fc.get(HEALTH_PATH).content)["store"]["degraded"] is False,
+          "...and stops calling itself degraded")
+    check(forced.state.db_url and app.state.db_url is None,
+          "the app holds the URL it selected on, and the gate's app holds none")
+    b = app.state.backend_for(T)
+    check(b.kind == M_KIND and b is app.state.memory_backend,
+          "in memory, every tenant shares ONE backend object so two requests in a process "
+          "see each other's rows")
+    pb = forced.state.backend_for(T)
+    check(pb.kind == P_KIND and pb.tenant_id == T,
+          "on Postgres a backend is built PER REQUEST, bound to the tenant the key "
+          "resolved to -- app.tenant_id is what the policies compare against")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:

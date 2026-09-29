@@ -33,8 +33,12 @@ id. So this drops `tenant_isolation`, asserts the other tenant's rows become vis
 and restores it. If that middle step does NOT leak, the test FAILS -- because then it was
 never measuring the policy.
 
-Run:  DATABASE_URL=postgres://... PYTHONPATH=. python3 scripts/rls_integration.py --run
+Run:  PLACEDON_DATABASE_URL=postgres://... PYTHONPATH=. python3 scripts/rls_integration.py --run
       PYTHONPATH=. python3 scripts/rls_integration.py            # prints this status
+
+`PLACEDON_DATABASE_URL` is the variable, the same one gateway/store.py selects on: two
+names for one connection is how a script proves isolation on a database the application
+never uses.
 """
 from __future__ import annotations
 
@@ -76,10 +80,37 @@ def _connect(url: str):
     return psycopg.connect(url, autocommit=True)
 
 
+def _seed(cur, tenant, actor, tag: str) -> None:
+    """One row per tenant-scoped table, for this tenant. Enough to be leaked."""
+    import uuid
+    cur.execute("SET app.tenant_id = %s", (str(tenant),))
+    cur.execute("INSERT INTO actors (actor_id, tenant_id, label) VALUES (%s,%s,%s)",
+                (actor, tenant, tag))
+    cur.execute("INSERT INTO api_keys (key_hash, key_id, tenant_id, actor_id, label) "
+                "VALUES (%s,%s,%s,%s,%s)",
+                (uuid.uuid4().hex + uuid.uuid4().hex, tag[:8], tenant, actor, tag))
+    cur.execute("INSERT INTO documents (sha256, tenant_id, name, byte_count) "
+                "VALUES (%s,%s,%s,%s)",
+                (uuid.uuid4().hex + uuid.uuid4().hex, tenant, f"{tag}.txt", 10))
+    cur.execute(
+        "INSERT INTO audit_log (tenant_id, request_id, actor_id, ts, action, route, "
+        "resource, outcome, http_status, prev_digest, digest) VALUES "
+        "(%s,%s,%s,now(),'READ','GET /v1/health','/v1/health','served',200,%s,%s)",
+        (tenant, uuid.uuid4(), actor, "0" * 64, uuid.uuid4().hex + uuid.uuid4().hex))
+    rid = uuid.uuid4()
+    cur.execute("INSERT INTO runs (run_id, tenant_id, actor_id, intent, status) "
+                "VALUES (%s,%s,%s,'review_contract','ANSWERED')", (rid, tenant, actor))
+    cur.execute("INSERT INTO run_steps (run_id, ordinal, tenant_id, capability, status) "
+                "VALUES (%s,0,%s,'intake','ANSWERED')", (rid, tenant))
+    cur.execute("INSERT INTO propositions (proposition_id, run_id, tenant_id, ordinal, "
+                "status) VALUES (%s,%s,%s,0,'VERIFIED')", (uuid.uuid4(), rid, tenant))
+
+
 def run(url: str) -> int:
-    """Apply the migrations and prove the four properties. Returns an exit code."""
+    """Apply the migrations and prove the properties. Returns an exit code."""
+    import uuid
     a, b = uuid.uuid4(), uuid.uuid4()
-    actor = uuid.uuid4()
+    actor_a, actor_b = uuid.uuid4(), uuid.uuid4()
     failures: list[str] = []
 
     def note(ok: bool, label: str) -> None:
@@ -89,56 +120,31 @@ def run(url: str) -> int:
 
     with _connect(url) as conn:
         cur = conn.cursor()
+        cur.execute("SELECT version()")
+        version = cur.fetchone()[0]
+        print(f"  server: {version.split(' on ')[0]}\n")
+
         for f in ("001_core.sql", "002_runs.sql"):
             cur.execute(sql(f))
             print(f"  applied {f}")
+        print()
 
         for t in (a, b):
-            cur.execute("INSERT INTO tenants (tenant_id, name) VALUES (%s, %s) "
+            cur.execute("INSERT INTO tenants (tenant_id, name) VALUES (%s,%s) "
                         "ON CONFLICT DO NOTHING", (t, f"t-{t}"))
+        _seed(cur, a, actor_a, "alpha")
+        _seed(cur, b, actor_b, "bravo")
+
+        # ── (a) isolation, on EVERY tenant-scoped table, as the table OWNER ──
         cur.execute("SET app.tenant_id = %s", (str(a),))
-        cur.execute("INSERT INTO actors (actor_id, tenant_id, label) VALUES (%s,%s,'a')",
-                    (actor, a))
-        cur.execute("SET app.tenant_id = %s", (str(b),))
-        cur.execute("INSERT INTO actors (actor_id, tenant_id, label) VALUES (%s,%s,'b')",
-                    (uuid.uuid4(), b))
+        for tbl in TENANT_TABLES:
+            cur.execute(f"SELECT count(*) FROM {tbl} WHERE tenant_id = %s", (b,))
+            other = cur.fetchone()[0]
+            cur.execute(f"SELECT count(*) FROM {tbl}")
+            mine = cur.fetchone()[0]
+            note(other == 0 and mine >= 1,
+                 f"{tbl}: tenant A sees {mine} of its own rows and {other} of tenant B's")
 
-        # 1 + 2: as the OWNER, which is what FORCE is for.
-        cur.execute("SET app.tenant_id = %s", (str(a),))
-        cur.execute("SELECT count(*) FROM actors WHERE tenant_id = %s", (b,))
-        note(cur.fetchone()[0] == 0,
-             "tenant A sees none of tenant B's actors, connected as the table owner")
-        cur.execute("SELECT count(*) FROM actors")
-        note(cur.fetchone()[0] == 1, "...and sees exactly its own")
-
-        # 3: the test must be able to fail.
-        cur.execute("DROP POLICY tenant_isolation ON actors")
-        cur.execute("SELECT count(*) FROM actors WHERE tenant_id = %s", (b,))
-        leaked = cur.fetchone()[0]
-        note(leaked > 0,
-             "with the policy DROPPED the other tenant's rows become visible -- so the "
-             "check above was measuring the policy and not an empty table")
-        cur.execute("CREATE POLICY tenant_isolation ON actors USING "
-                    "(tenant_id = current_setting('app.tenant_id', true)::uuid)")
-        cur.execute("SELECT count(*) FROM actors WHERE tenant_id = %s", (b,))
-        note(cur.fetchone()[0] == 0, "...and restoring it closes the leak again")
-
-        # 4: append-only.
-        cur.execute(
-            "INSERT INTO audit_log (tenant_id, request_id, actor_id, ts, action, route, "
-            "resource, outcome, http_status, prev_digest, digest) VALUES "
-            "(%s,%s,%s,now(),'READ','GET /v1/health','/v1/health','served',200,%s,%s)",
-            (a, uuid.uuid4(), actor, "0" * 64, uuid.uuid4().hex + uuid.uuid4().hex[:0]
-             + "0" * (64 - 32)))
-        for op in ("UPDATE audit_log SET outcome = 'tampered'",
-                   "DELETE FROM audit_log"):
-            try:
-                cur.execute(op)
-                note(False, f"audit_log refuses: {op.split()[0]}")
-            except Exception:                                   # noqa: BLE001
-                note(True, f"audit_log refuses {op.split()[0]} even as the owner")
-
-        # every tenant table actually has FORCE set, read from the catalogue
         cur.execute("SELECT relname FROM pg_class WHERE relname = ANY(%s) "
                     "AND relforcerowsecurity", (list(TENANT_TABLES),))
         forced = {r[0] for r in cur.fetchall()}
@@ -146,11 +152,45 @@ def run(url: str) -> int:
              f"pg_class says FORCE is set on every tenant table "
              f"(missing {sorted(set(TENANT_TABLES) - forced)})")
 
+        # ── (b) the test must be able to FAIL ────────────────────────────────
+        print()
+        leaked_anywhere = False
+        for tbl in TENANT_TABLES:
+            cur.execute(f"DROP POLICY tenant_isolation ON {tbl}")
+            cur.execute(f"SELECT count(*) FROM {tbl} WHERE tenant_id = %s", (b,))
+            leaked = cur.fetchone()[0]
+            leaked_anywhere = leaked_anywhere or leaked > 0
+            note(leaked > 0,
+                 f"{tbl}: with the policy DROPPED, tenant B's rows appear ({leaked}) -- "
+                 f"so the check above was measuring the policy, not an empty table")
+            cur.execute(f"CREATE POLICY tenant_isolation ON {tbl} USING "
+                        f"(tenant_id = current_setting('app.tenant_id', true)::uuid)")
+            cur.execute(f"SELECT count(*) FROM {tbl} WHERE tenant_id = %s", (b,))
+            note(cur.fetchone()[0] == 0, f"{tbl}: restoring the policy closes it again")
+
+        # ── append-only ─────────────────────────────────────────────────────
+        print()
+        for op in ("UPDATE audit_log SET outcome = 'tampered'", "DELETE FROM audit_log"):
+            try:
+                cur.execute(op)
+                note(False, f"audit_log refuses {op.split()[0]}")
+            except Exception:                                   # noqa: BLE001
+                note(True, f"audit_log refuses {op.split()[0]} even as the owner")
+
+        # ── the SAME store contract the gate runs against the dict ───────────
+        print()
+        from gateway.store import PostgresBackend, conformance
+        for ok_, label in conformance(PostgresBackend(url, tenant_id=str(a),
+                                                      actor_id=str(actor_a))):
+            note(ok_, f"[postgres] {label}")
+
     print()
     if failures:
         print(f"{len(failures)} FAILED — tenant isolation is NOT proved on this server.")
+        print("Do not edit this script to make it pass. Report it.")
         return 1
-    print("all properties proved. Set LAST_RUN in this file to the date and the server.")
+    print(f"all properties proved on {version.split(' on ')[0]}.")
+    print("Set LAST_RUN in this file to the date and the server.")
     return 0
 
 
@@ -158,12 +198,17 @@ def main(argv: list[str]) -> int:
     print("scripts/rls_integration.py")
     print(f"  {status()}\n")
     if "--run" not in argv:
-        print("  (pass --run with DATABASE_URL set to prove it against a real server)")
+        print("  (pass --run with PLACEDON_DATABASE_URL set to prove it against a real server)")
         return 0
-    url = os.getenv("DATABASE_URL")
+    # The SAME variable gateway/store.py selects on, read through checker.env so .env is
+    # honoured. Two names for one connection is how a script proves isolation on a
+    # database the application never uses.
+    from gateway.store import URL_ENV, database_url
+    url = database_url() or os.getenv("DATABASE_URL")
     if not url:
-        print("  DATABASE_URL is not set. Refusing to invent one: a connection string "
-              "guessed here would either fail confusingly or hit the wrong database.")
+        print(f"  {URL_ENV} is not set (nor DATABASE_URL). Refusing to invent one: a "
+              f"connection string guessed here would either fail confusingly or hit the "
+              f"wrong database.")
         return 2
     return run(url)
 
