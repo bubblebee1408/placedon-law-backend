@@ -96,9 +96,14 @@ KNOWN_TOOLS: frozenset[str] = frozenset({
     # name above: mcp_tools() refuses to generate a tool for a write verb, so this set
     # stays equal to READ_ONLY_TOOLS by construction rather than by remembering.
     "themis.review_contract",
+    "themis.review_document",
     "themis.runs.get",
     "themis.runs.trace",
 })
+# NOT here, and the absence is the decision: `themis.runs.approve` and `themis.runs.reject`
+# do not exist. They write a human decision, and mcp_tools() refuses to generate a tool for
+# a write verb -- so a tool surface cannot approve a finding, which is to say it cannot
+# clear a review with no person present (PLAN_23 §1.8, O1).
 
 # Every known tool is read-only. The list exists so that making a tool writable is a
 # deliberate edit here, seen in review, rather than a side effect of registering it

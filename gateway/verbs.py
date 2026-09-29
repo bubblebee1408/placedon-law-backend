@@ -326,6 +326,127 @@ def _runs_trace(args: dict, ctx: Context) -> dict:
     return {"run_id": row.get("id"), "steps": row.get("steps", [])}
 
 
+def _review_document(args: dict, ctx: Context) -> dict:
+    """SS-1/SS-2 checks over a filing. No model is called, so nothing leaves the process.
+
+    PLAN_23 O1. The classification happens FIRST and in code -- there is no `doc_type` input,
+    because a caller who could declare "this is minutes" could turn every minutes check on a
+    notice back on, which is the false-positive source the classifier was added to remove.
+    """
+    from agents import review_document as rd
+    try:
+        out = rd.review(
+            args.get("text") or "",
+            meeting_kind=args.get("meeting_kind") or "board",
+            meeting_date=args.get("meeting_date"),
+            entry_date=args.get("entry_date"),
+        )
+    except rd.BadRequest as e:
+        return _refuse("BAD_REQUEST", str(e))
+
+    d = out.to_dict()
+    # An unclassified document is ANSWERED as a RUN -- the work was done and nothing failed
+    # -- while its own status says the document was not identified. Recording the run as
+    # REFUSED would say we declined to look, and recording it as a clean result would say
+    # we looked and found nothing wrong. Neither happened.
+    props = [{"status": "UNVERIFIED" if i["status"] in (rd.NEEDS_BOOK, rd.NOT_APPLICABLE)
+                        else "VERIFIED",
+              "source_ref": f"ss:{i['rule_id']}",
+              "span_start": None, "span_end": None}
+             for i in d["findings"]]
+    steps = [
+        {"capability": "intake", "status": "ANSWERED", "degraded": False},
+        {"capability": "document", "engine_capability": "document.ground_extraction",
+         "status": "ANSWERED" if out.status == rd.ANSWERED else "REFUSED",
+         "degraded": False,
+         # Named rather than left blank: UNPRICED with no reason is indistinguishable from
+         # a cost nobody recorded, and this one has a good reason -- there was no model.
+         "cost_note": "no model is called by this intent; the checks are code"},
+        {"capability": "verify", "status": "ANSWERED", "degraded": False,
+         "cost_note": "no model is called by this intent; the checks are code"},
+    ]
+    d["run_id"] = _persist_run(ctx, intent="review_document", status="ANSWERED",
+                               steps=steps, propositions=props)
+    return d
+
+
+# The human gate. `runs.approve` and `runs.reject` are the only WRITING verbs besides
+# documents.upload, and they are excluded from MCP by `mcp_tools` for exactly that reason --
+# a tool surface that can approve a finding is a tool surface that can clear a review.
+MIN_REASON_CHARS = 10
+
+
+def _decide(args: dict, ctx: Context, *, decision: str) -> dict:
+    """One human decision on one item, stored as labelled data (PLAN_23 rule 5).
+
+    Refuses more than it accepts, on purpose. Every refusal here is a way the label could
+    have been recorded meaninglessly, and a meaningless label is worse than none: it is
+    counted later as evidence a person agreed.
+    """
+    import uuid
+
+    run_id = (args.get("run_id") or "").strip()
+    item_ref = (args.get("item_ref") or "").strip()
+    reason = (args.get("reason") or "").strip()
+    quoted_span = (args.get("quoted_span") or "").strip()
+
+    if not run_id:
+        return _refuse("BAD_REQUEST", "run_id is required")
+    if not item_ref:
+        return _refuse("BAD_REQUEST",
+                       "item_ref is required: a decision about a run is not a decision, "
+                       "because a run has many findings and a reviewer judged one of them")
+    if len(reason) < MIN_REASON_CHARS:
+        return _refuse(
+            "REASON_REQUIRED",
+            f"a written reason of at least {MIN_REASON_CHARS} characters is required to "
+            f"{decision.lower()} an item. A decision with no reason records that somebody "
+            f"clicked, which is the automation bias this gate exists to prevent -- and it "
+            f"is a label that teaches a later evaluation nothing.")
+    if not quoted_span:
+        return _refuse(
+            "QUOTE_REQUIRED",
+            "quoted_span is required: it is the text the reviewer was looking at when they "
+            "decided. Without it the label is attached to nothing a person can be shown to "
+            "have read.")
+    if ctx.store is None:
+        return _refuse("NO_STORE",
+                       "there is no store configured, so this decision could not be kept. "
+                       "A human decision that is not stored is one that was not made.")
+
+    run = ctx.store.read_run(run_id)
+    if run is None:
+        return _refuse("NOT_FOUND", f"no run {run_id!r}")
+
+    # The item must exist IN THAT RUN. Without this a reviewer could label an item that
+    # was never served, and the label would be about nothing.
+    refs = {p.get("source_ref") for p in run.get("propositions", [])}
+    if item_ref not in refs:
+        return _refuse("NOT_FOUND",
+                       f"run {run_id} has no item {item_ref!r}. It served "
+                       f"{len(refs)} item(s); a decision on one it did not serve would be "
+                       f"a label about nothing.")
+
+    from gateway.store import DecisionExists
+    row = {"decision_id": str(uuid.uuid4()), "run_id": run_id, "item_ref": item_ref,
+           "decision": decision, "reason": reason, "quoted_span": quoted_span,
+           "actor_id": ctx.actor,
+           "decided_at": ctx.clock() if ctx.clock else None}
+    try:
+        stored = ctx.store.write_decision(row)
+    except DecisionExists as e:
+        return _refuse("ALREADY_DECIDED", str(e))
+    return {"status": "RECORDED", **stored}
+
+
+def _runs_approve(args: dict, ctx: Context) -> dict:
+    return _decide(args, ctx, decision="APPROVED")
+
+
+def _runs_reject(args: dict, ctx: Context) -> dict:
+    return _decide(args, ctx, decision="REJECTED")
+
+
 def _documents_upload(args: dict, ctx: Context) -> dict:
     """Store bytes under their own sha256. The identity IS the hash, not a counter."""
     import hashlib
@@ -372,6 +493,48 @@ VERBS: tuple[Verb, ...] = (
     Verb("runs.trace", "Every step of one run, in order, as persisted.",
          (Field("run_id", STRING, True, in_path=True, describes="the run identifier"),),
          "GET", read_only=True, run=_runs_trace),
+
+    Verb("review_document",
+         "A corporate filing against the SS-1/SS-2 checks. The document type is classified "
+         "first, in code, and a check that does not apply to that type makes no claim. No "
+         "model is called.",
+         (Field("text", STRING, True, describes="the document text"),
+          Field("name", STRING, False, describes="a label for the document"),
+          Field("meeting_kind", STRING, False,
+                describes="board or general. Recorded on the run; no check branches on it "
+                          "today"),
+          Field("meeting_date", STRING, False,
+                describes="YYYY-MM-DD. Absent leaves the 30-day entry check unverifiable "
+                          "rather than passed"),
+          Field("entry_date", STRING, False,
+                describes="YYYY-MM-DD, the date the minutes were entered in the book")),
+         "POST", read_only=True, run=_review_document),
+
+    Verb("runs.approve",
+         "Accept one finding of a run, with a written reason. Stored as labelled data.",
+         (Field("run_id", STRING, True, in_path=True, describes="the run identifier"),
+          Field("item_ref", STRING, True,
+                describes="which finding, as the run served it: 'ss:T1.2', "
+                          "'playbook:NDA-08'"),
+          Field("reason", STRING, True,
+                describes="why, in the reviewer's own words. At least 10 characters: a "
+                          "decision with no reason is not a label"),
+          Field("quoted_span", STRING, True,
+                describes="the text the reviewer was looking at when they decided")),
+         "POST", read_only=False, run=_runs_approve),
+
+    Verb("runs.reject",
+         "Reject one finding of a run, with a written reason. Stored as labelled data.",
+         (Field("run_id", STRING, True, in_path=True, describes="the run identifier"),
+          Field("item_ref", STRING, True,
+                describes="which finding, as the run served it: 'ss:T1.2', "
+                          "'playbook:NDA-08'"),
+          Field("reason", STRING, True,
+                describes="why, in the reviewer's own words. At least 10 characters: a "
+                          "decision with no reason is not a label"),
+          Field("quoted_span", STRING, True,
+                describes="the text the reviewer was looking at when they decided")),
+         "POST", read_only=False, run=_runs_reject),
 
     Verb("documents.upload",
          "Store a document and return the sha256 that identifies it.",
@@ -450,9 +613,13 @@ def _test() -> None:
     rest, cli, mcp = rest_spec(), cli_spec(), mcp_tools()
     names = {v.name for v in VERBS}
 
-    check(names == {"ask", "review_contract", "runs.get", "runs.trace",
-                    "documents.upload"},
-          f"the five verbs are declared once ({sorted(names)})")
+    check(names == {"ask", "review_contract", "review_document", "runs.get", "runs.trace",
+                    "runs.approve", "runs.reject", "documents.upload"},
+          f"the eight verbs are declared once ({sorted(names)})")
+    # The two that WRITE a human decision. Named here rather than counted, so adding a
+    # third write verb is a deliberate edit to this line and not a number going up.
+    check(set(write_verbs()) == {"documents.upload", "runs.approve", "runs.reject"},
+          f"...and exactly three of them write ({sorted(write_verbs())})")
 
     # ── PARITY, the point of the file ───────────────────────────────────────
     check(set(rest) == names and set(cli) == names,
@@ -514,7 +681,7 @@ def _test() -> None:
           "...while a WRITE verb is kept out of MCP by mcp_tools(), not by the author "
           "remembering to")
     check("widgets.delete" in write_verbs(hypo), "...and is named in write_verbs()")
-    check(len(VERBS) == 5 and "widgets.count" not in rest_spec(),
+    check(len(VERBS) == 8 and "widgets.count" not in rest_spec(),
           "...and the probe changed nothing in this module: the surfaces are generated "
           "from an argument, not from a global the test rebound")
 
@@ -570,6 +737,92 @@ def _test() -> None:
           "...and the reply says the store is memory and what that costs")
     check(_documents_upload({"text": ""}, d)["code"] == "BAD_REQUEST",
           "an empty upload is refused rather than stored as a document of nothing")
+
+    # ── review_document: classify first, and a notice is not minutes ────────
+    from gateway.store import MemoryBackend as _MB
+    from checker.ss import defects as _ss
+    _NOTICE = ("NOTICE OF THE 14th ANNUAL GENERAL MEETING\n\nNotice is hereby given that "
+               "the meeting will be held on 30 September 2026. An explanatory statement is "
+               "annexed and a proxy form is enclosed. E-voting will be available.\n")
+    rd_ctx = Context(store=_MB())
+    rdoc = _review_document({"text": _ss.CLEAN, "meeting_date": "2026-04-01",
+                             "entry_date": "2026-04-20"}, rd_ctx)
+    check(rdoc["doc_type"] == "minutes" and rdoc["status"] == "ANSWERED",
+          f"review_document classifies the specimen as minutes ({rdoc['doc_type']})")
+    check(rdoc.get("run_id"), "...and returns the id of the run it wrote")
+    check(all(f["rule_id"] and f["source"] and f["quoted_span"] for f in rdoc["findings"]),
+          "...every finding carrying a rule id, a source and a quoted span (PLAN_23 O1)")
+    check(any(f["needs_human"] for f in rdoc["findings"]),
+          "...and the physical-book items are flagged for a person, not guessed at")
+
+    notice = _review_document({"text": _NOTICE}, Context(store=_MB()))
+    minutes_only = {c for c, a in _ss.APPLICABILITY.items() if a == frozenset({"minutes"})}
+    fired = [f["rule_id"] for f in notice["findings"]
+             if f["rule_id"] in minutes_only and f["status"] == "DEFECT"]
+    check(notice["doc_type"] == "notice" and not fired,
+          f"NO minutes check reports a defect on a notice {fired} -- the failure mode that "
+          f"produced 80-93% false positives against compliant filings")
+
+    unknown = _review_document({"text": "Dear Sir, please find the cheque enclosed. "
+                                        "Kindly acknowledge receipt."}, Context(store=_MB()))
+    check(unknown["status"] == "UNCLASSIFIED" and unknown["code"] == "CLASSIFICATION_UNCERTAIN",
+          f"an unidentifiable document is classification UNCERTAINTY ({unknown['status']})")
+    check(unknown["findings"] == [] and unknown["requires_review"],
+          "...with no findings at all, and still requiring review: 0 defects about a "
+          "document nobody identified must not read as a clean bill")
+    check(_review_document({"text": " "}, Context())["code"] == "BAD_REQUEST",
+          "review_document without text is refused")
+    check(_review_document({"text": _ss.CLEAN, "meeting_date": "1 April 2026"},
+                           Context())["code"] == "BAD_REQUEST",
+          "...and an unreadable date is refused rather than silently treated as absent")
+
+    # ── the human gate: runs.approve / runs.reject ──────────────────────────
+    dstore = _MB()
+    dctx = Context(store=dstore, actor="00000000-0000-0000-0000-0000000000a1")
+    drun = _review_document({"text": _ss.CLEAN}, dctx)
+    rid, item = drun["run_id"], "ss:T1.2"
+    good = {"run_id": rid, "item_ref": item,
+            "reason": "Inspected the book; the Chairman initialled every page.",
+            "quoted_span": "physical minutes book not inspected"}
+
+    check(_runs_approve({**good, "reason": "ok"}, dctx)["code"] == "REASON_REQUIRED",
+          "a one-word reason is REFUSED: a decision with no reason records that somebody "
+          "clicked, which is the automation bias the gate exists to prevent")
+    check(_runs_approve({**good, "quoted_span": ""}, dctx)["code"] == "QUOTE_REQUIRED",
+          "...and a decision with no quoted span is refused: the label would be attached "
+          "to nothing a person can be shown to have read")
+    check(_runs_approve({**good, "item_ref": "ss:T9.9"}, dctx)["code"] == "NOT_FOUND",
+          "...and an item the run never served is refused: it would be a label about nothing")
+    check(_runs_approve({**good, "run_id": "no-such-run"}, dctx)["code"] == "NOT_FOUND",
+          "...and so is an unknown run")
+    check(_runs_approve(good, Context(actor="a"))["code"] == "NO_STORE",
+          "...and with no store the decision is REFUSED, not accepted and dropped: a human "
+          "decision that is not stored is one that was not made")
+
+    rec = _runs_approve(good, dctx)
+    check(rec["status"] == "RECORDED" and rec["decision"] == "APPROVED",
+          f"a reasoned approval is recorded ({rec.get('status')})")
+    check(rec["actor_id"] == "00000000-0000-0000-0000-0000000000a1" and rec["decided_at"],
+          "...with the actor who made it and the time they made it")
+    check(rec["reason"] == good["reason"] and rec["quoted_span"] == good["quoted_span"],
+          "...and the reason and the span they were shown, verbatim: that IS the label")
+    again = _runs_approve({**good, "reason": "Actually I changed my mind about this."}, dctx)
+    check(again["code"] == "ALREADY_DECIDED",
+          "...and a second decision on the same item is refused rather than overwriting the "
+          "label that is the point of storing it")
+    rej = _runs_reject({**good, "item_ref": "ss:T1.3",
+                        "reason": "Blank pages were not scored out; the book shows three."},
+                       dctx)
+    check(rej["decision"] == "REJECTED" and len(dstore.read_decisions(rid)) == 2,
+          "...while a rejection on a different item is a separate label")
+
+    # NOT MCP. A tool surface that can approve a finding is one that can clear a review.
+    mcp_names = {t.name for t in mcp_tools()}
+    check(not {n for n in mcp_names if "approve" in n or "reject" in n},
+          f"runs.approve and runs.reject are NOT exposed over MCP {sorted(mcp_names)}")
+    check("runs.approve" in rest_spec() and "runs-approve" in
+          {c["command"] for c in cli_spec().values()},
+          "...while REST and the CLI both carry them, which is where a person acts")
 
     # ── a verb that answers leaves a TRACE, which is what runs.trace serves ──
     from gateway.store import MemoryBackend

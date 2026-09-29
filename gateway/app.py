@@ -448,8 +448,11 @@ def _test() -> None:
     check(all(not str(p).startswith("/v1") for p in mounted.values()),
           "no generated route lands under /v1, so the byte-identical surface cannot be "
           "shadowed by a verb")
-    check(write_verbs() == ("documents.upload",),
-          f"one write verb today, and it is named ({write_verbs()})")
+    # Named, not counted. The two human-gate verbs WRITE -- that is why `mcp_tools` keeps
+    # them off the tool surface, and a tool that can approve a finding is a tool that can
+    # clear a review without a person present.
+    check(set(write_verbs()) == {"documents.upload", "runs.approve", "runs.reject"},
+          f"three write verbs today, and each is named ({sorted(write_verbs())})")
 
     # ── auth: a key is required everywhere except liveness ──────────────────
     check(anon.get(HEALTH_PATH).status_code == 200,

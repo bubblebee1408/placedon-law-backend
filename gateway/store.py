@@ -55,6 +55,8 @@ class Backend(Protocol):
     def read_run(self, run_id: str) -> dict | None: ...
     def put_document(self, *, sha256: str, name: str, byte_count: int) -> dict: ...
     def get_document(self, sha256: str) -> dict | None: ...
+    def write_decision(self, decision: dict) -> dict: ...
+    def read_decisions(self, run_id: str) -> list[dict]: ...
 
 
 # ── in memory ────────────────────────────────────────────────────────────────
@@ -66,6 +68,18 @@ class Backend(Protocol):
 STEP_KEYS = ("capability", "engine_capability", "status", "model", "degraded",
              "provider", "region", "cost_inr", "cost_note")
 PROPOSITION_KEYS = ("status", "source_ref", "span_start", "span_end")
+# A human decision, as labelled data (PLAN_23 rule 5, migration 005). `quoted_span` is what
+# the reviewer was SHOWN, attested by the surface that showed it -- not re-derived here.
+DECISION_KEYS = ("decision_id", "run_id", "item_ref", "decision", "reason", "quoted_span",
+                 "actor_id", "decided_at")
+
+# Also in gateway/verbs.py and as a CHECK in 005_decisions.sql. "ok" is not a reason, and a
+# label whose text is "ok" teaches a later evaluation nothing.
+MIN_REASON_CHARS = 10
+
+
+class DecisionExists(StoreError):
+    """One decision per item per run. A second one would overwrite the label."""
 
 
 NO_CALL_NOTE = ("no model was called on this step, so there is nothing to price. This is "
@@ -98,6 +112,7 @@ class MemoryBackend:
     steps: dict = field(default_factory=dict)
     props: dict = field(default_factory=dict)
     documents: dict = field(default_factory=dict)
+    decisions: dict = field(default_factory=dict)      # run_id -> [row]
 
     def write_run(self, run: dict) -> None:
         rid = run["id"]
@@ -124,6 +139,28 @@ class MemoryBackend:
     def get_document(self, sha256: str) -> dict | None:
         row = self.documents.get(sha256)
         return dict(row) if row else None
+
+    def write_decision(self, decision: dict) -> dict:
+        rid = decision["run_id"]
+        existing = self.decisions.setdefault(rid, [])
+        # The UNIQUE (run_id, item_ref) of 005, enforced here too so the two backends
+        # refuse the same second decision rather than one of them silently keeping both.
+        if any(d["item_ref"] == decision["item_ref"] for d in existing):
+            raise DecisionExists(
+                f"{decision['item_ref']} on run {rid} already has a decision. A reviewer "
+                f"changing their mind writes a new one against a new run; overwriting "
+                f"would destroy the label, which is the point of storing it.")
+        row = _shaped(decision, DECISION_KEYS)
+        if not row.get("decided_at"):
+            # Postgres defaults this column; without the same default here one backend
+            # returns a timestamp and the other returns None for an identical write.
+            from datetime import datetime, timezone
+            row["decided_at"] = datetime.now(timezone.utc).isoformat()
+        existing.append(row)
+        return dict(row)
+
+    def read_decisions(self, run_id: str) -> list[dict]:
+        return [dict(d) for d in self.decisions.get(run_id, [])]
 
     # The shape agents/runtime.Store expects, so a run can be executed straight onto it.
     def read(self, run_id: str) -> dict | None:
@@ -239,6 +276,42 @@ class PostgresBackend:
                           "WHERE sha256 = %s", (sha256,)).fetchone()
         return None if r is None else {"sha256": r[0], "name": r[1],
                                         "byte_count": r[2], "tenant_id": str(r[3])}
+
+    def write_decision(self, decision: dict) -> dict:
+        import psycopg
+        with self._conn() as c:
+            try:
+                r = c.execute(
+                    "INSERT INTO decisions (decision_id, run_id, tenant_id, item_ref, "
+                    "decision, reason, quoted_span, actor_id, decided_at) "
+                    "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,COALESCE(%s::timestamptz, now())) "
+                    "RETURNING decision_id, run_id, item_ref, decision, reason, "
+                    "quoted_span, actor_id, decided_at",
+                    (decision["decision_id"], decision["run_id"], self.tenant_id,
+                     decision["item_ref"], decision["decision"], decision["reason"],
+                     decision["quoted_span"], decision["actor_id"],
+                     decision.get("decided_at"))).fetchone()
+            except psycopg.errors.UniqueViolation:
+                raise DecisionExists(
+                    f"{decision['item_ref']} on run {decision['run_id']} already has a "
+                    f"decision. A reviewer changing their mind writes a new one against a "
+                    f"new run; overwriting would destroy the label, which is the point of "
+                    f"storing it.") from None
+        return {"decision_id": str(r[0]), "run_id": str(r[1]), "item_ref": r[2],
+                "decision": r[3], "reason": r[4], "quoted_span": r[5],
+                "actor_id": str(r[6]), "decided_at": r[7].isoformat()}
+
+    def read_decisions(self, run_id: str) -> list[dict]:
+        if not _UUID.match(run_id or ""):
+            return []
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT decision_id, run_id, item_ref, decision, reason, quoted_span, "
+                "actor_id, decided_at FROM decisions WHERE run_id = %s "
+                "ORDER BY decided_at, item_ref", (run_id,)).fetchall()
+        return [{"decision_id": str(r[0]), "run_id": str(r[1]), "item_ref": r[2],
+                 "decision": r[3], "reason": r[4], "quoted_span": r[5],
+                 "actor_id": str(r[6]), "decided_at": r[7].isoformat()} for r in rows]
 
     def read(self, run_id: str) -> dict | None:
         return self.read_run(run_id)
@@ -401,6 +474,46 @@ def conformance(backend) -> list[tuple[bool, str]]:
     ck(backend.get_document(sha) is not None,
        "storing the same bytes twice is not an error: the id IS the hash, so it is one "
        "document")
+
+    # ── the human gate, stored as labelled data (PLAN_23 rule 5) ────────────
+    ck(backend.read_decisions(run["id"]) == [],
+       "a run with no human decision reads as an empty list, not as a missing key")
+    dec = {"decision_id": str(_uuid.uuid4()), "run_id": run["id"],
+           "item_ref": "playbook:NDA-08", "decision": "REJECTED",
+           "reason": "The non-compete is one-way and we do not accept those.",
+           "quoted_span": "The Receiving Party shall not compete for two years.",
+           "actor_id": "00000000-0000-0000-0000-0000000000a1",
+           "decided_at": "2026-09-30T10:00:00+00:00"}
+    wrote = backend.write_decision(dict(dec))
+    ck(set(wrote) == set(DECISION_KEYS),
+       f"a decision reads back with every key both backends promise ({sorted(wrote)})")
+    got = backend.read_decisions(run["id"])
+    ck(len(got) == 1 and got[0]["reason"] == dec["reason"],
+       "...and the reason is stored verbatim: it IS the label")
+    ck(got[0]["quoted_span"] == dec["quoted_span"],
+       "...with the span the reviewer was shown, so the label is attached to text a person "
+       "actually read")
+    ck(got[0]["decided_at"],
+       "...and a time, defaulted by the store when the caller gives none")
+
+    # One per item, on BOTH backends. Without this the dict keeps two labels for one item
+    # and Postgres keeps one, and the disagreement surfaces as a lost review months later.
+    try:
+        backend.write_decision(dict(dec, decision_id=str(_uuid.uuid4()),
+                                    decision="APPROVED", reason="Changed my mind about it."))
+        ck(False, "a second decision on the same item is refused")
+    except DecisionExists:
+        ck(True, "a second decision on the SAME item is refused -- overwriting would "
+                 "destroy the label, which is the point of storing it")
+    ck(len(backend.read_decisions(run["id"])) == 1,
+       "...and nothing was written by the attempt")
+
+    # A different item on the same run is a different label.
+    backend.write_decision(dict(dec, decision_id=str(_uuid.uuid4()),
+                                item_ref="ss:T1.2", decision="APPROVED",
+                                reason="Inspected the book; every page is initialled."))
+    ck(len(backend.read_decisions(run["id"])) == 2,
+       "...while a different item on the same run is a separate decision")
     return out
 
 
@@ -452,7 +565,8 @@ def _test() -> None:
           "operator told 'fine' while nothing persists is the worst of both")
 
     # ── both backends really do offer the same names ────────────────────────
-    need = ("write_run", "read_run", "put_document", "get_document", "read", "write")
+    need = ("write_run", "read_run", "put_document", "get_document", "read", "write",
+            "write_decision", "read_decisions")
     for name in need:
         check(hasattr(MemoryBackend(), name)
               and hasattr(PostgresBackend("postgresql://x/y", tenant_id=T), name),

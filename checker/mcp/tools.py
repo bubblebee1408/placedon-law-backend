@@ -472,8 +472,10 @@ def _test() -> None:
           f"(only in one: {names ^ set(KNOWN_TOOLS) or 'none'})")
     check(len(_HAND_WRITTEN) == 13,
           f"thirteen hand-written tools ({len(_HAND_WRITTEN)})")
-    check(len(TOOLS) == 16,
-          f"sixteen in all: three generated from gateway/verbs.py on 29-09-2026 "
+    check(len(TOOLS) == 17,
+          f"seventeen in all: four generated from gateway/verbs.py, the fourth being "
+          f"review_document on 30-09-2026 (PLAN_23 O1); runs.approve and runs.reject write "
+          f"and are therefore not among them "
           f"(got {len(TOOLS)})")
     check(all(t.description.strip() and t.schema.get("type") == "object" for t in TOOLS),
           "every tool has a description and an object schema")

@@ -68,12 +68,16 @@ MIGRATIONS = ROOT / "gateway" / "migrations"
 
 # Set this to an ISO date and a server description the day it is actually run.
 LAST_RUN: str | None = (
-    "2026-09-29 — PostgreSQL 18.6 (Postgres.app), local socket, database placedon_dev, "
-    "asserted as role placedon_app (NOSUPERUSER, NOBYPASSRLS). 54 checks, 0 "
-    "failures, migrations 001-003 applied.")
+    "2026-09-30 — PostgreSQL 18.6 (Postgres.app), local socket, database placedon_dev, "
+    "asserted as role placedon_app (NOSUPERUSER, NOBYPASSRLS). 71 checks, 0 failures, "
+    "migrations 001-005 applied. `decisions` is the eighth tenant-scoped table and was "
+    "proved the same way as the other seven: tenant A sees its own row and none of B's; "
+    "with the policy dropped it fails CLOSED and A sees nothing, not even its own; with "
+    "RLS disabled B's row APPEARS, which is what shows the check measures the protection "
+    "rather than an empty table.")
 
 TENANT_TABLES = ("actors", "api_keys", "documents", "audit_log",
-                 "runs", "run_steps", "propositions")
+                 "runs", "run_steps", "propositions", "decisions")
 
 
 class RlsFailure(AssertionError):
@@ -164,6 +168,13 @@ def _seed(cur, tenant, actor, tag: str) -> None:
                 "VALUES (%s,0,%s,'intake','ANSWERED')", (rid, tenant))
     cur.execute("INSERT INTO propositions (proposition_id, run_id, tenant_id, ordinal, "
                 "status) VALUES (%s,%s,%s,0,'VERIFIED')", (uuid.uuid4(), rid, tenant))
+    # A human decision. This is the row whose leak would matter most: it carries a named
+    # reviewer's words about another firm's document.
+    cur.execute("INSERT INTO decisions (decision_id, run_id, tenant_id, item_ref, decision, "
+                "reason, quoted_span, actor_id) VALUES (%s,%s,%s,%s,'APPROVED',%s,%s,%s)",
+                (uuid.uuid4(), rid, tenant, "ss:T1.2",
+                 f"{tag}: inspected the book, every page initialled.",
+                 f"{tag} physical minutes book not inspected", actor))
 
 
 def run(url: str) -> int:
@@ -193,7 +204,7 @@ def run(url: str) -> int:
               f"whose visibility is asserted\n")
 
         for f in ("001_core.sql", "002_runs.sql", "003_step_provenance.sql",
-                  "004_cost_note.sql"):
+                  "004_cost_note.sql", "005_decisions.sql"):
             cur.execute(sql(f))
             print(f"  applied {f}")
         _ensure_app_role(cur)
