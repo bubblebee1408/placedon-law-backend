@@ -187,9 +187,14 @@ CREATE POLICY tenant_isolation ON gadgets USING (tenant_id = tenant_id);
     check(live_check_is_outside_gate(),
           "...and is NOT in scripts/run_tests.sh: a suite that needs a server would be "
           "skipped, and a skipped security test reads as a passing one")
-    check(live_check_status() == "UNRUN",
-          f"...and is labelled UNRUN ({live_check_status()}) -- until it carries a date, "
-          f"the isolation above is a property of SQL text and not of any database")
+    st = live_check_status()
+    check(st != "UNRUN",
+          "...and is no longer UNRUN: it was run on 29-09-2026 against PostgreSQL 18.6")
+    check("PostgreSQL" in st and "placedon_app" in st and "2026-" in st,
+          f"...recording the DATE, the server and the ROLE it asserted as ({st[:60]}…). "
+          f"The role is the load-bearing part: a superuser bypasses row-level security "
+          f"unconditionally, so a run as one proves nothing")
+    check("0 failures" in st, "...and that nothing failed")
 
     # ── R-016, decided ──────────────────────────────────────────────────────
     runs_sql = (MIGRATIONS / "002_runs.sql").read_text(encoding="utf-8")

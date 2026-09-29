@@ -145,7 +145,8 @@ class PostgresBackend:
         conn = psycopg.connect(self._url, autocommit=True)
         # Before anything else. A statement issued ahead of this one is a statement the
         # policy evaluates with no tenant set, which returns nothing and looks like data loss.
-        conn.execute("SET app.tenant_id = %s", (self.tenant_id,))
+        conn.execute("SELECT set_config('app.tenant_id', %s, false)",
+                     (self.tenant_id,))
         return conn
 
     def write_run(self, run: dict) -> None:
@@ -178,6 +179,12 @@ class PostgresBackend:
                      p.get("span_start"), p.get("span_end")))
 
     def read_run(self, run_id: str) -> dict | None:
+        # A malformed id is not a run. Postgres raises InvalidTextRepresentation on a
+        # non-UUID for a uuid column, so without this a lookup of "no-such-run" is an
+        # exception on Postgres and None in memory -- the two backends disagreeing about
+        # what "unknown" means, which is exactly what the shared contract is for.
+        if not _UUID.match(run_id or ""):
+            return None
         with self._conn() as c:
             r = c.execute("SELECT run_id, intent, status, refusal_code FROM runs "
                           "WHERE run_id = %s", (run_id,)).fetchone()
@@ -282,11 +289,20 @@ def conformance(backend) -> list[tuple[bool, str]]:
     def ck(cond, label):
         out.append((bool(cond), label))
 
+    import uuid as _uuid
+    # A FRESH id per call. SAMPLE_RUN carried a fixed one, and against a shared Postgres
+    # that means two tenants writing the same run id: the second one's ON CONFLICT DO
+    # UPDATE reaches a row belonging to the first, and row-level security refuses it --
+    # correctly. Measured 29-09-2026. The isolation was right and the fixture was wrong.
+    run = dict(SAMPLE_RUN, id=str(_uuid.uuid4()))
+
     ck(backend.read_run("no-such-run") is None,
        "an unknown run reads as None, not as an empty run")
+    ck(backend.read_run(str(_uuid.uuid4())) is None,
+       "...and a well-formed id that names no run reads as None too")
 
-    backend.write_run(SAMPLE_RUN)
-    got = backend.read_run(SAMPLE_RUN["id"])
+    backend.write_run(run)
+    got = backend.read_run(run["id"])
     ck(got is not None, "a written run reads back")
     if got:
         ck(got["status"] == "ANSWERED" and got["intent"] == "review_contract",
@@ -304,17 +320,17 @@ def conformance(backend) -> list[tuple[bool, str]]:
            "...with span OFFSETS, not copied text")
 
     # Idempotence: writing the same run twice is one run with one set of steps.
-    backend.write_run(SAMPLE_RUN)
-    again = backend.read_run(SAMPLE_RUN["id"])
+    backend.write_run(run)
+    again = backend.read_run(run["id"])
     ck(again and len(again["steps"]) == 3,
        "re-writing a run replaces its steps rather than appending them again")
 
     # The caller's dict is not the store's dict.
-    mutant = dict(SAMPLE_RUN)
-    mutant["steps"] = [dict(s) for s in SAMPLE_RUN["steps"]]
+    mutant = dict(run)
+    mutant["steps"] = [dict(s) for s in run["steps"]]
     backend.write_run(mutant)
     mutant["steps"][0]["capability"] = "TAMPERED"
-    after = backend.read_run(SAMPLE_RUN["id"])
+    after = backend.read_run(run["id"])
     ck(after and after["steps"][0]["capability"] == "intake",
        "mutating the dict AFTER writing does not change the store -- a backend that kept "
        "the caller's object would pass tests a database cannot")
@@ -323,7 +339,7 @@ def conformance(backend) -> list[tuple[bool, str]]:
     # every column; a dict returns what it was handed, and `step["model"]` would then be a
     # KeyError on memory and None on Postgres. Caught the hard way on 29-09-2026, when the
     # CLI demo raised KeyError('model') on a step the sample run happened to populate.
-    sparse_id = SAMPLE_RUN["id"].replace("9", "8")
+    sparse_id = str(_uuid.uuid4())
     backend.write_run({"id": sparse_id, "intent": "ask", "status": "ANSWERED",
                        "steps": [{"capability": "intake", "status": "ANSWERED"}],
                        "propositions": [{"status": "VERIFIED"}]})
@@ -338,13 +354,14 @@ def conformance(backend) -> list[tuple[bool, str]]:
        "...and the same for a proposition")
 
     ck(backend.get_document("0" * 64) is None, "an unknown document reads as None")
-    doc = backend.put_document(sha256="a" * 64, name="nda.txt", byte_count=33)
-    ck(doc["sha256"] == "a" * 64, "a document is stored under its sha256")
-    back = backend.get_document("a" * 64)
+    sha = _uuid.uuid4().hex + _uuid.uuid4().hex
+    doc = backend.put_document(sha256=sha, name="nda.txt", byte_count=33)
+    ck(doc["sha256"] == sha, "a document is stored under its sha256")
+    back = backend.get_document(sha)
     ck(back and back["byte_count"] == 33 and back["name"] == "nda.txt",
        "...and reads back with its name and size")
-    backend.put_document(sha256="a" * 64, name="nda.txt", byte_count=33)
-    ck(backend.get_document("a" * 64) is not None,
+    backend.put_document(sha256=sha, name="nda.txt", byte_count=33)
+    ck(backend.get_document(sha) is not None,
        "storing the same bytes twice is not an error: the id IS the hash, so it is one "
        "document")
     return out

@@ -11,14 +11,28 @@ declares ENABLE and FORCE row level security and a policy. Static checks catch a
 that forgot the discipline. Only this file catches a server where the discipline does not
 hold.
 
-## STATUS: UNRUN
+## STATUS: RUN — 2026-09-29, PostgreSQL 18.6, 53 checks, 0 failures
 
     LAST_RUN = None
 
-**No Postgres has ever run this.** Until that line carries a date and a server, the
-isolation claim in gateway/migrations/*.sql is a claim about SQL text and not about a
-database, and gateway/app.py reports store.kind = "in-memory" for that reason. Do not read
-a green gate as evidence of tenant isolation; the gate has never seen a tenant.
+Both migrations are applied and every property below is proved on a real server. The gate
+still has never seen a tenant -- it runs on the in-memory backend and cannot assert
+anything about a database -- so this file remains the only evidence of isolation, and it
+has to be re-run after any migration change.
+
+## The role it connects as, which is the whole experiment
+
+**Isolation is verified as a NON-SUPERUSER role**, created here if absent, and that is not a
+detail. PostgreSQL superusers and roles with BYPASSRLS bypass row-level security
+unconditionally; `FORCE ROW LEVEL SECURITY` extends the policy to the table OWNER, and to
+nobody beyond that. Measured 29-09-2026: connected as the (superuser) macOS account, tenant
+A saw every row and dropping the policy changed nothing -- the run "failed" while proving
+only that a superuser is a superuser.
+
+So there are two connections. The ADMIN one applies the migrations, creates the role and
+seeds the rows. The APP one -- `placedon_app`, no superuser, no BYPASSRLS -- is the only one
+whose visibility is ever asserted. A deployment that connects as a superuser has no tenant
+isolation whatever this file says, and the run prints the roles it used for that reason.
 
 ## What it proves, and the one that matters
 
@@ -53,7 +67,9 @@ sys.path.insert(0, str(ROOT))
 MIGRATIONS = ROOT / "gateway" / "migrations"
 
 # Set this to an ISO date and a server description the day it is actually run.
-LAST_RUN: str | None = None
+LAST_RUN: str | None = (
+    "2026-09-29 — PostgreSQL 18.6 (Postgres.app), local socket, database placedon_dev, "
+    "asserted as role placedon_app (NOSUPERUSER, NOBYPASSRLS). 53 checks, 0 failures.")
 
 TENANT_TABLES = ("actors", "api_keys", "documents", "audit_log",
                  "runs", "run_steps", "propositions")
@@ -80,10 +96,33 @@ def _connect(url: str):
     return psycopg.connect(url, autocommit=True)
 
 
+APP_ROLE = "placedon_app"
+
+
+def _app_url(admin_url: str) -> str:
+    """The same database, connected as the non-superuser role."""
+    import re as _re
+    if "user=" in admin_url:
+        return _re.sub(r"user=[^&]+", f"user={APP_ROLE}", admin_url)
+    sep = "&" if "?" in admin_url else "?"
+    return f"{admin_url}{sep}user={APP_ROLE}"
+
+
+def _ensure_app_role(cur) -> None:
+    """A login role with no superuser and no BYPASSRLS. Created idempotently."""
+    if not cur.execute("SELECT 1 FROM pg_roles WHERE rolname=%s", (APP_ROLE,)).fetchone():
+        cur.execute(f"CREATE ROLE {APP_ROLE} LOGIN")
+    cur.execute(f"ALTER ROLE {APP_ROLE} NOSUPERUSER NOBYPASSRLS")
+    cur.execute(f"GRANT USAGE ON SCHEMA public TO {APP_ROLE}")
+    cur.execute(f"GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public "
+                f"TO {APP_ROLE}")
+    cur.execute(f"GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO {APP_ROLE}")
+
+
 def _seed(cur, tenant, actor, tag: str) -> None:
     """One row per tenant-scoped table, for this tenant. Enough to be leaked."""
     import uuid
-    cur.execute("SET app.tenant_id = %s", (str(tenant),))
+    cur.execute("SELECT set_config('app.tenant_id', %s, false)", (str(tenant),))
     cur.execute("INSERT INTO actors (actor_id, tenant_id, label) VALUES (%s,%s,%s)",
                 (actor, tenant, tag))
     cur.execute("INSERT INTO api_keys (key_hash, key_id, tenant_id, actor_id, label) "
@@ -107,7 +146,7 @@ def _seed(cur, tenant, actor, tag: str) -> None:
 
 
 def run(url: str) -> int:
-    """Apply the migrations and prove the properties. Returns an exit code."""
+    """Apply the migrations as admin, then prove isolation as a NON-SUPERUSER. Exit code."""
     import uuid
     a, b = uuid.uuid4(), uuid.uuid4()
     actor_a, actor_b = uuid.uuid4(), uuid.uuid4()
@@ -118,16 +157,24 @@ def run(url: str) -> int:
         if not ok:
             failures.append(label)
 
-    with _connect(url) as conn:
-        cur = conn.cursor()
-        cur.execute("SELECT version()")
-        version = cur.fetchone()[0]
-        print(f"  server: {version.split(' on ')[0]}\n")
+    app_url = _app_url(url)
+
+    with _connect(url) as admin:
+        cur = admin.cursor()
+        version = cur.execute("SELECT version()").fetchone()[0]
+        who, su = cur.execute(
+            "SELECT current_user, (SELECT rolsuper FROM pg_roles WHERE rolname=current_user)"
+        ).fetchone()
+        print(f"  server : {version.split(' on ')[0]}")
+        print(f"  admin  : {who} (superuser={su}) — applies migrations, seeds rows")
+        print(f"  app    : {APP_ROLE} (superuser=False, bypassrls=False) — the only role "
+              f"whose visibility is asserted\n")
 
         for f in ("001_core.sql", "002_runs.sql"):
             cur.execute(sql(f))
             print(f"  applied {f}")
-        print()
+        _ensure_app_role(cur)
+        print(f"  ensured role {APP_ROLE}\n")
 
         for t in (a, b):
             cur.execute("INSERT INTO tenants (tenant_id, name) VALUES (%s,%s) "
@@ -135,16 +182,28 @@ def run(url: str) -> int:
         _seed(cur, a, actor_a, "alpha")
         _seed(cur, b, actor_b, "bravo")
 
-        # ── (a) isolation, on EVERY tenant-scoped table, as the table OWNER ──
-        cur.execute("SET app.tenant_id = %s", (str(a),))
-        for tbl in TENANT_TABLES:
-            cur.execute(f"SELECT count(*) FROM {tbl} WHERE tenant_id = %s", (b,))
-            other = cur.fetchone()[0]
-            cur.execute(f"SELECT count(*) FROM {tbl}")
-            mine = cur.fetchone()[0]
-            note(other == 0 and mine >= 1,
-                 f"{tbl}: tenant A sees {mine} of its own rows and {other} of tenant B's")
+        r = cur.execute("SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname=%s",
+                        (APP_ROLE,)).fetchone()
+        note(r == (False, False),
+             f"{APP_ROLE} is NOT a superuser and does NOT have BYPASSRLS {r} -- without "
+             f"this, nothing below measures the policy")
 
+    # ── (a) isolation, as the application role, on EVERY tenant-scoped table ──
+    print()
+    before: dict[str, tuple[int, int]] = {}
+    with _connect(app_url) as app:
+        c = app.cursor()
+        c.execute("SELECT set_config('app.tenant_id', %s, false)", (str(a),))
+        for tbl in TENANT_TABLES:
+            other = c.execute(f"SELECT count(*) FROM {tbl} WHERE tenant_id = %s",
+                              (b,)).fetchone()[0]
+            mine = c.execute(f"SELECT count(*) FROM {tbl}").fetchone()[0]
+            before[tbl] = (mine, other)
+            note(other == 0 and mine >= 1,
+                 f"{tbl}: tenant A sees {mine} row(s), none of tenant B's ({other})")
+
+    with _connect(url) as admin:
+        cur = admin.cursor()
         cur.execute("SELECT relname FROM pg_class WHERE relname = ANY(%s) "
                     "AND relforcerowsecurity", (list(TENANT_TABLES),))
         forced = {r[0] for r in cur.fetchall()}
@@ -152,45 +211,104 @@ def run(url: str) -> int:
              f"pg_class says FORCE is set on every tenant table "
              f"(missing {sorted(set(TENANT_TABLES) - forced)})")
 
-        # ── (b) the test must be able to FAIL ────────────────────────────────
-        print()
-        leaked_anywhere = False
-        for tbl in TENANT_TABLES:
-            cur.execute(f"DROP POLICY tenant_isolation ON {tbl}")
-            cur.execute(f"SELECT count(*) FROM {tbl} WHERE tenant_id = %s", (b,))
-            leaked = cur.fetchone()[0]
-            leaked_anywhere = leaked_anywhere or leaked > 0
-            note(leaked > 0,
-                 f"{tbl}: with the policy DROPPED, tenant B's rows appear ({leaked}) -- "
-                 f"so the check above was measuring the policy, not an empty table")
-            cur.execute(f"CREATE POLICY tenant_isolation ON {tbl} USING "
-                        f"(tenant_id = current_setting('app.tenant_id', true)::uuid)")
-            cur.execute(f"SELECT count(*) FROM {tbl} WHERE tenant_id = %s", (b,))
-            note(cur.fetchone()[0] == 0, f"{tbl}: restoring the policy closes it again")
+    # ── (b) the proof must be able to FAIL, and Postgres has TWO ways ───────
+    # Dropping the policy while RLS is still forced does NOT leak: with no policy at all
+    # Postgres applies a default-deny, and tenant A stops seeing even its own rows. That
+    # is worth asserting -- it fails CLOSED -- but it demonstrates nothing about a leak.
+    # Removing row-level security itself is what exposes the data, so both are checked:
+    # protection removed one way hides everything, the other way reveals everything, and
+    # restoring returns to isolation. A check that only ever asserts "nothing leaked"
+    # passes just as happily against an empty table.
+    print()
+    for tbl in TENANT_TABLES:
+        with _connect(url) as admin:
+            admin.execute(f"DROP POLICY tenant_isolation ON {tbl}")
+        with _connect(app_url) as app:
+            c = app.cursor()
+            c.execute("SELECT set_config('app.tenant_id', %s, false)", (str(a),))
+            own_nopolicy = c.execute(f"SELECT count(*) FROM {tbl}").fetchone()[0]
 
-        # ── append-only ─────────────────────────────────────────────────────
-        print()
+        with _connect(url) as admin:
+            admin.execute(f"ALTER TABLE {tbl} DISABLE ROW LEVEL SECURITY")
+        with _connect(app_url) as app:
+            c = app.cursor()
+            c.execute("SELECT set_config('app.tenant_id', %s, false)", (str(a),))
+            leaked = c.execute(f"SELECT count(*) FROM {tbl} WHERE tenant_id = %s",
+                               (b,)).fetchone()[0]
+
+        with _connect(url) as admin:
+            admin.execute(f"ALTER TABLE {tbl} ENABLE ROW LEVEL SECURITY")
+            admin.execute(f"ALTER TABLE {tbl} FORCE ROW LEVEL SECURITY")
+            admin.execute(f"CREATE POLICY tenant_isolation ON {tbl} USING "
+                          f"(tenant_id = current_setting('app.tenant_id', true)::uuid)")
+        with _connect(app_url) as app:
+            c = app.cursor()
+            c.execute("SELECT set_config('app.tenant_id', %s, false)", (str(a),))
+            after_other = c.execute(f"SELECT count(*) FROM {tbl} WHERE tenant_id = %s",
+                                    (b,)).fetchone()[0]
+            after_own = c.execute(f"SELECT count(*) FROM {tbl}").fetchone()[0]
+
+        note(own_nopolicy == 0,
+             f"{tbl}: policy DROPPED (rls still forced) -> default-deny, tenant A sees "
+             f"{own_nopolicy} rows, not even its own. It fails CLOSED")
+        note(before[tbl][1] == 0 and leaked > 0,
+             f"{tbl}: RLS DISABLED -> {leaked} of tenant B's rows APPEAR, where {before[tbl][1]} "
+             f"were visible with it on. The check was measuring the protection")
+        note(after_other == 0 and after_own >= 1,
+             f"{tbl}: restored -> tenant A sees its own {after_own} again and {after_other} "
+             f"of tenant B's")
+
+    # ── append-only, as the application role ────────────────────────────────
+    print()
+    with _connect(app_url) as app:
+        c = app.cursor()
+        c.execute("SELECT set_config('app.tenant_id', %s, false)", (str(a),))
         for op in ("UPDATE audit_log SET outcome = 'tampered'", "DELETE FROM audit_log"):
             try:
-                cur.execute(op)
+                c.execute(op)
                 note(False, f"audit_log refuses {op.split()[0]}")
             except Exception:                                   # noqa: BLE001
-                note(True, f"audit_log refuses {op.split()[0]} even as the owner")
+                note(True, f"audit_log refuses {op.split()[0]}")
 
-        # ── the SAME store contract the gate runs against the dict ───────────
-        print()
-        from gateway.store import PostgresBackend, conformance
-        for ok_, label in conformance(PostgresBackend(url, tenant_id=str(a),
-                                                      actor_id=str(actor_a))):
-            note(ok_, f"[postgres] {label}")
+    # ── one tenant cannot overwrite another's run ───────────────────────────
+    # Found the hard way: write_run uses ON CONFLICT DO UPDATE, and ON CONFLICT resolves
+    # against the INDEX, which sees rows the policy hides. So a second tenant writing the
+    # same run id reaches the first tenant's row -- and RLS refuses the update. That is the
+    # isolation working, and it is worth an assertion of its own rather than a surprise.
+    print()
+    from gateway.store import PostgresBackend, conformance
+    shared_id = str(uuid.uuid4())
+    ba = PostgresBackend(app_url, tenant_id=str(a), actor_id=str(actor_a))
+    bb = PostgresBackend(app_url, tenant_id=str(b), actor_id=str(actor_b))
+    ba.write_run({"id": shared_id, "intent": "ask", "status": "ANSWERED",
+                  "steps": [], "propositions": []})
+    note(ba.read_run(shared_id) is not None, "tenant A writes a run and reads it back")
+    note(bb.read_run(shared_id) is None,
+         "...and tenant B cannot READ it, though it knows the id")
+    try:
+        bb.write_run({"id": shared_id, "intent": "ask", "status": "REFUSED",
+                      "refusal_code": "NO_MODEL", "steps": [], "propositions": []})
+        note(False, "...nor OVERWRITE it")
+    except Exception as e:                                       # noqa: BLE001
+        note("row-level security" in str(e).lower(),
+             f"...nor OVERWRITE it: the database refuses, not the application "
+             f"({type(e).__name__})")
+    still = ba.read_run(shared_id)
+    note(still and still["status"] == "ANSWERED" and still["intent"] == "ask",
+         "...and tenant A's run is untouched by the attempt")
+
+    # ── the SAME store contract the gate runs against the dict ──────────────
+    print()
+    for ok_, label in conformance(PostgresBackend(app_url, tenant_id=str(a),
+                                                  actor_id=str(actor_a))):
+        note(ok_, f"[postgres] {label}")
 
     print()
     if failures:
         print(f"{len(failures)} FAILED — tenant isolation is NOT proved on this server.")
         print("Do not edit this script to make it pass. Report it.")
         return 1
-    print(f"all properties proved on {version.split(' on ')[0]}.")
-    print("Set LAST_RUN in this file to the date and the server.")
+    print(f"all properties proved on {version.split(' on ')[0]} as {APP_ROLE}.")
     return 0
 
 
