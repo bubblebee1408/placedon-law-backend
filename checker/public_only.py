@@ -98,6 +98,22 @@ ROOT = Path(__file__).resolve().parent.parent
 
 PUBLIC_CORPUS = "PUBLIC_CORPUS"
 
+# A customer document: a contract, a matter file, anything from the Vault. NOT public, and
+# the whole point of naming it is that it travels under a different rule.
+MATTER = "MATTER"
+
+# PLAN_22 D3: "client documents only to endpoints whose hosting region is confirmed" and
+# "Gemini free tier never receives a Vault/matter document". Membership here is a
+# publication-style decision, exactly like PUBLIC_ROOTS: a provider is added by a person
+# who has confirmed where the bytes land, never because it was convenient at the call site.
+#
+# `azure` is here because PLAN_22 D3 routes client work to Azure. **The residency question
+# is OPEN and recorded, not closed by this line**: the deployments are on the
+# `placedon-law-eval` resource in UAE North, and whether a UAE region is acceptable for an
+# Indian in-house legal team's contracts is a buyer's decision nobody here has taken. This
+# tuple governs which provider may be SENT one; it does not certify the region.
+MATTER_PROVIDERS = frozenset({"azure"})
+
 PUBLIC_ROOTS: tuple[Path, ...] = (
     ROOT / "corpus" / "companies_act",
     ROOT / "corpus" / "rules",
@@ -122,9 +138,13 @@ class NotPublic(PermissionError):
 class Origin:
     """Where a piece of text came from, established rather than asserted."""
 
-    basis: str          # PUBLIC_CORPUS -- the only basis there is
-    path: str           # repo-relative, POSIX
-    blob: str           # the git blob id at HEAD, so the clearance is quotable later
+    basis: str          # PUBLIC_CORPUS or MATTER
+    path: str           # repo-relative POSIX for PUBLIC_CORPUS; "matter:<name>" for MATTER
+    blob: str           # the git blob id at HEAD; for MATTER, the sha256 of the document
+    # Only ever set for MATTER, where there is no committed file to re-read. It holds
+    # CLIENT TEXT: never log an Origin, and never put one in an audit row (gateway/audit.py
+    # is metadata-only for this reason).
+    text: str = ""
 
 
 def _git(args: list[str]) -> tuple[int, str]:
@@ -298,6 +318,55 @@ def untrusted_blocks(prompt: str) -> tuple[str, ...]:
     return tuple(out)
 
 
+def clear_matter(text: str, *, name: str, provider: str) -> Origin:
+    """A CUSTOMER document, cleared for a provider declared fit to receive one.
+
+    This is the deliberate hole in "nothing but published text leaves", and it is shaped so
+    that using it is a decision rather than an accident: the caller must name the provider,
+    and a provider not in MATTER_PROVIDERS is refused here -- before a prompt is built, not
+    after it is sent.
+
+    The returned Origin carries the document text, because unlike a corpus file there is no
+    committed blob to re-read when a block needs checking. That makes an Origin a container
+    of client data: never log one.
+    """
+    import hashlib
+    if provider not in MATTER_PROVIDERS:
+        raise NotPublic(
+            f"{provider!r} may not receive a matter document. PLAN_22 D3 permits client "
+            f"text only to {sorted(MATTER_PROVIDERS)}, and the free tier never. This is "
+            f"refused before the prompt is built, so nothing was sent.")
+    if not text.strip():
+        raise NotPublic("there is no document to clear; an empty Origin would mean nothing")
+    digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
+    return Origin(MATTER, f"matter:{name}", digest, text=text)
+
+
+def refuse_matter(origins) -> None:
+    """Raise if any origin is a matter document. Called by adapters that may never see one.
+
+    The provider check in `clear_matter` binds the caller that MADE the origin; this binds
+    the caller that USES it, so an origin cleared for Azure cannot be handed to Gemini one
+    function later. Both halves are needed: one guards the making, the other the passing.
+    """
+    if isinstance(origins, Origin):
+        items = (origins,)
+    else:
+        try:
+            items = tuple(origins or ())
+        except TypeError:
+            # A look-alike object that is not an Origin and not iterable. It is not a
+            # MATTER origin, so this guard has no opinion; the real clearance below it
+            # refuses anything that is not a genuine Origin.
+            items = (origins,)
+    bad = [o for o in items if getattr(o, "basis", None) == MATTER]
+    if bad:
+        raise NotPublic(
+            f"this provider may not receive a matter document, and {len(bad)} of the "
+            f"origins given is one ({bad[0].path}). PLAN_22 D3: the Gemini free tier never "
+            f"receives a Vault or matter document. Nothing was sent.")
+
+
 def verify_prompt(prompt: str, origins) -> tuple[str, ...]:
     """Every untrusted passage in `prompt` clears against one of `origins`, or refuse.
 
@@ -324,7 +393,15 @@ def verify_prompt(prompt: str, origins) -> tuple[str, ...]:
     for i, block in enumerate(blocks):
         for o in origins:
             try:
-                clear_text(block, path=ROOT / o.path)
+                if o.basis == MATTER:
+                    # No committed file to re-read, so the block must be part of the very
+                    # document this Origin was made from. Same question as for a corpus
+                    # file -- "is this text actually from the thing you named?" -- asked
+                    # against bytes held in memory instead of bytes held in git.
+                    if not _norm(block) or _norm(block) not in _norm(o.text):
+                        raise NotPublic("not part of the matter document named")
+                else:
+                    clear_text(block, path=ROOT / o.path)
                 break
             except NotPublic:
                 continue
@@ -504,6 +581,58 @@ def _test() -> None:
           "not one 3,540-character block made of our own system prompt")
     check(len(verify_prompt(with_clause, (o1, o2))) == 2,
           "...so a prompt built the way the pipeline builds it actually clears")
+
+    # ── MATTER: the deliberate hole, and the two locks on it ────────────────
+    from checker.prompt_safety import wrap_untrusted as _wrapm
+    DOC = ("MUTUAL NON-DISCLOSURE AGREEMENT between Acme Private Limited and Beta "
+           "Limited. The term is three years from the Effective Date.")
+    check("gemini" not in MATTER_PROVIDERS,
+          "the Gemini free tier is NOT permitted a matter document (PLAN_22 D3)")
+    for bad in ("gemini", "ollama", "sarvam", ""):
+        try:
+            clear_matter(DOC, name="nda.docx", provider=bad)
+            check(False, f"{bad!r} is refused a matter document")
+        except NotPublic as e:
+            check("may not receive a matter document" in str(e)
+                  and "nothing was sent" in str(e),
+                  f"...{bad!r} refused BEFORE a prompt is built, so nothing was sent")
+    mo = clear_matter(DOC, name="nda.docx", provider="azure")
+    check(mo.basis == MATTER and mo.path == "matter:nda.docx" and len(mo.blob) == 64,
+          f"azure may receive one, and the Origin is identified by sha256 ({mo.path})")
+    try:
+        clear_matter("   ", name="x", provider="azure")
+        check(False, "an empty document is refused")
+    except NotPublic:
+        check(True, "...and an empty document yields no Origin, which would mean nothing")
+
+    # the block must be part of THAT document, not merely untrusted-looking
+    good = "Review this.\n" + _wrapm(DOC[:60], "c1") + "\nWhat does it say?"
+    check(verify_prompt(good, mo) == (DOC[:60],),
+          "a block that IS part of the matter document clears against it")
+    other = "Review this.\n" + _wrapm("A DIFFERENT CLIENT'S TERMINATION CLAUSE", "c1") + "\n?"
+    try:
+        verify_prompt(other, mo)
+        check(False, "a block from another document is refused")
+    except NotPublic:
+        check(True, "...while a block from ANOTHER document is refused: naming one matter "
+                    "file does not clear every matter file")
+
+    # the second lock: the adapter that may never see one
+    pub_o = clear_file(ROOT / "corpus" / "testdocs" / "MANIFEST.md")
+    refuse_matter(pub_o)
+    refuse_matter([pub_o, pub_o])
+    check(True, "refuse_matter passes a PUBLIC_CORPUS origin through untouched")
+    for form in (mo, [mo], (pub_o, mo)):
+        try:
+            refuse_matter(form)
+            check(False, "refuse_matter raises on a matter origin")
+        except NotPublic:
+            check(True, "refuse_matter RAISES on a matter origin, alone or mixed in with "
+                        "public ones -- clear_matter binds who MADE it, this binds who "
+                        "passes it on")
+    check(pub_o.text == "" and mo.text == DOC,
+          "only a MATTER origin carries document text, because only it has no committed "
+          "blob to re-read -- which is also why an Origin must never be logged")
 
     # ── the roots are a decision, not a glob ─────────────────────────────────
     named = {p.name for p in PUBLIC_ROOTS}

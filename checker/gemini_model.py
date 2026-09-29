@@ -300,7 +300,12 @@ def extract(document: str, *, origin, budget=None, model: str = FLASH,
     """
     # Before the budget check, and before anything else. Whether text may leave at all is
     # not a question whose answer depends on how much money is left.
+    from checker.public_only import refuse_matter as _refuse_matter
     from checker.public_only import verify as _verify_public
+    # PLAN_22 D3: the free tier never receives a Vault or matter document. clear_matter
+    # binds whoever MADE the origin; this binds whoever passes it here, so an origin
+    # cleared for Azure cannot arrive at Gemini one function later.
+    _refuse_matter(origin)
     _verify_public(document, origin)
 
     if budget is not None:
@@ -352,7 +357,8 @@ def generate(prompt: str, *, origin, model: str = FLASH, budget=None,
     own instructions; everything inside has to be published, and a prompt with no
     delimiters at all is refused, because then nothing in it can be told apart.
     """
-    from checker.public_only import verify_prompt
+    from checker.public_only import refuse_matter, verify_prompt
+    refuse_matter(origin)          # PLAN_22 D3 -- never a matter document, see extract()
     verify_prompt(prompt, origin)
 
     if budget is not None:
@@ -520,6 +526,25 @@ def _test() -> None:
         check(False, "an exhausted budget refuses before the call")
     except ModelUnavailable:
         check(not called, "an exhausted budget refuses BEFORE the call — none was made")
+
+    # ── a matter document never reaches the free tier (PLAN_22 D3) ──────────
+    _matter = public_only.clear_matter(
+        "CONFIDENTIAL: Acme Private Limited and Beta Limited, term three years.",
+        name="nda.docx", provider="azure")
+    called.clear()
+    try:
+        extract(DOC, origin=_matter, _transport=spy)
+        check(False, "extract refuses a matter origin")
+    except public_only.NotPublic:
+        check(not called,
+              "extract() REFUSES an origin cleared for Azure and sends nothing -- the "
+              "clearance was for a different provider and passing it on does not launder it")
+    called.clear()
+    try:
+        generate("anything", origin=_matter, _transport=spy)
+        check(False, "generate refuses a matter origin")
+    except public_only.NotPublic:
+        check(not called, "...and so does generate(), the prose door")
 
     # ── the free tier's own daily quota, on a REAL ledger and not a stub ─────
     from backend.budget import FREE_TIER_RPD_PER_MODEL as _RPD, BudgetTracker as _BT
