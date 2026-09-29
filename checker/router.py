@@ -232,6 +232,26 @@ _PREFERENCE = {
 
     TaskProfile(TEXT, HIGH, EXTRACTION): [
         (ANTHROPIC, EXTRACT, "extraction: an error here becomes a wrong legal answer"),
+        # Added 29-09-2026 by a person, on the bake-off's evidence, which is what
+        # PLAN_22 D2 requires and what scripts/bakeoff_models.py deliberately cannot do
+        # for itself. An earlier test in this file asserted there was NO Azure row here --
+        # so that wiring Azure for narration could not QUIETLY make it the extractor. The
+        # word doing the work in that sentence was "quietly": this is the loud way, with
+        # the measurement named and the test rewritten rather than deleted.
+        #
+        # reports/bakeoff_2026-09-29.json, CUAD test split: exact-span 0.933 (28/30) for
+        # this model and 1.000 for gpt-5-mini, macro F1 0.292 vs 0.311 with intervals that
+        # overlap heavily -- "not resolvable at this n", so the incumbent-fallback rule
+        # picks llama, which also completed every contract and holds the better micro F1.
+        #
+        # What makes HIGH extraction defensible on a rented model here at all is that F12
+        # verifies every value against a verbatim span before it is used: a model error
+        # becomes UNVERIFIED, not a wrong fact. requires_review is still set automatically,
+        # because a contract review nobody has read is a draft.
+        (AZURE, AZURE_LLAMA_70B,
+         "F12 contract clause extraction. Measured on CUAD 29-09-2026: quotes verbatim "
+         "0.933 of the time, and every value is re-derived from its span before use, so a "
+         "miss becomes UNVERIFIED rather than a wrong clause. requires_review is set"),
         (OLLAMA, OPERATOR_NAMED,
          "no Anthropic credit, so extraction runs on the operator's own machine rather "
          "than not at all. UNMEASURED on this task and the route says so: requires_review "
@@ -608,13 +628,18 @@ def _test() -> None:
     check(ra.est_cost_inr == 0.0,
           f"...and it estimates against the RUPEE cap as 0.0 ({ra.est_cost_inr}) rather "
           f"than raising out of cost_inr on a model with no rupee rate")
-    try:
-        route(Task("extract", TEXT, HIGH, purpose=EXTRACTION), available=(AZURE,))
-        check(False, "with only Azure, a HIGH extraction refuses")
-    except NoRoute:
-        check(True, "with only Azure, a HIGH EXTRACTION refuses: there is no Azure row "
-                    "for it, so wiring a provider for narration did not quietly make it "
-                    "the extractor as well")
+    rx = route(Task("extract", TEXT, HIGH, purpose=EXTRACTION), available=(AZURE,))
+    check(rx.provider == AZURE and rx.model == AZURE_LLAMA_70B,
+          f"HIGH extraction now HAS an Azure row ({rx.provider}/{rx.model}) -- added by a "
+          f"person on the bake-off's evidence, which is the loud way; the earlier test "
+          f"asserted its absence to stop the QUIET way")
+    check(rx.requires_review and rx.degraded,
+          "...and it is flagged requires_review: a contract review by a rented model "
+          "nobody has read is a draft, not an answer")
+    check([p for p, _m, _w in _PREFERENCE[TaskProfile(TEXT, HIGH, EXTRACTION)]][0]
+          == ANTHROPIC,
+          "...while Anthropic is still preferred for extraction, so the row is a fallback "
+          "and not a promotion")
     _narr = [(p, m) for p, m, _w in _PREFERENCE[TaskProfile(TEXT, LOW, NARRATION)]]
     check(_narr == [(ANTHROPIC, NARRATE), (AZURE, AZURE_LLAMA_70B),
                     (AZURE, AZURE_GPT5_MINI), (GEMINI, FLASH), (GEMINI, FLASH_LITE)],

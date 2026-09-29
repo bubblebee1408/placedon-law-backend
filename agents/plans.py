@@ -31,7 +31,11 @@ RESEARCH_QUESTION = "research_question"
 REVIEW_DOCUMENT = "review_document"
 COMPANY_STANDING = "company_standing"
 LAW_CHANGES = "law_changes"
-INTENTS = (RESEARCH_QUESTION, REVIEW_DOCUMENT, COMPANY_STANDING, LAW_CHANGES)
+# F12 (PLAN_22 §6). Distinct from REVIEW_DOCUMENT, which grounds a corporate filing against
+# the Act: this one reads a CONTRACT against a company playbook, and the playbook is not law.
+REVIEW_CONTRACT = "review_contract"
+INTENTS = (RESEARCH_QUESTION, REVIEW_DOCUMENT, COMPANY_STANDING, LAW_CHANGES,
+           REVIEW_CONTRACT)
 
 # Runtime phases (founder's plan §1.4). `verify` is L0 only and never takes a model.
 INTAKE = "intake"
@@ -42,6 +46,7 @@ VERIFY = "verify"
 CRITIC = "critic"
 SYNTHESIS = "synthesis"
 AUDIT = "audit"
+PLAYBOOK = "playbook"
 
 # Engine capabilities, quoted from checker/bundles.capabilities() rather than restated, so a
 # renamed capability breaks a test here instead of drifting silently.
@@ -50,6 +55,8 @@ CAP_CURRENCY = "document.currency_check"
 CAP_GROUND = "document.ground_extraction"
 CAP_EXPOSURE = "law.acquisition_exposure"
 CAP_CHANGES = "law.changes"
+# Evaluated by checker/playbook.py in CODE. It is a company standard, never a legal test.
+CAP_PLAYBOOK = "contract.playbook_review"
 
 
 class UnknownIntent(LookupError):
@@ -104,6 +111,17 @@ TEMPLATES: dict[str, Plan] = {
         StepSpec(INTAKE),
         StepSpec(COMPANY, engine_capability=CAP_MATRIX),
         StepSpec(RESEARCH, optional=True, engine_capability=CAP_EXPOSURE),
+    ) + _TAIL),
+    REVIEW_CONTRACT: Plan(REVIEW_CONTRACT, (
+        StepSpec(INTAKE),
+        # The contract is read and split by CODE before any model sees it, so the model is
+        # asked about clauses that already have offsets rather than asked to find them.
+        StepSpec(DOCUMENT, engine_capability=CAP_GROUND),
+        StepSpec(PLAYBOOK, engine_capability=CAP_PLAYBOOK),
+        # Optional, and optional on purpose: a contract question reaching the Contract Act,
+        # the Stamp Act or the Arbitration Act gets scope.py's named refusal, because this
+        # corpus does not hold them. A required step would imply we could answer it.
+        StepSpec(RESEARCH, optional=True, engine_capability=CAP_CURRENCY),
     ) + _TAIL),
     LAW_CHANGES: Plan(LAW_CHANGES, (
         StepSpec(INTAKE),

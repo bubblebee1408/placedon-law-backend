@@ -7,8 +7,9 @@ Placedon — an India-first legal intelligence and audit platform.
 An **evidence-backed audit layer for Indian corporate documents**, across the whole of
 corporate-law compliance. Not a general legal chatbot. Not a foundation-model project.
 
-**Scope is declared in `checker/scope.py`, and that file is the authority.** Nine bodies of law are
-in scope; one (Companies Act 2013) is held. The other eight are DECLARED, which is an active
+**Scope is declared in `checker/scope.py`, and that file is the authority.** Eleven bodies of law are
+in scope; one (Companies Act 2013) is held. The Indian Contract Act 1872 and the
+Arbitration and Conciliation Act 1996 were declared on 29-09-2026 for F12 contract review. The other eight are DECLARED, which is an active
 refusal — a question there is answered with the body of law, what it covers, and what we would have
 to acquire. Never with silence, because silence would read as "no obligation found".
 
