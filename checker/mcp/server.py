@@ -219,7 +219,7 @@ def _test() -> None:
     # ---- tools/list -----------------------------------------------------------------
     r = handle_message({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
     names = [t["name"] for t in r["result"]["tools"]]
-    check(len(names) == 13 and "themis.ask" in names, f"tools/list returns thirteen ({len(names)})")
+    check(len(names) == 16 and "themis.ask" in names, f"tools/list returns all sixteen ({len(names)})")
     check("themis.submit_evidence" not in names,
           "...and not the submit tool, which this surface cannot safely offer (RT-10)")
     check(all("inputSchema" in t for t in r["result"]["tools"]), "every descriptor has a schema")

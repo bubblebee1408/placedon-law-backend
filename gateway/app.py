@@ -102,6 +102,11 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
 
     app = FastAPI(title="Placedon gateway", docs_url=None, redoc_url=None)
     app.state.deployment = dep
+    # The in-memory store, named on app.state so a test can reach it and a future
+    # Postgres store can replace it without touching a route.
+    from agents.runtime import MemoryStore
+    app.state.run_store = MemoryStore()
+    app.state.documents = {}
 
     @app.api_route("/v1/{rest:path}", methods=["GET", "POST"])
     async def v1(rest: str, request: Request) -> Response:
@@ -125,6 +130,55 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
             payload = health_body(payload, dep)
         return Response(content=dumps(payload), status_code=status,
                         media_type="application/json")
+
+    # ── /v2, generated from the verb table. No route is written by hand here ──
+    from gateway.verbs import VERBS, Context, rest_path
+
+    ctx = Context(store=app.state.run_store, documents=app.state.documents,
+                  clock=now)
+
+    def _mount(verb):
+        path = rest_path(verb)
+
+        async def _route(request: Request) -> Response:
+            args = dict(request.path_params)
+            if verb.method == "POST":
+                raw = await request.body()
+                if raw:
+                    try:
+                        body = json.loads(raw)
+                    except ValueError:
+                        return Response(content=dumps(
+                            {"error": "bad_request",
+                             "detail": "body is not valid JSON"}),
+                            status_code=400, media_type="application/json")
+                    if not isinstance(body, dict):
+                        return Response(content=dumps(
+                            {"error": "bad_request",
+                             "detail": "body must be a JSON object"}),
+                            status_code=400, media_type="application/json")
+                    args |= body
+            missing = [f.name for f in verb.inputs
+                       if f.required and not str(args.get(f.name) or "").strip()]
+            if missing:
+                return Response(content=dumps(
+                    {"error": "bad_request",
+                     "detail": f"missing required input(s): {', '.join(missing)}"}),
+                    status_code=400, media_type="application/json")
+            out = verb.run(args, ctx) if verb.run else {"error": "not_implemented"}
+            code = 200
+            if isinstance(out, dict) and out.get("code") in ("NOT_FOUND", "NO_STORE"):
+                code = 404 if out["code"] == "NOT_FOUND" else 503
+            elif isinstance(out, dict) and out.get("code") == "BAD_REQUEST":
+                code = 400
+            return Response(content=dumps(out), status_code=code,
+                            media_type="application/json")
+
+        app.add_api_route(path, _route, methods=[verb.method],
+                          name=f"v2:{verb.name}", summary=verb.summary)
+
+    for _v in VERBS:
+        _mount(_v)
 
     return app
 
@@ -252,6 +306,50 @@ def _test() -> None:
     # ── the serialiser is stated, because byte-identity needs an encoding ───
     check(dumps({"b": 1, "a": "é"}) == b'{"b":1,"a":"\xc3\xa9"}',
           "the encoding is fixed: key order preserved, no spaces, UTF-8 not escaped")
+
+    # ── /v2, mounted from the verb table and not written by hand ────────────
+    from gateway.verbs import VERBS, rest_path, write_verbs
+    mounted = {r.name: r.path for r in app.routes if getattr(r, "name", "").startswith("v2:")}
+    check(len(mounted) == len(VERBS),
+          f"every verb is mounted ({len(mounted)} of {len(VERBS)})")
+    check(all(mounted.get(f"v2:{v.name}") == rest_path(v) for v in VERBS),
+          "...at the path the table generates, so a route cannot be hand-edited apart "
+          "from its verb")
+
+    up = client.post("/v2/documents/upload", json={"text": "a contract"})
+    check(up.status_code == 200 and len(json.loads(up.content)["sha256"]) == 64,
+          f"documents.upload stores and returns a sha256 ({up.status_code})")
+    again = client.post("/v2/documents/upload", json={"text": "a contract"})
+    check(json.loads(again.content)["document_id"]
+          == json.loads(up.content)["document_id"],
+          "...and the same bytes are the same document, because the id IS the hash")
+
+    check(client.post("/v2/documents/upload", json={}).status_code == 400,
+          "a missing required input is a 400 from the GATEWAY, before the handler runs")
+    check(client.post("/v2/ask", content=b"[1,2]",
+                      headers={"content-type": "application/json"}).status_code == 400,
+          "...and a JSON body that is not an object is refused too")
+
+    r404 = client.get("/v2/runs/nosuchrun")
+    check(r404.status_code == 404 and json.loads(r404.content)["code"] == "NOT_FOUND",
+          f"an unknown run is 404 NOT_FOUND ({r404.status_code})")
+    tr = client.get("/v2/runs/nosuchrun/trace")
+    check(tr.status_code == 404, "...and so is its trace")
+
+    app.state.run_store.write({"id": "r1", "status": "ANSWERED",
+                               "steps": [{"capability": "intake"}]})
+    got = json.loads(client.get("/v2/runs/r1").content)
+    check(got["status"] == "ANSWERED" and "steps" not in got,
+          "runs.get serves the run without its steps")
+    check(json.loads(client.get("/v2/runs/r1/trace").content)["steps"]
+          == [{"capability": "intake"}],
+          "...and runs.trace serves them")
+
+    check(all(not str(p).startswith("/v1") for p in mounted.values()),
+          "no generated route lands under /v1, so the byte-identical surface cannot be "
+          "shadowed by a verb")
+    check(write_verbs() == ("documents.upload",),
+          f"one write verb today, and it is named ({write_verbs()})")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:

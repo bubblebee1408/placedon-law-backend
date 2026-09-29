@@ -92,6 +92,12 @@ KNOWN_TOOLS: frozenset[str] = frozenset({
     "themis.get_operation",
     "themis.get_tasks",
     "themis.scope",
+    # Generated from gateway/verbs.py on 29-09-2026 (PLAN_22 D6). Read-only, like every
+    # name above: mcp_tools() refuses to generate a tool for a write verb, so this set
+    # stays equal to READ_ONLY_TOOLS by construction rather than by remembering.
+    "themis.review_contract",
+    "themis.runs.get",
+    "themis.runs.trace",
 })
 
 # Every known tool is read-only. The list exists so that making a tool writable is a
