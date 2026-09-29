@@ -256,6 +256,14 @@ def _review_contract(args: dict, ctx: Context) -> dict:
             test_data=bool(args.get("test_data")))
     except public_only.NotPublic as e:
         return _refuse("NOT_PERMITTED", str(e))
+    # Residency is a decision about the DOCUMENT, so it is taken before a route is sought.
+    # Checked only inside the Azure call, a gateway with no credentials refused NO_MODEL
+    # instead, and the reader was told "outage" where the answer was "not permitted".
+    from checker import azure_model
+    try:
+        azure_model.refuse_unconfirmed_region(origin)
+    except azure_model.ModelRefused as e:
+        return _refuse("NOT_PERMITTED", str(e))
 
     served, refusal = _served_or_refusal(origin, name="review_contract",
                                          purpose=router.EXTRACTION,
