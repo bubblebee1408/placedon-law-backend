@@ -69,7 +69,9 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # Directories that are not this repository's documentation.
-SKIP_DIRS = (".claude/worktrees", ".git", "node_modules", "__pycache__")
+# A virtualenv at the repo root (the documented setup) holds third-party Markdown whose
+# links resolve against files pip never installs; scanning it failed a clean clone.
+SKIP_DIRS = (".claude/worktrees", ".git", "node_modules", "__pycache__", ".venv", "venv")
 
 # Paths belonging to ANOTHER repository, a build output, or an illustrative shape.
 # Resolving these against our filesystem would report a miss that means nothing.
@@ -433,6 +435,14 @@ def _test() -> None:
         check(("docs/RETIRED_POSH.md", "scripts/ghost.py") not in found,
               "...while the SAME path in a history document is left alone")
         check(len(found) == 1, "nothing else is invented")
+
+        # A virtualenv's third-party docs are not ours: a clean clone with `.venv/` at the
+        # root went RED on fastapi's bundled SKILL.md (measured 2026-09-30).
+        os.makedirs(os.path.join(tmp, ".venv/lib/pkg"))
+        with open(os.path.join(tmp, ".venv/lib/pkg/README.md"), "w") as fh:
+            fh.write("see `references/not_installed.md`\n")
+        check(dangling(tmp) == found,
+              "a virtualenv's Markdown is not scanned -- it is not this repository's")
 
         # The check must go RED on a new reference. This is the mutation: if this
         # passed while the scanner was broken, the whole file would be decoration.
