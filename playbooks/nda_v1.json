@@ -17,15 +17,30 @@
     {
       "id": "NDA-02",
       "clause": "Governing Law",
-      "test": "equals",
-      "value": "India",
-      "why": "An Indian counterparty agreement governed by foreign law makes enforcement slower and more expensive."
+      "test": "in_list",
+      "value": [
+        "India",
+        "laws of India",
+        "the laws of India",
+        "Republic of India",
+        "India, without regard to conflict of laws"
+      ],
+      "why": "An Indian counterparty agreement governed by foreign law makes enforcement slower and more expensive. Measured 29-09-2026: this rule was `equals: India` and a live model returned the value 'laws of India' -- substantively right, textually different -- so it reported DEVIATES on 7 of 10 fixtures whose governing law WAS India. A false alarm on the commonest clause in the set is worse than no rule, because it is the one a reviewer learns to ignore. The accepted spellings are enumerated here rather than by loosening `equals` to a substring match, which would have matched 'the laws of England and not India'. The real remedy is a normalisation step on extracted values; this is the data-level mitigation available today."
     },
     {
       "id": "NDA-03",
       "clause": "Jurisdiction",
       "test": "in_list",
-      "value": ["Mumbai", "New Delhi", "Delhi", "Bengaluru", "Bangalore", "Chennai", "Kolkata", "Hyderabad"],
+      "value": [
+        "Mumbai",
+        "New Delhi",
+        "Delhi",
+        "Bengaluru",
+        "Bangalore",
+        "Chennai",
+        "Kolkata",
+        "Hyderabad"
+      ],
       "why": "Exclusive jurisdiction in a city where the company has no presence turns a small dispute into a travel budget."
     },
     {
@@ -56,14 +71,20 @@
       "id": "NDA-08",
       "clause": "Non-Compete",
       "test": "must_be_absent_or_approved",
-      "approved_values": ["mutual", "none"],
+      "approved_values": [
+        "mutual",
+        "none"
+      ],
       "why": "A non-compete inside an NDA is out of place and is frequently missed because nobody expects to find one there. Code cannot judge whether a particular form is acceptable, so this returns NEEDS_LAWYER rather than a verdict."
     },
     {
       "id": "NDA-09",
       "clause": "Non-Solicit",
       "test": "must_be_absent_or_approved",
-      "approved_values": ["mutual", "none"],
+      "approved_values": [
+        "mutual",
+        "none"
+      ],
       "why": "Same reason as NDA-08: it changes what the document does, and whether the form is acceptable is a person's call."
     },
     {

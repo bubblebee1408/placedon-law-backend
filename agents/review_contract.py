@@ -255,6 +255,20 @@ def _nda(term="This Agreement continues for three years from the date above.",
     return _BASE.format(term=term, cap=cap, law=law, seat=seat, extra=extra)
 
 
+def _without(text: str, heading: str) -> str:
+    """The contract with one numbered clause cut out, heading and body together."""
+    lines, out, dropping = text.splitlines(keepends=True), [], False
+    for line in lines:
+        if line.startswith(heading):
+            dropping = True
+            continue
+        if dropping and re.match(r"^\d+\. ", line):
+            dropping = False
+        if not dropping:
+            out.append(line)
+    return "".join(out)
+
+
 def _std(term="three years", cap="Rs 50,00,000", law="India", seat="Mumbai") -> dict:
     return {
         "Definition of Confidential Information":
@@ -296,7 +310,12 @@ def fixtures() -> tuple[Fixture, ...]:
                 {**_ALL_PRESENT, "NDA-02": pb.DEVIATES}),
         Fixture("N04", _nda(seat="London"), _std(seat="London"),
                 {**_ALL_PRESENT, "NDA-03": pb.DEVIATES}),
-        Fixture("N05", _nda(), drop(_std(), "Definition of Confidential Information"),
+        # The clause is removed from the TEXT, not merely from the proposal. An earlier
+        # version dropped it from `proposed` only, so the fixture asserted MISSING while
+        # the document still contained the clause -- and a live model that read the
+        # document correctly found it and "disagreed". The fixture was wrong, not the model.
+        Fixture("N05", _without(_nda(), "1. Definition of Confidential Information"),
+                drop(_std(), "Definition of Confidential Information"),
                 {**_ALL_PRESENT, "NDA-04": pb.MISSING}),
         Fixture("N06", _nda(extra=nc),
                 {**_std(), "Non-Compete": {"span": "shall not compete with the Disclosing "
@@ -305,7 +324,8 @@ def fixtures() -> tuple[Fixture, ...]:
                 {**_ALL_PRESENT, "NDA-08": pb.NEEDS_LAWYER}),
         Fixture("N07", _nda(cap="5 crore"), _std(cap="5 crore"),
                 {**_ALL_PRESENT, "NDA-10": pb.DEVIATES}),
-        Fixture("N08", _nda(), drop(_std(), "Return or Destruction"),
+        Fixture("N08", _without(_nda(), "4. Return or Destruction"),
+                drop(_std(), "Return or Destruction"),
                 {**_ALL_PRESENT, "NDA-07": pb.MISSING}),
         Fixture("N09", "MUTUAL NON-DISCLOSURE AGREEMENT\n\nThe parties agree to keep "
                        "things quiet.\n", {},
@@ -392,6 +412,20 @@ def _test() -> None:
     check({pb.MATCHES, pb.DEVIATES, pb.MISSING, pb.NEEDS_LAWYER} <= statuses,
           f"...and all four statuses are reached across the set ({sorted(statuses)}) -- a "
           f"fixture set that only ever MATCHES measures nothing")
+
+    # A MISSING expectation must mean the clause is missing from the DOCUMENT, or the
+    # fixture is asserting that the model failed to read rather than that the clause is
+    # absent -- and a live model reading correctly then "disagrees" with a wrong fixture.
+    for fid, heading, rule in (("N05", "Definition of Confidential Information", "NDA-04"),
+                               ("N08", "Return or Destruction", "NDA-07")):
+        fx = next(f for f in fixtures() if f.id == fid)
+        check(heading not in fx.text,
+              f"{fid} is missing {heading!r} from its TEXT, not merely from its proposal")
+        check(fx.expect[rule] == pb.MISSING,
+              f"...which is why {rule} expects MISSING there")
+    check("Definition of Confidential Information" in fixtures()[0].text,
+          "...while the baseline fixture still contains it, so _without() cut one clause "
+          "and not the document")
 
     n09 = next(rv for fx, rv in results if fx.id == "N09")
     check(all(f.status in (pb.MISSING, pb.MATCHES) for f in n09.findings),
