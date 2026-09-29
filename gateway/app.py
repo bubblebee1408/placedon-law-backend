@@ -45,6 +45,9 @@ from datetime import datetime, timezone
 from fastapi import FastAPI, Request                         # noqa: E402
 from fastapi.responses import Response                       # noqa: E402
 
+from gateway import audit as audit_mod                       # noqa: E402
+from gateway.auth import AuthError, KeyStore, bearer          # noqa: E402
+
 V1_PREFIX = "/v1"
 HEALTH_PATH = "/v1/health"
 
@@ -92,7 +95,14 @@ def health_body(engine_body: dict, deployment: Deployment) -> dict:
                                           "note": deployment.note}}
 
 
-def create_app(*, deployment: Deployment | None = None, clock=None, handler=None):
+# GET /v1/health is the one route served without a key. A liveness probe that needs a
+# credential is a liveness probe that lies during the outage you built it for -- and it
+# carries no tenant data: the engine's provenance and which store is behind it.
+PUBLIC_ROUTES = frozenset({HEALTH_PATH})
+
+
+def create_app(*, deployment: Deployment | None = None, clock=None, handler=None,
+               keys: KeyStore | None = None):
     """The FastAPI app. Every dependency injected so the test reaches no network or clock."""
     dep = deployment or Deployment()
     now = clock or utc_now
@@ -107,6 +117,37 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
     from agents.runtime import MemoryStore
     app.state.run_store = MemoryStore()
     app.state.documents = {}
+    app.state.keys = keys if keys is not None else KeyStore()
+    # The audit chain, in memory with the rest of it. Append-only and hash-chained already
+    # (gateway/audit.py); what is missing is Postgres, not the chain.
+    app.state.audit = ()
+
+    def _unauthorised() -> Response:
+        return Response(content=dumps({"error": "unauthorized",
+                                       "detail": "a valid API key is required"}),
+                        status_code=401, media_type="application/json",
+                        headers={"WWW-Authenticate": "Bearer"})
+
+    def _principal(request: Request):
+        raw = bearer(request.headers.get("authorization")) or \
+            request.headers.get("x-api-key")
+        return app.state.keys.resolve(raw)
+
+    def _record(principal, *, action: str, route: str, resource: str,
+                outcome: str, status: int) -> None:
+        """One metadata row per served call. NEVER a document, a prompt or an answer.
+
+        `resource` is an identifier -- a verb name, a run id, a document's sha256 -- and
+        the question a caller asked is none of those. audit.py caps and scrubs each field,
+        but the rule that keeps client text out of the chain is enforced here, at the only
+        place that chooses what goes in.
+        """
+        import uuid
+        app.state.audit = audit_mod.append(
+            app.state.audit, timestamp=now(), request_id=str(uuid.uuid4()),
+            tenant_id=principal.tenant_id, actor=principal.actor,
+            action=action, route=route, resource=resource,
+            outcome=outcome, http_status=status)
 
     @app.api_route("/v1/{rest:path}", methods=["GET", "POST"])
     async def v1(rest: str, request: Request) -> Response:
@@ -122,12 +163,23 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
                     return Response(content=dumps(
                         {"error": "bad_request", "detail": "body is not valid JSON"}),
                         status_code=400, media_type="application/json")
+        bare = request.url.path.rstrip("/") or "/"
+        principal = None
+        if bare not in PUBLIC_ROUTES:
+            try:
+                principal = _principal(request)
+            except AuthError:
+                return _unauthorised()
         path = request.url.path
         if request.url.query:
             path = f"{path}?{request.url.query}"
         status, payload = handle(request.method, path, body, generated_at=now())
-        if request.url.path.rstrip("/") == HEALTH_PATH and status == 200:
+        if bare == HEALTH_PATH and status == 200:
             payload = health_body(payload, dep)
+        if principal is not None:
+            _record(principal, action=audit_mod.READ, route=f"{request.method} {bare}",
+                    resource=bare, outcome="served" if status < 400 else "refused",
+                    status=status)
         return Response(content=dumps(payload), status_code=status,
                         media_type="application/json")
 
@@ -141,6 +193,10 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
         path = rest_path(verb)
 
         async def _route(request: Request) -> Response:
+            try:
+                principal = _principal(request)
+            except AuthError:
+                return _unauthorised()
             args = dict(request.path_params)
             if verb.method == "POST":
                 raw = await request.body()
@@ -171,6 +227,15 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
                 code = 404 if out["code"] == "NOT_FOUND" else 503
             elif isinstance(out, dict) and out.get("code") == "BAD_REQUEST":
                 code = 400
+            # The resource is an IDENTIFIER, never the input. For documents.upload that
+            # is the sha256 the handler returned; for a run verb, the run id; otherwise
+            # the verb's own name. The question a caller asked never reaches the chain.
+            resource = (out.get("document_id") if isinstance(out, dict) else None) \
+                or args.get("run_id") or verb.name
+            _record(principal,
+                    action=audit_mod.READ if verb.read_only else audit_mod.WRITE,
+                    route=f"{verb.method} {path}", resource=str(resource),
+                    outcome="served" if code < 400 else "refused", status=code)
             return Response(content=dumps(out), status_code=code,
                             media_type="application/json")
 
@@ -234,9 +299,16 @@ def _test() -> None:
 
     from checker.api import handle
 
+    from gateway.auth import KeyStore
+
     GEN = "2026-09-10T00:00:00Z"
-    app = create_app(deployment=Deployment(MEMORY_STORE), clock=lambda: GEN)
-    client = TestClient(app)
+    T = "11111111-2222-3333-4444-555555555555"
+    A = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+    keys = KeyStore()
+    KEY, PRINCIPAL = keys.mint(tenant_id=T, actor=A, label="gate")
+    app = create_app(deployment=Deployment(MEMORY_STORE), clock=lambda: GEN, keys=keys)
+    client = TestClient(app, headers={"Authorization": f"Bearer {KEY}"})
+    anon = TestClient(app)
 
     # ── every /v1 route, byte for byte ──────────────────────────────────────
     differed = []
@@ -277,7 +349,8 @@ def _test() -> None:
     check("migrations" in got["store"]["note"],
           "...naming the migrations that have not been applied")
 
-    pg = TestClient(create_app(deployment=Deployment(POSTGRES_STORE), clock=lambda: GEN))
+    pg = TestClient(create_app(deployment=Deployment(POSTGRES_STORE), clock=lambda: GEN,
+                               keys=keys), headers={"Authorization": f"Bearer {KEY}"})
     got_pg = json.loads(pg.get(HEALTH_PATH).content)
     check(got_pg["store"]["kind"] == POSTGRES_STORE
           and got_pg["store"]["degraded"] is False,
@@ -350,6 +423,51 @@ def _test() -> None:
           "shadowed by a verb")
     check(write_verbs() == ("documents.upload",),
           f"one write verb today, and it is named ({write_verbs()})")
+
+    # ── auth: a key is required everywhere except liveness ──────────────────
+    check(anon.get(HEALTH_PATH).status_code == 200,
+          "health is served WITHOUT a key -- a liveness probe that needs a credential "
+          "lies during the outage it was built for")
+    for m, path in (("POST", "/v1/ask"), ("GET", "/v1/company/X/events"),
+                    ("POST", "/v2/documents/upload"), ("GET", "/v2/runs/r1")):
+        r = anon.request(m, path, json={} if m == "POST" else None)
+        check(r.status_code == 401 and json.loads(r.content)["error"] == "unauthorized",
+              f"{m} {path} without a key is 401")
+    check(anon.get(HEALTH_PATH).headers.get("content-type", "").startswith(
+        "application/json"), "...and the public route still answers JSON")
+    r = anon.request("POST", "/v1/ask", json={}, headers={"Authorization": "Bearer nope"})
+    check(r.status_code == 401 and "WWW-Authenticate" in r.headers,
+          "a WRONG key is 401 too, with a WWW-Authenticate header")
+    check(TestClient(app, headers={"x-api-key": KEY}).post(
+        "/v1/ask", json={"question": "x"}).status_code == 200,
+        "x-api-key is accepted as well as Bearer")
+
+    # ── an audit row per served call, metadata only ──────────────────────────
+    before = len(app.state.audit)
+    client.post("/v2/documents/upload", json={"text": "CONFIDENTIAL: Acme and Beta."})
+    client.post("/v1/ask", json={"question": "how many board meetings must be held"})
+    after = app.state.audit
+    check(len(after) == before + 2, f"one row per served call ({len(after) - before})")
+    check(audit_mod.verify(after)[0], "...and the chain verifies")
+    joined = " ".join(f"{r.tenant_id}{r.actor}{r.route}{r.resource}{r.outcome}"
+                      for r in after)
+    for leak in ("CONFIDENTIAL", "Acme", "how many board meetings", "board meetings"):
+        check(leak not in joined,
+              f"...and NO document or prompt text reached the chain ({leak!r})")
+    up_row = next(r for r in after if "documents" in r.route)
+    check(len(up_row.resource) == 64,
+          f"a document row names its sha256, which is metadata ({up_row.resource[:12]}…)")
+    check(up_row.action == audit_mod.WRITE, "...and an upload is recorded as a WRITE")
+    ask_row = next(r for r in after if r.route.endswith("/v1/ask"))
+    check(ask_row.action == audit_mod.READ and ask_row.resource == "/v1/ask",
+          "a read is recorded as a READ, and its resource is the ROUTE, never the question")
+    check(all(r.tenant_id == T and r.actor == A for r in after),
+          "every row carries the tenant and actor the key resolved to")
+    n = len(app.state.audit)
+    anon.post("/v1/ask", json={})
+    check(len(app.state.audit) == n,
+          "an unauthorised call writes NO row: there is no tenant to attribute it to, and "
+          "audit.py refuses a row that cannot be joined to one")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:
