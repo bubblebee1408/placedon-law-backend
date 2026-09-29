@@ -64,14 +64,23 @@ class Backend(Protocol):
 # normalising, `step["model"]` is a KeyError on memory and None on Postgres -- which is a
 # divergence that only shows up on the backend the gate does not run.
 STEP_KEYS = ("capability", "engine_capability", "status", "model", "degraded",
-             "provider", "region", "cost_inr")
+             "provider", "region", "cost_inr", "cost_note")
 PROPOSITION_KEYS = ("status", "source_ref", "span_start", "span_end")
+
+
+NO_CALL_NOTE = ("no model was called on this step, so there is nothing to price. This is "
+                "not a cost of zero.")
 
 
 def _shaped(row: dict, keys: tuple[str, ...]) -> dict:
     out = {k: row.get(k) for k in keys}
     if "degraded" in keys:
         out["degraded"] = bool(row.get("degraded", False))
+    if "cost_note" in keys and out.get("cost_inr") is None and not out.get("cost_note"):
+        # A null cost ALWAYS carries a reason. Without this, a step with no model reads as
+        # a blank -- and a blank beside a null is indistinguishable from a cost nobody
+        # bothered to record, which is the ambiguity this whole change exists to remove.
+        out["cost_note"] = NO_CALL_NOTE
     return out
 
 
@@ -161,17 +170,23 @@ class PostgresBackend:
                 (rid, self.tenant_id, self.actor_id, run.get("intent", ""),
                  run.get("status", "PLANNED"), run.get("refusal_code")))
             c.execute("DELETE FROM run_steps WHERE run_id = %s", (rid,))
-            for i, s in enumerate(run.get("steps", [])):
+            # Shaped on the way IN, the same as MemoryBackend: one normalisation for
+            # both backends, or the two disagree about what a null cost means. The shared
+            # conformance suite caught this on Postgres while memory passed.
+            for i, s in enumerate(_shaped(st, STEP_KEYS)
+                                  for st in run.get("steps", [])):
                 c.execute(
                     "INSERT INTO run_steps (run_id, ordinal, tenant_id, capability, "
                     "engine_capability, status, model, degraded, provider, region, "
-                    "cost_inr) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+                    "cost_inr, cost_note) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
                     (rid, i, self.tenant_id, s.get("capability", ""),
                      s.get("engine_capability"), s.get("status", "PLANNED"),
                      s.get("model"), bool(s.get("degraded", False)),
-                     s.get("provider"), s.get("region"), s.get("cost_inr")))
+                     s.get("provider"), s.get("region"), s.get("cost_inr"),
+                     s.get("cost_note")))
             c.execute("DELETE FROM propositions WHERE run_id = %s", (rid,))
-            for i, p in enumerate(run.get("propositions", [])):
+            for i, p in enumerate(_shaped(pr, PROPOSITION_KEYS)
+                                  for pr in run.get("propositions", [])):
                 import uuid as _uuid
                 c.execute(
                     "INSERT INTO propositions (proposition_id, run_id, tenant_id, ordinal, "
@@ -196,10 +211,11 @@ class PostgresBackend:
             out["steps"] = [
                 {"capability": s[0], "engine_capability": s[1], "status": s[2],
                  "model": s[3], "degraded": s[4], "provider": s[5], "region": s[6],
-                 "cost_inr": float(s[7]) if s[7] is not None else None}
+                 "cost_inr": float(s[7]) if s[7] is not None else None,
+                 "cost_note": s[8]}
                 for s in c.execute(
                     "SELECT capability, engine_capability, status, model, degraded, "
-                    "provider, region, cost_inr "
+                    "provider, region, cost_inr, cost_note "
                     "FROM run_steps WHERE run_id = %s ORDER BY ordinal", (run_id,)).fetchall()]
             out["propositions"] = [
                 {"status": p[0], "source_ref": p[1], "span_start": p[2], "span_end": p[3]}
@@ -269,7 +285,8 @@ SAMPLE_RUN = {
          "model": None, "degraded": False},
         {"capability": "document", "engine_capability": "document.ground_extraction",
          "status": "ANSWERED", "model": "azure/llama-3-3-70b", "degraded": True,
-         "provider": "azure", "region": "UAE North", "cost_inr": 0.0},
+         "provider": "azure", "region": "UAE North", "cost_inr": None,
+         "cost_note": "UNPRICED: no verified price on record for this deployment"},
         {"capability": "playbook", "engine_capability": "contract.playbook_review",
          "status": "ANSWERED", "model": None, "degraded": False},
     ],
@@ -319,10 +336,13 @@ def conformance(backend) -> list[tuple[bool, str]]:
            and got["steps"][1]["degraded"] is True,
            "...carrying which model served a step and whether the route was degraded")
         ck(got["steps"][1]["provider"] == "azure"
-           and got["steps"][1]["region"] == "UAE North"
-           and got["steps"][1]["cost_inr"] == 0.0,
-           "...and the provider, the deployment REGION and the rupee cost, so a trace "
-           "answers 'where did this document go' without reading a deployment note")
+           and got["steps"][1]["region"] == "UAE North",
+           "...and the provider and the deployment REGION, so a trace answers 'where did "
+           "this document go' without reading a deployment note")
+        ck(got["steps"][1]["cost_inr"] is None
+           and "UNPRICED" in (got["steps"][1]["cost_note"] or ""),
+           "...and an unpriced call records NULL with its reason, never 0.0: Azure bills "
+           "student credit, so a recorded zero would be a claim the call was free")
         ck([p["status"] for p in got["propositions"]] == ["VERIFIED", "UNVERIFIED"],
            "...and its propositions, in order")
         ck(got["propositions"][0]["span_start"] == 10
@@ -362,6 +382,13 @@ def conformance(backend) -> list[tuple[bool, str]]:
        "on one backend and None on the other")
     ck(sp and set(sp["propositions"][0]) == set(PROPOSITION_KEYS),
        "...and the same for a proposition")
+
+    # A null cost always says WHY it is null.
+    nulls = [st for st in (backend.read_run(sparse_id) or {}).get("steps", [])
+             if st["cost_inr"] is None]
+    ck(nulls and all(st["cost_note"] for st in nulls),
+       "every step with a null cost carries a reason -- a blank beside a null is "
+       "indistinguishable from a cost nobody bothered to record")
 
     ck(backend.get_document("0" * 64) is None, "an unknown document reads as None")
     sha = _uuid.uuid4().hex + _uuid.uuid4().hex

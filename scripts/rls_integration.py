@@ -11,7 +11,7 @@ declares ENABLE and FORCE row level security and a policy. Static checks catch a
 that forgot the discipline. Only this file catches a server where the discipline does not
 hold.
 
-## STATUS: RUN — 2026-09-29, PostgreSQL 18.6, 54 checks, 0 failures
+## STATUS: RUN — 2026-09-29, PostgreSQL 18.6, 59 checks, 0 failures
 
     LAST_RUN = None
 
@@ -192,7 +192,8 @@ def run(url: str) -> int:
         print(f"  app    : {APP_ROLE} (superuser=False, bypassrls=False) — the only role "
               f"whose visibility is asserted\n")
 
-        for f in ("001_core.sql", "002_runs.sql", "003_step_provenance.sql"):
+        for f in ("001_core.sql", "002_runs.sql", "003_step_provenance.sql",
+                  "004_cost_note.sql"):
             cur.execute(sql(f))
             print(f"  applied {f}")
         _ensure_app_role(cur)
@@ -318,6 +319,32 @@ def run(url: str) -> int:
     still = ba.read_run(shared_id)
     note(still and still["status"] == "ANSWERED" and still["intent"] == "ask",
          "...and tenant A's run is untouched by the attempt")
+
+    # ── the database refuses a billed provider claiming a call was free ─────
+    print()
+    with _connect(app_url) as app:
+        c = app.cursor()
+        c.execute("SELECT set_config('app.tenant_id', %s, false)", (str(a),))
+        rid2 = str(uuid.uuid4())
+        c.execute("INSERT INTO runs (run_id, tenant_id, actor_id, intent, status) "
+                  "VALUES (%s,%s,%s,'ask','ANSWERED')", (rid2, a, actor_a))
+        try:
+            c.execute("INSERT INTO run_steps (run_id, ordinal, tenant_id, capability, "
+                      "status, provider, cost_inr) VALUES (%s,0,%s,'research','ANSWERED',"
+                      "'azure',0)", (rid2, a))
+            note(False, "the database refuses cost_inr=0 from a billed provider")
+        except Exception as e:                                   # noqa: BLE001
+            note("run_steps_billed_never_zero" in str(e),
+                 "the DATABASE refuses cost_inr=0 from a billed provider, not only the "
+                 "application -- the application is not the only thing that can write")
+        c.execute("INSERT INTO run_steps (run_id, ordinal, tenant_id, capability, status, "
+                  "provider, cost_inr, cost_note) VALUES (%s,1,%s,'research','ANSWERED',"
+                  "'azure',NULL,'UNPRICED: no verified price on record')", (rid2, a))
+        note(True, "...while NULL with a reason is accepted, which is what UNPRICED is")
+        c.execute("INSERT INTO run_steps (run_id, ordinal, tenant_id, capability, status, "
+                  "provider, cost_inr) VALUES (%s,2,%s,'classify','ANSWERED','gemini',0)",
+                  (rid2, a))
+        note(True, "...and a FREE provider may record 0, because its marginal cost is zero")
 
     # ── the SAME store contract the gate runs against the dict ──────────────
     print()

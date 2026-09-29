@@ -115,12 +115,21 @@ def _test() -> None:
             print(f"  [FAIL] {label}")
 
     files = [p.name for p in migrations()]
-    check(files == ["001_core.sql", "002_runs.sql", "003_step_provenance.sql"],
+    check(files == ["001_core.sql", "002_runs.sql", "003_step_provenance.sql",
+                    "004_cost_note.sql"],
           f"every migration exists, in order ({files})")
     step_sql = (MIGRATIONS / "003_step_provenance.sql").read_text(encoding="utf-8")
     for col in ("provider", "region", "cost_inr"):
         check(f"ADD COLUMN IF NOT EXISTS {col}" in step_sql,
               f"003 adds run_steps.{col}, idempotently")
+    cost_sql = (MIGRATIONS / "004_cost_note.sql").read_text(encoding="utf-8")
+    check("ADD COLUMN IF NOT EXISTS cost_note" in cost_sql,
+          "004 adds run_steps.cost_note")
+    check("run_steps_billed_never_zero" in cost_sql
+          and "cost_inr <> 0" in cost_sql,
+          "...and a CHECK constraint so a BILLED provider cannot record a zero cost -- the "
+          "database enforces it too, because the application is not the only thing that "
+          "can write a row")
     check("PLAN_22 D3" in step_sql and "region" in step_sql,
           "...and says why the region is on the STEP: a region in a deployment note is a "
           "region nobody checks")

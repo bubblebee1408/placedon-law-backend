@@ -225,8 +225,24 @@ def refuse_unconfirmed_region(origins) -> None:
             f"that decision, or mark the document as test data. Nothing was sent.")
 
 
+def usage_of(data: dict) -> dict:
+    """The token counts a reply reported, as ints or None. NEVER defaulted to zero.
+
+    An absent count is not a count of zero: backend/azure_pricing.py prices None as
+    UNPRICED, and a zero would price as free.
+    """
+    u = (data or {}).get("usage") or {}
+
+    def _n(key):
+        v = u.get(key)
+        return int(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else None
+
+    return {"tokens_in": _n("prompt_tokens"), "tokens_out": _n("completion_tokens"),
+            "deployment": None}
+
+
 def narrate(prompt: str, *, origin, model: str = DEFAULT_DEPLOYMENT, budget=None,
-            timeout: int | None = None, _transport=None) -> str:
+            timeout: int | None = None, _transport=None, on_usage=None) -> str:
     """A plain text-in/text-out call to Azure, under `public_only` clearance.
 
     `origin` is an Origin or a tuple of them, and the check is `verify_prompt`: every
@@ -272,13 +288,19 @@ def narrate(prompt: str, *, origin, model: str = DEFAULT_DEPLOYMENT, budget=None
         data = _call(body, key, timeout)
 
     text = reply_text(data)
+    if on_usage is not None:
+        on_usage(usage_of(data) | {"deployment": deployment})
     if budget is not None:
+        # 0.0 against the RUPEE ledger, and that stays correct: MONTHLY_CAP_INR bounds
+        # Anthropic spend, and an Azure call consumes no rupees from it. What the call DOES
+        # consume is Azure for Students credit, a separate pot -- priced per step by
+        # backend/azure_pricing.py from the tokens reported above, never assumed to be zero.
         budget.record_call(0.0)
     return text
 
 
 def as_text_model(*, origin, model: str = DEFAULT_DEPLOYMENT, budget=None,
-                  _transport=None):
+                  _transport=None, on_usage=None):
     """`narrate` as the Callable[[str], str] that `quoted_span.summarise` takes.
 
     The clearance is bound once, here, by the caller that knows which published files the
@@ -289,7 +311,7 @@ def as_text_model(*, origin, model: str = DEFAULT_DEPLOYMENT, budget=None,
 
     def _m(prompt: str) -> str:
         return narrate(prompt, origin=origin, model=model, budget=budget,
-                       _transport=_transport)
+                       _transport=_transport, on_usage=on_usage)
     return _m
 
 
@@ -439,6 +461,24 @@ def _test() -> None:
         _os.environ.pop(ACCEPT_REGION_ENV, None)
         if held_region is not None:
             _os.environ[ACCEPT_REGION_ENV] = held_region
+
+    # ── token usage is reported, and an absent count is never zero ──────────
+    seen = []
+    narrate(cleared, origin=_o, _transport=lambda d, b: {
+        "choices": [{"message": {"content": "ok"}, "finish_reason": "stop"}],
+        "usage": {"prompt_tokens": 1234, "completion_tokens": 56}},
+        on_usage=seen.append)
+    check(seen and seen[0]["tokens_in"] == 1234 and seen[0]["tokens_out"] == 56,
+          f"a call reports the tokens it used ({seen[0] if seen else None})")
+    check(seen[0]["deployment"] == DEFAULT_DEPLOYMENT,
+          "...and which deployment used them, which is what the price table is keyed on")
+    seen.clear()
+    narrate(cleared, origin=_o, _transport=lambda d, b: good, on_usage=seen.append)
+    check(seen and seen[0]["tokens_in"] is None and seen[0]["tokens_out"] is None,
+          "a reply with NO usage object reports None, not 0 -- an unmeasured cost is not "
+          "a zero cost, and azure_pricing prices None as UNPRICED")
+    check(usage_of({"usage": {"prompt_tokens": "x"}})["tokens_in"] is None,
+          "...and a non-numeric count is None rather than coerced")
 
     check(issubclass(RateLimited, ModelUnavailable),
           "a rate limit is still ModelUnavailable, so every existing `except` catches it")

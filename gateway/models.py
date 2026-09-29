@@ -35,9 +35,10 @@ Run: PYTHONPATH=. python3 gateway/models.py
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Callable
 
+from backend.azure_pricing import check_recordable, price_inr
 from checker import azure_model, router
 
 # Where the `placedon-law-eval` deployments live. Recorded per step, not per deployment.
@@ -58,7 +59,13 @@ class NotServed(RuntimeError):
 
 @dataclass(frozen=True)
 class Served:
-    """A model that WILL be called, with everything a run step has to record."""
+    """A model that WILL be called, with everything a run step has to record.
+
+    `usage` fills in as calls are made -- `serve()` binds it as the on_usage sink -- so the
+    cost recorded on a step is derived from the tokens the provider REPORTED, not from
+    router.estimate_inr. That estimate is 0.0 for Azure and says so only about
+    MONTHLY_CAP_INR; recording it as the step's cost was a claim the call was free.
+    """
     call: Callable[[str], str]
     provider: str
     model: str
@@ -66,10 +73,25 @@ class Served:
     degraded: bool
     requires_review: bool
     est_cost_inr: float
+    usage: list = field(default_factory=list)
+
+    def cost(self) -> tuple[float | None, str]:
+        """(rupees, note). None whenever the number would be a guess."""
+        if not self.usage:
+            return None, ("UNPRICED: no call was made on this step, so there is nothing to "
+                          "price.")
+        last = self.usage[-1]
+        return price_inr(last.get("deployment") or self.model,
+                         tokens_in=last.get("tokens_in"),
+                         tokens_out=last.get("tokens_out"))
 
     def step_fields(self) -> dict:
+        cost, note = self.cost()
+        # The invariant, checked where the number is produced rather than where it lands:
+        # a BILLED provider never records exactly 0.0.
+        check_recordable(self.provider, cost)
         return {"model": f"{self.provider}/{self.model}", "provider": self.provider,
-                "region": self.region, "cost_inr": self.est_cost_inr,
+                "region": self.region, "cost_inr": cost, "cost_note": note,
                 "degraded": self.degraded}
 
 
@@ -122,13 +144,14 @@ def serve(origins, *, name: str, purpose: str, consequence: str = router.LOW,
                         f"the route chose {route.provider}/{route.model}, and the gateway "
                         f"only serves Azure routes today (PLAN_22 D3). No call was made.")
 
+    usage: list = []
     inner = (transport if transport is not None
              else azure_model.as_text_model(origin=origins, model=route.model,
-                                            budget=budget))
+                                            budget=budget, on_usage=usage.append))
     return Served(call=azure_model.with_backoff(inner, sleep=sleep or time.sleep),
                   provider=route.provider, model=route.model, region=REGION,
                   degraded=route.degraded, requires_review=route.requires_review,
-                  est_cost_inr=route.est_cost_inr)
+                  est_cost_inr=route.est_cost_inr, usage=usage)
 
 
 def _test() -> None:
@@ -159,10 +182,48 @@ def _test() -> None:
           "...marked degraded (Claude was preferred) but not requiring review: narration "
           "is LOW and every sentence is span-checked afterwards")
     f = s.step_fields()
-    check(set(f) == {"model", "provider", "region", "cost_inr", "degraded"},
-          f"a run step records provider, model, region and rupees ({sorted(f)})")
-    check(f["cost_inr"] == 0.0 and f["model"] == "azure/llama-3-3-70b",
-          f"...the rupee figure being router.estimate_inr's AZURE rule ({f['cost_inr']})")
+    check(set(f) == {"model", "provider", "region", "cost_inr", "cost_note", "degraded"},
+          f"a run step records provider, model, region and a cost WITH its note "
+          f"({sorted(f)})")
+    check(f["cost_inr"] is None and "no call was made" in f["cost_note"],
+          f"before any call the cost is UNPRICED with a reason, never 0.0 "
+          f"({f['cost_inr']}, {f['cost_note'][:40]})")
+
+    # ── a BILLED provider can never record 0.0 ──────────────────────────────
+    from backend.azure_pricing import BILLED_PROVIDERS, CostError
+    check(s.provider in BILLED_PROVIDERS,
+          f"{s.provider} is a billed provider -- these calls spend Azure for Students "
+          f"credit, whatever router.estimate_inr says about the rupee cap")
+    zero = Served(call=lambda p: "", provider="azure", model="llama-3-3-70b",
+                  region=REGION, degraded=True, requires_review=False, est_cost_inr=0.0,
+                  usage=[{"deployment": "llama-3-3-70b", "tokens_in": 0, "tokens_out": 0}])
+    check(zero.cost()[0] is None and zero.cost()[1].startswith("UNPRICED:"),
+          f"a call reporting ZERO tokens is UNPRICED, not free ({zero.cost()[1][:40]}…). "
+          f"The reason here is the missing price rather than the zero counts, because the "
+          f"table is asked first -- an unpriced deployment is unpriced whatever it used")
+    try:
+        Served(call=lambda p: "", provider="azure", model="m", region=REGION,
+               degraded=False, requires_review=False, est_cost_inr=0.0,
+               usage=[{"deployment": "m", "tokens_in": 1, "tokens_out": 1}]
+               ).step_fields()
+        check(True, "an unknown deployment is UNPRICED rather than 0.0, so it records fine")
+    except CostError:
+        check(False, "an unknown deployment should be UNPRICED, not an error")
+    try:
+        check_recordable("azure", 0.0)
+        check(False, "0.0 from Azure is refused")
+    except CostError:
+        check(True, "...and a literal 0.0 from a billed provider is REFUSED before it can "
+                    "reach a run step or a database")
+
+    # after a real call, the cost is priced from the tokens reported
+    s.usage.append({"deployment": "llama-3-3-70b", "tokens_in": 1200, "tokens_out": 300})
+    c, note = s.cost()
+    check(c is None and note.startswith("UNPRICED:"),
+          f"today llama-3-3-70b has no price on record, so a real call is UNPRICED with "
+          f"the reason ({note[:48]}…)")
+    check("price" in note.lower(),
+          "...and the reason points at the price table, which is where the fix goes")
 
     # ── the two refusals, each with its own code ────────────────────────────
     try:

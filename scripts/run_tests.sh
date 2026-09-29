@@ -69,6 +69,7 @@ suites=(
   checker/derived_date.py
   checker/document_date.py
   backend/budget.py
+  backend/azure_pricing.py
   checker/claim_schema.py
   checker/legal_ref.py
   checker/admission.py
