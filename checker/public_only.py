@@ -145,6 +145,12 @@ class Origin:
     # CLIENT TEXT: never log an Origin, and never put one in an audit row (gateway/audit.py
     # is metadata-only for this reason).
     text: str = ""
+    # MATTER only. TEST DATA -- a fixture, a specimen, a synthetic contract -- may be sent
+    # to a deployment whose hosting region is not yet confirmed for client data. A real
+    # client document may not (PLAN_22 D3), and the caller has to SAY which it is. A flag a
+    # caller sets is weak evidence on its own, which is why it is recorded on the Origin
+    # and asserted at the point of sending rather than trusted here.
+    test_data: bool = False
 
 
 def _git(args: list[str]) -> tuple[int, str]:
@@ -318,7 +324,8 @@ def untrusted_blocks(prompt: str) -> tuple[str, ...]:
     return tuple(out)
 
 
-def clear_matter(text: str, *, name: str, provider: str) -> Origin:
+def clear_matter(text: str, *, name: str, provider: str,
+                 test_data: bool = False) -> Origin:
     """A CUSTOMER document, cleared for a provider declared fit to receive one.
 
     This is the deliberate hole in "nothing but published text leaves", and it is shaped so
@@ -339,7 +346,7 @@ def clear_matter(text: str, *, name: str, provider: str) -> Origin:
     if not text.strip():
         raise NotPublic("there is no document to clear; an empty Origin would mean nothing")
     digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
-    return Origin(MATTER, f"matter:{name}", digest, text=text)
+    return Origin(MATTER, f"matter:{name}", digest, text=text, test_data=bool(test_data))
 
 
 def refuse_matter(origins) -> None:

@@ -11,7 +11,7 @@ declares ENABLE and FORCE row level security and a policy. Static checks catch a
 that forgot the discipline. Only this file catches a server where the discipline does not
 hold.
 
-## STATUS: RUN — 2026-09-29, PostgreSQL 18.6, 53 checks, 0 failures
+## STATUS: RUN — 2026-09-29, PostgreSQL 18.6, 54 checks, 0 failures
 
     LAST_RUN = None
 
@@ -69,7 +69,8 @@ MIGRATIONS = ROOT / "gateway" / "migrations"
 # Set this to an ISO date and a server description the day it is actually run.
 LAST_RUN: str | None = (
     "2026-09-29 — PostgreSQL 18.6 (Postgres.app), local socket, database placedon_dev, "
-    "asserted as role placedon_app (NOSUPERUSER, NOBYPASSRLS). 53 checks, 0 failures.")
+    "asserted as role placedon_app (NOSUPERUSER, NOBYPASSRLS). 54 checks, 0 "
+    "failures, migrations 001-003 applied.")
 
 TENANT_TABLES = ("actors", "api_keys", "documents", "audit_log",
                  "runs", "run_steps", "propositions")
@@ -97,6 +98,26 @@ def _connect(url: str):
 
 
 APP_ROLE = "placedon_app"
+
+
+ADMIN_URL_ENV = "PLACEDON_ADMIN_DATABASE_URL"
+
+
+def _admin_url(url: str) -> str:
+    """The connection that may CREATE TABLE. Not the application's.
+
+    PLACEDON_DATABASE_URL names the application role, and that role deliberately cannot
+    create tables -- which is correct, and means this script cannot use it to apply
+    migrations. PLACEDON_ADMIN_DATABASE_URL names the owner; absent, it is derived by
+    swapping the user back to the OS account, which is how Postgres.app is set up.
+    """
+    import getpass
+    import os as _os
+    import re as _re
+    explicit = _os.getenv(ADMIN_URL_ENV)
+    if explicit:
+        return explicit
+    return _re.sub(r"user=[^&]+", f"user={getpass.getuser()}", url)
 
 
 def _app_url(admin_url: str) -> str:
@@ -158,6 +179,7 @@ def run(url: str) -> int:
             failures.append(label)
 
     app_url = _app_url(url)
+    url = _admin_url(url)
 
     with _connect(url) as admin:
         cur = admin.cursor()
@@ -170,7 +192,7 @@ def run(url: str) -> int:
         print(f"  app    : {APP_ROLE} (superuser=False, bypassrls=False) — the only role "
               f"whose visibility is asserted\n")
 
-        for f in ("001_core.sql", "002_runs.sql"):
+        for f in ("001_core.sql", "002_runs.sql", "003_step_provenance.sql"):
             cur.execute(sql(f))
             print(f"  applied {f}")
         _ensure_app_role(cur)

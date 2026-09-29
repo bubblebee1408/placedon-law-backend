@@ -122,14 +122,90 @@ def _refuse(code: str, detail: str) -> dict:
     return {"status": "REFUSED", "code": code, "detail": detail}
 
 
+def _ledger():
+    """The real rupee/request ledger, or None if it cannot be read.
+
+    An unreadable ledger is not evidence the budget is empty, so the call proceeds -- the
+    same choice backend/budget.py makes in providers_available(). The cost of being wrong
+    is one call that records itself properly.
+    """
+    try:
+        from backend.budget import BudgetTracker
+        return BudgetTracker()
+    except (OSError, ValueError):
+        return None
+
+
+def _served_or_refusal(origins, *, name: str, purpose: str, ctx: Context,
+                       consequence: str | None = None):
+    """(Served|None, refusal dict|None). Never returns neither, never returns both."""
+    from gateway.models import NotServed, serve
+    if ctx.model_for is not None:                     # a test or a caller-supplied model
+        # A dataclass instance, not a class with `call` as a class attribute: a plain
+        # function stored on a class becomes a BOUND METHOD through an instance, so
+        # `served.call(prompt)` would pass `self` as the prompt. Caught on 29-09-2026.
+        from gateway.models import Served
+        return Served(call=ctx.model_for(origins), provider="stub", model="stub",
+                      region="n/a", degraded=False, requires_review=False,
+                      est_cost_inr=0.0), None
+    try:
+        from checker import router as _r
+        return serve(origins, name=name, purpose=purpose, budget=_ledger(),
+                     consequence=consequence or _r.LOW), None
+    except NotServed as e:
+        # REFUSED with the code, never a quiet UNVERIFIED: UNVERIFIED is a claim about
+        # EVIDENCE, and there is no evidence when no call was made.
+        return None, {"status": "REFUSED", "code": e.code, "detail": e.detail}
+
+
 def _ask(args: dict, ctx: Context) -> dict:
     from agents import research_question as rq
+    from checker import router
     q = (args.get("question") or "").strip()
     if not q:
         return _refuse("BAD_REQUEST", "question is required")
-    model = ctx.model_for(q) if ctx.model_for else None
-    out = rq.answer(q, model=model, available=args.get("available") or ("azure",))
-    return out.to_dict()
+
+    ev = rq.evidence(q)
+    origins = tuple(o for _, o in ev)
+    served, refusal = (None, None)
+    if origins:
+        served, refusal = _served_or_refusal(origins, name="ask",
+                                             purpose=router.NARRATION, ctx=ctx)
+        if refusal:
+            refusal["run_id"] = _persist_run(
+                ctx, intent="research_question", status="REFUSED",
+                refusal_code=refusal["code"],
+                steps=[{"capability": "intake", "status": "ANSWERED"},
+                       {"capability": "research", "status": "REFUSED"}],
+                propositions=[])
+            return refusal
+
+    try:
+        out = rq.answer(q, model=served.call if served else None,
+                        available=args.get("available") or ("azure",))
+    except Exception as e:                                       # noqa: BLE001
+        # FAILED, not REFUSED: we tried and the attempt broke. Only a transport error
+        # reaches here -- a decision not to call is handled above.
+        rid = _persist_run(ctx, intent="research_question", status="FAILED",
+                           steps=[{"capability": "research", "status": "FAILED"}],
+                           propositions=[])
+        return {"status": "FAILED", "error": f"{type(e).__name__}: {str(e)[:200]}",
+                "run_id": rid}
+
+    d = out.to_dict()
+    fields = served.step_fields() if served else {}
+    d["run_id"] = _persist_run(
+        ctx, intent="research_question", status=out.status,
+        refusal_code=out.code if out.status == "REFUSED" else None,
+        steps=[{"capability": "intake", "status": "ANSWERED"},
+               {"capability": "research", "engine_capability": "law.acquisition_exposure",
+                "status": out.status, **fields}],
+        propositions=[{"status": "VERIFIED" if s.traced else "UNVERIFIED",
+                       "source_ref": (s.citation.source_id
+                                      if getattr(s, "citation", None) else None),
+                       "span_start": None, "span_end": None}
+                      for s in (out.summary.sentences if out.summary else ())])
+    return d
 
 
 def _persist_run(ctx: Context, *, intent: str, status: str, steps: list,
@@ -165,9 +241,37 @@ def _review_contract(args: dict, ctx: Context) -> dict:
         book = pb.load(root / book_path)
     except pb.PlaybookError as e:
         return _refuse("BAD_REQUEST", f"playbook: {e}")
-    model = ctx.model_for(text) if ctx.model_for else None
-    out = rc.review(text, book=book, model=model,
-                    name=args.get("name") or "contract")
+    from checker import public_only, router
+    name = args.get("name") or "contract"
+    # The clearance is made HERE, before a route is chosen, so the served callable is bound
+    # to this document and cannot be reused against another one.
+    try:
+        origin = public_only.clear_matter(
+            text, name=name, provider="azure",
+            test_data=bool(args.get("test_data")))
+    except public_only.NotPublic as e:
+        return _refuse("NOT_PERMITTED", str(e))
+
+    served, refusal = _served_or_refusal(origin, name="review_contract",
+                                         purpose=router.EXTRACTION,
+                                         consequence=router.HIGH, ctx=ctx)
+    if refusal:
+        refusal["run_id"] = _persist_run(
+            ctx, intent="review_contract", status="REFUSED",
+            refusal_code=refusal["code"],
+            steps=[{"capability": "intake", "status": "ANSWERED"},
+                   {"capability": "document", "status": "REFUSED"}],
+            propositions=[])
+        return refusal
+
+    try:
+        out = rc.review(text, book=book, model=served.call, name=name, origin=origin)
+    except Exception as e:                                       # noqa: BLE001
+        rid = _persist_run(ctx, intent="review_contract", status="FAILED",
+                           steps=[{"capability": "document", "status": "FAILED"}],
+                           propositions=[])
+        return {"status": "FAILED", "error": f"{type(e).__name__}: {str(e)[:200]}",
+                "run_id": rid}
     d = out.to_dict()
 
     # The run, as a derivation: the steps agents/plans.py declares for this intent, and one
@@ -186,12 +290,11 @@ def _review_contract(args: dict, ctx: Context) -> dict:
               "source_ref": f"playbook:{f.rule_id}",
               "span_start": None, "span_end": None}
              for f in out.findings]
+    fields = served.step_fields()
     steps = [
         {"capability": "intake", "status": "ANSWERED", "degraded": False},
         {"capability": "document", "engine_capability": "document.ground_extraction",
-         "status": "ANSWERED",
-         "model": f"{out.route.provider}/{out.route.model}" if out.route else None,
-         "degraded": bool(out.route and out.route.degraded)},
+         "status": "ANSWERED", **fields},
         {"capability": "playbook", "engine_capability": "contract.playbook_review",
          "status": "ANSWERED", "degraded": False},
     ]
@@ -250,7 +353,11 @@ VERBS: tuple[Verb, ...] = (
          "against that standard, never a statement of law.",
          (Field("text", STRING, True, describes="the contract text"),
           Field("name", STRING, False, describes="a label for the document"),
-          Field("playbook", STRING, False, describes="repo-relative playbook path")),
+          Field("playbook", STRING, False, describes="repo-relative playbook path"),
+          Field("test_data", STRING, False,
+                describes="set when the document is a fixture or specimen, not a client "
+                          "contract. Required to send one while the deployment region is "
+                          "unconfirmed (PLAN_22 D3)")),
          "POST", read_only=True, run=_review_contract),
 
     Verb("runs.get", "One run's status and result, without its steps.",
@@ -463,9 +570,11 @@ def _test() -> None:
     from gateway.store import MemoryBackend
     from agents import review_contract as _rc
     st = MemoryBackend()
-    c2 = Context(store=st)
     fx = _rc.fixtures()[0]
-    out = _review_contract({"text": fx.text, "name": fx.id}, c2)
+    # A model is INJECTED for every check below. The gate must reach no network: a suite
+    # that calls Azure is a suite that fails on a plane and bills a student account.
+    c2 = Context(store=st, model_for=lambda origins: _rc.fixture_model(fx))
+    out = _review_contract({"text": fx.text, "name": fx.id, "test_data": True}, c2)
     check(out.get("run_id"), "review_contract returns the id of the run it wrote")
     trace = _runs_trace({"run_id": out["run_id"]}, c2)
     check([s["capability"] for s in trace["steps"]]
@@ -481,11 +590,15 @@ def _test() -> None:
           f"{len(out['findings'])} findings)")
     # With no model nothing is extracted, so every finding is MISSING -- and NOTHING may
     # be recorded as VERIFIED. Derived by subtraction, the first version recorded all ten.
-    nomodel = Context(store=MemoryBackend())
-    o_nm = _review_contract({"text": fx.text, "name": fx.id}, nomodel)
+    # "Nothing extracted" is now a MODEL that finds nothing, not the absence of one:
+    # the verbs serve a real route today, so absence of a model is a refusal instead.
+    nomodel = Context(store=MemoryBackend(),
+                      model_for=lambda origins: (lambda prompt: "{}"))
+    o_nm = _review_contract({"text": fx.text, "name": fx.id, "test_data": True},
+                            nomodel)
     st_nm = nomodel.store.read_run(o_nm["run_id"])
     check({f["status"] for f in o_nm["findings"]} == {"MISSING", "MATCHES"},
-          f"with no model configured nothing is extracted: every finding is MISSING, "
+          f"a model that extracts NOTHING leaves every finding MISSING, "
           f"except the must_be_absent rules, which MATCH on absence "
           f"({sorted({f['status'] for f in o_nm['findings']})})")
     check({p["status"] for p in st_nm["propositions"]} == {"UNVERIFIED"},
@@ -498,9 +611,31 @@ def _test() -> None:
           "a legal verdict is read from")
     check(all(p["source_ref"].startswith("playbook:") for p in stored["propositions"]),
           "...and naming the rule it came from")
-    check(_review_contract({"text": fx.text}, Context()).get("run_id") is None,
+    check(_review_contract({"text": fx.text, "test_data": True},
+                           Context(model_for=lambda o: _rc.fixture_model(fx))
+                           ).get("run_id") is None,
           "with NO store the verb still answers, and says the run id is None rather than "
           "handing back one that resolves to nothing")
+
+    # ── PLAN_22 D3: a real client contract may not go to an unconfirmed region ──
+    import os as _os
+    from checker.azure_model import ACCEPT_REGION_ENV, DEPLOYMENT_REGION
+    held = _os.environ.pop(ACCEPT_REGION_ENV, None)
+    try:
+        real = _review_contract(
+            {"text": fx.text, "name": "acme-real.docx"},
+            Context(store=MemoryBackend()))
+        check(real.get("status") in ("FAILED", "REFUSED"),
+              f"a contract NOT marked test data does not produce findings "
+              f"({real.get('status')})")
+        check("findings" not in real,
+              "...and no findings are served from a document that was never sent")
+        check(DEPLOYMENT_REGION in str(real),
+              f"...the reason naming the region ({DEPLOYMENT_REGION}), so a reader knows "
+              f"it is a residency decision and not an outage")
+    finally:
+        if held is not None:
+            _os.environ[ACCEPT_REGION_ENV] = held
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:

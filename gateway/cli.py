@@ -126,15 +126,20 @@ def _test() -> None:
 
     # end to end, in ONE process: review a contract, then read its trace back
     from agents import review_contract as _rc
-    shared = Context(store=MemoryBackend())
+    # A model is INJECTED: the gate reaches no network, and this asserts the CLI's
+    # plumbing rather than a model's reading.
+    shared = Context(store=MemoryBackend(),
+                     model_for=lambda origins: _rc.fixture_model(_rc.fixtures()[0]))
     fx = _rc.fixtures()[0]
-    c1, o1 = run(["review-contract", "--text", fx.text, "--name", fx.id], ctx=shared)
+    c1, o1 = run(["review-contract", "--text", fx.text, "--name", fx.id,
+                  "--test-data", "yes"], ctx=shared)
     check(c1 == 0 and o1.get("run_id"), "review-contract answers and returns a run id")
     c2, o2 = run(["runs-trace", "--run-id", o1["run_id"]], ctx=shared)
     check(c2 == 0 and [s["capability"] for s in o2["steps"]]
           == ["intake", "document", "playbook"],
           "...and runs-trace reads that run back through the CLI, same store")
-    c3, o3 = run(["runs-trace", "--run-id", o1["run_id"]], ctx=Context(store=MemoryBackend()))
+    c3, o3 = run(["runs-trace", "--run-id", o1["run_id"]],
+                 ctx=Context(store=MemoryBackend()))
     check(c3 == 1 and o3["code"] == "NOT_FOUND",
           "...while a DIFFERENT in-memory store does not have it -- which is what two CLI "
           "invocations are without Postgres, and why the Postgres store exists")

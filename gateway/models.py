@@ -1,0 +1,251 @@
+"""Turning a router decision into a callable, or into a NAMED refusal.
+
+The verbs used to run with `model=None`, which is not "no model" -- it is a pipeline that
+extracts nothing and then reports every clause MISSING, indistinguishable from a contract
+that genuinely lacks them. This module is what stands between those two outcomes.
+
+**No new provider code.** Everything here is composition: `checker/router.py` decides which
+model, `checker/azure_model.py` calls it, `with_backoff` honours a 429, and
+`backend/budget.py` says whether a call may be made at all. If this file grew an HTTP
+request it would be the second Azure client, and the second one drifts.
+
+## Why a refusal is REFUSED and not FAILED
+
+`agents/state.py` separates them and the separation is the product:
+
+    REFUSED   we decided not to answer, and the code says which decision
+              NO_MODEL  -- no route for this task with the providers available
+              NO_BUDGET -- the guard refused before any call was made
+    FAILED    we tried and the attempt broke. A transport error, and nothing else
+
+A budget refusal recorded as FAILED sends someone to look at the network. A transport error
+recorded as REFUSED says the system chose this, which it did not. And neither may become a
+quiet UNVERIFIED: that is a claim about the EVIDENCE, and there is no evidence when no call
+happened.
+
+## The region, carried on every step
+
+PLAN_22 D3 permits client documents only to endpoints whose hosting region is confirmed.
+These deployments are in UAE North, and whether that is acceptable for an Indian in-house
+team's contracts is a buyer's decision nobody has taken. So the region travels with the
+route onto every run step rather than living in a deployment note nobody reads.
+
+Run: PYTHONPATH=. python3 gateway/models.py
+"""
+from __future__ import annotations
+
+import time
+from dataclasses import dataclass
+from typing import Callable
+
+from checker import azure_model, router
+
+# Where the `placedon-law-eval` deployments live. Recorded per step, not per deployment.
+REGION = "UAE North"
+
+NO_MODEL = "NO_MODEL"
+NO_BUDGET = "NO_BUDGET"
+
+
+class NotServed(RuntimeError):
+    """No model will be called, and `code` says which decision that was."""
+
+    def __init__(self, code: str, detail: str) -> None:
+        super().__init__(detail)
+        self.code = code
+        self.detail = detail
+
+
+@dataclass(frozen=True)
+class Served:
+    """A model that WILL be called, with everything a run step has to record."""
+    call: Callable[[str], str]
+    provider: str
+    model: str
+    region: str
+    degraded: bool
+    requires_review: bool
+    est_cost_inr: float
+
+    def step_fields(self) -> dict:
+        return {"model": f"{self.provider}/{self.model}", "provider": self.provider,
+                "region": self.region, "cost_inr": self.est_cost_inr,
+                "degraded": self.degraded}
+
+
+# The providers this gateway has a callable for. Anthropic is PREFERRED by router.py and
+# is deliberately not here: there is no Anthropic adapter wired into the gateway, and
+# PLAN_22 §3 records that the founder has no Anthropic credit. Asking the router for a
+# route among providers we cannot call would produce a correct route we then refuse --
+# which is what happened on 29-09-2026, reported as NO_MODEL while Azure sat available.
+SERVEABLE = frozenset({router.AZURE})
+
+
+def available_providers(credit_exhausted=None) -> tuple[str, ...]:
+    """What router.py offers, narrowed to what this gateway can actually call."""
+    return tuple(p for p in router.providers_available(credit_exhausted=credit_exhausted)
+                 if p in SERVEABLE)
+
+
+def serve(origins, *, name: str, purpose: str, consequence: str = router.LOW,
+          budget=None, available: tuple[str, ...] | None = None,
+          sleep=None, transport=None) -> Served:
+    """The route for this task, as a callable. Raises NotServed with a code, never None.
+
+    `origins` is the public_only clearance the model call will be made under; it is bound
+    here so the returned callable cannot be used against a different document.
+    """
+    providers = available_providers() if available is None else available
+    if not providers:
+        raise NotServed(
+            NO_MODEL,
+            f"no provider this gateway can call is available. It serves "
+            f"{sorted(SERVEABLE)} today; router.py additionally knows "
+            f"{sorted(set(router.providers_available()) - SERVEABLE)}, for which no "
+            f"callable is wired here. No call was made.")
+    task = router.Task(name, router.TEXT, consequence, purpose=purpose)
+    try:
+        route = router.route(task, available=providers)
+    except router.NoRoute as e:
+        raise NotServed(NO_MODEL, f"{e}") from None
+
+    if budget is not None:
+        verdict = budget.can_make_call(0.0, model=route.model)
+        if not verdict.allowed:
+            raise NotServed(NO_BUDGET, verdict.reason)
+
+    if route.provider != router.AZURE:
+        # Deliberate: the only adapter wired here is Azure's, and PLAN_22 D3 puts every
+        # model call inside Azure. A Gemini route would need its own callable, and adding
+        # one silently is how a matter document ends up at a free tier.
+        raise NotServed(NO_MODEL,
+                        f"the route chose {route.provider}/{route.model}, and the gateway "
+                        f"only serves Azure routes today (PLAN_22 D3). No call was made.")
+
+    inner = (transport if transport is not None
+             else azure_model.as_text_model(origin=origins, model=route.model,
+                                            budget=budget))
+    return Served(call=azure_model.with_backoff(inner, sleep=sleep or time.sleep),
+                  provider=route.provider, model=route.model, region=REGION,
+                  degraded=route.degraded, requires_review=route.requires_review,
+                  est_cost_inr=route.est_cost_inr)
+
+
+def _test() -> None:
+    ok = fail = 0
+
+    def check(cond: bool, label: str) -> None:
+        nonlocal ok, fail
+        if cond:
+            ok += 1
+            print(f"  [PASS] {label}")
+        else:
+            fail += 1
+            print(f"  [FAIL] {label}")
+
+    from checker import public_only
+    act = public_only.ROOT / "corpus" / "companies_act" / "1220.json"
+    origin = public_only.clear_file(act)
+    NARR = router.NARRATION
+
+    # ── a model that WILL be called ─────────────────────────────────────────
+    s = serve(origin, name="ask", purpose=NARR, available=(router.AZURE,),
+              transport=lambda p: "answered")
+    check(s.provider == "azure" and s.model == "llama-3-3-70b",
+          f"with Azure available the route is the served one ({s.provider}/{s.model})")
+    check(s.region == REGION == "UAE North",
+          f"...carrying the deployment region ({s.region})")
+    check(s.degraded and not s.requires_review,
+          "...marked degraded (Claude was preferred) but not requiring review: narration "
+          "is LOW and every sentence is span-checked afterwards")
+    f = s.step_fields()
+    check(set(f) == {"model", "provider", "region", "cost_inr", "degraded"},
+          f"a run step records provider, model, region and rupees ({sorted(f)})")
+    check(f["cost_inr"] == 0.0 and f["model"] == "azure/llama-3-3-70b",
+          f"...the rupee figure being router.estimate_inr's AZURE rule ({f['cost_inr']})")
+
+    # ── the two refusals, each with its own code ────────────────────────────
+    try:
+        serve(origin, name="ask", purpose=NARR, available=())
+        check(False, "no providers is a refusal")
+    except NotServed as e:
+        check(e.code == NO_MODEL,
+              f"no provider at all is REFUSED/{e.code}, not an empty answer")
+
+    try:
+        serve(origin, name="ask", purpose=NARR, available=(router.GEMINI,))
+        check(False, "a non-Azure route is refused here")
+    except NotServed as e:
+        check(e.code == NO_MODEL and "only serves Azure" in e.detail,
+              "a route that chose Gemini is refused rather than served by a callable this "
+              "module does not have -- adding one silently is how a matter document "
+              "reaches a free tier")
+
+    class Broke:
+        def can_make_call(self, *a, **k):
+            class V:
+                allowed = False
+                reason = "daily request cap reached: 20 of 20"
+            return V()
+
+    try:
+        serve(origin, name="ask", purpose=NARR, available=(router.AZURE,), budget=Broke(),
+              transport=lambda p: "x")
+        check(False, "an exhausted budget is a refusal")
+    except NotServed as e:
+        check(e.code == NO_BUDGET and "20 of 20" in e.detail,
+              f"an exhausted budget is REFUSED/{e.code}, carrying the ledger's own reason")
+    check(router.ANTHROPIC not in SERVEABLE and router.AZURE in SERVEABLE,
+          f"the gateway serves only {sorted(SERVEABLE)}: router.py PREFERS Anthropic and "
+          f"there is no Anthropic callable here, so asking for a route among providers we "
+          f"cannot call returns a correct route we then refuse")
+    check(all(p in SERVEABLE for p in available_providers()),
+          f"...so available_providers() narrows to what can be called "
+          f"({available_providers()})")
+    check(NO_BUDGET != NO_MODEL,
+          "...and the two codes are distinct: one needs money or tomorrow, the other a "
+          "provider, and a reader should not have to guess which")
+
+    # ── the backoff is applied, not merely available ────────────────────────
+    from checker.azure_model import RateLimited
+    tries, waits = [], []
+
+    def flaky(prompt: str) -> str:
+        tries.append(1)
+        if len(tries) < 3:
+            raise RateLimited("Azure HTTP 429")
+        return "eventually"
+
+    s2 = serve(origin, name="ask", purpose=NARR, available=(router.AZURE,),
+               transport=flaky, sleep=waits.append)
+    check(s2.call("p") == "eventually" and len(tries) == 3,
+          "the returned callable retries a 429 rather than reporting the model refused")
+    check(len(waits) == 2, f"...waiting between attempts ({waits})")
+
+    def dead(prompt: str) -> str:
+        raise RuntimeError("connection reset")
+
+    s3 = serve(origin, name="ask", purpose=NARR, available=(router.AZURE,),
+               transport=dead, sleep=waits.append)
+    try:
+        s3.call("p")
+        check(False, "a transport error propagates")
+    except RuntimeError:
+        check(True, "...while a transport error propagates unchanged, so the caller can "
+                    "record FAILED rather than inventing a refusal we did not make")
+
+    # ── no second HTTP client ───────────────────────────────────────────────
+    from pathlib import Path
+    src = Path(__file__).read_text().split("def _test(")[0]
+    for token in ("urllib", "requests", "httpx", "api-key", "Bearer "):
+        check(token not in src,
+              f"this module opens no socket of its own ({token!r} absent) -- it composes "
+              f"router, azure_model and budget, and a second client would drift")
+
+    print(f"\n{ok}/{ok + fail} passed")
+    if fail:
+        raise SystemExit(1)
+
+
+if __name__ == "__main__":
+    _test()

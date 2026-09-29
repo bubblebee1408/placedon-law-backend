@@ -165,6 +165,66 @@ def _call(body: dict, key: str, timeout: int) -> dict:
         raise ModelUnavailable(f"Azure unreachable: {e}") from None
 
 
+RETRY_BASE_SECONDS = 25.0
+
+
+def with_backoff(call, *, sleep=None, tries: int = 3, base: float = RETRY_BASE_SECONDS):
+    """Wrap a model callable so Azure's own rate limit waits instead of scoring zero.
+
+    Measured 29-09-2026: eight two-token calls in a row succeeded while twelve full
+    narration prompts returned HTTP 429, so what binds is tokens-per-minute. Without this
+    a bake-off measures Azure's quota and calls it the model's refusal rate -- the single
+    easiest way to publish a wrong number here.
+
+    `sleep` is INJECTED and defaults to None, so the gated tests exercise every branch and
+    never wait. A library that sleeps on its own is a library that hangs a test suite.
+    """
+    def _c(prompt: str) -> str:
+        last = None
+        for i in range(tries):
+            try:
+                return call(prompt)
+            except Exception as e:                               # noqa: BLE001
+                if not isinstance(e, RateLimited) or sleep is None or i == tries - 1:
+                    raise
+                last = e
+                sleep(base * (i + 1))
+        raise last                                               # pragma: no cover
+    return _c
+
+
+# Where the `placedon-law-eval` deployments are hosted, and the environment variable by
+# which an operator states that this region is acceptable for CLIENT data. PLAN_22 D3
+# permits client documents only to endpoints whose hosting region is CONFIRMED; UAE North
+# for an Indian in-house legal team is a buyer's decision nobody has taken, so the default
+# is to refuse. Test data -- fixtures, specimens, synthetic contracts -- is unaffected.
+DEPLOYMENT_REGION = "UAE North"
+ACCEPT_REGION_ENV = "PLACEDON_ACCEPT_REGION"
+
+
+def region_accepted() -> bool:
+    return (os.getenv(ACCEPT_REGION_ENV) or "").strip() == DEPLOYMENT_REGION
+
+
+def refuse_unconfirmed_region(origins) -> None:
+    """Refuse a real client document while the hosting region is unconfirmed.
+
+    Only MATTER origins are affected, and only those NOT marked test_data. Public corpus
+    text is unaffected: the Companies Act is published by the Government of India and its
+    residency is not a confidentiality question.
+    """
+    from checker.public_only import MATTER, Origin as _O
+    items = (origins,) if isinstance(origins, _O) else tuple(origins or ())
+    risky = [o for o in items
+             if getattr(o, "basis", None) == MATTER and not getattr(o, "test_data", False)]
+    if risky and not region_accepted():
+        raise ModelRefused(
+            f"this is a client document and the deployment region is "
+            f"{DEPLOYMENT_REGION!r}, which nobody has confirmed as acceptable for client "
+            f"data (PLAN_22 D3). Set {ACCEPT_REGION_ENV}={DEPLOYMENT_REGION!r} to state "
+            f"that decision, or mark the document as test data. Nothing was sent.")
+
+
 def narrate(prompt: str, *, origin, model: str = DEFAULT_DEPLOYMENT, budget=None,
             timeout: int | None = None, _transport=None) -> str:
     """A plain text-in/text-out call to Azure, under `public_only` clearance.
@@ -177,6 +237,7 @@ def narrate(prompt: str, *, origin, model: str = DEFAULT_DEPLOYMENT, budget=None
     refusal costs no request and leaks nothing.
     """
     from checker.public_only import verify_prompt
+    refuse_unconfirmed_region(origin)
     verify_prompt(prompt, origin)
 
     if budget is not None and not budget.can_make_call().allowed:
@@ -339,6 +400,46 @@ def _test() -> None:
           "exactly what it asked before")
     sent.clear()
     narrate(cleared, origin=_o, _transport=spy)
+    # ── the region guard: a client document may not go to an unconfirmed region ─
+    import os as _os
+    held_region = _os.environ.pop(ACCEPT_REGION_ENV, None)
+    try:
+        real = public_only.clear_matter("A CLIENT'S ACTUAL CONTRACT.", name="acme.docx",
+                                        provider="azure")
+        fixture = public_only.clear_matter("A SYNTHETIC NDA FIXTURE.", name="N02",
+                                           provider="azure", test_data=True)
+        check(not real.test_data and fixture.test_data,
+              "a clearance records whether it is test data")
+        # A LOCAL spy: clearing the shared one breaks a later assertion that reads it.
+        region_sent = []
+        try:
+            narrate(cleared, origin=real,
+                    _transport=lambda d, b: region_sent.append((d, b)) or good)
+            check(False, "a client document is refused while the region is unconfirmed")
+        except ModelRefused as e:
+            check(not region_sent and DEPLOYMENT_REGION in str(e),
+                  f"a CLIENT document is refused while the region is unconfirmed, naming "
+                  f"{DEPLOYMENT_REGION!r}, and NOTHING was sent (PLAN_22 D3)")
+        check(not region_accepted(), "...the region is not accepted by default")
+        _os.environ[ACCEPT_REGION_ENV] = DEPLOYMENT_REGION
+        check(region_accepted(),
+              "...and an operator states the decision by naming the region, not by a "
+              "boolean that says nothing about which region was accepted")
+        refuse_unconfirmed_region(real)
+        check(True, "...after which the same document passes the guard")
+        _os.environ[ACCEPT_REGION_ENV] = "Central India"
+        check(not region_accepted(),
+              "...while naming a DIFFERENT region does not accept this one")
+        _os.environ.pop(ACCEPT_REGION_ENV, None)
+        refuse_unconfirmed_region(fixture)
+        refuse_unconfirmed_region(_o)
+        check(True, "test data and PUBLIC corpus text are unaffected: the Act's residency "
+                    "is not a confidentiality question")
+    finally:
+        _os.environ.pop(ACCEPT_REGION_ENV, None)
+        if held_region is not None:
+            _os.environ[ACCEPT_REGION_ENV] = held_region
+
     check(issubclass(RateLimited, ModelUnavailable),
           "a rate limit is still ModelUnavailable, so every existing `except` catches it")
     check(RateLimited is not ModelUnavailable,

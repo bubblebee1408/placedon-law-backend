@@ -115,8 +115,15 @@ def _test() -> None:
             print(f"  [FAIL] {label}")
 
     files = [p.name for p in migrations()]
-    check(files == ["001_core.sql", "002_runs.sql"],
-          f"both migrations exist, in order ({files})")
+    check(files == ["001_core.sql", "002_runs.sql", "003_step_provenance.sql"],
+          f"every migration exists, in order ({files})")
+    step_sql = (MIGRATIONS / "003_step_provenance.sql").read_text(encoding="utf-8")
+    for col in ("provider", "region", "cost_inr"):
+        check(f"ADD COLUMN IF NOT EXISTS {col}" in step_sql,
+              f"003 adds run_steps.{col}, idempotently")
+    check("PLAN_22 D3" in step_sql and "region" in step_sql,
+          "...and says why the region is on the STEP: a region in a deployment note is a "
+          "region nobody checks")
 
     t = tables()
     check({"tenants", "actors", "api_keys", "documents", "audit_log",

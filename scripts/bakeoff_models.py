@@ -143,35 +143,10 @@ def score_contract(proposed: dict[str, list[str]], truth: dict[str, list[str]],
     return per, exact, total
 
 
-# ── a 429 is a minute, not a verdict ─────────────────────────────────────────
-
-RETRY_BASE_SECONDS = 25.0
-
-
-def with_backoff(call, *, sleep=None, tries: int = 3, base: float = RETRY_BASE_SECONDS):
-    """Wrap a model callable so Azure's own rate limit waits instead of scoring zero.
-
-    Measured 29-09-2026: eight two-token calls in a row succeeded while twelve full
-    narration prompts returned HTTP 429, so what binds is tokens-per-minute. Without this
-    a bake-off measures Azure's quota and calls it the model's refusal rate -- the single
-    easiest way to publish a wrong number here.
-
-    `sleep` is INJECTED and defaults to None, so the gated tests exercise every branch and
-    never wait. A library that sleeps on its own is a library that hangs a test suite.
-    """
-    def _c(prompt: str) -> str:
-        last = None
-        for i in range(tries):
-            try:
-                return call(prompt)
-            except Exception as e:                               # noqa: BLE001
-                from checker.azure_model import RateLimited
-                if not isinstance(e, RateLimited) or sleep is None or i == tries - 1:
-                    raise
-                last = e
-                sleep(base * (i + 1))
-        raise last                                               # pragma: no cover
-    return _c
+# `with_backoff` moved to checker/azure_model.py on 29-09-2026, so the gateway can use it
+# too: a script is not something gateway/ may import, and two copies of a retry policy is
+# how one of them quietly stops honouring a 429.
+from checker.azure_model import RETRY_BASE_SECONDS, with_backoff  # noqa: E402,F401
 
 
 # ── the arms: whatever route() would serve, read and never written ───────────

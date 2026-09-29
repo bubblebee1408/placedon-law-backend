@@ -63,7 +63,8 @@ class Backend(Protocol):
 # column whether or not the writer supplied it; a dict returns what it was handed. Without
 # normalising, `step["model"]` is a KeyError on memory and None on Postgres -- which is a
 # divergence that only shows up on the backend the gate does not run.
-STEP_KEYS = ("capability", "engine_capability", "status", "model", "degraded")
+STEP_KEYS = ("capability", "engine_capability", "status", "model", "degraded",
+             "provider", "region", "cost_inr")
 PROPOSITION_KEYS = ("status", "source_ref", "span_start", "span_end")
 
 
@@ -163,11 +164,12 @@ class PostgresBackend:
             for i, s in enumerate(run.get("steps", [])):
                 c.execute(
                     "INSERT INTO run_steps (run_id, ordinal, tenant_id, capability, "
-                    "engine_capability, status, model, degraded) "
-                    "VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
+                    "engine_capability, status, model, degraded, provider, region, "
+                    "cost_inr) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
                     (rid, i, self.tenant_id, s.get("capability", ""),
                      s.get("engine_capability"), s.get("status", "PLANNED"),
-                     s.get("model"), bool(s.get("degraded", False))))
+                     s.get("model"), bool(s.get("degraded", False)),
+                     s.get("provider"), s.get("region"), s.get("cost_inr")))
             c.execute("DELETE FROM propositions WHERE run_id = %s", (rid,))
             for i, p in enumerate(run.get("propositions", [])):
                 import uuid as _uuid
@@ -193,9 +195,11 @@ class PostgresBackend:
             out = {"id": str(r[0]), "intent": r[1], "status": r[2], "refusal_code": r[3]}
             out["steps"] = [
                 {"capability": s[0], "engine_capability": s[1], "status": s[2],
-                 "model": s[3], "degraded": s[4]}
+                 "model": s[3], "degraded": s[4], "provider": s[5], "region": s[6],
+                 "cost_inr": float(s[7]) if s[7] is not None else None}
                 for s in c.execute(
-                    "SELECT capability, engine_capability, status, model, degraded "
+                    "SELECT capability, engine_capability, status, model, degraded, "
+                    "provider, region, cost_inr "
                     "FROM run_steps WHERE run_id = %s ORDER BY ordinal", (run_id,)).fetchall()]
             out["propositions"] = [
                 {"status": p[0], "source_ref": p[1], "span_start": p[2], "span_end": p[3]}
@@ -264,7 +268,8 @@ SAMPLE_RUN = {
         {"capability": "intake", "engine_capability": None, "status": "ANSWERED",
          "model": None, "degraded": False},
         {"capability": "document", "engine_capability": "document.ground_extraction",
-         "status": "ANSWERED", "model": "azure/llama-3-3-70b", "degraded": True},
+         "status": "ANSWERED", "model": "azure/llama-3-3-70b", "degraded": True,
+         "provider": "azure", "region": "UAE North", "cost_inr": 0.0},
         {"capability": "playbook", "engine_capability": "contract.playbook_review",
          "status": "ANSWERED", "model": None, "degraded": False},
     ],
@@ -313,6 +318,11 @@ def conformance(backend) -> list[tuple[bool, str]]:
         ck(got["steps"][1]["model"] == "azure/llama-3-3-70b"
            and got["steps"][1]["degraded"] is True,
            "...carrying which model served a step and whether the route was degraded")
+        ck(got["steps"][1]["provider"] == "azure"
+           and got["steps"][1]["region"] == "UAE North"
+           and got["steps"][1]["cost_inr"] == 0.0,
+           "...and the provider, the deployment REGION and the rupee cost, so a trace "
+           "answers 'where did this document go' without reading a deployment note")
         ck([p["status"] for p in got["propositions"]] == ["VERIFIED", "UNVERIFIED"],
            "...and its propositions, in order")
         ck(got["propositions"][0]["span_start"] == 10
