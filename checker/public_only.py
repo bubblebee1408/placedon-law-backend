@@ -58,11 +58,23 @@ of the statute itself:
     corpus/sources/         the acquired source documents, with their acquisition logs
     corpus/testdocs/        public ICSI specimens and listed-company disclosures
 
-`corpus/admission/`, `corpus/benchmark/`, `corpus/corroboration/`, `corpus/provisions/`
-and `corpus/trust/` are NOT here. They are this project's own evaluation and provenance
-artefacts, and while none of them is confidential today, "not confidential today" is not a
-publication decision. A root is added to this tuple by a person who has looked at what is
-in it, never by a glob.
+    corpus/benchmark/cuad/  CUAD, and ONLY cuad -- see below
+
+`corpus/admission/`, `corpus/corroboration/`, `corpus/provisions/` and `corpus/trust/` are
+NOT here, and neither is the REST of `corpus/benchmark/`. They are this project's own
+evaluation and provenance artefacts, and while none of them is confidential today, "not
+confidential today" is not a publication decision. A root is added to this tuple by a
+person who has looked at what is in it, never by a glob.
+
+`corpus/benchmark/cuad/` is the one exception, added 29-09-2026, and it is deliberately the
+SUBDIRECTORY and not its parent. What is in it was looked at: the Contract Understanding
+Atticus Dataset, 510 commercial contracts filed publicly with the US SEC, labelled for 41
+clause types by The Atticus Project and released under CC BY 4.0 (corpus/benchmark/cuad/
+LICENSE). It is third-party published material, it contains no client or matter document,
+and PLAN_22 E2 exists to send it to a model and score what comes back. Its siblings --
+entailment pairs, approved pairs, review decisions, releases -- were NOT reviewed and are
+NOT cleared by this entry, which is why the root is one directory deep rather than the
+parent everything would have ridden in on.
 
 ## What this does not claim
 
@@ -92,6 +104,9 @@ PUBLIC_ROOTS: tuple[Path, ...] = (
     ROOT / "corpus" / "reference",
     ROOT / "corpus" / "sources",
     ROOT / "corpus" / "testdocs",
+    # One directory deep on purpose. See the module docstring: the parent holds this
+    # project's own evaluation artefacts, which nobody has cleared for publication.
+    ROOT / "corpus" / "benchmark" / "cuad",
 )
 
 
@@ -346,6 +361,22 @@ def _test() -> None:
     import tempfile
 
     # ── a published file clears, and carries its blob ────────────────────────
+    # ── the cuad root is one directory deep, and its siblings are not cleared ──
+    check(any(r.name == "cuad" and r.parent.name == "benchmark" for r in PUBLIC_ROOTS),
+          "corpus/benchmark/cuad IS a published root: CC BY 4.0, third-party, no matter "
+          "document in it")
+    check(ROOT / "corpus" / "benchmark" not in PUBLIC_ROOTS,
+          "...and its PARENT is not, so entailment pairs, approved pairs and the release "
+          "archive did not ride in behind it")
+    for sib in ("entailment_pairs.jsonl", "approved_pairs.jsonl"):
+        f = ROOT / "corpus" / "benchmark" / sib
+        if f.is_file():
+            try:
+                clear_file(f)
+                check(False, f"corpus/benchmark/{sib} is refused")
+            except NotPublic:
+                check(True, f"...measured: corpus/benchmark/{sib} is still REFUSED")
+
     pub = ROOT / "corpus" / "testdocs" / "MANIFEST.md"
     o = clear_file(pub)
     check(o.basis == PUBLIC_CORPUS and o.path == "corpus/testdocs/MANIFEST.md",
@@ -477,11 +508,17 @@ def _test() -> None:
     # ── the roots are a decision, not a glob ─────────────────────────────────
     named = {p.name for p in PUBLIC_ROOTS}
     present = {p.name for p in (ROOT / "corpus").iterdir() if p.is_dir()}
-    check(named == {"companies_act", "rules", "reference", "sources", "testdocs"},
-          f"the published roots are exactly the five decided on ({sorted(named)})")
-    check(named < present,
-          f"...and corpus/ holds more than that ({sorted(present - named)}), so this "
-          f"tuple is a decision rather than everything under corpus/")
+    check(named == {"companies_act", "rules", "reference", "sources", "testdocs", "cuad"},
+          f"the published roots are exactly the SIX decided on ({sorted(named)}) -- five "
+          f"statute and specimen directories, plus corpus/benchmark/cuad, added 29-09-2026 "
+          f"for PLAN_22 E2 after reading what is in it")
+    top = {p.name for p in PUBLIC_ROOTS if p.parent == ROOT / "corpus"}
+    check(top < present,
+          f"...and corpus/ holds more top-level directories than are published "
+          f"({sorted(present - top)}), so this tuple is a decision rather than a glob")
+    check("benchmark" not in top and "benchmark" in present,
+          "...corpus/benchmark among them: the cuad entry is a subdirectory of an "
+          "UNPUBLISHED parent, which is the whole point of adding it one level deep")
     check(all(r.is_dir() for r in PUBLIC_ROOTS),
           "every published root exists -- a typo'd root would silently refuse everything")
 

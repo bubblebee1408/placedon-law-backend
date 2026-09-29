@@ -1,0 +1,17 @@
+CUAD — Contract Understanding Atticus Dataset
+Copyright The Atticus Project.
+
+Licensed under Creative Commons Attribution 4.0 International (CC BY 4.0).
+https://creativecommons.org/licenses/by/4.0/
+
+Source dataset:   https://www.atticusprojectai.org/cuad
+Acquired from:    https://raw.githubusercontent.com/TheAtticusProject/cuad/main/data.zip
+Acquired on:      2026-09-29
+
+Attribution, as CC BY 4.0 requires: this benchmark is the work of The Atticus Project
+and its volunteer lawyers. Nothing in this repository claims authorship of it. It is
+used here to MEASURE clause extraction (PLAN_22 E2), and no part of it is served to a
+user as legal content.
+
+The contracts in CUAD are American. A score on it is a score on American drafting, and
+PLAN_22 E2 pairs it with Indian contracts for that reason.
