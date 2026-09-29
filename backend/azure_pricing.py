@@ -42,11 +42,36 @@ UNPRICED = None
 
 @dataclass(frozen=True)
 class Priced:
-    """A price with its provenance. Both fields are required, and that is the point."""
+    """A price with its provenance. Every provenance field is required, and that is the point.
+
+    A rate with no meter id is a rate nobody can re-check: Azure's meter names are
+    abbreviated ("Llama 3.3 70B Inp glbl Tokens") and several look alike, so the id is what
+    makes "this exact rate" a verifiable claim rather than a recollection.
+    """
     usd_per_m_input: float
     usd_per_m_output: float
-    source: str
-    dated: str
+    meter_id_input: str
+    meter_id_output: str
+    sku_id_input: str
+    sku_id_output: str
+    currency: str
+    source: str          # the exact query that returned it
+    dated: str           # the day it was read
+
+    def __post_init__(self) -> None:
+        missing = [f for f in ("meter_id_input", "meter_id_output", "sku_id_input",
+                               "sku_id_output", "currency", "source", "dated")
+                   if not getattr(self, f)]
+        if missing:
+            raise CostError(
+                f"a Priced entry is missing its provenance: {missing}. A rate without the "
+                f"query that returned it, its meter id and the date it was read is a "
+                f"recollection, and three documents later it is indistinguishable from a "
+                f"measured figure.")
+        if self.currency != "USD":
+            raise CostError(
+                f"currency is {self.currency!r}; the USD_INR conversion below assumes USD. "
+                f"A non-USD rate needs its own conversion, not this one.")
 
     def inr(self, tokens_in: int, tokens_out: int) -> float:
         usd = (tokens_in * self.usd_per_m_input
@@ -60,16 +85,57 @@ class Unpriced:
     reason: str
 
 
+# ── Verified 2026-09-29 against the public Azure Retail Prices API (no auth) ──
+#
+#   https://prices.azure.com/api/retail/prices
+#     ?$filter=armRegionName eq 'uaenorth' and contains(meterName,'Llama 3.3 70B')
+#
+# Two meters matched, one input and one output, after excluding the fine-tuning meters
+# (which carry "FT" in the name and price differently). Two is what makes this
+# unambiguous: had there been a regional AND a data-zone AND a global variant, the
+# deployment type would decide between them and nothing in this repository records which
+# we provisioned -- so it would have stayed UNPRICED.
+RETAIL_API = "https://prices.azure.com/api/retail/prices"
+LLAMA_QUERY = (f"{RETAIL_API}?$filter=armRegionName eq 'uaenorth' and "
+               f"contains(meterName,'Llama 3.3 70B')")
+
 TABLE: dict[str, Priced | Unpriced] = {
-    "llama-3-3-70b": Unpriced(
-        "no verified price on record for this deployment. Azure for Students pricing for "
-        "Llama-3.3-70B in UAE North has not been read from a source and written down here, "
-        "and a number from memory would be indistinguishable from a measured one later."),
+    # 0.00071 USD per 1K tokens on both meters = 0.71 USD per 1M. Input and output are the
+    # SAME rate here, which is unusual enough to state: it is what both meters return.
+    "llama-3-3-70b": Priced(
+        usd_per_m_input=0.71,
+        usd_per_m_output=0.71,
+        meter_id_input="1a90d107-2527-5fe4-bced-37776297dcec",
+        meter_id_output="27268bdf-1d66-5f0a-9454-d1218d8924c0",
+        sku_id_input="DZH318Z0T9X1/016Q",
+        sku_id_output="DZH318Z0T9X1/012R",
+        currency="USD",
+        source=LLAMA_QUERY,
+        dated="2026-09-29"),
+
+    # UNPRICED, and NOT for the reason it was before. How reasoning tokens bill is now
+    # ESTABLISHED from Microsoft's own documentation --
+    # https://learn.microsoft.com/en-us/azure/ai-foundry/openai/how-to/reasoning, read
+    # 2026-09-29: "Reasoning tokens never appear in the message content, but they occupy
+    # space in the context window and are billed as output tokens", and the sample response
+    # shows completion_tokens 1843 WITH completion_tokens_details.reasoning_tokens 448
+    # inside it. So `completion_tokens` already includes them and pricing output against it
+    # would be correct. That question is answered.
+    #
+    # What blocks it is meter IDENTITY. The retail API has no meter named 'gpt-5-mini'
+    # anywhere (0 results for contains(meterName,'gpt-5-mini')). uaenorth has 18 meters
+    # whose names contain 'mini' -- "5 mini pp Inp Gl", "5.4 mini pp cd Inp Gl", "5.1 codex
+    # mini inp Gl" and others -- spanning GPT-5, 5.1, 5.4 and 5.6 at input rates from 0.025
+    # to 0.45 USD per 1M. Nothing in this repository records which of those our deployment
+    # named "gpt-5-mini" actually is, and picking the plausible one is guessing with extra
+    # steps.
     "gpt-5-mini": Unpriced(
-        "no verified price on record for this deployment. Reasoning models also bill hidden "
-        "reasoning tokens, which the chat-completions `usage` object reports inside "
-        "completion_tokens on some APIs and separately on others -- so even with a list "
-        "price, which side of that line these counts fall on needs checking, not assuming."),
+        "no Azure retail meter is named 'gpt-5-mini' (0 results), and the 18 'mini' meters "
+        "in uaenorth span GPT-5, 5.1, 5.4 and 5.6 at input rates from 0.025 to 0.45 USD "
+        "per 1M -- an AMBIGUOUS match, so no rate is recorded. Reasoning-token billing is "
+        "NOT the blocker: Microsoft Learn (read 2026-09-29) states reasoning tokens 'are "
+        "billed as output tokens' and are already counted inside completion_tokens. What "
+        "is missing is which meter this deployment maps to."),
 }
 
 
@@ -158,11 +224,45 @@ def _test() -> None:
     # ── the table admits what it does not know ──────────────────────────────
     check(set(TABLE) == {"llama-3-3-70b", "gpt-5-mini"},
           f"both served deployments are in the table ({sorted(TABLE)})")
-    for dep in sorted(TABLE):
-        cost, note = price_inr(dep, tokens_in=1000, tokens_out=500)
-        check(cost is UNPRICED and note.startswith("UNPRICED:"),
-              f"{dep} is UNPRICED today, and the note says why")
-        check(len(note) > 60, f"...at length, so the next reader knows what to go and find")
+
+    # ── llama-3-3-70b: PRICED, verified against the retail API on 2026-09-29 ─
+    llama = TABLE["llama-3-3-70b"]
+    check(isinstance(llama, Priced), "llama-3-3-70b carries a verified price")
+    check(llama.usd_per_m_input == 0.71 and llama.usd_per_m_output == 0.71,
+          f"...0.71 USD per 1M in and out ({llama.usd_per_m_input}/"
+          f"{llama.usd_per_m_output}), which is 0.00071 USD per 1K as the meters return it")
+    check(llama.source.startswith("https://prices.azure.com/api/retail/prices")
+          and "uaenorth" in llama.source and "Llama 3.3 70B" in llama.source,
+          "...sourced to the EXACT query that returned it, region included")
+    check(llama.meter_id_input == "1a90d107-2527-5fe4-bced-37776297dcec"
+          and llama.meter_id_output == "27268bdf-1d66-5f0a-9454-d1218d8924c0",
+          "...with the meter id for each direction, so the rate can be re-checked")
+    check(llama.sku_id_input.startswith("DZH318Z0T9X1/")
+          and llama.sku_id_output.startswith("DZH318Z0T9X1/"),
+          f"...and the sku ids ({llama.sku_id_input}, {llama.sku_id_output})")
+    check(llama.currency == "USD" and llama.dated == "2026-09-29",
+          f"...the currency and the day it was read ({llama.currency}, {llama.dated})")
+
+    cost, note = price_inr("llama-3-3-70b", tokens_in=1_000_000, tokens_out=1_000_000)
+    check(cost == round(1.42 * USD_INR, 4),
+          f"a million tokens each way costs 1.42 USD converted at the repo's own rate "
+          f"({cost} INR)")
+    check(cost > 0, "...which is not zero, because the call is not free")
+    real, _ = price_inr("llama-3-3-70b", tokens_in=1200, tokens_out=300)
+    check(0 < real < 1.0,
+          f"a realistic call prices to a small non-zero rupee figure ({real})")
+
+    # ── gpt-5-mini: UNPRICED, and the reason is meter identity ──────────────
+    cost, note = price_inr("gpt-5-mini", tokens_in=1000, tokens_out=500)
+    check(cost is UNPRICED and note.startswith("UNPRICED:"),
+          "gpt-5-mini is UNPRICED, and the note says why")
+    check("AMBIGUOUS" in note and "0 results" in note,
+          "...the reason being that NO meter is named gpt-5-mini and the 18 'mini' meters "
+          "are an ambiguous match, not that we forgot to look")
+    check("billed as output tokens" in note and "completion_tokens" in note,
+          "...and it records that reasoning-token billing is ANSWERED and is not the "
+          "blocker, so nobody re-investigates the wrong question")
+    check(len(note) > 200, "...at length, so the next reader knows what to go and find")
     cost, note = price_inr("some-future-deployment", tokens_in=10, tokens_out=10)
     check(cost is UNPRICED and "not in the price table" in note,
           "a deployment nobody listed is UNPRICED, not free")
@@ -170,6 +270,9 @@ def _test() -> None:
     # ── and prices correctly the moment one is on record ────────────────────
     probe = dict(TABLE)
     probe["priced-demo"] = Priced(usd_per_m_input=0.50, usd_per_m_output=1.50,
+                                  meter_id_input="m-in", meter_id_output="m-out",
+                                  sku_id_input="s-in", sku_id_output="s-out",
+                                  currency="USD",
                                   source="a vendor page", dated="2026-09-29")
     saved = dict(TABLE)
     TABLE.update(probe)
@@ -204,6 +307,26 @@ def _test() -> None:
           f"a Priced carries its source and the date it was read ({sorted(fields)})")
     check(all(not isinstance(v, Priced) or (v.source and v.dated) for v in TABLE.values()),
           "...and no entry in the table has an empty one")
+    for missing in ({"source": ""}, {"dated": ""}, {"meter_id_input": ""},
+                    {"currency": ""}):
+        kw = dict(usd_per_m_input=1.0, usd_per_m_output=1.0, meter_id_input="a",
+                  meter_id_output="b", sku_id_input="c", sku_id_output="d",
+                  currency="USD", source="s", dated="d")
+        kw.update(missing)
+        try:
+            Priced(**kw)
+            check(False, f"a Priced missing {list(missing)[0]} is refused")
+        except CostError:
+            check(True, f"a Priced missing {list(missing)[0]} is REFUSED at construction: "
+                        f"a rate nobody can re-check is a recollection")
+    try:
+        Priced(usd_per_m_input=1.0, usd_per_m_output=1.0, meter_id_input="a",
+               meter_id_output="b", sku_id_input="c", sku_id_output="d",
+               currency="INR", source="s", dated="d")
+        check(False, "a non-USD rate is refused")
+    except CostError:
+        check(True, "...and a non-USD rate is refused, because USD_INR is the only "
+                    "conversion here and applying it to rupees would double-convert")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:
