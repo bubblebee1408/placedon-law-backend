@@ -52,3 +52,5 @@
 # wheel rather than by the base image -- fine for dev and CI; whether psycopg[c] against the
 # distro libpq is the better PRODUCTION form is an open sub-question, not settled here.
 psycopg[binary]==3.3.6
+fastapi==0.135.1
+uvicorn==0.42.0

@@ -1,5 +1,12 @@
 -r requirements.txt
 uvicorn==0.42.0
+# gateway/app.py is in the gate, so FastAPI is a GATE dependency and is declared here
+# rather than only in requirements-gateway.txt, which scripts/check_deps.py does not read.
+# Without this line a machine lacking FastAPI reports a failing SUITE instead of a BLOCKED
+# environment, which sends the reader to the wrong file -- the exact defect the dependency
+# precheck was added to fix on 2026-09-27.
+fastapi==0.135.1
+httpx==0.28.1
 pdfplumber==0.11.10
 # TWO readers, and which is which was SWAPPED on 25-09-2026 (D-002b).
 # pdfplumber above is now the page-level extractor for OFFLINE tooling
