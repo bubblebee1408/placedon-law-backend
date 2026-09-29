@@ -129,6 +129,7 @@ suites=(
   checker/prescribed_thresholds.py
   checker/classify.py
   checker/clauses.py
+  checker/playbook.py
   checker/obligations.py
   checker/obligation_citations.py
   checker/entity_graph.py
