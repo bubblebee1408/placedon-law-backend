@@ -121,6 +121,11 @@ AZURE = "azure"
 # this table reads as a table; checker/azure_model.DEFAULT_DEPLOYMENT is the same string
 # and its own test asserts the default it serves.
 AZURE_LLAMA_70B = "llama-3-3-70b"
+# The fallback deployment on the same resource. A REASONING model, so checker/azure_model
+# sends it no temperature and a larger completion budget -- see _REASONING there. Second
+# and not first because it errored on 1 of 17 realrun cases where the 70B errored on 0 of
+# 18, and because hidden reasoning tokens are spent on a job whose whole point is obedience.
+AZURE_GPT5_MINI = "gpt-5-mini"
 
 # ── purpose: the axis the table's own docstring already used and the code did not ──
 # The header above lists four rows, and one of them -- NARRATE -- was never routable:
@@ -242,26 +247,36 @@ _PREFERENCE = {
     TaskProfile(TEXT, LOW, NARRATION): [
         (ANTHROPIC, NARRATE,
          "cannot introduce a fact -- reasoning.review() drops the whole sentence if it tries"),
-        (GEMINI, FLASH,
-         "free tier. Narration is the one job where the model choice is least load-bearing: "
-         "the context is pre-retrieved and pre-gated, review() drops any sentence carrying "
-         "a proposition that is not in the evidence, and an 8B model at temperature 0 would "
-         "do it (PROVIDER_DECISION.md §4)"),
-        (GEMINI, FLASH_LITE,
-         "free tier, and the one that was actually answering on 28-09-2026 while "
-         "gemini-3.6-flash returned 503 six times running"),
+        # ── with no Anthropic credit, this is the chain, and PLAN_22 §3 fixes its order ──
+        # An earlier version of this table put both Gemini rows ABOVE Azure, on the
+        # argument that a free tier should be spent before paid credit. That argument reads
+        # the cost and ignores the CAPACITY: the free tier is 20 requests per day per
+        # model, so routing ordinary traffic there first means the product is down by
+        # mid-morning with the Azure credit still untouched. PLAN_22 §3 calls Gemini
+        # "backup only -- a demo's worth, not a working day", and this order is that
+        # sentence made executable. Azure first, Gemini in reserve, then refuse.
         (AZURE, AZURE_LLAMA_70B,
-         "a 70B served from Azure AI. BELOW the Gemini rows because those are free and "
-         "this spends student credit; ABOVE the Ollama row because Ollama on this machine "
-         "means an 8B model or an out-of-memory error, and while narration is the job "
-         "where model choice matters least, 'least' is not 'not at all'. Measured "
-         "28-09-2026 on the realrun probes: 18 of 18 cases, 0 errors"),
-        (OLLAMA, OPERATOR_NAMED,
-         "the operator's own machine: no key, no quota, no credit. Last because it is "
-         "the slowest and unmeasured, and because it is the row that CANNOT run out -- "
-         "the free tier is 20 requests/day/model (measured 28-09-2026), which is a "
-         "demo's worth, so a system that only had free-tier rows would be down by "
-         "mid-morning")],
+         "the workhorse: a 70B on Azure AI, and the reason the laptop is not in this row "
+         "at all. Measured 28-09-2026 on the realrun probes: 18 of 18 cases, 0 errors"),
+        (AZURE, AZURE_GPT5_MINI,
+         "same resource, second deployment, so a 503 or a retired model on the 70B does "
+         "not end the chain. Below it because it errored on 1 of 17 realrun cases and "
+         "spends hidden reasoning tokens on a job that asks for obedience, not thought"),
+        (GEMINI, FLASH,
+         "BACKUP ONLY (PLAN_22 §3). Narration is the job where model choice is least "
+         "load-bearing -- the context is pre-retrieved and pre-gated, review() drops any "
+         "sentence carrying a proposition not in the evidence -- so a free tier is adequate "
+         "here when Azure is unreachable. PUBLIC CORPUS TEXT ONLY: public_only.verify_prompt "
+         "gates every call and no Vault or matter document can reach it (PLAN_22 D3)"),
+        (GEMINI, FLASH_LITE,
+         "the second free-tier bucket -- the 20/day limit is PER MODEL, so this is another "
+         "20, not the same 20 -- and the one actually answering on 28-09-2026 while "
+         "gemini-3.6-flash returned 503 six times running"),
+        # and then nothing. There is deliberately NO Ollama row here: the laptop holds
+        # 8.6 GB (PLAN_22 §3), so a local narration is an 8B model or an out-of-memory
+        # error, and an 8B restating Indian corporate law is worse than a refusal a reader
+        # can act on. NoRoute is the end of this chain, by decision.
+    ],
 }
 
 # ── candidates: wired, not preferred. route() never reads this table. ─────────
@@ -600,10 +615,20 @@ def _test() -> None:
         check(True, "with only Azure, a HIGH EXTRACTION refuses: there is no Azure row "
                     "for it, so wiring a provider for narration did not quietly make it "
                     "the extractor as well")
-    check([p for p, _m, _w in _PREFERENCE[TaskProfile(TEXT, LOW, NARRATION)]]
-          == [ANTHROPIC, GEMINI, GEMINI, AZURE, OLLAMA],
-          "the narration order is paid-best, free, Azure credit, then the laptop -- so a "
-          "free tier is spent before credit is, and credit before an 8B is trusted")
+    _narr = [(p, m) for p, m, _w in _PREFERENCE[TaskProfile(TEXT, LOW, NARRATION)]]
+    check(_narr == [(ANTHROPIC, NARRATE), (AZURE, AZURE_LLAMA_70B),
+                    (AZURE, AZURE_GPT5_MINI), (GEMINI, FLASH), (GEMINI, FLASH_LITE)],
+          f"the narration chain is Anthropic, Azure 70B, Azure gpt-5-mini, then Gemini as "
+          f"backup: PLAN_22 §3's 'backup only' made executable ({_narr})")
+    check(OLLAMA not in [p for p, _m in _narr],
+          "...and the laptop is NOT in it: 8.6 GB means an 8B model, and an 8B restating "
+          "Indian corporate law is worse than a refusal a reader can act on")
+    try:
+        route(Task("narrate", TEXT, LOW, purpose=NARRATION), available=(OLLAMA,))
+        check(False, "with only the laptop, narration refuses")
+    except NoRoute:
+        check(True, "...so with ONLY Ollama available, narration REFUSES -- the chain ends "
+                    "in NoRoute by decision, which is what PLAN_22's '-> refuse' means")
 
     # ── the free-model fallbacks (28-09-2026) ────────────────────────────────
     import os as _os

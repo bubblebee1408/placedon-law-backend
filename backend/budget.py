@@ -576,7 +576,8 @@ class BudgetTracker:
         """
         if raw.get("corrupt"):
             return {"corrupt": True, "day": "", "month": "", "day_inr": 0.0,
-                    "month_inr": 0.0, "calls_today": 0, "spend_cap": False,
+                    "month_inr": 0.0, "calls_today": 0, "calls_by_model": {},
+                    "spend_cap": False,
                     "credit_exhausted": False, "reservations": {}}
         day_key, month_key = self._today.isoformat(), self._today.strftime("%Y-%m")
         same_day = raw.get("day") == day_key
@@ -589,6 +590,13 @@ class BudgetTracker:
             "day_inr": float(raw.get("day_inr", 0.0)) if same_day else 0.0,
             "month_inr": float(raw.get("month_inr", 0.0)) if raw.get("month") == month_key else 0.0,
             "calls_today": int(raw.get("calls_today", 0)) if same_day else 0,
+            # Per MODEL, because a free tier's request limit is per model per project:
+            # two Gemini models are two buckets of 20, not one shared 20. Day-scoped for
+            # the same reason calls_today is -- the provider's window is a calendar day,
+            # and a counter that outlives it would refuse a call the provider would serve.
+            "calls_by_model": ({str(k): int(v) for k, v in
+                                (raw.get("calls_by_model") or {}).items()}
+                               if same_day else {}),
             # Scoped to the month, so it clears itself exactly when the provider's cap does.
             "spend_cap": raw.get("spend_cap_month") == month_key,
             # Scoped to the DAY, unlike the spend cap above, because the two clear on
@@ -616,6 +624,8 @@ class BudgetTracker:
             "day_inr": s["day_inr"], "month_inr": s["month_inr"],
             "calls_today": s["calls_today"],
         }
+        if s["calls_by_model"]:
+            row["calls_by_model"] = dict(s["calls_by_model"])
         if s["spend_cap"]:
             row["spend_cap_month"] = s["month"]
         if s["credit_exhausted"]:
@@ -625,6 +635,8 @@ class BudgetTracker:
         row.update(overrides)
         if not row.get("reservations"):
             row.pop("reservations", None)
+        if not row.get("calls_by_model"):
+            row.pop("calls_by_model", None)
         return row
 
     def _mutate(self, build: Callable[[dict], dict]) -> dict:
@@ -647,8 +659,8 @@ class BudgetTracker:
 
     # ── the gate ─────────────────────────────────────────────────────────
     def can_make_call(self, estimated_inr: float | None = None, *, model: str = DEFAULT_MODEL,
-                      input_tokens: int | None = None, output_tokens: int | None = None
-                      ) -> Verdict:
+                      input_tokens: int | None = None, output_tokens: int | None = None,
+                      per_model_cap: int | None = None) -> Verdict:
         # A half-given pair is refused rather than zero-filled, on `estimate_tokens`' rule:
         # supplying the missing half quietly is wrong in whichever direction the caller did
         # not mean, and a zero-filled OUTPUT count is wrong in the cheap one.
@@ -704,19 +716,46 @@ class BudgetTracker:
                            f"even when the call costs nothing.",
                            s["day_inr"], s["month_inr"], reserved)
 
+        # Per-model, and last, for the same reason as the rupee cap above: a caller that
+        # breaches both should read the money first. `per_model_cap` is passed IN rather
+        # than looked up here, because which models are free-tier is the router's fact and
+        # not the ledger's -- backend/ must not grow a table of provider model names.
+        if per_model_cap is not None:
+            used = s["calls_by_model"].get(model, 0)
+            if used >= per_model_cap:
+                return Verdict(False, "budget",
+                               f"{model} has used {used} of its {per_model_cap} requests "
+                               f"today. This is the provider's own per-model daily quota, "
+                               f"not a rupee limit: the calls cost nothing and are still "
+                               f"refused, because the next one would return HTTP 429. "
+                               f"It clears at the provider's day boundary.",
+                               s["day_inr"], s["month_inr"], reserved)
+
         return Verdict(True, "normal", "within budget",
                        s["day_inr"], s["month_inr"], reserved)
 
-    def record_call(self, actual_inr: float) -> Verdict:
-        """Record a call whose cost is already known. `settle()` is the reserved path."""
+    def record_call(self, actual_inr: float, *, model: str | None = None) -> Verdict:
+        """Record a call whose cost is already known. `settle()` is the reserved path.
+
+        `model` is optional and only the per-model counter needs it. A caller that omits it
+        still moves `calls_today`, so the rupee and request gates are unaffected -- but the
+        per-model quota cannot see the call, which is why gemini_model passes it.
+        """
         if actual_inr < 0:
             raise ValueError(f"actual cost must be >= 0, got {actual_inr}")
         if self._state()["corrupt"]:
             return self._unrecordable(actual_inr)
+
+        def _by_model(st: dict) -> dict:
+            if model is None:
+                return dict(st["calls_by_model"])
+            return dict(st["calls_by_model"]) | {model: st["calls_by_model"].get(model, 0) + 1}
+
         row = self._mutate(lambda st: self._row(
             st,
             day_inr=round(st["day_inr"] + actual_inr, 4),
             month_inr=round(st["month_inr"] + actual_inr, 4),
+            calls_by_model=_by_model(st),
             calls_today=st["calls_today"] + 1))
         return Verdict(True, "normal", "recorded", row["day_inr"], row["month_inr"],
                        _reserved_total(row.get("reservations", {})))
@@ -1398,6 +1437,40 @@ if __name__ == "__main__":
           BudgetTracker(Corrupt(), today=date(2026, 8, 8)).credit_exhausted(), False)
     check("  ...and refuses to record, rather than inventing state over an unknown one",
           BudgetTracker(Corrupt(), today=date(2026, 8, 8)).record_credit_exhausted(), False)
+
+    # ── the per-model daily counter: the thing named as missing at the top of this file ──
+    class _Mem:
+        def __init__(self): self.d = {}
+        def read(self) -> dict: return dict(self.d)
+        def write(self, data: dict) -> None: self.d = dict(data)
+
+    _st = _Mem()
+    _t = BudgetTracker(_st, today=date(2026, 9, 29))
+    check("a model with no calls today is under its per-model cap",
+          _t.can_make_call(0.0, model="gemini-3.1-flash-lite",
+                           per_model_cap=FREE_TIER_RPD_PER_MODEL).allowed, True)
+    for _ in range(FREE_TIER_RPD_PER_MODEL):
+        _t.record_call(0.0, model="gemini-3.1-flash-lite")
+    _v = _t.can_make_call(0.0, model="gemini-3.1-flash-lite",
+                          per_model_cap=FREE_TIER_RPD_PER_MODEL)
+    check("  ...and at the cap it is refused, though every call cost Rs 0",
+          _v.allowed, False)
+    check("  ...naming the provider's quota rather than a rupee limit",
+          "per-model daily quota" in _v.reason, True)
+    check("  ...while the SECOND free-tier model still has its own 20: the limit is per "
+          "model per project, so two models are two buckets",
+          _t.can_make_call(0.0, model="gemini-3.6-flash",
+                           per_model_cap=FREE_TIER_RPD_PER_MODEL).allowed, True)
+    check("  ...and with no cap passed, the counter gates nothing -- which is what keeps "
+          "the PAID path uncapped at 20 a day",
+          _t.can_make_call(0.0, model="gemini-3.1-flash-lite").allowed, True)
+    check("  ...the counter is day-scoped, so tomorrow the same model is served again",
+          BudgetTracker(_st, today=date(2026, 9, 30)).can_make_call(
+              0.0, model="gemini-3.1-flash-lite",
+              per_model_cap=FREE_TIER_RPD_PER_MODEL).allowed, True)
+    check("  ...and a call recorded WITHOUT a model still moves calls_today, so the "
+          "rupee and request gates are unaffected by the new argument",
+          BudgetTracker(_Mem(), today=date(2026, 9, 29)).record_call(0.0).allowed, True)
 
     check("the free-tier RPM is the measured one, not the TPM figure's implication",
           FREE_TIER_RPM, 5)

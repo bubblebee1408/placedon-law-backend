@@ -266,6 +266,26 @@ def _payload(document: str) -> dict:
     }
 
 
+def _free_quota_verdict(budget, model: str):
+    """The rupee gates AND the provider's own per-model daily quota.
+
+    The cap is passed in rather than read inside backend/budget.py, because which models
+    are free-tier is this module's fact: the ledger counts calls and must not grow a table
+    of Google's model names. Measured 28-09-2026 from Google's quota object --
+    GenerateRequestsPerDayPerProjectPerModel-FreeTier = 20 -- and PER MODEL, so the
+    fallback row in router.py is a second bucket of 20 rather than a share of one.
+    """
+    from backend.budget import FREE_TIER_RPD_PER_MODEL
+    # estimated_inr=0.0 explicitly, and not because zero is convenient: router.estimate_inr
+    # already returns 0.0 for GEMINI (free tier, paid rates UNVERIFIED there), and these
+    # model names have no tokenizer on record -- `can_make_call` would raise trying to
+    # price one. Before this, the call passed NO model at all, so a Gemini request was
+    # priced against DEFAULT_MODEL, an Anthropic rate, and charged to the rupee ledger at
+    # a cost it never incurred. The request counter below is the gate that actually binds.
+    return budget.can_make_call(0.0, model=model,
+                                per_model_cap=FREE_TIER_RPD_PER_MODEL)
+
+
 def extract(document: str, *, origin, budget=None, model: str = FLASH,
             _transport=None) -> tuple[Proposal, dict]:
     """Ask Gemini to read a document and quote what it read.
@@ -283,8 +303,13 @@ def extract(document: str, *, origin, budget=None, model: str = FLASH,
     from checker.public_only import verify as _verify_public
     _verify_public(document, origin)
 
-    if budget is not None and not budget.can_make_call().allowed:
-        raise ModelUnavailable("budget exhausted; no call was made")
+    if budget is not None:
+        # The verdict's own reason, not a generic one: "budget exhausted" sent a reader to
+        # the rupee ledger for what is usually the provider's per-model request quota, and
+        # those two have different remedies -- one needs money, the other needs tomorrow.
+        _v = _free_quota_verdict(budget, model)
+        if not _v.allowed:
+            raise ModelUnavailable(f"no call was made -- {_v.reason}")
 
     data = (_transport or _post)(model, _payload(document))
 
@@ -309,7 +334,7 @@ def extract(document: str, *, origin, budget=None, model: str = FLASH,
     # and advanced by none, so it could never fire however many went out. Same shape as
     # BUD-F13 -- a guard that reads correctly and cannot fire.
     if budget is not None:
-        budget.record_call(0.0)
+        budget.record_call(0.0, model=model)
     return Proposal(facts=_parse(raw)), meta
 
 
@@ -330,8 +355,13 @@ def generate(prompt: str, *, origin, model: str = FLASH, budget=None,
     from checker.public_only import verify_prompt
     verify_prompt(prompt, origin)
 
-    if budget is not None and not budget.can_make_call().allowed:
-        raise ModelUnavailable("budget exhausted; no call was made")
+    if budget is not None:
+        # The verdict's own reason, not a generic one: "budget exhausted" sent a reader to
+        # the rupee ledger for what is usually the provider's per-model request quota, and
+        # those two have different remedies -- one needs money, the other needs tomorrow.
+        _v = _free_quota_verdict(budget, model)
+        if not _v.allowed:
+            raise ModelUnavailable(f"no call was made -- {_v.reason}")
 
     payload = {"contents": [{"role": "user", "parts": [{"text": prompt}]}],
                "generationConfig": {"temperature": 0, "maxOutputTokens": 4096}}
@@ -342,7 +372,7 @@ def generate(prompt: str, *, origin, model: str = FLASH, budget=None,
         raise ModelRefused(
             f"no usable candidate in the response: {json.dumps(data)[:200]}") from None
     if budget is not None:
-        budget.record_call(0.0)
+        budget.record_call(0.0, model=model)
     return "".join(p.get("text", "") for p in parts)
 
 
@@ -491,6 +521,36 @@ def _test() -> None:
     except ModelUnavailable:
         check(not called, "an exhausted budget refuses BEFORE the call — none was made")
 
+    # ── the free tier's own daily quota, on a REAL ledger and not a stub ─────
+    from backend.budget import FREE_TIER_RPD_PER_MODEL as _RPD, BudgetTracker as _BT
+    from datetime import date as _date
+
+    class _Mem:
+        def __init__(self): self.d = {}
+        def read(self): return dict(self.d)
+        def write(self, data): self.d = dict(data)
+
+    _led = _BT(_Mem(), today=_date(2026, 9, 29))
+    called.clear()
+    extract(DOC, origin=ORIGIN, budget=_led, model=FLASH, _transport=spy)
+    check(len(called) == 1, f"a first free-tier call is served and counted ({len(called)})")
+    for _ in range(_RPD - 1):
+        _led.record_call(0.0, model=FLASH)
+    called.clear()
+    try:
+        extract(DOC, origin=ORIGIN, budget=_led, model=FLASH, _transport=spy)
+        check(False, f"the {_RPD}th free-tier request of the day refuses")
+    except ModelUnavailable as e:
+        check(not called and "per-model daily quota" in str(e),
+              f"at {_RPD} requests today this model refuses BEFORE the call, naming the "
+              f"provider's quota -- the calls cost Rs 0 and are still refused, because the "
+              f"next one returns 429 ({str(e)[:60]})")
+    called.clear()
+    extract(DOC, origin=ORIGIN, budget=_led, model=FLASH_LITE, _transport=spy)
+    check(len(called) == 1,
+          "...and the FALLBACK model is still served: the quota is per model per project, "
+          "so router.py's second Gemini row is another 20, not a share of the same 20")
+
     # ── retired is not busy, and the old pin was retired ─────────────────────
     check(FLASH_LITE != "gemini-2.5-flash-lite",
           f"FLASH_LITE is off the pin that 404s for new keys ({FLASH_LITE})")
@@ -526,7 +586,7 @@ def _test() -> None:
         def can_make_call(self, *a, **k):
             from backend.budget import Verdict
             return Verdict(True, "normal", "within budget", 0.0, 0.0)
-        def record_call(self, inr): self.calls.append(inr)
+        def record_call(self, inr, **k): self.calls.append(inr)
     led = Ledger()
     extract(DOC, origin=ORIGIN, budget=led, _transport=lambda m, pay, timeout=90: GOOD)
     check(led.calls == [0.0],

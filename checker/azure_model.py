@@ -69,6 +69,18 @@ COMPLETION_BUDGET = 700
 # -- so this raises the ceiling and does not soften the guard.
 NARRATION_BUDGET = 4096
 
+# A reasoning deployment is slower by construction, not by accident: it spends hidden
+# reasoning tokens before it emits the first visible one. Measured 29-09-2026 -- gpt-5-mini
+# answered fixtures F1 and F2 and then exceeded 180s on F3, mid-run. 180s is right for a
+# 70B that starts emitting immediately and wrong for a model that thinks first, so the
+# default is chosen per deployment family rather than shared. An explicit timeout= still wins.
+DEFAULT_TIMEOUT = 180
+REASONING_TIMEOUT = 600
+
+
+def default_timeout(deployment: str) -> int:
+    return REASONING_TIMEOUT if deployment.startswith(_REASONING) else DEFAULT_TIMEOUT
+
 # The key is sent in a header, so the endpoint is checked before it is used.
 _AZURE_HOSTS = (".openai.azure.com", ".services.ai.azure.com",
                 ".cognitiveservices.azure.com")
@@ -140,7 +152,7 @@ def _call(body: dict, key: str, timeout: int) -> dict:
 
 
 def narrate(prompt: str, *, origin, model: str = DEFAULT_DEPLOYMENT, budget=None,
-            timeout: int = 180, _transport=None) -> str:
+            timeout: int | None = None, _transport=None) -> str:
     """A plain text-in/text-out call to Azure, under `public_only` clearance.
 
     `origin` is an Origin or a tuple of them, and the check is `verify_prompt`: every
@@ -157,6 +169,21 @@ def narrate(prompt: str, *, origin, model: str = DEFAULT_DEPLOYMENT, budget=None
         raise ModelUnavailable("budget exhausted; no call was made")
 
     deployment = model.removeprefix(PREFIX)
+    if timeout is None:
+        timeout = default_timeout(deployment)
+    # NARRATION_BUDGET for every deployment, reasoning ones included, and that is a
+    # MEASURED choice rather than the obvious one. On a reasoning model
+    # max_completion_tokens is a THINKING budget and not merely an output cap: the model
+    # spends what it is given. Both settings were run over the ten research fixtures on
+    # 29-09-2026 (reports/fixtures_azure_2026-09-29.json, `reasoning_budget_experiment`):
+    #
+    #   4096  ANSWERED 5  PARTIAL 0  dropped 0   157s   1 truncation (F4)
+    #   8192  ANSWERED 3  PARTIAL 1  dropped 1  1169s   2 transport failures
+    #
+    # Seven and a half times the wall clock, fewer complete answers, and two connection
+    # drops -- to avoid one truncation, which `reply_text` turns into a REFUSAL rather
+    # than a fragment. The safe failure was cheaper than the cure. Left at 4096 until a
+    # bake-off with intervals says otherwise; n=1 per setting is not a finding.
     body = chat_body(prompt, deployment, max_tokens=NARRATION_BUDGET)
     if _transport is not None:
         data = _transport(deployment, body)
@@ -286,6 +313,23 @@ def _test() -> None:
           "a prompt whose every delimited block is published goes through")
     check(sent[0][0] == DEFAULT_DEPLOYMENT,
           f"...to the measured default deployment ({DEFAULT_DEPLOYMENT})")
+    sent.clear()
+    narrate(cleared, origin=_o, model="gpt-5-mini", _transport=spy)
+    check(sent[0][1]["max_completion_tokens"] == NARRATION_BUDGET,
+          f"a reasoning deployment gets the SAME narration budget "
+          f"({sent[0][1]['max_completion_tokens']}), because that limit is a thinking "
+          f"budget it will spend: doubling it cost 7.5x the wall clock and two connection "
+          f"drops to avoid one truncation that was already a safe refusal")
+    check(chat_body("x", "gpt-5-mini")["max_completion_tokens"] == REASONING_BUDGET,
+          "...while chat_body's own default is unchanged, so the eval harness still asks "
+          "exactly what it asked before")
+    sent.clear()
+    narrate(cleared, origin=_o, _transport=spy)
+    check(default_timeout("llama-3-3-70b") == DEFAULT_TIMEOUT
+          and default_timeout("gpt-5-mini") == REASONING_TIMEOUT
+          and REASONING_TIMEOUT > DEFAULT_TIMEOUT,
+          "a reasoning deployment gets a longer default timeout: it thinks before it "
+          "emits, and gpt-5-mini exceeded 180s on fixture F3 on 29-09-2026")
     check(sent[0][1]["max_tokens"] == NARRATION_BUDGET,
           f"...asking for the NARRATION budget, not the extraction one "
           f"({sent[0][1]['max_tokens']}): this is the line that was 700, and F5 came "
