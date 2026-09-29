@@ -226,6 +226,7 @@ is this repository's rule for its own history:
 | "gateway = to build" | True for auth, tenant and the app — `gateway/` holds only `__init__.py` and `audit.py`. The **audit chain is built** (19 checks) and the psycopg/Postgres decision is recorded in `requirements-gateway.txt` | **PART BUILT** |
 | "document pipe = to build" | True for the F12 parts: `checker/clause_segmenter.py` and `checker/playbook.py` **do not exist**. Text/OCR does — `checker/pdf_pages.py`, `checker/sarvam_model.py`, `checker/classify.py` | **PART BUILT** |
 | "Postgres tables = to build" | Stronger than "to build": **no migration file exists anywhere in the tree.** `001_core.sql` and `002_runs.sql` were specified and never written; R-016 (`runs` vs `turns`) is the open question blocking the second | **BLOCKED** |
+| ...and later the same day | **Both migrations are now written** (`gateway/migrations/`), with FORCE ROW LEVEL SECURITY on all seven tenant-scoped tables, and R-016 was decided in favour of the DERIVATION. They are **UNAPPLIED**: no Postgres has run them, `scripts/rls_integration.py` is labelled UNRUN, and `/v1/health` reports `store.kind="in-memory"` for that reason | **BUILT, UNAPPLIED** |
 
 All six L0 verifiers named in the diagram exist and are gated: `scope`, `as_of`,
 `currency`, `quoted_span`, `entailment_gate`, `obligations`. **BUILT**, as claimed.
