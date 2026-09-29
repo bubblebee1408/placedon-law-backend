@@ -37,6 +37,7 @@ PLAN_19 is a directory, `docs/plan19/`, not a single file.
 | [PLAN_20_INHOUSE_CORPORATE](PLAN_20_INHOUSE_CORPORATE.md) | **The current customer decision.** In-house legal teams, corporate law | Supersedes the CS-primary buyer | Four of its claims are corrected — read the next row first |
 | [EVIDENCE_CORRECTIONS_PLAN_20](EVIDENCE_CORRECTIONS_PLAN_20.md) | What the 27-09 evidence review contradicts in PLAN_20 | Every figure carries a source class | A single commissioned review, not a replication |
 | [PLAN_21_RESEARCH_PROGRAMME](PLAN_21_RESEARCH_PROGRAMME.md) | The research programme and the conformal guarantee | C1 states the guarantee per answer | Was PLAN_16 until 27-09; n=0 human labels |
+| [PLAN_22_MODEL_AND_PLATFORM_DECISIONS](PLAN_22_MODEL_AND_PLATFORM_DECISIONS.md) | **The model and platform layer.** Rent-not-train, Azure-only calls, retrieval, OCR, API/MCP/CLI, contract review F12 | Seven decisions, each with a reversal condition; the Gemini/Vault firewall is BUILT and gate-enforced | Every Harvey figure is second-hand and two are vendor-reported; Fireworks-on-Foundry region is OPEN |
 | [FEATURES](FEATURES.md) | **The canonical feature list.** If it is not there, it is not planned | 7 of 10 have a built engine | F8 unbuilt and risky |
 
 ## Scope

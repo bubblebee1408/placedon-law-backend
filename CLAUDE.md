@@ -15,6 +15,9 @@ to acquire. Never with silence, because silence would read as "no obligation fou
 **The invariant, tested:** no obligation may exist in the register for a body that is not held.
 That is what stops the widened scope from producing answers decided against law nobody acquired.
 
+Model and platform decisions: `docs/PLAN_22_MODEL_AND_PLATFORM_DECISIONS.md` — read before any
+model, retrieval, OCR, API or MCP work.
+
 ## The wedge
 Given a corporate document, determine whether it is:
 1. the correct document type,
