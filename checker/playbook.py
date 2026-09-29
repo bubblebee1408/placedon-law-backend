@@ -112,10 +112,29 @@ def amount(text: str | int | float | None) -> float | None:
 
 @dataclass(frozen=True)
 class Rule:
+    """One company standard, in three registers that are not interchangeable.
+
+    `standard_text` is the position, in one plain sentence, as a lawyer would state it.
+    `rationale` is why the company takes it. Both are READER-FACING: they are what fills
+    the standard column beside a finding, and both are DRAFT until a lawyer approves the
+    playbook that holds them.
+
+    `why` is the ENGINEERING note -- why the rule is SHAPED as it is, including the
+    measurements that made it so. It is not shown to a reader and is not a substitute for
+    `rationale`. NDA-02's `why` is a changelog about a false-alarm rate; putting that in a
+    lawyer's column would be a category error, which is why they are two fields.
+
+    Both reader-facing fields are required. A rule with no stated standard renders an
+    empty cell, and an empty cell beside a DEVIATES is a finding with nothing to deviate
+    FROM -- the exact defect this replaced.
+    """
+
     id: str
     clause: str
     test: str
     why: str
+    standard_text: str
+    rationale: str
     value: object = None
     approved_values: tuple[str, ...] = ()
 
@@ -150,6 +169,11 @@ class Finding:
     span: str | None = None
     playbook_status: str = DRAFT
     kind: str = POTENTIAL_ISSUE
+    # Copied from the rule so a finding can be read on its own. `playbook_status` above is
+    # what marks them DRAFT: there is deliberately no second status for these two, because
+    # a standard cannot be approved while the playbook holding it is not.
+    standard_text: str = ""
+    rationale: str = ""
 
 
 @dataclass(frozen=True)
@@ -172,7 +196,8 @@ def evaluate(rule: Rule, found: Extracted | None, *, draft: bool = True) -> Find
     def out(status: str, detail: str) -> Finding:
         return Finding(rule.id, rule.clause, status, rule.why, detail,
                        span=(found.span if found else None),
-                       playbook_status=DRAFT if draft else APPROVED)
+                       playbook_status=DRAFT if draft else APPROVED,
+                       standard_text=rule.standard_text, rationale=rule.rationale)
 
     if rule.test == MUST_BE_ABSENT_OR_APPROVED:
         if found is None:
@@ -246,7 +271,16 @@ def load(path: str | Path) -> Playbook:
         raise PlaybookError(
             f"{p}: status is {APPROVED} with no approved_by. An approval with no name on "
             f"it is not an approval.")
+    for r in raw["rules"]:
+        for field_name in ("standard_text", "rationale"):
+            if not str(r.get(field_name) or "").strip():
+                raise PlaybookError(
+                    f"{p}: rule {r.get('id')!r} has no {field_name!r}. Every rule states "
+                    f"its standard in a sentence a reader can read and the reason for it. "
+                    f"Without them the standard column beside a finding is blank, and a "
+                    f"DEVIATES with a blank standard is a deviation from nothing.")
     rules = tuple(Rule(id=r["id"], clause=r["clause"], test=r["test"], why=r["why"],
+                       standard_text=r["standard_text"], rationale=r["rationale"],
                        value=r.get("value"),
                        approved_values=tuple(r.get("approved_values", ())))
                   for r in raw["rules"])
@@ -269,7 +303,10 @@ def _test() -> None:
             print(f"  [FAIL] {label}")
 
     def r(test, value=None, clause="Term", approved=()):
-        return Rule(id=f"R-{test}", clause=clause, test=test, why="the company standard",
+        return Rule(id=f"R-{test}", clause=clause, test=test,
+                    why="why the rule is shaped this way",
+                    standard_text="the company position, in one sentence",
+                    rationale="why the company takes it",
                     value=value, approved_values=tuple(approved))
 
     def e(value, *, verified=True, clause="Term", span="the span"):
@@ -367,7 +404,8 @@ def _test() -> None:
 
     # ── a wrong playbook fails at load, not at grading time ─────────────────
     try:
-        Rule(id="x", clause="Term", test="vibes", why="")
+        Rule(id="x", clause="Term", test="vibes", why="", standard_text="s",
+             rationale="r")
         check(False, "an unknown test is refused")
     except PlaybookError:
         check(True, "an unknown test is refused at construction -- defaulting it to 'pass' "
@@ -384,7 +422,9 @@ def _test() -> None:
 
         good = {"id": "nda", "version": "1", "status": DRAFT,
                 "rules": [{"id": "A", "clause": "Term", "test": MAX_YEARS,
-                           "value": "3 years", "why": "standard"}]}
+                           "value": "3 years", "why": "standard",
+                           "standard_text": "Confidentiality lasts no more than 3 years.",
+                           "rationale": "Longer costs more to administer than it is worth."}]}
         pb = load(write(good))
         check(pb.is_draft and len(pb.rules) == 1, "a good playbook loads and reads DRAFT")
         for broken, why in (
@@ -392,6 +432,14 @@ def _test() -> None:
             ({**good, "status": APPROVED}, "APPROVED with no approved_by"),
             ({k: v for k, v in good.items() if k != "rules"}, "no rules key"),
             ({**good, "rules": good["rules"] * 2}, "two rules sharing an id"),
+            # A rule with no reader-facing standard renders a blank cell beside its
+            # finding, and a DEVIATES with a blank standard is a deviation from nothing.
+            ({**good, "rules": [{k: v for k, v in good["rules"][0].items()
+                                 if k != "standard_text"}]}, "a rule with no standard_text"),
+            ({**good, "rules": [{k: v for k, v in good["rules"][0].items()
+                                 if k != "rationale"}]}, "a rule with no rationale"),
+            ({**good, "rules": [{**good["rules"][0], "standard_text": "   "}]},
+             "a standard_text that is only whitespace"),
         ):
             try:
                 load(write(broken))
@@ -411,6 +459,31 @@ def _test() -> None:
         check(all(len(r.why) > 40 for r in nda.rules),
               "...and every rule says WHY, at length: a threshold with no reason behind it "
               "is one a reviewing lawyer cannot accept or reject")
+
+        # ── the two reader-facing sentences ────────────────────────────────
+        check(all(r.standard_text.strip() and r.rationale.strip() for r in nda.rules),
+              "...every rule states its standard and its rationale, so no finding can "
+              "reach a screen with a blank standard beside it")
+        check(all(r.standard_text.rstrip().endswith(".") and
+                  r.standard_text.count(".") == 1 for r in nda.rules),
+              "...and the standard is ONE sentence: a paragraph in that column is a place "
+              "for a qualification nobody approved to hide in")
+        # The three bodies a contract reaches are DECLARED and not held (checker/scope.py),
+        # so a citation in a standard would be a legal claim with no instrument behind it.
+        cites = sorted({r.id for r in nda.rules
+                        for text in (r.standard_text, r.rationale)
+                        # `s\.` must be followed by a number: "not code's." is not a
+                        # section reference, and the first version of this check said it was.
+                        if re.search(r"\b(section\s*\d|s\.\s*\d|Act,?\s*\d{4}|rule\s*\d|"
+                                     r"G\.S\.R|regulation\s*\d|clause\s*\d+\(\d\))",
+                                     text, re.I)})
+        check(not cites,
+              f"...and NEITHER sentence cites a statute, rule or instrument {cites}: "
+              f"these are commercial positions, and a citation here would be a legal claim "
+              f"resting on law this corpus does not hold")
+        check(all(r.rationale != r.why for r in nda.rules),
+              "...and rationale is not a copy of the engineering note: they are written "
+              "for different readers and NDA-02's why is a false-alarm changelog")
         used = {r.test for r in nda.rules}
         check(len(used) >= 4, f"...exercising several rule types ({sorted(used)})")
         findings = review(nda, [])

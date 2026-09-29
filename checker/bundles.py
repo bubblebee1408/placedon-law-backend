@@ -146,6 +146,7 @@ def _playbook_review(payload: dict, *, generated_at: str) -> dict:
     return {"playbook": book.id, "playbook_status": book.status,
             "findings": [{"rule_id": f.rule_id, "clause": f.clause, "status": f.status,
                           "kind": f.kind, "why": f.why, "detail": f.detail,
+                          "standard_text": f.standard_text, "rationale": f.rationale,
                           "playbook_status": f.playbook_status} for f in findings]}
 
 

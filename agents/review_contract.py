@@ -93,8 +93,16 @@ class Review:
             "requires_review": self.requires_review,
             "model": f"{self.route.provider}/{self.route.model}" if self.route else None,
             "clauses_in_contract": self.clause_count,
+            # `standard_text` and `rationale` are what the reader is shown beside a
+            # finding; without them the standard column renders blank, which is what it
+            # did until 29-09-2026. `why` is deliberately NOT sent: it is the engineering
+            # note on the rule's shape -- NDA-02's is a changelog about a false-alarm rate
+            # -- and a lawyer's column is the wrong place for it. Both sentences are DRAFT,
+            # marked by the `playbook_status` this same dict carries.
             "findings": [{"rule_id": f.rule_id, "clause": f.clause, "status": f.status,
-                          "kind": f.kind, "detail": f.detail} for f in self.findings],
+                          "kind": f.kind, "detail": f.detail,
+                          "standard_text": f.standard_text, "rationale": f.rationale}
+                         for f in self.findings],
             "unverified": [{"clause": c, "why": w} for c, w in self.unverified],
             "law_not_held": [{"body": k, "refusal": r} for k, r in self.law_notes],
         }
@@ -446,6 +454,24 @@ def _test() -> None:
     d = rv.to_dict()
     check(set(d) >= {"findings", "unverified", "law_not_held", "requires_review"},
           "the report carries findings, what could not be verified, and the law not held")
+
+    # ── the standard travels with the finding ──────────────────────────────
+    # It did not until 29-09-2026: to_dict dropped it, so a live review rendered ten rows
+    # with a blank standard column and the only text a reader had for the company position
+    # was the comparison detail. A finding whose standard is not on the wire cannot be
+    # judged by the person it is shown to.
+    check(all(f["standard_text"].strip() and f["rationale"].strip() for f in d["findings"]),
+          "every finding on the wire carries the standard it was judged against and the "
+          "reason for it")
+    check(all(f["standard_text"] != f["detail"] for f in d["findings"]),
+          "...and the standard is not the comparison detail: one is the company position, "
+          "the other is what this document said against it")
+    check("why" not in set().union(*(set(f) for f in d["findings"])),
+          "...and the engineering note is NOT sent: NDA-02's `why` is a changelog about a "
+          "false-alarm rate, which is not what a lawyer's column is for")
+    check(d["playbook_status"] == pb.DRAFT,
+          "...and both sentences are marked DRAFT by the playbook_status on the same "
+          "report -- there is no second status for them to fall out of step with")
     check(len(d["law_not_held"]) == len(UNHELD_FOR_CONTRACTS),
           "...and the unheld law travels WITH the report rather than being left out of it")
 
