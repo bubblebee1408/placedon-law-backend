@@ -437,9 +437,13 @@ def _test() -> None:
     got = json.loads(client.get("/v2/runs/r1").content)
     check(got["status"] == "ANSWERED" and "steps" not in got,
           "runs.get serves the run without its steps")
-    check(json.loads(client.get("/v2/runs/r1/trace").content)["steps"]
-          == [{"capability": "intake"}],
-          "...and runs.trace serves them")
+    step = json.loads(client.get("/v2/runs/r1/trace").content)["steps"][0]
+    from gateway.store import STEP_KEYS
+    check(step["capability"] == "intake", "...and runs.trace serves them")
+    check(set(step) == set(STEP_KEYS),
+          f"...normalised to the full key set ({sorted(step)}), so a caller reading "
+          f"step['model'] gets None on memory rather than a KeyError it would not get "
+          f"on Postgres")
 
     check(all(not str(p).startswith("/v1") for p in mounted.values()),
           "no generated route lands under /v1, so the byte-identical surface cannot be "

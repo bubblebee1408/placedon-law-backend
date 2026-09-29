@@ -59,6 +59,21 @@ class Backend(Protocol):
 
 # ── in memory ────────────────────────────────────────────────────────────────
 
+# The key set a step and a proposition ALWAYS have when read back. Postgres returns every
+# column whether or not the writer supplied it; a dict returns what it was handed. Without
+# normalising, `step["model"]` is a KeyError on memory and None on Postgres -- which is a
+# divergence that only shows up on the backend the gate does not run.
+STEP_KEYS = ("capability", "engine_capability", "status", "model", "degraded")
+PROPOSITION_KEYS = ("status", "source_ref", "span_start", "span_end")
+
+
+def _shaped(row: dict, keys: tuple[str, ...]) -> dict:
+    out = {k: row.get(k) for k in keys}
+    if "degraded" in keys:
+        out["degraded"] = bool(row.get("degraded", False))
+    return out
+
+
 @dataclass
 class MemoryBackend:
     """A dict, with the same decomposition discipline as Postgres so the tests can be one.
@@ -78,8 +93,9 @@ class MemoryBackend:
         rid = run["id"]
         self.runs[rid] = {k: v for k, v in run.items()
                           if k not in ("steps", "propositions")}
-        self.steps[rid] = [dict(s) for s in run.get("steps", [])]
-        self.props[rid] = [dict(p) for p in run.get("propositions", [])]
+        self.steps[rid] = [_shaped(s, STEP_KEYS) for s in run.get("steps", [])]
+        self.props[rid] = [_shaped(p, PROPOSITION_KEYS)
+                           for p in run.get("propositions", [])]
 
     def read_run(self, run_id: str) -> dict | None:
         if run_id not in self.runs:
@@ -302,6 +318,24 @@ def conformance(backend) -> list[tuple[bool, str]]:
     ck(after and after["steps"][0]["capability"] == "intake",
        "mutating the dict AFTER writing does not change the store -- a backend that kept "
        "the caller's object would pass tests a database cannot")
+
+    # A step written WITHOUT its optional keys must read back WITH them. Postgres returns
+    # every column; a dict returns what it was handed, and `step["model"]` would then be a
+    # KeyError on memory and None on Postgres. Caught the hard way on 29-09-2026, when the
+    # CLI demo raised KeyError('model') on a step the sample run happened to populate.
+    sparse_id = SAMPLE_RUN["id"].replace("9", "8")
+    backend.write_run({"id": sparse_id, "intent": "ask", "status": "ANSWERED",
+                       "steps": [{"capability": "intake", "status": "ANSWERED"}],
+                       "propositions": [{"status": "VERIFIED"}]})
+    sp = backend.read_run(sparse_id)
+    ck(sp and set(sp["steps"][0]) == set(STEP_KEYS),
+       f"a step written with two keys reads back with all of them "
+       f"({sorted(sp['steps'][0]) if sp else []})")
+    ck(sp and sp["steps"][0]["model"] is None and sp["steps"][0]["degraded"] is False,
+       "...the absent ones defaulted, not missing -- so step['model'] is never a KeyError "
+       "on one backend and None on the other")
+    ck(sp and set(sp["propositions"][0]) == set(PROPOSITION_KEYS),
+       "...and the same for a proposition")
 
     ck(backend.get_document("0" * 64) is None, "an unknown document reads as None")
     doc = backend.put_document(sha256="a" * 64, name="nda.txt", byte_count=33)

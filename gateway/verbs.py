@@ -132,6 +132,25 @@ def _ask(args: dict, ctx: Context) -> dict:
     return out.to_dict()
 
 
+def _persist_run(ctx: Context, *, intent: str, status: str, steps: list,
+                 propositions: list, refusal_code=None) -> str | None:
+    """Write one run as runs + ordered steps + propositions. Returns the run id, or None.
+
+    R-016's DERIVATION model, actually used: without this a verb answers and leaves no
+    trace, and `runs.trace` has nothing to serve. A store that is absent is not an error
+    here -- the verb still answered -- but the caller is told the id is None rather than
+    handed one that resolves to nothing.
+    """
+    if ctx.store is None:
+        return None
+    import uuid
+    run_id = str(uuid.uuid4())
+    ctx.store.write({"id": run_id, "intent": intent, "status": status,
+                     "refusal_code": refusal_code,
+                     "steps": steps, "propositions": propositions})
+    return run_id
+
+
 def _review_contract(args: dict, ctx: Context) -> dict:
     from pathlib import Path
 
@@ -147,8 +166,38 @@ def _review_contract(args: dict, ctx: Context) -> dict:
     except pb.PlaybookError as e:
         return _refuse("BAD_REQUEST", f"playbook: {e}")
     model = ctx.model_for(text) if ctx.model_for else None
-    return rc.review(text, book=book, model=model,
-                     name=args.get("name") or "contract").to_dict()
+    out = rc.review(text, book=book, model=model,
+                    name=args.get("name") or "contract")
+    d = out.to_dict()
+
+    # The run, as a derivation: the steps agents/plans.py declares for this intent, and one
+    # proposition per finding. A finding's status is a PLAYBOOK status (MATCHES, DEVIATES,
+    # MISSING, NEEDS_LAWYER) and a proposition's is an L0 verification status, so they are
+    # mapped rather than copied -- writing "DEVIATES" into a column that means "VERIFIED"
+    # would put a company standard where a legal verdict is read from.
+    # VERIFIED requires an EXTRACTION that passed span verification -- not merely a
+    # finding. The first version derived it by subtraction ("every clause, minus the
+    # unverified ones"), and with no model configured nothing is extracted, nothing is
+    # unverified, and all ten findings persisted as VERIFIED. Ten MISSING clauses recorded
+    # as verified propositions is a falsehood in the one record that is supposed to be
+    # trustworthy. So the set is built from what was actually verified, positively.
+    verified_clauses = {e.clause for e in out.extracted if e.verified}
+    props = [{"status": "VERIFIED" if f.clause in verified_clauses else "UNVERIFIED",
+              "source_ref": f"playbook:{f.rule_id}",
+              "span_start": None, "span_end": None}
+             for f in out.findings]
+    steps = [
+        {"capability": "intake", "status": "ANSWERED", "degraded": False},
+        {"capability": "document", "engine_capability": "document.ground_extraction",
+         "status": "ANSWERED",
+         "model": f"{out.route.provider}/{out.route.model}" if out.route else None,
+         "degraded": bool(out.route and out.route.degraded)},
+        {"capability": "playbook", "engine_capability": "contract.playbook_review",
+         "status": "ANSWERED", "degraded": False},
+    ]
+    d["run_id"] = _persist_run(ctx, intent="review_contract", status="ANSWERED",
+                               steps=steps, propositions=props)
+    return d
 
 
 def _runs_get(args: dict, ctx: Context) -> dict:
@@ -409,6 +458,49 @@ def _test() -> None:
           "...and the reply says the store is memory and what that costs")
     check(_documents_upload({"text": ""}, d)["code"] == "BAD_REQUEST",
           "an empty upload is refused rather than stored as a document of nothing")
+
+    # ── a verb that answers leaves a TRACE, which is what runs.trace serves ──
+    from gateway.store import MemoryBackend
+    from agents import review_contract as _rc
+    st = MemoryBackend()
+    c2 = Context(store=st)
+    fx = _rc.fixtures()[0]
+    out = _review_contract({"text": fx.text, "name": fx.id}, c2)
+    check(out.get("run_id"), "review_contract returns the id of the run it wrote")
+    trace = _runs_trace({"run_id": out["run_id"]}, c2)
+    check([s["capability"] for s in trace["steps"]]
+          == ["intake", "document", "playbook"],
+          f"...and runs.trace serves its steps, in the order agents/plans.py declares "
+          f"({[s['capability'] for s in trace['steps']]})")
+    row = _runs_get({"run_id": out["run_id"]}, c2)
+    check(row["intent"] == "review_contract" and row["status"] == "ANSWERED",
+          "...and runs.get serves the run itself")
+    stored = st.read_run(out["run_id"])
+    check(len(stored["propositions"]) == len(out["findings"]),
+          f"one proposition per finding ({len(stored['propositions'])} for "
+          f"{len(out['findings'])} findings)")
+    # With no model nothing is extracted, so every finding is MISSING -- and NOTHING may
+    # be recorded as VERIFIED. Derived by subtraction, the first version recorded all ten.
+    nomodel = Context(store=MemoryBackend())
+    o_nm = _review_contract({"text": fx.text, "name": fx.id}, nomodel)
+    st_nm = nomodel.store.read_run(o_nm["run_id"])
+    check({f["status"] for f in o_nm["findings"]} == {"MISSING", "MATCHES"},
+          f"with no model configured nothing is extracted: every finding is MISSING, "
+          f"except the must_be_absent rules, which MATCH on absence "
+          f"({sorted({f['status'] for f in o_nm['findings']})})")
+    check({p["status"] for p in st_nm["propositions"]} == {"UNVERIFIED"},
+          f"...and NOT ONE proposition is VERIFIED "
+          f"({sorted({p['status'] for p in st_nm['propositions']})}): a clause that was "
+          f"never extracted cannot have been verified")
+    check({p["status"] for p in stored["propositions"]} <= {"VERIFIED", "UNVERIFIED"},
+          "...carrying an L0 verification status, never a playbook status: writing "
+          "DEVIATES into a column that means VERIFIED would put a company standard where "
+          "a legal verdict is read from")
+    check(all(p["source_ref"].startswith("playbook:") for p in stored["propositions"]),
+          "...and naming the rule it came from")
+    check(_review_contract({"text": fx.text}, Context()).get("run_id") is None,
+          "with NO store the verb still answers, and says the run id is None rather than "
+          "handing back one that resolves to nothing")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:

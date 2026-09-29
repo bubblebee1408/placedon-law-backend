@@ -40,6 +40,23 @@ def build_parser(verbs=None) -> argparse.ArgumentParser:
     return p
 
 
+DEFAULT_TENANT = "00000000-0000-0000-0000-000000000001"
+
+
+def default_context() -> Context:
+    """A context backed by whatever gateway.store.select() chooses.
+
+    With PLACEDON_DATABASE_URL set this is Postgres, and a run written by one invocation is
+    readable by the next. Without it the store is in-memory and dies with the process --
+    so `placedon review-contract` followed by `placedon runs-trace` will NOT find the run.
+    That is not a bug to work around; it is the reason the Postgres store exists, and the
+    CLI says so rather than appearing to lose data.
+    """
+    from gateway.store import select
+    return Context(tenant=DEFAULT_TENANT, actor=DEFAULT_TENANT,
+                   store=select(tenant_id=DEFAULT_TENANT))
+
+
 def run(argv: list[str], *, ctx: Context | None = None) -> tuple[int, dict]:
     """(exit code, payload). Pure enough to test: no printing, no sys.exit."""
     parser = build_parser()
@@ -49,7 +66,7 @@ def run(argv: list[str], *, ctx: Context | None = None) -> tuple[int, dict]:
     wanted = {cli_command(v): v for v in VERBS}[args.command]
     supplied = {f.name: getattr(args, f.name) for f in wanted.inputs
                 if getattr(args, f.name, None) is not None}
-    out = wanted.run(supplied, ctx or Context()) if wanted.run else {
+    out = wanted.run(supplied, ctx or default_context()) if wanted.run else {
         "error": "not_implemented", "detail": wanted.name}
     refused = isinstance(out, dict) and (out.get("status") == "REFUSED"
                                          or "error" in out)
@@ -101,6 +118,26 @@ def _test() -> None:
           f"documents-upload answers with the same object the route returns ({code})")
     check(len(ctx.documents) == 1,
           "...and wrote to the context it was given, not to a private store of its own")
+
+    from gateway.store import MEMORY, MemoryBackend
+    dc = default_context()
+    check(dc.store is not None and dc.store.kind in (MEMORY, "postgres"),
+          f"the default context is backed by the SELECTED store ({dc.store.kind})")
+
+    # end to end, in ONE process: review a contract, then read its trace back
+    from agents import review_contract as _rc
+    shared = Context(store=MemoryBackend())
+    fx = _rc.fixtures()[0]
+    c1, o1 = run(["review-contract", "--text", fx.text, "--name", fx.id], ctx=shared)
+    check(c1 == 0 and o1.get("run_id"), "review-contract answers and returns a run id")
+    c2, o2 = run(["runs-trace", "--run-id", o1["run_id"]], ctx=shared)
+    check(c2 == 0 and [s["capability"] for s in o2["steps"]]
+          == ["intake", "document", "playbook"],
+          "...and runs-trace reads that run back through the CLI, same store")
+    c3, o3 = run(["runs-trace", "--run-id", o1["run_id"]], ctx=Context(store=MemoryBackend()))
+    check(c3 == 1 and o3["code"] == "NOT_FOUND",
+          "...while a DIFFERENT in-memory store does not have it -- which is what two CLI "
+          "invocations are without Postgres, and why the Postgres store exists")
 
     code, out = run(["runs-get", "--run-id", "r1"], ctx=Context())
     check(code == 1 and out["code"] == "NO_STORE",
