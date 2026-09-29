@@ -38,6 +38,7 @@ PLAN_19 is a directory, `docs/plan19/`, not a single file.
 | [EVIDENCE_CORRECTIONS_PLAN_20](EVIDENCE_CORRECTIONS_PLAN_20.md) | What the 27-09 evidence review contradicts in PLAN_20 | Every figure carries a source class | A single commissioned review, not a replication |
 | [PLAN_21_RESEARCH_PROGRAMME](PLAN_21_RESEARCH_PROGRAMME.md) | The research programme and the conformal guarantee | C1 states the guarantee per answer | Was PLAN_16 until 27-09; n=0 human labels |
 | [PLAN_22_MODEL_AND_PLATFORM_DECISIONS](PLAN_22_MODEL_AND_PLATFORM_DECISIONS.md) | **The model and platform layer.** Rent-not-train, Azure-only calls, retrieval, OCR, API/MCP/CLI, contract review F12 | Seven decisions, each with a reversal condition; the Gemini/Vault firewall is BUILT and gate-enforced | Every Harvey figure is second-hand and two are vendor-reported; Fireworks-on-Foundry region is OPEN |
+| [PLAN_23_ORCHESTRATION](PLAN_23_ORCHESTRATION.md) | **How work is planned and run.** Twelve layers, the workflow-before-agent rule, the verified cascade, sagas, and O1–O9 | Every rule is derived from a cited finding, MAST's 1,642 traces included | A design: layers 2–11 name work not built, and two of eleven findings are vendor material |
 | [FEATURES](FEATURES.md) | **The canonical feature list.** If it is not there, it is not planned | 7 of 10 have a built engine | F8 unbuilt and risky |
 
 ## Scope

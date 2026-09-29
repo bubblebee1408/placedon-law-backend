@@ -19,6 +19,8 @@ That is what stops the widened scope from producing answers decided against law 
 Model and platform decisions: `docs/PLAN_22_MODEL_AND_PLATFORM_DECISIONS.md` — read before any
 model, retrieval, OCR, API or MCP work.
 
+Orchestration design: `docs/PLAN_23_ORCHESTRATION.md`, read before touching `agents/` or `gateway/`.
+
 ## The wedge
 Given a corporate document, determine whether it is:
 1. the correct document type,
