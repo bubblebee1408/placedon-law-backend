@@ -145,30 +145,95 @@ because every decision on this page is an instance of it.
 
 ## 5. Architecture
 
+Recorded **verbatim as supplied** in the founder's review. Two forms were given and both
+are kept: the drawn diagram and the written-out form. They are not edited — including
+where the box rules do not align — because a diagram retyped is a diagram changed, and
+§5.4 carries the corrections instead.
+
+### 5.1 As given — drawn
+
 ```
-surfaces        API /v2 · MCP · CLI · Word add-in · web
-                        |
-gateway         auth · tenant · audit
-                        |
-agents/ runtime fixed intents: research_question · review_contract
-                · review_board_doc · law_changes
-                        |
-        +---------------+---------------+---------------+
-        |               |               |               |
-   model router    retrieval     document pipe     L0 verify
-                                 text/OCR          scope · as_of
-                                 clause segmenter  currency
-                                 playbook engine   quoted_span
-                                                   entailment
-                                                   obligations
-                        |
-Postgres (row-level security)
-                corpus · Vault · runs/steps/propositions
-                · two-date events · entity graph · audit chain
+                 ┌──────────── SURFACES (one verb table → three) ─────────────┐
+                 │  REST API /v2        MCP server (hosted, OAuth)     CLI     │
+                 │  Word add-in · Web                                          │
+                 └───────────────────────────────┬─────────────────────────────┘
+                                                 │ auth → tenant, actor · audit row
+ ┌───────────────────────────── L3 AGENT RUNTIME (agents/) ──────────────────────────────┐
+ │ intent (fixed list) → plan (code) → steps saved → budget → at most 1 correction         │
+ │ intents: research_question · review_contract · review_board_doc · law_changes           │
+ └──────┬────────────────────┬─────────────────────┬──────────────────────────────┬────────┘
+        │                    │                     │                              │
+ ┌──────▼──────┐   ┌─────────▼────────┐   ┌────────▼─────────┐        ┌───────────▼─────────┐
+ │ MODEL ROUTER│   │ RETRIEVAL        │   │ DOCUMENT PIPE    │        │ VERIFY (L0, no model)│
+ │ router.py   │   │ BM25 (statutes)  │   │ text / OCR       │        │ scope · as_of ·      │
+ │ Azure Llama │   │ + dense candidate│   │ Sarvam | Azure DI│        │ currency · quoted_   │
+ │ gpt-5-mini  │   │ (Voyage / Azure) │   │ clause segmenter │        │ span · entailment ·  │
+ │ Kimi/DS cand│   │ date-conditioned │   │ playbook engine  │        │ obligations          │
+ │ Gemini: pub │   └──────────────────┘   └──────────────────┘        └─────────────────────┘
+ │ only        │
+ └─────────────┘
+ ┌──────────────────────── L1 DATA (Postgres, row-level security per tenant) ─────────────┐
+ │ corpus (hashed, versioned) · Vault docs · runs/steps/propositions · events with two     │
+ │ dates (took effect / we learned it) · entity graph · audit chain                        │
+ └─────────────────────────────────────────────────────────────────────────────────────────┘
 ```
+
+### 5.2 As given — written out
+
+```
+SURFACES (one verb table -> REST API /v2, MCP server with OAuth, CLI; plus Word
+add-in and web) -> GATEWAY (auth -> tenant, actor; audit row) -> L3 AGENT RUNTIME
+(agents/: fixed intent -> plan in code -> steps saved -> budget -> max 1
+correction; intents research_question, review_contract, review_board_doc,
+law_changes) -> four parts:
+  MODEL ROUTER (router.py: Azure Llama, gpt-5-mini, Kimi/DeepSeek candidates,
+    Gemini public-only)
+  RETRIEVAL (BM25 for statutes, dense candidate Voyage/Azure, date-conditioned)
+  DOCUMENT PIPE (text/OCR Sarvam|Azure DI, clause segmenter, playbook engine)
+  VERIFY L0, no model (scope, as_of, currency, quoted_span, entailment,
+    obligations)
+-> L1 DATA (Postgres, row-level security per tenant: hashed versioned corpus,
+Vault docs, runs/steps/propositions, events with two dates, entity graph, audit
+chain).
+Status today: runtime, retrieval (BM25), verify = built; router needs Azure rows;
+document pipe, gateway, surfaces, Postgres tables = to build.
+Themis later plugs into L1 (watch feeds -> events, entity graph, recall of past
+answers that relied on changed law) without rebuilding.
+```
+
+### 5.3 Why the shape matters
 
 Intents are a **fixed list in code** — `agents/plans.py` — and a model may only choose
 among *declared optional steps*. That is what makes a run replayable.
+
+**VERIFY is L0 and takes no model.** That is the same rule as §4's, drawn: the four boxes
+above it may read, extract, label and phrase; only the box with no model in it decides.
+
+**Themis plugs into L1, not into a new stack.** Watch feeds become events, events land on
+the entity graph, and a past answer that relied on law which later changed is recalled —
+all off the two-date events already in L1. This is what the bitemporal model in L1 is *for*,
+and it is why the premium tier needs no rebuild.
+
+### 5.4 Checked against the tree, 29-09-2026
+
+The status line in §5.2 is preserved as written. Four refinements, each verified in this
+checkout rather than passed through — the record stands and the correction is dated, which
+is this repository's rule for its own history:
+
+| §5.2 says | Verified today | |
+|---|---|---|
+| "router needs Azure rows" | **Already landed.** `checker/router.py` now carries an AZURE row for TEXT/LOW/NARRATION and `providers_available()` reports it (commits `d9a65c7`, `0ff9a4d`). Ten fixtures ran live on `azure:llama-3-3-70b` | **BUILT** |
+| "gateway = to build" | True for auth, tenant and the app — `gateway/` holds only `__init__.py` and `audit.py`. The **audit chain is built** (19 checks) and the psycopg/Postgres decision is recorded in `requirements-gateway.txt` | **PART BUILT** |
+| "document pipe = to build" | True for the F12 parts: `checker/clause_segmenter.py` and `checker/playbook.py` **do not exist**. Text/OCR does — `checker/pdf_pages.py`, `checker/sarvam_model.py`, `checker/classify.py` | **PART BUILT** |
+| "Postgres tables = to build" | Stronger than "to build": **no migration file exists anywhere in the tree.** `001_core.sql` and `002_runs.sql` were specified and never written; R-016 (`runs` vs `turns`) is the open question blocking the second | **BLOCKED** |
+
+All six L0 verifiers named in the diagram exist and are gated: `scope`, `as_of`,
+`currency`, `quoted_span`, `entailment_gate`, `obligations`. **BUILT**, as claimed.
+
+One box is drawn but not yet real anywhere: **retrieval is not date-conditioned yet.**
+`as_of` and `currency` exist as verifiers that refuse a stale answer *after* retrieval; the
+diagram puts the date inside retrieval, which is a different thing and is not built.
+
 
 ## 6. F12 — contract review (new feature)
 
