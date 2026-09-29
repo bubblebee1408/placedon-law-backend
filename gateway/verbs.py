@@ -193,6 +193,11 @@ def _ask(args: dict, ctx: Context) -> dict:
                 "run_id": rid}
 
     d = out.to_dict()
+    # The ANSWER, with its citations. to_dict() carries the verdict and the provisions but
+    # not the prose, so the verb returned everything about an answer except the answer.
+    # Summary.prose() is the served form: traced sentences with their spans, and the count
+    # of any that were dropped stated in the body rather than a footnote.
+    d["answer"] = out.served
     fields = served.step_fields() if served else {}
     d["run_id"] = _persist_run(
         ctx, intent="research_question", status=out.status,
@@ -576,6 +581,13 @@ def _test() -> None:
     c2 = Context(store=st, model_for=lambda origins: _rc.fixture_model(fx))
     out = _review_contract({"text": fx.text, "name": fx.id, "test_data": True}, c2)
     check(out.get("run_id"), "review_contract returns the id of the run it wrote")
+    _a = _ask({"question": "how many meetings of the Board must a company hold"},
+              Context(store=MemoryBackend(),
+                      model_for=lambda origins: (lambda prompt: "")))
+    check("answer" in _a,
+          "ask returns the ANSWER as well as the verdict -- to_dict() carries provisions "
+          "and a status, and a verb that returned everything about an answer except the "
+          "answer is not serving one")
     trace = _runs_trace({"run_id": out["run_id"]}, c2)
     check([s["capability"] for s in trace["steps"]]
           == ["intake", "document", "playbook"],
