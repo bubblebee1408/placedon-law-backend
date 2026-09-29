@@ -143,6 +143,37 @@ def score_contract(proposed: dict[str, list[str]], truth: dict[str, list[str]],
     return per, exact, total
 
 
+# ── a 429 is a minute, not a verdict ─────────────────────────────────────────
+
+RETRY_BASE_SECONDS = 25.0
+
+
+def with_backoff(call, *, sleep=None, tries: int = 3, base: float = RETRY_BASE_SECONDS):
+    """Wrap a model callable so Azure's own rate limit waits instead of scoring zero.
+
+    Measured 29-09-2026: eight two-token calls in a row succeeded while twelve full
+    narration prompts returned HTTP 429, so what binds is tokens-per-minute. Without this
+    a bake-off measures Azure's quota and calls it the model's refusal rate -- the single
+    easiest way to publish a wrong number here.
+
+    `sleep` is INJECTED and defaults to None, so the gated tests exercise every branch and
+    never wait. A library that sleeps on its own is a library that hangs a test suite.
+    """
+    def _c(prompt: str) -> str:
+        last = None
+        for i in range(tries):
+            try:
+                return call(prompt)
+            except Exception as e:                               # noqa: BLE001
+                from checker.azure_model import RateLimited
+                if not isinstance(e, RateLimited) or sleep is None or i == tries - 1:
+                    raise
+                last = e
+                sleep(base * (i + 1))
+        raise last                                               # pragma: no cover
+    return _c
+
+
 # ── the arms: whatever route() would serve, read and never written ───────────
 
 def served_models() -> list[tuple[str, str]]:
@@ -158,6 +189,10 @@ def azure_models() -> list[str]:
 
 # ── task 1: research answers ─────────────────────────────────────────────────
 
+# The contract is DATA, and it is delimited. The first version concatenated it raw and
+# public_only refused all six calls -- correctly: an undelimited prompt is one where
+# nothing can be told apart from our own instructions, so nothing in it can be cleared.
+# That refusal is the firewall working, and the fix is to wrap, never to unwrap the guard.
 CLAUSE_PROMPT = (
     "You are shown a commercial contract and a list of clause types.\n"
     "For each clause type that is PRESENT, quote the exact words from the contract that "
@@ -166,6 +201,14 @@ CLAUSE_PROMPT = (
     "Answer as one JSON object mapping clause type to a list of verbatim quotes, and "
     "nothing else.\n\nCLAUSE TYPES:\n{clauses}\n\nCONTRACT:\n{contract}\n"
 )
+
+
+def clause_prompt(contract: str, clauses: list[str], *, wrap=None) -> str:
+    """The prompt, with the contract wrapped as untrusted evidence."""
+    if wrap is None:
+        from checker.prompt_safety import wrap_untrusted as wrap
+    return CLAUSE_PROMPT.format(clauses="\n".join(f"- {x}" for x in clauses),
+                                contract=wrap(contract, "contract"))
 
 
 def parse_clause_reply(raw: str) -> dict[str, list[str]]:
@@ -226,7 +269,12 @@ def run_research(model_for, cases, *, answer_fn=None, evidence_fn=None,
                     "code": o.code, "written": n_w, "traced": n_t,
                     "seconds": round(time.time() - t, 2)})
     n = len(cases)
-    return {"n": n, "sentences_written": written, "sentences_traced": traced,
+    return {"n": n, "completed": n - errored,
+            "completion_rate": round((n - errored) / n, 4) if n else 0.0,
+            "rates_are_over": ("COMPLETED tasks only. A task that errored contributed no "
+                               "sentences, so a high traced rate beside a high error count "
+                               "is a rate over the survivors -- read the two together."),
+            "sentences_written": written, "sentences_traced": traced,
             "traced_rate": round(traced / written, 4) if written else 0.0,
             "traced_ci": wilson(traced, written) if written else (0.0, 0.0),
             "refusals": refused,
@@ -240,7 +288,7 @@ def run_research(model_for, cases, *, answer_fn=None, evidence_fn=None,
 
 # ── task 2: clause extraction ────────────────────────────────────────────────
 
-def run_clauses(model_call, contracts, clauses, *, on_call=None) -> dict:
+def run_clauses(model_call, contracts, clauses, *, on_call=None, wrap=None) -> dict:
     totals: dict[str, Counts] = {}
     exact = proposed = errored = truncated = 0
     per = []
@@ -249,8 +297,7 @@ def run_clauses(model_call, contracts, clauses, *, on_call=None) -> dict:
             on_call()
         ctx = c["context"][:MAX_CONTRACT_CHARS]
         truncated += 1 if len(c["context"]) > MAX_CONTRACT_CHARS else 0
-        prompt = CLAUSE_PROMPT.format(clauses="\n".join(f"- {x}" for x in clauses),
-                                      contract=ctx)
+        prompt = clause_prompt(ctx, clauses, wrap=wrap)
         t = time.time()
         try:
             raw = model_call(prompt)
@@ -325,15 +372,16 @@ def render(report: dict) -> str:
     """The markdown table. Intervals on every rate, because a rate without one is a story."""
     out = ["# Model bake-off — " + report["date"], "", RULE, "",
            "## Research (E1) — " + report["research_set"], "",
-           "| model | n | traced-sentence rate | 95% CI | refusal rate | 95% CI | err | Rs/task |",
+           "| model | n | completed | traced-sentence rate | 95% CI | refusal rate | 95% CI | Rs/task |",
            "|---|---|---|---|---|---|---|---|"]
     for name, r in report["research"].items():
         lo, hi = r["traced_ci"]
         rlo, rhi = r["refusal_ci"]
-        out.append(f"| `{name}` | {r['n']} | {r['traced_rate']:.3f} "
+        out.append(f"| `{name}` | {r['n']} | {r['completed']}/{r['n']} | "
+                   f"{r['traced_rate']:.3f} "
                    f"({r['sentences_traced']}/{r['sentences_written']}) | "
                    f"[{lo:.3f}, {hi:.3f}] | {r['refusal_rate']:.3f} | "
-                   f"[{rlo:.3f}, {rhi:.3f}] | {r['errors']} | "
+                   f"[{rlo:.3f}, {rhi:.3f}] | "
                    f"{r['rupees_per_task_inr']:.4f} |")
     out += ["", "## Clause extraction (E2) — CUAD test split", "",
             "| model | contracts | macro F1 | 95% CI | micro F1 | exact-span rate | 95% CI | err |",
@@ -345,7 +393,10 @@ def render(report: dict) -> str:
                    f"[{lo:.3f}, {hi:.3f}] | {c['micro_f1']:.3f} | "
                    f"{c['exact_span_rate']:.3f} ({c['spans_exact']}/"
                    f"{c['spans_proposed']}) | [{elo:.3f}, {ehi:.3f}] | {c['errors']} |")
-    out += ["", "Rupees are Rs 0.00 for every Azure row by `router.estimate_inr`'s own "
+    out += ["", "**Every rate is over COMPLETED tasks.** A task that errored contributed "
+                "no sentences and no spans, so a high traced rate beside a low completed "
+                "count is a rate over the survivors, and the two must be read together.",
+            "", "Rupees are Rs 0.00 for every Azure row by `router.estimate_inr`'s own "
                 "rule: zero against MONTHLY_CAP_INR, **not** zero cost. Azure for Students "
                 "credit is a separate pot no counter here watches.", ""]
     return "\n".join(out)
@@ -397,8 +448,10 @@ def main(argv: list[str]) -> int:
         name = f"azure:{m}"
         print(f"\n== {name} ==")
         res = run_research(
-            lambda origins, _m=m: (azure_model.as_text_model(origin=origins, model=_m)
-                                   if origins else None),
+            lambda origins, _m=m: (
+                with_backoff(azure_model.as_text_model(origin=origins, model=_m),
+                             sleep=time.sleep)
+                if origins else None),
             cases, on_call=lambda: spent.__setitem__(0, spent[0] + 1))
         report["research"][name] = res
         print(f"   research: traced {res['traced_rate']:.3f} "
@@ -412,7 +465,7 @@ def main(argv: list[str]) -> int:
             spent[0] += 1
             return azure_model.narrate(prompt, origin=_o, model=_m)
 
-        cl = run_clauses(clause_call, contracts, clauses)
+        cl = run_clauses(with_backoff(clause_call, sleep=time.sleep), contracts, clauses)
         report["clauses"][name] = cl
         print(f"   clauses:  macro F1 {cl['macro_f1']:.3f} "
               f"exact-span {cl['exact_span_rate']:.3f} errors {cl['errors']}")
@@ -489,6 +542,17 @@ def _test() -> None:
         check(parse_clause_reply(junk) == {},
               f"...and an unreadable reply is NO clauses, never a guess ({junk[:18]!r})")
 
+    # ── the contract goes in DELIMITED, or public_only refuses the whole call ─
+    seen_wrap = []
+    pr = clause_prompt("THE CONTRACT BODY", ["Governing Law"],
+                       wrap=lambda body, meta: seen_wrap.append((body, meta))
+                       or f"<source {meta}>\n{body}\n</source>")
+    check(seen_wrap and seen_wrap[0][0] == "THE CONTRACT BODY",
+          "the contract is passed to wrap_untrusted, not concatenated raw")
+    check("<source" in pr and "</source>" in pr and "Governing Law" in pr,
+          "...so the prompt carries a delimited block AND the clause list. The first "
+          "version skipped this and public_only refused all six live calls, correctly")
+
     # ── the budget is refused BEFORE anything is sent ────────────────────────
     p_ok = Plan(["a"], 10, 5, 200)
     p_no = Plan(["a", "b"], 70, 5, 100)
@@ -536,6 +600,43 @@ def _test() -> None:
     err = run_clauses(boom, FIXTURE_CONTRACTS, FIXTURE_CLAUSES)
     check(err["errors"] == 3 and err["spans_proposed"] == 0,
           "a transport failure is counted as an ERROR, never as a model that found nothing")
+
+    # ── a rate limit waits; anything else does not ──────────────────────────
+    from checker.azure_model import RateLimited
+    waits, tries = [], []
+
+    def flaky(prompt: str) -> str:
+        tries.append(1)
+        if len(tries) < 3:
+            raise RateLimited("Azure HTTP 429: slow down")
+        return "ok"
+
+    got = with_backoff(flaky, sleep=waits.append, base=10.0)("p")
+    check(got == "ok" and len(tries) == 3, "a 429 is retried until it succeeds")
+    check(waits == [10.0, 20.0],
+          f"...waiting longer each time rather than hammering the same minute ({waits})")
+
+    waits.clear()
+    def always(prompt: str) -> str:
+        raise RateLimited("Azure HTTP 429: slow down")
+    try:
+        with_backoff(always, sleep=waits.append, tries=2, base=1.0)("p")
+        check(False, "a persistent 429 eventually raises")
+    except RateLimited:
+        check(len(waits) == 1,
+              f"...after the bounded number of waits, not forever ({waits})")
+
+    waits.clear()
+    def broken(prompt: str) -> str:
+        raise RuntimeError("the key is wrong")
+    try:
+        with_backoff(broken, sleep=waits.append)("p")
+        check(False, "a non-429 failure is not retried")
+    except RuntimeError:
+        check(not waits, "a non-429 failure raises at once -- waiting would not fix a bad key")
+
+    check(with_backoff(lambda p: "fine", sleep=None)("p") == "fine",
+          "...and with no sleep injected the wrapper is a pass-through, so the gate never waits")
 
     # ── the research arm, offline, with the pipeline stubbed ────────────────
     class _Sent:

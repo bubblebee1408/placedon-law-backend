@@ -86,6 +86,18 @@ _AZURE_HOSTS = (".openai.azure.com", ".services.ai.azure.com",
                 ".cognitiveservices.azure.com")
 
 
+class RateLimited(ModelUnavailable):
+    """Azure's own quota, which is a fact about the minute rather than about the call.
+
+    Split from plain ModelUnavailable because the two want opposite responses, the same
+    way gemini_model splits ModelRateLimited from ModelBusy: a 429 here means WAIT, and a
+    caller that retries immediately -- or fails over to the next model -- spends quota it
+    did not need to. Measured 29-09-2026: eight two-token calls in a row all succeeded
+    while twelve full narration prompts returned 429, so the limit that binds is
+    tokens-per-minute and not requests, and the remedy is spacing rather than fewer calls.
+    """
+
+
 def available() -> bool:
     return bool(os.getenv("AZURE_AI_API_KEY") and os.getenv("AZURE_AI_ENDPOINT"))
 
@@ -146,6 +158,8 @@ def _call(body: dict, key: str, timeout: int) -> dict:
             return json.loads(r.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
         body_text = e.read().decode("utf-8", "replace")[:200]
+        if e.code == 429:
+            raise RateLimited(f"Azure HTTP 429: {body_text}") from None
         raise ModelUnavailable(f"Azure HTTP {e.code}: {body_text}") from None
     except (urllib.error.URLError, TimeoutError, OSError) as e:
         raise ModelUnavailable(f"Azure unreachable: {e}") from None
@@ -325,6 +339,11 @@ def _test() -> None:
           "exactly what it asked before")
     sent.clear()
     narrate(cleared, origin=_o, _transport=spy)
+    check(issubclass(RateLimited, ModelUnavailable),
+          "a rate limit is still ModelUnavailable, so every existing `except` catches it")
+    check(RateLimited is not ModelUnavailable,
+          "...and is its own type, so a caller can WAIT on a 429 instead of failing over "
+          "to the next model and spending its quota too")
     check(default_timeout("llama-3-3-70b") == DEFAULT_TIMEOUT
           and default_timeout("gpt-5-mini") == REASONING_TIMEOUT
           and REASONING_TIMEOUT > DEFAULT_TIMEOUT,
