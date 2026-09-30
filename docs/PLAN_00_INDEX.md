@@ -39,6 +39,9 @@ PLAN_19 is a directory, `docs/plan19/`, not a single file.
 | [PLAN_21_RESEARCH_PROGRAMME](PLAN_21_RESEARCH_PROGRAMME.md) | The research programme and the conformal guarantee | C1 states the guarantee per answer | Was PLAN_16 until 27-09; n=0 human labels |
 | [PLAN_22_MODEL_AND_PLATFORM_DECISIONS](PLAN_22_MODEL_AND_PLATFORM_DECISIONS.md) | **The model and platform layer.** Rent-not-train, Azure-only calls, retrieval, OCR, API/MCP/CLI, contract review F12 | Seven decisions, each with a reversal condition; the Gemini/Vault firewall is BUILT and gate-enforced | Every Harvey figure is second-hand and two are vendor-reported; Fireworks-on-Foundry region is OPEN |
 | [PLAN_23_ORCHESTRATION](PLAN_23_ORCHESTRATION.md) | **How work is planned and run.** Twelve layers, the workflow-before-agent rule, the verified cascade, sagas, and O1–O9 | Every rule is derived from a cited finding, MAST's 1,642 traces included | A design: layers 2–11 name work not built, and two of eleven findings are vendor material |
+| [PLAN_26_INDIAN_SOURCES](PLAN_26_INDIAN_SOURCES.md) | **Where legal data comes from, Indian only.** Source tiers, a terms register, build order S0–S5 | Every source carries its terms and its robots position before code depends on it | Written 30-09 as PLAN_24 and renumbered the same day: `docs/plan24/` is Themis's and means something else |
+| [plan25/](plan25/00_INDEX.md) | **PLAN_25, nine documents.** The deep architecture and the Ring 3 prediction engine | Grounded in code that exists | A design; naming a module is not a claim it is built |
+| [plan24/](plan24/00_INDEX.md) | **PLAN_24, Themis Intelligence.** Orchestration that learns, watches and measures | Nine documents, cross-reviewed twice | A design, not a status |
 | [FEATURES](FEATURES.md) | **The canonical feature list.** If it is not there, it is not planned | 7 of 10 have a built engine | F8 unbuilt and risky |
 
 ## Scope
