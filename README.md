@@ -1,5 +1,7 @@
 # placedon-law-backend
 
+**Start with [docs/START_HERE.md](docs/START_HERE.md).**
+
 Verified legal evidence for **compliance across Indian corporate law**.
 Deterministic Python. No language model in any decision path.
 
