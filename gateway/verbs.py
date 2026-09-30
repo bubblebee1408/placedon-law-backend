@@ -659,6 +659,69 @@ def _events_assess(args: dict, ctx: Context) -> dict:
     return d
 
 
+def _intake_classify(args: dict, ctx: Context) -> dict:
+    """Which of six fixed tasks this request is. PLAN_23 layer 1.
+
+    **It never runs the task.** No plan is compiled, no run is persisted, no run_id comes
+    back -- the caller gets a name, two alternatives and a reason, and decides. That is what
+    makes a misclassification cost time rather than correctness, and it is why the model
+    call is router.CLASSIFICATION at LOW consequence while `ask` is NARRATION.
+
+    The model is reached only when the deterministic rules cannot decide, and its reply is
+    checked against the six names in `agents/intake.py` before it is returned (PLAN_23
+    §3.2). A reply outside the list is discarded, never normalised into range.
+    """
+    from agents import intake
+    from checker import router
+
+    message = args.get("message") or ""
+    raw_files = args.get("files")
+    if raw_files is None:
+        raw_files = []
+    if not isinstance(raw_files, list):
+        return _refuse("BAD_REQUEST", "files must be a list of {name, type} objects")
+    files = []
+    for i, f in enumerate(raw_files):
+        if not isinstance(f, dict):
+            return _refuse("BAD_REQUEST", f"files[{i}] must be an object with name/type")
+        files.append({"name": str(f.get("name") or ""), "type": str(f.get("type") or "")})
+    facts = args.get("facts")
+    if facts is not None and not isinstance(facts, dict):
+        return _refuse("BAD_REQUEST", "facts must be an object")
+    if not message.strip() and not files:
+        return _refuse("BAD_REQUEST",
+                       "a message or at least one file is required: there is nothing to "
+                       "classify otherwise")
+
+    # The rules first, with NO model. If they decide, nothing is spent and nothing is
+    # routed -- which is the common case and the point of the ordering.
+    decided = intake.classify(message, files=files, facts=facts)
+    if decided.rule not in ("default_no_attachment", "attachment+unrecognised_instruction"):
+        out = decided.to_dict()
+        out["note"] = _INTAKE_NOTE
+        return out
+
+    # Only now is a model worth asking for. LOW consequence: a wrong name costs a click.
+    served, refusal = _served_or_refusal((), name="intake.classify",
+                                         purpose=router.CLASSIFICATION, ctx=ctx,
+                                         consequence=router.LOW)
+    model = served.call if served else None
+    out = intake.classify(message, files=files, facts=facts, model=model).to_dict()
+    if refusal:
+        # Not a refusal of the verb: the rules already produced an answer, and this only
+        # says the classifier could not be asked to improve on it.
+        out["classifier_unavailable"] = refusal["code"]
+    out["note"] = _INTAKE_NOTE
+    return out
+
+
+_INTAKE_NOTE = (
+    "Intake names the task and never runs it. Scope is not decided here: an off-topic "
+    "request still classifies, and the path it names is what refuses it -- so a question "
+    "about a body of law this engine does not hold comes back from `ask` with the named "
+    "refusal, not from here with silence.")
+
+
 def _documents_upload(args: dict, ctx: Context) -> dict:
     """Store bytes under their own sha256. The identity IS the hash, not a counter."""
     import hashlib
@@ -892,6 +955,23 @@ VERBS: tuple[Verb, ...] = (
                           "named refusal rather than today's text")),
          "POST", read_only=True, run=_sources_search),
 
+    Verb("intake.classify",
+         "Which of six fixed tasks a request is, with two alternatives and a reason -- or "
+         "a one-sentence question when it is genuinely open. Decided by code wherever code "
+         "can; a model is asked only when the rules cannot, and its reply must be one of "
+         "the six names. This verb never runs the task.",
+         (Field("message", STRING, False,
+                describes="the user's words. Rendered verbatim, never parsed for meaning "
+                          "beyond the fixed signals"),
+          Field("files", OBJECT, False,
+                describes="the attachments as [{name, type}]. The NAME decides whether a "
+                          "file is a contract or a filing, because a .pdf is both"),
+          Field("facts", OBJECT, False,
+                describes="event facts (foreign_investor, listed, state). Recorded and "
+                          "passed through, never used to classify: they describe the "
+                          "company, not what is being asked")),
+         "POST", read_only=True, run=_intake_classify),
+
     Verb("documents.upload",
          "Store a document and return the sha256 that identifies it.",
          (Field("text", STRING, True, describes="the document text"),
@@ -972,8 +1052,8 @@ def _test() -> None:
     check(names == {"ask", "review_contract", "review_document", "events.assess",
                     "runs.get", "runs.trace", "runs.approve", "runs.reject",
                     "runs.submit", "runs.cancel", "documents.upload",
-                    "sources.list", "sources.search"},
-          f"the thirteen verbs are declared once ({sorted(names)})")
+                    "sources.list", "sources.search", "intake.classify"},
+          f"the fourteen verbs are declared once ({sorted(names)})")
     # sources.* are READ-ONLY, so they reach MCP. That is the intended shape: an agent may
     # ask what a source permits and search what may be read, and there is no sources verb
     # that fetches, stores or spends. S3's Indian Kanoon connector will spend money, and
@@ -990,6 +1070,41 @@ def _test() -> None:
     check(not {t.name for t in mcp} & {f"{MCP_NAMESPACE}.runs.submit",
                                        f"{MCP_NAMESPACE}.runs.cancel"},
           "...so neither runs.submit nor runs.cancel reaches MCP")
+
+    # ── intake.classify (PLAN_23 layer 1) ───────────────────────────────────
+    check("intake.classify" not in write_verbs(),
+          "intake.classify is read-only, so it reaches MCP")
+    check(f"{MCP_NAMESPACE}.intake.classify" in {t.name for t in mcp},
+          "...and it does")
+    _ictx = Context()
+    _i = by_name()["intake.classify"].run(
+        {"message": "Please review the attached share purchase agreement.",
+         "files": [{"name": "spa-final.docx", "type": "application/pdf"}]}, _ictx)
+    check(_i["task"] == "REVIEW_CONTRACT", f"a contract with a review verb -> "
+                                           f"REVIEW_CONTRACT ({_i['task']})")
+    check("run_id" not in _i and _ictx.last_steps == [],
+          "**the verb never runs the task**: no run_id comes back and no step was built")
+    check(len(_i["alternatives"]) == 2 and _i["reason"],
+          f"...with two alternatives and a reason ({_i['alternatives']})")
+    _u = by_name()["intake.classify"].run(
+        {"files": [{"name": "board-minutes.pdf", "type": "application/pdf"}]}, _ictx)
+    check(_u["task"] == "NEEDS_CLARIFICATION" and len(_u["options"]) == 2
+          and _u["question"].endswith("?"),
+          f"minutes with no instruction -> NEEDS_CLARIFICATION, two options, one question "
+          f"({_u['task']})")
+    check("alternatives" not in _u,
+          "...and the undecided shape carries `options`, never `alternatives`")
+    _e = by_name()["intake.classify"].run(
+        {"message": "We are allotting shares to a new investor next week."}, _ictx)
+    check(_e["task"] == "EVENT_ASSESS" and _e["event"] == "share_allotment",
+          f"an event stated -> EVENT_ASSESS naming the event ({_e.get('event')})")
+    _o = by_name()["intake.classify"].run(
+        {"message": "Under the IBC, what is the CIRP timeline?"}, _ictx)
+    check(_o["task"] in [t for t in __import__("agents.intake", fromlist=["TASKS"]).TASKS],
+          f"an unheld-body question still CLASSIFIES ({_o['task']}) -- the refusal belongs "
+          f"to the ask path, and intake does not duplicate it")
+    check(by_name()["intake.classify"].run({}, _ictx)["status"] == "REFUSED",
+          "nothing to classify is a BAD_REQUEST, not an empty classification")
 
     # ── PARITY, the point of the file ───────────────────────────────────────
     check(set(rest) == names and set(cli) == names,
@@ -1051,7 +1166,7 @@ def _test() -> None:
           "...while a WRITE verb is kept out of MCP by mcp_tools(), not by the author "
           "remembering to")
     check("widgets.delete" in write_verbs(hypo), "...and is named in write_verbs()")
-    check(len(VERBS) == 13 and "widgets.count" not in rest_spec(),
+    check(len(VERBS) == 14 and "widgets.count" not in rest_spec(),
           "...and the probe changed nothing in this module: the surfaces are generated "
           "from an argument, not from a global the test rebound")
 

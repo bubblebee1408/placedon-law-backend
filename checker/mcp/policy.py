@@ -106,6 +106,11 @@ KNOWN_TOOLS: frozenset[str] = frozenset({
     # does all three and will be argued for on its own.
     "themis.sources.list",
     "themis.sources.search",
+    # PLAN_23 layer 1. Read-only, and the read is the whole point: it names the task and
+    # runs nothing, so an agent may ask "what kind of request is this" without that
+    # question starting any work or spending anything beyond one LOW-consequence
+    # classification call.
+    "themis.intake.classify",
 })
 # NOT here, and the absence is the decision: `themis.runs.approve` and `themis.runs.reject`
 # do not exist. They write a human decision, and mcp_tools() refuses to generate a tool for
