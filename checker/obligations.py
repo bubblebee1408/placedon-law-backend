@@ -36,6 +36,7 @@ one.
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from typing import Callable
@@ -328,9 +329,11 @@ def _decide_agm(p: CompanyProfile, ev: Evidence) -> tuple[bool | str | None, str
     if not ds:
         # s.96(1) allows six months from the close of the year (nine for the first).
         # Before that deadline passes, no AGM yet is not a breach (founder rule 3).
-        due = (_add_months(ev.financial_year_end, 6) if ev.financial_year_end
-               else _add_months(ev.first_financial_year_end, 9)
-               if ev.first_financial_year_end else None)
+        # The first AGM has nine months, and with none held yet this may be the first --
+        # the same precedence the held-AGM branch below gives first_financial_year_end.
+        due = (_add_months(ev.first_financial_year_end, 9) if ev.first_financial_year_end
+               else _add_months(ev.financial_year_end, 6) if ev.financial_year_end
+               else None)
         if due is not None and ev.read_on is not None and ev.read_on <= due:
             return IN_PROGRESS, (f"no annual general meeting yet, and s.96(1) allows "
                                  f"until {due.isoformat()}; on {ev.read_on.isoformat()} "
@@ -506,11 +509,22 @@ def _decide_annual_return(p: CompanyProfile, ev: Evidence) -> tuple[bool | None,
                    f"{'s' if late != 1 else ''} after the limit of {due} ({basis})")
 
 
+_FY = re.compile(r"\s*(\d{4})\s*[-\u2013\u2014/]\s*(\d{2}|\d{4})\s*")
+
+
 def _fy_end(fy: str | None) -> date | None:
-    """31 March closing an Indian financial year written "2026-27", or None."""
-    import re as _re
-    m = _re.fullmatch(r"\s*(\d{4})\s*-\s*\d{2,4}\s*", fy or "")
-    return date(int(m.group(1)) + 1, 3, 31) if m else None
+    """31 March closing an Indian financial year ("2026-27", "2026-2027", "2026/27"), or
+    None when the string is not one: the second year must follow the first, and the year
+    must be one a date can hold. User text; it never raises."""
+    m = _FY.fullmatch(fy or "")
+    if not m:
+        return None
+    first, second = int(m.group(1)), m.group(2)
+    nxt = first + 1
+    if (int(second) != nxt % 100 if len(second) == 2 else int(second) != nxt) \
+            or not 1900 <= first <= 9998:
+        return None
+    return date(nxt, 3, 31)
 
 
 def _decide_resident_director(p: CompanyProfile, ev: Evidence) -> tuple[bool | str | None, str]:

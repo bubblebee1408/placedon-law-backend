@@ -1129,6 +1129,35 @@ def _test() -> None:
         else:
             check(row.get("state") == "APPLIES_NOT_SATISFIED" and not row.get("period"),
                   f"{label}: still a shortfall -- the period has ended ({row.get('state')})")
+
+    # The financial year is a user string: it must never crash the row, and nonsense must
+    # not be read as a year (e8f8d31 re-verification, findings 1, 2 and 4).
+    for fy in ("9999-00", "0000-01", "2026-99", "2026-2020"):
+        st, r = handle("POST", "/v1/compliance-pack",
+                       {**_ask_facts, "financial_year": fy, "as_of": "2026-08-31",
+                        "evidence": {"resident_director_days": 100}}, generated_at=GEN)
+        row = next((x for x in r.get("rows", [])
+                    if x["obligation_id"] == "CA13-S149-3-RESIDENT"), {})
+        check(st == 200 and row.get("period") != "IN_PROGRESS",
+              f"financial_year {fy!r} is not a year it can close: no crash, and not read "
+              f"as one ({st}: {row.get('state')}/{row.get('period')})")
+    for fy in ("2026-27", "2026-2027", "2026\u201327", "2026/27"):
+        st, r = handle("POST", "/v1/compliance-pack",
+                       {**_ask_facts, "financial_year": fy, "as_of": "2026-08-31",
+                        "evidence": {"resident_director_days": 100}}, generated_at=GEN)
+        row = next((x for x in r.get("rows", [])
+                    if x["obligation_id"] == "CA13-S149-3-RESIDENT"), {})
+        check(st == 200 and row.get("period") == "IN_PROGRESS",
+              f"...while {fy!r} is FY 2026-27, still running ({st}: {row.get('period')})")
+    st, r = handle("POST", "/v1/compliance-pack",
+                   {**_ask_facts, "as_of": "2026-11-15",
+                    "evidence": {"agm_dates": [], "financial_year_end": "2026-03-31",
+                                 "first_financial_year_end": "2026-03-31"}},
+                   generated_at="2026-11-15T00:00:00Z")
+    row = next(x for x in r["rows"] if x["obligation_id"] == "CA13-S96-AGM")
+    check(row.get("period") == "IN_PROGRESS",
+          f"a FIRST year with no AGM yet has nine months, not six: on 2026-11-15 it is IN "
+          f"PROGRESS until 2026-12-31 ({row['state']}/{row.get('period')})")
     st, r = handle("POST", "/v1/compliance-pack", {**_ask_facts, "turnover": 5},
                    generated_at=GEN)
     check(st == 400 and "turnover" in r.get("detail", ""),

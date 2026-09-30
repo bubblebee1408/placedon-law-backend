@@ -300,8 +300,11 @@ undeclared field, a wrong type or an out-of-range value is a `400` — never a c
   (182 days during the financial year — below 182 before the year closes is IN PROGRESS; at or
   above 182 is a pass whenever it is reached, since days only accumulate) and s.96 (no AGM
   before the six-month deadline after the year closes, nine for the first year, is IN
-  PROGRESS; after it, a breach). AOC-4 and the annual return already refused to decide before
-  their deadlines.
+  PROGRESS; after it, a breach). This needs the period's end: a `financial_year` the engine can
+  read ("2026-27", "2026-2027", "2026/27"; the second year must follow the first) or a
+  `financial_year_end` / `first_financial_year_end`. **Without one, the row is decided as it was
+  before this rule** — below 182 days, or no AGM, still reads as a breach — which is open
+  (TASKS A-014). AOC-4 and the annual return decide nothing without their filing date.
 - `resident_director_days`: an `int` 0–366 — a financial year runs to 31 March (s.2(41)), so a
   full one has 365 or 366 days; a longer first year is s.149(3)'s proportionate proviso, which
   this engine does not compute.
