@@ -1,0 +1,97 @@
+{
+  "schema": "acquisition_log/v1",
+  "instrument_id": "INDIACODE_COMPETITION_ACT_2002",
+  "title": "Competition Act, 2002 (India Code actid + handle, and a per-Act enumeration route)",
+  "terminal_state": "HUMAN_RETRIEVAL_REQUIRED",
+  "handoff": "OPEN. No actid, no handle, no enumeration query -- and NOT because the Act is hard to find. indiacode.gov.in/robots.txt has answered 5xx for at least 27 days (502 on 2026-08-31, 500 x3 today), which under RFC 9309 2.3.1.4 and checker/robots.py means the ENTIRE host is completely disallowed to an automated client today. So the one permitted host is closed, and with it every route at once: the handle page, the SectionPageContent endpoint, and the DSpace REST API that was measured live earlier today. Zero content requests were made to indiacode.gov.in for this instrument. NO CONTROL PROBE WAS MADE EITHER, deliberately: docs/ACQUISITION_POLICY.md asks for one when several endpoints on a host fail, but a control probe is a content request, and robots wins. This log therefore records NO claim about whether the REST API is up right now. \n\nHUMAN TASK (about five minutes, in a browser -- a person is not a crawler and is outside this gate by design, the same reasoning as the gsr700e handoff). On indiacode.gov.in, open the Central Acts listing, find 'The Competition Act, 2002', and copy TWO strings: (a) the handle URL from the address bar, of the form https://indiacode.gov.in/handle/123456789/<n>; (b) the actid, of the form AC_CEN_..., which appears in the query string of any per-section link on that page. Paste both into ACTS['comp2002'] in scripts/ingest_act.py with the URL each was read from. \n\nTWO TRAPS FOR WHOEVER DOES IT. (1) The Competition Act, 2002 received assent in JANUARY 2003 and is commonly cited as Act No. 12 of 2003, so the actid's year-and-number segment will probably read 200312 and not 200218 or anything containing 2002 -- the Companies Act 2013 (Act 18 of 2013) is AC_CEN_22_29_00008_201318_1517807327856. That is a SANITY CHECK on what you read off the page, and it is a LEAD, not a source: '12 of 2003' must be read off India Code itself before it is recorded anywhere, exactly as PRINCIPAL_RULES_LEAD in checker/provenance.py requires. Do not backfill it. (2) The remaining segments (22_29_00008 and the trailing epoch-milliseconds) are NOT derivable from anything. Do not complete a partially-read actid by analogy with the Companies Act's. A wrong actid returns a DIFFERENT Act's sections as well-formed JSON with real statutory text and a clean sha256, and nothing downstream can tell.\n\nBEFORE ANY FUTURE AUTOMATED ATTEMPT, re-read robots.txt. It is the gate. It is also, by the BLOCKED classification above, on this log's never_retry_automatically list -- see the doc, that tension is a finding about the taxonomy, not permission to skip the check.",
+  "summary": {
+    "instrument_id": "INDIACODE_COMPETITION_ACT_2002",
+    "title": "Competition Act, 2002 (India Code actid + handle, and a per-Act enumeration route)",
+    "attempts": 4,
+    "hosts_tried": [
+      "indiacode.gov.in",
+      "www.indiacode.gov.in"
+    ],
+    "by_outcome": {
+      "BLOCKED": 3,
+      "UNREACHABLE": 1
+    },
+    "terminal_state": "HUMAN_RETRIEVAL_REQUIRED",
+    "terminal_state_is_success": true,
+    "human_retrieval_required": true,
+    "automated_retry_permitted": [
+      "https://www.indiacode.gov.in/robots.txt"
+    ],
+    "never_retry_automatically": [
+      "https://indiacode.gov.in/robots.txt"
+    ],
+    "instrument_existence": "EXISTENCE_UNDETERMINED",
+    "existence_note": "Failure to DISCOVER an instrument is not evidence that the instrument does not exist. Every outcome below is a fact about a host or an address -- a refusal, an outage, a wrong path -- and none of them is a fact about the law. Disproving existence would require reading a source that would list the instrument if it existed; no such source was read. Existence stays undetermined, and nothing downstream may treat absence-from-corpus as absence-from-law.",
+    "chain": {
+      "length": 4,
+      "head": "9ac0c8da6945b33e9b6238183cfa1e9f416a9924a4b1f09f9320570a5562a893"
+    }
+  },
+  "records": [
+    {
+      "seq": 0,
+      "timestamp": "2026-09-27",
+      "instrument_id": "INDIACODE_COMPETITION_ACT_2002",
+      "url": "https://indiacode.gov.in/robots.txt",
+      "host": "indiacode.gov.in",
+      "method": "GET",
+      "outcome": "BLOCKED",
+      "http_status": 500,
+      "error": null,
+      "note": "Probe 1 of 3, curl with the project User-Agent. 148 bytes of text/html: '<pre>Internal Server Error</pre>'. This is the FIRST request made for this instrument, before any content request, because robots.txt is the gate and not an afterthought. Recorded BLOCKED with the status carried, following the precedent set for this same URL at 502 on 2026-08-31 in corpus/sources/acquisition_gsr700e.json: the four-state taxonomy has no 5xx member, and inventing a fifth state to log one probe would make the two records incomparable. See the doc for why that precedent is worth flagging rather than extending.",
+      "artifact_sha256": null,
+      "prev_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "entry_hash": "379878b6ab60cd6e3e8303227e964a2d1cdbeb51a5822626347f16144de90ab6"
+    },
+    {
+      "seq": 1,
+      "timestamp": "2026-09-27",
+      "instrument_id": "INDIACODE_COMPETITION_ACT_2002",
+      "url": "https://indiacode.gov.in/robots.txt",
+      "host": "indiacode.gov.in",
+      "method": "GET",
+      "outcome": "BLOCKED",
+      "http_status": 500,
+      "error": null,
+      "note": "Probe 2 of 3, via checker.robots.fetch_rules(), i.e. the compliant path itself. It returned Rules(loaded=False, source='.../robots.txt HTTP 500'), and checker.robots.allowed('https://indiacode.gov.in/server/api/core/items', rules) returned False. That is the whole finding: the repository's own robots gate denies EVERY url on this host today, the DSpace REST API included.",
+      "artifact_sha256": null,
+      "prev_hash": "379878b6ab60cd6e3e8303227e964a2d1cdbeb51a5822626347f16144de90ab6",
+      "entry_hash": "d09fea569ffaff1775b4135175bb043793286675e370768ae0fbc7f687424983"
+    },
+    {
+      "seq": 2,
+      "timestamp": "2026-09-27",
+      "instrument_id": "INDIACODE_COMPETITION_ACT_2002",
+      "url": "https://indiacode.gov.in/robots.txt",
+      "host": "indiacode.gov.in",
+      "method": "GET",
+      "outcome": "BLOCKED",
+      "http_status": 500,
+      "error": null,
+      "note": "Probe 3 of 3, six seconds after probe 2. Byte-identical 500. Logged as its own record rather than as a count inside one note, so that 'three consecutive attempts' is readable off the chain instead of asserted in prose. Three identical answers is the evidence that this is a standing condition and not a transient blip -- and the same URL answered 502 on 2026-08-31, so the outage is at least 27 days old. RFC 9309 2.3.1.4: a 5xx robots.txt means the file is UNDEFINED and a crawler MUST assume complete disallow. Not a judgement call and not a SHOULD.",
+      "artifact_sha256": null,
+      "prev_hash": "d09fea569ffaff1775b4135175bb043793286675e370768ae0fbc7f687424983",
+      "entry_hash": "56ac24d92684067ae9084344ca28f03bce425382ebdbed40495874f5b6428f7d"
+    },
+    {
+      "seq": 3,
+      "timestamp": "2026-09-27",
+      "instrument_id": "INDIACODE_COMPETITION_ACT_2002",
+      "url": "https://www.indiacode.gov.in/robots.txt",
+      "host": "www.indiacode.gov.in",
+      "method": "GET",
+      "outcome": "UNREACHABLE",
+      "http_status": null,
+      "error": "SSL: CERTIFICATE_VERIFY_FAILED -- hostname mismatch, certificate is not valid for 'www.indiacode.gov.in'",
+      "note": "The www subdomain is inside the permitted-host rule (check_host accepts a dot-suffix), so it was probed as a possible second origin whose robots.txt might be readable. It is not: TLS verification fails on a hostname mismatch, so no HTTP answer was ever heard -- hence UNREACHABLE with the transport error, not BLOCKED. Note what was NOT done: verification was not disabled to get past it. An unverified statute source is worth less than no statute source (RT-14). The www origin is therefore not an alternative route, and ingest_act.py's own test asserting www.indiacode.gov.in is a PERMITTED host is true of the host rule and false of reality.",
+      "artifact_sha256": null,
+      "prev_hash": "56ac24d92684067ae9084344ca28f03bce425382ebdbed40495874f5b6428f7d",
+      "entry_hash": "9ac0c8da6945b33e9b6238183cfa1e9f416a9924a4b1f09f9320570a5562a893"
+    }
+  ]
+}

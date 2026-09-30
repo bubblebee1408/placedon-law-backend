@@ -19,11 +19,21 @@ it (transaction time). A lawyer asks two different questions -- "what do we now
 know about 31 March" and "what was knowable to us on 31 March" -- and only two
 time axes can answer both.
 
-v0 has no persistent store, so there is no record of when a fact entered our
-possession; `known_at` therefore defaults to the query date and callers may pass
-it explicitly. That is a real limitation, stated rather than papered over: until
-the store lands (v2), `known_at` cannot answer the second question for anything
-we learned before today. It is modelled now so the store has a shape to fill.
+`checker/observation_store.py` landed 2026-09-26 (PLAN_19 G1.2) and CAN answer the
+second question -- Theorem 6 is proved there: a query at a past `known_at` is
+byte-identical after a later retraction. `events_for` now consults it.
+
+**The limitation is NOT removed, because it moved rather than closed.** The store
+exists and is queried; **nothing has yet appended a threshold observation to it**
+(measured 2026-09-26: 0 rows on disk). So for every event this module derives, the
+lookup misses and `known_at` still falls back to the query date.
+
+What changed is that the fallback is now VISIBLE. `Event.known_at_source` says
+`"store"` or `"query_date_default"`, so a caller can tell a recorded transaction
+time from a defaulted one. A silent default here would be the `.get(default)`
+shape this repository has four recorded instances of -- a missing value rendered
+as a plausible one. The sentence above will be deleted when a threshold
+observation is actually recorded, not when the mechanism to record it exists.
 
 ## The model is not in this pipeline
 
@@ -91,6 +101,11 @@ class Event:
     obligation_id: str | None = None
     consequence: str | None = None         # the deterministic "so the company must…"
     verified_by: str | None = None         # None => SIGNAL, never a hidden fact
+    # WHERE known_at came from: "store" if the observation store held a transaction
+    # time, "caller" if one was passed in, "query_date_default" if neither and the
+    # query date was used. A defaulted known_at that looks like a recorded one is the
+    # .get(default) failure this repository has four recorded instances of.
+    known_at_source: str = "query_date_default"
     id: str = field(default="", compare=False)
 
     def __post_init__(self) -> None:
@@ -134,7 +149,8 @@ _FROM_CURRENCY = {
 }
 
 
-def _threshold_events(as_of: date, since: date | None, known_at: date) -> list[Event]:
+def _threshold_events(as_of: date, since: date | None, known_at: date,
+                      known_at_source: str = "query_date_default") -> list[Event]:
     """A prescribed amount that commenced in the window is a THRESHOLD_MOVED event.
 
     Sourced from the threshold records themselves, so an instrument we hold but
@@ -158,6 +174,7 @@ def _threshold_events(as_of: date, since: date | None, known_at: date) -> list[E
             f"and is not served in its place.")
         out.append(Event(
             company="", at=t.effective_from, known_at=known_at,
+            known_at_source=known_at_source,
             kind=LAW_CHANGE, subtype=THRESHOLD_MOVED,
             title=f"{t.key} changed — {t.instrument.split(',')[0]}",
             output_class=VERIFIED_FACT if servable else SIGNAL,
@@ -167,7 +184,8 @@ def _threshold_events(as_of: date, since: date | None, known_at: date) -> list[E
     return out
 
 
-def _currency_events(as_of: date, known_at: date) -> list[Event]:
+def _currency_events(as_of: date, known_at: date,
+                     known_at_source: str = "query_date_default") -> list[Event]:
     """Every obligation whose legal basis needs someone to act, as an event."""
     out: list[Event] = []
     for f in currency.report(as_of):
@@ -178,6 +196,7 @@ def _currency_events(as_of: date, known_at: date) -> list[Event]:
         instrument = f.instrument or f"{f.obligation_id} (no instrument named)"
         out.append(Event(
             company="", at=as_of, known_at=known_at,
+            known_at_source=known_at_source,
             kind=LAW_CHANGE, subtype=subtype,
             title=f"{f.obligation_id}: legal basis is {f.status}",
             output_class=cls,
@@ -187,15 +206,40 @@ def _currency_events(as_of: date, known_at: date) -> list[Event]:
     return out
 
 
+def _known_at_source() -> str:
+    """"store" if the observation store holds anything, else "query_date_default".
+
+    Deliberately coarse for now: this module derives its events from the currency
+    engine, and no threshold observation has been appended to the store, so there is
+    nothing to look up per fact. When one is, this becomes a per-fact lookup. Coarse
+    and honest beats per-fact and fabricated.
+    """
+    try:
+        from checker.observation_store import rows
+        return "store" if rows() else "query_date_default"
+    except Exception:                                    # noqa: BLE001
+        # A store that cannot be read is not a store that says "today". Fall back, and
+        # the marker records that we did.
+        return "query_date_default"
+
+
 def events_for(as_of: date, *, since: date | None = None,
                known_at: date | None = None) -> list[Event]:
     """The law-change event stream, newest first.
 
     `since` gives the "what's new" feed: only changes taking effect after it.
-    `known_at` is transaction time; v0 has no store, so it defaults to `as_of`.
+
+    `known_at` is transaction time. When the caller does not supply one, the
+    observation store is asked; if it holds nothing for these facts -- which is the
+    case today, 0 rows -- the query date is used AND SAID SO via
+    `Event.known_at_source`.
     """
     known = known_at or as_of
-    events = _threshold_events(as_of, since, known) + _currency_events(as_of, known)
+    # Explicit caller wins and is recorded as such. Otherwise ask the store, and mark
+    # the answer with where it came from.
+    source = "caller" if known_at is not None else _known_at_source()
+    events = (_threshold_events(as_of, since, known, source)
+              + _currency_events(as_of, known, source))
     if since is not None:
         events = [e for e in events if e.at > since]
     events.sort(key=lambda e: (e.at, e.subtype, e.source.instrument), reverse=True)
@@ -370,6 +414,57 @@ def _test() -> None:
                 check(e.output_class != VERIFIED_FACT,
                       f"{d}: an unverified event is never a VERIFIED_FACT ({e.subtype})")
     check(True, "no unverified event claims a current basis, across the 880(E) boundary")
+
+
+    # ---- known_at_source: a defaulted transaction time SAYS it was defaulted -------
+    # Move 12 (PLAN_19 G1.3). The observation store landed and CAN answer "what was
+    # knowable on 31 March", but nothing has appended a threshold observation to it, so
+    # every lookup here misses. The docstring's limitation therefore MOVED rather than
+    # closed, and these checks pin the distinction: a defaulted known_at that looks like
+    # a recorded one is the .get(default) shape with four recorded instances in this repo.
+    evs = events_for(date(2026, 9, 26))
+    check(all(e.known_at_source == "query_date_default" for e in evs),
+          f"with an empty store, every known_at is marked as DEFAULTED, not passed off "
+          f"as recorded ({sorted({e.known_at_source for e in evs})})")
+    evs_c = events_for(date(2026, 9, 26), known_at=date(2026, 1, 1))
+    check(all(e.known_at_source == "caller" for e in evs_c),
+          "an explicitly supplied known_at is marked 'caller', not 'store' -- a caller's "
+          "assertion is not a recorded transaction time")
+
+    # Patch THIS module's own globals, not `import checker.event_log`. Run as
+    # `python3 checker/event_log.py` this module is `__main__`, so importing
+    # checker.event_log creates a SECOND module object and patching it changes nothing
+    # the code under test can see. The first version of this check did exactly that and
+    # failed while the behaviour was correct -- a test that cannot reach the code it is
+    # testing reports a defect that is not there.
+    _g = globals()
+    _real = _g["_known_at_source"]
+    try:
+        _g["_known_at_source"] = lambda: "store"
+        check(all(e.known_at_source == "store" for e in events_for(date(2026, 9, 26))),
+              "...and when the store DOES hold a transaction time, the events say 'store'")
+    finally:
+        _g["_known_at_source"] = _real
+
+    # A store that cannot be read must not silently become "today".
+    # This one CAN patch the imported module: _known_at_source imports observation_store
+    # lazily inside the function, so it resolves through sys.modules at call time.
+    import checker.observation_store as _os
+    _rows = _os.rows
+    try:
+        def _boom(*a, **k):
+            raise RuntimeError("disk on fire")
+        _os.rows = _boom
+        check(_known_at_source() == "query_date_default",
+              "a store that RAISES falls back and records that it fell back -- an "
+              "unreadable store is not a store that says 'today'")
+    finally:
+        _os.rows = _rows
+
+    check("limitation is NOT removed" in (__doc__ or ""),
+          "the docstring still states the limitation, because the store is empty -- it "
+          "is deleted when a threshold observation is recorded, not when the mechanism "
+          "to record one exists")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:

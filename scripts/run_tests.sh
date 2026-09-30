@@ -8,15 +8,52 @@ set -uo pipefail
 cd "$(dirname "$0")/.."
 export PYTHONPATH="$PWD"
 
+# ── Dependencies first, because a missing one is not a failing test ───────────
+# Reported 2026-09-27 from an environment without pypdf: the sweep said
+# "checker/sarvam_model.py FAIL" with NO result line, because sarvam_selftest reached an
+# optional-dependency path and the SarvamUnavailable refusal propagated out of the suite.
+# That reads as a broken suite and sends the reader to the wrong file -- the suite is fine
+# and the environment is not. `scripts/check_deps.py` already knows the answer (it reads
+# requirements.txt AND requirements-dev.txt); nothing was asking it before the sweep.
+#
+# BLOCKED is a third status, distinct from GREEN and RED on purpose: no suite ran, so
+# reporting `failed=0 status=RED` would claim a measurement nobody took.
+if ! missing=$(python3 scripts/check_deps.py 2>&1); then
+  cat >&2 <<MSG
+==============================================================================
+ ENVIRONMENT NOT READY -- no suite was run
+==============================================================================
+  $missing
+
+  These are pinned in requirements.txt / requirements-dev.txt and are absent here.
+  Install them, then re-run:
+
+      python3 -m pip install -r requirements.txt -r requirements-dev.txt
+      # or: ./setup.sh   (idempotent; installs both)
+
+  This is NOT a failing test. Nothing about the suite is known yet.
+==============================================================================
+MSG
+  printf 'HARNESS_RESULT suites=0 failed=0 status=BLOCKED\n'
+  exit 5
+fi
+
 suites=(
   checker/acquisition_log.py
   checker/amendment.py
   checker/as_of.py
+  checker/instrument_registry.py
+  checker/ontology.py
+  checker/observation_store.py
+  checker/derivation.py
   checker/prompt_safety.py
   checker/anthropic_model.py
+  checker/azure_model.py
   checker/gemini_model.py
   checker/router.py
   checker/voyage_model.py
+  checker/public_only.py
+  checker/quoted_span.py
   checker/sarvam_model.py
   checker/orchestrator.py
   checker/bundles.py
@@ -31,6 +68,8 @@ suites=(
   checker/staleness.py
   checker/derived_date.py
   checker/document_date.py
+  backend/budget.py
+  backend/azure_pricing.py
   checker/claim_schema.py
   checker/legal_ref.py
   checker/admission.py
@@ -77,7 +116,6 @@ suites=(
   checker/benchmark_freeze.py
   checker/entail_baseline.py
   checker/entail_paraphrase.py
-  checker/span_inventory.py
   checker/commencement.py
   checker/witness_span.py
   checker/s96_slice.py
@@ -86,9 +124,12 @@ suites=(
   checker/entail_role.py
   checker/entail_qualifier.py
   checker/cascade.py
+  checker/entailment_gate.py
   checker/company_profile.py
   checker/prescribed_thresholds.py
   checker/classify.py
+  checker/clauses.py
+  checker/playbook.py
   checker/obligations.py
   checker/obligation_citations.py
   checker/entity_graph.py
@@ -106,6 +147,7 @@ suites=(
   eval/temporal/harness.py
   eval/prelabel/compare.py
   eval/goldset/__init__.py
+  eval/goldset/split.py
   eval/prelabel/corpus.py
   checker/env.py
   checker/s185.py
@@ -175,10 +217,17 @@ if [ -n "${HARNESS_EXTRA_SUITE:-}" ]; then
 fi
 
 # --test flag rather than a bare run: this one takes a PDF argument in normal use.
-extra=("scripts/acquire_rules.py --test" "scripts/register_gsr700e.py --test" "scripts/register_gsr880e.py --test" "scripts/register_kmp_rules.py --test" "scripts/register_sebi_lodr.py --test" "scripts/register_pas_rules.py --test" "scripts/sweep_folder.py --test" "scripts/holdings.py --test" "scripts/provenance_census.py --test" "eval/realrun/run.py --test" "eval/realrun/text_field_probe.py --test" "eval/realrun/azure_model.py" "scripts/text_layer_census.py --test" "scripts/assistant_contract.py --test" "scripts/register_s188_rule15.py --test" "scripts/benchmark_refreeze_request.py --test" "scripts/parse_board_rules.py --test" "scripts/baseline_eval.py --test" "scripts/review.py --test" "scripts/review_brief.py --check" "scripts/slice_s96.py --test" "scripts/slice_s173.py --test" "scripts/serve_matrix.py --test" "scripts/serve_api.py --test" "scripts/record_interview.py --test" "scripts/verify_document.py --test" "scripts/verify_section_index.py --test" "scripts/resolve_missing_sections.py --test" "scripts/prove_temporal.py --test" "scripts/batch1_omissions.py --test" "scripts/batch1_review.py --test" "scripts/find_commencement.py --test" "scripts/watch_gazette.py --test" "scripts/watch_ofac.py --test" "scripts/gazette_digest.py --test" "scripts/themis_slice.py --test" "scripts/themis_mcp.py --test" "scripts/bakeoff_retrieval.py --test" "scripts/bakeoff_indic.py --test" "scripts/smoke_adapters.py --test" "eval/prelabel/run_prelabel.py --test" "eval/goldset/run.py --test")
+extra=("scripts/acquire_rules.py --test" "scripts/register_gsr700e.py --test" "scripts/register_gsr880e.py --test" "scripts/register_kmp_rules.py --test" "scripts/register_sebi_lodr.py --test" "scripts/register_pas_rules.py --test" "scripts/sweep_folder.py --test" "scripts/holdings.py --test" "scripts/provenance_census.py --test" "eval/realrun/run.py --test" "eval/realrun/text_field_probe.py --test" "eval/realrun/azure_model.py" "scripts/text_layer_census.py --test" "scripts/assistant_contract.py --test" "scripts/register_s188_rule15.py --test" "scripts/benchmark_refreeze_request.py --test" "scripts/parse_board_rules.py --test" "scripts/baseline_eval.py --test" "scripts/review.py --test" "scripts/review_brief.py --check" "scripts/slice_s96.py --test" "scripts/slice_s173.py --test" "scripts/serve_matrix.py --test" "scripts/serve_api.py --test" "scripts/record_interview.py --test" "scripts/verify_document.py --test" "scripts/ingest_act.py --test" "scripts/ingest_companies_act.py --test" "scripts/verify_section_index.py --test" "scripts/resolve_missing_sections.py --test" "scripts/prove_temporal.py --test" "scripts/batch1_omissions.py --test" "scripts/batch1_review.py --test" "scripts/find_commencement.py --test" "scripts/watch_gazette.py --test" "scripts/watch_ofac.py --test" "scripts/gazette_digest.py --test" "scripts/themis_slice.py --test" "scripts/themis_mcp.py --test" "scripts/bakeoff_retrieval.py --test" "scripts/bakeoff_models.py --test" "scripts/acquire_cuad.py --test" "scripts/bakeoff_indic.py --test" "scripts/smoke_adapters.py --test" "eval/prelabel/run_prelabel.py --test" "eval/goldset/run.py --test" "scripts/check_doc_refs.py --test" "scripts/cascade_report.py --test" "gateway/audit.py" "gateway/auth.py" "gateway/schema.py" "checker/model_cascade.py" "checker/events.py" "checker/claim_bodies.py" "gateway/store.py" "gateway/jobs.py" "gateway/worker.py" "gateway/app.py" "gateway/verbs.py" "gateway/cli.py --test" "agents/state.py" "agents/plans.py" "agents/runtime.py" "agents/research_question.py" "agents/review_contract.py" "agents/review_document.py")
 
 # The Ask demo server (D2): 127.0.0.1 only, serves web/assistant, forwards POST /v1/ask.
 extra+=("scripts/serve_ask.py --test")
+
+# Defines _test() but runs it only under --test; invoked bare it printed a report and
+# exited 0. Its sixteen checks had never run. Found by the no-count rule below.
+extra+=("checker/span_inventory.py --test")
+# The harness's own reproduction of the 2026-09-30 incident.
+extra+=("scripts/harness_selftest.py --test")
+extra+=("scripts/suite_floors.py --test")
 
 # A module that prints "9/10 passed" has failed, whatever its exit code says.
 # Eight modules once defined _test() without `raise SystemExit(1)`, so their
@@ -189,11 +238,15 @@ count_mismatch() {            # $1 = "N/M passed" (may be empty)
   case "$1" in
     *" passed") n=${1%%/*}; m=${1#*/}; m=${m%% *}
                 [ "$n" = "$m" ] && return 1 || return 0 ;;
-    *) return 1 ;;            # no count line: handled separately, not a mismatch
+    *) return 1 ;;            # no count line: the CALLER refuses it. See `-z "$res"`.
   esac
 }
 
 fails=0
+nocount=0
+# Each green suite's passed count, for the floor ratchet below.
+counts_file=$(mktemp)
+trap 'rm -f "$counts_file"' EXIT
 for s in "${suites[@]}"; do
   [ -f "$s" ] || { printf '%-28s %s\n' "$s" "MISSING"; fails=$((fails+1)); continue; }
   out=$(python3 "$s" 2>&1); rc=$?
@@ -206,8 +259,20 @@ for s in "${suites[@]}"; do
     printf '%-28s FAIL  %s  (exit 0 but checks failed)\n' "$s" "$res"
     printf '%s\n' "$out" | grep -E '^\s*\[FAIL\]' | head -4 | sed 's/^/      /'
     fails=$((fails+1))
+  elif [ -z "$res" ]; then
+    # A suite that exits 0 and prints no count has not been SEEN to run. On 2026-09-30
+    # gateway/schema.py was overwritten with the live row-level-security harness, which
+    # prints a banner and exits 0 unless given --run; the gate reported it `ok (no count)`
+    # and stayed green over a file that was not the suite at all. Exit 0 is not evidence;
+    # a count is. (That harness is deliberately not named here: schema.py asserts this
+    # file does not mention it, so that a server-dependent suite cannot creep into the
+    # gate and read as passing when it is skipped.)
+    printf '%-28s FAIL  no count line (exit 0 but no "N/M passed" -- did this suite run?)\n' "$s"
+    printf '%s\n' "$out" | tail -3 | sed 's/^/      /'
+    fails=$((fails+1)); nocount=$((nocount+1))
   else
-    printf '%-28s ok    %s\n' "$s" "${res:-(no count)}"
+    printf '%-28s ok    %s\n' "$s" "$res"
+    printf '%s\t%s\n' "$s" "${res%%/*}" >> "$counts_file"
   fi
 done
 
@@ -217,8 +282,23 @@ for e in "${extra[@]}"; do
   if [ $rc -ne 0 ]; then printf '%-28s FAIL  %s\n' "${e%% *}" "$res"; fails=$((fails+1))
   elif count_mismatch "$res"; then
     printf '%-28s FAIL  %s  (exit 0 but checks failed)\n' "${e%% *}" "$res"; fails=$((fails+1))
-  else printf '%-28s ok    %s\n' "${e%% *}" "$res"; fi
+  elif [ -z "$res" ]; then
+    printf '%-28s FAIL  no count line (exit 0 but no "N/M passed" -- did this suite run?)\n' "${e%% *}"
+    printf '%s\n' "$out" | tail -3 | sed 's/^/      /'
+    fails=$((fails+1)); nocount=$((nocount+1))
+  else
+    printf '%-28s ok    %s\n' "${e%% *}" "$res"
+    printf '%s\t%s\n' "${e%% *}" "${res%%/*}" >> "$counts_file"
+  fi
 done
+
+# ── the floor ratchet: a suite may gain checks, never quietly lose them ──────
+# Run even when something else failed, because a regression and a breach are different
+# defects and a reader fixing one should be told about the other in the same pass.
+echo
+breaches=0
+if ! python3 scripts/suite_floors.py --gate "$counts_file"; then breaches=1; fi
+fails=$((fails+breaches))
 
 echo
 [ $fails -eq 0 ] && echo "all suites green" || echo "$fails suite(s) failing"
@@ -231,6 +311,7 @@ echo
 # fix is a parseable contract plus scripts/verify_green.sh as the single oracle.
 total=$(( ${#suites[@]} + ${#extra[@]} ))
 if [ "$fails" -eq 0 ]; then harness_status=GREEN; else harness_status=RED; fi
-printf 'HARNESS_RESULT suites=%d failed=%d status=%s\n' "$total" "$fails" "$harness_status"
+printf 'HARNESS_RESULT suites=%d failed=%d nocount=%d floor_breach=%d status=%s\n' \
+  "$total" "$fails" "$nocount" "$breaches" "$harness_status"
 
 exit $fails

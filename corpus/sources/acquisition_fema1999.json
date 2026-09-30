@@ -1,0 +1,93 @@
+{
+  "schema": "acquisition_log/v1",
+  "instrument_id": "INDIACODE_FEMA_1999",
+  "title": "Foreign Exchange Management Act, 1999 -- India Code current text (Act text only; the FDI rules, DPIIT press notes and RBI Master Directions are OUT of this ingest)",
+  "terminal_state": "HUMAN_RETRIEVAL_REQUIRED",
+  "handoff": "NOTHING WAS ACQUIRED AND NOTHING WAS INGESTED. FEMA 1999's India Code actid and handle URL are both OPEN -- not guessed, not inferred. corpus/fema1999/ was not created and scripts/ingest_act.py still holds fema1999 as PENDING_ID, which is correct.\n\nWHY: the only permitted host is indiacode.gov.in (founder instruction 2026-09-27), and that origin's robots.txt answered HTTP 500 on four probes today (and 502 on 2026-09-17). An unreadable permission document is not permission. checker/robots.py fails closed and RFC 9309 s.2.3.1.4 agrees, so /server/api, /server/api/discover/search/objects, /handle/*, /SectionPageContent and /bitstream/* are all disallowed. The DSpace REST API being live and open is not a licence to read it: no request was made to any of them.\n\nHUMAN STEPS, all on indiacode.gov.in, a browser (a person is not a crawler -- same reasoning as acquisition_gsr700e.json):\n  1. Search India Code for 'Foreign Exchange Management Act, 1999' (Act 42 of 1999). Open its Act page.\n  2. Record the handle URL from the address bar, e.g. https://indiacode.gov.in/handle/123456789/<n>, and the actid that appears in the section links / the SectionPageContent request the page makes (?actid=AC_CEN_..._&sectionID=...). Note the exact URL each was seen at.\n  3. CONFIRM before recording: fetch section 1 for that actid and check the text says 'Foreign Exchange Management Act, 1999'. An actid is not guessable -- a wrong one returns another Act's sections as well-formed JSON with real statutory text and a clean hash, and nothing downstream could tell.\n  4. Paste actid + handle into ACTS['fema1999'] in scripts/ingest_act.py with the URL each was confirmed at.\n  5. Re-probe https://indiacode.gov.in/robots.txt. The automated route resumes only when it answers 200 with a readable ruleset, or a genuine 404 (= no rules published). Do not resume on a 5xx.\n\nOUT OF SCOPE for this instrument, deliberately not fetched: FDI rules, DPIIT press notes, RBI Master Directions and anything on rbi.org.in. Sectoral caps move by press note and RBI's caching restriction is recorded OPEN in this repo; the Act text is a different acquisition problem.\n\nNOT ATTEMPTED BY DESIGN, and a question for the founder rather than a route an agent should take on its own: backend.indiacode.gov.in, which the site's own Content-Security-Policy names as a frame ancestor, is a subdomain the one-host rule would permit and is a separate robots origin. Hopping to it to read the same REST API while the canonical origin's permission document is broken would be a workaround, not compliance, so it was left alone.",
+  "summary": {
+    "instrument_id": "INDIACODE_FEMA_1999",
+    "title": "Foreign Exchange Management Act, 1999 -- India Code current text (Act text only; the FDI rules, DPIIT press notes and RBI Master Directions are OUT of this ingest)",
+    "attempts": 4,
+    "hosts_tried": [
+      "indiacode.gov.in"
+    ],
+    "by_outcome": {
+      "BLOCKED": 4
+    },
+    "terminal_state": "HUMAN_RETRIEVAL_REQUIRED",
+    "terminal_state_is_success": true,
+    "human_retrieval_required": true,
+    "automated_retry_permitted": [],
+    "never_retry_automatically": [
+      "https://indiacode.gov.in/robots.txt"
+    ],
+    "instrument_existence": "EXISTENCE_UNDETERMINED",
+    "existence_note": "Failure to DISCOVER an instrument is not evidence that the instrument does not exist. Every outcome below is a fact about a host or an address -- a refusal, an outage, a wrong path -- and none of them is a fact about the law. Disproving existence would require reading a source that would list the instrument if it existed; no such source was read. Existence stays undetermined, and nothing downstream may treat absence-from-corpus as absence-from-law.",
+    "chain": {
+      "length": 4,
+      "head": "c64fb28f66eb83f1ac5daf6ac882ae21604256b0660ddd455b300de50c0c7f59"
+    }
+  },
+  "records": [
+    {
+      "seq": 0,
+      "timestamp": "2026-09-27",
+      "instrument_id": "INDIACODE_FEMA_1999",
+      "url": "https://indiacode.gov.in/robots.txt",
+      "host": "indiacode.gov.in",
+      "method": "GET (urllib, TLS verified, honest UA, via checker.robots.fetch_rules)",
+      "outcome": "BLOCKED",
+      "http_status": 500,
+      "error": null,
+      "note": "Probe 1 of 4, minute not recorded so the timestamp is date-only. HTTP 500, text/html, 148 bytes, body '<pre>Internal Server Error</pre>' -- the DSpace Angular SSR error page. The four accessibility states have NO 5xx member, so this is recorded BLOCKED and the gap is flagged rather than silently mapped: a 500 is the server faulting, not a refusal aimed at us. BLOCKED is chosen because the CONSEQUENCE is a refusal -- RFC 9309 s.2.3.1.4 treats an unavailable (5xx) robots.txt as complete disallow, and checker/robots.rules_for_status() independently fails closed on any non-4xx, so every path on this origin is denied while this persists. 'Never retry automatically' therefore applies to the STATUTE endpoints; re-probing robots.txt itself is a permitted manual step and is what unblocks this. checker.robots.fetch_rules returned loaded=False, source 'https://indiacode.gov.in/robots.txt HTTP 500'; allowed() then refused /server/api, /server/api/discover/search/objects, /handle/123456789/*, /SectionPageContent and /bitstream/* -- i.e. every route FEMA could be acquired through. No statute endpoint was requested.",
+      "artifact_sha256": null,
+      "prev_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "entry_hash": "5274596f885b03f394d5a25f9ed8ed608c58456478f92d6244f39fe67a5a1b9b"
+    },
+    {
+      "seq": 1,
+      "timestamp": "2026-09-27",
+      "instrument_id": "INDIACODE_FEMA_1999",
+      "url": "https://indiacode.gov.in/robots.txt",
+      "host": "indiacode.gov.in",
+      "method": "GET (urllib, TLS verified, honest UA, raw)",
+      "outcome": "BLOCKED",
+      "http_status": 500,
+      "error": null,
+      "note": "Probe 2 of 4, 4 seconds after probe 1, to test for a one-off. Identical answer: 500, text/html, 148 bytes.",
+      "artifact_sha256": null,
+      "prev_hash": "5274596f885b03f394d5a25f9ed8ed608c58456478f92d6244f39fe67a5a1b9b",
+      "entry_hash": "d0aa02d6614c9b790cdc1814c172a8970cf328026b6c1a5b9d8438a3a023bb3c"
+    },
+    {
+      "seq": 2,
+      "timestamp": "2026-09-27T18:26:26Z",
+      "instrument_id": "INDIACODE_FEMA_1999",
+      "url": "https://indiacode.gov.in/robots.txt",
+      "host": "indiacode.gov.in",
+      "method": "GET (curl, HTTP/2, same honest UA)",
+      "outcome": "BLOCKED",
+      "http_status": 500,
+      "error": null,
+      "note": "Probe 3 of 4, and the CONTROL for the client rather than the host: a second, independent HTTP client with the same honest UA gets the same 500 (148 bytes, date header 'Sun, 27 Sep 2026 18:26:26 GMT'), so the fault is the server's and not our fetcher's. A control probe on a WORKING path of this host -- the usual way to tell 'India Code is down' from 'India Code refuses us' -- is NOT available today, because the unreadable permission document denies every path on the origin. The only evidence the host is otherwise alive is the founder's own measurement earlier the same day (/server/api 200 application/hal+json, 74,821 section-bearing items), taken outside this robots gate.",
+      "artifact_sha256": null,
+      "prev_hash": "d0aa02d6614c9b790cdc1814c172a8970cf328026b6c1a5b9d8438a3a023bb3c",
+      "entry_hash": "f8dd52c6b8243beee1550c354748c07db6ae77067fce6c89ce2a6cc65538c75e"
+    },
+    {
+      "seq": 3,
+      "timestamp": "2026-09-27T18:28:47Z",
+      "instrument_id": "INDIACODE_FEMA_1999",
+      "url": "https://indiacode.gov.in/robots.txt",
+      "host": "indiacode.gov.in",
+      "method": "GET (urllib, TLS verified, honest UA)",
+      "outcome": "BLOCKED",
+      "http_status": 500,
+      "error": null,
+      "note": "Probe 4 of 4, 2 minutes after probe 3. Still 500. Not transient within this session, and not new: docs/research/PROVENANCE_AUDIT_2026_09_17.md records the same path answering HTTP 502 on every probe on 2026-09-17 (09:26Z and 15:20Z), when India Code was likewise not fetched. Ten days, two 5xx codes, one verdict.",
+      "artifact_sha256": null,
+      "prev_hash": "f8dd52c6b8243beee1550c354748c07db6ae77067fce6c89ce2a6cc65538c75e",
+      "entry_hash": "c64fb28f66eb83f1ac5daf6ac882ae21604256b0660ddd455b300de50c0c7f59"
+    }
+  ]
+}

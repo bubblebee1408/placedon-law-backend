@@ -165,3 +165,45 @@ Both were corrected against the document's own evidence — `"further to amend"`
 
 `human_reviewed = False`. `can_promote()` refuses VERIFIED until a person reads it. **Acquisition
 is custody, not review.** Nothing has been ingested into the corpus; that is Week 2.2.
+
+---
+
+## Week 1.1 index, re-measured (2026-09-27)
+
+**Supersedes the numbers in the 2026-08-21 entries above. It does not replace them** — that entry
+fixed its denominator and said it must not be quietly restated, so it is left exactly as written
+and this entry carries the later measurement.
+
+**Claim:** every live provision of the Companies Act 2013 in `corpus/companies_act/_index.json`
+carries a `section_id`.
+
+| Measure | 2026-08-21 | 2026-09-27 | note |
+|---|---|---|---|
+| Index entries | 517 | 517 | unchanged |
+| Omitted provisions (`confidence: n/a`) | 43 | 43 | s.11; ss.253-269 (IBC, w.e.f. 15-11-2016). None carries an id, by design |
+| Live provisions | 474 | 474 | the denominator the earlier entry fixed |
+| Live provisions with a `section_id` | 464 | **474** | the last 10 closed by `scripts/resolve_missing_sections.py` |
+| Rate on live | 97.9% | **100%** | |
+| Unmapped | 10 | **0** | s.51 and nine Producer Company provisions |
+
+**Confidence is not uniform, and 100% mapped is not 100% verified.** Of the 474: **449 `high`,
+15 `medium`, 10 `source-confirmed`.** The 10 were resolved from India Code's own REST API, which
+is a second reading of the same publisher — not an independent one.
+
+**Independent cross-validation remains 12/12 MVP sections only** (`scripts/verify_section_index.py`),
+unchanged since 2026-08-21. The 474 as a whole have **never** been externally validated, and this
+entry must not be read as claiming otherwise.
+
+**Method:** counted directly from `_index.json` — `entries` grouped by `confidence`, then filtered
+on the presence of `section_id`. Reproduce:
+
+```
+python3 -c "import json;r=list(json.load(open('corpus/companies_act/_index.json'))['entries'].values());\
+l=[x for x in r if x.get('confidence')!='n/a'];print(len(r),len(l),sum(1 for x in l if x.get('section_id')))"
+```
+
+**Also corrected the same day:** `CLAUDE.md` and `README.md` both said the corpus held **529
+sections**. It holds **527**; there are 529 *files*, the extra two being `_index.json` and
+`_manifest.json`. `CLAUDE.md` printed the method that caused it (`ls corpus/companies_act/*.json |
+wc -l`) and cited `README.md` as corroboration — but README.md was produced by the same method, so
+the corroboration was circular. `_manifest.json`'s own `count` field has said 527 throughout.

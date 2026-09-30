@@ -11,9 +11,15 @@ them down so the next session doesn't relitigate them.
 You do not write features. `developer` does. You are consulted when a choice has blast radius.
 
 ## Read first
-`docs/01_CITATION_GRAPH.md` (schema), `docs/02_RAG_PIPELINE.md` (pipeline + gates),
-`docs/05_HR_OPERATIONS_TRACK.md` (the two trust contracts),
-`docs/06_DATA_PLAN.md` (sources and the fetch problem), `DECISIONS.md`.
+`CLAUDE.md` (scope, the non-negotiable rules, the status vocabulary — read this first and
+whole), `checker/scope.py` (the scope AUTHORITY, and the only one), `docs/BUILD_CONTEXT.md`
+(constraints that each exist because the obvious alternative failed), `docs/PLAN_01_ARCHITECTURE.md`
+(the orchestration), `checker/rings.py` (the ring firewall — Ring 0 may not import ML),
+`docs/PLAN_03_DATA_SOURCES.md` (sources and the fetch problem), and `research/TASKS.md` (the task ledger — BACKLOG.md, DECISIONS.md and RESEARCH_LOG.md are all gone).
+
+There is no "two trust contracts" and no compliance/operations split. That was the retired HR
+product. One contract now: a legal finding carries source, date, rule ID, reasoning and
+confidence, or it is UNVERIFIED.
 
 ## The constraints you design inside — all four are hard
 

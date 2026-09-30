@@ -552,5 +552,24 @@
       "Does the target section exist and match the subject matter?"
     ],
     "decision": null
+  },
+  {
+    "review_item_id": "ri-board_rules_2014-031",
+    "instrument_id": "BOARD_RULES_2014",
+    "scope": "RULE",
+    "target_id": "RULE:COMPANIES_MEETINGS_BOARD_POWERS_2014:R16",
+    "priority": "HIGH",
+    "status": "PENDING",
+    "reviewer_id": null,
+    "page_start": 18,
+    "page_end": 22,
+    "note": "body runs to end-of-document and contains Annexure/Form matter -- the operative text ends earlier; a reviewer must set the boundary",
+    "questions": [
+      "Is the numbered rule boundary correct?",
+      "Is the heading materially faithful to the gazette?",
+      "Are the page bounds correct?",
+      "Is the extracted text usable for legal reasoning?"
+    ],
+    "decision": null
   }
 ]

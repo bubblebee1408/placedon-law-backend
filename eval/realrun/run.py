@@ -126,7 +126,23 @@ def _extractor(model_name: str):
             return p
         return model
     if model_name == "gemini":
-        from checker.gemini_model import extract
+        # REFUSED, not routed. `checker.gemini_model.extract` now requires a
+        # public-corpus clearance (checker/public_only.py): the text sent to a free
+        # tier must appear in a file this repository publishes. The adversarial cases
+        # in eval/realrun/documents.py are synthetic strings in a Python module -- not
+        # a published document -- so none of them can be cleared.
+        #
+        # Nothing about them is confidential; they are our own text, and the injection
+        # payloads among them would be fine to publish. But the guard cannot tell
+        # "synthetic probe we wrote" from "matter a client pasted in", and teaching it
+        # to would be teaching it the one distinction an attacker controls. The fix is
+        # to publish the case documents under corpus/testdocs/ and clear against them,
+        # which is a separate change with its own reason to exist.
+        raise SystemExit(
+            "REFUSED: the Gemini arm needs a public-corpus clearance and the adversarial "
+            "cases are synthetic strings in eval/realrun/documents.py, which no published "
+            "file contains. Publish them under corpus/testdocs/ first. Run --model local "
+            "or the Anthropic arm meanwhile. Nothing was called.")
     elif model_name == "local":
         from eval.realrun.local_model import extract
     else:

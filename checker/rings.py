@@ -12,11 +12,12 @@
 A module in ring N may import from rings below it. **No Ring 0 decider may
 import, read, or receive any value originating in Ring 2 or Ring 3. Same for
 Ring 1.** A forecast may never be an input to a deterministic legal decision.
-Ring 2 and Ring 3 are currently EMPTY — no God's Eye or inference module has
-been built yet (PLAN_08 §3: the release chokepoint has to land first) — so this
-guard currently has nothing to catch. That is expected, and the guard has to
-keep working (not error, not vacuously report "clean" for the wrong reason)
-right up to the day a Ring 2 module is registered.
+**Both upper rings are now occupied, and this paragraph used to say they were
+not.** Ring 2 holds the Operation Model, the feeds package, the MCP surface and
+(2026-09-28) the HTTP `gateway`; Ring 3 holds `agents`, the agent runtime, which
+is its first occupant — the day this docstring was written to anticipate. The
+guard therefore has something real to catch, and `violations()` returning `[]`
+is now evidence rather than a tautology.
 
 ## Why structural, not conventional
 
@@ -102,6 +103,7 @@ REGISTRY: dict[str, int] = {
     # ── RING 0 — statute, obligations, deciders, currency, entailment ──────
     "applicability": RING_0,
     "checker.obligations": RING_0,
+    "checker.instrument_registry": RING_0,  # pointers to the register scripts; PLAN_19 G0.1
     "checker.s180": RING_0,             # borrowing-limit decider, same family as s185/6/8
     "checker.s184": RING_0,             # director-interest decider, same family as s185/6/8
     "checker.s185": RING_0,
@@ -110,6 +112,16 @@ REGISTRY: dict[str, int] = {
     "checker.s188_threshold": RING_0,
     "checker.currency": RING_0,
     "checker.cascade": RING_0,
+    # The MODEL cascade (deterministic -> small -> large), not the entailment one above.
+    # Ring 0 because it decides whether a claim is verified and which body statuses bind
+    # the answer, which is a legal-core decision however many models it calls.
+    "checker.model_cascade": RING_0,
+    # The event -> bodies table. Ring 0: which bodies of law a transaction engages is a
+    # legal-core fact, and it decides whether an obligation may be decided at all.
+    "checker.events": RING_0,
+    # Which body ONE claim rests on, read from the path of the evidence it traced to.
+    # Ring 0: it decides what an answer may be said to rest on.
+    "checker.claim_bodies": RING_0,
     "checker.ground_span": RING_0,
     "checker.as_of": RING_0,
     "checker.amendment": RING_0,
@@ -126,6 +138,9 @@ REGISTRY: dict[str, int] = {
 
     # ── RING 1 — entity graph, public registers, event log ─────────────────
     "checker.entity_graph": RING_1,
+    "checker.ontology": RING_1,          # typed objects; PLAN_19 G1.1
+    "checker.observation_store": RING_1, # append-only bitemporal store; PLAN_19 G1.2
+    "checker.derivation": RING_1,        # evidence semiring; PLAN_19 G2.1
     "checker.event_log": RING_1,
     "checker.corporate_data": RING_1,
     "checker.mca_aggregator": RING_1,
@@ -140,7 +155,8 @@ REGISTRY: dict[str, int] = {
     "checker.operation_store": RING_2,
 
     # ── RING 2 — FEEDS. Classified by PACKAGE below, not listed here. ──────
-    # ── RING 3 — INFERENCE. Deliberately empty; see the module docstring. ──
+    # ── RING 3 — INFERENCE. Occupied since 2026-09-28 by the `agents` PACKAGE,
+    #    registered below rather than here; see PACKAGE_RINGS. ──
 }
 
 # Whole packages whose every module belongs to one ring, by construction.
@@ -160,6 +176,26 @@ PACKAGE_RINGS: dict[str, int] = {
     # The MCP surface: read-only tools over the engine, reachable by an agent.
     # Ring 2 for the same reason feeds are -- a Ring 0 decider must never import it.
     "checker.mcp": RING_2,
+    # The HTTP gateway (PLAN_18 §2.1): auth, tenancy, Postgres, audit. Ring 2 for the
+    # identical reason -- an I/O surface over the engine, reachable from outside.
+    #
+    # **Registered because the guard CANNOT catch it otherwise, not because it would fail
+    # without it.** `_leaks_upward` constrains only Ring 0/1 importers, and `ring_of`
+    # returning None is never flagged ("this guard enforces one declared rule, it does not
+    # invent opinions about the rest of the codebase"). So an unregistered `gateway` passes
+    # today AND would keep passing on the day a decider imports it. Registering it is what
+    # brings "no Ring 0 decider may import the gateway" into existence as a rule at all.
+    #
+    # By PACKAGE, not by module: `ring_of("gateway.routes.matters")` then resolves even for
+    # a file nobody remembered to register, which is the hole the checker.feeds package rule
+    # was created to close.
+    "gateway": RING_2,
+    # The agent runtime (founder's plan L3). **Ring 3, the furthest from a decider**, because
+    # it is where model output lives: a run produces PROPOSALS and a trace, and whether a
+    # proposal is legally correct is Ring 0's answer, never Ring 3's. Registering it is what
+    # makes "nothing in agents/ may feed an L0 decision" an enforced rule rather than a hope --
+    # see the note on `gateway` above for why an unregistered package would not be caught.
+    "agents": RING_3,
 }
 
 
@@ -407,7 +443,7 @@ def _test() -> None:
     missing1 = [m for m in required_ring1 if REGISTRY.get(m) != RING_1]
     check(not missing1, f"every task-mandated Ring 1 module is registered (missing: {missing1})")
 
-    # ---- Ring 2 is now populated, by PACKAGE; Ring 3 is still empty -------------
+    # ---- Ring 2 and, since 2026-09-28, Ring 3 are populated, by PACKAGE ---------
     # This assertion used to read "Ring 2 and Ring 3 are empty". It changed on
     # 2026-09-17 when checker/feeds/ landed -- updated to the new truth, not
     # deleted, so the file still records what each ring is supposed to hold.
@@ -418,8 +454,16 @@ def _test() -> None:
           "a FUTURE feed nobody remembered to register is still Ring 2 -- the hole this closes")
     check(ring_of("checker/feeds/common/fetch.py") == RING_2, "...in the file-path spelling too")
     check(ring_of("checker.feedsX") is None, "prefix matching is on whole segments, not characters")
-    check(not any(r == RING_3 for r in list(REGISTRY.values()) + list(PACKAGE_RINGS.values())),
-          "Ring 3 is still empty, as PLAN_08 §2 records")
+    # Ring 3 was empty from PLAN_08 §2 until 2026-09-28, and this check recorded that.
+    # `agents/` is the first occupant: the agent runtime is where MODEL-DERIVED content
+    # lives, which is what Ring 3 means. The assertion is kept rather than deleted, and
+    # narrowed to the new fact -- a second occupant should be a deliberate decision, not a
+    # line someone adds without noticing this said something different yesterday.
+    ring3 = sorted(k for k, r in list(REGISTRY.items()) + list(PACKAGE_RINGS.items())
+                   if r == RING_3)
+    check(ring3 == ["agents"],
+          f"Ring 3 holds exactly the agent runtime; it was empty until 2026-09-28 "
+          f"(PLAN_08 §2) and this is the first occupant ({ring3})")
 
     # The hole, demonstrated: a Ring 0 decider importing an UNREGISTERED feed.
     sneaky = ast.parse("def decide(c):\n    from checker.feeds.mca_defaulters import hit\n    return hit(c)\n")
@@ -537,6 +581,28 @@ def _test() -> None:
         helper.unlink(missing_ok=True); decider.unlink(missing_ok=True)
     check(not [v for v in violations() if "_rt02_probe" in v],
           "the probe cleans up after itself -- no residue in the registry or on disk")
+
+    # ── the gateway is Ring 2, by package ────────────────────────────────────
+    check(ring_of("gateway") == RING_2, "the gateway package is Ring 2")
+    check(ring_of("gateway.routes.matters") == RING_2,
+          "...and so is a module inside it nobody registered by name")
+    check(ring_of("gateway.audit") == RING_2, "...and gateway.audit")
+    # The reason it had to be registered: an UNREGISTERED package is never flagged, so
+    # without this entry the rule "no Ring 0 decider may import the gateway" would not exist.
+    check(ring_of("no_such_package.thing") is None,
+          "an unregistered module has no ring -- which is why registering gateway matters")
+
+    # ── the agent runtime is Ring 3, and a decider may not reach it ─────────
+    check(ring_of("agents") == RING_3 and ring_of("agents.runtime") == RING_3,
+          "agents/ is Ring 3 (INFERENCE), by package")
+    check(RING_3 > RING_2 > RING_1 > RING_0,
+          "...which is the furthest ring from a Ring 0 decider, by construction")
+    # Proof that registering it created a rule: a Ring 0 module importing it is a violation.
+    _synthetic = ast.parse("from agents.runtime import execute\n")
+    check(_leaks_upward(_synthetic, "checker.s185", RING_0),
+          "a Ring 0 decider importing agents.runtime IS flagged -- the rule now exists")
+    check(not _leaks_upward(_synthetic, "gateway.app", RING_2),
+          "...while Ring 2 importing it is not, because the firewall is one-way")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:

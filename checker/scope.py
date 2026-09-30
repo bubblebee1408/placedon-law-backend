@@ -125,6 +125,26 @@ BODIES: tuple[Body, ...] = (
          "combination notification thresholds, anti-competitive agreements",
          DECLARED, "Nothing acquired."),
 
+    # Declared 29-09-2026 for F12 contract review (PLAN_22 §6). A contract review that
+    # silently skipped these would read as "nothing to say about enforceability", which is
+    # the exact failure DECLARED exists to prevent: silence reads as no obligation found.
+    Body("CONTRACT1872", "Indian Contract Act, 1872", "Parliament of India",
+         "formation, consideration, free consent, void and voidable agreements, "
+         "restraint of trade, remedies for breach",
+         DECLARED,
+         "Nothing acquired. F12 reviews a contract against a COMPANY PLAYBOOK, which is "
+         "a commercial standard and not a legal test. Any question about whether a clause "
+         "is valid, enforceable or void reaches this body and is refused by name until it "
+         "is held."),
+
+    Body("ARBITRATION1996", "Arbitration and Conciliation Act, 1996",
+         "Parliament of India",
+         "arbitration agreements, seat and venue, interim relief, enforcement of awards",
+         DECLARED,
+         "Nothing acquired. Reached by the dispute-resolution clause of almost every "
+         "commercial contract, which is why declaring it matters more here than its "
+         "acquisition priority suggests."),
+
     Body("STAMP", "Stamp duty — Indian Stamp Act, 1899 and State amendments",
          "State governments",
          "instrument stamping on share transfers, debentures, agreements",

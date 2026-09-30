@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """The /v1/ask response contract (placedon.ask/0): a validator, and fixtures built from the engine.
 
-The Ask section (docs/PLAN_13_ASSISTANT_UX_PLAN.md) renders three server-decided states --
+The Ask section (docs/ASSISTANT_UX_PLAN.md) renders three server-decided states --
 answered, partial, out_of_scope -- and nothing else. The prototype is static and sends nothing, so
 it renders fixtures. Two failures that would make a prototype lie are designed out here:
 

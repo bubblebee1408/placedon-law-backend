@@ -1,0 +1,56 @@
+-r requirements.txt
+# Gateway-only dependencies. NOT in requirements.txt, whose header scopes it to "Runtime
+# dependencies for the deployed function" -- that is the engine surface, and the engine must
+# keep serving without any of this.
+#
+# DECISION (2026-09-28): PostgreSQL as the gateway's system of record, psycopg 3 as the only
+# module permitted to speak to it. Recorded here because this is where CLAUDE.md's rule --
+# "No new dependency without a stated reason" -- is discharged in this repo.
+#
+# WHY POSTGRES, and it comes down to one thing: **row-level security**. Everything else the
+# gateway needs (tenant rows, an audit table, a job queue) is achievable without it. RLS is
+# not. Tenant isolation enforced by `WHERE tenant_id = ?` in application code is a convention,
+# and a missing clause in one handler leaks another firm's matter while looking like a normal
+# 200. `FORCE ROW LEVEL SECURITY` turns that from "every future query is correct" into "a query
+# that forgets the predicate returns zero rows" -- the same argument checker/rings.py makes for
+# why the ring firewall is an AST walk and not a code-review convention. Secondarily:
+# `REVOKE UPDATE, DELETE, TRUNCATE ON audit_log` gives an append-only table the application
+# role cannot rewrite, and `SELECT ... FOR UPDATE SKIP LOCKED` gives a durable job queue with
+# no second piece of infrastructure.
+#
+# REJECTED, by name and reason:
+#   SQLite   - the cheapest option and the wrong one. No row-level security, no roles, no
+#              REVOKE the app role cannot undo. Every guarantee above collapses back into
+#              application-level WHERE clauses, which is the failure this decision prevents.
+#              (This repo contains zero sqlite3 usage today, so it would be a new pattern
+#              rather than a free one.)
+#   an ORM   - adds a large dependency plus a migration tool to hide the one thing that must
+#              stay visible: the exact SQL, the exact SET LOCAL, and the exact policy
+#              predicates. PLAN_18 §3.2/§3.3 is already written as DDL. With an ORM the
+#              isolation suite would be testing the ORM.
+#   a broker - Redis/Celery/SQS: a second durability story and a second failure mode for a
+#              queue that SKIP LOCKED already covers at beta volume. Also ruled out by the
+#              founder's plan.
+#   asyncpg  - a protocol reimplementation with its own type adaptation and no libpq. psycopg 3
+#              gives sync and async from one API, so the request path and the worker share one
+#              driver. Speed is not the constraint here.
+#   psycopg2 - maintenance mode, sync-only, worse type adaptation. No reason to adopt the
+#              previous generation on day one.
+#   pg8000   - pure Python and attractive for the reason pypdf was chosen in D-2, but thinly
+#              maintained relative to psycopg, and unlike that decision this is the
+#              credential-handling, TLS-terminating path to client data. The analogy cuts the
+#              other way.
+#
+# REVERSAL CONDITION: undo this if the isolation suite cannot be made to FAIL on demand --
+# dropping the tenant_isolation policy on one table must turn it red. If it does not, RLS is
+# enforcing nothing in our configuration, the whole reason for Postgres over SQLite is gone,
+# and the right move is to stop before the migrations multiply. This repo has twice paid for
+# green checks that could not turn red.
+#
+# Version read from PyPI on 2026-09-28 (`pip index versions psycopg` -> 3.3.6 latest). The
+# [binary] extra bundles its own libpq/OpenSSL, so those CVEs are patched by re-pinning a
+# wheel rather than by the base image -- fine for dev and CI; whether psycopg[c] against the
+# distro libpq is the better PRODUCTION form is an open sub-question, not settled here.
+psycopg[binary]==3.3.6
+fastapi==0.135.1
+uvicorn==0.42.0

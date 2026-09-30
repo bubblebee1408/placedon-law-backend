@@ -1,7 +1,7 @@
 # PLAN_13 — the Ask section: design spec
 
 Written 2026-09-15 (Phase D output). This is the spec `web/assistant/` is built from in Phase B.
-Plan: [PLAN_13_ASSISTANT_UX_PLAN.md](PLAN_13_ASSISTANT_UX_PLAN.md) (constraints C1–C10, the nine harsh
+Plan: [ASSISTANT_UX_PLAN.md](ASSISTANT_UX_PLAN.md) (constraints C1–C10, the nine harsh
 questions, acceptance checks). Brief: [research/ux/DESIGN_BRIEF.md](research/ux/DESIGN_BRIEF.md).
 Contract: [`web/assistant/contract.md`](../web/assistant/contract.md) + `web/assistant/fixtures/*.json`.
 

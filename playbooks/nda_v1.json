@@ -1,0 +1,119 @@
+{
+  "id": "nda_v1",
+  "version": "1",
+  "status": "DRAFT",
+  "approved_by": null,
+  "note": "DRAFT. No in-house lawyer has approved these rules, and until one does every finding produced from this playbook carries playbook_status DRAFT. The thresholds below are ORDINARY MARKET DEFAULTS for an Indian mutual NDA, not this company's standards -- a company that has not written its own playbook does not have one, and pretending otherwise would report a deviation from a standard nobody adopted. Each rule states the standard it encodes so a reviewing lawyer can accept, change or delete it one at a time.",
+  "applies_to": "Mutual non-disclosure agreements governed by Indian law",
+  "not_legal_advice": "Every finding is a POTENTIAL_ISSUE against a company standard. Nothing here states what the law requires. Contract Act, Stamp Act and Arbitration Act are not held in this corpus, so no rule below links to them.",
+  "rules": [
+    {
+      "id": "NDA-01",
+      "clause": "Term",
+      "standard_text": "Confidentiality lasts no more than 3 years from signature.",
+      "rationale": "A longer obligation costs more to administer than it is usually worth, and is the term most often negotiated down.",
+      "test": "max_years",
+      "value": "3 years",
+      "why": "Confidentiality obligations running longer than three years are hard to administer and are usually negotiated down. Longer terms are common for trade secrets, which is why this is a flag and not a rejection."
+    },
+    {
+      "id": "NDA-02",
+      "clause": "Governing Law",
+      "standard_text": "The agreement is governed by Indian law.",
+      "rationale": "A foreign governing law makes any dispute slower and more expensive to run.",
+      "test": "in_list",
+      "value": [
+        "India",
+        "laws of India",
+        "the laws of India",
+        "Republic of India",
+        "India, without regard to conflict of laws"
+      ],
+      "why": "An Indian counterparty agreement governed by foreign law makes enforcement slower and more expensive. Measured 29-09-2026: this rule was `equals: India` and a live model returned the value 'laws of India' -- substantively right, textually different -- so it reported DEVIATES on 7 of 10 fixtures whose governing law WAS India. A false alarm on the commonest clause in the set is worse than no rule, because it is the one a reviewer learns to ignore. The accepted spellings are enumerated here rather than by loosening `equals` to a substring match, which would have matched 'the laws of England and not India'. The real remedy is a normalisation step on extracted values; this is the data-level mitigation available today."
+    },
+    {
+      "id": "NDA-03",
+      "clause": "Jurisdiction",
+      "standard_text": "Exclusive jurisdiction sits with the courts of an Indian city where the company already operates.",
+      "rationale": "Exclusive jurisdiction somewhere the company has no presence turns a small dispute into a travel budget.",
+      "test": "in_list",
+      "value": [
+        "Mumbai",
+        "New Delhi",
+        "Delhi",
+        "Bengaluru",
+        "Bangalore",
+        "Chennai",
+        "Kolkata",
+        "Hyderabad"
+      ],
+      "why": "Exclusive jurisdiction in a city where the company has no presence turns a small dispute into a travel budget."
+    },
+    {
+      "id": "NDA-04",
+      "clause": "Definition of Confidential Information",
+      "standard_text": "The agreement defines what counts as confidential information.",
+      "rationale": "Without a definition there is nothing in particular being protected.",
+      "test": "must_be_present",
+      "why": "An NDA with no definition of what is confidential protects nothing in particular."
+    },
+    {
+      "id": "NDA-05",
+      "clause": "Confidentiality Obligation",
+      "standard_text": "The agreement contains a promise to keep the other side's confidential information secret.",
+      "rationale": "It is the operative promise, so its absence is the most consequential omission this document type can have.",
+      "test": "must_be_present",
+      "why": "The operative promise. Its absence is the single most consequential omission in this document type."
+    },
+    {
+      "id": "NDA-06",
+      "clause": "Permitted Disclosure",
+      "standard_text": "The agreement permits disclosure where it is required by law or by a court.",
+      "rationale": "Without that carve-out the receiving party is promising something it cannot perform.",
+      "test": "must_be_present",
+      "why": "Without a carve-out for disclosure required by law or by a court, the receiving party is promising something it cannot perform."
+    },
+    {
+      "id": "NDA-07",
+      "clause": "Return or Destruction",
+      "standard_text": "The agreement says what happens to the material when it ends.",
+      "rationale": "It is the clause people discover is missing at the end, when the material is already out.",
+      "test": "must_be_present",
+      "why": "What happens to the material at the end is the clause people discover is missing at the end."
+    },
+    {
+      "id": "NDA-08",
+      "clause": "Non-Compete",
+      "standard_text": "The agreement contains no non-compete.",
+      "rationale": "A non-compete changes what an NDA does and is easy to miss inside one; whether a particular form is acceptable is a person's call, not code's.",
+      "test": "must_be_absent_or_approved",
+      "approved_values": [
+        "mutual",
+        "none"
+      ],
+      "why": "A non-compete inside an NDA is out of place and is frequently missed because nobody expects to find one there. Code cannot judge whether a particular form is acceptable, so this returns NEEDS_LAWYER rather than a verdict."
+    },
+    {
+      "id": "NDA-09",
+      "clause": "Non-Solicit",
+      "standard_text": "The agreement contains no non-solicit.",
+      "rationale": "Same as the non-compete: it changes what the document does, and whether the form is acceptable is a person's call, not code's.",
+      "test": "must_be_absent_or_approved",
+      "approved_values": [
+        "mutual",
+        "none"
+      ],
+      "why": "Same reason as NDA-08: it changes what the document does, and whether the form is acceptable is a person's call."
+    },
+    {
+      "id": "NDA-10",
+      "clause": "Limitation of Liability",
+      "standard_text": "Liability is capped at no more than Rs 1 crore.",
+      "rationale": "An uncapped or very high cap is unusual on a mutual NDA, and this figure is exactly the kind a reviewing lawyer should replace with the company's own.",
+      "test": "max_amount",
+      "value": "1 crore",
+      "why": "An uncapped or very high cap on a mutual NDA is unusual. The figure is an ordinary default and is exactly the kind of number a reviewing lawyer should replace with the company's own."
+    }
+  ],
+  "standards_note": "DRAFT, and drafted by an engineer. `standard_text` and `rationale` on every rule below are the company position and the reason for it in one plain sentence each, written to be read by a lawyer reviewing this playbook and by whoever reads a finding on screen. NO IN-HOUSE LAWYER HAS APPROVED EITHER SENTENCE. They are DRAFT for the same reason the thresholds are: the playbook's own `status` is DRAFT, and everything inside a DRAFT playbook is draft -- which is why there is no second status field here to fall out of step with the first. Neither field cites a statute, a rule or a case, and neither may: the Contract Act, the Stamp Act and the Arbitration Act are not held in this corpus, so a citation in one of these sentences would be a legal claim with nothing behind it. `rationale` is written for a reader. `why` is the separate engineering note on why the RULE is shaped as it is, is not shown on screen, and is not a substitute for either."
+}

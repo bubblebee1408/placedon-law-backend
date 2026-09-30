@@ -178,7 +178,8 @@ def _amendments(args: dict) -> dict:
 
 def _instrument_impact(args: dict) -> dict:
     """The lawyer sentence: what landed, what it touches, and what is not yet known."""
-    from checker.currency import acquisition_for, affected_by
+    from checker.currency import (AMBIGUOUS, PENDING, acquisition_for,
+                                   affected_by)
     from checker.obligations import REGISTER
     frag = args.get("instrument", "")
     ids = affected_by(frag)
@@ -219,11 +220,25 @@ def _instrument_impact(args: dict) -> dict:
         # the release gate, not a fourth opinion written here.
         acq = acquisition_for(frag)
         if acq is not None and acq.read:
-            held = (f"It is held and attested: {acq.instrument}, effective "
-                    f"{acq.effective_from.isoformat()}, evidence state {acq.state}"
+            # `effective_from` is None for an instrument known only from its
+            # registration record -- those carry no commencement date, and inventing
+            # one would be a fabricated legal date. Unguarded, this raised
+            # AttributeError on the first attested registry-only instrument.
+            when = (f"effective {acq.effective_from.isoformat()}, "
+                    if acq.effective_from is not None else "commencement not recorded, ")
+            held = (f"It is held and attested: {acq.instrument}, {when}"
+                    f"evidence state {acq.state or 'unstated'}"
                     + (f", from {acq.source_url}" if acq.source_url else "") + ". "
                     "Read it before relying on this -- what it touches is indexed, "
                     "what it MEANS for a given company is not.")
+        elif acq is not None and acq.status == PENDING:
+            # PLAN_19 G0.1: the state that used to be reported as "nobody has read
+            # it". Someone downloaded and hashed it; what is missing is a reviewer.
+            held = (f"It is registered and held ({acq.answered_from}), status "
+                    f"{acq.state or 'unstated'}, but NO REVIEWER HAS ATTESTED IT, so "
+                    "nothing may be served from it yet.")
+        elif acq is not None and acq.status == AMBIGUOUS:
+            held = (f"{acq.note}. Name one of them before relying on any of this.")
         else:
             held = ("Nobody has read the instrument yet, so nothing follows from it "
                     "until someone acquires and attests it.")
@@ -351,7 +366,7 @@ def _get_tasks(args: dict) -> dict:
                       for r in reqs]}
 
 
-TOOLS: tuple[Tool, ...] = (
+_HAND_WRITTEN: tuple[Tool, ...] = (
     Tool("themis.health", "Liveness and provenance: corpus version, commit, whether a "
          "model was consulted.", _obj({}), _health),
     Tool("themis.scope", "Which bodies of Indian corporate law are HELD versus merely "
@@ -388,6 +403,24 @@ TOOLS: tuple[Tool, ...] = (
                               "watchlist": {"type": "array", "items": _STR},
                               "trigger": {"type": "object"}}, ("instrument",)), _get_tasks),
 )
+
+
+# The verbs declared once in gateway/verbs.py, generated onto this surface rather than
+# retyped here. PLAN_22 D6: one table, three surfaces, and the parity test in that module
+# is what stops them drifting. Only READ-ONLY verbs are generated -- mcp_tools() refuses
+# the rest -- because policy.KNOWN_TOOLS is asserted equal to READ_ONLY_TOOLS.
+#
+# `themis.ask` already exists above and is NOT replaced: it is the /v1 engine ask, wired
+# before the agent runtime existed, and quietly swapping what a published tool does is a
+# worse outcome than two doors to one idea. The collision is handled by name and a test
+# in gateway/verbs.py asserts every read-only verb has SOME tool on this surface.
+def _generated() -> tuple[Tool, ...]:
+    from gateway.verbs import mcp_tools
+    have = {t.name for t in _HAND_WRITTEN}
+    return tuple(t for t in mcp_tools() if t.name not in have)
+
+
+TOOLS: tuple[Tool, ...] = _HAND_WRITTEN + _generated()
 
 _BY_NAME = {t.name: t for t in TOOLS}
 
@@ -437,7 +470,15 @@ def _test() -> None:
     check(names == set(KNOWN_TOOLS),
           f"every registered tool is policy-known and vice versa "
           f"(only in one: {names ^ set(KNOWN_TOOLS) or 'none'})")
-    check(len(TOOLS) == 13, f"thirteen tools, every one a read (got {len(TOOLS)})")
+    check(len(_HAND_WRITTEN) == 13,
+          f"thirteen hand-written tools ({len(_HAND_WRITTEN)})")
+    check(len(TOOLS) == 18,
+          f"eighteen in all: five generated from gateway/verbs.py, the fifth being "
+          f"events.assess on 30-09-2026 -- read-only and model-free, which is why it may "
+          f"be here at all; "
+          f"review_document on 30-09-2026 (PLAN_23 O1); runs.approve and runs.reject write "
+          f"and are therefore not among them "
+          f"(got {len(TOOLS)})")
     check(all(t.description.strip() and t.schema.get("type") == "object" for t in TOOLS),
           "every tool has a description and an object schema")
     check(all(t.mcp_descriptor()["inputSchema"]["additionalProperties"] is False

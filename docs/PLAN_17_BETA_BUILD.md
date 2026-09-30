@@ -1,7 +1,7 @@
 # PLAN_17 — the beta: what to build, in what order, and the prompt for each step
 
 Written 2026-09-24. Status vocabulary is [PLAN_00_INDEX](PLAN_00_INDEX.md)'s.
-Companion documents: [PLAN_16](PLAN_16_RESEARCH_PROGRAMME.md) (the research the
+Companion documents: [PLAN_21](PLAN_21_RESEARCH_PROGRAMME.md) (the research the
 design rests on), [PLAN_18](PLAN_18_TECHNICAL_DESIGN.md) (the technical design:
 interfaces, schema, API, pipeline, security) and
 [STUDY_GUIDE_THEMIS](STUDY_GUIDE_THEMIS.md) (the concepts, explained for the
@@ -33,7 +33,7 @@ use on real matters for a month without anyone faking anything.
 at least twice a week for four weeks (PLAN_05's retention gate); zero
 cross-tenant data incidents; every served legal claim traced or refused; at
 least 59 answers labelled by the team's lawyers with consent (enough for the
-first certified-abstention measurement, PLAN_16 C1).
+first certified-abstention measurement, PLAN_21 C1).
 
 ---
 
@@ -350,7 +350,7 @@ deletable for good.
    gone and its blobs unreadable; a scan routes to Document Intelligence and never
    to Gemini; a killed job is retried exactly once and never double-indexes.
 
-Rules: CLAUDE.md; PLAN_07 as amended by PLAN_16 §1 (nothing kept as a side
+Rules: CLAUDE.md; PLAN_07 as amended by PLAN_21 §1 (nothing kept as a side
 effect; only deliberate Vault uploads persist). Report in the required format.
 ```
 
@@ -548,7 +548,7 @@ see the inbox, on a 360px screen and with a keyboard only.
    the questions, the metrics, the analysis — Magesh et al.'s method.
 2. Onboard the champion lawyer; weekly 30-minute review of flagged answers.
 3. Consented feedback becomes labelled claims; stop at ≥ 59 for the first
-   calibration (PLAN_16 C1), aim for 299.
+   calibration (PLAN_21 C1), aim for 299.
 4. Weekly metrics **with error bars** (Miller): traced rate, refusal rate,
    refusal-was-right rate, time saved as reported by the user.
 5. Exit review against §0's criteria. Only then decide pricing and a second
@@ -560,9 +560,9 @@ see the inbox, on a 360px screen and with a keyboard only.
 
 | Step | Output | Depends on |
 |---|---|---|
-| R1 | P1 draft: calibration floors (PLAN_16 C2), re-derived by an independent agent | Nothing |
+| R1 | P1 draft: calibration floors (PLAN_21 C2), re-derived by an independent agent | Nothing |
 | R2 | P2 draft: non-interference in `rings.py` (C5) + the lattice (C6) | Nothing |
-| R3 | Read in full the four temporal-legal-RAG papers (PLAN_16 §2.4); write the delta | A human with arXiv access |
+| R3 | Read in full the four temporal-legal-RAG papers (PLAN_21 §2.4); write the delta | A human with arXiv access |
 | R4 | P3 draft (currency) for ICAIL 2027, deadline 28 Jan 2027 | R3; dated competitor captures |
 | R5 | P4 (certified abstention) | M12 labelled data |
 
@@ -587,7 +587,7 @@ see the inbox, on a 360px screen and with a keyboard only.
 | Wanted GPT model not deployable in an Indian region | M0.2 | Use what is available regionally; model choice is a cost lever here, not a correctness lever (PROVIDER_DECISION) |
 | Pilot finds refusals annoying | M12 week 1–2 feedback | This is PLAN_00 falsifier 1 — learn which refusals, fix coverage, do not remove refusal |
 | Cross-tenant leak | M4 tests, M11 red team | Stop the beta; incident runbook |
-| Scope creep (general chat, prediction) | Requests from the pilot | Decision 2 and PLAN_16 §4 "will not claim" |
+| Scope creep (general chat, prediction) | Requests from the pilot | Decision 2 and PLAN_21 §4 "will not claim" |
 
 ---
 

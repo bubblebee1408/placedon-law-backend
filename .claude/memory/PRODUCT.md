@@ -22,8 +22,10 @@ Compliance is the wedge that earns trust; operations is the work that earns dail
 | Uncertain | **Abstain** | Draft anyway, flag assumptions, stay editable |
 | Verified by | A human employment lawyer | Nobody |
 
-**Leakage** — an operations answer wearing legal grammar — is the failure this introduces.
-`trust-boundary-reviewer` exists solely to catch it. Full contract: `docs/05_HR_OPERATIONS_TRACK.md`.
+**Leakage** — an answer wearing legal grammar without legal evidence — is the failure this
+introduces. `trust-boundary-reviewer` exists solely to catch it. Full contract: `CLAUDE.md`'s
+non-negotiable rules, plus `checker/admission.py` and `checker/calibration_contract.py`, which
+enforce it in code rather than in prose.
 
 ## Scope
 - **V1** — PoSH, Karnataka. Company Health Scan (free, no signup, ₹0 to run), cited Q&A with

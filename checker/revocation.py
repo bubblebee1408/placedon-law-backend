@@ -39,7 +39,7 @@ from pathlib import Path
 
 from checker import asn1
 from checker.asn1 import Asn1Error, Node
-from checker.robots import USER_AGENT
+from checker.robots import DER, USER_AGENT, payload_refusal
 
 CACHE = Path("corpus/trust/crl")
 
@@ -232,21 +232,32 @@ def verify_crl_signature(crl: CRL, issuer_der: bytes) -> bool:
 
 
 def fetch_crl(url: str, *, timeout: float = 30.0, cache: Path = CACHE) -> bytes | None:
-    """Retrieve a CRL. Plain HTTP is expected and acceptable — see module docstring."""
+    """Retrieve a CRL. Plain HTTP is expected and acceptable — see module docstring.
+
+    **A CRL is DER, and a 200 is not evidence of that.** A CA that has moved its
+    distribution point answers the old URL with a 200 and an HTML "page not found",
+    and the same soft-404 shape was measured on India Code on 26-09-2026. The
+    single-byte `0x30` test already refused such a page (`<` is `0x3C`), but it said
+    nothing about why, ignored the `Content-Type`, and — the real gap — did not apply
+    to bytes arriving from the cache rather than the network. A file is not evidence
+    for being on our own disk.
+    """
     cache.mkdir(parents=True, exist_ok=True)
     key = re.sub(r"[^A-Za-z0-9]+", "_", url)[-120:]
     p = cache / f"{key}.crl"
     if p.exists():
-        return p.read_bytes()
+        cached = p.read_bytes()
+        return None if payload_refusal(cached, expect=(DER,)) else cached
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
             if r.status != 200:
                 return None
             body = r.read()
+            ctype = r.headers.get("Content-Type") or ""
     except (urllib.error.URLError, OSError, ValueError):
         return None
-    if body[:1] != b"\x30":                       # not DER
+    if payload_refusal(body, expect=(DER,), content_type=ctype):
         return None
     p.write_bytes(body)
     return body
@@ -355,6 +366,51 @@ def _test() -> None:
     oc = [u for c in certs for u in ocsp_urls(c)]
     check_(oc and all("ocsp" in u or "ocvs" in u for u in oc),
            f"OCSP responders are extracted and CA-Issuers URLs excluded ({oc})")
+
+    # ── the soft-404: a 200 is not evidence of WHAT came back ────────────────
+    # A CRL is DER: an ASN.1 SEQUENCE, so byte 0 is 0x30. A CA that has moved its
+    # distribution point can answer the old URL with 200 and an HTML "page not found",
+    # and `<` is 0x3C, not 0x30 -- so the magic check already refused it. What it did
+    # NOT do was say why, or look at the Content-Type, or re-check bytes that arrived
+    # from the cache rather than the network. All three are now closed.
+    import tempfile as _tempfile
+    import urllib.request as _ur
+    from unittest import mock as _mock
+
+    class _Resp:
+        def __init__(self, body: bytes, ctype: str, status: int = 200):
+            self.status, self._b = status, body
+            self.headers = {"Content-Type": ctype}
+
+        def read(self) -> bytes:
+            return self._b
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    shell = b'<!DOCTYPE html>\n<html><body>Not found</body></html>'
+    real_der = b"\x30\x82\x01\x0a" + b"\x00" * 16
+    with _tempfile.TemporaryDirectory() as d:
+        cache = Path(d)
+        with _mock.patch.object(_ur, "urlopen", return_value=_Resp(shell, "text/html")):
+            check_(fetch_crl("http://cca.example/crl/old.crl", cache=cache) is None,
+                   "an HTML page where a CRL was expected is refused")
+        check_(not list(cache.glob("*.crl")),
+               "...and is never written to the CRL cache, so no later run can trust it")
+        with _mock.patch.object(_ur, "urlopen", return_value=_Resp(real_der, "application/pkix-crl")):
+            check_(fetch_crl("http://cca.example/crl/good.crl", cache=cache) == real_der,
+                   "a real DER CRL is retrieved and returned")
+        check_(len(list(cache.glob("*.crl"))) == 1, "...and cached")
+        # A cached file is re-checked on read: a poisoned or hand-placed cache entry is
+        # not evidence just because it is on our own disk.
+        poisoned_url = "http://cca.example/crl/poisoned.crl"
+        key = re.sub(r"[^A-Za-z0-9]+", "_", poisoned_url)[-120:]
+        (cache / f"{key}.crl").write_bytes(shell)
+        check_(fetch_crl(poisoned_url, cache=cache) is None,
+               "a cached file that is not DER is refused on read, not trusted for being local")
 
     # Freshness semantics.
     now = datetime.now(timezone.utc)

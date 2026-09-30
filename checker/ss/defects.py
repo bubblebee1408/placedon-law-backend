@@ -382,6 +382,59 @@ def _test() -> None:
     ok(not ids & {"route_map", "leave_of_absence", "dissent"},
        "zero-precedent rules are absent, not merely disabled")
 
+    # ── the gate, measured on the REAL specimens ─────────────────────────────
+    # CLAUDE.md: "Never call a finding a defect when the rule is inapplicable to the document
+    # type. Minutes checks must not fire on notices." That held when measured on 2026-09-28
+    # and NOTHING GUARDED IT: the checks above use synthetic text, and
+    # scripts/scan_testdocs.py, which does read the corpus, is not in the harness.
+    #
+    # An AGM notice is issued BEFORE the meeting, so it cannot record when the meeting
+    # concluded, whether a quorum was present, or when minutes were entered in the book.
+    # Calling those DEFECT is a category error, and it produced false-positive rates of
+    # 80-93% against genuinely compliant filings.
+    #
+    # Written to be NON-VACUOUS, because "no defects fired" is the easiest result in the
+    # world to get by scanning nothing. The counts assert that specimens were found, that
+    # findings were produced, that N/A was actually reached, and that all four document types
+    # appear. Without those, a path typo or a classifier that called everything "minutes"
+    # would let the two real assertions pass while proving nothing.
+    from pathlib import Path as _P
+
+    _root = _P(__file__).resolve().parent.parent.parent / "corpus/testdocs"
+    _minutes_only = {k for k, v in APPLICABILITY.items() if v == frozenset({"minutes"})}
+    _seen = _findings = _na = 0
+    _types: set = set()
+    _leak: list = []
+    _unknown_defects: list = []
+    for _d in ("agm_notices", "board_outcomes", "icsi_specimens", "minutes_extracts"):
+        for _f in sorted((_root / _d).rglob("*")):
+            if not _f.is_file() or _f.suffix not in (".txt", ".md"):
+                continue
+            _text = _f.read_text(encoding="utf-8", errors="replace")
+            _dt = classify(_text)
+            _fs = scan(Minutes(text=_text, kind="general" if _d == "agm_notices" else "board"))
+            _seen += 1
+            _types.add(_dt)
+            _findings += len(_fs)
+            _na += sum(1 for x in _fs if x.status == "N/A")
+            _bad = [x.check_id for x in _fs
+                    if x.status == "DEFECT" and x.check_id in _minutes_only]
+            if _dt in ("notice", "outcome") and _bad:
+                _leak.append((_f.name, _dt, _bad))
+            if _dt == "unknown" and any(x.status == "DEFECT" for x in _fs):
+                _unknown_defects.append(_f.name)
+
+    ok(_seen >= 25, f"the specimen corpus is present and was read ({_seen} documents)")
+    ok(_findings > 0, f"the scanner produced findings ({_findings}) -- it is not inert")
+    ok(_na > 0, f"N/A was actually reached ({_na} times), so the gate is doing work")
+    ok(_types == {"minutes", "notice", "outcome", "unknown"},
+       f"all four document types are represented, so the gate is exercised ({sorted(_types)})")
+    ok(not _leak,
+       f"NO minutes-only check fires on a notice or an outcome filing ({_leak[:3]})")
+    ok(not _unknown_defects,
+       f"an UNKNOWN document type yields classification uncertainty, never a defect "
+       f"({_unknown_defects[:3]})")
+
     print(f"\n{passed}/{passed + failed} passed")
     if failed:
         raise SystemExit(1)

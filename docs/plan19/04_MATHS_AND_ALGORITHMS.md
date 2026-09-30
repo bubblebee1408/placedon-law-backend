@@ -264,7 +264,7 @@ says no. There are five independent reasons, each sufficient alone:
    under criminal penalty. India has no known equivalent **[OPEN]**. This is a risk, not a rule
    that binds us.
 5. **It is off-wedge.** An in-house team asks "are we compliant, as of this date, on what basis?",
-   not "will we win?" (PLAN_16 decision 1; `CLAUDE.md` scope).
+   not "will we win?" (PLAN_21 decision 1; `CLAUDE.md` scope).
 
 **What is built instead** is the citator (03 §8). It answers the question a litigator really
 needs from a legal-intelligence tool: *is the authority I rely on still good?* Deterministically,
@@ -312,7 +312,7 @@ n  =  ( z_{α/2} √ψ  +  z_β √(ψ − δ²) )²  /  δ²
 - HUMAN labels only. SYNTHETIC entries may never carry an answer key (`eval/goldset/__init__.py`)
   [R].
 - `annotation.to_sft()` must be fixed (`CLAUDE.md` E6) before any training path opens.
-- No client document is used without the per-matter opt-in of PLAN_16 decision 3.
+- No client document is used without the per-matter opt-in of PLAN_21 decision 3.
 
 ## 9. Certification under a changing law
 
@@ -338,7 +338,7 @@ The bound, as transcribed from Proposition 4.1, is **|mean error − α| ≤ (ma
 guarantee is either loose (small γ) or bought with a jumpy threshold (large γ). **So the plan is:**
 
 1. Re-calibrate at each amendment boundary, using post-amendment labels only.
-2. Refuse certification in each regime until PLAN_16 C1's n is met there.
+2. Refuse certification in each regime until PLAN_21 C1's n is met there.
 3. Treat ACI as a research comparison, not the serving mechanism.
 
 ## Sources

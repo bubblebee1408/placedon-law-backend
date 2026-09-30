@@ -1,10 +1,10 @@
-# Reviewer brief — 30 queued items
+# Reviewer brief — 31 queued items
 
 Assembled evidence only. **Every decision column is blank and stays blank until you fill it.** Nothing here recommends an outcome.
 
 - Source: `corpus/sources/companies_meetings_board_powers_rules_2014.pdf` (22 pages)
-- Parsed: 15 rules, instrument status `UNREVIEWED`, `production_usable: False`
-- Queue: 30 items, 30 open
+- Parsed: 16 rules, instrument status `UNREVIEWED`, `production_usable: False`
+- Queue: 31 items, 31 open
 
 ## How to record a decision
 
@@ -29,7 +29,7 @@ A `LIMITED` or `REJECTED` decision requires a written reason — the tool enforc
 | artifact | `corpus/sources/companies_meetings_board_powers_rules_2014.pdf` |
 | sha256 | `b8b2e01b3d151ee038215c81d4fb10d8…` |
 | pages | 22 |
-| rules parsed | 15 (r.1–r.15) |
+| rules parsed | 16 (r.1–r.16) |
 | gazette, per the document | G.S.R. 240 (E) dated 31st March, 2014 |
 | made under, per the preamble | 173, 175, 177, 178, 179, 184, 185, 186, 187, 188, 189, 191, 469 |
 | principal or amendment? | classified VERIFIED_PRINCIPAL by scripts/acquire_rules.py — 'Short title and commencement' present, no amending language |
@@ -42,7 +42,7 @@ A `LIMITED` or `REJECTED` decision requires a written reason — the tool enforc
 
 **Decision:** ______   **Reason:** ______
 
-## RULE — 15 item(s)
+## RULE — 16 item(s)
 
 ### `ri-board_rules_2014-002` — RULE:COMPANIES_MEETINGS_BOARD_POWERS_2014:R1
 
@@ -54,11 +54,11 @@ A `LIMITED` or `REJECTED` decision requires a written reason — the tool enforc
 | servable now | False |
 | heading | Short title and commencement |
 | pages | 13–13 of 22 |
-| body length | 155 chars |
+| body length | 153 chars |
 | sub-rules detected | 1, 2 |
 | sections it names | none |
 | extraction split words | 6 |
-| parser warnings | 6 word(s) still split by extraction -- read text_raw against pages 13-13 |
+| parser warnings | none |
 
 **Questions**
 
@@ -79,11 +79,11 @@ A `LIMITED` or `REJECTED` decision requires a written reason — the tool enforc
 | servable now | False |
 | heading | Definitions |
 | pages | 13–13 of 22 |
-| body length | 687 chars |
+| body length | 682 chars |
 | sub-rules detected | 1, 2 |
 | sections it names | none |
-| extraction split words | 35  ← read text_raw closely |
-| parser warnings | 33 word(s) still split by extraction -- read text_raw against pages 13-13 |
+| extraction split words | 31  ← read text_raw closely |
+| parser warnings | none |
 
 **Questions**
 
@@ -104,11 +104,11 @@ A `LIMITED` or `REJECTED` decision requires a written reason — the tool enforc
 | servable now | False |
 | heading | Meetings of Board through video conferencing or other audio visual means |
 | pages | 13–15 of 22 |
-| body length | 7,301 chars |
+| body length | 7,218 chars |
 | sub-rules detected | 1, 2, 3, 4, 5, 6 |
 | sections it names | 118, 173 |
-| extraction split words | 336  ← read text_raw closely |
-| parser warnings | 321 word(s) still split by extraction -- read text_raw against pages 13-15 |
+| extraction split words | 299  ← read text_raw closely |
+| parser warnings | 1 word(s) still split by extraction -- read text_raw against pages 13-15 |
 
 **Questions**
 
@@ -129,11 +129,11 @@ A `LIMITED` or `REJECTED` decision requires a written reason — the tool enforc
 | servable now | False |
 | heading | Matters not to be dealt with in a meeting through video conferencing or other audio visual means |
 | pages | 15–15 of 22 |
-| body length | 432 chars |
+| body length | 428 chars |
 | sub-rules detected | 1 |
 | sections it names | none |
-| extraction split words | 13 |
-| parser warnings | 12 word(s) still split by extraction -- read text_raw against pages 15-15 |
+| extraction split words | 11 |
+| parser warnings | none |
 
 **Questions**
 
@@ -154,11 +154,11 @@ A `LIMITED` or `REJECTED` decision requires a written reason — the tool enforc
 | servable now | False |
 | heading | Passing of resolution by circulation |
 | pages | 15–15 of 22 |
-| body length | 179 chars |
+| body length | 177 chars |
 | sub-rules detected | none |
 | sections it names | none |
-| extraction split words | 9 |
-| parser warnings | 7 word(s) still split by extraction -- read text_raw against pages 15-15 |
+| extraction split words | 7 |
+| parser warnings | none |
 
 **Questions**
 
@@ -179,11 +179,11 @@ A `LIMITED` or `REJECTED` decision requires a written reason — the tool enforc
 | servable now | False |
 | heading | Committees of the Board |
 | pages | 15–15 of 22 |
-| body length | 747 chars |
+| body length | 737 chars |
 | sub-rules detected | none |
 | sections it names | none |
-| extraction split words | 34  ← read text_raw closely |
-| parser warnings | 33 word(s) still split by extraction -- read text_raw against pages 15-15 |
+| extraction split words | 31  ← read text_raw closely |
+| parser warnings | none |
 
 **Questions**
 
@@ -204,11 +204,11 @@ A `LIMITED` or `REJECTED` decision requires a written reason — the tool enforc
 | servable now | False |
 | heading | Establishment of vigil mechanism |
 | pages | 15–16 of 22 |
-| body length | 1,568 chars |
+| body length | 1,554 chars |
 | sub-rules detected | 1, 2, 3, 4, 5 |
 | sections it names | none |
-| extraction split words | 71  ← read text_raw closely |
-| parser warnings | 66 word(s) still split by extraction -- read text_raw against pages 15-16 |
+| extraction split words | 64  ← read text_raw closely |
+| parser warnings | none |
 
 **Questions**
 
@@ -229,11 +229,11 @@ A `LIMITED` or `REJECTED` decision requires a written reason — the tool enforc
 | servable now | False |
 | heading | Powers of Board |
 | pages | 16–16 of 22 |
-| body length | 988 chars |
+| body length | 980 chars |
 | sub-rules detected | 1, 2, 3, 4, 5, 6, 7, 8, 9 |
 | sections it names | 179 |
-| extraction split words | 40  ← read text_raw closely |
-| parser warnings | 39 word(s) still split by extraction -- read text_raw against pages 16-16 |
+| extraction split words | 36  ← read text_raw closely |
+| parser warnings | 1 word(s) still split by extraction -- read text_raw against pages 16-16 |
 
 **Questions**
 
@@ -254,11 +254,11 @@ A `LIMITED` or `REJECTED` decision requires a written reason — the tool enforc
 | servable now | False |
 | heading | Disclosures by a director of his interest |
 | pages | 16–16 of 22 |
-| body length | 699 chars |
+| body length | 693 chars |
 | sub-rules detected | 1, 2, 3 |
 | sections it names | none |
-| extraction split words | 39  ← read text_raw closely |
-| parser warnings | 39 word(s) still split by extraction -- read text_raw against pages 16-16 |
+| extraction split words | 37  ← read text_raw closely |
+| parser warnings | none |
 
 **Questions**
 
@@ -279,11 +279,11 @@ A `LIMITED` or `REJECTED` decision requires a written reason — the tool enforc
 | servable now | False |
 | heading | Loans to Director etc. under section 185 |
 | pages | 16–16 of 22 |
-| body length | 614 chars |
+| body length | 608 chars |
 | sub-rules detected | 1, 2 |
 | sections it names | 185 |
-| extraction split words | 25  ← read text_raw closely |
-| parser warnings | 22 word(s) still split by extraction -- read text_raw against pages 16-16 |
+| extraction split words | 21  ← read text_raw closely |
+| parser warnings | none |
 
 **Questions**
 
@@ -304,11 +304,11 @@ A `LIMITED` or `REJECTED` decision requires a written reason — the tool enforc
 | servable now | False |
 | heading | Loan and investment by a company under section 186 of the Act |
 | pages | 16–16 of 22 |
-| body length | 1,484 chars |
-| sub-rules detected | 1, 2, 3 |
+| body length | 1,465 chars |
+| sub-rules detected | 1, 2, 3, 4, 11 |
 | sections it names | 12, 186 |
-| extraction split words | 69  ← read text_raw closely |
-| parser warnings | 66 word(s) still split by extraction -- read text_raw against pages 16-16 |
+| extraction split words | 64  ← read text_raw closely |
+| parser warnings | none |
 
 **Questions**
 
@@ -329,11 +329,11 @@ A `LIMITED` or `REJECTED` decision requires a written reason — the tool enforc
 | servable now | False |
 | heading | Register |
 | pages | 16–17 of 22 |
-| body length | 1,397 chars |
+| body length | 1,371 chars |
 | sub-rules detected | 1, 2, 3, 4, 5, 6, 9 |
 | sections it names | 186 |
-| extraction split words | 71  ← read text_raw closely |
-| parser warnings | 70 word(s) still split by extraction -- read text_raw against pages 16-17 |
+| extraction split words | 61  ← read text_raw closely |
+| parser warnings | none |
 
 **Questions**
 
@@ -354,11 +354,11 @@ A `LIMITED` or `REJECTED` decision requires a written reason — the tool enforc
 | servable now | False |
 | heading | Special Resolution |
 | pages | 17–17 of 22 |
-| body length | 1,243 chars |
+| body length | 1,230 chars |
 | sub-rules detected | 1, 2, 3, 4 |
 | sections it names | 186 |
-| extraction split words | 63  ← read text_raw closely |
-| parser warnings | 60 word(s) still split by extraction -- read text_raw against pages 17-17 |
+| extraction split words | 58  ← read text_raw closely |
+| parser warnings | none |
 
 **Questions**
 
@@ -377,13 +377,13 @@ A `LIMITED` or `REJECTED` decision requires a written reason — the tool enforc
 |---|---|
 | admission state | HUMAN_REVIEW_PENDING |
 | servable now | False |
-| heading | Investments of company to be held in its own na me |
+| heading | Investments of company to be held in its own name |
 | pages | 17–17 of 22 |
-| body length | 1,055 chars |
+| body length | 1,047 chars |
 | sub-rules detected | 1, 2, 3, 4 |
 | sections it names | none |
-| extraction split words | 51  ← read text_raw closely |
-| parser warnings | 51 word(s) still split by extraction -- read text_raw against pages 17-17 |
+| extraction split words | 50  ← read text_raw closely |
+| parser warnings | none |
 
 **Questions**
 
@@ -403,12 +403,37 @@ A `LIMITED` or `REJECTED` decision requires a written reason — the tool enforc
 | admission state | HUMAN_REVIEW_PENDING |
 | servable now | False |
 | heading | Contract or arrangement with a related party |
-| pages | 17–22 of 22 |
-| body length | 13,401 chars |
+| pages | 17–18 of 22 |
+| body length | 3,994 chars |
 | sub-rules detected | 1, 2, 3 |
-| sections it names | 101, 184, 188, 191, 202, 247 |
-| extraction split words | 578  ← read text_raw closely |
-| parser warnings | body runs to end-of-document and contains Annexure/Form matter -- the operative text ends earlier; a reviewer must set the boundary; 557 word(s) still split by extraction -- read text_raw against pages 17-22 |
+| sections it names | 101, 188 |
+| extraction split words | 163  ← read text_raw closely |
+| parser warnings | 1 word(s) still split by extraction -- read text_raw against pages 17-18 |
+
+**Questions**
+
+1. Is the numbered rule boundary correct?
+2. Is the heading materially faithful to the gazette?
+3. Are the page bounds correct?
+4. Is the extracted text usable for legal reasoning?
+
+**Decision:** ______   **Reason:** ______
+
+### `ri-board_rules_2014-031` — RULE:COMPANIES_MEETINGS_BOARD_POWERS_2014:R16
+
+*HIGH priority* · body runs to end-of-document and contains Annexure/Form matter -- the operative text ends earlier; a reviewer must set the boundary
+
+| fact | value |
+|---|---|
+| admission state | HUMAN_REVIEW_PENDING |
+| servable now | False |
+| heading | Register of contracts or arrangements in which directors are interested |
+| pages | 18–22 of 22 |
+| body length | 9,349 chars |
+| sub-rules detected | 1, 2, 3, 4 |
+| sections it names | 184, 187, 188, 189, 191, 202, 247 |
+| extraction split words | 367  ← read text_raw closely |
+| parser warnings | body runs to end-of-document and contains Annexure/Form matter -- the operative text ends earlier; a reviewer must set the boundary |
 
 **Questions**
 
@@ -430,12 +455,12 @@ A `LIMITED` or `REJECTED` decision requires a written reason — the tool enforc
 | admission state | HUMAN_REVIEW_PENDING |
 | servable now | False |
 | heading | Contract or arrangement with a related party |
-| pages | 17–22 of 22 |
-| body length | 13,401 chars |
+| pages | 17–18 of 22 |
+| body length | 3,994 chars |
 | sub-rules detected | 1, 2, 3 |
-| sections it names | 101, 184, 188, 191, 202, 247 |
-| extraction split words | 578  ← read text_raw closely |
-| parser warnings | body runs to end-of-document and contains Annexure/Form matter -- the operative text ends earlier; a reviewer must set the boundary; 557 word(s) still split by extraction -- read text_raw against pages 17-22 |
+| sections it names | 101, 188 |
+| extraction split words | 163  ← read text_raw closely |
+| parser warnings | 1 word(s) still split by extraction -- read text_raw against pages 17-18 |
 
 **Questions**
 

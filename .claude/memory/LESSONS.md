@@ -312,3 +312,24 @@ the working is now checkable and the premise still is not. Where the inputs are 
 (`verified_by` set or null), the honest structure is an **ordinal lattice with weakest-link
 composition**, not a probability: it composes, it orders, it explains, and it cannot be misread
 as a measurement.
+
+## L-26 — backticks in a heredoc commit message are shell command substitution
+
+2026-09-26. `git commit -m "... `official` and `accessibility` ..."` inside an unquoted
+heredoc ran `official` and `accessibility` as commands. They failed
+(`command not found`), substituted empty, and the commit landed with
+*"also omits  and , and accessibility is what feeds/ uses"* — two words silently
+deleted from the record.
+
+The commit was already pushed to a branch a peer session shares, so amending it would
+have meant a force-push that could clobber their work. **The message stays wrong.** The
+doc file it describes is correct, which is the only reason this is cheap.
+
+**Rule:** a commit message written through the shell uses `-F -` with a **quoted**
+heredoc (`<<'MSG'`), never `-m` with backticks in it. Every commit in this session that
+used `<<'MSG'` was fine; the one that used `-m "…`x`…"` was not.
+
+Worth noticing about the failure shape: the words did not error the commit, they
+**disappeared**. A mangled message that still reads as English is harder to spot than
+one that breaks — the same class as every other defect this week, where something
+unverified was rendered as though it were established.

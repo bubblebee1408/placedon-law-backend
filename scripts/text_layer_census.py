@@ -139,20 +139,31 @@ def compare_readers(name: str, *, repo_pages: list[str],
 
 def _pdfplumber_read(path: Path) -> tuple[list[str], list[float]] | None:
     """The independent reader: text and image geometry per page. None when it
-    cannot open the file -- recorded, never skipped."""
+    cannot open the file -- recorded, never skipped.
+
+    **The oracle is pypdf, not pdfplumber, since D-002b (25-09-2026).** The roles
+    were swapped, not merged: `checker/pdf_pages` moved to pdfplumber because pypdf
+    invented spaces inside words ("Board an d its") and emitted /uniXXXX glyph names
+    for the bilingual gazette's Devanagari. Making the census read pdfplumber too
+    would have left one library judging itself, which is the property that caught
+    SD-006. The name is kept so callers and stored reports stay comparable; what it
+    means is "the reader that is NOT the repo reader".
+
+    pypdf cannot supply image geometry, so shares come back empty and
+    `page_image_share` is applied by the repo reader's row only.
+    """
     try:
-        import pdfplumber
-        with pdfplumber.open(str(path)) as pdf:
-            texts = [(page.extract_text() or "") for page in pdf.pages]
-            shares = [page_image_share(page.images, page.width, page.height)
-                      for page in pdf.pages]
-            return texts, shares
+        from pypdf import PdfReader
+        r = PdfReader(str(path))
+        if getattr(r, "is_encrypted", False) and not r.decrypt(""):
+            return None
+        return [(pg.extract_text() or "") for pg in r.pages], []
     except Exception:                                            # noqa: BLE001
         return None
 
 
 def summarise(rows: list[dict], *, reader: str =
-              "checker/pdf_pages.extract_pages (pypdf; offline tooling)") -> dict:
+              "checker/pdf_pages.extract_pages (pdfplumber; offline tooling)") -> dict:
     totals: dict[str, int] = {}
     for r in rows:
         for label, n in r["counts"].items():
@@ -190,7 +201,7 @@ def run_census() -> dict:
         if ind is not None:
             independent_rows.append(census_pages(name, ind, image_shares=shares))
         comparison.append(compare_readers(name, repo_pages=repo, independent_pages=ind))
-    report = summarise(independent_rows, reader="pdfplumber 0.11.10 (declared in "
+    report = summarise(independent_rows, reader="pypdf 6.16.1, the independent oracle (declared in "
                                                  "requirements-dev.txt)")
     repo_summary = summarise(repo_rows)
     report["repo_reader"] = {"reader": repo_summary["reader"],

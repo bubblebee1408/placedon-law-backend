@@ -21,8 +21,10 @@
   "kind": "general"
  },
  "evidence_pack": {
+  "abstain_reason": "",
   "insufficient_evidence": false,
   "missing": [],
+  "query_expansions": [],
   "retrieval_query": "s.2(85)",
   "route": "exact",
   "unusable_keys": [],
@@ -58,7 +60,7 @@
   "held": [
    "Companies Act, 2013"
   ],
-  "sentence": "1 of 9 in-scope bodies of law are held"
+  "sentence": "1 of 11 in-scope bodies of law are held"
  },
  "state": "answered",
  "turn_id": "t_35e5e8a47ea0",

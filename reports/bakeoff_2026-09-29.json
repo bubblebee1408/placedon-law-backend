@@ -1,0 +1,411 @@
+{
+  "date": "2026-09-29",
+  "rule": "ADOPTION RULE (PLAN_22 D2): a challenger is adopted only when its 95% interval lies entirely above the incumbent's AND a person edits checker/router.py. Overlapping intervals are 'not resolvable at this n', never a win. This script does not edit the router.",
+  "research_set": "checker/cross_section_eval.CASES",
+  "cuad": {
+    "file": "corpus/benchmark/cuad/test.json",
+    "contracts_scored": 3,
+    "clause_types": 41,
+    "licence": "CC BY 4.0, The Atticus Project"
+  },
+  "plan": {
+    "calls": 30,
+    "max_calls": 60
+  },
+  "research": {
+    "azure:llama-3-3-70b": {
+      "n": 12,
+      "completed": 12,
+      "completion_rate": 1.0,
+      "rates_are_over": "COMPLETED tasks only. A task that errored contributed no sentences, so a high traced rate beside a high error count is a rate over the survivors -- read the two together.",
+      "sentences_written": 54,
+      "sentences_traced": 21,
+      "traced_rate": 0.3889,
+      "traced_ci": [
+        0.2704193382667319,
+        0.522117014648823
+      ],
+      "refusals": 3,
+      "refusal_rate": 0.25,
+      "refusal_ci": [
+        0.0889416683732539,
+        0.5323053349974733
+      ],
+      "errors": 0,
+      "rupees_total_inr": 0.0,
+      "rupees_per_task_inr": 0.0,
+      "per_case": [
+        {
+          "q": "how do we issue shares through private placement",
+          "section": "42",
+          "status": "REFUSED",
+          "code": "NOTHING_TRACED",
+          "written": 5,
+          "traced": 0,
+          "seconds": 3.09
+        },
+        {
+          "q": "rules for a private placement offer and allotment",
+          "section": "42",
+          "status": "PARTIAL",
+          "code": null,
+          "written": 9,
+          "traced": 2,
+          "seconds": 2.54
+        },
+        {
+          "q": "how does a company issue further shares to existing sharehol",
+          "section": "62",
+          "status": "PARTIAL",
+          "code": null,
+          "written": 5,
+          "traced": 2,
+          "seconds": 3.66
+        },
+        {
+          "q": "rights issue procedure and pricing",
+          "section": "62",
+          "status": "REFUSED",
+          "code": "NO_EVIDENCE",
+          "written": 0,
+          "traced": 0,
+          "seconds": 0.01
+        },
+        {
+          "q": "can a company accept deposits from the public",
+          "section": "73",
+          "status": "PARTIAL",
+          "code": null,
+          "written": 3,
+          "traced": 2,
+          "seconds": 28.99
+        },
+        {
+          "q": "duty to register a charge on the company's assets",
+          "section": "77",
+          "status": "ANSWERED",
+          "code": null,
+          "written": 1,
+          "traced": 1,
+          "seconds": 2.62
+        },
+        {
+          "q": "how to register a charge with the registrar",
+          "section": "77",
+          "status": "PARTIAL",
+          "code": null,
+          "written": 3,
+          "traced": 1,
+          "seconds": 29.86
+        },
+        {
+          "q": "declaration of beneficial interest in shares",
+          "section": "89",
+          "status": "PARTIAL",
+          "code": null,
+          "written": 4,
+          "traced": 2,
+          "seconds": 2.99
+        },
+        {
+          "q": "register of significant beneficial owners",
+          "section": "90",
+          "status": "PARTIAL",
+          "code": null,
+          "written": 6,
+          "traced": 4,
+          "seconds": 37.0
+        },
+        {
+          "q": "what must be filed in the annual return",
+          "section": "92",
+          "status": "REFUSED",
+          "code": "NOTHING_TRACED",
+          "written": 10,
+          "traced": 0,
+          "seconds": 3.82
+        },
+        {
+          "q": "when must a company hold its annual general meeting",
+          "section": "96",
+          "status": "ANSWERED",
+          "code": null,
+          "written": 3,
+          "traced": 3,
+          "seconds": 29.01
+        },
+        {
+          "q": "how to call an extraordinary general meeting",
+          "section": "100",
+          "status": "PARTIAL",
+          "code": null,
+          "written": 5,
+          "traced": 4,
+          "seconds": 12.08
+        }
+      ]
+    },
+    "azure:gpt-5-mini": {
+      "n": 12,
+      "completed": 3,
+      "completion_rate": 0.25,
+      "rates_are_over": "COMPLETED tasks only. A task that errored contributed no sentences, so a high traced rate beside a high error count is a rate over the survivors -- read the two together.",
+      "sentences_written": 12,
+      "sentences_traced": 12,
+      "traced_rate": 1.0,
+      "traced_ci": [
+        0.7575059932585456,
+        1.0
+      ],
+      "refusals": 1,
+      "refusal_rate": 0.0833,
+      "refusal_ci": [
+        0.014865094400000833,
+        0.3538799112178779
+      ],
+      "errors": 9,
+      "rupees_total_inr": 0.0,
+      "rupees_per_task_inr": 0.0,
+      "per_case": [
+        {
+          "q": "how do we issue shares through private placement",
+          "status": "ERROR",
+          "error": "ModelUnavailable: the Azure reply did not finish (finish_reason='length'); a truncated reply is not an answer"
+        },
+        {
+          "q": "rules for a private placement offer and allotment",
+          "status": "ERROR",
+          "error": "ModelUnavailable: the Azure reply did not finish (finish_reason='length'); a truncated reply is not an answer"
+        },
+        {
+          "q": "how does a company issue further shares to existing sharehol",
+          "section": "62",
+          "status": "ANSWERED",
+          "code": null,
+          "written": 6,
+          "traced": 6,
+          "seconds": 27.59
+        },
+        {
+          "q": "rights issue procedure and pricing",
+          "section": "62",
+          "status": "REFUSED",
+          "code": "NO_EVIDENCE",
+          "written": 0,
+          "traced": 0,
+          "seconds": 0.01
+        },
+        {
+          "q": "can a company accept deposits from the public",
+          "section": "73",
+          "status": "ANSWERED",
+          "code": null,
+          "written": 6,
+          "traced": 6,
+          "seconds": 26.81
+        },
+        {
+          "q": "duty to register a charge on the company's assets",
+          "status": "ERROR",
+          "error": "ModelUnavailable: the Azure reply did not finish (finish_reason='length'); a truncated reply is not an answer"
+        },
+        {
+          "q": "how to register a charge with the registrar",
+          "status": "ERROR",
+          "error": "ModelUnavailable: the Azure reply did not finish (finish_reason='length'); a truncated reply is not an answer"
+        },
+        {
+          "q": "declaration of beneficial interest in shares",
+          "status": "ERROR",
+          "error": "ModelUnavailable: the Azure reply did not finish (finish_reason='length'); a truncated reply is not an answer"
+        },
+        {
+          "q": "register of significant beneficial owners",
+          "status": "ERROR",
+          "error": "ModelUnavailable: the Azure reply did not finish (finish_reason='length'); a truncated reply is not an answer"
+        },
+        {
+          "q": "what must be filed in the annual return",
+          "status": "ERROR",
+          "error": "ModelUnavailable: the Azure reply did not finish (finish_reason='length'); a truncated reply is not an answer"
+        },
+        {
+          "q": "when must a company hold its annual general meeting",
+          "status": "ERROR",
+          "error": "ModelUnavailable: the Azure reply did not finish (finish_reason='length'); a truncated reply is not an answer"
+        },
+        {
+          "q": "how to call an extraordinary general meeting",
+          "status": "ERROR",
+          "error": "ModelUnavailable: the Azure reply did not finish (finish_reason='length'); a truncated reply is not an answer"
+        }
+      ]
+    }
+  },
+  "clauses": {
+    "azure:llama-3-3-70b": {
+      "n_contracts": 3,
+      "clause_types": 41,
+      "truncated_contracts": 1,
+      "errors": 0,
+      "per_clause_f1": {
+        "Affiliate License-Licensee": 0.0,
+        "Affiliate License-Licensor": 0.0,
+        "Agreement Date": 0.8,
+        "Anti-Assignment": 1.0,
+        "Audit Rights": 1.0,
+        "Cap On Liability": 0.5,
+        "Change Of Control": 0.0,
+        "Competitive Restriction Exception": 0.0,
+        "Covenant Not To Sue": 0.0,
+        "Document Name": 1.0,
+        "Effective Date": 1.0,
+        "Exclusivity": 0.0,
+        "Expiration Date": 0.0,
+        "Governing Law": 1.0,
+        "Insurance": 1.0,
+        "Ip Ownership Assignment": 0.0,
+        "Irrevocable Or Perpetual License": 0.0,
+        "Joint Ip Ownership": 0.0,
+        "License Grant": 0.0,
+        "Liquidated Damages": 0.0,
+        "Minimum Commitment": 0.0,
+        "Most Favored Nation": 0.0,
+        "No-Solicit Of Customers": 0.0,
+        "No-Solicit Of Employees": 0.0,
+        "Non-Compete": 1.0,
+        "Non-Disparagement": 0.0,
+        "Non-Transferable License": 0.0,
+        "Notice Period To Terminate Renewal": 1.0,
+        "Parties": 1.0,
+        "Post-Termination Services": 0.0,
+        "Price Restrictions": 0.0,
+        "Renewal Term": 1.0,
+        "Revenue/Profit Sharing": 0.0,
+        "Rofr/Rofo/Rofn": 0.0,
+        "Source Code Escrow": 0.0,
+        "Termination For Convenience": 0.6667,
+        "Third Party Beneficiary": 0.0,
+        "Uncapped Liability": 0.0,
+        "Unlimited/All-You-Can-Eat-License": 0.0,
+        "Volume Restriction": 0.0,
+        "Warranty Duration": 0.0
+      },
+      "macro_f1": 0.2919,
+      "micro_f1": 0.6667,
+      "macro_f1_ci": [
+        0.16260243902439023,
+        0.42845609756097564
+      ],
+      "tp": 22,
+      "fp": 3,
+      "fn": 19,
+      "spans_proposed": 30,
+      "spans_exact": 28,
+      "exact_span_rate": 0.9333,
+      "exact_span_ci": [
+        0.786765416327938,
+        0.9815229762136907
+      ],
+      "per_contract": [
+        {
+          "title": "LohaCompanyltd_20191209_F-1_EX-10.16_11917878_EX-1",
+          "proposed": 9,
+          "exact": 7,
+          "gold_clauses": 6,
+          "seconds": 6.28
+        },
+        {
+          "title": "CENTRACKINTERNATIONALINC_10_29_1999-EX-10.3-WEB SI",
+          "proposed": 10,
+          "exact": 10,
+          "gold_clauses": 10,
+          "seconds": 12.39
+        },
+        {
+          "title": "DovaPharmaceuticalsInc_20181108_10-Q_EX-10.2_11414",
+          "proposed": 11,
+          "exact": 11,
+          "gold_clauses": 25,
+          "seconds": 6.14
+        }
+      ]
+    },
+    "azure:gpt-5-mini": {
+      "n_contracts": 3,
+      "clause_types": 41,
+      "truncated_contracts": 1,
+      "errors": 0,
+      "per_clause_f1": {
+        "Affiliate License-Licensee": 0.0,
+        "Agreement Date": 0.8,
+        "Anti-Assignment": 0.0,
+        "Audit Rights": 0.0,
+        "Cap On Liability": 0.5,
+        "Change Of Control": 0.0,
+        "Competitive Restriction Exception": 0.0,
+        "Covenant Not To Sue": 0.0,
+        "Document Name": 1.0,
+        "Effective Date": 0.8,
+        "Exclusivity": 0.0,
+        "Expiration Date": 0.8,
+        "Governing Law": 0.8,
+        "Insurance": 0.6667,
+        "Ip Ownership Assignment": 0.0,
+        "License Grant": 0.0,
+        "Liquidated Damages": 0.0,
+        "Minimum Commitment": 0.0,
+        "No-Solicit Of Employees": 0.0,
+        "Non-Compete": 0.0,
+        "Non-Transferable License": 0.0,
+        "Notice Period To Terminate Renewal": 1.0,
+        "Parties": 1.0,
+        "Price Restrictions": 0.0,
+        "Renewal Term": 1.0,
+        "Revenue/Profit Sharing": 0.0,
+        "Termination For Convenience": 0.6667,
+        "Uncapped Liability": 0.0,
+        "Warranty Duration": 0.0
+      },
+      "macro_f1": 0.3115,
+      "micro_f1": 0.5758,
+      "macro_f1_ci": [
+        0.17011724137931034,
+        0.4666689655172414
+      ],
+      "tp": 19,
+      "fp": 6,
+      "fn": 22,
+      "spans_proposed": 31,
+      "spans_exact": 31,
+      "exact_span_rate": 1.0,
+      "exact_span_ci": [
+        0.8897446044935219,
+        0.9999999999999999
+      ],
+      "per_contract": [
+        {
+          "title": "LohaCompanyltd_20191209_F-1_EX-10.16_11917878_EX-1",
+          "proposed": 11,
+          "exact": 11,
+          "gold_clauses": 6,
+          "seconds": 40.65
+        },
+        {
+          "title": "CENTRACKINTERNATIONALINC_10_29_1999-EX-10.3-WEB SI",
+          "proposed": 13,
+          "exact": 13,
+          "gold_clauses": 10,
+          "seconds": 33.98
+        },
+        {
+          "title": "DovaPharmaceuticalsInc_20181108_10-Q_EX-10.2_11414",
+          "proposed": 7,
+          "exact": 7,
+          "gold_clauses": 25,
+          "seconds": 37.87
+        }
+      ]
+    }
+  }
+}

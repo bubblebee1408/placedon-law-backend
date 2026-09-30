@@ -463,6 +463,46 @@ def _test() -> None:
         check(mismatch_log["reason"] == "count_mismatch" and mismatch_log["stated"] == 99,
              "the log distinguishes a count mismatch from a fetch failure, and names the bad count")
 
+        # ---- stage 7b: FETCH-1 -- a 200 of HTML holds the baseline too ---------
+        # An expired pre-signed S3 link, a WAF interstitial or a soft-404 answers HTTP
+        # 200 with a page, and until FETCH-1 nothing on this path looked past the
+        # status code: the page was hashed, cached by feeds/common/cache.py, and handed
+        # to a parser as OFAC's list.
+        #
+        # MEASURED, not assumed, before writing this: stage 7's count check ALREADY
+        # held the baseline for this shape. `_publish_info(page)` returns stated=None
+        # and `_summarise(page)` parses 0 entries, and poll() holds whenever
+        # `stated is None` -- so the exit code was already correct. It stayed correct
+        # even for a page carrying a literal <Record_Count>0</Record_Count>, because
+        # _publish_info reads the count from OFAC's own publshInformation element and
+        # finds none. So this guard is NOT what stops a page becoming a zero-entry
+        # sanctions list here; the count check is.
+        #
+        # What it does change, and why it is still worth having: the refusal now
+        # happens AT THE FETCH, before the bytes are hashed and written to the
+        # snapshot cache, and the logged reason is `fetch_failed` naming the served
+        # Content-Type rather than `count_mismatch` -- which described the wrong
+        # failure. The file did not lie about its count. It was not the file.
+        # No other feed has a self-stated count to fall back on (egazette and ibbi
+        # have none), so for them the fetch is the only place this can be caught.
+        page = b'<!DOCTYPE html>\n<html><body>Access Denied</body></html>'
+
+        def page_opener(url, *, timeout):
+            return _FakeResponse(200, page, headers={"Content-Type": "text/html"})
+
+        rc = poll(OfacSdnFeed(rules=allow_all, opener=page_opener), cache_root=cache_root,
+                 state_path=state_path, log_path=log_path, observed_at="2026-09-07T12:00:00Z")
+        check(rc == EXIT_POLL_NOT_TRUSTWORTHY,
+             f"a 200 of HTML where the SDN list was expected is POLL_NOT_TRUSTWORTHY ({rc})")
+        check(json.loads(state_path.read_text()) == state5,
+             "...and the baseline is held BYTE-FOR-BYTE, so the next poll still diffs "
+             "against the last real list")
+        page_log = json.loads(log_path.read_text().splitlines()[-1])
+        check(page_log["result"] == "held" and page_log["reason"] == "fetch_failed",
+             "...and it is recorded as a FETCH failure, not as a list that lost every entry")
+        check(not any(page in p.read_bytes() for p in cache_root.rglob("*") if p.is_file()),
+             "...and the page is never written to the snapshot cache")
+
         # ---- stage 8: a CORRUPT state file stops the run, not resets it -------
         state_path.write_text("{ not json ", encoding="utf-8")
         rc = poll(feed_for(snap_d), cache_root=cache_root, state_path=state_path,
