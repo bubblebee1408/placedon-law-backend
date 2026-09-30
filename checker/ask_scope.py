@@ -98,6 +98,19 @@ HELD_ACT_FORUMS: dict[str, str] = {
 TERMS_OF_ART: dict[str, tuple[str, ...]] = {
     "IBC2016": ("CIRP", "corporate insolvency resolution process", "resolution professional",
                 "insolvency commencement"),
+    # H0, 2026-09-30. "Our promoter is acquiring another 8% of a listed company. Is an open
+    # offer triggered?" is a SEBI SAST question that never says SEBI, and it was answered
+    # from the Companies Act. "open offer" is the takeover code's own term and is absent
+    # from the held Act text (the test below proves the absence, over the whole corpus).
+    #
+    # Only this one phrase was added, and the two sibling rows in the same gold-set group
+    # were deliberately left alone: "asset test" and "clearance before closing" are not
+    # competition-law terms of art, and "payroll vendor" is not data-protection vocabulary.
+    # Adding them would fit this split rather than name a body, and a loose signal that
+    # wrongly refuses a HELD question is the worse error this module exists to avoid. Those
+    # two rows refuse on the no-evidence path in checker/ask.py instead -- correctly, but
+    # with a weaker reason than the register's.
+    "SEBI_OTHER": ("open offer",),
 }
 
 

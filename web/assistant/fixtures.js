@@ -451,6 +451,11 @@ window.PLACEDON_ASK_FIXTURES = {
    }
   ],
   "question": "What does rule 2(1)(t) prescribe?",
+  "refusal": {
+   "detail": "Nothing in the held corpus was retrieved for this question, so there is no provision to read and nothing was decided (1 of 11 in-scope bodies of law are held). That is a statement about what this engine holds, not a finding that no obligation applies -- and not an answer to the question.",
+   "kind": "nothing_held_reaches_it"
+  },
+  "refused": true,
   "schema": "placedon.ask/0",
   "scope": {
    "held": [

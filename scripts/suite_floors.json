@@ -19,7 +19,7 @@
     "checker/anthropic_model.py": 23,
     "checker/api.py": 86,
     "checker/as_of.py": 21,
-    "checker/ask.py": 127,
+    "checker/ask.py": 135,
     "checker/ask_scope.py": 54,
     "checker/asn1.py": 11,
     "checker/assessment.py": 49,
