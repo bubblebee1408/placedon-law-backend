@@ -205,6 +205,7 @@
     "gateway/audit.py": 19,
     "gateway/auth.py": 25,
     "gateway/cli.py": 55,
+    "gateway/envelope.py": 62,
     "gateway/jobs.py": 28,
     "gateway/schema.py": 55,
     "gateway/store.py": 74,

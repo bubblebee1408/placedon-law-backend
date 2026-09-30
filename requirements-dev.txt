@@ -20,3 +20,4 @@ pdfplumber==0.11.10
 # that boundary, so the README's "no dependencies outside the standard library"
 # stays true of the served path.
 pypdf==6.16.1
+jsonschema==4.26.0
