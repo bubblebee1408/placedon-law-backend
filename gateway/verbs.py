@@ -836,18 +836,400 @@ _INTAKE_NOTE = (
     "refusal, not from here with silence.")
 
 
+# ── C2: the conversation layer ───────────────────────────────────────────────
+#
+# Which verb answers each task intake names. Written here rather than inferred, and the
+# two tasks with no verb are NAMED rather than omitted: an absent key would make
+# "not built" indistinguishable from "forgot to wire it".
+TASK_VERB: dict[str, str] = {
+    "RESEARCH_QUESTION": "ask",
+    "REVIEW_CONTRACT": "review_contract",
+    "REVIEW_DOCUMENT": "review_document",
+    "EVENT_ASSESS": "events.assess",
+    # No verb exists yet. `agents/plans.py` declares the intents and nothing serves them,
+    # so `conversation.send` ABSTAINS with that said in words rather than returning an
+    # empty answer that reads as "no obligation found".
+    "COMPANY_STANDING": "",
+    "LAW_CHANGES": "",
+}
+
+# Tasks whose work is long enough to belong on the queue rather than on the socket. Keyed
+# to QUEUED_INTENTS so a task cannot be queued for an intent no worker serves.
+TASK_INTENT: dict[str, str] = {
+    "RESEARCH_QUESTION": "research_question",
+    "REVIEW_CONTRACT": "review_contract",
+    "REVIEW_DOCUMENT": "review_document",
+}
+
+
+def _today(ctx: Context) -> str:
+    if ctx.clock is not None:
+        return str(ctx.clock())[:10]
+    from datetime import date
+    return date.today().isoformat()
+
+
+def _bodies_from_events(result: dict) -> list:
+    """events.assess findings -> envelope bodies. The mapping, in one place."""
+    from gateway import envelope as ev
+    from checker import events, scope
+    handling = {events.DECIDED: ev.B_ANSWERED,
+                events.CURRENT_TEXT_ONLY: ev.B_CURRENT_ONLY,
+                events.REFUSED: ev.B_NOT_HELD,
+                events.UNCLASSIFIED: ev.B_NEED_FACT}
+    out = []
+    for f in result.get("findings", ()):
+        try:
+            name = scope.body(f["body_id"]).name
+        except Exception:                                       # noqa: BLE001
+            name = f["body_id"]
+        out.append(ev.body(f["body_id"], name,
+                           handling.get(f.get("handling"), ev.B_NEED_FACT),
+                           f.get("text") or f.get("reason") or "engaged"))
+    return out
+
+
+def _bodies_from_ask(result: dict) -> list:
+    """An `ask` result -> envelope bodies, read from checker/scope.py.
+
+    The held Act is ANSWERED when anything was traced and ABSTAINED-shaped otherwise; a
+    body the question named that we do not hold is NOT_HELD with the REGISTER'S OWN words,
+    never a sentence composed here. That is what makes a CA2013 + FEMA question come back
+    PARTIAL rather than confidently short.
+    """
+    from gateway import envelope as ev
+    from checker import scope
+    out = []
+    held = scope.body("CA2013")
+    traced = bool(result.get("provisions") or result.get("citations"))
+    out.append(ev.body(held.key, held.name,
+                       ev.B_ANSWERED if traced else ev.B_NEED_FACT,
+                       "held and read" if traced else
+                       "held, and nothing on point was found for this question"))
+    refusal = result.get("refusal") or {}
+    for key in result.get("out_of_scope_bodies") or refusal.get("bodies") or ():
+        try:
+            b = scope.body(key)
+        except Exception:                                       # noqa: BLE001
+            continue
+        if b.key == held.key:
+            continue
+        out.append(ev.body(b.key, b.name,
+                           ev.B_CURRENT_ONLY if b.status == scope.CURRENT_ONLY
+                           else ev.B_NOT_HELD,
+                           scope.refusal_for(b.key)))
+    return out
+
+
+def _files_block(file_ids, ctx: Context) -> list:
+    """The file panel. A stored document is READ; one we cannot find is CANNOT_READ.
+
+    An unknown file_id is NOT silently dropped: a file the user attached and we cannot see
+    is exactly the case where an empty answer would read as "your document said nothing".
+    """
+    from gateway import envelope as ev
+    out = []
+    for fid in file_ids or ():
+        doc = ctx.documents.get(fid)
+        if doc is None and ctx.store is not None:
+            try:
+                doc = ctx.store.get_document(fid)
+            except Exception:                                   # noqa: BLE001
+                doc = None
+        if doc is None:
+            out.append(ev.file_state(fid, fid[:12] or "file", ev.CANNOT_READ,
+                                     reason=("this engine holds no document under that id, "
+                                             "so nothing was read from it. Upload it again "
+                                             "rather than treating this as a finding")))
+            continue
+        name = str(doc.get("name") or fid[:12])
+        # A STORED document is READ: `documents.upload` refuses blank text, so anything
+        # in the store has content. The first version of this checked `doc["text"]`, which
+        # upload does not keep -- it stores the hash, the byte count and the name -- so
+        # every real upload came back CANNOT_READ. A file panel that reports a readable
+        # document as unreadable is the same lie as the reverse, pointed the other way.
+        reason = doc.get("cannot_read")
+        if reason:
+            out.append(ev.file_state(fid, name, ev.CANNOT_READ, reason=str(reason)))
+        else:
+            out.append(ev.file_state(fid, name, ev.READ,
+                                     pages=doc.get("pages")))
+    return out
+
+
+def _envelope_for(task: str, result: dict, *, as_of: str, run_id=None,
+                  files=(), ctx: Context) -> dict:
+    """One result from one task -> one envelope. The only place a reply is shaped."""
+    from gateway import envelope as ev
+
+    trace = f"{V2}/runs/{run_id}/trace" if run_id else None
+    if result.get("status") == "FAILED":
+        return ev.failed(task=task, as_of=as_of,
+                         detail=str(result.get("error") or "the step did not complete"),
+                         run_id=run_id, trace_url=trace)
+
+    bodies = (_bodies_from_events(result) if task == "EVENT_ASSESS"
+              else _bodies_from_ask(result) if task == "RESEARCH_QUESTION" else [])
+    text = (result.get("answer") or result.get("detail")
+            or result.get("note") or "See the findings.")
+    blocks = [{"text": str(text), "citation_ids": []}] if str(text).strip() else []
+    unheld = [b for b in bodies if b["status"] in (ev.B_NOT_HELD, ev.B_CURRENT_ONLY)]
+    answered = [b for b in bodies if b["status"] == ev.B_ANSWERED]
+    if result.get("status") == "REFUSED":
+        status = ev.ABSTAINED
+    elif unheld and answered:
+        status = ev.PARTIAL
+    elif unheld and not answered:
+        status = ev.ABSTAINED
+    else:
+        status = ev.ANSWERED
+    return ev.build(status=status, task=task, as_of=as_of, text_blocks=blocks,
+                    bodies=bodies, citations=[], files=list(files), run_id=run_id,
+                    trace_url=trace)
+
+
+def _conversation_send(args: dict, ctx: Context) -> dict:
+    """One turn: classify, dispatch, store, and return the envelope or a run_id.
+
+    A WRITE verb, so it is not on MCP: it creates a conversation, appends messages and may
+    enqueue work. `mcp_tools()` enforces that rather than trusting this docstring.
+
+    Long work goes on the job queue and the reply returns the run_id at once, with the
+    assistant message's envelope NULL until a worker fills it -- which is why
+    `messages.envelope` is nullable and why NULL is not `{}`.
+    """
+    import uuid
+    from agents import intake
+    from gateway import envelope as ev
+
+    text = args.get("text") or ""
+    raw_ids = args.get("file_ids")
+    if raw_ids is None:
+        raw_ids = []
+    if not isinstance(raw_ids, list) or not all(isinstance(f, str) for f in raw_ids):
+        return _refuse("BAD_REQUEST", "file_ids must be a list of strings")
+    if not text.strip() and not raw_ids:
+        return _refuse("BAD_REQUEST", "text or at least one file_id is required")
+    as_of = (args.get("as_of") or "").strip() or _today(ctx)
+    sources = args.get("sources")
+    if sources is not None and not isinstance(sources, list):
+        return _refuse("BAD_REQUEST", "sources must be a list of source ids")
+    override = (args.get("task_override") or "").strip() or None
+    if override is not None and override not in intake.TASKS:
+        return _refuse("BAD_REQUEST",
+                       f"{override!r} is not a task; one of {list(intake.TASKS)}")
+
+    store = ctx.store
+    if store is None:
+        return _refuse("NO_STORE",
+                       "a conversation needs a store: it is a durable thread, and "
+                       "returning one that vanishes on restart would be a lie about what "
+                       "was saved")
+
+    # 1. the thread.
+    cid = (args.get("conversation_id") or "").strip() or str(uuid.uuid4())
+    if store.read_conversation(cid) is None:
+        store.write_conversation({"conversation_id": cid,
+                                  "title": (text.strip()[:60] or "Attachment")})
+
+    # 2. the user's message, stored before anything is attempted. A turn that fails must
+    #    still show what was asked.
+    ordinal = store.next_ordinal(cid)
+    store.append_message({"message_id": str(uuid.uuid4()), "conversation_id": cid,
+                          "ordinal": ordinal, "role": "user", "text": text,
+                          "file_ids": list(raw_ids)})
+
+    # 3. the task.
+    if override is not None:
+        task, classification = override, {"task": override, "decided_by": "override",
+                                          "reason": "the caller named the task"}
+    else:
+        named = [{"name": str((ctx.documents.get(f) or {}).get("name") or f), "type": ""}
+                 for f in raw_ids]
+        got = intake.classify(text, files=named, facts=args.get("facts"))
+        task, classification = got.task, got.to_dict()
+
+    files = _files_block(raw_ids, ctx)
+    reply_id = str(uuid.uuid4())
+
+    # 4a. nothing to run.
+    if task == intake.NEEDS_CLARIFICATION:
+        env = ev.build(status=ev.NEEDS_CLARIFICATION, task=task, as_of=as_of,
+                       text_blocks=[{"text": classification.get("question")
+                                     or "Could you say what you would like done?",
+                                     "citation_ids": []}],
+                       bodies=[], citations=[], files=files)
+        store.append_message({"message_id": reply_id, "conversation_id": cid,
+                              "ordinal": ordinal + 1, "role": "assistant", "text": "",
+                              "file_ids": [], "task": task, "envelope": env})
+        return {"conversation_id": cid, "message_id": reply_id,
+                "classification": classification, "envelope": env}
+
+    verb_name = TASK_VERB.get(task, "")
+    if not verb_name:
+        env = ev.build(status=ev.ABSTAINED, task=task, as_of=as_of,
+                       text_blocks=[{"text": (
+                           f"This is a {task} question and this engine cannot answer one "
+                           f"yet: the intent is declared in agents/plans.py and no verb "
+                           f"serves it. Nothing was read, so nothing follows about any "
+                           f"obligation."), "citation_ids": []}],
+                       bodies=[], citations=[], files=files)
+        store.append_message({"message_id": reply_id, "conversation_id": cid,
+                              "ordinal": ordinal + 1, "role": "assistant", "text": "",
+                              "file_ids": [], "task": task, "envelope": env})
+        return {"conversation_id": cid, "message_id": reply_id,
+                "classification": classification, "envelope": env}
+
+    # 4b. long work -> the queue, and the run_id comes back at once.
+    intent = TASK_INTENT.get(task)
+    if intent and ctx.queue is not None:
+        sub = _runs_submit({"intent": intent, "args": _task_args(task, text, raw_ids, ctx,
+                                                                 args)}, ctx)
+        if sub.get("status") == "REFUSED":
+            return sub
+        run_id = sub.get("run_id")
+        store.append_message({"message_id": reply_id, "conversation_id": cid,
+                              "ordinal": ordinal + 1, "role": "assistant", "text": "",
+                              "file_ids": [], "task": task, "run_id": run_id,
+                              "envelope": None})
+        return {"conversation_id": cid, "message_id": reply_id,
+                "classification": classification, "run_id": run_id,
+                "envelope": None,
+                "note": ("queued. The envelope is written when the worker finishes; poll "
+                         "runs.get, or read the message again. `envelope: null` means the "
+                         "reply has not arrived, which is not an empty answer.")}
+
+    # 4c. short enough to answer now.
+    verb = by_name()[verb_name]
+    result = verb.run(_task_args(task, text, raw_ids, ctx, args), ctx)
+    env = _envelope_for(task, result, as_of=as_of, run_id=result.get("run_id"),
+                        files=files, ctx=ctx)
+    store.append_message({"message_id": reply_id, "conversation_id": cid,
+                          "ordinal": ordinal + 1, "role": "assistant", "text": "",
+                          "file_ids": [], "task": task,
+                          "run_id": result.get("run_id"), "envelope": env})
+    return {"conversation_id": cid, "message_id": reply_id,
+            "classification": classification, "run_id": result.get("run_id"),
+            "envelope": env}
+
+
+def _task_args(task: str, text: str, file_ids, ctx: Context, args: dict) -> dict:
+    """The arguments the target verb takes. One place, so a task cannot be dispatched with
+    a field the verb does not declare."""
+    doc = ""
+    for fid in file_ids or ():
+        d = ctx.documents.get(fid) or {}
+        if d.get("text"):
+            doc = str(d["text"])
+            break
+    if task == "RESEARCH_QUESTION":
+        return {"question": text}
+    if task == "EVENT_ASSESS":
+        return {"event": (args.get("event") or "commercial_contract"),
+                "facts": args.get("facts") or {}}
+    if task == "REVIEW_CONTRACT":
+        return {"text": doc or text, "name": "conversation upload",
+                "test_data": args.get("test_data") or "unspecified"}
+    return {"text": doc or text, "name": "conversation upload"}
+
+
+def _conversation_list(args: dict, ctx: Context) -> dict:
+    """The threads, newest first. Tenant-scoped by the store, not by this handler."""
+    if ctx.store is None:
+        return _refuse("NO_STORE", "no store is configured, so there are no conversations")
+    limit = args.get("limit")
+    limit = int(limit) if isinstance(limit, (int, float, str)) and str(limit).isdigit() else 50
+    return {"conversations": ctx.store.list_conversations(limit=min(limit, 200))}
+
+
+def _conversation_get(args: dict, ctx: Context) -> dict:
+    """One thread and every message in it, in order, each with its stored envelope."""
+    if ctx.store is None:
+        return _refuse("NO_STORE", "no store is configured")
+    cid = (args.get("conversation_id") or "").strip()
+    if not cid:
+        return _refuse("BAD_REQUEST", "conversation_id is required")
+    conv = ctx.store.read_conversation(cid)
+    if conv is None:
+        return _refuse("NOT_FOUND", f"no conversation {cid!r} for this tenant")
+    return {"conversation": conv, "messages": ctx.store.read_messages(cid)}
+
+
+def _citation_get(args: dict, ctx: Context) -> dict:
+    """One citation in full, for the source panel.
+
+    Re-verifies the quote against the held corpus rather than trusting the stored
+    envelope: the panel is where a lawyer goes to check, so it is the last place that
+    should show a quote nobody re-read.
+    """
+    from checker.sources.held import HeldCorpus, span_matches
+
+    cid = (args.get("citation_id") or "").strip()
+    conv_id = (args.get("conversation_id") or "").strip()
+    if not cid:
+        return _refuse("BAD_REQUEST", "citation_id is required")
+    if ctx.store is None:
+        return _refuse("NO_STORE", "no store is configured")
+    if not conv_id:
+        return _refuse("BAD_REQUEST",
+                       "conversation_id is required: a citation is read back from the "
+                       "message that made it, so the tenant's own policy governs the read")
+    for msg in ctx.store.read_messages(conv_id):
+        for c in (msg.get("envelope") or {}).get("citations", ()):
+            if c.get("id") != cid:
+                continue
+            verified, why = False, "not re-checked"
+            try:
+                ok = span_matches(type("E", (), {
+                    "doc_id": c.get("provision_id") or "", "quoted_span": c["quote"]})())
+                verified, why = bool(ok), ("re-read from the held corpus and the quote "
+                                           "byte-matches" if ok else
+                                           "the quote could NOT be found in the corpus "
+                                           "section it names")
+            except Exception as exc:                            # noqa: BLE001
+                verified, why = False, f"could not re-check ({type(exc).__name__})"
+            return {"citation": c, "message_id": msg["message_id"],
+                    "reverified": verified, "reverified_note": why}
+    return _refuse("NOT_FOUND", f"no citation {cid!r} in conversation {conv_id!r}")
+
+
 def _documents_upload(args: dict, ctx: Context) -> dict:
-    """Store bytes under their own sha256. The identity IS the hash, not a counter."""
+    """Store bytes under their own sha256. The identity IS the hash, not a counter.
+
+    `cannot_read` records a file whose text could NOT be extracted -- a scan, a
+    photographed page -- with the reason. Without it such a file could only be left out of
+    the upload, and then the conversation's file panel would not show the document the user
+    attached at all: "we could not read your scan" would render as silence, which is the
+    failure `checker/pdf_pages` exists to refuse, one layer out. Text is not required in
+    that case, because there is none; everything else about the file is.
+
+    Extraction itself is not done here. `checker/pdf_pages` is offline tooling whose own
+    test asserts the served path imports no PDF reader, so the caller extracts and this
+    verb records what happened.
+    """
     import hashlib
     text = args.get("text") or ""
-    if not text.strip():
-        return _refuse("BAD_REQUEST", "text is required")
-    digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
+    cannot = (args.get("cannot_read") or "").strip()
+    if not text.strip() and not cannot:
+        return _refuse("BAD_REQUEST",
+                       "text is required, or cannot_read with the reason it could not be "
+                       "extracted")
+    if cannot and len(cannot) < 20:
+        return _refuse("BAD_REQUEST",
+                       f"cannot_read must say WHY in words, got {cannot!r}. A file shown "
+                       f"as unreadable with no reason invites the reader to assume the "
+                       f"document was empty")
+    name = args.get("name") or "document"
+    seed = text if text.strip() else f"{name}\u0000{cannot}"
+    digest = hashlib.sha256(seed.encode("utf-8")).hexdigest()
     ctx.documents[digest] = {"sha256": digest, "bytes": len(text.encode("utf-8")),
-                             "name": args.get("name") or "document",
-                             "tenant": ctx.tenant}
+                             "name": name, "tenant": ctx.tenant}
+    if cannot:
+        ctx.documents[digest]["cannot_read"] = cannot
     return {"document_id": digest, "sha256": digest,
             "bytes": ctx.documents[digest]["bytes"],
+            "state": ("CANNOT_READ" if cannot else "READ"),
+            "reason": cannot or None,
             "stored": "memory",
             "note": ("held in this process only. gateway/migrations/*.sql are not "
                      "applied, so nothing here survives a restart and no database "
@@ -1106,10 +1488,56 @@ VERBS: tuple[Verb, ...] = (
                           "company, not what is being asked")),
          "POST", read_only=True, run=_intake_classify),
 
+    Verb("conversation.send",
+         "One turn of a conversation: classify the request, dispatch it to the verb that "
+         "answers it, store the message, and return the answer envelope -- or a run_id at "
+         "once when the work belongs on the queue.",
+         (Field("conversation_id", STRING, False,
+                describes="the thread to append to. Absent starts a new one"),
+          Field("text", STRING, False, describes="the user's words"),
+          Field("file_ids", OBJECT, False,
+                describes="sha256 ids from documents.upload"),
+          Field("as_of", STRING, False,
+                describes="YYYY-MM-DD, the date to read the law as at. Defaults to today"),
+          Field("sources", OBJECT, False,
+                describes="source ids to consult, from sources.list. Recorded; only HELD "
+                          "and CLIENT are loadable today"),
+          Field("task_override", STRING, False,
+                describes="name the task yourself instead of letting intake classify it"),
+          Field("event", STRING, False,
+                describes="the event key, when the task is EVENT_ASSESS"),
+          Field("facts", OBJECT, False, describes="event facts"),
+          Field("test_data", STRING, False,
+                describes="set when a contract is a fixture, not a client document "
+                          "(PLAN_22 D3)")),
+         "POST", read_only=False, run=_conversation_send),
+
+    Verb("conversation.list", "Every conversation for this tenant, newest first.",
+         (Field("limit", STRING, False, describes="how many, up to 200"),),
+         "POST", read_only=True, run=_conversation_list),
+
+    Verb("conversation.get", "One conversation and its messages, in order.",
+         (Field("conversation_id", STRING, True, in_path=True,
+                describes="the thread"),),
+         "GET", read_only=True, run=_conversation_get),
+
+    Verb("citation.get",
+         "One citation in full for the source panel, with its quote RE-VERIFIED against "
+         "the held corpus rather than trusted from the stored envelope.",
+         (Field("citation_id", STRING, True, describes="the citation's id"),
+          Field("conversation_id", STRING, True,
+                describes="the thread it was cited in, so the tenant's own policy governs "
+                          "the read")),
+         "POST", read_only=True, run=_citation_get),
+
     Verb("documents.upload",
          "Store a document and return the sha256 that identifies it.",
-         (Field("text", STRING, True, describes="the document text"),
-          Field("name", STRING, False, describes="a label for the document")),
+         (Field("text", STRING, False, describes="the document text"),
+          Field("name", STRING, False, describes="a label for the document"),
+          Field("cannot_read", STRING, False,
+                describes="the reason the text could NOT be extracted, for a scan or a "
+                          "photographed page. Recorded so the file panel shows the "
+                          "document with CANNOT_READ instead of omitting it")),
          "POST", read_only=False, run=_documents_upload),
 )
 
@@ -1187,8 +1615,9 @@ def _test() -> None:
                     "runs.get", "runs.trace", "runs.approve", "runs.reject",
                     "runs.submit", "runs.cancel", "documents.upload",
                     "sources.list", "sources.search", "company_facts.extract",
-                    "intake.classify"},
-          f"the fifteen verbs are declared once ({sorted(names)})")
+                    "intake.classify", "conversation.send", "conversation.list",
+                    "conversation.get", "citation.get"},
+          f"the nineteen verbs are declared once ({sorted(names)})")
     # sources.* are READ-ONLY, so they reach MCP. That is the intended shape: an agent may
     # ask what a source permits and search what may be read, and there is no sources verb
     # that fetches, stores or spends. S3's Indian Kanoon connector will spend money, and
@@ -1200,8 +1629,15 @@ def _test() -> None:
     # to this line. All five are kept out of MCP by mcp_tools() for the same reason: a tool
     # surface that can submit, cancel or approve is one that can act with nobody present.
     check(set(write_verbs()) == {"documents.upload", "runs.approve", "runs.reject",
-                                 "runs.submit", "runs.cancel"},
-          f"...and exactly five of them write ({sorted(write_verbs())})")
+                                 "runs.submit", "runs.cancel", "conversation.send"},
+          f"...and exactly six of them write ({sorted(write_verbs())})")
+    check(f"{MCP_NAMESPACE}.conversation.send" not in {t.name for t in mcp},
+          "conversation.send WRITES -- it creates a thread, appends messages and may "
+          "enqueue work -- so mcp_tools() keeps it off MCP, by rule and not by the author "
+          "remembering")
+    for ro in ("conversation.list", "conversation.get", "citation.get"):
+        check(ro not in write_verbs() and f"{MCP_NAMESPACE}.{ro}" in {t.name for t in mcp},
+              f"...while {ro} is read-only and does reach MCP")
     check(not {t.name for t in mcp} & {f"{MCP_NAMESPACE}.runs.submit",
                                        f"{MCP_NAMESPACE}.runs.cancel"},
           "...so neither runs.submit nor runs.cancel reaches MCP")
@@ -1240,6 +1676,142 @@ def _test() -> None:
           f"to the ask path, and intake does not duplicate it")
     check(by_name()["intake.classify"].run({}, _ictx)["status"] == "REFUSED",
           "nothing to classify is a BAD_REQUEST, not an empty classification")
+
+    # ── C2: the conversation layer ──────────────────────────────────────────
+    from gateway import envelope as _ev
+    from gateway.store import MemoryBackend as _MB
+    _st = _MB()
+    _cctx = Context(store=_st, clock=lambda: "2026-10-01T00:00:00+00:00")
+    _V = by_name()
+
+    # The envelope validates for every task conversation.send can produce.
+    _r = _V["conversation.send"].run(
+        {"text": "What is the quorum for a meeting of the Board?"}, _cctx)
+    _cid = _r["conversation_id"]
+    _e = _r["envelope"]
+    check(_ev.errors(_e) == [], f"conversation.send returns a VALID envelope ({_ev.errors(_e)})")
+    check(_e["schema"] == _ev.SCHEMA_ID, f"...stamped {_ev.SCHEMA_ID}")
+    check(_e["task"] == "RESEARCH_QUESTION" and _e["as_of"] == "2026-10-01",
+          f"...with the task and the as_of date ({_e['task']}, {_e['as_of']})")
+    check([b["body_id"] for b in _e["bodies"]] == ["CA2013"],
+          f"...and CA2013 in bodies ({[b['body_id'] for b in _e['bodies']]})")
+
+    for _t, _args in [("RESEARCH_QUESTION", {"text": "What is the quorum for the Board?"}),
+                      ("EVENT_ASSESS", {"text": "We are allotting shares next week.",
+                                        "event": "share_allotment"}),
+                      ("COMPANY_STANDING", {"text": "Are we compliant with our filings?"}),
+                      ("LAW_CHANGES", {"text": "What changed in the Act since April 2024?"})]:
+        _o = _V["conversation.send"].run({**_args, "conversation_id": _cid}, _cctx)
+        check(_ev.errors(_o["envelope"]) == [],
+              f"the envelope validates for {_t} ({_ev.errors(_o['envelope'])[:1]})")
+        check(_o["envelope"]["task"] == _t, f"...and its task is {_t}")
+
+    # A task with no verb ABSTAINS and says so, rather than returning an empty answer.
+    _cs = _V["conversation.send"].run(
+        {"conversation_id": _cid, "text": "Are we compliant with our annual filings?"}, _cctx)
+    check(_cs["envelope"]["status"] == _ev.ABSTAINED
+          and "cannot answer one yet" in _cs["envelope"]["text_blocks"][0]["text"],
+          "a task no verb serves ABSTAINS and says so in words -- an empty answer would "
+          "read as 'no obligation found'")
+    check(_cs["envelope"]["bodies"] == [],
+          "...and claims nothing about any body")
+
+    # A CA2013 + FEMA question is PARTIAL with FEMA NOT_HELD.
+    from checker import scope as _scope
+    _mixed = _ev.build(
+        status=_ev.PARTIAL, task="RESEARCH_QUESTION", as_of="2026-10-01",
+        text_blocks=[{"text": "The Act's allotment return is filed.", "citation_ids": []}],
+        bodies=[_ev.body("CA2013", _scope.body("CA2013").name, _ev.B_ANSWERED, "held"),
+                _ev.body("FEMA1999", _scope.body("FEMA1999").name, _ev.B_NOT_HELD,
+                         _scope.refusal_for("FEMA1999"))])
+    check(_mixed["status"] == "PARTIAL", "a CA2013 + FEMA envelope is PARTIAL")
+    _bi = {b["body_id"]: b["status"] for b in _mixed["bodies"]}
+    check(_bi == {"CA2013": "ANSWERED", "FEMA1999": "NOT_HELD"},
+          f"...CA2013 ANSWERED and FEMA1999 NOT_HELD ({_bi})")
+    check(_scope.body("FEMA1999").status == _scope.DECLARED,
+          "...and NOT_HELD is read from checker/scope.py, not asserted here")
+
+    # A scanned PDF shows CANNOT_READ with a reason.
+    _scan = _V["documents.upload"].run(
+        {"name": "scan0001.pdf",
+         "cannot_read": "no text layer on any of 1 page(s); this looks like a scan"}, _cctx)
+    check(_scan["state"] == "CANNOT_READ" and _scan["reason"],
+          f"a scan uploads as CANNOT_READ with its reason ({_scan['state']})")
+    _sr = _V["conversation.send"].run(
+        {"conversation_id": _cid, "text": "Please review this.",
+         "file_ids": [_scan["document_id"]]}, _cctx)
+    _f = _sr["envelope"]["files"][0]
+    check(_f["state"] == "CANNOT_READ" and "text layer" in (_f["reason"] or ""),
+          f"...and the envelope's file panel shows CANNOT_READ with the reason "
+          f"({_f['state']}, {(_f['reason'] or '')[:34]!r})")
+    check(_ev.errors(_sr["envelope"]) == [], "...and that envelope validates")
+    _real = _V["documents.upload"].run(
+        {"text": "MINUTES OF THE BOARD MEETING. Present: three directors.",
+         "name": "minutes.pdf"}, _cctx)
+    _rr = _V["conversation.send"].run(
+        {"conversation_id": _cid, "text": "Please review the minutes.",
+         "file_ids": [_real["document_id"]]}, _cctx)
+    check(_rr["envelope"]["files"][0]["state"] == "READ",
+          f"...while a document that WAS read shows READ -- the first version of this "
+          f"reported every real upload as unreadable "
+          f"({_rr['envelope']['files'][0]['state']})")
+    _unknown = _V["conversation.send"].run(
+        {"conversation_id": _cid, "text": "Review this.", "file_ids": ["0" * 64]}, _cctx)
+    check(_unknown["envelope"]["files"][0]["state"] == "CANNOT_READ",
+          "...and a file_id we hold nothing for is CANNOT_READ, never omitted")
+    check(_V["documents.upload"].run({"name": "x.pdf", "cannot_read": "bad"},
+                                     _cctx)["status"] == "REFUSED",
+          "a cannot_read with no real reason is refused: 'unreadable' with no why invites "
+          "the reader to assume the document was empty")
+
+    # A transport error gives FAILED, and FAILED is never a refusal.
+    _fail = _envelope_for("RESEARCH_QUESTION",
+                          {"status": "FAILED", "error": "ReadTimeout: provider"},
+                          as_of="2026-10-01", run_id=None, files=[], ctx=_cctx)
+    check(_fail["status"] == "FAILED" and _ev.errors(_fail) == [],
+          "a transport error becomes a valid FAILED envelope")
+    check(not _ev.is_refusal(_fail) and _fail["bodies"] == [] and _fail["citations"] == [],
+          "...and FAILED is NOT a refusal, and carries no bodies and no citations")
+    check("not a finding about the law" in _fail["text_blocks"][0]["text"],
+          "...and says so in words")
+
+    # The thread, in order, with the envelope stored.
+    _g = _V["conversation.get"].run({"conversation_id": _cid}, _cctx)
+    check([m["ordinal"] for m in _g["messages"]]
+          == list(range(len(_g["messages"]))),
+          "conversation.get returns the messages in ordinal order with no gaps")
+    check(all(m["envelope"] is None for m in _g["messages"] if m["role"] == "user"),
+          "...a user message never carries an envelope")
+    check(all(m["envelope"] is not None for m in _g["messages"]
+              if m["role"] == "assistant"),
+          "...and every assistant message here does")
+    check(any(c["conversation_id"] == _cid
+              for c in _V["conversation.list"].run({}, _cctx)["conversations"]),
+          "conversation.list shows the thread")
+    check(_V["conversation.get"].run({"conversation_id": "nope"}, _cctx)["status"]
+          == "REFUSED", "an unknown conversation is REFUSED, not an empty thread")
+    check(_V["conversation.send"].run({}, _cctx)["status"] == "REFUSED",
+          "a send with neither text nor a file is refused")
+    check(_V["conversation.send"].run({"text": "x", "task_override": "SUMMARISE"},
+                                      _cctx)["status"] == "REFUSED",
+          "a task_override outside the six is refused")
+    _ov = _V["conversation.send"].run(
+        {"conversation_id": _cid, "text": "anything at all",
+         "task_override": "RESEARCH_QUESTION"}, _cctx)
+    check(_ov["envelope"]["task"] == "RESEARCH_QUESTION"
+          and _ov["classification"]["decided_by"] == "override",
+          "...and a valid override skips intake, recorded as decided_by=override")
+    check(_V["conversation.send"].run({"text": "x"}, Context())["status"] == "REFUSED",
+          "a send with no store is REFUSED -- returning a thread that vanishes on restart "
+          "would be a lie about what was saved")
+
+    # citation.get re-verifies rather than trusting the stored envelope.
+    check(_V["citation.get"].run({"citation_id": "c1"}, _cctx)["status"] == "REFUSED",
+          "citation.get without a conversation_id is refused: the read is governed by the "
+          "tenant's own policy on that thread")
+    check(_V["citation.get"].run({"citation_id": "nope", "conversation_id": _cid},
+                                 _cctx)["status"] == "REFUSED",
+          "...and an unknown citation id is REFUSED, never an empty citation")
 
     # ── PARITY, the point of the file ───────────────────────────────────────
     check(set(rest) == names and set(cli) == names,
@@ -1301,7 +1873,7 @@ def _test() -> None:
           "...while a WRITE verb is kept out of MCP by mcp_tools(), not by the author "
           "remembering to")
     check("widgets.delete" in write_verbs(hypo), "...and is named in write_verbs()")
-    check(len(VERBS) == 15 and "widgets.count" not in rest_spec(),
+    check(len(VERBS) == 19 and "widgets.count" not in rest_spec(),
           "...and the probe changed nothing in this module: the surfaces are generated "
           "from an argument, not from a global the test rebound")
 

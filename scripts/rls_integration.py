@@ -108,7 +108,7 @@ LAST_RUN: str | None = (
     "other ten are: A sees its own and none of B's; with the policy dropped they fail "
     "CLOSED and A sees nothing, not even its own; with RLS disabled B's rows APPEAR (1 "
     "conversation, 2 messages), which is what shows the check measures the protection "
-    "rather than an empty table; restoring returns to isolation.")
+    "rather than an empty table; restoring returns to isolation. The store's chat methods also run through gateway/store.conformance() HERE, against Postgres, and that is what caught a real divergence: the dict raised StoreError on a duplicate ordinal while Postgres raised psycopg UniqueViolation, so one `except StoreError` handled the memory backend and crashed on the real one. PostgresBackend now translates IntegrityError into StoreError. Re-run after the fix: 165 checks, 0 failures.")
 
 TENANT_TABLES = ("actors", "api_keys", "documents", "audit_log",
                  "runs", "run_steps", "propositions", "decisions", "jobs",

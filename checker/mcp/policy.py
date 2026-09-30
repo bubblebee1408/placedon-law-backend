@@ -115,6 +115,13 @@ KNOWN_TOOLS: frozenset[str] = frozenset({
     # question starting any work or spending anything beyond one LOW-consequence
     # classification call.
     "themis.intake.classify",
+    # C2's read side. `conversation.send` is absent and that absence is the decision: it
+    # creates a thread, appends messages and may enqueue work, so mcp_tools() refuses to
+    # generate a tool for it. An agent may READ a conversation and re-check a citation; it
+    # may not start a turn.
+    "themis.conversation.list",
+    "themis.conversation.get",
+    "themis.citation.get",
 })
 # NOT here, and the absence is the decision: `themis.runs.approve` and `themis.runs.reject`
 # do not exist. They write a human decision, and mcp_tools() refuses to generate a tool for

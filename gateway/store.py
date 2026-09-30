@@ -61,6 +61,13 @@ class Backend(Protocol):
     def set_run(self, run_id: str, *, status: str, refusal_code=None, result=None) -> None: ...
     def write_cascade(self, record: dict, *, run_id: str | None = None) -> dict: ...
     def read_cascades(self, *, run_id: str | None = None, limit: int = 1000) -> list[dict]: ...
+    # C2: the chat layer (010_conversations.sql).
+    def write_conversation(self, conversation: dict) -> dict: ...
+    def read_conversation(self, conversation_id: str) -> dict | None: ...
+    def list_conversations(self, *, limit: int = 50) -> list[dict]: ...
+    def append_message(self, message: dict) -> dict: ...
+    def read_messages(self, conversation_id: str) -> list[dict]: ...
+    def set_message_envelope(self, message_id: str, envelope: dict) -> bool: ...
 
 
 # ── in memory ────────────────────────────────────────────────────────────────
@@ -91,6 +98,41 @@ MIN_REASON_CHARS = 10
 # What a stored cascade record always reads back with. `attempts` keeps its ORDER: stage 2
 # only ran because stage 1 was rejected, and a record that has to be re-sorted to see that
 # has lost the thing it was kept for.
+# What a message ALWAYS has when read back, for the same reason STEP_KEYS exists: Postgres
+# returns every column, a dict returns what it was handed, and `msg["envelope"]` must not be
+# a KeyError on one backend and None on the other.
+MESSAGE_KEYS = ("message_id", "conversation_id", "ordinal", "role", "text", "file_ids",
+                "task", "run_id", "envelope")
+CONVERSATION_KEYS = ("conversation_id", "title", "created_at", "updated_at")
+
+# 'system' is not among them, and the database refuses it too (010). A system prompt
+# belongs to the run, not to the conversation.
+ROLES = ("user", "assistant")
+
+
+class MessageShape(StoreError):
+    """A message that the database's own CHECKs would refuse. Raised before it is written,
+    so the memory backend and Postgres refuse the same rows."""
+
+
+def _check_message(row: dict) -> None:
+    role = row.get("role")
+    if role not in ROLES:
+        raise MessageShape(f"role {role!r} is not one of {ROLES}; 'system' is deliberately "
+                           f"absent -- a system prompt belongs to the run")
+    if role == "user" and row.get("envelope") is not None:
+        raise MessageShape("a user message carries no envelope")
+    if role == "assistant" and list(row.get("file_ids") or []):
+        raise MessageShape("an assistant message carries no file_ids")
+    if not isinstance(row.get("ordinal"), int) or row["ordinal"] < 0:
+        raise MessageShape(f"ordinal must be a non-negative integer, got "
+                           f"{row.get('ordinal')!r}")
+    env = row.get("envelope")
+    if env is not None and not isinstance(env, dict):
+        raise MessageShape(f"envelope must be an object or absent, got "
+                           f"{type(env).__name__}")
+
+
 CASCADE_KEYS = ("cascade_id", "run_id", "status", "error", "attempts", "body_ids",
                 "claim_count", "refusal_count", "total_cost_inr")
 
@@ -160,6 +202,59 @@ class MemoryBackend:
     documents: dict = field(default_factory=dict)
     decisions: dict = field(default_factory=dict)      # run_id -> [row]
     cascades: list = field(default_factory=list)
+    conversations: dict = field(default_factory=dict)
+    messages: dict = field(default_factory=dict)       # conversation_id -> [row]
+
+    # ── C2: the chat layer ───────────────────────────────────────────────────
+    def write_conversation(self, conversation: dict) -> dict:
+        cid = conversation["conversation_id"]
+        row = {k: conversation.get(k) for k in CONVERSATION_KEYS}
+        row["conversation_id"] = cid
+        self.conversations[cid] = row
+        self.messages.setdefault(cid, [])
+        return dict(row)
+
+    def read_conversation(self, conversation_id: str) -> dict | None:
+        row = self.conversations.get(conversation_id)
+        return dict(row) if row else None
+
+    def list_conversations(self, *, limit: int = 50) -> list[dict]:
+        rows = sorted(self.conversations.values(),
+                      key=lambda r: (r.get("updated_at") or "", r["conversation_id"]),
+                      reverse=True)
+        return [dict(r) for r in rows[:limit]]
+
+    def append_message(self, message: dict) -> dict:
+        _check_message(message)
+        cid = message["conversation_id"]
+        if cid not in self.conversations:
+            raise StoreError(f"no conversation {cid!r} to append to")
+        thread = self.messages.setdefault(cid, [])
+        if any(m["ordinal"] == message["ordinal"] for m in thread):
+            # The UNIQUE (conversation_id, ordinal) constraint in 010, enforced here too so
+            # the two backends refuse the same row rather than one of them accepting it.
+            raise StoreError(f"ordinal {message['ordinal']} is already used in {cid!r}")
+        row = _shaped(message, MESSAGE_KEYS)
+        row["file_ids"] = list(message.get("file_ids") or [])
+        thread.append(row)
+        return dict(row)
+
+    def read_messages(self, conversation_id: str) -> list[dict]:
+        return [dict(m) for m in sorted(self.messages.get(conversation_id, []),
+                                        key=lambda m: m["ordinal"])]
+
+    def set_message_envelope(self, message_id: str, envelope: dict) -> bool:
+        for thread in self.messages.values():
+            for m in thread:
+                if m["message_id"] == message_id:
+                    if m["role"] != "assistant":
+                        raise MessageShape("only an assistant message carries an envelope")
+                    m["envelope"] = dict(envelope)
+                    return True
+        return False
+
+    def next_ordinal(self, conversation_id: str) -> int:
+        return len(self.messages.get(conversation_id, []))
 
     def write_run(self, run: dict) -> None:
         rid = run["id"]
@@ -477,6 +572,108 @@ class PostgresBackend:
                  "refusal_count": r[7],
                  "total_cost_inr": float(r[8]) if r[8] is not None else None}
                 for r in rows]
+
+    # ── C2: the chat layer (010_conversations.sql) ───────────────────────────
+    def write_conversation(self, conversation: dict) -> dict:
+        import psycopg
+        cid = conversation["conversation_id"]
+        try:
+            with self._conn() as c:
+                c.execute(
+                    "INSERT INTO conversations (conversation_id, tenant_id, title) "
+                    "VALUES (%s,%s,%s) ON CONFLICT (conversation_id) DO UPDATE SET "
+                    "title = EXCLUDED.title, updated_at = now()",
+                    (cid, self.tenant_id, conversation.get("title") or ""))
+        except psycopg.errors.IntegrityError as exc:
+            raise StoreError(f"the database refused this conversation: "
+                             f"{type(exc).__name__}") from None
+        return self.read_conversation(cid) or {"conversation_id": cid}
+
+    def read_conversation(self, conversation_id: str) -> dict | None:
+        if not _UUID.match(conversation_id or ""):
+            return None
+        with self._conn() as c:
+            r = c.execute("SELECT conversation_id, title, created_at, updated_at FROM "
+                          "conversations WHERE conversation_id = %s",
+                          (conversation_id,)).fetchone()
+        if r is None:
+            return None
+        return {"conversation_id": str(r[0]), "title": r[1],
+                "created_at": r[2].isoformat() if r[2] else None,
+                "updated_at": r[3].isoformat() if r[3] else None}
+
+    def list_conversations(self, *, limit: int = 50) -> list[dict]:
+        with self._conn() as c:
+            rows = c.execute("SELECT conversation_id, title, created_at, updated_at FROM "
+                             "conversations ORDER BY updated_at DESC LIMIT %s",
+                             (limit,)).fetchall()
+        return [{"conversation_id": str(r[0]), "title": r[1],
+                 "created_at": r[2].isoformat() if r[2] else None,
+                 "updated_at": r[3].isoformat() if r[3] else None} for r in rows]
+
+    def append_message(self, message: dict) -> dict:
+        """Append one message, translating the database's refusals into StoreError.
+
+        The translation is not cosmetic. `conformance()` asserts that both backends refuse
+        the same rows, and it caught this: the dict raised `StoreError` on a duplicate
+        ordinal while Postgres raised `psycopg.errors.UniqueViolation`, so a caller with
+        one `except StoreError` handled the memory backend and crashed on the real one --
+        the divergence that only shows up on the backend the gate does not run, which is
+        the whole reason that list is shared.
+        """
+        import psycopg
+        _check_message(message)
+        try:
+            with self._conn() as c:
+                c.execute(
+                    "INSERT INTO messages (message_id, conversation_id, tenant_id, "
+                    "ordinal, role, text, file_ids, task, run_id, envelope) "
+                    "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+                    (message["message_id"], message["conversation_id"], self.tenant_id,
+                     message["ordinal"], message["role"], message.get("text") or "",
+                     _json(list(message.get("file_ids") or [])), message.get("task"),
+                     message.get("run_id"), _json(message.get("envelope"))))
+                c.execute("UPDATE conversations SET updated_at = now() WHERE "
+                          "conversation_id = %s", (message["conversation_id"],))
+        except psycopg.errors.IntegrityError as exc:
+            # UniqueViolation (the ordinal), CheckViolation (010's role/envelope/file_ids
+            # rules), ForeignKeyViolation (no such conversation) all land here.
+            raise StoreError(
+                f"the database refused this message: {type(exc).__name__} "
+                f"{str(exc).splitlines()[0][:160]}") from None
+        return _shaped(message, MESSAGE_KEYS)
+
+    def read_messages(self, conversation_id: str) -> list[dict]:
+        if not _UUID.match(conversation_id or ""):
+            return []
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT message_id, conversation_id, ordinal, role, text, file_ids, task, "
+                "run_id, envelope FROM messages WHERE conversation_id = %s "
+                "ORDER BY ordinal", (conversation_id,)).fetchall()
+        return [{"message_id": str(r[0]), "conversation_id": str(r[1]), "ordinal": r[2],
+                 "role": r[3], "text": r[4], "file_ids": list(r[5] or []),
+                 "task": r[6], "run_id": str(r[7]) if r[7] is not None else None,
+                 "envelope": r[8]} for r in rows]
+
+    def set_message_envelope(self, message_id: str, envelope: dict) -> bool:
+        if not _UUID.match(message_id or ""):
+            return False
+        with self._conn() as c:
+            # role = 'assistant' in the WHERE, not asserted in Python: a user message must
+            # not gain an envelope even if a caller asks, and 010's CHECK says so too.
+            n = c.execute("UPDATE messages SET envelope = %s WHERE message_id = %s AND "
+                          "role = 'assistant'",
+                          (_json(envelope), message_id)).rowcount
+        return bool(n)
+
+    def next_ordinal(self, conversation_id: str) -> int:
+        if not _UUID.match(conversation_id or ""):
+            return 0
+        with self._conn() as c:
+            r = c.execute("SELECT count(*) FROM messages WHERE conversation_id = %s",
+                          (conversation_id,)).fetchone()
+        return int(r[0]) if r else 0
 
     def read(self, run_id: str) -> dict | None:
         return self.read_run(run_id)
@@ -816,6 +1013,88 @@ def conformance(backend) -> list[tuple[bool, str]]:
        "...and a cancelled run keeps its code, which is what the trace is read for")
     ck(len(backend.read_run(idem)["steps"]) == 2,
        "...with every step it had: cancellation never deletes")
+
+    # ── C2: the chat layer, on BOTH backends ────────────────────────────────
+    # These run against MemoryBackend in the gate and against PostgresBackend in
+    # scripts/rls_integration.py, so a behaviour only the dict satisfies fails identically
+    # on Postgres. The row-shape refusals below are 010's own CHECKs, restated in code so
+    # the two backends refuse the same rows rather than one of them accepting it.
+    import uuid as _uuid
+    cid = str(_uuid.uuid4())
+    backend.write_conversation({"conversation_id": cid, "title": "board meeting"})
+    conv = backend.read_conversation(cid)
+    ck(conv is not None and conv["title"] == "board meeting",
+       "a conversation is written and read back")
+    ck(backend.read_conversation(str(_uuid.uuid4())) is None,
+       "...and an unknown conversation reads as None, not an empty one")
+    ck(any(c["conversation_id"] == cid for c in backend.list_conversations()),
+       "...and appears in the list")
+
+    m0, m1 = str(_uuid.uuid4()), str(_uuid.uuid4())
+    backend.append_message({"message_id": m0, "conversation_id": cid, "ordinal": 0,
+                            "role": "user", "text": "are we late on MGT-7?",
+                            "file_ids": ["abc"]})
+    backend.append_message({"message_id": m1, "conversation_id": cid, "ordinal": 1,
+                            "role": "assistant", "text": "", "file_ids": [],
+                            "task": "RESEARCH_QUESTION"})
+    thread = backend.read_messages(cid)
+    ck([m["ordinal"] for m in thread] == [0, 1], "messages read back IN ORDER")
+    ck([m["role"] for m in thread] == ["user", "assistant"], "...with their roles")
+    ck(thread[0]["file_ids"] == ["abc"], "...and the user message keeps its file_ids")
+    ck(all(set(m) >= set(MESSAGE_KEYS) for m in thread),
+       f"...and every message has every key on both backends ({sorted(thread[0])})")
+    ck(thread[1]["envelope"] is None,
+       "an assistant message with no reply yet has envelope None -- NOT {}, which would "
+       "claim an empty answer")
+
+    ck(backend.set_message_envelope(m1, {"schema": "answer_envelope.v1",
+                                         "status": "ANSWERED"}),
+       "the envelope is written when the reply arrives")
+    ck(backend.read_messages(cid)[1]["envelope"]["status"] == "ANSWERED",
+       "...and reads back as an object")
+    ck(not backend.set_message_envelope(str(_uuid.uuid4()), {"schema": "x"}),
+       "...and an unknown message id is False, not a silent no-op")
+    # A USER message may not gain an envelope. The dict RAISES; Postgres returns False,
+    # because it enforces it with `AND role = 'assistant'` in the UPDATE. Both are
+    # refusals and neither writes, so the assertion is on the OUTCOME -- the message still
+    # has no envelope -- rather than on which mechanism said no.
+    try:
+        wrote = backend.set_message_envelope(m0, {"schema": "x"})
+    except (StoreError, MessageShape):
+        wrote = False
+    ck(not wrote, "a USER message cannot be given an envelope")
+    ck(backend.read_messages(cid)[0]["envelope"] is None,
+       "...and it still has none afterwards, whichever way it was refused")
+
+    for bad, why in (
+        ({"message_id": str(_uuid.uuid4()), "conversation_id": cid, "ordinal": 2,
+          "role": "system", "text": "you are a helpful assistant"},
+         "role 'system' -- a system prompt belongs to the run, not the conversation"),
+        ({"message_id": str(_uuid.uuid4()), "conversation_id": cid, "ordinal": 2,
+          "role": "user", "text": "x", "envelope": {"schema": "x"}},
+         "a user message carrying an envelope"),
+        ({"message_id": str(_uuid.uuid4()), "conversation_id": cid, "ordinal": 2,
+          "role": "assistant", "text": "x", "file_ids": ["f"]},
+         "an assistant message carrying file_ids"),
+        ({"message_id": str(_uuid.uuid4()), "conversation_id": cid, "ordinal": -1,
+          "role": "user", "text": "x"}, "a negative ordinal"),
+        ({"message_id": str(_uuid.uuid4()), "conversation_id": cid, "ordinal": 0,
+          "role": "user", "text": "x"}, "an ordinal already used in this conversation"),
+    ):
+        try:
+            backend.append_message(dict(bad))
+            ck(False, f"{why} is refused")
+        except StoreError:
+            ck(True, f"refused: {why}")
+    ck(len(backend.read_messages(cid)) == 2,
+       "...and none of the refused messages was written")
+    try:
+        backend.append_message({"message_id": str(_uuid.uuid4()),
+                                "conversation_id": str(_uuid.uuid4()), "ordinal": 0,
+                                "role": "user", "text": "x"})
+        ck(False, "a message for a conversation that does not exist is refused")
+    except Exception:
+        ck(True, "a message for a conversation that does not exist is refused")
     return out
 
 
@@ -868,7 +1147,9 @@ def _test() -> None:
 
     # ── both backends really do offer the same names ────────────────────────
     need = ("write_run", "read_run", "put_document", "get_document", "read", "write",
-            "write_decision", "read_decisions", "write_cascade", "read_cascades")
+            "write_decision", "read_decisions", "write_cascade", "read_cascades",
+            "write_conversation", "read_conversation", "list_conversations",
+            "append_message", "read_messages", "set_message_envelope", "next_ordinal")
     for name in need:
         check(hasattr(MemoryBackend(), name)
               and hasattr(PostgresBackend("postgresql://x/y", tenant_id=T), name),
