@@ -116,7 +116,6 @@ suites=(
   checker/benchmark_freeze.py
   checker/entail_baseline.py
   checker/entail_paraphrase.py
-  checker/span_inventory.py
   checker/commencement.py
   checker/witness_span.py
   checker/s96_slice.py
@@ -223,6 +222,12 @@ extra=("scripts/acquire_rules.py --test" "scripts/register_gsr700e.py --test" "s
 # The Ask demo server (D2): 127.0.0.1 only, serves web/assistant, forwards POST /v1/ask.
 extra+=("scripts/serve_ask.py --test")
 
+# Defines _test() but runs it only under --test; invoked bare it printed a report and
+# exited 0. Its sixteen checks had never run. Found by the no-count rule below.
+extra+=("checker/span_inventory.py --test")
+# The harness's own reproduction of the 2026-09-30 incident.
+extra+=("scripts/harness_selftest.py --test")
+
 # A module that prints "9/10 passed" has failed, whatever its exit code says.
 # Eight modules once defined _test() without `raise SystemExit(1)`, so their
 # failures never reached the exit code and the sweep printed "all suites green"
@@ -232,11 +237,12 @@ count_mismatch() {            # $1 = "N/M passed" (may be empty)
   case "$1" in
     *" passed") n=${1%%/*}; m=${1#*/}; m=${m%% *}
                 [ "$n" = "$m" ] && return 1 || return 0 ;;
-    *) return 1 ;;            # no count line: handled separately, not a mismatch
+    *) return 1 ;;            # no count line: the CALLER refuses it. See `-z "$res"`.
   esac
 }
 
 fails=0
+nocount=0
 for s in "${suites[@]}"; do
   [ -f "$s" ] || { printf '%-28s %s\n' "$s" "MISSING"; fails=$((fails+1)); continue; }
   out=$(python3 "$s" 2>&1); rc=$?
@@ -249,8 +255,19 @@ for s in "${suites[@]}"; do
     printf '%-28s FAIL  %s  (exit 0 but checks failed)\n' "$s" "$res"
     printf '%s\n' "$out" | grep -E '^\s*\[FAIL\]' | head -4 | sed 's/^/      /'
     fails=$((fails+1))
+  elif [ -z "$res" ]; then
+    # A suite that exits 0 and prints no count has not been SEEN to run. On 2026-09-30
+    # gateway/schema.py was overwritten with the live row-level-security harness, which
+    # prints a banner and exits 0 unless given --run; the gate reported it `ok (no count)`
+    # and stayed green over a file that was not the suite at all. Exit 0 is not evidence;
+    # a count is. (That harness is deliberately not named here: schema.py asserts this
+    # file does not mention it, so that a server-dependent suite cannot creep into the
+    # gate and read as passing when it is skipped.)
+    printf '%-28s FAIL  no count line (exit 0 but no "N/M passed" -- did this suite run?)\n' "$s"
+    printf '%s\n' "$out" | tail -3 | sed 's/^/      /'
+    fails=$((fails+1)); nocount=$((nocount+1))
   else
-    printf '%-28s ok    %s\n' "$s" "${res:-(no count)}"
+    printf '%-28s ok    %s\n' "$s" "$res"
   fi
 done
 
@@ -260,6 +277,10 @@ for e in "${extra[@]}"; do
   if [ $rc -ne 0 ]; then printf '%-28s FAIL  %s\n' "${e%% *}" "$res"; fails=$((fails+1))
   elif count_mismatch "$res"; then
     printf '%-28s FAIL  %s  (exit 0 but checks failed)\n' "${e%% *}" "$res"; fails=$((fails+1))
+  elif [ -z "$res" ]; then
+    printf '%-28s FAIL  no count line (exit 0 but no "N/M passed" -- did this suite run?)\n' "${e%% *}"
+    printf '%s\n' "$out" | tail -3 | sed 's/^/      /'
+    fails=$((fails+1)); nocount=$((nocount+1))
   else printf '%-28s ok    %s\n' "${e%% *}" "$res"; fi
 done
 
@@ -274,6 +295,7 @@ echo
 # fix is a parseable contract plus scripts/verify_green.sh as the single oracle.
 total=$(( ${#suites[@]} + ${#extra[@]} ))
 if [ "$fails" -eq 0 ]; then harness_status=GREEN; else harness_status=RED; fi
-printf 'HARNESS_RESULT suites=%d failed=%d status=%s\n' "$total" "$fails" "$harness_status"
+printf 'HARNESS_RESULT suites=%d failed=%d nocount=%d status=%s\n' \
+  "$total" "$fails" "$nocount" "$harness_status"
 
 exit $fails
