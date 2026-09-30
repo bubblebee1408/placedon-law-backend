@@ -140,7 +140,7 @@ REGISTRY: dict[str, int] = {
     "checker.operation_store": RING_2,
 
     # ── RING 2 — FEEDS. Classified by PACKAGE below, not listed here. ──────
-    # ── RING 3 — INFERENCE. Deliberately empty; see the module docstring. ──
+    # ── RING 3 — INFERENCE. Classified by PACKAGE below (checker.forecast). ──
 }
 
 # Whole packages whose every module belongs to one ring, by construction.
@@ -160,6 +160,11 @@ PACKAGE_RINGS: dict[str, int] = {
     # The MCP surface: read-only tools over the engine, reachable by an agent.
     # Ring 2 for the same reason feeds are -- a Ring 0 decider must never import it.
     "checker.mcp": RING_2,
+    # Forecasting (PLAN_25 §5): rates, durations, prediction sets, change forecasts,
+    # what-if under uncertain facts. Ring 3, by PACKAGE, so a forecast module nobody
+    # remembered to register still cannot be read by a decider. It may CALL a Ring 0
+    # decider (propagate.py takes one as a callable); it may never be imported BY one.
+    "checker.forecast": RING_3,
 }
 
 
@@ -418,8 +423,20 @@ def _test() -> None:
           "a FUTURE feed nobody remembered to register is still Ring 2 -- the hole this closes")
     check(ring_of("checker/feeds/common/fetch.py") == RING_2, "...in the file-path spelling too")
     check(ring_of("checker.feedsX") is None, "prefix matching is on whole segments, not characters")
-    check(not any(r == RING_3 for r in list(REGISTRY.values()) + list(PACKAGE_RINGS.values())),
-          "Ring 3 is still empty, as PLAN_08 §2 records")
+    # Ring 3 was empty from PLAN_08 §2 until 2026-09-30, and this check recorded that.
+    # Its first occupant on this branch is the forecasting package (PLAN_25 §5): numbers
+    # about what is LIKELY, which is exactly what a decider must never read.
+    ring3 = sorted(k for k, r in list(REGISTRY.items()) + list(PACKAGE_RINGS.items())
+                   if r == RING_3)
+    check(ring3 == ["checker.forecast"],
+          f"Ring 3 holds the forecasting package and nothing else ({ring3})")
+    check(ring_of("checker.forecast.conformal") == RING_3
+          and ring_of("checker.forecast.not_written_yet") == RING_3,
+          "every forecast module resolves to Ring 3, including ones not yet written")
+    peek = ast.parse("from checker.forecast.rates import pooled_rate\n")
+    caught3 = _leaks_upward(peek, "checker.s188", RING_0)
+    check(bool(caught3) and caught3[0][1] == RING_3,
+          f"a decider that reads a forecast is CAUGHT ({caught3[:1]})")
 
     # The hole, demonstrated: a Ring 0 decider importing an UNREGISTERED feed.
     sneaky = ast.parse("def decide(c):\n    from checker.feeds.mca_defaulters import hit\n    return hit(c)\n")
