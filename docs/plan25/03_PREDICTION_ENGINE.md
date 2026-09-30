@@ -58,6 +58,7 @@ estimate_j = (y_j + a) / (n_j + a + b),  exact Beta 95% interval
 | A 3-case stratum at 2/3 | reported as 0.316 and flagged "mostly prior" |
 | A 300-case stratum at 0.667 | reported as 0.646, barely moved |
 | Strata differing only by noise | pooled completely, with no false difference shown |
+| Complete pooling: interval covers the truth | **168/183 runs (91.8%)**. The first version covered **~4%**: its prior was "worth 1e6 cases". An independent QA review found it; the fix is that a prior is never worth more cases than the data it was fitted from |
 
 ### 2.2 `survival`: how long things take, counting the pending cases
 
@@ -117,8 +118,9 @@ P(≥1 change in h years) = 1 - (β'/(β'+h))^α',   α' = α + k_i,  β' = β +
 
 | Check | Result |
 |---|---|
-| Mean forecast vs what happened | **0.170 vs 0.168** (Wilson interval 0.152–0.185) |
-| Top decile | forecast 0.459, observed 0.475 (0.407–0.544), so calibrated in the tail |
+| Mean forecast vs what happened | **0.170 vs 0.168** (99.9% Wilson interval 0.142–0.197) |
+| Top decile | forecast 0.459, observed 0.475 (99.9% interval 0.363–0.589), so calibrated in the tail |
+| Homogeneous rates, the likely shape of the real corpus | computes (0.180). The first version **crashed in 176/176 such cases** (QA review); the prior is now capped at the events observed |
 | Brier: pooled history vs one rate for all | **0.1215 vs 0.1399** |
 | On real data today | it computes, **and shows no number**, because `calibration_contract` has no track record. That is the rule working |
 
@@ -162,6 +164,25 @@ pool:  logit p = d · Σ w_i logit p_i    (d = 1 until the promotion gate says o
 | The identity | holds to 1e-12 (0.20165 = 0.00589 − 0.05198 + 0.24773) |
 | The base-rate forecaster | skill **0**, as it must be |
 | An informative forecaster | skill **0.186** |
+
+## 2.7 How the tests were made trustworthy
+
+Two independent reviewers ran after the build:
+
+- **The trust-boundary review (VETO)** found that a forecast could borrow any track record,
+  that notes were dropped on rendering, and that the what-if test used a rule written inside
+  Ring 3.
+- **The QA review (NO-GO)** re-derived every formula independently. The Beta/Gamma CDFs
+  matched numeric integration to ~1e-12, and the KM ties and Greenwood band matched hand
+  calculation. It then found:
+  - the complete-pooling failures above;
+  - a hang on NaN durations;
+  - tests that passed only on the chosen seed: a "95% interval contains the truth" check
+    fails 1 run in 20 by design.
+
+**All of these are fixed, and each fix has its test.** The failing tests were written first
+and seen red. Simulation checks now use 4-standard-error or 99.9% tolerances. **Every test
+now passes under 20 different seeds** (measured).
 
 ## 3. How it connects to the rest of Themis
 
