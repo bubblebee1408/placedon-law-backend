@@ -228,6 +228,7 @@
     "scripts/register_s188_rule15.py": 7,
     "scripts/register_sebi_lodr.py": 10,
     "scripts/resolve_missing_sections.py": 9,
+    "scripts/retrieval_recall.py": 10,
     "scripts/review.py": 55,
     "scripts/review_brief.py": 10,
     "scripts/serve_api.py": 4,
