@@ -141,6 +141,12 @@ def _shared(signal: str) -> bool:
         for b in _held())
 
 
+# Parliament enacts every Act, the held one included, so the legislature named in a
+# question says nothing about WHICH body it is about (A-012 NEW-2; founder rule 1,
+# 2026-09-30). scope.py may still record it as a regulator; it is never a signal.
+LEGISLATURE = re.compile(r"(?i)\b(parliament|legislature)\b")
+
+
 def _signals(b) -> tuple[list[str], list[str]]:
     """(title signals, regulator signals) this body declares, minus the held Act's words.
 
@@ -153,7 +159,8 @@ def _signals(b) -> tuple[list[str], list[str]]:
     if re.fullmatch(r"[A-Z]{3,}", key):
         titles.append(key)
     regulators = [r.strip() for r in re.split(r"[,/]", b.regulator)
-                  if len(r.strip()) >= 3 and any(ch.isalpha() for ch in r)]
+                  if len(r.strip()) >= 3 and any(ch.isalpha() for ch in r)
+                  and not LEGISLATURE.search(r)]
     keep = lambda xs: list(dict.fromkeys(x for x in xs if not _shared(x)))
     return keep(titles), keep(regulators)
 
@@ -263,6 +270,20 @@ def _test() -> None:
         r = read(q)
         check(r.refuse and r.body.key == key,
               f"{q[:44]!r} -> {key} ({r.body.key if r.body else None})")
+
+    # ── the legislature is not a scope signal (A-012 NEW-2, founder rule 1) ──
+    # scope.py lists "Parliament of India" as the regulator of the Contract and Arbitration
+    # Acts. Parliament enacts every Act, the held one included, so naming it says nothing
+    # about which body a question is about -- and it refused held-law questions.
+    for q in ("When did the Parliament of India last amend the definition of small company?",
+              "Has the Parliament of India changed the CSR threshold recently?",
+              "Did the Legislature intend s.188 to cover this transaction?",
+              "What did Parliament say when it enacted the Companies Act?"):
+        r = read(q)
+        check(r.body is None, f"not refused: {q[:58]!r} ({r.body.key if r.body else None})")
+    check(not any(re.search(r"(?i)\b(parliament|legislature)\b", sig)
+                  for b in _unheld() for sig in _signals(b)[0] + _signals(b)[1]),
+          "no body carries the legislature as a title or regulator signal")
 
     # ── the Companies Act's own forums never refuse (round 3, item 1) ────────
     # The NCLT is constituted by the held Act (s.408); registered valuers under s.247
