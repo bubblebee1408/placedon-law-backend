@@ -168,6 +168,7 @@
     "checker/section_index.py": 26,
     "checker/session.py": 17,
     "checker/shadow.py": 18,
+    "checker/sources/terms.py": 54,
     "checker/span_inventory.py": 16,
     "checker/ss/defects.py": 26,
     "checker/staleness.py": 11,
