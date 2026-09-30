@@ -33,6 +33,11 @@ from typing import Callable
 STRING = "string"
 OBJECT = "object"
 BOOLEAN = "boolean"
+# A list, and it is a separate kind because `mcp_tools()` puts `Field.kind` straight into
+# the JSON Schema as the declared type. Declaring a list field OBJECT told every MCP client
+# to send `{...}` where the handler reads a list -- a schema that lies about the verb.
+ARRAY = "array"
+KINDS = (STRING, OBJECT, BOOLEAN, ARRAY)
 
 V2 = "/v2"
 MCP_NAMESPACE = "themis"
@@ -47,6 +52,10 @@ class Field:
     describes: str = ""
 
     def __post_init__(self) -> None:
+        if self.kind not in KINDS:
+            raise ValueError(f"{self.name!r}: {self.kind!r} is not a field kind; one of "
+                             f"{KINDS}. The kind is published as the JSON Schema type, so "
+                             f"an unknown one is a contract nobody can read")
         if self.in_path and not self.required:
             raise ValueError(
                 f"{self.name!r} is in the path and optional, which cannot be: a URL either "
@@ -773,6 +782,34 @@ def _company_facts_extract(args: dict, ctx: Context) -> dict:
     return d
 
 
+def _intake_origin(message: str):
+    """A `public_only` clearance for the user's OWN TYPED WORDS.
+
+    Finding 1 on PR #27. The classifier wraps the message in `<source>` delimiters, so
+    `azure_model.narrate` -> `public_only.verify_prompt` requires an origin that block can
+    clear against. The old code passed `()`, and `verify_prompt` refuses "no origin given;
+    there is nothing to clear the prompt against" -- so the classifier was UNREACHABLE and
+    every unmatched message came back NEEDS_CLARIFICATION for a reason that had nothing to
+    do with the message.
+
+    The right clearance is `clear_matter`, not a corpus origin, and the distinction is the
+    honest one: a lawyer's question is their client's business, not published text. That
+    routes it through PLAN_22 D3's gate rather than around it -- only a provider in
+    MATTER_PROVIDERS may receive it, and `refuse_unconfirmed_region` will refuse a
+    non-test_data matter document while the region is unconfirmed. Both of those are
+    refusals we WANT: they end in a fallback to RESEARCH_QUESTION, never in a question for
+    the user.
+
+    Returns None when no clearance can be made, which the caller treats as "no model".
+    """
+    from checker import public_only, router
+    try:
+        return public_only.clear_matter(message, name="intake message",
+                                        provider=router.AZURE)
+    except Exception:                                           # noqa: BLE001
+        return None
+
+
 def _intake_classify(args: dict, ctx: Context) -> dict:
     """Which of six fixed tasks this request is. PLAN_23 layer 1.
 
@@ -781,14 +818,21 @@ def _intake_classify(args: dict, ctx: Context) -> dict:
     makes a misclassification cost time rather than correctness, and it is why the model
     call is router.CLASSIFICATION at LOW consequence while `ask` is NARRATION.
 
-    The model is reached only when the deterministic rules cannot decide, and its reply is
-    checked against the six names in `agents/intake.py` before it is returned (PLAN_23
-    §3.2). A reply outside the list is discarded, never normalised into range.
+    ONE call to `intake.classify`, with a `model_provider` it invokes only if the rules
+    cannot decide. The first version ran the rules, compared the returned RULE NAME against
+    two strings to guess whether a model was wanted, obtained one, and ran the rules again
+    -- which coupled this file to `agents/intake.py`'s internals and ran the rules twice.
     """
     from agents import intake
-    from checker import router
 
-    message = args.get("message") or ""
+    message = args.get("message")
+    if message is None:
+        message = ""
+    if not isinstance(message, str):
+        # BAD_REQUEST, not an exception. `message.strip()` on an int is a 500, and a
+        # malformed request is the caller's to fix, not an outage to page someone about.
+        return _refuse("BAD_REQUEST",
+                       f"message must be a string, got {type(message).__name__}")
     raw_files = args.get("files")
     if raw_files is None:
         raw_files = []
@@ -807,24 +851,29 @@ def _intake_classify(args: dict, ctx: Context) -> dict:
                        "a message or at least one file is required: there is nothing to "
                        "classify otherwise")
 
-    # The rules first, with NO model. If they decide, nothing is spent and nothing is
-    # routed -- which is the common case and the point of the ordering.
-    decided = intake.classify(message, files=files, facts=facts)
-    if decided.rule not in ("default_no_attachment", "attachment+unrecognised_instruction"):
-        out = decided.to_dict()
-        out["note"] = _INTAKE_NOTE
-        return out
+    unavailable: list = []
 
-    # Only now is a model worth asking for. LOW consequence: a wrong name costs a click.
-    served, refusal = _served_or_refusal((), name="intake.classify",
-                                         purpose=router.CLASSIFICATION, ctx=ctx,
-                                         consequence=router.LOW)
-    model = served.call if served else None
-    out = intake.classify(message, files=files, facts=facts, model=model).to_dict()
-    if refusal:
+    def provider():
+        """A model, or None. Called by classify() only if the rules did not decide."""
+        from checker import router
+        origin = _intake_origin(message)
+        if origin is None:
+            unavailable.append("NO_CLEARANCE")
+            return None
+        served, refusal = _served_or_refusal(origin, name="intake.classify",
+                                             purpose=router.CLASSIFICATION, ctx=ctx,
+                                             consequence=router.LOW)
+        if refusal:
+            unavailable.append(refusal["code"])
+            return None
+        return served.call
+
+    out = intake.classify(message, files=files, facts=facts,
+                          model_provider=provider).to_dict()
+    if unavailable:
         # Not a refusal of the verb: the rules already produced an answer, and this only
         # says the classifier could not be asked to improve on it.
-        out["classifier_unavailable"] = refusal["code"]
+        out["classifier_unavailable"] = unavailable[0]
     out["note"] = _INTAKE_NOTE
     return out
 
@@ -1335,8 +1384,8 @@ VERBS: tuple[Verb, ...] = (
     Verb("ask", "One grounded research question against the held statute. Cited spans or "
                 "a named refusal.",
          (Field("question", STRING, True, describes="the question, in plain English"),
-          Field("available", OBJECT, False, describes="provider tuple to route over"),
-          Field("company_facts", OBJECT, False,
+          Field("available", ARRAY, False, describes="provider tuple to route over"),
+          Field("company_facts", ARRAY, False,
                 describes="company facts you are telling us, e.g. "
                           "[{'field':'listed','value':'yes'}]. Labelled 'you told us', "
                           "shown back, never verified, and they do not steer the answer")),
@@ -1434,7 +1483,7 @@ VERBS: tuple[Verb, ...] = (
                 describes="the event key, e.g. share_allotment, related_party_contract"),
           Field("facts", OBJECT, False,
                 describes="foreign_investor, listed, state — facts that add bodies"),
-          Field("company_facts", OBJECT, False,
+          Field("company_facts", ARRAY, False,
                 describes="company facts with their basis: typed by you (USER_FACT) or "
                           "read from an MCA master-data page you uploaded (COMPANY_FACT, "
                           "with the quoted span). ONLY THE CONFIRMED ONES ARE USED")),
@@ -1450,7 +1499,7 @@ VERBS: tuple[Verb, ...] = (
          "Search every source that may be read, returning Evidence rows that each carry "
          "their tier. Only a HELD row may support a legal claim.",
          (Field("query", STRING, True, describes="what to look for"),
-          Field("tiers", OBJECT, False,
+          Field("tiers", ARRAY, False,
                 describes="restrict to these tiers, e.g. ['HELD']. Absent searches all "
                           "loadable sources"),
           Field("as_of", STRING, False,
@@ -1479,7 +1528,7 @@ VERBS: tuple[Verb, ...] = (
          (Field("message", STRING, False,
                 describes="the user's words. Rendered verbatim, never parsed for meaning "
                           "beyond the fixed signals"),
-          Field("files", OBJECT, False,
+          Field("files", ARRAY, False,
                 describes="the attachments as [{name, type}]. The NAME decides whether a "
                           "file is a contract or a filing, because a .pdf is both"),
           Field("facts", OBJECT, False,
@@ -1495,11 +1544,11 @@ VERBS: tuple[Verb, ...] = (
          (Field("conversation_id", STRING, False,
                 describes="the thread to append to. Absent starts a new one"),
           Field("text", STRING, False, describes="the user's words"),
-          Field("file_ids", OBJECT, False,
+          Field("file_ids", ARRAY, False,
                 describes="sha256 ids from documents.upload"),
           Field("as_of", STRING, False,
                 describes="YYYY-MM-DD, the date to read the law as at. Defaults to today"),
-          Field("sources", OBJECT, False,
+          Field("sources", ARRAY, False,
                 describes="source ids to consult, from sources.list. Recorded; only HELD "
                           "and CLIENT are loadable today"),
           Field("task_override", STRING, False,
@@ -1812,6 +1861,88 @@ def _test() -> None:
     check(_V["citation.get"].run({"citation_id": "nope", "conversation_id": _cid},
                                  _cctx)["status"] == "REFUSED",
           "...and an unknown citation id is REFUSED, never an empty citation")
+
+    # ══ REVIEW FINDINGS ON PR #27 ════════════════════════════════════════════
+
+    # ── 1. the model must be REACHABLE, checked against the real pre-send guard ─
+    # `_served_or_refusal((), ...)` passed NO origin, and `public_only.verify_prompt`
+    # refuses a prompt with no origin to clear against -- so the classifier could never be
+    # called, and every unmatched message came back NEEDS_CLARIFICATION because of
+    # NotPublic. The user's own typed words are MATTER text, not published corpus text,
+    # and clear_matter is the path for them.
+    from agents import intake as _ik
+    from checker import public_only as _po
+    _msg = "zzz mmm"
+    _org = _intake_origin(_msg)
+    check(_org is not None and _org.basis == _po.MATTER,
+          f"the intake classifier clears the user's message as MATTER text "
+          f"({getattr(_org, 'basis', None)})")
+    # THE REAL PRE-SEND CHECK. No stub: this is the function azure_model.narrate calls.
+    _cleared = _po.verify_prompt(_ik.prompt_for(_msg), _org)
+    check(len(_cleared) == 1 and _msg in _cleared[0],
+          f"...and the REAL verify_prompt clears the classification prompt against it "
+          f"({len(_cleared)} block(s))")
+    try:
+        _po.verify_prompt(_ik.prompt_for(_msg), ())
+        check(False, "...while no origin is refused, which is what used to happen")
+    except _po.NotPublic as e:
+        check("nothing to clear" in str(e),
+              f"...while NO origin is refused by that same guard ({e!s:.44}) -- the bug")
+    _ic = by_name()["intake.classify"].run({"message": _msg}, Context())
+    check(_ic["task"] != "NEEDS_CLARIFICATION",
+          f"an unmatched message never comes back NEEDS_CLARIFICATION for want of a "
+          f"clearance; it reaches the model or falls back to RESEARCH_QUESTION "
+          f"(got {_ic['task']} by {_ic['rule']})")
+    check(_ic["task"] == "RESEARCH_QUESTION", f"...here, the fallback ({_ic['task']})")
+
+    # ── 5. a list field is declared ARRAY, and MCP says so ──────────────────
+    _by = {v.name: v for v in VERBS}
+    _arr = [(v.name, f.name) for v in VERBS for f in v.inputs if f.kind == ARRAY]
+    check(("intake.classify", "files") in _arr,
+          f"intake.classify.files is declared ARRAY, not OBJECT -- it takes a list "
+          f"({_arr})")
+    _schemas = {t.name: t.schema for t in mcp_tools()}
+    _s = _schemas[f"{MCP_NAMESPACE}.intake.classify"]["properties"]["files"]
+    check(_s["type"] == "array",
+          f"...and the MCP inputSchema says array, matching what the verb accepts "
+          f"({_s['type']!r})")
+    for _vn, _fn in _arr:
+        _t = _schemas.get(f"{MCP_NAMESPACE}.{_vn}")
+        if _t is None:                      # a write verb: not on MCP at all
+            continue
+        check(_t["properties"][_fn]["type"] == "array",
+              f"{_vn}.{_fn}: MCP declares array, matching the handler")
+    # And a field declared ARRAY must actually be refused when handed an object.
+    check(by_name()["intake.classify"].run(
+              {"message": "x", "files": {"name": "a.pdf"}}, Context())["status"]
+          == "REFUSED",
+          "a field declared ARRAY is REFUSED when handed an object, so the declaration "
+          "and the handler agree")
+
+    # ── 6. a non-string message is BAD_REQUEST, not a 500 ───────────────────
+    for _bad in (5, 5.5, True, {"a": 1}, ["x"]):
+        _r6 = by_name()["intake.classify"].run({"message": _bad}, Context())
+        check(_r6.get("status") == "REFUSED" and _r6.get("code") == "BAD_REQUEST",
+              f"message={_bad!r} is BAD_REQUEST, not an exception "
+              f"({_r6.get('status')}/{_r6.get('code')})")
+    check(by_name()["intake.classify"].run({"message": None,
+                                            "files": [{"name": "nda.docx"}]},
+                                           Context())["task"] in
+          ("NEEDS_CLARIFICATION", "REVIEW_CONTRACT"),
+          "...while message=None with a file is still classified: absent is not malformed")
+
+    # ── 7 (caller side). One classify call, no rule-name matching ───────────
+    _src = __import__("inspect").getsource(_intake_classify)
+    check("default_no_attachment" not in _src
+          and "attachment+unrecognised_instruction" not in _src,
+          "the verb no longer matches intake's RULE NAMES to guess whether a model is "
+          "wanted -- that coupled the gateway to the module's internals")
+    check(_src.count("intake.classify(") == 1,
+          f"...and calls classify() exactly ONCE, so the rules cannot disagree with "
+          f"themselves between two runs ({_src.count('intake.classify(')})")
+    check("model_provider" in _src,
+          "...passing a model_provider, which classify() calls lazily and only if the "
+          "rules did not decide")
 
     # ── PARITY, the point of the file ───────────────────────────────────────
     check(set(rest) == names and set(cli) == names,

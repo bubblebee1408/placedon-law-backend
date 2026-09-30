@@ -155,10 +155,13 @@ _CONTRACT_NAMES = ("nda", "non-disclosure", "agreement", "contract", "mou",
                    "memorandum of understanding", "spa", "share purchase", "shareholders",
                    "sha", "deed", "lease", "licence agreement", "license agreement",
                    "term sheet", "termsheet", "msa", "sow", "engagement letter")
+# The form prefixes lost their trailing hyphen when matching became word-based: "mgt-7"
+# normalises to "mgt 7", so `\bmgt\b` is the token that matches, and "mgt-" never would.
 _FILING_NAMES = ("minutes", "notice", "agm", "egm", "board meeting", "resolution",
-                 "mgt-", "aoc-", "adt-", "dir-", "pas-", "sh-", "chg-", "inc-",
-                 "annual return", "financial statement", "directors report",
-                 "director's report", "boards report", "attendance register")
+                 "mgt", "aoc", "adt", "dir", "pas", "chg", "inc",
+                 "annual return", "financial statement", "financial statements",
+                 "directors report", "director's report", "boards report",
+                 "attendance register", "agenda")
 
 _REVIEW_VERBS = ("review", "check", "vet", "mark up", "markup", "redline", "red-line",
                  "look over", "look at", "go through", "examine", "audit", "verify",
@@ -231,21 +234,55 @@ _NEIGHBOURS: dict[str, tuple[str, str]] = {
 }
 
 
-def _any(text: str, phrases) -> str:
-    """The first phrase present, or "". Returned rather than a bool so the reason can
-    quote the words that decided it."""
-    for ph in phrases:
-        if ph in text:
-            return ph
-    return ""
+# Word-boundary matching, and it is not a refinement -- `phrase in text` was WRONG, in four
+# ways that all shipped:
+#
+#     "Please review."                   -> a contract, because "p(lease)" contains "lease"
+#     "AGM-notice-agenda.pdf"            -> a contract, because "age(nda)" contains "nda"
+#     "board-minutes-monday.pdf"         -> a contract, because "mo(nda)y" contains "nda"
+#     "standalone-financial-statements"  -> a contract, because "sta(nda)lone" contains "nda"
+#     "the auditor signed it"            -> a review verb, because "audit(or)"
+#
+# Three of those five are documents this product exists to review, misrouted to the
+# contract playbook by a substring. A compiled pattern per phrase list, cached, because
+# these run on every message.
+_WORD_CACHE: dict[tuple, object] = {}
+
+
+def _pattern(phrases) -> object:
+    key = tuple(phrases)
+    if key not in _WORD_CACHE:
+        alts = "|".join(re.escape(ph) for ph in sorted(key, key=len, reverse=True))
+        _WORD_CACHE[key] = re.compile(rf"\b(?:{alts})\b", re.IGNORECASE)
+    return _WORD_CACHE[key]
+
+
+def _any_word(text: str, phrases) -> str:
+    """The first phrase present AS A WHOLE WORD, or "". Longest alternative wins.
+
+    Returned rather than a bool so the reason can quote the words that decided it.
+    """
+    m = _pattern(phrases).search(text or "")
+    return m.group(0).lower() if m else ""
+
+
+# Kept as the name the rules call, now boundary-aware. One definition, so no caller can
+# reach the substring behaviour by accident.
+_any = _any_word
+
+
+def _file_words(name: str) -> str:
+    """A file name as words. `-`, `_` and `.` are how people separate them, and treating
+    them as separators is what lets "financial-statements" match "financial statement"."""
+    return re.sub(r"[-_.]+", " ", _norm(name))
 
 
 def file_kind(name: str) -> str:
     """"contract", "filing", or "" -- by NAME, because a .pdf is both an NDA and a gazette."""
-    low = _norm(name)
-    if _any(low, _CONTRACT_NAMES):
+    words = _file_words(name)
+    if _any_word(words, _CONTRACT_NAMES):
         return "contract"
-    if _any(low, _FILING_NAMES):
+    if _any_word(words, _FILING_NAMES):
         return "filing"
     return ""
 
@@ -379,6 +416,18 @@ def _rules(message: str, files, facts) -> Classification | None:
                               decided_by="rules", alternatives=_alts(COMPANY_STANDING),
                               reason=f"it asks about our own position (matched {st!r})")
 
+    # 7. question shape. It runs BEFORE the review-verb rule below, and only when nothing
+    # is attached -- an attachment was already decided by rule 1. "Can you check whether
+    # minutes must be signed within 30 days?" says "check" and names "minutes" and is a
+    # QUESTION ABOUT THE LAW: there are no minutes here to review. The old order read the
+    # verb and the noun and offered to review a document nobody had sent.
+    if asks:
+        return Classification(
+            task=RESEARCH_QUESTION, rule="question_shape", decided_by="rules",
+            alternatives=_alts(RESEARCH_QUESTION),
+            reason="it is shaped as a question about the law, and nothing is attached to "
+                   "review")
+
     # A review verb naming a filing type in the text, with no file attached: "check the
     # minutes of the board meeting". The document is named even though it is not attached.
     if verb:
@@ -394,13 +443,6 @@ def _rules(message: str, files, facts) -> Classification | None:
                 task=REVIEW_CONTRACT, rule="review_verb+named_contract",
                 decided_by="rules", alternatives=_alts(REVIEW_CONTRACT),
                 reason=f"it says {verb!r} about a {namedc!r}")
-
-    # 7. question shape.
-    if asks:
-        return Classification(
-            task=RESEARCH_QUESTION, rule="question_shape", decided_by="rules",
-            alternatives=_alts(RESEARCH_QUESTION),
-            reason="it is shaped as a question about the law")
 
     return None
 
@@ -429,40 +471,59 @@ def prompt_for(message: str) -> str:
             + wrap_untrusted(message, "the user's request"))
 
 
-def _from_model(message: str, model) -> Classification:
+def _from_model(message: str, model, files=()) -> Classification:
     """One call, one name, checked. A reply outside TASKS is discarded, never repaired."""
     try:
         raw = model(prompt_for(message))
     except Exception as exc:                                    # noqa: BLE001
-        return _unclear(message, why=f"the classifier could not be called ({type(exc).__name__})")
+        # A classifier that BROKE is not evidence of anything about the message, so it must
+        # not turn into a question for the user. It is the same case as "no classifier
+        # available": fall back. The old code sent it to _unclear, which meant a timeout
+        # on our side became "what did you mean?" on theirs.
+        return _fallback(message, files, rule="model_unavailable", note=(
+            f"the classifier could not be called ({type(exc).__name__}), so the rules' "
+            f"own default stands"))
     reply = str(raw or "").strip()
     if reply not in TASKS:
         # NOT normalised, NOT fuzzy-matched, NOT stripped down to a substring. A reply this
         # function had to edit into range is a reply the model did not give -- and
         # "RESEARCH_QUESTION and REVIEW_CONTRACT" contains a valid name while being an
         # answer to a different question.
-        return _unclear(message, why=(f"the classifier replied {reply[:40]!r}, which is not "
-                                      f"one of the six names, so it was discarded"))
+        return _unclear(message, files=files,
+                        why=(f"the classifier replied {reply[:40]!r}, which is not one of "
+                             f"the six names, so it was discarded"))
     return Classification(task=reply, rule="model", decided_by="model",
                           alternatives=_alts(reply),
                           reason="the rules could not decide, and the classifier chose "
                                  "this from the six names")
 
 
-def _unclear(message: str, *, why: str, rule: str = "model_rejected") -> Classification:
+def _unclear(message: str, *, why: str, rule: str = "model_rejected",
+             files=()) -> Classification:
     """NEEDS_CLARIFICATION with two options, chosen deterministically.
 
-    The options are the two commonest tasks rather than a guess at this message: if there
-    were enough signal to rank them, a rule above would have fired.
+    **The question may only offer what the user could actually pick.** It used to offer
+    "answer a question about the law, or review a document?" with nothing attached, which
+    invites the user to choose an option they cannot take -- there is no document. With no
+    file the only real choice is which KIND of question, so the options are the two
+    question-shaped tasks and the wording says nothing about documents.
     """
+    if any(_kinds(files)):
+        return Classification(
+            task=NEEDS_CLARIFICATION, rule=rule, decided_by="rules",
+            alternatives=(REVIEW_DOCUMENT, RESEARCH_QUESTION), question=(
+                "Shall I review the attached file against our standards, or answer a "
+                "question about it?"),
+            reason=why)
     return Classification(
         task=NEEDS_CLARIFICATION, rule=rule, decided_by="rules",
-        alternatives=(RESEARCH_QUESTION, REVIEW_DOCUMENT), question=(
-            "Would you like me to answer a question about the law, or review a document?"),
+        alternatives=(RESEARCH_QUESTION, LAW_CHANGES), question=(
+            "Are you asking what the law says, or what has changed in it?"),
         reason=why)
 
 
-def _fallback(message: str, files) -> Classification:
+def _fallback(message: str, files, *, rule: str = "default_no_attachment",
+              note: str = "") -> Classification:
     """What an unrecognised message is when no classifier could be asked.
 
     **Not NEEDS_CLARIFICATION, when nothing is attached.** With no file there is nothing to
@@ -480,18 +541,21 @@ def _fallback(message: str, files) -> Classification:
         # Whether a file is ATTACHED, not whether its name was recognised. The first
         # version asked the second question, so "review this" with `scan0001.pdf` fell
         # through to a research question about a document nobody had read.
-        return _unclear(message, rule="attachment+unrecognised_instruction", why=(
-            "a file is attached and the instruction was not recognised, so what to do "
-            "with it is genuinely open"))
+        return _unclear(message, files=files, rule=(
+            "attachment+unrecognised_instruction" if rule == "default_no_attachment"
+            else rule), why=(note or (
+                "a file is attached and the instruction was not recognised, so what to do "
+                "with it is genuinely open")))
     return Classification(
-        task=RESEARCH_QUESTION, rule="default_no_attachment", decided_by="rules",
+        task=RESEARCH_QUESTION, rule=rule, decided_by="rules",
         alternatives=_alts(RESEARCH_QUESTION),
-        reason=("no rule matched and nothing is attached, so it is taken as a question "
-                "about the law; if it is outside what this engine holds, the ask path "
-                "refuses it by name"))
+        reason=(note or ("no rule matched and nothing is attached, so it is taken as a "
+                         "question about the law; if it is outside what this engine "
+                         "holds, the ask path refuses it by name")))
 
 
-def classify(message: str, *, files=(), facts=None, model=None) -> Classification:
+def classify(message: str, *, files=(), facts=None, model=None,
+             model_provider=None) -> Classification:
     """One of six tasks, or NEEDS_CLARIFICATION. Never runs anything.
 
     `facts` is accepted and recorded, never used to decide: event facts say something about
@@ -511,9 +575,26 @@ def classify(message: str, *, files=(), facts=None, model=None) -> Classificatio
     out = _rules(message, files, facts)
     if out is not None:
         return out
+
+    # `model_provider` is called ONLY here, and only because the rules did not decide. It
+    # exists so a caller that must do work to obtain a model -- clear an origin, consult a
+    # router, check a budget -- does that work lazily and in one place. Before it, the
+    # gateway ran the rules, matched the RULE NAME against a string to guess whether a
+    # model was wanted, obtained one, and ran the rules a second time. Matching on a rule
+    # name couples the caller to this module's internals, and running the rules twice
+    # means a rule with any state would disagree with itself.
+    if model is None and model_provider is not None:
+        try:
+            model = model_provider()
+        except Exception as exc:                                # noqa: BLE001
+            return _fallback(message, files, rule="model_unavailable", note=(
+                f"a classifier could not be obtained ({type(exc).__name__}), so the "
+                f"rules' own default stands"))
     if model is None:
-        return _fallback(message, files)
-    return _from_model(message, model)
+        return _fallback(message, files, rule=(
+            "model_unavailable" if model_provider is not None
+            else "default_no_attachment"))
+    return _from_model(message, model, files)
 
 
 def _test() -> int:
@@ -663,8 +744,14 @@ def _test() -> int:
         raise RuntimeError("transport")
 
     b = classify("Mmm.", model=boom)
-    check(b.task == NEEDS_CLARIFICATION and "could not be called" in b.reason,
-          f"a classifier that raises yields NEEDS_CLARIFICATION, not a task ({b.task})")
+    # CORRECTED by review of PR #27. This asserted NEEDS_CLARIFICATION, which was wrong:
+    # a classifier that BROKE is not evidence about the message, so turning our timeout
+    # into "what did you mean?" on the user's screen blamed them for our outage.
+    check(b.task == RESEARCH_QUESTION and b.rule == "model_unavailable",
+          f"a classifier that raises falls back to RESEARCH_QUESTION with rule "
+          f"model_unavailable -- our failure is not a question for the user ({b.task})")
+    check("could not be called" in b.reason,
+          "...and the reason still records that the classifier broke")
 
     # ── shape invariants ────────────────────────────────────────────────────
     for msg, files in [("What is the quorum for a meeting of the Board?", ()),
@@ -765,6 +852,84 @@ def _test() -> int:
           == NEEDS_CLARIFICATION,
           "an unrecognisable file name with a review verb does not guess which review it "
           "is -- it asks")
+
+    # ══ REVIEW FINDINGS ON PR #27. Each test written before its fix. ═════════
+
+    # ── 2. word boundaries, not substrings ──────────────────────────────────
+    # Every case below is a REAL false positive of `phrase in text`.
+    check(classify("Please review.").task != REVIEW_CONTRACT,
+          f"'Please review.' is not a contract -- 'p(lease)' contains 'lease' "
+          f"(got {classify('Please review.').task})")
+    for name in ("AGM-notice-agenda.pdf", "board-minutes-monday.pdf",
+                 "standalone-financial-statements.pdf"):
+        check(file_kind(name) != "contract",
+              f"{name} is not a contract (got {file_kind(name)!r}) -- 'age(nda)', "
+              f"'mo(nda)y' and 'sta(nda)lone' each contain 'nda'")
+    check(file_kind("AGM-notice-agenda.pdf") == "filing",
+          "...AGM-notice-agenda.pdf is a FILING, which is what it actually is")
+    check(file_kind("board-minutes-monday.pdf") == "filing",
+          "...and so is board-minutes-monday.pdf")
+    check(event_in("do not interrupt the meeting")[0] != "related_party_contract",
+          f"'interrupt' does not contain the event token 'rpt' "
+          f"(got {event_in('do not interrupt the meeting')[0]!r})")
+    check(not _any_word("the auditor signed it", _REVIEW_VERBS),
+          "'auditor' is not the review verb 'audit'")
+    check(_any_word("please audit the minutes", _REVIEW_VERBS) == "audit",
+          "...while a real 'audit' still matches")
+    check(_any_word("review the lease agreement", _CONTRACT_NAMES) in
+          ("lease", "agreement"),
+          "...and a real 'lease' still matches")
+    check(_any_word("we discussed the rpt policy", ("rpt",)) == "rpt",
+          "...and a standalone 'rpt' still matches")
+
+    # ── 3. question shape beats review-verb + document noun, with no file ───
+    q3 = classify("Can you check whether minutes must be signed within 30 days?")
+    check(q3.task == RESEARCH_QUESTION,
+          f"'Can you check whether minutes must be signed within 30 days?' is a "
+          f"RESEARCH_QUESTION, not a review of minutes nobody attached "
+          f"(got {q3.task} by {q3.rule})")
+    check(classify("Check the minutes of the board meeting held on 14 August.").task
+          == REVIEW_DOCUMENT,
+          "...while a plain instruction about minutes is still REVIEW_DOCUMENT")
+
+    # ── 4. a model exception falls back, and never offers a missing document ─
+    def boom(_p):
+        raise RuntimeError("transport")
+
+    b4 = classify("Mmm.", model=boom)
+    check(b4.task == RESEARCH_QUESTION and b4.rule == "model_unavailable",
+          f"a model EXCEPTION gives the documented fallback, RESEARCH_QUESTION with rule "
+          f"model_unavailable (got {b4.task}/{b4.rule})")
+    for msg in ("Mmm.", "zzz"):
+        c4 = classify(msg, model=lambda _p: "SUMMARISE")
+        if c4.task == NEEDS_CLARIFICATION:
+            check("document" not in c4.question.lower(),
+                  f"a clarification with NO file attached never offers to review a "
+                  f"document ({c4.question!r})")
+    u4 = _unclear("x", why="y", files=())
+    check("document" not in u4.question.lower(),
+          f"...and _unclear with no files does not mention a document ({u4.question!r})")
+    u4f = _unclear("x", why="y", files=[{"name": "nda.docx", "type": ""}])
+    check("document" in u4f.question.lower() or "file" in u4f.question.lower(),
+          f"...while with a file attached it may ({u4f.question!r})")
+
+    # ── 7. classify takes the model PROVIDER, called at most once and lazily ─
+    calls = []
+
+    def provider():
+        calls.append(1)
+        return lambda _p: "LAW_CHANGES"
+
+    r7 = classify("What is the quorum for a meeting of the Board?",
+                  model_provider=provider)
+    check(r7.task == RESEARCH_QUESTION and calls == [],
+          f"a message the RULES decide never calls the provider ({calls})")
+    r7b = classify("Mmm.", model_provider=provider)
+    check(r7b.task == LAW_CHANGES and len(calls) == 1,
+          f"...and one the rules cannot calls it exactly once ({len(calls)})")
+    check(classify("Mmm.", model_provider=lambda: None).task == RESEARCH_QUESTION,
+          "a provider that yields no model falls back to RESEARCH_QUESTION, not a "
+          "clarification")
 
     print(f"\n{ok}/{ok + fail} passed")
     return 1 if fail else 0
