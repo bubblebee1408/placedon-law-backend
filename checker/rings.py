@@ -14,10 +14,10 @@ import, read, or receive any value originating in Ring 2 or Ring 3. Same for
 Ring 1.** A forecast may never be an input to a deterministic legal decision.
 **Both upper rings are now occupied, and this paragraph used to say they were
 not.** Ring 2 holds the Operation Model, the feeds package, the MCP surface and
-(2026-09-28) the HTTP `gateway`; Ring 3 holds `agents`, the agent runtime, which
-is its first occupant — the day this docstring was written to anticipate. The
-guard therefore has something real to catch, and `violations()` returning `[]`
-is now evidence rather than a tautology.
+(2026-09-28) the HTTP `gateway`. Ring 3 holds `agents`, the agent runtime (its first
+occupant, 2026-09-28), and `checker.forecast` (2026-09-30, PLAN_25 §5): numbers about
+what is LIKELY. The guard therefore has something real to catch, and `violations()`
+returning `[]` is now evidence rather than a tautology.
 
 ## Why structural, not conventional
 
@@ -155,7 +155,7 @@ REGISTRY: dict[str, int] = {
     "checker.operation_store": RING_2,
 
     # ── RING 2 — FEEDS. Classified by PACKAGE below, not listed here. ──────
-    # ── RING 3 — INFERENCE. Occupied since 2026-09-28 by the `agents` PACKAGE,
+    # ── RING 3 — INFERENCE. Occupied by the `agents` and `checker.forecast` PACKAGES,
     #    registered below rather than here; see PACKAGE_RINGS. ──
 }
 
@@ -196,6 +196,11 @@ PACKAGE_RINGS: dict[str, int] = {
     # makes "nothing in agents/ may feed an L0 decision" an enforced rule rather than a hope --
     # see the note on `gateway` above for why an unregistered package would not be caught.
     "agents": RING_3,
+    # Forecasting (PLAN_25 §5): rates, durations, prediction sets, change forecasts,
+    # what-if under uncertain facts. Ring 3, by PACKAGE, so a forecast module nobody
+    # remembered to register still cannot be read by a decider. It may CALL a Ring 0
+    # decider (propagate.py takes one as a callable); it may never be imported BY one.
+    "checker.forecast": RING_3,
 }
 
 
@@ -362,7 +367,7 @@ def violations() -> list[str]:
     A verdict with no witness is unusable: each entry names the offending
     module, the exact import, and the line it appears on, so the fix is
     "delete this line" rather than "go audit everything". Returns `[]` when
-    the firewall holds — which, with Ring 2 and Ring 3 currently empty, is
+    the firewall holds — which, with Ring 2 and Ring 3 now occupied, is
     the only possible outcome, and this function still walks every declared
     Ring 0/1 module's real AST to say so rather than asserting it by
     construction.
@@ -454,16 +459,22 @@ def _test() -> None:
           "a FUTURE feed nobody remembered to register is still Ring 2 -- the hole this closes")
     check(ring_of("checker/feeds/common/fetch.py") == RING_2, "...in the file-path spelling too")
     check(ring_of("checker.feedsX") is None, "prefix matching is on whole segments, not characters")
-    # Ring 3 was empty from PLAN_08 §2 until 2026-09-28, and this check recorded that.
-    # `agents/` is the first occupant: the agent runtime is where MODEL-DERIVED content
-    # lives, which is what Ring 3 means. The assertion is kept rather than deleted, and
-    # narrowed to the new fact -- a second occupant should be a deliberate decision, not a
-    # line someone adds without noticing this said something different yesterday.
+    # Ring 3 was empty from PLAN_08 §2 until 2026-09-28. `agents/` is the first occupant:
+    # the agent runtime is where MODEL-DERIVED content lives. `checker.forecast` is the
+    # second, added deliberately on 2026-09-30 (PLAN_25 §5): numbers about what is LIKELY,
+    # which is exactly what a decider must never read. A third occupant should be a
+    # deliberate decision too, so the assertion names both rather than counting.
     ring3 = sorted(k for k, r in list(REGISTRY.items()) + list(PACKAGE_RINGS.items())
                    if r == RING_3)
-    check(ring3 == ["agents"],
-          f"Ring 3 holds exactly the agent runtime; it was empty until 2026-09-28 "
-          f"(PLAN_08 §2) and this is the first occupant ({ring3})")
+    check(ring3 == ["agents", "checker.forecast"],
+          f"Ring 3 holds exactly the agent runtime and the forecasting package ({ring3})")
+    check(ring_of("checker.forecast.conformal") == RING_3
+          and ring_of("checker.forecast.not_written_yet") == RING_3,
+          "every forecast module resolves to Ring 3, including ones not yet written")
+    peek = ast.parse("from checker.forecast.rates import pooled_rate\n")
+    caught3 = _leaks_upward(peek, "checker.s188", RING_0)
+    check(bool(caught3) and caught3[0][1] == RING_3,
+          f"a decider that reads a forecast is CAUGHT ({caught3[:1]})")
 
     # The hole, demonstrated: a Ring 0 decider importing an UNREGISTERED feed.
     sneaky = ast.parse("def decide(c):\n    from checker.feeds.mca_defaulters import hit\n    return hit(c)\n")
