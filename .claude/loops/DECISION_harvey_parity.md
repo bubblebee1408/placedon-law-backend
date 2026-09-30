@@ -54,3 +54,22 @@ table; no step changes an existing verb's behaviour except H0, which is reverted
 
 A second session is building on this branch. Editing a shared file from here risks a conflict;
 the laptop session mirrors this decision when it starts H0.
+
+## Amendment, 2026-09-30: Indian sources only
+
+Owner decision: no US or other foreign legal data enters the product. EDGAR appeared in the
+research only as the name of Harvey's connector; its Indian counterpart is MCA company records
+plus stock-exchange disclosures. International law is not added; a question about it gets the
+existing out-of-scope refusal. Revisit only when a paying Indian client needs cross-border work,
+and even then as a named refusal first.
+
+CUAD, the clause dataset in `corpus/benchmark/cuad/`, is built from contracts filed on EDGAR. It is
+used only to MEASURE clause extraction and is never shown to a user or cited in an answer. It stays
+until an Indian contract set labelled by lawyers replaces it. That is an evaluation input, not legal data.
+
+Sources for H1b, all Indian, each needing its terms and robots.txt read before code depends on it:
+Indian Kanoon (Supreme Court, High Courts, tribunals); MCA company master data (OGD); BSE/NSE
+announcements; SEBI circulars and orders; RBI notifications; e-Gazette. Courts' and tribunals'
+own sites (eCourts, NCLT) are NOT on CLAUDE.md's permitted list; adding them is a separate decision.
+Watching these sources for changes in real time is Project Themis's job, on its own branch; H1b
+builds search and fetch only.
