@@ -163,6 +163,13 @@ suites=(
   checker/release.py
   checker/licence.py
   checker/calibration_contract.py
+  checker/forecast/__init__.py
+  checker/forecast/rates.py
+  checker/forecast/survival.py
+  checker/forecast/conformal.py
+  checker/forecast/events.py
+  checker/forecast/propagate.py
+  checker/forecast/scoring.py
   checker/chunk_fusion.py
   checker/fusion.py
   checker/reranker.py

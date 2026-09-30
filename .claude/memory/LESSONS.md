@@ -333,3 +333,23 @@ Worth noticing about the failure shape: the words did not error the commit, they
 **disappeared**. A mangled message that still reads as English is harder to spot than
 one that breaks — the same class as every other defect this week, where something
 unverified was rendered as though it were established.
+
+## L-27 — A protection named in a plan is not a protection until the call path shows it
+
+**Incident.** PLAN_23 §1.11 lists "a date filter runs before the model" as something *this
+repository has already measured*, and PLAN_24 03 §3.5 repeated it ("retrieves as of today").
+The PLAN_25 code audit traced `ask` end to end, from `gateway/verbs._ask` through
+`agents/research_question.evidence` to `answer`. No `as_of` reaches retrieval. The same audit
+found two defects that a green suite had not surfaced:
+
+- `verbs.py:215` reads `s.citation` where the field is `citations`, so no `ask` answer carries
+  its source;
+- `worker.py:146` stores FAILED as ANSWERED.
+
+The research found in the same run showed that date filtering is the single largest effect in
+temporal legal RAG (0% vs 98.3% date-correct retrieval). The most important protection was the
+one that existed only in prose.
+
+**Apply.** Before a plan cites a protection as existing, trace one real request through the
+code and name the line that enforces it. A green suite proves the tests pass. It does not prove
+the plan's description of the system is true, because a test that was never written cannot fail.

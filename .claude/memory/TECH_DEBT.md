@@ -13,6 +13,7 @@ merely *suspected* belongs in `BACKLOG.md`; this file is only for things chosen 
 | T-6 | MCA provisions from a secondary reproduction | The rule matters now; recording it with the weakness stated beats holding it in someone's head | BACKLOG M-4 — ingest the Gazette |
 | T-7 | Report passed to `/result` in the query string | Worst real case today 3,362 bytes; works | **17 findings** — Vercel CDN returns 414 at 14,336 bytes. Measured, see `.claude/loops/RESEARCH_T7.md` |
 | T-8 | No git remote | Everything is on one laptop | **Now.** This is not a shortcut, it is an unbacked-up asset |
+| T-9 | `checker/forecast` is pure-Python, seeded Monte Carlo and bisection quantiles (no numpy/scipy) | Stdlib-only rule; all 7 suites run in < 2 s; every quantile is checked against a closed form in its test | A what-if needs > 5 uncertain facts or a verb's p95 latency exceeds 1 s; then add numpy with a stated reason |
 
 **T-8 is the one to fix today.** Every other row has a real trigger. That one just has a
 disk that has not failed yet — and on 8 Aug an `ln -sf` destroyed four command files that were
