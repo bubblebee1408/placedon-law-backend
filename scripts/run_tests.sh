@@ -235,6 +235,17 @@ extra+=("checker/span_inventory.py --test")
 # The harness's own reproduction of the 2026-09-30 incident.
 extra+=("scripts/harness_selftest.py --test")
 extra+=("scripts/suite_floors.py --test")
+# The source register (PLAN_24 S0). Nothing is fetched on an unread term, so the register
+# is a test subject: it asserts which sources are closed, and a later edit that quietly
+# opens one has to break a check to do it.
+extra+=("checker/sources/terms.py --test")
+# The source framework (PLAN_24 S1). contract.py holds the five cross-module rules -- only
+# HELD can verify, every Evidence is hash-stamped and timed, a soft-404 raises rather than
+# reading as "no results" -- and is listed because a rule spanning three modules would
+# otherwise pass three times while the composition failed.
+extra+=("checker/sources/tiers.py --test" "checker/sources/evidence.py --test"
+        "checker/sources/base.py --test" "checker/sources/held.py --test"
+        "checker/sources/client.py --test" "checker/sources/contract.py --test")
 
 # A module that prints "9/10 passed" has failed, whatever its exit code says.
 # Eight modules once defined _test() without `raise SystemExit(1)`, so their

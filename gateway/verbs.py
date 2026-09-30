@@ -677,6 +677,99 @@ def _documents_upload(args: dict, ctx: Context) -> dict:
                      "enforces tenant isolation.")}
 
 
+def _sources_list(args: dict, ctx: Context) -> dict:
+    """Every source, its tier, and whether it may be fetched — with the reason when not.
+
+    The reason travels with the refusal on purpose. "no" on its own invites someone to try
+    again with a different client; "robots: https://www.rbi.org.in BLOCKED HTTP 418" does
+    not, and it is also the answer to "why has nobody built the RBI connector".
+    """
+    from checker.sources import terms
+    from checker.sources.tiers import CLIENT, HELD, TIERS
+
+    out = []
+    for source_id in terms.SOURCE_IDS:
+        rec = terms.record_for(source_id)
+        fetch_ok, fetch_why = terms.may_fetch(source_id)
+        cache_ok, cache_why = terms.may_cache(source_id)
+        out.append({
+            "source_id": source_id,
+            "name": rec.name,
+            "terms_url": rec.terms_url,
+            "terms_read": rec.date_read or None,
+            "robots": [{"origin": o.origin, "state": o.state, "http": o.http}
+                       for o in rec.robots],
+            "may_fetch": fetch_ok, "may_fetch_reason": fetch_why,
+            "may_cache": cache_ok, "may_cache_reason": cache_why,
+            "clauses": {c.topic: c.state for c in rec.clauses},
+        })
+    # The two adapters that exist. Neither needs a terms record and both say why.
+    built_in = [{"source_id": "held", "name": "Companies Act 2013 (our corpus)",
+                 "tier": HELD, "may_fetch": True,
+                 "may_fetch_reason": "ours, hash-stamped; the only tier that can VERIFY"},
+                {"source_id": "client", "name": "Your uploaded documents", "tier": CLIENT,
+                 "may_fetch": True,
+                 "may_fetch_reason": "the tenant's own document, under review"}]
+    return {"tiers": list(TIERS), "adapters": built_in, "external": out,
+            "fetchable": [r["source_id"] for r in out if r["may_fetch"]],
+            "cacheable": [r["source_id"] for r in out if r["may_cache"]],
+            "note": ("Only HELD can make an answer VERIFIED (PLAN_24 §2). External sources "
+                     "are listed with what their own terms permit, read on the date shown; "
+                     "an unread term is OPEN, and OPEN is not permission.")}
+
+
+def _sources_search(args: dict, ctx: Context) -> dict:
+    """Search the loadable sources and return Evidence rows, each carrying its tier.
+
+    Today that is HELD and CLIENT. The five external sources S0 recorded either refuse us
+    by robots or have unread terms, so there is nothing to call — and this returns the
+    empty list with the reasons rather than pretending the sources do not exist.
+    """
+    from checker.sources.base import load
+    from checker.sources.client import ClientDocuments
+    from checker.sources.evidence import verifying
+    from checker.sources.held import AsOfUnsupported, HeldCorpus
+    from checker.sources.tiers import label_for
+
+    query = (args.get("query") or "").strip()
+    if not query:
+        return _refuse("BAD_REQUEST", "query is required")
+    wanted = args.get("tiers") or None
+    as_of = (args.get("as_of") or "").strip() or None
+
+    rows, refusals = [], []
+    for src in (HeldCorpus(), ClientDocuments(ctx.documents)):
+        if wanted and src.tier not in wanted:
+            continue
+        try:
+            rows.extend(load(src).search(query, as_of=as_of))
+        except AsOfUnsupported as exc:
+            # A named refusal, not a silent fallback to current text. CLAUDE.md:
+            # point-in-time reconstruction is UNVERIFIED against any external source.
+            return _refuse("AS_OF_UNSUPPORTED", str(exc))
+        except Exception as exc:                      # a connector that cannot load
+            refusals.append({"source_id": getattr(src, "source_id", "?"),
+                             "detail": str(exc)})
+    from checker.sources import terms
+    for source_id in terms.SOURCE_IDS:
+        ok, why = terms.may_fetch(source_id)
+        if not ok:
+            refusals.append({"source_id": source_id, "detail": why})
+
+    return {
+        "query": query,
+        "results": [{"tier": e.tier, "source": e.source, "ref": e.ref,
+                     "fetched_at": e.fetched_at, "sha256": e.sha256,
+                     "quoted_span": e.quoted_span, "attribution": e.attribution,
+                     "label": label_for(e.tier, date=e.fetched_at[:10], source=e.source),
+                     "can_verify": e.can_verify} for e in rows],
+        "verified_count": len(verifying(rows)),
+        "not_searched": refusals,
+        "note": ("Every row carries its tier. Only a HELD row may support a legal claim; "
+                 "`not_searched` says which sources were not asked and why."),
+    }
+
+
 # ── the table ────────────────────────────────────────────────────────────────
 
 VERBS: tuple[Verb, ...] = (
@@ -780,6 +873,25 @@ VERBS: tuple[Verb, ...] = (
                 describes="foreign_investor, listed, state — facts that add bodies")),
          "POST", read_only=True, run=_events_assess),
 
+    Verb("sources.list",
+         "Every source, its tier, and whether its own terms and robots.txt permit a fetch "
+         "-- with the reason when they do not.",
+         (),
+         "POST", read_only=True, run=_sources_list),
+
+    Verb("sources.search",
+         "Search every source that may be read, returning Evidence rows that each carry "
+         "their tier. Only a HELD row may support a legal claim.",
+         (Field("query", STRING, True, describes="what to look for"),
+          Field("tiers", OBJECT, False,
+                describes="restrict to these tiers, e.g. ['HELD']. Absent searches all "
+                          "loadable sources"),
+          Field("as_of", STRING, False,
+                describes="YYYY-MM-DD. REFUSED for HELD: point-in-time reconstruction is "
+                          "UNVERIFIED against any external source, so a past date gets a "
+                          "named refusal rather than today's text")),
+         "POST", read_only=True, run=_sources_search),
+
     Verb("documents.upload",
          "Store a document and return the sha256 that identifies it.",
          (Field("text", STRING, True, describes="the document text"),
@@ -859,8 +971,16 @@ def _test() -> None:
 
     check(names == {"ask", "review_contract", "review_document", "events.assess",
                     "runs.get", "runs.trace", "runs.approve", "runs.reject",
-                    "runs.submit", "runs.cancel", "documents.upload"},
-          f"the eleven verbs are declared once ({sorted(names)})")
+                    "runs.submit", "runs.cancel", "documents.upload",
+                    "sources.list", "sources.search"},
+          f"the thirteen verbs are declared once ({sorted(names)})")
+    # sources.* are READ-ONLY, so they reach MCP. That is the intended shape: an agent may
+    # ask what a source permits and search what may be read, and there is no sources verb
+    # that fetches, stores or spends. S3's Indian Kanoon connector will spend money, and
+    # will be a separate verb argued for separately.
+    check({f"{MCP_NAMESPACE}.sources.list", f"{MCP_NAMESPACE}.sources.search"}
+          <= {t.name for t in mcp},
+          "...and both sources verbs reach MCP, being read-only")
     # Every verb that WRITES, named rather than counted, so adding one is a deliberate edit
     # to this line. All five are kept out of MCP by mcp_tools() for the same reason: a tool
     # surface that can submit, cancel or approve is one that can act with nobody present.
@@ -931,7 +1051,7 @@ def _test() -> None:
           "...while a WRITE verb is kept out of MCP by mcp_tools(), not by the author "
           "remembering to")
     check("widgets.delete" in write_verbs(hypo), "...and is named in write_verbs()")
-    check(len(VERBS) == 11 and "widgets.count" not in rest_spec(),
+    check(len(VERBS) == 13 and "widgets.count" not in rest_spec(),
           "...and the probe changed nothing in this module: the surfaces are generated "
           "from an argument, not from a global the test rebound")
 

@@ -100,6 +100,12 @@ KNOWN_TOOLS: frozenset[str] = frozenset({
     "themis.events.assess",
     "themis.runs.get",
     "themis.runs.trace",
+    # PLAN_24 S1. Both read-only: `sources.list` says what each source's own terms permit,
+    # `sources.search` returns Evidence rows that each carry their tier. Neither fetches
+    # from a third party, stores anything, or spends money -- S3's Indian Kanoon connector
+    # does all three and will be argued for on its own.
+    "themis.sources.list",
+    "themis.sources.search",
 })
 # NOT here, and the absence is the decision: `themis.runs.approve` and `themis.runs.reject`
 # do not exist. They write a human decision, and mcp_tools() refuses to generate a tool for
