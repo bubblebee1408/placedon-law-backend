@@ -12,11 +12,10 @@
 A module in ring N may import from rings below it. **No Ring 0 decider may
 import, read, or receive any value originating in Ring 2 or Ring 3. Same for
 Ring 1.** A forecast may never be an input to a deterministic legal decision.
-Ring 2 and Ring 3 are currently EMPTY — no God's Eye or inference module has
-been built yet (PLAN_08 §3: the release chokepoint has to land first) — so this
-guard currently has nothing to catch. That is expected, and the guard has to
-keep working (not error, not vacuously report "clean" for the wrong reason)
-right up to the day a Ring 2 module is registered.
+Both upper rings are now occupied. Ring 2 holds the feeds package, the MCP surface and
+the operation store; Ring 3 holds `checker.forecast` (2026-09-30, PLAN_25 §5), its first
+occupant on this branch. `violations()` returning `[]` is therefore evidence, not a
+tautology.
 
 ## Why structural, not conventional
 
@@ -331,7 +330,7 @@ def violations() -> list[str]:
     A verdict with no witness is unusable: each entry names the offending
     module, the exact import, and the line it appears on, so the fix is
     "delete this line" rather than "go audit everything". Returns `[]` when
-    the firewall holds — which, with Ring 2 and Ring 3 currently empty, is
+    the firewall holds — which, with Ring 2 and Ring 3 now occupied, is
     the only possible outcome, and this function still walks every declared
     Ring 0/1 module's real AST to say so rather than asserting it by
     construction.

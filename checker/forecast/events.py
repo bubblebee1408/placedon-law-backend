@@ -16,7 +16,10 @@ and s^2 the sample variance of k_i / T_i,
     Var(k_i / T_i) = mu / T_i + mu^2 / alpha   =>   mu^2 / alpha = s^2 - mu * mean(1 / T_i)
 
 If the right side is <= 0 there is no spread beyond Poisson noise, and every provision gets
-the pooled rate (complete pooling, capped as in `rates`).
+the pooled rate. The prior is then Gamma(sum k, sum T), the posterior for one common rate.
+In every case **the prior is never worth more events than were observed** (shape <= sum k).
+An independent QA review found that a 1e6 cap made this branch crash in 176 of 176
+homogeneous cases, which is the likely shape of the real corpus.
 
 Posterior: Gamma(alpha + k_i, beta + T_i). The probability of at least one amendment in the
 next h years (negative-binomial predictive) is
@@ -39,13 +42,12 @@ from dataclasses import dataclass
 
 from checker.forecast import FORECAST, Estimate, EstimateError
 
-SHAPE_CAP = 1e6
 
 
 def _gser(a: float, x: float) -> float:
     s = term = 1.0 / a
     ap = a
-    for _ in range(1000):
+    for _ in range(200_000):
         ap += 1.0
         term *= x / ap
         s += term
@@ -59,7 +61,7 @@ def _gcf(a: float, x: float) -> float:
     b = x + 1.0 - a
     c, d = 1.0 / fpmin, 1.0 / b
     h = d
-    for i in range(1, 1000):
+    for i in range(1, 200_000):
         an = -i * (i - a)
         b += 2.0
         d = an * d + b
@@ -85,6 +87,8 @@ def gamma_cdf(x: float, shape: float, rate: float) -> float:
 
 
 def gamma_ppf(q: float, shape: float, rate: float) -> float:
+    if not 0.0 < q < 1.0:
+        raise EstimateError("quantile level must be in (0, 1)")
     lo, hi = 0.0, max(1.0, 10.0 * shape) / rate
     while gamma_cdf(hi, shape, rate) < q:
         hi *= 2.0
@@ -112,7 +116,9 @@ def fit_rate_prior(histories: list[tuple[int, float]]) -> RatePrior:
         raise EstimateError("at least two provisions with exposure are needed")
     if any(k < 0 for k, _ in use):
         raise EstimateError("a negative event count is a data error")
-    mu = sum(k for k, _ in use) / sum(t for _, t in use)
+    total_k = sum(k for k, _ in use)
+    total_t = sum(t for _, t in use)
+    mu = total_k / total_t
     if mu == 0.0:
         raise EstimateError("no amending event in any provision: there is no rate to pool, "
                             "and 'never' is not a forecast")
@@ -120,7 +126,7 @@ def fit_rate_prior(histories: list[tuple[int, float]]) -> RatePrior:
     mr = sum(r) / len(r)
     s2 = sum((x - mr) ** 2 for x in r) / (len(r) - 1)
     between = s2 - mu * sum(1.0 / t for _, t in use) / len(use)
-    shape = SHAPE_CAP if between <= 0 else mu * mu / between
+    shape = float(total_k) if between <= 0 else min(mu * mu / between, float(total_k))
     return RatePrior(shape, shape / mu, mu, len(use))
 
 
@@ -134,7 +140,7 @@ def p_change(events: int, years: float, prior: RatePrior, horizon: float, *,
     lam_lo, lam_hi = gamma_ppf(0.025, a, b), gamma_ppf(0.975, a, b)
     lo = 1.0 - math.exp(-lam_lo * horizon)
     hi = 1.0 - math.exp(-lam_hi * horizon)
-    return Estimate(p, min(lo, p), max(hi, p), events,
+    return Estimate(p, min(lo, p), max(hi, p), prior.strata,
                     "Gamma-Poisson (empirical Bayes), negative-binomial predictive",
                     FORECAST, "a statement that the law will or will not change",
                     basis=basis, target_id=target_id,
@@ -194,14 +200,15 @@ def _test() -> None:
     n = len(preds)
     mean_p, obs = sum(preds) / n, sum(outcomes) / n
     from checker.interval import wilson
-    lo, hi = wilson(sum(outcomes), n)
+    # 99.9% intervals: a 95% check fails 1 run in 20 by design, and a fixed seed hides it
+    lo, hi = wilson(sum(outcomes), n, z=3.2905)
     check(lo <= mean_p <= hi,
           f"mean forecast {mean_p:.4f} sits inside the observed rate's interval "
           f"[{lo:.4f}, {hi:.4f}] (observed {obs:.4f}, n={n})")
     # calibration in the tails, where a bad model shows first
     top = sorted(zip(preds, outcomes), reverse=True)[: n // 10]
     t_p, t_o = sum(p for p, _ in top) / len(top), sum(o for _, o in top)
-    t_lo, t_hi = wilson(t_o, len(top))
+    t_lo, t_hi = wilson(t_o, len(top), z=3.2905)
     check(t_lo <= t_p <= t_hi,
           f"top decile: forecast {t_p:.3f}, observed {t_o / len(top):.3f} "
           f"(interval [{t_lo:.3f}, {t_hi:.3f}])")
@@ -217,6 +224,16 @@ def _test() -> None:
     txt = real.render(None)
     check(txt.startswith("No forecast shown") and f"{real.value:.3g}" not in txt,
           "with no track record, the forecast is computed but no number is shown")
+    # ── QA finding 2: homogeneous rates (the likely shape of the real corpus) ──
+    homo = [(poisson(0.2 * 12.0), 12.0) for _ in range(30)]
+    try:
+        hp = fit_rate_prior(homo)
+        ph = p_change(1, 12.0, hp, 1.0, target_id="change:homogeneous")
+        check(0.0 < ph.value < 1.0 and ph.low <= ph.value <= ph.high,
+              f"with no overdispersion the forecast still computes ({ph.value:.3f})")
+    except EstimateError as e:
+        check(False, f"with no overdispersion the forecast still computes ({e})")
+
     try:
         fit_rate_prior([(0, 10.0), (0, 12.0)])
         check(False, "refuses to pool when no provision has ever changed")

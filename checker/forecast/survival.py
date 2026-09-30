@@ -28,6 +28,7 @@ Without censoring, KM must equal one minus the empirical CDF exactly.
 """
 from __future__ import annotations
 
+import math
 import random
 from dataclasses import dataclass
 from math import exp, log, sqrt
@@ -52,6 +53,8 @@ def kaplan_meier(durations: list[float], observed: list[bool]) -> list[Step]:
         raise EstimateError("durations and observed flags differ in length")
     if not durations:
         raise EstimateError("no cases")
+    if any(not math.isfinite(d) for d in durations):
+        raise EstimateError("a non-finite duration (NaN or inf) is a data error, not a case")
     if any(d < 0 for d in durations):
         raise EstimateError("a negative duration is a data error, not a case")
     pairs = sorted(zip(durations, observed))
@@ -172,6 +175,12 @@ def _test() -> None:
     except EstimateError as e:
         check("not reached" in str(e),
               "refuses a median when fewer than half the cases have ended")
+    # ── QA finding 3: NaN made the tie loop spin forever (nan != nan) ──────
+    try:
+        kaplan_meier([float("nan"), 1.0], [True, True])
+        check(False, "refuses a NaN duration instead of hanging")
+    except EstimateError:
+        check(True, "refuses a NaN duration instead of hanging")
     try:
         kaplan_meier([1, -2], [True, True])
         check(False, "refuses a negative duration")

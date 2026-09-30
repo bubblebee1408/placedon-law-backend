@@ -19,8 +19,10 @@ so, with s^2 the sample variance of the raw rates and h = mean(1/n_j),
     rho_hat = ( s^2 / (m(1-m)) - h ) / (1 - h),      a + b = 1/rho_hat - 1.
 
 If rho_hat <= 0 the strata show no more spread than binomial noise alone would give, and
-the honest answer is complete pooling. It is capped at a+b = POOL_CAP rather than infinity
-so the posterior stays a proper Beta.
+the honest answer is complete pooling. **The prior is never worth more cases than the data
+it was fitted from:** a + b <= sum n_j. An independent QA review measured the earlier cap of
+1e6 "cases": a 40-case stratum got a +-0.0008 interval that covered the truth in 4% of runs,
+and pooled_rate(0, 5) crashed. Capping at the pooled n carries the uncertainty in m itself.
 
 The posterior for stratum j is Beta(a + y_j, b + n_j - y_j), with mean (y_j + a)/(n_j + a + b).
 **A stratum with n_j < a + b is mostly prior**, and every estimate says so.
@@ -39,7 +41,6 @@ from math import exp, lgamma, log
 
 from checker.forecast import DESCRIPTIVE, Estimate, EstimateError
 
-POOL_CAP = 1e6          # a + b when the data show no between-stratum spread
 _EPS = 3e-14
 _FPMIN = 1e-300
 
@@ -50,7 +51,7 @@ def _betacf(a: float, b: float, x: float) -> float:
     c, d = 1.0, 1.0 - qab * x / qap
     d = 1.0 / (d if abs(d) > _FPMIN else _FPMIN)
     h = d
-    for m in range(1, 400):
+    for m in range(1, 100_000):     # converges in O(sqrt(max(a, b))) steps
         m2 = 2 * m
         aa = m * (b - m) * x / ((qam + m2) * (a + m2))
         d = 1.0 + aa * d
@@ -124,16 +125,17 @@ def fit_prior(strata: list[tuple[int, int]]) -> Prior:
     m = total_y / total_n
     if m in (0.0, 1.0):
         # every stratum all-success or all-failure: nothing to shrink between
-        return Prior(max(m, 1e-9) * POOL_CAP, max(1 - m, 1e-9) * POOL_CAP, 0.0, len(usable))
+        return Prior(max(m, 0.5 / total_n) * total_n, max(1 - m, 0.5 / total_n) * total_n,
+                     0.0, len(usable))
     rates = [y / n for y, n in usable]
     mean_r = sum(rates) / len(rates)
     s2 = sum((r - mean_r) ** 2 for r in rates) / (len(rates) - 1)
     h = sum(1.0 / n for _, n in usable) / len(usable)
     rho = (s2 / (m * (1.0 - m)) - h) / (1.0 - h) if h < 1.0 else 0.0
     if rho <= 0.0:
-        return Prior(m * POOL_CAP, (1.0 - m) * POOL_CAP, 0.0, len(usable))
+        return Prior(m * total_n, (1.0 - m) * total_n, 0.0, len(usable))
     rho = min(rho, 1.0 - 1e-9)
-    ab = 1.0 / rho - 1.0
+    ab = min(1.0 / rho - 1.0, float(total_n))
     return Prior(m * ab, (1.0 - m) * ab, rho, len(usable))
 
 
@@ -210,7 +212,7 @@ def _test() -> None:
     # ── no spread beyond noise -> complete pooling, not a false difference ──
     flat = [(10, 40), (11, 40), (9, 40), (10, 40), (10, 40)]
     fp = fit_prior(flat)
-    check(fp.rho == 0.0 and fp.strength == POOL_CAP,
+    check(fp.rho == 0.0,
           "strata that differ only by binomial noise are pooled completely")
 
     # ── the 'mostly prior' flag, and the interval ──────────────────────────
@@ -223,6 +225,27 @@ def _test() -> None:
           f"a 300-case stratum barely moves ({big.value:.3f} vs raw 0.667)")
     check(big.high - big.low < small.high - small.low,
           "...and its interval is narrower than the small stratum's")
+
+    # ── QA finding 1: complete pooling must still carry the uncertainty in m ──
+    # A prior "worth 1e6 cases" gave +-0.0008 around 0.25 and covered the truth in ~4% of
+    # runs, and pooled_rate(0, 5) crashed. The prior may never be worth more than the data.
+    cover = fired = 0
+    for _ in range(300):
+        strata = [(sum(rng.random() < 0.25 for _ in range(40)), 40) for _ in range(5)]
+        pr = fit_prior(strata)
+        if pr.rho == 0.0:
+            fired += 1
+            est = pooled_rate(strata[0][0], 40, pr)
+            cover += est.low <= 0.25 <= est.high
+    check(fired > 50 and cover / fired >= 0.85,
+          f"complete pooling: the 95% interval covers the truth in {cover}/{fired} runs")
+    try:
+        pooled_rate(0, 5, fit_prior(flat))
+        check(True, "pooled_rate on a completely pooled prior does not crash")
+    except EstimateError as e:
+        check(False, f"pooled_rate on a completely pooled prior does not crash ({e})")
+    check(fit_prior(flat).strength <= sum(n for _, n in flat),
+          "the prior is never worth more cases than the data it was fitted from")
 
     for bad in ([(1, 5)], [(6, 5), (1, 5)]):
         try:

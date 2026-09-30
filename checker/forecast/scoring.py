@@ -8,7 +8,9 @@ three tools the learning loop needs for that (PLAN_24 05):
     BS = (1/N) sum (f_i - o_i)^2
 
 On its own the Brier score mixes two different virtues. Murphy (1973) splits it exactly,
-when forecasts take K distinct values f_k with n_k cases and observed frequency o_k each:
+when forecasts take K distinct values f_k with n_k cases and observed frequency o_k each.
+**Continuous forecasts must be binned first** (for example to 0.05). Otherwise every group
+holds one case and REL/RES degenerate, and the identity holds only to about 1e-8:
 
     BS = REL - RES + UNC
     REL = (1/N) sum n_k (f_k - o_k)^2        calibration error: lower is better
@@ -87,7 +89,10 @@ def pool(probs: list[float], weights: list[float] | None = None, d: float = 1.0)
     if d <= 0:
         raise EstimateError("d must be positive")
     z = d * sum(wi * _logit(p) for wi, p in zip(w, probs))
-    return 1.0 / (1.0 + math.exp(-z))
+    if z >= 0:                                   # numerically stable in both tails
+        return 1.0 / (1.0 + math.exp(-z))
+    ez = math.exp(z)
+    return ez / (1.0 + ez)
 
 
 def _test() -> None:
@@ -128,6 +133,8 @@ def _test() -> None:
     check(pool([0.7, 0.8], d=2.0) > pool([0.7, 0.8]),
           "d > 1 extremizes away from 0.5 (allowed only after the gate)")
     check(abs(pool([0.3, 0.9], [1.0, 0.0]) - 0.3) < 1e-12, "a zero weight silences a forecaster")
+    check(pool([0.1, 0.1], d=1e9) == 0.0 and pool([0.9], d=1e9) == 1.0,
+          "extreme extremizing saturates instead of overflowing")
     for bad in (dict(probs=[1.2]), dict(probs=[0.5, 0.5], weights=[0.7, 0.7]),
                 dict(probs=[0.5], d=0)):
         try:

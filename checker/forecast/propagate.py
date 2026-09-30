@@ -41,6 +41,10 @@ class Uniform:
     lo: float
     hi: float
 
+    def __post_init__(self) -> None:
+        if not self.lo < self.hi:
+            raise EstimateError("Uniform needs lo < hi; a fixed fact is passed as a plain value")
+
     def sample(self, rng: random.Random) -> float:
         return rng.uniform(self.lo, self.hi)
 
@@ -56,6 +60,10 @@ class Triangular:
     lo: float
     mode: float
     hi: float
+
+    def __post_init__(self) -> None:
+        if not (self.lo <= self.mode <= self.hi and self.lo < self.hi):
+            raise EstimateError("Triangular needs lo <= mode <= hi and lo < hi")
 
     def sample(self, rng: random.Random) -> float:
         return rng.triangular(self.lo, self.hi, self.mode)
@@ -82,6 +90,10 @@ class Triangular:
 class Normal:
     mu: float
     sd: float
+
+    def __post_init__(self) -> None:
+        if not self.sd > 0:
+            raise EstimateError("Normal needs sd > 0")
 
     def sample(self, rng: random.Random) -> float:
         return rng.gauss(self.mu, self.sd)
@@ -113,12 +125,12 @@ def _verdict(out: object) -> bool:
         out = out[0]
     if isinstance(out, bool):
         return out
-    name = getattr(out, "name", None)
-    if name == "APPLIES":
+    from applicability import Result          # Ring 0; Ring 3 may import downward
+    if out is Result.APPLIES:
         return True
-    if name == "DOES_NOT_APPLY":
+    if out is Result.DOES_NOT_APPLY:
         return False
-    if name == "INSUFFICIENT_DATA":
+    if out is Result.INSUFFICIENT_DATA:
         raise EstimateError("the rule answered INSUFFICIENT_DATA for some drawn facts, so no "
                             "probability exists: an abstention is not a 'does not apply'")
     raise EstimateError("a decider must answer True/False or APPLIES/DOES_NOT_APPLY, "
@@ -195,14 +207,19 @@ def _test() -> None:
     print("forecast.propagate")
 
     # ── simulation against exact answers ───────────────────────────────────
+    # Tolerance 4 standard errors, not "inside a 95% interval": that check fails 1 run in
+    # 20 by design, and a fixed seed only hides which one (independent QA review).
+    def near(est, exact: float) -> bool:
+        return abs(est.value - exact) <= 4 * math.sqrt(max(exact * (1 - exact), 1e-12) / est.n)
+
     ctx = dict(rule_id="test.threshold", as_of="2026-09-30", source="synthetic")
     over50 = lambda f: f["turnover_cr"] > 50
     e = probability_applies(over50, {"turnover_cr": Uniform(40, 60)}, **ctx)
-    check(e.low <= 0.5 <= e.high, f"Uniform(40,60) > 50: exact 0.5, simulated {e.value:.4f}")
+    check(near(e, 0.5), f"Uniform(40,60) > 50: exact 0.5, simulated {e.value:.4f}")
     tri = Triangular(30, 45, 70)
     e = probability_applies(over50, {"turnover_cr": tri}, **ctx)
     exact = 1 - tri.cdf(50)
-    check(e.low <= exact <= e.high,
+    check(near(e, exact),
           f"Triangular(30,45,70) > 50: exact {exact:.4f}, simulated {e.value:.4f}")
     check(abs(tri.cdf(tri.ppf(0.3)) - 0.3) < 1e-12, "triangular ppf inverts its cdf")
 
@@ -210,7 +227,7 @@ def _test() -> None:
     facts = {"turnover_cr": Uniform(40, 60), "paid_up_cr": Normal(8, 2)}
     e = probability_applies(either, facts, **ctx)
     exact = 1 - (1 - 0.5) * NormalDist(8, 2).cdf(10)
-    check(e.low <= exact <= e.high,
+    check(near(e, exact),
           f"compound OR rule: exact {exact:.4f}, simulated {e.value:.4f}")
     check(any("applied exactly" in n for n in e.notes) and "test.threshold" in e.basis,
           "the estimate names the rule, date and source, and says only the facts vary")
@@ -227,7 +244,21 @@ def _test() -> None:
     except pt.ThresholdUnavailable:
         cap = turn = None
     if cap is None:
-        check(True, "the engine does not serve the limits today, so no probability is formed")
+        # Not a vacuous pass (LESSONS L-11): when the engine will not serve the limits, the
+        # real decider must refuse, and that refusal must reach the caller as no probability.
+        prof_facts = {"turnover_rupees": Uniform(1e9, 2e9), "holding": False}
+        try:
+            probability_applies(lambda f: small_company(CompanyProfile(
+                company_class="private", incorporation_date=date(2019, 6, 1), as_of=as_of,
+                latest_financial_year="2025-26", is_holding_company=False,
+                is_subsidiary_company=False, is_section_8=False, governed_by_special_act=False,
+                paid_up_capital=Figure(Money(int(5e7)), "2025-26"),
+                turnover=Figure(Money(int(f["turnover_rupees"])), "2025-26"))),
+                prof_facts, n=100, rule_id="CA13-S2-85-SMALL", as_of=str(as_of),
+                source="unavailable")
+            check(False, "with the limits unserved, the real decider yields no probability")
+        except EstimateError:
+            check(True, "with the limits unserved, the real decider yields no probability")
     else:
         turn_cr = turn.rupees / 1e7
 
@@ -246,7 +277,7 @@ def _test() -> None:
         facts = {"holding": False,
                  "turnover_rupees": Uniform((turn_cr - 20) * 1e7, (turn_cr + 5) * 1e7)}
         e = probability_applies(small, facts, n=800, **real)
-        check(e.low <= 0.80 <= e.high,
+        check(near(e, 0.80),
               f"real s.2(85) decider, engine limits (₹{cap.rupees / 1e7:g} cr / ₹{turn_cr:g} cr), "
               f"turnover ~ U(limit-20, limit+5) cr: exact 0.80, simulated {e.value:.4f}")
         sw = swing(small, facts, n=300, **real)

@@ -54,7 +54,7 @@ def conformal_quantile(scores: list[float], alpha: float) -> float:
     if not scores:
         return math.inf
     n = len(scores)
-    k = math.ceil((n + 1) * (1.0 - alpha))
+    k = math.ceil(round((n + 1) * (1.0 - alpha), 9))   # round: 0.3*10 is 3.0000000000000004
     if k > n:
         return math.inf
     return sorted(scores)[k - 1]
@@ -63,7 +63,7 @@ def conformal_quantile(scores: list[float], alpha: float) -> float:
 def min_calibration_n(alpha: float) -> int:
     """Smallest calibration set for which the method can ever return a singleton."""
     n = 1
-    while math.ceil((n + 1) * (1.0 - alpha)) > n:
+    while math.ceil(round((n + 1) * (1.0 - alpha), 9)) > n:
         n += 1
     return n
 
@@ -90,6 +90,8 @@ class SplitConformal:
             raise EstimateError("probabilities and labels differ in length")
         if any(y not in (0, 1) for y in labels):
             raise EstimateError("labels must be 0 or 1")
+        if any(not (0.0 <= p <= 1.0) for p in probs):     # also rejects NaN
+            raise EstimateError("calibration probabilities must lie in [0, 1]")
         scores = [1.0 - (p if y == 1 else 1.0 - p) for p, y in zip(probs, labels)]
         self.qhat = conformal_quantile(scores, self.alpha)
         self.n = len(scores)
@@ -125,6 +127,8 @@ class AdaptiveConformal:
 
     @staticmethod
     def bound(alpha1: float, gamma: float, horizon: int) -> float:
+        if gamma <= 0 or horizon <= 0:
+            raise EstimateError("gamma and horizon must be positive")
         return (max(alpha1, 1.0 - alpha1) + gamma) / (gamma * horizon)
 
 
