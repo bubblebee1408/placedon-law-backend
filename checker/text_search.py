@@ -98,7 +98,26 @@ TITLE_PRECISION_FLOOR = 0.35   # a heading is never worth less than this share o
 BODY_PRESENCE = 0.75      # a term is either in the body or not; that is most of the signal
 BODY_TF_BONUS = 0.25      # repetition adds at most this, saturating -- it cannot buy coverage
 BODY_TF_HALF = 2.0        # occurrences at which half the tf bonus is earned
-MIN_COVER = 0.50          # a result must account for >= half the query's IDF mass
+# A result must account for at least this share of the query's IDF mass.
+#
+# Was 0.50 until 2026-09-30, and at 0.50 it was INVERTING the ranking rather than filtering
+# it. "How many directors must sit on the audit committee?" scored s.177 *Audit committee* at
+# 0.819 -- nearly double the runner-up -- and discarded it for coverage 0.377, returning
+# NOTHING. "What is the maximum gap allowed between two annual general meetings?" discarded
+# s.96 *Annual general meeting* (score 0.669, cover 0.279) and kept s.137 (score 0.566, cover
+# 0.529): a lower-scoring section survived because it happened to share more of the question's
+# common words.
+#
+# The assumption behind 0.50 was that a query is keyword-shaped. A practitioner's question is
+# not: "how many", "must", "sit on the" carry IDF mass that no section heading will ever
+# contain, so coverage punishes exactly the short, precise heading that is the right answer.
+#
+# 0.25 is TUNED ON THE DEV SPLIT and that is what it is: the lowest coverage any correct dev
+# answer scored is 0.279 (s.96), and this sits just below it. Measured over the sweep
+# 0.50 -> 0.20, dev answer recall@5 went 9/13 -> 12/13 while the number of refusal rows that
+# retrieve anything stayed FLAT at 3/17 and title recall@1 stayed at its ceiling. The cost is
+# 3 more junk provisions across rows that already leaked -- no new leaking row.
+MIN_COVER = 0.25
 SCORE_FLOOR = 0.45
 SNIPPET_CHARS = 150
 

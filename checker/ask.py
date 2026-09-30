@@ -692,8 +692,12 @@ def _test() -> None:
           "on 'return' and 'due', so there is evidence and the no-evidence rule does not "
           "fire. Fixing it needs retrieval precision (H1), not a refusal rule. If this "
           "line fails, the gap closed -- record how, and delete the pin.")
+    # Named exactly, and this line has already earned its keep: lowering MIN_COVER in R1
+    # added s.198 to what this question wrongly reaches, and this check is what said so.
+    # Widened deliberately, with the cost recorded -- not loosened to a length or a subset.
     check((gap.get("evidence_pack") or {}).get("usable_keys") == [
-              "ACT:COMPANIES_ACT_2013:S212", "ACT:COMPANIES_ACT_2013:S2"],
+              "ACT:COMPANIES_ACT_2013:S212", "ACT:COMPANIES_ACT_2013:S2",
+              "ACT:COMPANIES_ACT_2013:S198"],
           f"...and the provisions it wrongly reaches are named, so the gap cannot grow "
           f"quietly ({(gap.get('evidence_pack') or {}).get('usable_keys')})")
 
