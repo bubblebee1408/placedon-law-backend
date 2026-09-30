@@ -47,14 +47,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from agents.state import (ANSWERED, NO_EVIDENCE, NO_MODEL, NOTHING_TRACED,
+from agents.state import (ANSWERED, FAILED, NO_EVIDENCE, NO_MODEL, NOTHING_TRACED,
                           OUT_OF_SCOPE_LAW, PARTIAL, REFUSED)
-from checker import ask_scope, public_only, quoted_span, router, scope, section_index
+from checker import (ask_scope, claim_bodies, model_cascade as mc, public_only,
+                     quoted_span, router, scope, section_index)
 from backend.budget import FREE_TIER_RPD_PER_MODEL
 from checker.gemini_model import ModelBusy, ModelRateLimited
 from checker.ollama_runner import ModelUnavailable as OllamaUnavailable
 from checker.ollama_runner import OllamaRunner
-from checker.lawyer_summary import STATUTE, Source, Summary
+from checker.lawyer_summary import STATUTE, Call, Source, Summary, check_blocks
 from checker.retrieve import ROUTE_ABSTAIN
 from checker.sarvam_model import html_to_text
 from checker.structural_retrieve import structural_retrieve
@@ -147,12 +148,120 @@ def evidence(question: str) -> tuple[tuple[Source, public_only.Origin], ...]:
     return tuple(out)
 
 
-def answer(question: str, *, model=None, available=None, budget=None) -> Outcome:
-    """One question, to one of ANSWERED / PARTIAL / REFUSED.
+# ── the cascade (PLAN_23 layer 5, O3) ────────────────────────────────────────
 
-    `model` is injected -- a `Callable[[str], str]` -- so the tests reach no network. When
-    it is None the route decides, and the clearance for the free-tier call is bound from
-    the evidence that was just cleared.
+def _prompt(sources, question: str) -> str:
+    """Exactly the prompt `quoted_span.summarise` builds. Split out because the cascade
+    needs the model call and the verification to be two steps, and `summarise` is both."""
+    return (quoted_span.system_prompt(_SYSTEM) + "\n\n"
+            + quoted_span.render_sources(sources) + "\n\n"
+            + (question or "Summarise these sources for a lawyer."))
+
+
+def _verifier(sources, origins, holder: dict):
+    """L0, unchanged: `quoted_span` searches the sources for the quote the model claims.
+
+    Returns the cascade's `(accepted, reason, claims)`. The Summary is kept on `holder`
+    because an Outcome serves its prose, and the cascade's contract has no room for it.
+
+    Each claim carries the `evidence_path` of the source its quote was found in, so
+    `checker/claim_bodies.py` can attribute it from the instrument rather than from a label.
+    """
+    def verify(raw: str):
+        if not (raw or "").strip():
+            return False, ("no model produced any text for this stage, so there was "
+                           "nothing to verify"), ()
+        bs = quoted_span.blocks(raw, sources)
+        summary = check_blocks(bs, sources, call=Call(holder.get("model") or "unnamed",
+                                                      0, 0, 0.0, raw))
+        holder["summary"] = summary
+        if summary.refused_entirely:
+            return False, (summary.refusal_reason() or "nothing traced"), ()
+        claims = []
+        for sentence in summary.traced:
+            cit = sentence.citations[0] if sentence.citations else None
+            idx = cit.source_index if cit else 0
+            claims.append(mc.Claim(
+                text=sentence.text, body_id="",
+                quote=cit.quoted if cit else "",
+                source_id=sources[idx].source_id,
+                span=(cit.start, cit.end) if cit else None,
+                evidence_path=origins[idx].path if idx < len(origins) else ""))
+        return True, "", tuple(claims)
+    return verify
+
+
+def _tier_callable(sources, question, *, route0, model, available, budget, busy: set,
+                   holder: dict):
+    """One cascade stage: call the best model left, falling through the busy ones.
+
+    The retry loop lives INSIDE the stage rather than around the cascade, and that is the
+    load-bearing part: a 503 or a spent free-tier quota is not a model being wrong, so it
+    must not count as the verifier rejecting anything. It moves to the next model in the
+    same tier. Only a real transport error escapes, and the cascade turns that into FAILED.
+
+    When every model is exhausted the stage returns "" rather than raising, and records why.
+    `NoRoute` reaching the cascade would be FAILED, but "every model was busy" is a refusal
+    with a name -- which is what this returned before the cascade existed.
+    """
+    task = router.Task("research.narrate", router.TEXT, router.LOW,
+                       purpose=router.NARRATION)
+
+    def call(prompt: str) -> str:
+        route = route0
+        last = ""
+        while True:
+            if route is None:
+                try:
+                    route = router.route(task, available=available,
+                                         exclude_models=frozenset(busy))
+                except router.NoRoute as e:
+                    holder["no_model"] = (
+                        (f"every model was unavailable ({', '.join(sorted(busy))}): "
+                         f"{last} " if busy else "") + str(e))
+                    return ""
+            holder["route"] = route
+            holder["model"] = route.model
+            fn = model
+            if fn is None:
+                if route.provider == router.GEMINI:
+                    from checker import gemini_model
+                    fn = gemini_model.as_text_model(origin=holder["origins"],
+                                                    model=route.model, budget=budget)
+                elif route.provider == router.OLLAMA:
+                    fn = OllamaRunner(route.model)
+                else:
+                    holder["no_model"] = (f"no text callable is wired for "
+                                          f"{route.provider}/{route.model}")
+                    return ""
+            try:
+                return fn(prompt)
+            except ModelBusy:
+                busy.add(route.model)
+            except OllamaUnavailable as e:
+                busy.add(route.model)
+                last = str(e)
+            except ModelRateLimited as e:
+                # A quota, not a fault: the next row may be the operator's own machine,
+                # which has none. Remembered so the refusal can name it.
+                busy.add(route.model)
+                last = (f"the free tier's quota for {route.model} is spent "
+                        f"({FREE_TIER_RPD_PER_MODEL} requests/day/model, measured); "
+                        f"{str(e)[:120]}")
+            route = None
+    return call
+
+
+def answer(question: str, *, model=None, available=None, budget=None,
+           stages=None, event_key: str | None = None, facts: dict | None = None) -> Outcome:
+    """One question, to one of ANSWERED / PARTIAL / REFUSED, through the verified cascade.
+
+    PLAN_23 O3: deterministic -> small -> large, escalating ONLY when L0 rejects. `model` is
+    injected -- a `Callable[[str], str]` -- so the tests reach no network; an injected model
+    is ONE stage, because a caller who supplied one model did not ask for a cascade over it.
+
+    `event_key` and `facts` are passed to `claim_bodies.bodies_for`, so a body the answer
+    TOUCHES but cannot claim from keeps its named refusal.
     """
     reading = ask_scope.read(question)
     unheld = [b for b in getattr(reading, "unheld", ()) or ()]
@@ -173,82 +282,111 @@ def answer(question: str, *, model=None, available=None, budget=None) -> Outcome
     origins = tuple(o for _, o in ev)
     names = tuple(s.source_id for s in sources)
 
-    task = router.Task("research.narrate", router.TEXT, router.LOW,
-                       purpose=router.NARRATION)
     have = available if available is not None else router.providers_available()
-
-    # A busy model is not an unavailable provider. Measured on the first live run of
-    # these fixtures: gemini-3.6-flash returned 503 six times running while
-    # gemini-3.1-flash-lite answered throughout, and treating the 503 as a refusal threw
-    # away six questions the next row could have answered. ModelBusy retries the NEXT
-    # row; ModelRetired and everything else do not, because no retry fixes those.
+    holder: dict = {"origins": origins}
     busy: set[str] = set()
-    _last = ""
-    route = summary = None
-    while True:
-        try:
-            route = router.route(task, available=have, exclude_models=frozenset(busy))
-        except router.NoRoute as e:
-            return Outcome(REFUSED, question, NO_MODEL,
-                           (f"every model was unavailable ({', '.join(sorted(busy))}): "
-                            f"{_last} " if busy else "") + str(e),
+
+    if stages is None:
+        stages = _stages(sources, question, model=model, available=have, budget=budget,
+                         busy=busy, holder=holder)
+        if stages is None:                      # no route at all, before anything was spent
+            return Outcome(REFUSED, question, NO_MODEL, holder.get("no_model", ""),
                            provisions=names)
 
-        call = model
-        if call is None:
-            if route.provider == router.GEMINI:
-                from checker import gemini_model
-                call = gemini_model.as_text_model(origin=origins, model=route.model,
-                                                  budget=budget)
-            elif route.provider == router.OLLAMA:
-                # No public-corpus clearance is bound here, and that is the point rather
-                # than an omission: `ollama_runner.local_model()` has already refused a
-                # `:cloud` model, so the prompt does not leave this machine. The
-                # clearance exists because a free tier's terms let it train on what it
-                # is sent; there is no third party here to send anything to.
-                                call = OllamaRunner(route.model)
-            else:
-                return Outcome(REFUSED, question, NO_MODEL,
-                               f"no text callable is wired for {route.provider}/"
-                               f"{route.model}", provisions=names, route=route)
-        try:
-            summary = quoted_span.summarise(
-                sources, model=call, base_system=_SYSTEM, question=question,
-                model_name=route.model, budget=None if call is not model else budget)
-            break
-        except ModelBusy:
-            busy.add(route.model)
-            continue
-        except OllamaUnavailable as e:
-            # The local server is not answering. Same shape as a 503: try the next row.
-            busy.add(route.model)
-            _last = str(e)
-            continue
-        except ModelRateLimited as e:
-            # A quota, not a fault. The first version refused here, reasoning that the
-            # next model has its own 20-a-day and spending it buys one question and
-            # costs tomorrow's. That reasoning holds for the next FREE-TIER row and not
-            # for the one after it: the last narration row is the operator's own
-            # machine, which has no quota at all, and refusing a question while a local
-            # model sits idle is the wrong trade however it is argued. So it falls
-            # through like a 503 -- and the quota is remembered, so that if nothing
-            # answers, the refusal names it rather than saying "no route".
-            busy.add(route.model)
-            _last = (f"the free tier's quota for {route.model} is spent "
-                     f"({FREE_TIER_RPD_PER_MODEL} requests/day/model, measured); "
-                     f"{str(e)[:120]}")
-            continue
+    result = mc.run(_prompt(sources, question), stages=stages,
+                    verify=_verifier(sources, origins, holder),
+                    bodies_for=lambda claims: claim_bodies.bodies_for(
+                        claims, event_key=event_key, facts=facts))
 
-    traced, dropped = len(summary.traced), len(summary.refused)
-    if not traced:
+    return _outcome(question, result, names, holder)
+
+
+def _stages(sources, question, *, model, available, budget, busy, holder):
+    """deterministic -> small -> large. None when no route exists at all.
+
+    The deterministic stage is declared with no callable and says so: there is no
+    deterministic answer path for a research question today -- retrieval picks the
+    provisions and a model narrates them. Declaring it and recording NO_ANSWER is how the
+    cost report can later show that the cheapest rung is empty, which a silently absent
+    stage never would.
+    """
+    det = mc.Stage(mc.DETERMINISTIC, call=None,
+                   unpriced_note="no deterministic answer path is wired for a research "
+                                 "question yet, so this stage did not run and nothing was "
+                                 "spent")
+    if model is not None:
+        # An injected model is one stage. Running the SAME callable twice would bill a
+        # caller twice for a cascade they did not ask for.
+        return [det, mc.Stage(mc.SMALL,
+                              _tier_callable(sources, question, route0=None, model=model,
+                                             available=available, budget=budget, busy=busy,
+                                             holder=holder),
+                              model="injected")]
+
+    task = router.Task("research.narrate", router.TEXT, router.LOW,
+                       purpose=router.NARRATION)
+    try:
+        first = router.route(task, available=available)
+    except router.NoRoute as e:
+        holder["no_model"] = str(e)
+        return None
+    out = [det, mc.Stage(mc.SMALL,
+                         _tier_callable(sources, question, route0=first, model=None,
+                                        available=available, budget=budget, busy=busy,
+                                        holder=holder),
+                         model=first.model)]
+    try:
+        second = router.route(task, available=available,
+                              exclude_models=frozenset({first.model}))
+    except router.NoRoute:
+        second = None
+    if second is not None:
+        out.append(mc.Stage(mc.LARGE,
+                            _tier_callable(sources, question, route0=second, model=None,
+                                           available=available, budget=budget, busy=busy,
+                                           holder=holder),
+                            model=second.model))
+    return out
+
+
+def _outcome(question, result, names, holder) -> Outcome:
+    """The cascade's Result, as the Outcome this intent has always returned.
+
+    The three product states are unchanged. What is new is that REFUSED can now be reached
+    after more than one model was tried, and the cascade's attempts say which.
+    """
+    summary = holder.get("summary")
+    route = holder.get("route")
+    dropped = len(summary.refused) if summary else 0
+
+    if result.status == mc.FAILED:
+        # Transport. Not an abstention: nobody decided. `agents/state.py` will not let a
+        # FAILED run carry a refusal code, and this mirrors it.
+        return Outcome(FAILED, question, None, result.error or "transport failure",
+                       summary=None, provisions=names, route=route)
+
+    if result.status == mc.NEEDS_LAWYER:
+        # Every stage rejected, or none could run. Which refusal it is depends on WHY.
+        if holder.get("no_model") and not holder.get("summary"):
+            return Outcome(REFUSED, question, NO_MODEL, holder["no_model"],
+                           provisions=names, route=route)
         return Outcome(REFUSED, question, NOTHING_TRACED,
-                       summary.refusal_reason() or "nothing traced",
+                       (summary.refusal_reason() if summary else None)
+                       or "nothing traced at any stage of the cascade",
                        summary=summary, provisions=names, route=route, dropped=dropped)
-    status = ANSWERED if not dropped else PARTIAL
-    return Outcome(status, question, None,
-                   "every sentence traced" if not dropped else
-                   f"{traced} sentence(s) traced, {dropped} dropped as unsupported",
-                   summary=summary, provisions=names, route=route, dropped=dropped)
+
+    traced = len(summary.traced) if summary else 0
+    # PARTIAL is now reached two ways, and both are true at once: sentences dropped by L0,
+    # and an answer resting on a body that is not fully held. The cascade decided the
+    # second; this line keeps the first.
+    status = ANSWERED if (not dropped and result.status == mc.ANSWERED) else PARTIAL
+    reason = "every sentence traced" if not dropped else \
+        f"{traced} sentence(s) traced, {dropped} dropped as unsupported"
+    if result.status == mc.PARTIAL and not dropped:
+        reason = ("every sentence traced, and the answer reaches a body of law this "
+                  "corpus does not fully hold")
+    return Outcome(status, question, None, reason, summary=summary, provisions=names,
+                   route=route, dropped=dropped)
 
 
 # ── the ten fixtures ─────────────────────────────────────────────────────────
@@ -397,6 +535,84 @@ def _test() -> None:
           f"{o_half.dropped} dropped)")
     check("five lakh" not in o_half.served,
           "...the dropped sentence is not served")
+    # ── the cascade: deterministic -> small -> large (PLAN_23 O3) ───────────
+    good = " ".join(srcs[0].text.split())[:150]
+    honest_text = (f"{quoted_span.SENTENCE_TAG} {good}\n"
+                   f"{quoted_span.QUOTE_TAG} {good}\n")
+    tried = []
+
+    def liar_stage(_p):
+        tried.append("small")
+        return (f"{quoted_span.SENTENCE_TAG} The company must hold it within forty-five "
+                f"days.\n{quoted_span.QUOTE_TAG} within forty-five days\n")
+
+    def honest_stage(_p):
+        tried.append("large")
+        return honest_text
+
+    o_esc = answer(FIXTURES[0][1], available=("gemini",),
+                   stages=[mc.Stage(mc.DETERMINISTIC, call=None,
+                                    unpriced_note="no deterministic path yet"),
+                           mc.Stage(mc.SMALL, liar_stage, model="small"),
+                           mc.Stage(mc.LARGE, honest_stage, model="large")])
+    check(tried == ["small", "large"],
+          f"the small model runs FIRST and the large one only after L0 rejects {tried}")
+    check(o_esc.status == ANSWERED,
+          f"...and the escalated answer is served ({o_esc.status})")
+
+    o_both = answer(FIXTURES[0][1], available=("gemini",),
+                    stages=[mc.Stage(mc.SMALL, liar_stage, model="s"),
+                            mc.Stage(mc.LARGE, liar_stage, model="l")])
+    check(o_both.status == REFUSED and o_both.code == NOTHING_TRACED,
+          f"every stage rejected is still REFUSED / NOTHING_TRACED, not served "
+          f"({o_both.status}/{o_both.code})")
+
+    # A transport error is FAILED, and is NOT an abstention.
+    def dead(_p):
+        raise ConnectionError("connection reset by peer")
+
+    o_dead = answer(FIXTURES[0][1], available=("gemini",),
+                    stages=[mc.Stage(mc.SMALL, dead, model="s"),
+                            mc.Stage(mc.LARGE, honest_stage, model="l")])
+    check(o_dead.status == FAILED and o_dead.code is None,
+          f"a transport error is FAILED with NO refusal code ({o_dead.status}/"
+          f"{o_dead.code}) -- nobody decided anything")
+    check("ConnectionError" in o_dead.reason, "...carrying the error it reports")
+    check(o_dead.served == "", "...and serves nothing")
+
+    # An injected model is ONE stage: a caller who supplied one model did not ask for a
+    # cascade over it, and running it twice would bill them twice.
+    calls = []
+
+    def once(_p):
+        calls.append(1)
+        return honest_text
+    answer(FIXTURES[0][1], model=once, available=("gemini",))
+    check(len(calls) == 1, f"an injected model is called ONCE ({len(calls)})")
+
+    # ── claim attribution, and an event body that keeps its refusal ─────────
+    o_ev = answer(FIXTURES[0][1], model=once, available=("gemini",),
+                  event_key="share_allotment", facts={"foreign_investor": True})
+    check(o_ev.status == PARTIAL,
+          f"an answer whose EVENT reaches an unheld body is PARTIAL ({o_ev.status}), "
+          f"even though every sentence traced")
+    check("does not fully hold" in o_ev.reason,
+          f"...and the reason says so rather than reporting a dropped sentence "
+          f"({o_ev.reason[:60]})")
+    check(o_ev.served and "45" not in o_ev.served,
+          "...while the traced sentences are still served: PARTIAL is not a refusal")
+
+    # The claims themselves attribute from the evidence path, not from a label.
+    holder = {"origins": tuple(o for _, o in ev6)}
+    v = _verifier(srcs, tuple(o for _, o in ev6), holder)
+    acc, _why, claims = v(honest_text)
+    check(acc and claims, "L0 admits an honest answer and produces claims")
+    check(all(c.evidence_path for c in claims),
+          "...each carrying the path of the corpus file its quote was found in")
+    check(claim_bodies.bodies_for(claims) == ("CA2013",),
+          f"...which attributes to CA2013 from the instrument, not from the source label "
+          f"({claim_bodies.bodies_for(claims)})")
+
     check("did not trace" in o_half.served and "1 of 2" in o_half.served,
           "...and the reader is told one was dropped, in the body rather than a footnote")
 
