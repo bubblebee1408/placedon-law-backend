@@ -134,6 +134,84 @@ The same channel Harvey uses. Extends the **13 existing read-only tools in
 `READ_ONLY_TOOLS == KNOWN_TOOLS`, so "read-only" is enforced rather than described.
 **BUILT.**
 
+### D8 — The production database: Azure PostgreSQL Flexible Server, Central India — OPEN on one figure
+
+**Status: OPEN. Nothing has been created.** The region, SKU, storage and access rules are
+settled; what is not settled is the monthly figure the founder is willing to spend, and this
+decision does not get made by an agent creating the server.
+
+**Region is `centralindia` and is not negotiable.** The corpus is Indian law and the buyer
+is an Indian in-house team; a database outside India would make data residency a question we
+would then have to answer for every client conversation. Any request to build this elsewhere
+is refused rather than accommodated.
+
+**Shape, when it is built:** PostgreSQL Flexible Server, `Standard_B1ms` (Burstable), 32 GiB
+storage, public access restricted to a single named IP, SSL required, admin role separate
+from `placedon_app` (NOSUPERUSER, NOBYPASSRLS, not the table owner) so that
+`scripts/rls_integration.py` proves isolation against the same role the application uses.
+
+#### The measurement, and the thing it corrected
+
+The prompt that opened this work assumed **B1MS is covered by the free 750 hours/month for
+PostgreSQL Flexible Server**. It is not, on this subscription, and the distinction is an
+offer boundary rather than a technicality:
+
+| | |
+|---|---|
+| Subscription | **Azure for Students**, `quotaId AzureForStudents_2018-01-01`, spending limit **On** |
+| What that offer gives | a **$100 credit for 12 months**, no card |
+| What carries the 750 h/month B1MS allowance | the **Azure free account** offer — a *different* offer |
+
+Measured 2026-09-30 from the public retail API,
+`https://prices.azure.com/api/retail/prices`, `armRegionName eq 'centralindia'`:
+
+| Meter | Price | At 730 h/month |
+|---|---|---|
+| `B1MS` compute (Burstable) | **$0.0245 / hour** | **$17.89** |
+| Storage, data stored | **$0.131 / GB / month** | **$4.19** at 32 GiB |
+| Backup storage LRS, beyond the included allowance | $0.095 / GB / month | — |
+| **Total, always on** | | **≈ $22.08 / month (≈ ₹1,900)** |
+
+**There is no smaller server.** `B1MS` is the cheapest meter in the region — the next tier,
+`B2S`, is 4× at $0.098/hour — and 32 GiB is the minimum storage a Flexible Server takes. A
+request for "something cheaper" of the same shape has no answer; the only lever is DUTY
+CYCLE, because a stopped server bills storage and not compute.
+
+| Duty cycle | ≈ / month | $100 credit lasts |
+|---|---|---|
+| Always on (730 h) | $22.08 | ~4.5 months |
+| 12 h/day (365 h) | $13.13 | ~7.6 months |
+| 8 h/day (240 h) | $10.07 | ~9.9 months |
+| 2 h/day (60 h) | $5.66 | ~17.7 months |
+| Stopped for a whole month | $4.19 | ~23.9 months |
+
+*Vendor-reported, not verified here:* that a stopped Flexible Server bills no compute, and
+that it may be stopped for at most 7 days before auto-starting. Both are Microsoft's
+documented behaviour and neither has been measured on this subscription.
+
+#### The consequence that decides this, and it is not the money
+
+**The spending limit is On.** When the $100 credit is exhausted the subscription is
+**disabled**, not billed. A *production* database that switches itself off partway through a
+year is worse than one that costs money, because the failure arrives without warning and
+looks like an outage rather than an invoice. So D8 is not "is $22/month affordable" — it is
+**"what happens in month five"**, and that question has to be answered before the server
+exists, not after.
+
+Any duty-cycled option is therefore a DEVELOPMENT database honestly labelled, not a
+production one. Calling a server that is off 16 hours a day "production" is the kind of
+claim this repository exists to refuse.
+
+#### Reversal condition
+
+Revisit when either holds: a payment method is attached, so exhausting the credit degrades
+to a bill rather than to an outage; or the product needs a database that is reachable when
+the founder is asleep, which every one of the duty-cycled rows above fails.
+
+Until one of those, **local PostgreSQL is the system of record** — it is what
+`scripts/rls_integration.py` has proved isolation against (121 checks, 0 failures, migrations
+001-007, as `placedon_app`), and it costs nothing.
+
 ### The rule that binds every model, in every decision above
 
 > A model **may** read, extract, label and phrase.
