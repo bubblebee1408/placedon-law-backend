@@ -29,8 +29,13 @@ it is for a reason that has nothing to do with the cascade.
 **NO_ANSWER is excluded too**, and for the opposite reason: no model ran, so there is
 nothing to have rejected and nothing to have spent.
 
-Run:  PYTHONPATH=. python3 scripts/cascade_report.py runs.jsonl
+Run:  PYTHONPATH=. python3 scripts/cascade_report.py --store
+      PYTHONPATH=. python3 scripts/cascade_report.py runs.jsonl
       PYTHONPATH=. python3 scripts/cascade_report.py --test
+
+`--store` reads `cascade_runs` through `gateway/store.py`, which is where the records
+actually live. The JSONL path is kept because the tests must reach no database: a report
+whose own suite needs Postgres is a report nobody runs.
 """
 from __future__ import annotations
 
@@ -208,11 +213,47 @@ def report_text(records) -> str:
     return "\n".join(lines)
 
 
+def from_store(backend=None, *, run_id: str | None = None, limit: int = 1000) -> list[dict]:
+    """Records as `gateway/store.py` holds them, shaped as this report reads them.
+
+    The store keeps `claim_count` and `refusal_count` rather than the claims themselves --
+    a report counts them and does not need the text, and the text is another firm's answer.
+    They are re-expanded into the list shapes `stage_stats` and `by_body` expect, so one
+    code path serves both sources.
+    """
+    if backend is None:
+        from gateway.store import select
+        backend = select()
+    out = []
+    for row in backend.read_cascades(run_id=run_id, limit=limit):
+        out.append({
+            "status": row["status"],
+            "error": row.get("error"),
+            "attempts": list(row.get("attempts") or []),
+            "body_ids": list(row.get("body_ids") or []),
+            # Length is all the report uses. Rebuilt as placeholders rather than invented
+            # text, so nothing here can be mistaken for the answer that was served.
+            "claims": [{}] * int(row.get("claim_count") or 0),
+            "refusals": [{}] * int(row.get("refusal_count") or 0),
+            "total_cost_inr": row.get("total_cost_inr"),
+            "stages_tried": [a.get("stage") for a in (row.get("attempts") or [])],
+        })
+    return out
+
+
 def main(argv) -> int:
+    if "--store" in argv:
+        records = from_store()
+        if not records:
+            print("no cascade records are stored yet. Nothing is reported rather than an "
+                  "empty table, which would read as a cascade that never rejects.")
+            return 0
+        print(report_text(records))
+        return 0
     args = [a for a in argv[1:] if not a.startswith("-")]
     if not args:
         print(__doc__.strip().splitlines()[0])
-        print("usage: python3 scripts/cascade_report.py <records.jsonl>")
+        print("usage: python3 scripts/cascade_report.py [--store | <records.jsonl>]")
         return 2
     print(report_text(load(args[0])))
     return 0
@@ -344,6 +385,36 @@ def _test() -> int:
     unp_text = report_text(unpriced)
     check("UNPRICED" in unp_text and "₹0.0000" not in unp_text.split("expected cost")[1][:30],
           "an unpriced cascade prints UNPRICED where the number would go, never ₹0.0000")
+
+    # ── reading from the store ──────────────────────────────────────────────
+    from gateway.store import MemoryBackend
+    b = MemoryBackend()
+    check(from_store(b) == [],
+          "an empty store yields no records, rather than an empty table that would read "
+          "as a cascade that never rejects")
+    b.write_cascade({"status": "PARTIAL", "attempts": [
+        {"stage": SMALL, "outcome": REJECTED, "reason": "NO_CITATION: invented",
+         "model": "s", "cost_inr": 0.02, "cost_note": ""},
+        {"stage": LARGE, "outcome": ACCEPTED, "reason": "", "model": "l",
+         "cost_inr": 0.10, "cost_note": ""}],
+        "body_ids": ["CA2013", "FEMA1999"], "claims": [{}], "refusals": [{}],
+        "total_cost_inr": 0.12})
+    stored = from_store(b)
+    check(len(stored) == 1 and stored[0]["status"] == "PARTIAL",
+          "a stored record reads back for the report")
+    st_stats = stage_stats(stored)
+    check(st_stats[SMALL]["rejected"] == 1 and st_stats[LARGE]["ran"] == 1,
+          "...with its stages and their outcomes intact")
+    e_st, _ = expected_cost(st_stats)
+    check(e_st is not None and abs(e_st - 0.12) < 1e-9,
+          f"...and E computes from it exactly as from JSONL ({e_st})")
+    check(set(by_body(stored)) == {"CA2013", "FEMA1999"},
+          "...grouped by every body the answer touched")
+    check(all(c == {} for c in stored[0]["claims"]),
+          "...and the claims are placeholders: the report counts them and never needs the "
+          "text, which is another firm's answer")
+    check("cascade report — 1 run(s)" in report_text(stored),
+          "...and the printed report reads the same from either source")
 
     # ── the scope invariant, restated where a report could break it ─────────
     check(all(not scope.body(b).answerable for b in ("FEMA1999",)),

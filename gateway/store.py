@@ -59,6 +59,8 @@ class Backend(Protocol):
     def read_decisions(self, run_id: str) -> list[dict]: ...
     def append_step(self, run_id: str, step: dict, *, key: str) -> bool: ...
     def set_run(self, run_id: str, *, status: str, refusal_code=None, result=None) -> None: ...
+    def write_cascade(self, record: dict, *, run_id: str | None = None) -> dict: ...
+    def read_cascades(self, *, run_id: str | None = None, limit: int = 1000) -> list[dict]: ...
 
 
 # ── in memory ────────────────────────────────────────────────────────────────
@@ -86,9 +88,35 @@ DECISION_KEYS = ("decision_id", "run_id", "item_ref", "decision", "reason", "quo
 # label whose text is "ok" teaches a later evaluation nothing.
 MIN_REASON_CHARS = 10
 
+# What a stored cascade record always reads back with. `attempts` keeps its ORDER: stage 2
+# only ran because stage 1 was rejected, and a record that has to be re-sorted to see that
+# has lost the thing it was kept for.
+CASCADE_KEYS = ("cascade_id", "run_id", "status", "error", "attempts", "body_ids",
+                "claim_count", "refusal_count", "total_cost_inr")
+
 
 class DecisionExists(StoreError):
     """One decision per item per run. A second one would overwrite the label."""
+
+
+def _check_cascade(row: dict) -> None:
+    """The invariants 007_cascade.sql states as CHECKs, refused in Python too.
+
+    Both, because a backfill or a fixture reaches one and not the other -- and because the
+    memory backend has no CHECK constraints at all, so without this the two backends would
+    accept different records and the conformance suite would be testing nothing.
+    """
+    if row["status"] not in ("ANSWERED", "PARTIAL", "NEEDS_LAWYER", "FAILED"):
+        raise StoreError(f"{row['status']!r} is not a cascade status")
+    if (row["status"] == "FAILED") != bool(row.get("error")):
+        raise StoreError(
+            "a FAILED cascade carries its transport error and nothing else does. A refusal "
+            "is a decision and a failure is not, and the two must not blur in the record.")
+    cost = row.get("total_cost_inr")
+    if cost is not None and float(cost) <= 0:
+        raise StoreError(
+            "a recorded cascade cost of 0 would claim the calls were free. UNPRICED is "
+            "NULL; there is no free provider here.")
 
 
 NO_CALL_NOTE = ("no model was called on this step, so there is nothing to price. This is "
@@ -122,6 +150,7 @@ class MemoryBackend:
     props: dict = field(default_factory=dict)
     documents: dict = field(default_factory=dict)
     decisions: dict = field(default_factory=dict)      # run_id -> [row]
+    cascades: list = field(default_factory=list)
 
     def write_run(self, run: dict) -> None:
         rid = run["id"]
@@ -183,6 +212,28 @@ class MemoryBackend:
             return False
         rows.append({**_shaped(step, STEP_KEYS), "idempotency_key": key})
         return True
+
+    def write_cascade(self, record: dict, *, run_id: str | None = None) -> dict:
+        """Store one `model_cascade.Result.to_dict()`. Returns the row as it reads back."""
+        import uuid as _uuid
+        row = {
+            "cascade_id": record.get("cascade_id") or str(_uuid.uuid4()),
+            "run_id": run_id,
+            "status": record.get("status", ""),
+            "error": record.get("error"),
+            "attempts": [dict(a) for a in record.get("attempts", [])],
+            "body_ids": list(record.get("body_ids", [])),
+            "claim_count": len(record.get("claims", [])),
+            "refusal_count": len(record.get("refusals", [])),
+            "total_cost_inr": record.get("total_cost_inr"),
+        }
+        _check_cascade(row)
+        self.cascades.append(row)
+        return dict(row)
+
+    def read_cascades(self, *, run_id: str | None = None, limit: int = 1000) -> list[dict]:
+        rows = [c for c in self.cascades if run_id is None or c["run_id"] == run_id]
+        return [dict(c) for c in rows[:limit]]
 
     def set_run(self, run_id: str, *, status: str, refusal_code=None, result=None) -> None:
         row = self.runs.setdefault(run_id, {"id": run_id})
@@ -374,6 +425,49 @@ class PostgresBackend:
                 (status, refusal_code,
                  None if result is None else _json.dumps(result),
                  status in ("ANSWERED", "PARTIAL", "REFUSED", "FAILED"), run_id))
+
+    def write_cascade(self, record: dict, *, run_id: str | None = None) -> dict:
+        import json as _json
+        import uuid as _uuid
+        row = {
+            "cascade_id": record.get("cascade_id") or str(_uuid.uuid4()),
+            "run_id": run_id,
+            "status": record.get("status", ""),
+            "error": record.get("error"),
+            "attempts": [dict(a) for a in record.get("attempts", [])],
+            "body_ids": list(record.get("body_ids", [])),
+            "claim_count": len(record.get("claims", [])),
+            "refusal_count": len(record.get("refusals", [])),
+            "total_cost_inr": record.get("total_cost_inr"),
+        }
+        _check_cascade(row)
+        with self._conn() as c:
+            c.execute(
+                "INSERT INTO cascade_runs (cascade_id, run_id, tenant_id, status, error, "
+                "attempts, body_ids, claim_count, refusal_count, total_cost_inr) "
+                "VALUES (%s,%s,%s,%s,%s,%s::jsonb,%s,%s,%s,%s)",
+                (row["cascade_id"], row["run_id"], self.tenant_id, row["status"],
+                 row["error"], _json.dumps(row["attempts"]), row["body_ids"],
+                 row["claim_count"], row["refusal_count"], row["total_cost_inr"]))
+        return dict(row)
+
+    def read_cascades(self, *, run_id: str | None = None, limit: int = 1000) -> list[dict]:
+        if run_id is not None and not _UUID.match(run_id or ""):
+            return []
+        where = "WHERE run_id = %s " if run_id is not None else ""
+        args = (run_id, limit) if run_id is not None else (limit,)
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT cascade_id, run_id, status, error, attempts, body_ids, "
+                "claim_count, refusal_count, total_cost_inr FROM cascade_runs "
+                + where + "ORDER BY created_at LIMIT %s", args).fetchall()
+        return [{"cascade_id": str(r[0]),
+                 "run_id": str(r[1]) if r[1] is not None else None,
+                 "status": r[2], "error": r[3], "attempts": r[4] or [],
+                 "body_ids": list(r[5] or []), "claim_count": r[6],
+                 "refusal_count": r[7],
+                 "total_cost_inr": float(r[8]) if r[8] is not None else None}
+                for r in rows]
 
     def read(self, run_id: str) -> dict | None:
         return self.read_run(run_id)
@@ -611,6 +705,60 @@ def conformance(backend) -> list[tuple[bool, str]]:
     ck(done.get("result") == {"findings": 3},
        f"...and the result is readable by a poller once the status goes final "
        f"({done.get('result')})")
+    # ── cascade records (PLAN_23 O3) ───────────────────────────────────────
+    ck(backend.read_cascades(run_id=idem) == [],
+       "a run with no cascade record reads as an empty list")
+    cid = str(_uuid.uuid4())
+    casc = {"cascade_id": cid, "status": "PARTIAL", "error": None,
+            "attempts": [{"stage": "small_model", "outcome": "REJECTED",
+                          "reason": "NO_CITATION: invented", "model": "s",
+                          "cost_inr": 0.02, "cost_note": ""},
+                         {"stage": "large_model", "outcome": "ACCEPTED", "reason": "",
+                          "model": "l", "cost_inr": 0.10, "cost_note": ""}],
+            "body_ids": ["CA2013", "FEMA1999"],
+            "claims": [{"text": "t"}], "refusals": [{"body": "FEMA1999"}],
+            "total_cost_inr": 0.12}
+    wrote = backend.write_cascade(dict(casc), run_id=idem)
+    ck(set(wrote) == set(CASCADE_KEYS),
+       f"a cascade record reads back with every key both backends promise "
+       f"({sorted(wrote)})")
+    got_c = backend.read_cascades(run_id=idem)
+    ck(len(got_c) == 1 and got_c[0]["status"] == "PARTIAL",
+       "...and is findable by the run it belonged to")
+    ck([a["stage"] for a in got_c[0]["attempts"]] == ["small_model", "large_model"],
+       f"...with its attempts IN ORDER: stage 2 only ran because stage 1 was rejected, "
+       f"and a record that must be re-sorted to see that has lost it "
+       f"({[a['stage'] for a in got_c[0]['attempts']]})")
+    ck(got_c[0]["attempts"][0]["reason"] == "NO_CITATION: invented",
+       "...each carrying the verifier's rejection reason, which is what a rate counts")
+    ck(got_c[0]["body_ids"] == ["CA2013", "FEMA1999"],
+       f"...and every body the answer touched ({got_c[0]['body_ids']})")
+    ck(abs((got_c[0]["total_cost_inr"] or 0) - 0.12) < 1e-9,
+       "...and the total cost, including the rejected stage")
+
+    unp = backend.write_cascade({"status": "NEEDS_LAWYER", "attempts": [],
+                                 "body_ids": [], "total_cost_inr": None}, run_id=idem)
+    ck(unp["total_cost_inr"] is None,
+       "an unpriced cascade stores NULL, which is UNPRICED")
+    for bad, why in (
+        ({"status": "FAILED", "attempts": [], "body_ids": []},
+         "FAILED with no error"),
+        ({"status": "ANSWERED", "error": "boom", "attempts": [], "body_ids": []},
+         "a non-FAILED record carrying a transport error"),
+        ({"status": "ANSWERED", "attempts": [], "body_ids": [], "total_cost_inr": 0},
+         "a recorded cost of 0, which would claim the calls were free"),
+        ({"status": "MAYBE", "attempts": [], "body_ids": []}, "an unknown status"),
+    ):
+        try:
+            backend.write_cascade(dict(bad), run_id=idem)
+            ck(False, f"{why} is refused")
+        except StoreError:
+            ck(True, f"refused: {why}")
+    ck(len(backend.read_cascades(run_id=idem)) == 2,
+       "...and none of the refused records was written")
+    ck(len(backend.read_cascades()) >= 2,
+       "cascades are readable without naming a run, which is what the report needs")
+
     backend.set_run(idem, status="REFUSED", refusal_code="CANCELLED")
     ck(backend.read_run(idem)["refusal_code"] == "CANCELLED",
        "...and a cancelled run keeps its code, which is what the trace is read for")
@@ -668,7 +816,7 @@ def _test() -> None:
 
     # ── both backends really do offer the same names ────────────────────────
     need = ("write_run", "read_run", "put_document", "get_document", "read", "write",
-            "write_decision", "read_decisions")
+            "write_decision", "read_decisions", "write_cascade", "read_cascades")
     for name in need:
         check(hasattr(MemoryBackend(), name)
               and hasattr(PostgresBackend("postgresql://x/y", tenant_id=T), name),

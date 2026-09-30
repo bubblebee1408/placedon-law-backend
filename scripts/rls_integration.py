@@ -70,16 +70,17 @@ MIGRATIONS = ROOT / "gateway" / "migrations"
 # Set this to an ISO date and a server description the day it is actually run.
 LAST_RUN: str | None = (
     "2026-09-30 — PostgreSQL 18.6 (Postgres.app), local socket, database placedon_dev, "
-    "asserted as role placedon_app (NOSUPERUSER, NOBYPASSRLS). 103 checks, 0 failures, "
-    "migrations 001-006 applied. `jobs` is the ninth tenant-scoped table and is proved the "
-    "same way as the other eight; it is also the one whose leak would be worst "
-    "OPERATIONALLY, because a worker that could see another tenant's job would EXECUTE "
-    "another firm's document. The Postgres queue runs the same conformance suite the gate "
-    "runs against a dict, plus the assertion SKIP LOCKED exists for: two workers claiming "
-    "at once get two different jobs, and a third finds nothing rather than blocking.")
+    "asserted as role placedon_app (NOSUPERUSER, NOBYPASSRLS). 121 checks, 0 failures, "
+    "migrations 001-007 applied. `cascade_runs` is the TENTH tenant-scoped table: it holds "
+    "which bodies another firm's question touched and the reason a model's output was "
+    "rejected, and it is proved the same way as the other nine -- A sees its own row and "
+    "none of B's; with the policy dropped it fails CLOSED and A sees nothing, not even its "
+    "own; with RLS disabled B's row APPEARS, which is what shows the check measures the "
+    "protection rather than an empty table.")
 
 TENANT_TABLES = ("actors", "api_keys", "documents", "audit_log",
-                 "runs", "run_steps", "propositions", "decisions", "jobs")
+                 "runs", "run_steps", "propositions", "decisions", "jobs",
+                 "cascade_runs")
 
 
 class RlsFailure(AssertionError):
@@ -182,6 +183,15 @@ def _seed(cur, tenant, actor, tag: str) -> None:
     cur.execute("INSERT INTO jobs (job_id, run_id, tenant_id, actor_id, intent, args) "
                 "VALUES (%s,%s,%s,%s,'review_document',%s)",
                 (uuid.uuid4(), rid, tenant, actor, json.dumps({"tag": tag})))
+    # A cascade record. It carries which bodies another firm's question touched and the
+    # reason a model's output was rejected -- one more row that must not cross.
+    cur.execute("INSERT INTO cascade_runs (cascade_id, run_id, tenant_id, status, "
+                "attempts, body_ids, total_cost_inr) "
+                "VALUES (%s,%s,%s,'PARTIAL',%s::jsonb,%s,%s)",
+                (uuid.uuid4(), rid, tenant,
+                 json.dumps([{"stage": "small_model", "outcome": "REJECTED",
+                              "reason": f"{tag}: NO_CITATION"}]),
+                 ["CA2013"], 0.02))
 
 
 class _SeededQueue:
@@ -261,7 +271,8 @@ def run(url: str) -> int:
               f"whose visibility is asserted\n")
 
         for f in ("001_core.sql", "002_runs.sql", "003_step_provenance.sql",
-                  "004_cost_note.sql", "005_decisions.sql", "006_jobs.sql"):
+                  "004_cost_note.sql", "005_decisions.sql", "006_jobs.sql",
+                  "007_cascade.sql"):
             cur.execute(sql(f))
             print(f"  applied {f}")
         _ensure_app_role(cur)
