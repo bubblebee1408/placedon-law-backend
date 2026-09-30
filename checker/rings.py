@@ -116,6 +116,9 @@ REGISTRY: dict[str, int] = {
     # Ring 0 because it decides whether a claim is verified and which body statuses bind
     # the answer, which is a legal-core decision however many models it calls.
     "checker.model_cascade": RING_0,
+    # The event -> bodies table. Ring 0: which bodies of law a transaction engages is a
+    # legal-core fact, and it decides whether an obligation may be decided at all.
+    "checker.events": RING_0,
     "checker.ground_span": RING_0,
     "checker.as_of": RING_0,
     "checker.amendment": RING_0,
