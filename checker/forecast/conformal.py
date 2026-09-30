@@ -10,7 +10,8 @@ labelled cases, it returns a set C(x) of outcomes with
 for any model and any data distribution, provided calibration and new cases are
 exchangeable. For a binary outcome the set is {}, {0}, {1} or {0, 1}:
 
-    a singleton  -> a FORECAST (the only case in which a number may be shown at all)
+    a singleton  -> a CANDIDATE forecast. It reaches a reader only as an `Estimate` of kind
+                    FORECAST, through `Estimate.render`, with a SERVABLE record for its target
     {0, 1}       -> ABSTAIN: the evidence does not separate the outcomes at this alpha
     {}           -> ABSTAIN as well: never shown as "neither will happen"
 

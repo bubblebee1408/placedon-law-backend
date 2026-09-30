@@ -4,7 +4,15 @@ without ever letting a likelihood decide what the law IS.
 PLAN_25 §5. Every function here is a known, published method. None is claimed as new
 mathematics. What this package adds is the contract around them: every output is an
 `Estimate` carrying its n, its interval, its method, what kind of claim it is, and the
-sentence saying what it is NOT. A bare number cannot leave this package.
+sentence saying what it is NOT. `render()` is the only sanctioned text path. `.value` is a
+public field for computation, and a caller must never serialise it without the rendered
+sentence beside it.
+
+## Mapping onto the product's output classes (web/assistant/contract.md)
+
+    DESCRIPTIVE   -> predictive_signal   never verified_fact, even when every record is verified
+    HYPOTHETICAL  -> predictive_signal   never deterministic_conclusion: a probability over facts
+    FORECAST      -> predictive_signal   only when SERVABLE for its OWN target; else abstained
 
 ## Where it sits
 
@@ -58,8 +66,9 @@ class Estimate:
     method: str
     kind: str
     not_a: str                      # the sentence saying what this is NOT
-    basis: str = ""                 # what data, as of when
+    basis: str = ""                 # what data / which rule, as of when, from which source
     notes: tuple[str, ...] = field(default_factory=tuple)
+    target_id: str = ""             # FORECAST only: the track record this may render against
 
     def __post_init__(self) -> None:
         if self.kind not in KINDS:
@@ -71,6 +80,22 @@ class Estimate:
         if not (self.low <= self.value <= self.high):
             raise EstimateError(f"value {self.value} outside its own interval "
                                 f"[{self.low}, {self.high}]")
+        if self.kind == FORECAST and not self.target_id.strip():
+            raise EstimateError("a FORECAST must name the target its track record is kept for")
+        if self.kind == HYPOTHETICAL and not self.basis.strip():
+            raise EstimateError("a HYPOTHETICAL must state the rule, date and source it applied")
+
+    def servable(self, track_record=None) -> bool:
+        """A FORECAST is servable only against a SERVABLE record kept for ITS target."""
+        if self.kind != FORECAST:
+            return True
+        if track_record is None or getattr(track_record, "target_id", None) != self.target_id:
+            return False
+        from checker.calibration_contract import SERVABLE, assess
+        return assess(track_record).state == SERVABLE
+
+    def output_class(self, track_record=None) -> str:
+        return "predictive_signal" if self.servable(track_record) else "abstained"
 
     def render(self, track_record=None) -> str:
         """The only way an estimate becomes text.
@@ -79,14 +104,20 @@ class Estimate:
         track record is SERVABLE; otherwise it degrades to a sentence with no number in it.
         That is the same rule the engine applies to an unattested instrument.
         """
-        if self.kind == FORECAST:
-            from checker.calibration_contract import SERVABLE, assess
-            verdict = assess(track_record)
-            if verdict.state != SERVABLE:
-                return (f"No forecast shown ({verdict.state}): {verdict.reason} "
-                        f"This is not {self.not_a}.")
-        return (f"{self.value:.3g} (95% interval {self.low:.3g}–{self.high:.3g}; n={self.n}; "
-                f"{self.method}; {self.kind.lower()}). Not {self.not_a}.")
+        tail = "".join(f" {n}." for n in self.notes) + (f" Basis: {self.basis}." if self.basis else "")
+        if self.kind == FORECAST and not self.servable(track_record):
+            from checker.calibration_contract import UNREGISTERED, assess
+            if track_record is None or track_record.target_id != self.target_id:
+                why = (f"{UNREGISTERED}: no track record is kept for '{self.target_id}'"
+                       + ("" if track_record is None else
+                          f" (a record for '{track_record.target_id}' does not count)"))
+            else:
+                v = assess(track_record)
+                why = f"{v.state}: {v.reason}"
+            return f"No forecast shown ({why}). This is not {self.not_a}.{tail}"
+        hi = "not reached" if self.high == float("inf") else f"{self.high:.3g}"
+        return (f"{self.value:.3g} (95% interval {self.low:.3g}–{hi}; n={self.n}; "
+                f"{self.method}; {self.kind.lower()}). Not {self.not_a}.{tail}")
 
 
 def _test() -> None:
@@ -120,15 +151,45 @@ def _test() -> None:
         except EstimateError:
             check(True, f"refuses {label}")
 
-    f = Estimate(0.7, 0.6, 0.8, 40, "conformal", FORECAST, "legal advice")
+    f = Estimate(0.7, 0.6, 0.8, 40, "conformal", FORECAST, "legal advice",
+                 target_id="change:SEBI_LODR:reg30")
     txt = f.render(None)
-    check(txt.startswith("No forecast shown (UNREGISTERED)") and "0.7" not in txt,
+    check(txt.startswith("No forecast shown (UNREGISTERED") and "0.7" not in txt,
           "a FORECAST with no track record renders no number at all")
     from checker.calibration_contract import TrackRecord
-    good = TrackRecord("t", n=500, mean_forecast=0.9, observed_rate=0.9, target_ece=0.05,
-                       baseline_score=0.09, model_score=0.04)
+    good = TrackRecord("change:SEBI_LODR:reg30", n=500, mean_forecast=0.9, observed_rate=0.9,
+                       target_ece=0.05, baseline_score=0.09, model_score=0.04)
+    other = TrackRecord("filed-late-given-history", n=500, mean_forecast=0.9,
+                        observed_rate=0.9, target_ece=0.05, baseline_score=0.09,
+                        model_score=0.04)
+    # the trust-boundary review's finding: ANY servable record used to unlock the number
+    t_other = f.render(other)
+    check("0.7" not in t_other and "does not count" in t_other,
+          "a SERVABLE record kept for a DIFFERENT target does not unlock the number")
     check(f.render(good).startswith("0.7 "),
-          "...and renders only once calibration_contract says SERVABLE")
+          "...it renders only against a SERVABLE record for its own target")
+    check(f.output_class(other) == "abstained" and f.output_class(good) == "predictive_signal",
+          "output class: abstained without its own record, predictive_signal with it")
+    check(e.output_class() == "predictive_signal",
+          "a DESCRIPTIVE statistic is a predictive_signal, never a verified_fact")
+    try:
+        Estimate(0.5, 0.4, 0.6, 10, "m", FORECAST, "x")
+        check(False, "a FORECAST with no target is refused")
+    except EstimateError:
+        check(True, "a FORECAST with no target is refused")
+    try:
+        Estimate(0.5, 0.4, 0.6, 10, "m", HYPOTHETICAL, "x")
+        check(False, "a HYPOTHETICAL with no stated rule/date/source is refused")
+    except EstimateError:
+        check(True, "a HYPOTHETICAL with no stated rule/date/source is refused")
+    noted = Estimate(0.3, 0.2, 0.4, 3, "m", DESCRIPTIVE, "a prediction",
+                     basis="NCLT Mumbai, to 2026-08-31", notes=("mostly prior: 3 cases",))
+    r = noted.render()
+    check("mostly prior: 3 cases" in r and "Basis: NCLT Mumbai" in r,
+          "notes and basis survive rendering -- uncertainty is never dropped on the way out")
+    inf = Estimate(5.0, 4.0, float("inf"), 6, "KM", DESCRIPTIVE, "a prediction")
+    check("not reached" in inf.render() and "inf" not in inf.render(),
+          "an unbounded upper limit renders as 'not reached', never 'inf'")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:

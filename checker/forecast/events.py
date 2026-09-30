@@ -125,7 +125,7 @@ def fit_rate_prior(histories: list[tuple[int, float]]) -> RatePrior:
 
 
 def p_change(events: int, years: float, prior: RatePrior, horizon: float, *,
-             basis: str = "") -> Estimate:
+             target_id: str, basis: str = "") -> Estimate:
     """P(at least one amendment within `horizon` years), with a 95% posterior band."""
     if horizon <= 0 or years < 0 or events < 0:
         raise EstimateError("horizon must be positive; history cannot be negative")
@@ -137,7 +137,7 @@ def p_change(events: int, years: float, prior: RatePrior, horizon: float, *,
     return Estimate(p, min(lo, p), max(hi, p), events,
                     "Gamma-Poisson (empirical Bayes), negative-binomial predictive",
                     FORECAST, "a statement that the law will or will not change",
-                    basis=basis,
+                    basis=basis, target_id=target_id,
                     notes=(f"{events} event(s) in {years:g} years for this provision; "
                            f"prior pooled from {prior.strata} provisions",))
 
@@ -188,7 +188,7 @@ def _test() -> None:
             lams.append(lam)
         prior = fit_rate_prior(hist)
         for (k, t), lam in zip(hist, lams):
-            preds.append(p_change(k, t, prior, 1.0).value)
+            preds.append(p_change(k, t, prior, 1.0, target_id="sim").value)
             pooled_preds.append(1.0 - math.exp(-prior.pooled_rate))
             outcomes.append(1 if poisson(lam) >= 1 else 0)
     n = len(preds)
@@ -212,7 +212,8 @@ def _test() -> None:
 
     # ── the corpus as it is: a forecast is computed, and NOT rendered ──────
     real = p_change(1, 12.0, fit_rate_prior([(1, 12.0), (0, 12.0), (2, 12.0), (0, 12.0),
-                                             (3, 12.0)]), 1.0)
+                                             (3, 12.0)]), 1.0,
+                    target_id="change:CA2013:s.2(85)")
     txt = real.render(None)
     check(txt.startswith("No forecast shown") and f"{real.value:.3g}" not in txt,
           "with no track record, the forecast is computed but no number is shown")
