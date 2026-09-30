@@ -135,7 +135,10 @@ def _rows_for(rows: list[dict], provisions: list[str]) -> tuple[list[dict], list
             undecided.append({"kind": "cannot_verify", "ref": row["obligation_id"],
                               "duty": row["duty"], "provision": row["provision"],
                               "detail": row["basis"], "missing_facts": row["missing_facts"],
-                              "blocked_by": row["blocked_by"]})
+                              "blocked_by": row["blocked_by"],
+                              # IN_PROGRESS: the period is running, so this is not a
+                              # shortfall and nothing is missing (D24, A-012 NEW-5).
+                              "period": row.get("period")})
         else:
             decided.append(row)
     return decided, undecided

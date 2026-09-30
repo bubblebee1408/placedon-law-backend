@@ -53,6 +53,12 @@ CANNOT_DETERMINE = "CANNOT_DETERMINE"
 ROW_STATES = (APPLIES_SATISFIED, APPLIES_NOT_SATISFIED, APPLIES_UNDETERMINED,
               DOES_NOT_APPLY, CANNOT_DETERMINE)
 
+# A PERIOD marker, not a row state: the period a periodic duty is measured over has not
+# ended on the read date, so a count so far is not a shortfall (A-012 NEW-5; founder rule
+# 3, 2026-09-30; contract.md D24). The row keeps a state from ROW_STATES -- a client that
+# knows only those still reads it as not-a-defect -- and carries `period` beside it.
+IN_PROGRESS = "IN_PROGRESS"
+
 # States in which a reviewer must look. A row nobody has to read is a row that
 # can be wrong quietly.
 NEEDS_ATTENTION = (APPLIES_NOT_SATISFIED, APPLIES_UNDETERMINED, CANNOT_DETERMINE)
@@ -80,6 +86,9 @@ class Evidence:
     resident_director_days: int | None = None      # s.149(3): max days-in-India
                                                    # among the directors, this FY
     incorporated_this_financial_year: bool | None = None  # s.149(3) proviso
+    # The date the evidence is READ on: the earlier of as_of and the day the answer is
+    # made. A periodic duty whose period ends after it is IN_PROGRESS. None = not told.
+    read_on: date | None = None
 
     # ── transaction evidence for the s.185/186/188 controls (all Optional) ──
     # None means "we were not told"; an empty tuple means "we were told there are
@@ -95,7 +104,8 @@ class Evidence:
 # A decider answers "was it complied with", given the profile and the evidence.
 # It returns None when the evidence does not settle it — which is the common
 # case and must never be mistaken for a pass.
-Decider = Callable[[CompanyProfile, Evidence], "tuple[bool | None, str]"]
+Decider = Callable[[CompanyProfile, Evidence], "tuple[bool | str | None, str]"]
+# ...or (IN_PROGRESS, why): the period has not ended, so neither answer is available yet.
 
 
 @dataclass(frozen=True)
@@ -126,6 +136,7 @@ class Row:
     missing_facts: tuple[str, ...] = ()
     blocked_by: str = ""                  # a task id, where a source is missing
     evidence: tuple[str, ...] = field(default_factory=tuple)
+    period: str = ""                      # IN_PROGRESS when the duty's period is running
 
     @property
     def needs_attention(self) -> bool:
@@ -273,6 +284,14 @@ def _decide_board(p: CompanyProfile, ev: Evidence) -> tuple[bool | None, str]:
         # that may not owe it, so this declines instead.
         return None, ("the s.173(5) regime depends on small-company status, "
                       "which cannot be determined")
+
+    year_end = date(ev.calendar_year, 12, 31)
+    if ev.read_on is not None and year_end > ev.read_on:
+        n = len([d for d in ev.board_meetings if d.year == ev.calendar_year])
+        return IN_PROGRESS, (
+            f"calendar year {ev.calendar_year} has not ended on {ev.read_on.isoformat()}. "
+            f"s.173 sets a minimum for the whole year, so {n} meeting(s) so far is not a "
+            f"shortfall; it is decided once the year ends")
 
     r = review(company_class=cls, calendar_year=ev.calendar_year,
                meetings=list(ev.board_meetings),
@@ -853,7 +872,13 @@ def build(profile: CompanyProfile,
         met, why = (ob.decided_by(profile, ev) if ob.decided_by
                     else (None, "no decision procedure is registered for this duty"))
 
-        if met is True and ob.limbs_not_decided:
+        if met == IN_PROGRESS:
+            # Neither a pass nor a shortfall, and not a data gap either: nothing is missing
+            # that the user could supply. The period simply has not ended.
+            rows.append(Row(ob.obligation_id, ob.duty, ob.provision,
+                            APPLIES_UNDETERMINED, f"IN PROGRESS: {basis}. {why}",
+                            period=IN_PROGRESS))
+        elif met is True and ob.limbs_not_decided:
             # Everything we CAN check passed. That is not the same as compliance,
             # and the row must not say it is.
             rows.append(Row(ob.obligation_id, ob.duty, ob.provision,

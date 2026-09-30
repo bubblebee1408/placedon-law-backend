@@ -283,10 +283,17 @@ single table: `EVIDENCE_KEYS` is derived from it, `api._evidence()` builds from 
 `checker/ask.py` refuses by it, so no field can be read by one route and ignored by another. An
 undeclared field, a wrong type or an out-of-range value is a `400` — never a coercion, never a
 `500`. Two ranges, and where they come from:
-- `calendar_year`: an `int` from **2015** to the last calendar year **ended** by the read date.
-  2015 because `checker/as_of.COMMENCEMENT` is 01-04-2014, so calendar 2014 straddles the 1956
-  Act; the upper bound because `s173_slice` counts meetings without knowing the date it is read
-  on, so a year still running would be reported short of four meetings in September.
+- `calendar_year`: an `int` from **2015** to the year of the **read date**. 2015 because
+  `checker/as_of.COMMENCEMENT` is 01-04-2014, so calendar 2014 straddles the 1956 Act; a later
+  year has not begun and is a `400`. **A year still running on the read date is IN PROGRESS,
+  never a shortfall** (A-012 NEW-5, founder rule 3, 2026-09-30): s.173 sets a minimum for the
+  whole year, so three meetings by September is not short of four. The row keeps a state from
+  `ROW_STATES` (`APPLIES_UNDETERMINED`, no missing facts) and carries `period: "IN_PROGRESS"`
+  beside it, with a basis that starts `IN PROGRESS`; `/v1/ask` names it in `not_confirmed`
+  with the same `period`. **The read date is the EARLIER of `as_of` and the day the answer is
+  generated** — an `as_of` that has not arrived cannot end a year (until this, `as_of`
+  2027-01-01 let a running 2026 through as ended and reported it short). Until 2026-09-30 a
+  running year was a `400`.
 - `resident_director_days`: an `int` 0–366 — a financial year runs to 31 March (s.2(41)), so a
   full one has 365 or 366 days; a longer first year is s.149(3)'s proportionate proviso, which
   this engine does not compute.
