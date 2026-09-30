@@ -77,9 +77,13 @@ checker/forecast). Register it in checker/rings.py PACKAGE_RINGS as RING_3 next 
 `agents`, and update the rings self-test so Ring 3 = {agents, checker.forecast}. Show that a
 decider importing either is CAUGHT. Add scripts/run_tests.sh entries.
 Add ONE read-only verb, forecast.whatif: inputs {rule, facts, as_of}. `rule` names a Ring 0
-decider from an explicit allow-list (start with the s.2(85) monetary limbs through
-checker.prescribed_thresholds). `facts` accepts {"uniform":[lo,hi]}, {"triangular":[lo,
-mode,hi]}, {"normal":[mu,sd]} or a fixed value. It returns Estimate fields plus swing().
+decider from an explicit allow-list (start with checker.classify.small_company, proviso
+included; its INSUFFICIENT_DATA maps to REFUSED, never to a probability). `facts` accepts
+{"uniform":[lo,hi]}, {"triangular":[lo,mode,hi]}, {"normal":[mu,sd]} or a fixed value. It
+returns Estimate.render() text with kind, n, method, not_a, notes and basis, plus swing().
+value/low/high never leave without the rendered sentence. The output class is
+predictive_signal (docs/plan25/02 §4). Do NOT persist it through verbs.py's traced →
+VERIFIED proposition path.
 It must appear on REST, MCP and CLI (the parity test proves it). A refusing decider returns
 REFUSED with the decider's reason, never a probability. Tests: the exact-answer cases from
 propagate._test through the verb; parity; an unknown rule refused.

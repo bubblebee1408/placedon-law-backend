@@ -10,7 +10,8 @@ file 01. Where it rests on a line of code, the line is in `.claude/loops/…_D_C
 ```
 ╔════════════════════════════════════════════════════════════════════════════════════╗
 ║ SURFACES      REST /v2/<verb>        MCP themis.<verb>          CLI placedon <verb>  ║
-║ (BUILT)       web app, Word add-in   Claude/Harvey/any agent    engineers, cron, CI   ║
+║ (BUILT)       web app, Word add-in   local stdio agents only;   engineers, cron, CI   ║
+║                                      Harvey: NOT BUILT (needs hosted MCP + OAuth)     ║
 ║               └──────────── generated from ONE verb table + parity test ──────────┘  ║
 ╠════════════════════════════════════════════════════════════════════════════════════╣
 ║ L0 GATE       API key → (tenant, actor) · RLS on Postgres · audit row · rate limit NEW║
@@ -43,6 +44,9 @@ file 01. Where it rests on a line of code, the line is in `.claude/loops/…_D_C
 ║               body-of-law onboarding: acquire → attest → encode → test → HELD          ║
 ╚════════════════════════════════════════════════════════════════════════════════════╝
 ```
+
+The surfaces exist in the orchestration snapshot: `gateway/verbs.py` (verb table and parity
+test), `addin/` (Word add-in), and row-level security in `gateway/migrations/` (FORCE in `001_core.sql`).
 
 **Read it as three loops turning at different speeds:**
 
@@ -101,11 +105,11 @@ same six gates, and **only the last gate changes what is served**:
   (s(CASP)/Blawx or Prolog, free) becomes worth adding when a body's rules are mostly
   exceptions ("notwithstanding", "subject to"), for example IBC timelines or FEMA
   permitted-route rules.
-- **Order of bodies** (recommended, file 08):
+- **Order of bodies** (recommended, file 08; DPDP dates are [S], reported as 13 May 2027, some sources 14 May, UNVERIFIED against the Gazette):
   1. **SEBI LODR**: the text is already held; only ENCODE and TEST remain.
   2. **IBC**: the same forum as the Companies Act (NCLT), so forum analytics share data.
   3. **FEMA/FDI**: the highest in-house demand after corporate law [I].
-  4. **DPDP**: core obligations bind from 13 May 2027.
+  4. **DPDP**: core obligations reported to bind from 13 May 2027 [S].
 
   Each body is about **one lawyer-engineer-month** [I, estimate].
 
@@ -129,11 +133,11 @@ shown only beside law that is held. For each body, the forums and their public r
 | L2 Plan | linear tuple of steps; no budget; **nothing calls it** | a typed plan with `budget_tokens`, `timeout_s`, `as_of`, `bodies_of_law`; the gateway calls `plans.template` | Anthropic vendor data: tokens explain 80% of variance, so budgets must be declared (PLAN_23 §1.3) |
 | L3 Execute | queue exists but is **unreachable**; resume re-runs model calls | give surfaces a queue in `Context`; make handlers generators so each step persists before the next; renew leases | appendix D F3 |
 | Scope | 9 bodies; practitioner phrasing leaks (5/14) | per-body lexicon from each body's own acquired text (ACQUIRE gives G0.3 its source) | gold-set run 2026-09-25 |
-| Retrieve | BM25 over structure; **no as_of filter** (F5) | **filter by as_of before ranking**, over the bitemporal store | FiscalQA Pro: static RAG finds the right version 0% of the time; date-conditioned retrieval gets 98.3% |
+| Retrieve | BM25 over structure; **no as_of filter** (F5) | **filter by as_of before ranking**, over the bitemporal store | FiscalQA Pro [S]: static RAG finds the right version 0% of the time; date-conditioned retrieval gets 98.3% |
 | Decide | Ring 0 deciders per provision | per-body encodings; a solver for exception-heavy bodies | Catala found a bug in official code; LLM formalisation is unfaithful |
 | Narrate | router → Azure llama-70b (gpt-5-mini fallback) | free no-train hosts for **public** text only (file 04) | appendix A |
 | Forecast | — | `checker/forecast/` **(BUILT in this loop)** | file 03 |
-| L6 Verify | span tracing, byte-identical | add the **sufficient-context gate** before narration (it may only withhold) | Joren et al., ICLR 2025: models hallucinate 15–40% on insufficient context |
+| L6 Verify | span tracing, byte-identical | add the **sufficient-context gate** before narration (it may only withhold) | Joren et al., ICLR 2025 [R]: models hallucinate 15–40% on insufficient context |
 | L7 Critic | not built | removes or narrows once, on the verifier's reason | Huang et al., ICLR 2024: no intrinsic self-correction |
 | L9 Human gate | approve/reject after serving; **ask runs cannot be approved** (F2) | **fix F2**; `quote_viewed` (from T0) as migration **007**; `reviews.next` verb | automation bias (PLAN_23 §1.8) |
 | L10 Record | provider, region, cost | + law_versions, as_of, behaviour_version, MAST tag, dataset_version | recall and the learning loop need them |
@@ -156,17 +160,32 @@ shown only beside law that is held. For each body, the forums and their public r
  verb forecast.rate    ─► forecast.rates     ◄─ observation_store (ForumCase rows)  ─► Estimate(DESCRIPTIVE)
  verb forecast.duration─► forecast.survival  ◄─ observation_store                    ─► Estimate(DESCRIPTIVE)
  verb forecast.change  ─► forecast.events    ◄─ corpus amendment chains + eGazette   ─► Estimate(FORECAST)
- (matter outcome)      ─► forecast.conformal ◄─ labelled resolved matters            ─► set or ABSTAIN
+ (matter outcome: NOT BUILT, not exposed anywhere; needs labelled resolved matters and counsel)
+                       ─► forecast.conformal ◄─ labelled resolved matters            ─► set or ABSTAIN
                                │
                                └─► Estimate.render(track_record) ─► calibration_contract.assess
                                     FORECAST without SERVABLE record → no number, a sentence
 ```
 
-- **All five are read-only verbs**, so they appear on REST, MCP and CLI together (parity
-  test).
+- **These would be read-only verbs; none exists yet.** Once built they appear on REST, MCP
+  and CLI together (parity test).
 - **Ring 3 is enforced by `rings.py`.** No decider can import a forecast, and the test
   proving that was written first and seen red.
-- **`forecast.whatif` works on held law today.** The other four wait for data (file 03 §4).
+- **`propagate` works in-process on held law today, and no verb exists yet.** The other
+  four wait for data (file 03 §4).
+
+**How each kind maps onto the product's output classes** (`web/assistant/contract.md`):
+
+| Kind | Output class | Never |
+|---|---|---|
+| DESCRIPTIVE | predictive_signal | verified_fact, even when every source record is verified |
+| HYPOTHETICAL | predictive_signal | deterministic_conclusion: it is a probability over facts; only the rule is exact |
+| FORECAST | predictive_signal **only** when SERVABLE for its own target; otherwise abstained | a number without its own track record |
+| conformal {0,1} or {} | abstained | "neither will happen" |
+| a Ring 0 refusal inside propagate | abstained, carrying the decider's reason | a probability |
+
+**Warning for Move 2:** the orchestration branch's `verbs.py:213` stores any traced
+proposition as `VERIFIED`. Forecast verbs must not persist through that path.
 
 ## 5. The live-data loop (daily), with God's Eye's reliability patterns
 
@@ -216,12 +235,12 @@ Detailed in file 05. Its place in the architecture:
              (eval, frozen splits)         (track records for Ring 3)     (ATTEST, ENCODE, TEST)
 ```
 
-**The agent never decides.** It cannot write a decision: MCP has no write verbs, and
+**The agent never decides.** It cannot write a decision: MCP has no write verbs (`checker/mcp/policy.py`), and
 `runs.approve` needs an authenticated human key. The literature is why:
 
-- LLM annotators score F1 0.54 on statutes (Savelka & Ashley).
+- LLM annotators score F1 0.54 on statutes (Savelka & Ashley) [S].
 - An LLM labeller must pass the Alternative Annotator Test before its labels count
-  (ACL 2025).
+  (ACL 2025) [S].
 
 ## 7. What makes it "deep", in one table
 
@@ -230,7 +249,7 @@ Detailed in file 05. Its place in the architecture:
 | Hears | ASR of the tenant's own recordings → SS-1 minutes check (PLAN_24 T8) | later |
 | Reads | vault upload, OCR (measured choice), structural chunking | built for text; OCR choice open |
 | Understands | extraction proposed by a model, admitted by code (spans, types, domains) | built for contracts and SS documents |
-| Gives judgments | Ring 0 deciders per body; later a solver | built for CA2013 provisions; the pipeline for the rest |
+| Applies held provisions to stated facts | Ring 0 deciders per body; later a solver | built for CA2013 provisions; the pipeline for the rest |
 | Understands research papers | research registry: `PaperCard`, model drafts, a person admits (PLAN_24 T2) | design |
 | Adapts | per-tenant playbook, precedent memory, per-tenant scorers | playbook built; the rest design |
 | Updates | daily feeds + recall + learning loop with a promotion gate | feeds built; loop design |

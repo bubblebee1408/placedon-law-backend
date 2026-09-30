@@ -4,8 +4,9 @@
 standard library, and is registered as Ring 3 in `checker/rings.py`. Every module proves
 itself with seeded simulation in its `_test()`.
 
-**No real legal data has been run through it.** Every number on this page comes from a
-simulation where the truth is known. That is how you check that an algorithm works. It is
+**No real legal data has been run through it.** Every rate, interval and score on this page
+comes from a simulation where the truth is known. The ₹10 cr / ₹100 cr limits are served by
+the engine (G.S.R. 880(E), CORROBORATED), and 9/19/99 is arithmetic. That is how you check that an algorithm works. It is
 not how you check that Themis is accurate. That needs human labels, which is file 05.
 
 **Why this is not the Bayesian engine `LESSONS.md` L-15 deleted.** L-15's engine ran correct
@@ -27,8 +28,8 @@ buildable now, and one is not.
 | **What-if over uncertain facts** | "Will we still be a small company next year if turnover lands between ₹80 and ₹105 crore?" | Run the exact legal rule over the stated range of facts | `propagate` |
 | **Base rates from records** | "How often does NCLT allow compounding under this section? How long does a scheme take?" | Partial pooling; survival with censoring | `rates`, `survival` |
 | **Forecast of a future event** | "Will SEBI amend this regulation in the next 12 months?" | Pooled event rates, scored against what then happens | `events`, `scoring` |
-| **Forecast of a case outcome** | "Will we win?" | Only as a *set* with guaranteed coverage, and abstaining when it cannot separate the outcomes | `conformal` |
-| ~~Simulated judge or court~~ | "Simulate how the bench will reason" | **Not built.** Agent courts are unvalidated. LLMs are near random on formal counterfactuals (CounterBench) and flatten identity groups (Wang et al., NMI 2025) | — |
+| ~~Forecast of a case outcome~~ | "Will we win?" | **Not built.** Needs labelled resolved matters and counsel. The method exists (`conformal`: a set with guaranteed coverage, abstaining when it cannot separate the outcomes), and is tested on simulations only | — |
+| ~~Simulated judge or court~~ | "Simulate how the bench will reason" | **Not built.** Agent courts are unvalidated. LLMs are near random on formal counterfactuals (CounterBench [S]) and flatten identity groups (Wang et al., NMI 2025 [S]) | — |
 
 **The rule that holds across all of them:** the law is never probabilistic. The rule is
 applied exactly. Only facts, rates and future events carry probability. That is why
@@ -70,7 +71,7 @@ median = first t with S(t) ≤ 0.5; interval read from the band
 
 | Check | Result |
 |---|---|
-| **The naive method** (drop pending cases) | median **4.42**: wrong by a third, and always too fast |
+| **The naive method** (drop pending cases) | median **4.42**: wrong by a third, and too fast in this sample |
 | Kaplan–Meier | median **7.41** |
 | Coverage of the 95% interval over 200 samples | **188/200 = 94%** |
 | Without censoring, KM equals 1 − ECDF | exact at every step |
@@ -99,9 +100,11 @@ ACI:  α_{t+1} = α_t + γ(α - err_t)       |mean err - α| ≤ (max(α₁,1-α
 | After the same change, ACI | error held at **10.2%**, inside the proven bound of ±2.3 pts |
 | Minimum labelled cases before any singleton is possible | **9 / 19 / 99** for α = 0.10 / 0.05 / 0.01 |
 
-This is the most important result on the page. **A wrong model plus conformal is safe.
-The same wrong model alone is not.** The research (Barber et al., Annals of Statistics
-2023) says an amendment breaks exchangeability. ACI is the fix, and it is built and tested.
+This is the most important result on the page. **In this simulation, a miscalibrated model
+wrapped in conformal kept its 90% marginal coverage (90.06%) under exchangeability. After a
+simulated law change, only ACI held (10.2% error).** Barber et al. (Annals of Statistics
+2023) [S] treat conformal prediction under drift. That an amendment is such a drift is our
+inference [I]. ACI is built and tested.
 
 ### 2.4 `events`: will this rule change within h years?
 
@@ -134,11 +137,15 @@ swing(): pin each uncertain fact at its 5th / 95th percentile -> which unknown m
 | Uniform(40, 60) > 50 | 0.5000 | 0.5056 |
 | Triangular(30, 45, 70) > 50 | 0.4000 | 0.4025 |
 | Compound OR rule over two facts | 0.5793 | 0.5811 |
-| **Real s.2(85) monetary limbs**, using the limits the engine serves today (₹10 cr / ₹100 cr, G.S.R. 880(E)), turnover ~ U(limit−20, limit+5) | 0.80 | **0.8063** |
+| **Real Ring 0 decider `checker.classify.small_company`** (proviso included), limits served by the engine (₹10 cr / ₹100 cr, G.S.R. 880(E)), turnover ~ U(limit−20, limit+5) | 0.80 | **0.7925** (n = 800) |
+| Same, holding company | 0 | **0.0**: the proviso is applied |
 
-`swing()` correctly names turnover as the fact that decides the answer. A decider that
-refuses (for example, an unattested threshold) produces **no probability**. A decider
-returning a score instead of True/False is refused.
+- `swing()` correctly names turnover as the fact that decides the answer.
+- If the decider answers **INSUFFICIENT_DATA** for any draw (for example, an unknown proviso
+  fact), **no probability is formed**. An abstention is never counted as "does not apply".
+- A decider that raises (for example, an unattested threshold) produces no probability.
+- A decider returning a score is refused.
+- Every estimate states the rule id, the as-of date and the source.
 
 ### 2.6 `scoring`: grading forecasters, and combining them
 
@@ -161,12 +168,16 @@ pool:  logit p = d · Σ w_i logit p_i    (d = 1 until the promotion gate says o
 - **Ring 3, enforced.** `rings.py` now asserts that Ring 3 holds `checker.forecast` and
   nothing else. It also asserts that a Ring 0 decider importing any forecast module,
   including one not yet written, is caught.
-- **Rendering is gated.** `Estimate.render()` refuses to print a FORECAST number unless
-  `calibration_contract.assess()` says SERVABLE. The two other kinds of claim, DESCRIPTIVE
-  and HYPOTHETICAL, always carry n, an interval, the method and a "not a …" sentence.
+- **Rendering is gated.** `Estimate.render()` prints a FORECAST number only when
+  `calibration_contract.assess()` says SERVABLE **for a record kept for that forecast's own
+  `target_id`**. An independent review showed that the first version accepted *any* SERVABLE
+  record; that is fixed and tested. Every render carries n, the interval, the method, the
+  "not a …" sentence, the notes ("mostly prior", "censored", "not reached") and the basis. A
+  HYPOTHETICAL without a stated rule, date and source is refused at construction.
 - **Orchestration.** Each algorithm becomes a verb (file 02 §4): `forecast.rate`,
-  `forecast.duration`, `forecast.change`, `forecast.whatif`. All four are read-only, so
-  all four are also exposed as MCP tools.
+  `forecast.duration`, `forecast.change`, `forecast.whatif`. **None exists yet.** When
+  built, all four are read-only, so all four are also MCP tools. They return the rendered
+  sentence, never a bare value. Output classes are mapped in file 02 §4.
 
 ## 4. What it needs before any of this touches a real matter
 

@@ -4,14 +4,14 @@ You asked: "what's the use of Harvey?" Harvey is **not a part of Themis.** It ap
 the diagram for one reason: it is an AI assistant that lawyers already use, and it can
 connect to outside tools the way Claude can. Here is the full picture.
 
-**Evidence:** `.claude/loops/…_B_HARVEY_FUNNEL.md`, mostly [S], with one [V].
+**Evidence:** `.claude/loops/…_B_HARVEY_FUNNEL.md`. Mostly [S], with two [V]: the claude.com connector page, and BigLaw Bench's GitHub repo, which the agent fetched.
 
 ## 1. What Harvey is
 
 | | |
 |---|---|
 | Business | Legal-AI software for law firms and in-house teams, founded 2022 |
-| Size | $550M raised at a $15.5B valuation in September 2026 (Bloomberg says $15.6B). Revenue estimates range from $300M to $400M+ a year. "142,000+ lawyers, 1,500+ customers, 60+ countries" [S] |
+| Size | $550M raised at a $15.5B valuation in September 2026 (Bloomberg says $15.6B). Revenue estimates range from $300M to $400M+ a year. "142,000+ lawyers, 1,500+ customers, 60+ countries" [S; vendor- or press-reported, not disclosed accounts] |
 | India | AZB & Partners and Shardul Amarchand Mangaldas have firm-wide rollouts; S&A is reported as a customer. Bengaluru office. SCC Online content since January 2026 [S] |
 | Price | About $1,200 per seat per month, 20–50 seat minimums [S]. Not published by Harvey |
 | Products | Assistant (Q&A and drafting), Vault (up to 100k documents), Workflows, Knowledge, Word add-in |

@@ -106,12 +106,12 @@ roughly the senior cost alone. Budget it as **₹25–50k**.
   personally engaging in business. **Whether part-time contract review triggers Rule 49 is
   OPEN.**
 - **Privilege:** *In re Summoning Advocates* (2025 INSC 1275) [S] gives in-house counsel no
-  s.132 BSA privilege. [I] Anything a client sends Placedon's reviewers is very likely not
+  s.132 BSA privilege, only the narrower s.134 protection. [I] Anything a client sends Placedon's reviewers is very likely not
   privileged, so reviewers work on **public material and synthetic matters** until counsel
   says otherwise.
 - **DPDP:**
-  - s.8(2) requires a processor contract for anyone touching client personal data.
-  - Core obligations bind from **13 May 2027** (some sources say the 14th).
+  - s.8(2) requires a processor contract for anyone touching client personal data [S].
+  - Core obligations are reported to bind from **13 May 2027** (some sources say the 14th) [S], UNVERIFIED against the Gazette.
   - Whether s.3(c)(ii)'s exemption for "made publicly available" covers MCA filings is
     **OPEN**.
 - **The permitted-sources rule** (`CLAUDE.md`) already keeps reviewers on public documents,

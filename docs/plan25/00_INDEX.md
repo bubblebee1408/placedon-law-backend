@@ -55,8 +55,9 @@ The founder asked for five things:
 
 ## What this plan does not claim
 
-- **No accuracy figure for Themis.** The gold set holds 0 human labels. Every number in
-  file 03 is from a simulation where the truth is known. That proves the maths, not the
+- **No accuracy figure for Themis.** The gold set holds 0 human labels. Every rate and score
+  in file 03 is from a simulation where the truth is known (the ₹ limits are the engine's, and
+  9/19/99 is arithmetic). That proves the maths, not the
   product.
 - **No figure from another system is Themis's figure.**
 - **Evidence is mostly [S]**, read in search results only. Research and vendor hosts were
