@@ -112,6 +112,10 @@ REGISTRY: dict[str, int] = {
     "checker.s188_threshold": RING_0,
     "checker.currency": RING_0,
     "checker.cascade": RING_0,
+    # The MODEL cascade (deterministic -> small -> large), not the entailment one above.
+    # Ring 0 because it decides whether a claim is verified and which body statuses bind
+    # the answer, which is a legal-core decision however many models it calls.
+    "checker.model_cascade": RING_0,
     "checker.ground_span": RING_0,
     "checker.as_of": RING_0,
     "checker.amendment": RING_0,
