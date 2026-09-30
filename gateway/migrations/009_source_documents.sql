@@ -1,6 +1,6 @@
 -- 009_source_documents.sql — public material we have fetched, hashed once and shared.
 --
--- PLAN_24 §4: "public material goes into one hash-stamped `source_documents` table, shared
+-- PLAN_26 §4: "public material goes into one hash-stamped `source_documents` table, shared
 -- across tenants because it is public; caching follows each source's terms record."
 --
 -- ## NOT tenant-scoped, and that is the decision

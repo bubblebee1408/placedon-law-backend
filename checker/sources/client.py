@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """CLIENT: the tenant's own uploads. The document under review, never an authority.
 
-PLAN_24 §2/S1. A client document is the question, not the answer: it is what the audit is
+PLAN_26 §2/S1. A client document is the question, not the answer: it is what the audit is
 *about*, so a finding may quote it and no finding may rest on it. `can_verify` is False and
 `checker/sources/tiers.py` is where that is decided, not here.
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """HELD: our own hash-stamped corpus. The only tier that can make an answer VERIFIED.
 
-PLAN_24 §2/S1. Wraps `checker/text_search.py` in the Source interface so the one tier that
+PLAN_26 §2/S1. Wraps `checker/text_search.py` in the Source interface so the one tier that
 can verify goes through the same door as the four that cannot — otherwise the verifier has
 two code paths and only one of them is guarded.
 

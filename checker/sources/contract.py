@@ -169,7 +169,7 @@ def _test() -> int:
     except EvidenceError as e:
         check("terms" in str(e),
               f"...an invented attribution is refused: the terms require the LOGO, and "
-              f"'Powered by IKanoon' is the text PLAN_24 guessed ({e!s:.34})")
+              f"'Powered by IKanoon' is the text PLAN_26 guessed ({e!s:.34})")
     good = Evidence(tier=LICENSED, source="indiankanoon",
                     url="https://indiankanoon.org/doc/1/", fetched_at=NOW, sha256=H,
                     quoted_span="held that...", attribution=ik)

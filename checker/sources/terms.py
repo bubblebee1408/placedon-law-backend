@@ -1,6 +1,6 @@
 """What each Indian source actually permits — read from the source, never from memory.
 
-S0 of `docs/PLAN_24_INDIAN_SOURCES.md` §5 (the same plan PR #24 renames to PLAN_26). One
+S0 of `docs/PLAN_26_INDIAN_SOURCES.md` §5. One
 record per source: the terms URL, the date it was read, the exact clauses that govern
 caching, attribution, commercial use and rate limits, and the robots.txt result for every
 path a connector intends to fetch.
@@ -12,7 +12,7 @@ not what the plan document wrote down before anyone fetched anything. A clause i
 only when this repository fetched the page and the words below are that page's words. Every
 quote here was extracted from a saved response body by a script, not typed from memory.
 
-That rule cost the plan its own numbers. `docs/PLAN_24_INDIAN_SOURCES.md` §3 recorded
+That rule cost the plan its own numbers. `docs/PLAN_26_INDIAN_SOURCES.md` §3 recorded
 Indian Kanoon at "search ~ ₹5 per 100 results; full text +₹0.20 per record" and GODL as
 "commercial and non-commercial use permitted with attribution", both from search-result
 summaries. The pricing page says ₹0.50 per search (see `_IK_PRICING`), and the GODL page
@@ -84,7 +84,7 @@ ROBOTS_PERMISSIVE = (ACCESSIBLE, NOT_FOUND)
 class NoTermsRecord(LookupError):
     """Raised when a connector asks for a source this file does not hold.
 
-    A LookupError and not a warning: PLAN_24 §3 says "a connector refuses to load without
+    A LookupError and not a warning: PLAN_26 §3 says "a connector refuses to load without
     its record", and a warning is a thing a caller can ignore.
     """
 
@@ -251,7 +251,7 @@ RECORDS: tuple[TermsRecord, ...] = (
             Clause(ATTRIBUTION, READ, _IK_ATTRIBUTION,
                    "The strictest attribution clause of the seven, and it names our exact "
                    "use: RAG context counts, not only display. It requires the LOGO, not "
-                   "the words -- PLAN_24 §2 says the label is 'Powered by IKanoon', which "
+                   "the words -- PLAN_26 §2 says the label is 'Powered by IKanoon', which "
                    "is the text and not what this clause asks for. A text-only credit does "
                    "not satisfy it."),
             Clause(COMMERCIAL_USE, READ, _IK_PRICING + " " + _IK_PREPAID,
@@ -330,7 +330,7 @@ RECORDS: tuple[TermsRecord, ...] = (
         ),
         note="SEBI's own policy says its content 'should not be construed as a statement of "
              "law or used for any legal purposes': " + _SEBI_NOT_LAW + " The tier rule in "
-             "PLAN_24 §2 -- that only HELD may make an answer VERIFIED -- is what the "
+             "PLAN_26 §2 -- that only HELD may make an answer VERIFIED -- is what the "
              "publisher itself asks for here. Four other candidate policy URLs "
              "(terms-conditions.html, legal/terms-and-conditions.html, copyright-policy.html, "
              "hyperlinking-policy.html) all 404; website-policy.html is the one that exists.",
@@ -411,7 +411,7 @@ RECORDS: tuple[TermsRecord, ...] = (
         date_read="",
         clauses=(
             Clause(ATTRIBUTION, OPEN,
-                   note="The GODL text was NOT read. PLAN_24 §3 quotes it from a search "
+                   note="The GODL text was NOT read. PLAN_26 §3 quotes it from a search "
                         "summary; that is not a reading, so it is not repeated here."),
             Clause(COMMERCIAL_USE, OPEN, note="GODL unread -- see ATTRIBUTION."),
             Clause(CACHING, OPEN, note="GODL unread -- see ATTRIBUTION."),
@@ -512,7 +512,7 @@ def record_for(source_id: str) -> TermsRecord:
     except KeyError:
         raise NoTermsRecord(
             f"no terms record for {source_id!r}; nothing is fetched on an unread term "
-            f"(PLAN_24 §3). Known: {', '.join(SOURCE_IDS)}") from None
+            f"(PLAN_26 §3). Known: {', '.join(SOURCE_IDS)}") from None
 
 
 def may_fetch(source_id: str) -> tuple[bool, str]:
@@ -595,7 +595,7 @@ def _test() -> int:
 
     print("sources.terms")
 
-    # The gate PLAN_24 §3 names: no record, no connector.
+    # The gate PLAN_26 §3 names: no record, no connector.
     try:
         record_for("manupatra")
         check(False, "an unknown source raises NoTermsRecord")
@@ -681,7 +681,7 @@ def _test() -> int:
     check("Retrieval-Augmented Generation" in a and "powered by IKanoon" in a,
           "IK attribution names RAG context and the logo, not just display")
     check("logo" in a,
-          "...the LOGO: PLAN_24's 'Powered by IKanoon' text does not satisfy this clause")
+          "...the LOGO: PLAN_26's 'Powered by IKanoon' text does not satisfy this clause")
     check(attribution_for("bse") == "",
           "an unread attribution clause yields the empty string, never an invented label")
     check("prominently acknowledged" in attribution_for("sebi"),

@@ -106,6 +106,10 @@ KNOWN_TOOLS: frozenset[str] = frozenset({
     # does all three and will be argued for on its own.
     "themis.sources.list",
     "themis.sources.search",
+    # PLAN_26 S2-alt. Read-only: it parses text the USER uploaded and returns unconfirmed
+    # facts with their spans. It stores nothing, fetches nothing, and cannot confirm a
+    # fact -- confirmation is a person's act and arrives as an argument, never from a tool.
+    "themis.company_facts.extract",
 })
 # NOT here, and the absence is the decision: `themis.runs.approve` and `themis.runs.reject`
 # do not exist. They write a human decision, and mcp_tools() refuses to generate a tool for
