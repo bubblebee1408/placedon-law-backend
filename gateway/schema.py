@@ -35,7 +35,10 @@ LIVE_CHECK = ROOT / "scripts" / "rls_integration.py"
 # Tables that hold no tenant data and are therefore not tenant-scoped. Listed explicitly,
 # because "it has no tenant_id" must be a decision someone wrote down rather than an
 # omission nobody noticed.
-NOT_TENANT_SCOPED = frozenset({"tenants"})
+# `source_documents` (009) is public fetched material -- one SEBI circular, one row, shared
+# across tenants on purpose (PLAN_24 §4). What keeps a client contract out of it is the
+# tier CHECK in the migration, which admits only OFFICIAL_LIVE, LICENSED and COMPANY_FACT.
+NOT_TENANT_SCOPED = frozenset({"tenants", "source_documents"})
 
 
 def migrations() -> tuple[Path, ...]:
@@ -117,8 +120,37 @@ def _test() -> None:
     files = [p.name for p in migrations()]
     check(files == ["001_core.sql", "002_runs.sql", "003_step_provenance.sql",
                     "004_cost_note.sql", "005_decisions.sql", "006_jobs.sql",
-                    "007_cascade.sql", "008_decision_evidence.sql"],
+                    "007_cascade.sql", "008_decision_evidence.sql",
+                    "009_source_documents.sql"],
           f"every migration exists, in order ({files})")
+
+    # 009 is the one table in this schema that is NOT tenant-scoped, so what keeps a
+    # client contract out of it is a CHECK rather than a policy. Asserted statically
+    # because the live check cannot run in the gate (see this module's docstring).
+    src_sql = (MIGRATIONS / "009_source_documents.sql").read_text(encoding="utf-8")
+    check("CREATE TABLE IF NOT EXISTS source_documents" in src_sql,
+          "009 creates source_documents, idempotently")
+    check("'OFFICIAL_LIVE', 'LICENSED', 'COMPANY_FACT'" in src_sql
+          and "'CLIENT'" not in src_sql.split("CONSTRAINT")[0],
+          "...and its tier CHECK admits only the three PUBLIC tiers -- CLIENT is refused "
+          "by the schema, because a client contract in a cross-tenant table is the worst "
+          "bug this file could ship")
+    check(not declares("ENABLE", "source_documents", src_sql)
+          and not declares("FORCE", "source_documents", src_sql),
+          "...it is deliberately NOT RLS-bound: public material is shared on purpose, and "
+          "the tier CHECK is what makes that safe. Asked of the SQL via declares(), not of "
+          "the prose -- the first version of this check grepped for the phrase and fired on "
+          "the file's own comment explaining the decision")
+    check("terms_basis_quoted" in src_sql and "length(btrim(terms_basis)) >= 20" in src_sql,
+          "...a row must carry the CLAUSE that permitted it, in words, not a boolean")
+    check("attribution_when_required" in src_sql,
+          "...and attribution is NOT NULL exactly where the terms demand it")
+    check("bytea" in src_sql and " text" in src_sql,
+          "...the material is BYTEA: a Gazette PDF decoded as text became mojibake that "
+          "looked like a short document")
+    check("may_cache" in src_sql,
+          "...and the file says nothing may be written yet, pointing at the function that "
+          "decides it rather than restating a verdict that can drift")
     step_sql = (MIGRATIONS / "003_step_provenance.sql").read_text(encoding="utf-8")
     for col in ("provider", "region", "cost_inr"):
         check(f"ADD COLUMN IF NOT EXISTS {col}" in step_sql,
@@ -138,13 +170,17 @@ def _test() -> None:
     t = tables()
     check({"tenants", "actors", "api_keys", "documents", "audit_log",
            "runs", "run_steps", "propositions", "decisions", "jobs",
-           "cascade_runs"} <= set(t),
+           "cascade_runs", "source_documents"} <= set(t),
           f"every table the gateway needs is declared ({sorted(t)})")
 
     scoped = tenant_scoped()
     check("tenants" not in scoped,
           "the tenants table is not tenant-scoped, and that is written down rather than "
           "inferred from a missing column")
+    check("source_documents" in NOT_TENANT_SCOPED and "source_documents" not in scoped,
+          "source_documents is not tenant-scoped, and it is LISTED rather than left to a "
+          "missing tenant_id column -- sharing public material across tenants is a "
+          "decision, and the day someone adds a tenant_id to it this line is what argues")
     check(scoped == {"actors", "api_keys", "documents", "audit_log", "runs", "run_steps",
                      "propositions", "decisions", "jobs", "cascade_runs"},
           f"every other table is tenant-scoped, DERIVED from having a tenant_id ({sorted(scoped)})")
