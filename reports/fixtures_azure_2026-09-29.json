@@ -1,0 +1,289 @@
+{
+  "date": "2026-09-29",
+  "harness": "agents/research_question.FIXTURES",
+  "fixtures": 10,
+  "models": {
+    "azure:llama-3-3-70b": {
+      "ANSWERED": 0,
+      "PARTIAL": 4,
+      "REFUSED": 6,
+      "ERROR": 0,
+      "refusal_codes": [
+        "NOTHING_TRACED",
+        "NO_EVIDENCE"
+      ],
+      "sentences_dropped": 32,
+      "model_calls": 6,
+      "rupees_total_inr": 0.0,
+      "rupees_per_answer_inr": 0.0,
+      "rupees_note": "0.0 by router.estimate_inr's AZURE rule: zero against MONTHLY_CAP_INR, NOT zero cost -- billed to Azure for Students credit, a separate pot no counter in this repo watches. Token usage is not captured on the narrate path, so no token-derived figure is available.",
+      "wall_seconds": 55.8,
+      "per_fixture": [
+        {
+          "id": "F1",
+          "status": "PARTIAL",
+          "code": null,
+          "dropped": 1,
+          "sources": 1,
+          "seconds": 6.65,
+          "model": "azure/llama-3-3-70b",
+          "degraded": true,
+          "est_inr": 0.0
+        },
+        {
+          "id": "F2",
+          "status": "PARTIAL",
+          "code": null,
+          "dropped": 1,
+          "sources": 1,
+          "seconds": 1.44,
+          "model": "azure/llama-3-3-70b",
+          "degraded": true,
+          "est_inr": 0.0
+        },
+        {
+          "id": "F3",
+          "status": "PARTIAL",
+          "code": null,
+          "dropped": 1,
+          "sources": 1,
+          "seconds": 2.21,
+          "model": "azure/llama-3-3-70b",
+          "degraded": true,
+          "est_inr": 0.0
+        },
+        {
+          "id": "F4",
+          "status": "REFUSED",
+          "code": "NOTHING_TRACED",
+          "dropped": 10,
+          "sources": 1,
+          "seconds": 9.97,
+          "model": "azure/llama-3-3-70b",
+          "degraded": true,
+          "est_inr": 0.0
+        },
+        {
+          "id": "F5",
+          "status": "PARTIAL",
+          "code": null,
+          "dropped": 18,
+          "sources": 1,
+          "seconds": 28.82,
+          "model": "azure/llama-3-3-70b",
+          "degraded": true,
+          "est_inr": 0.0
+        },
+        {
+          "id": "F6",
+          "status": "REFUSED",
+          "code": "NOTHING_TRACED",
+          "dropped": 1,
+          "sources": 1,
+          "seconds": 5.71,
+          "model": "azure/llama-3-3-70b",
+          "degraded": true,
+          "est_inr": 0.0
+        },
+        {
+          "id": "F7",
+          "status": "REFUSED",
+          "code": "NO_EVIDENCE",
+          "dropped": 0,
+          "sources": 0,
+          "seconds": 0.03,
+          "model": null,
+          "degraded": false,
+          "est_inr": 0.0
+        },
+        {
+          "id": "F8",
+          "status": "REFUSED",
+          "code": "NO_EVIDENCE",
+          "dropped": 0,
+          "sources": 0,
+          "seconds": 0.03,
+          "model": null,
+          "degraded": false,
+          "est_inr": 0.0
+        },
+        {
+          "id": "F9",
+          "status": "REFUSED",
+          "code": "NO_EVIDENCE",
+          "dropped": 0,
+          "sources": 0,
+          "seconds": 0.03,
+          "model": null,
+          "degraded": false,
+          "est_inr": 0.0
+        },
+        {
+          "id": "F10",
+          "status": "REFUSED",
+          "code": "NO_EVIDENCE",
+          "dropped": 0,
+          "sources": 0,
+          "seconds": 0.04,
+          "model": null,
+          "degraded": false,
+          "est_inr": 0.0
+        }
+      ]
+    },
+    "azure:gpt-5-mini": {
+      "ANSWERED": 4,
+      "PARTIAL": 0,
+      "REFUSED": 4,
+      "ERROR": 2,
+      "refusal_codes": [
+        "ModelUnavailable",
+        "NO_EVIDENCE"
+      ],
+      "sentences_dropped": 0,
+      "model_calls": 6,
+      "rupees_total_inr": 0.0,
+      "rupees_per_answer_inr": 0.0,
+      "rupees_note": "0.0 by router.estimate_inr's AZURE rule: zero against MONTHLY_CAP_INR, NOT zero cost -- billed to Azure for Students credit, a separate pot no counter in this repo watches. Token usage is not captured on the narrate path, so no token-derived figure is available.",
+      "wall_seconds": 187.0,
+      "per_fixture": [
+        {
+          "id": "F1",
+          "status": "ANSWERED",
+          "code": null,
+          "dropped": 0,
+          "sources": 1,
+          "seconds": 34.97,
+          "model": "azure/llama-3-3-70b",
+          "degraded": true,
+          "est_inr": 0.0
+        },
+        {
+          "id": "F2",
+          "status": "ERROR",
+          "code": "ModelUnavailable",
+          "error": "the Azure reply did not finish (finish_reason='length'); a truncated reply is not an answer",
+          "dropped": 0,
+          "sources": 1,
+          "seconds": 39.6,
+          "model": "azure/gpt-5-mini",
+          "degraded": true,
+          "est_inr": 0.0
+        },
+        {
+          "id": "F3",
+          "status": "ANSWERED",
+          "code": null,
+          "dropped": 0,
+          "sources": 1,
+          "seconds": 28.39,
+          "model": "azure/llama-3-3-70b",
+          "degraded": true,
+          "est_inr": 0.0
+        },
+        {
+          "id": "F4",
+          "status": "ERROR",
+          "code": "ModelUnavailable",
+          "error": "the Azure reply did not finish (finish_reason='length'); a truncated reply is not an answer",
+          "dropped": 0,
+          "sources": 1,
+          "seconds": 34.77,
+          "model": "azure/gpt-5-mini",
+          "degraded": true,
+          "est_inr": 0.0
+        },
+        {
+          "id": "F5",
+          "status": "ANSWERED",
+          "code": null,
+          "dropped": 0,
+          "sources": 1,
+          "seconds": 21.36,
+          "model": "azure/llama-3-3-70b",
+          "degraded": true,
+          "est_inr": 0.0
+        },
+        {
+          "id": "F6",
+          "status": "ANSWERED",
+          "code": null,
+          "dropped": 0,
+          "sources": 1,
+          "seconds": 27.16,
+          "model": "azure/llama-3-3-70b",
+          "degraded": true,
+          "est_inr": 0.0
+        },
+        {
+          "id": "F7",
+          "status": "REFUSED",
+          "code": "NO_EVIDENCE",
+          "dropped": 0,
+          "sources": 0,
+          "seconds": 0.03,
+          "model": null,
+          "degraded": false,
+          "est_inr": 0.0
+        },
+        {
+          "id": "F8",
+          "status": "REFUSED",
+          "code": "NO_EVIDENCE",
+          "dropped": 0,
+          "sources": 0,
+          "seconds": 0.03,
+          "model": null,
+          "degraded": false,
+          "est_inr": 0.0
+        },
+        {
+          "id": "F9",
+          "status": "REFUSED",
+          "code": "NO_EVIDENCE",
+          "dropped": 0,
+          "sources": 0,
+          "seconds": 0.03,
+          "model": null,
+          "degraded": false,
+          "est_inr": 0.0
+        },
+        {
+          "id": "F10",
+          "status": "REFUSED",
+          "code": "NO_EVIDENCE",
+          "dropped": 0,
+          "sources": 0,
+          "seconds": 0.03,
+          "model": null,
+          "degraded": false,
+          "est_inr": 0.0
+        }
+      ]
+    }
+  },
+  "reasoning_budget_experiment": {
+    "what": "max_completion_tokens on a REASONING deployment is a thinking budget, not only an output cap: the model spends what it is given. Both settings were run over these ten fixtures on 2026-09-29, azure:gpt-5-mini.",
+    "settings": {
+      "4096 (NARRATION_BUDGET, kept)": {
+        "ANSWERED": 5,
+        "PARTIAL": 0,
+        "REFUSED": 4,
+        "ERROR": 1,
+        "sentences_dropped": 0,
+        "wall_seconds": 156.9,
+        "error_kind": "one finish_reason='length' on F4, which reply_text turns into a REFUSAL rather than a fragment"
+      },
+      "8192 (answer + REASONING_BUDGET headroom, rejected)": {
+        "ANSWERED": 3,
+        "PARTIAL": 1,
+        "REFUSED": 4,
+        "ERROR": 2,
+        "sentences_dropped": 1,
+        "wall_seconds": 1169.3,
+        "error_kind": "two transport failures: a read timeout and a remote end closing the connection"
+      }
+    },
+    "conclusion": "7.5x the wall clock, fewer complete answers and two connection drops, to avoid one truncation that was already a safe refusal. Kept at 4096. n=1 per setting, so this is a reason to leave it alone, not a finding."
+  }
+}

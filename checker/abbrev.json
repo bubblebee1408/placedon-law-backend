@@ -1,0 +1,100 @@
+{
+ "schema": "placedon.abbrev/0",
+ "note": "Practitioner abbreviations and their expansions. EVERY entry's provision was confirmed to contain the expansion verbatim in corpus/companies_act text on 2026-09-26; nothing here is from memory. Entries whose provision could not be confirmed are in `refused`, with the reason, rather than guessed -- CLAUDE.md: 'If evidence is incomplete, write OPEN or UNVERIFIED. Do not guess.'",
+ "verified": [
+  {
+   "abbrev": "KMP",
+   "expansion": "key managerial personnel",
+   "provision": "s.2(51)",
+   "confirmed_in_corpus": true
+  },
+  {
+   "abbrev": "CFO",
+   "expansion": "Chief Financial Officer",
+   "provision": "s.2(19)",
+   "confirmed_in_corpus": true
+  },
+  {
+   "abbrev": "CEO",
+   "expansion": "Chief Executive Officer",
+   "provision": "s.2(18)",
+   "confirmed_in_corpus": true
+  },
+  {
+   "abbrev": "WTD",
+   "expansion": "whole-time director",
+   "provision": "s.2(94)",
+   "confirmed_in_corpus": true
+  },
+  {
+   "abbrev": "MD",
+   "expansion": "managing director",
+   "provision": "s.2(54)",
+   "confirmed_in_corpus": true
+  },
+  {
+   "abbrev": "RPT",
+   "expansion": "related party",
+   "provision": "s.2(76)",
+   "confirmed_in_corpus": true
+  },
+  {
+   "abbrev": "AGM",
+   "expansion": "annual general meeting",
+   "provision": "s.96",
+   "confirmed_in_corpus": true
+  },
+  {
+   "abbrev": "EGM",
+   "expansion": "extraordinary general meeting",
+   "provision": "s.100",
+   "confirmed_in_corpus": true
+  },
+  {
+   "abbrev": "CIN",
+   "expansion": "corporate identity number",
+   "provision": "s.7",
+   "confirmed_in_corpus": true
+  },
+  {
+   "abbrev": "DIN",
+   "expansion": "director identification number",
+   "provision": "s.153",
+   "confirmed_in_corpus": true
+  },
+  {
+   "abbrev": "CS",
+   "expansion": "company secretary",
+   "provision": "s.2",
+   "confirmed_in_corpus": true
+  },
+  {
+   "abbrev": "NCLT",
+   "expansion": "Tribunal",
+   "provision": "s.2",
+   "confirmed_in_corpus": true
+  }
+ ],
+ "refused": [
+  {
+   "abbrev": "MOA",
+   "expansion": "memorandum of association",
+   "reason": "not found verbatim in s.4 or s.7 of the held text"
+  },
+  {
+   "abbrev": "AOA",
+   "expansion": "articles of association",
+   "reason": "not found verbatim in s.5 or s.7 of the held text"
+  },
+  {
+   "abbrev": "ROC",
+   "expansion": "Registrar of Companies",
+   "reason": "not found verbatim in s.396 of the held text"
+  },
+  {
+   "abbrev": "officer",
+   "expansion": "officer",
+   "reason": "s.2(18) matched only as part of 'Chief Executive officer' -- a naive extraction mis-attributed it, so it is not used"
+  }
+ ]
+}

@@ -130,6 +130,26 @@ def _ground_extraction(payload: dict, *, generated_at: str) -> dict:
                        for f in g.fields]}
 
 
+def _playbook_review(payload: dict, *, generated_at: str) -> dict:
+    """A contract's extracted clauses against a company playbook. No model, by design.
+
+    uses_model is False and that is the claim: checker/playbook.py is pure functions over
+    data, so the grading step of F12 cannot hallucinate a finding. The model's part
+    happened earlier, when it proposed spans that quoted_span then verified.
+    """
+    from checker.playbook import Extracted, load, review
+    book = load(payload["playbook_path"])
+    found = tuple(Extracted(clause=e["clause"], span=e.get("span"),
+                            value=e.get("value"), verified=bool(e.get("verified")))
+                  for e in payload["extracted"])
+    findings = review(book, found)
+    return {"playbook": book.id, "playbook_status": book.status,
+            "findings": [{"rule_id": f.rule_id, "clause": f.clause, "status": f.status,
+                          "kind": f.kind, "why": f.why, "detail": f.detail,
+                          "standard_text": f.standard_text, "rationale": f.rationale,
+                          "playbook_status": f.playbook_status} for f in findings]}
+
+
 # ── the registry ──────────────────────────────────────────────────────────────
 _REGISTRY: dict[str, Bundle] = {b.name: b for b in (
     Bundle("document.currency_check",
@@ -146,6 +166,9 @@ _REGISTRY: dict[str, Bundle] = {b.name: b for b in (
     Bundle("law.acquisition_exposure",
            "which instruments do our answers depend on, and is anyone watching them?",
            ("as_of",), False, _acquisition_exposure),
+    Bundle("contract.playbook_review",
+           "where does this contract differ from the company's own standard?",
+           ("playbook_path", "extracted"), False, _playbook_review),
     Bundle("document.ground_extraction",
            "of what an extractor claimed to read, what is demonstrably in the document?",
            ("document_text", "proposed"), False, _ground_extraction),
@@ -235,7 +258,8 @@ def _test() -> None:
     print("bundles")
     GEN = "2026-09-10T00:00:00Z"
 
-    check(len(capabilities()) == 5, f"five bundles are declared ({len(capabilities())})")
+    check(len(capabilities()) == 6, f"six bundles are declared ({len(capabilities())}) -- "
+          f"contract.playbook_review joined them on 29-09-2026 for F12")
     check(all(not b.uses_model for b in registry().values()),
           "no bundle currently calls a model, and each says so")
 
@@ -262,7 +286,7 @@ def _test() -> None:
     check(len(results) == len(capabilities()), "...checked for every bundle")
 
     # and the registry is restored afterwards
-    check(len(capabilities()) == 5, "withdrawal is scoped -- the registry is restored")
+    check(len(capabilities()) == 6, "withdrawal is scoped -- the registry is restored")
 
     # ── dispatch fails closed on missing inputs ──────────────────────────────
     try:

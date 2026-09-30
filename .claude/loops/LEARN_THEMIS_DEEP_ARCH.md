@@ -2,7 +2,7 @@
 
 ## What cost something, and was recorded
 
-**LESSONS L-16. A protection named in a plan is not a protection until the call path shows it.**
+**LESSONS L-27. A protection named in a plan is not a protection until the call path shows it.**
 - PLAN_23 and PLAN_24 both said "a date filter runs before the model". The code audit showed it does not.
 - Two real defects (FAILED stored as ANSWERED; no `ask` answer carries its source) sat behind a green suite.
 

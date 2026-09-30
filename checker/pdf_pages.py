@@ -38,7 +38,7 @@ could not read it" is indistinguishable from "the document says nothing" — and
 compliance engine the second reads as *no obligation found*. The bug was not that
 pages were missed; it was that they were missed **quietly**.
 
-## Decision D-2 (founder, 2026-09-17): pypdf, offline only
+## Decision D-2 (founder, 2026-09-17), revised 2026-09-25: a library, offline only
 
 The standard-library fix was measured at ~400-450 lines — xref-stream parsing with
 variable `/W` widths, `/Prev` chain walking with loop guards, object-stream
@@ -47,29 +47,27 @@ plus the separate `/Contents` fix, with pure-Python AES as a live risk the day a
 encrypted gazette arrives. That is a PDF parser, and every line of it is a line that
 can be quietly wrong about the source text of the law.
 
-`pypdf` is BSD-3-Clause, pure Python, and has **zero mandatory transitive
-dependencies**. It is declared in `requirements-dev.txt`, never in
-`requirements.txt`.
+**The reader is pdfplumber (since `8c4bccd`, 2026-09-25).** D-2 first chose pypdf.
+Measured on the Board Rules gazette, pypdf invented spaces ("Board an d its", 4
+artifacts where pdfplumber and poppler both render "Board and its", 0 and 0) and
+emitted `/uniXXXX` glyph names for the Devanagari half. pdfplumber is declared in
+`requirements-dev.txt`, never in `requirements.txt`.
+
+**The two readers swapped roles, and the census stays two engines.**
+`scripts/text_layer_census.py` is the independent oracle that judges this reader, and
+it now reads with pypdf. pdfplumber wraps pdfminer.six; pypdf is its own parser.
+Comparing a reader against itself would stop the census being evidence.
 
 **The boundary that keeps README honest.** The README claims "no dependencies
 outside the standard library". That claim is about the SERVED path, and it stays
 true: `checker/api.py` and `backend/` import nothing from this module or from
 `pdf_text` -- verified 2026-09-17, zero hits. Every consumer of page extraction is
-offline tooling (`sweep.py` and five scripts). `_test()` below asserts that boundary
-rather than trusting it, in the same spirit as `api.py`'s assertion that the API
-imports no model library.
+offline tooling. `_test()` below asserts that boundary rather than trusting it.
 
 **PyMuPDF was rejected on licence.** It is AGPL-3.0 or a paid Artifex commercial
 licence. AGPL section 13 extends copyleft to network use, so shipping it in a served
 backend sold to Indian corporates would compel disclosure of the whole product's
 source. That is a legal exposure, not a preference.
-
-**pdfplumber was rejected for a subtler reason.** It is already a declared dev
-dependency, so it looked free. But `scripts/text_layer_census.py` uses pdfplumber as
-the INDEPENDENT ORACLE that judges this repository's reader. Adopting it here would
-make the census compare pdfplumber against pdfplumber, and the verification
-instrument would stop being evidence. pypdf is its own parser; pdfplumber wraps
-pdfminer.six. Two engines, so the two-reader census stays honest.
 
 ## What this module does not do
 
@@ -80,6 +78,7 @@ An encrypted document raises rather than returning plausible blanks.
 """
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 __all__ = ["extract_pages", "page_count"]
@@ -95,30 +94,20 @@ def _reader(path: str | Path):
     if not p.is_file():
         raise PdfUnreadable(f"no such PDF: {p}")
     try:
-        from pypdf import PdfReader
+        import pdfplumber
     except ImportError as exc:                                    # pragma: no cover
         raise PdfUnreadable(
-            "pypdf is required for page extraction and is declared in "
+            "pdfplumber is required for page extraction and is declared in "
             "requirements-dev.txt. This module is offline tooling only."
         ) from exc
 
     try:
-        r = PdfReader(str(p))
+        return pdfplumber.open(str(p))
     except Exception as exc:
+        # pdfplumber raises its own type for an encrypted file; both land here, and
+        # both must raise rather than yield a pile of empty pages -- that is the
+        # toolchain-as-evidence failure this module exists to refuse.
         raise PdfUnreadable(f"{p.name}: not readable as a PDF ({exc})") from exc
-
-    # An encrypted document must not come back as a pile of empty pages: that is the
-    # toolchain-as-evidence failure this module exists to refuse. Try the empty user
-    # password, which is what permissions-only encryption uses, and raise otherwise.
-    if getattr(r, "is_encrypted", False):
-        try:
-            if not r.decrypt(""):
-                raise PdfUnreadable(f"{p.name}: encrypted, and not with an empty password")
-        except PdfUnreadable:
-            raise
-        except Exception as exc:
-            raise PdfUnreadable(f"{p.name}: encrypted and undecryptable ({exc})") from exc
-    return r
 
 
 def extract_pages(path: str | Path) -> list[str]:
@@ -131,21 +120,22 @@ def extract_pages(path: str | Path) -> list[str]:
     Raises `PdfUnreadable` rather than returning [] — an empty list from a real
     document is the silent failure this module replaced.
     """
-    r = _reader(path)
     out: list[str] = []
-    for page in r.pages:
-        try:
-            out.append(page.extract_text() or "")
-        except Exception:
-            # One unreadable page must not lose the other 168. Preserve the slot,
-            # say nothing about its content.
-            out.append("")
+    with _reader(path) as doc:
+        for page in doc.pages:
+            try:
+                out.append(page.extract_text() or "")
+            except Exception:
+                # One unreadable page must not lose the other 168. Preserve the slot,
+                # say nothing about its content.
+                out.append("")
     return out
 
 
 def page_count(path: str | Path) -> int:
     """How many pages the document declares, without extracting any text."""
-    return len(_reader(path).pages)
+    with _reader(path) as doc:
+        return len(doc.pages)
 
 
 def _test() -> None:
@@ -211,6 +201,29 @@ def _test() -> None:
     else:
         print("  [SKIP] stored Rules PDF not present")
 
+    # ---- the reader must not invent spaces inside words (D-002b) ----------------
+    # Measured 25-09-2026 on the Rules gazette: pdfplumber and poppler both render
+    # "Board and its"; pypdf rendered "Board an d its". Two independent readers
+    # disagreeing with us is the INVERSE of SD-006, where both agreed with us and the
+    # source was genuinely defective -- here the source says "and", so the split was
+    # ours. pypdf's `space_width` is not the cause: artifacts stayed flat at 4 across
+    # 200/120/80/60/40, so the spaces come from content-stream positioning.
+    # A split word is not cosmetic. It is what a reviewer would be asked to adjudicate,
+    # and it is what put 15 rules into HUMAN_REVIEW_PENDING.
+    if stored.is_file():
+        joined = " ".join(extract_pages(stored))
+        split_probe = re.compile(r"\ban\sd\b|\bBoar\sd\b|\b1\s+st\b", re.I)
+        hits = split_probe.findall(joined)
+        check(not hits, f"no word is split by an invented space (found {len(hits)}: {hits[:4]})")
+        check("Board and its" in joined,
+              "the title reads 'Board and its', as two independent readers render it")
+        # The gazette is bilingual. A reader that emits /uniXXXX glyph NAMES instead of
+        # characters inflates its own character count with garbage and loses the Hindi.
+        devanagari = sum(1 for c in joined if "\u0900" <= c <= "\u097f")
+        check(devanagari > 10000,
+              f"the Hindi half decodes to Devanagari, not glyph names (got {devanagari})")
+        check("/uni0" not in joined, "no /uniXXXX glyph names leak into the text")
+
     # ---- failing loudly ----------------------------------------------------------
     try:
         extract_pages(root / "definitely-not-here-9x.pdf")
@@ -220,9 +233,9 @@ def _test() -> None:
 
     import logging
     import tempfile
-    # pypdf logs its own parse failure to stderr. That is correct of pypdf and noise
+    # pdfminer logs its own parse failure to stderr. That is correct of it and noise
     # here: the raise IS the assertion. Silence it so a real error stays visible.
-    _pypdf_log = logging.getLogger("pypdf")
+    _pypdf_log = logging.getLogger("pdfminer")
     _prior = _pypdf_log.level
     _pypdf_log.setLevel(logging.CRITICAL)
     try:

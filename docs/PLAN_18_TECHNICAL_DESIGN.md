@@ -278,7 +278,7 @@ LIMIT  :k;
 - `english` configuration first. Hindi/regional text: flagged by script
   detection and **not** searched in beta (stated in "Known limitations").
 - Dense retrieval: only after it beats BM25 on the enlarged eval under
-  `router.py`'s `adopt_when` rule (PLAN_16 §6.5).
+  `router.py`'s `adopt_when` rule (PLAN_21 §6.5).
 
 ### 2.6 Sufficiency gate (`checker/sufficiency.py`, NEW)
 
@@ -320,7 +320,7 @@ serve(claims, tau): keep claims with score > tau; the rest are refused as
   (fraction of a clause's distinctive terms present in its span). Record it for
   every clause from day one of the pilot.
 - **Flag:** `CERTIFY_ENABLED=false` until n ≥ 19 (α = 0.05) *and* the
-  independent audit sample reaches 59 clean answers (PLAN_16 C1). The UI never
+  independent audit sample reaches 59 clean answers (PLAN_21 C1). The UI never
   shows a percentage.
 
 ### 2.8 Vault storage and extraction
@@ -829,7 +829,7 @@ placedon-claude-legal-3300/
 | T2 | Blob encryption scopes with per-scope CMK: confirm key-disable makes blobs unreadable immediately | M0/M5 |
 | T3 | Postgres backup retention window (7–35 days) and its DPA wording | M4 |
 | T4 | JWT validation library for the gateway (or stdlib + pinned crypto) | M3 |
-| T5 | Postgres driver (`psycopg` 3 is the default candidate) | M4 |
+| T5 | ~~Postgres driver~~ **RESOLVED 2026-09-28: `psycopg[binary]==3.3.6`.** Reason, rejected alternatives (SQLite, an ORM, a broker, asyncpg, psycopg2, pg8000) and the reversal condition are recorded in `requirements-gateway.txt`. Version read from PyPI on the day of the pin, not carried from a plan document. | ~~M4~~ done |
 | T6 | OIDC library for the Next.js app, compatible with its Next.js version | M10 |
 | T7 | Whether Claude joins `CLIENT_SAFE` (India in-country inference live + zero retention) | M11 |
 | T8 | Hindi/regional-language Vault search | after beta |

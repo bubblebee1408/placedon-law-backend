@@ -42,7 +42,7 @@ from dataclasses import dataclass, asdict
 from datetime import date, datetime, timezone
 from pathlib import Path
 
-from checker.robots import Fetcher
+from checker.robots import HTML, Fetcher
 
 ORIGIN = "https://indiankanoon.org"
 ATTRIBUTION = "Source: Indian Kanoon (indiankanoon.org), retrieved under its terms of use."
@@ -140,7 +140,10 @@ class Corroborator:
         p = self.cache / f"{key}.html"
         if p.exists():
             return 200, p.read_text(encoding="utf-8")
-        st, body = self.f.get(url)
+        # Indian Kanoon serves pages, and this path writes what comes back into the
+        # corroboration cache as `.html`. Naming the expectation is what stops a soft-404
+        # being cached as a witness. `Fetcher.get` has no default for it (robots.py F3).
+        st, body = self.f.get(url, expect=(HTML,))
         if st == 200:
             p.write_text(body, encoding="utf-8")
         return st, body

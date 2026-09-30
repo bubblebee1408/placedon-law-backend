@@ -48,7 +48,7 @@ training on inputs (today: Groq). Client text: Azure only."* Until then, Groq st
 
 These come from the code audit, appendix D §B:
 
-1. An adapter `checker/groq_model.py` with `as_text_model(origin=...)`. It calls
+1. A new adapter module (proposed name: groq_model, in checker/) with `as_text_model(origin=...)`. It calls
    `public_only.refuse_matter` and `verify_prompt` before any socket opens. Copy the shape
    of `azure_model.py`.
 2. A row in `router._PREFERENCE`, **only after a bake-off win** (PLAN_22 D2: a

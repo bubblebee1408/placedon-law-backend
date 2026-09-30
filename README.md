@@ -57,7 +57,7 @@ checker/matrix_view.py          the HTTP surface, no dependencies
 checker/cascade.py              the E3-E6 deterministic verifier
 checker/metric_policy.py        the release gate
 checker/model_adapter.py        the only place an LLM may be called (stubbed)
-corpus/companies_act/           529 sections, hash-stamped
+corpus/companies_act/           527 sections, hash-stamped (529 files: + _index, _manifest)
 corpus/benchmark/               the frozen benchmark and its governance
 docs/                           plans, analyses, source defects, retractions
 research/TASKS.md               the open ledger — what is blocked and on whom

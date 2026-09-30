@@ -26,6 +26,9 @@
 #   1  suite is red
 #   3  no HARNESS_RESULT line -- runner did not finish, or is the wrong version
 #   4  contradiction between exit code and reported counts
+#   5  environment not ready (status=BLOCKED) -- a dependency is missing and NO suite
+#      ran, so nothing about the tree is known. Distinct from 1: red means measured and
+#      failing, 5 means unmeasured.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
@@ -58,6 +61,12 @@ status=$(sed -n 's/.*status=\([A-Z][A-Z]*\).*/\1/p' <<<"$line")
 if [ -z "$suites" ] || [ -z "$failed" ] || [ -z "$status" ]; then
     echo "verify_green: NOT GREEN -- could not parse: $line" >&2
     exit 3
+fi
+
+if [ "$status" = "BLOCKED" ]; then
+    echo "verify_green: NOT GREEN -- the environment is not ready, so no suite ran." >&2
+    echo "verify_green: see the runner's message above. This is unmeasured, not red." >&2
+    exit 5
 fi
 
 # A runner that exits 0 while reporting failures (or the reverse) is broken in exactly

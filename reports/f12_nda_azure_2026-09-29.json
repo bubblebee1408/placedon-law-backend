@@ -1,0 +1,332 @@
+{
+  "date": "2026-09-29",
+  "model": "azure:llama-3-3-70b",
+  "playbook": "nda_v1",
+  "playbook_status": "DRAFT",
+  "fixtures": 10,
+  "errors": 0,
+  "rule_agreement": 0.97,
+  "rules_compared": 100,
+  "rules_agreed": 97,
+  "per_rule": {
+    "NDA-01": {
+      "MATCHES": {
+        "MATCHES": 8
+      },
+      "DEVIATES": {
+        "DEVIATES": 1
+      },
+      "MISSING": {
+        "MISSING": 1
+      }
+    },
+    "NDA-02": {
+      "MATCHES": {
+        "MATCHES": 8
+      },
+      "DEVIATES": {
+        "DEVIATES": 1
+      },
+      "MISSING": {
+        "MISSING": 1
+      }
+    },
+    "NDA-03": {
+      "MATCHES": {
+        "MATCHES": 8
+      },
+      "DEVIATES": {
+        "DEVIATES": 1
+      },
+      "MISSING": {
+        "MISSING": 1
+      }
+    },
+    "NDA-04": {
+      "MATCHES": {
+        "MATCHES": 8
+      },
+      "MISSING": {
+        "MISSING": 2
+      }
+    },
+    "NDA-05": {
+      "MATCHES": {
+        "MATCHES": 8,
+        "NEEDS_LAWYER": 1
+      },
+      "MISSING": {
+        "MISSING": 1
+      }
+    },
+    "NDA-06": {
+      "MATCHES": {
+        "MATCHES": 8,
+        "NEEDS_LAWYER": 1
+      },
+      "MISSING": {
+        "MISSING": 1
+      }
+    },
+    "NDA-07": {
+      "MATCHES": {
+        "MATCHES": 7,
+        "NEEDS_LAWYER": 1
+      },
+      "MISSING": {
+        "MISSING": 2
+      }
+    },
+    "NDA-08": {
+      "MATCHES": {
+        "MATCHES": 9
+      },
+      "NEEDS_LAWYER": {
+        "NEEDS_LAWYER": 1
+      }
+    },
+    "NDA-09": {
+      "MATCHES": {
+        "MATCHES": 10
+      }
+    },
+    "NDA-10": {
+      "MATCHES": {
+        "MATCHES": 8
+      },
+      "DEVIATES": {
+        "DEVIATES": 1
+      },
+      "MISSING": {
+        "MISSING": 1
+      }
+    }
+  },
+  "wall_seconds": 21.3,
+  "note": "'agree' means the LIVE extraction produced the finding the fixture expects. A disagreement is usually the model failing to extract a clause, which grades MISSING rather than wrong -- the safe direction.",
+  "per_fixture": [
+    {
+      "id": "N01",
+      "agreed": 10,
+      "of": 10,
+      "unverified": [],
+      "extracted": 8,
+      "requires_review": true,
+      "seconds": 2.6,
+      "statuses": {
+        "NDA-01": "MATCHES",
+        "NDA-02": "MATCHES",
+        "NDA-03": "MATCHES",
+        "NDA-04": "MATCHES",
+        "NDA-05": "MATCHES",
+        "NDA-06": "MATCHES",
+        "NDA-07": "MATCHES",
+        "NDA-08": "MATCHES",
+        "NDA-09": "MATCHES",
+        "NDA-10": "MATCHES"
+      }
+    },
+    {
+      "id": "N02",
+      "agreed": 10,
+      "of": 10,
+      "unverified": [],
+      "extracted": 8,
+      "requires_review": true,
+      "seconds": 2.5,
+      "statuses": {
+        "NDA-01": "DEVIATES",
+        "NDA-02": "MATCHES",
+        "NDA-03": "MATCHES",
+        "NDA-04": "MATCHES",
+        "NDA-05": "MATCHES",
+        "NDA-06": "MATCHES",
+        "NDA-07": "MATCHES",
+        "NDA-08": "MATCHES",
+        "NDA-09": "MATCHES",
+        "NDA-10": "MATCHES"
+      }
+    },
+    {
+      "id": "N03",
+      "agreed": 10,
+      "of": 10,
+      "unverified": [],
+      "extracted": 8,
+      "requires_review": true,
+      "seconds": 2.1,
+      "statuses": {
+        "NDA-01": "MATCHES",
+        "NDA-02": "DEVIATES",
+        "NDA-03": "MATCHES",
+        "NDA-04": "MATCHES",
+        "NDA-05": "MATCHES",
+        "NDA-06": "MATCHES",
+        "NDA-07": "MATCHES",
+        "NDA-08": "MATCHES",
+        "NDA-09": "MATCHES",
+        "NDA-10": "MATCHES"
+      }
+    },
+    {
+      "id": "N04",
+      "agreed": 10,
+      "of": 10,
+      "unverified": [],
+      "extracted": 8,
+      "requires_review": true,
+      "seconds": 2.7,
+      "statuses": {
+        "NDA-01": "MATCHES",
+        "NDA-02": "MATCHES",
+        "NDA-03": "DEVIATES",
+        "NDA-04": "MATCHES",
+        "NDA-05": "MATCHES",
+        "NDA-06": "MATCHES",
+        "NDA-07": "MATCHES",
+        "NDA-08": "MATCHES",
+        "NDA-09": "MATCHES",
+        "NDA-10": "MATCHES"
+      }
+    },
+    {
+      "id": "N05",
+      "agreed": 7,
+      "of": 10,
+      "unverified": [
+        {
+          "clause": "Confidentiality Obligation",
+          "why": "VALUE_NOT_IN_SPAN"
+        },
+        {
+          "clause": "Permitted Disclosure",
+          "why": "VALUE_NOT_IN_SPAN"
+        },
+        {
+          "clause": "Return or Destruction",
+          "why": "VALUE_NOT_IN_SPAN"
+        }
+      ],
+      "extracted": 7,
+      "requires_review": true,
+      "seconds": 1.7,
+      "statuses": {
+        "NDA-01": "MATCHES",
+        "NDA-02": "MATCHES",
+        "NDA-03": "MATCHES",
+        "NDA-04": "MISSING",
+        "NDA-05": "NEEDS_LAWYER",
+        "NDA-06": "NEEDS_LAWYER",
+        "NDA-07": "NEEDS_LAWYER",
+        "NDA-08": "MATCHES",
+        "NDA-09": "MATCHES",
+        "NDA-10": "MATCHES"
+      }
+    },
+    {
+      "id": "N06",
+      "agreed": 10,
+      "of": 10,
+      "unverified": [],
+      "extracted": 9,
+      "requires_review": true,
+      "seconds": 2.3,
+      "statuses": {
+        "NDA-01": "MATCHES",
+        "NDA-02": "MATCHES",
+        "NDA-03": "MATCHES",
+        "NDA-04": "MATCHES",
+        "NDA-05": "MATCHES",
+        "NDA-06": "MATCHES",
+        "NDA-07": "MATCHES",
+        "NDA-08": "NEEDS_LAWYER",
+        "NDA-09": "MATCHES",
+        "NDA-10": "MATCHES"
+      }
+    },
+    {
+      "id": "N07",
+      "agreed": 10,
+      "of": 10,
+      "unverified": [],
+      "extracted": 8,
+      "requires_review": true,
+      "seconds": 2.5,
+      "statuses": {
+        "NDA-01": "MATCHES",
+        "NDA-02": "MATCHES",
+        "NDA-03": "MATCHES",
+        "NDA-04": "MATCHES",
+        "NDA-05": "MATCHES",
+        "NDA-06": "MATCHES",
+        "NDA-07": "MATCHES",
+        "NDA-08": "MATCHES",
+        "NDA-09": "MATCHES",
+        "NDA-10": "DEVIATES"
+      }
+    },
+    {
+      "id": "N08",
+      "agreed": 10,
+      "of": 10,
+      "unverified": [],
+      "extracted": 7,
+      "requires_review": true,
+      "seconds": 2.1,
+      "statuses": {
+        "NDA-01": "MATCHES",
+        "NDA-02": "MATCHES",
+        "NDA-03": "MATCHES",
+        "NDA-04": "MATCHES",
+        "NDA-05": "MATCHES",
+        "NDA-06": "MATCHES",
+        "NDA-07": "MISSING",
+        "NDA-08": "MATCHES",
+        "NDA-09": "MATCHES",
+        "NDA-10": "MATCHES"
+      }
+    },
+    {
+      "id": "N09",
+      "agreed": 10,
+      "of": 10,
+      "unverified": [],
+      "extracted": 0,
+      "requires_review": true,
+      "seconds": 0.5,
+      "statuses": {
+        "NDA-01": "MISSING",
+        "NDA-02": "MISSING",
+        "NDA-03": "MISSING",
+        "NDA-04": "MISSING",
+        "NDA-05": "MISSING",
+        "NDA-06": "MISSING",
+        "NDA-07": "MISSING",
+        "NDA-08": "MATCHES",
+        "NDA-09": "MATCHES",
+        "NDA-10": "MISSING"
+      }
+    },
+    {
+      "id": "N10",
+      "agreed": 10,
+      "of": 10,
+      "unverified": [],
+      "extracted": 8,
+      "requires_review": true,
+      "seconds": 2.3,
+      "statuses": {
+        "NDA-01": "MATCHES",
+        "NDA-02": "MATCHES",
+        "NDA-03": "MATCHES",
+        "NDA-04": "MATCHES",
+        "NDA-05": "MATCHES",
+        "NDA-06": "MATCHES",
+        "NDA-07": "MATCHES",
+        "NDA-08": "MATCHES",
+        "NDA-09": "MATCHES",
+        "NDA-10": "MATCHES"
+      }
+    }
+  ]
+}

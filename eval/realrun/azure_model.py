@@ -10,7 +10,10 @@ same reply parser, both imported rather than copied, so a difference between two
 models is a difference in what the models said -- never in what they were asked
 or how their replies were read.
 
-Like `local_model`, this is a MEASURING adapter. `router.py` routes nothing here.
+Like `local_model`, this is a MEASURING adapter: `router.py` routes nothing to THIS
+module. It does route to `checker/azure_model.py`, which now holds the HTTP core both
+sides share -- and which requires a `public_only` origin, because the engine sends
+corpus text where this harness sends its own fixtures.
 
 ## What it refuses to turn into an answer
 
@@ -38,60 +41,24 @@ from eval.realrun.local_model import _prompt, parse_reply           # noqa: E402
 
 _load_env()
 
-PREFIX = "azure:"
-
-# Reasoning models accept only the default temperature (gpt-5-mini answers
-# temperature=0 with HTTP 400 "unsupported_value") and spend hidden reasoning
-# tokens against the completion limit, so they get no temperature and a larger
-# budget. The temperature actually sent is recorded in meta, never assumed.
-_REASONING = ("gpt-5", "o1", "o3", "o4")
-REASONING_BUDGET = 4000
-COMPLETION_BUDGET = 700          # the same limit local_model gives Ollama
-
-# The key is sent in a header, so the endpoint is checked before it is used.
-_AZURE_HOSTS = (".openai.azure.com", ".services.ai.azure.com",
-                ".cognitiveservices.azure.com")
-
-
-def available() -> bool:
-    return bool(os.getenv("AZURE_AI_API_KEY") and os.getenv("AZURE_AI_ENDPOINT"))
-
-
-def _url() -> str:
-    base = os.getenv("AZURE_AI_ENDPOINT") or ""
-    u = urlparse(base)
-    if u.scheme != "https" or not (u.hostname or "").endswith(_AZURE_HOSTS):
-        raise ModelUnavailable(
-            f"AZURE_AI_ENDPOINT={base!r} is not an https Azure AI host; refusing "
-            f"to send the key to it")
-    return f"https://{u.hostname}/openai/v1/chat/completions"
+# The endpoint allowlist, the request and the reply discipline live in
+# checker/azure_model.py and are imported, never copied. They moved there when router.py
+# began routing to Azure for real: nothing in checker/ may import this harness (rings.py),
+# so the shared half had to sit on the engine side. Two copies of an endpoint allowlist is
+# how one of them quietly grows a host the other refuses.
+from checker.azure_model import (COMPLETION_BUDGET, PREFIX,  # noqa: E402,F401
+                                 REASONING_BUDGET, _AZURE_HOSTS, _call, _REASONING,
+                                 _url, available, chat_body, reply_text)
 
 
 def payload(document: str, deployment: str) -> dict:
-    body = {"model": deployment,
-            "messages": [{"role": "user", "content": _prompt(document)}]}
-    if deployment.startswith(_REASONING):
-        return body | {"max_completion_tokens": REASONING_BUDGET}
-    return body | {"max_tokens": COMPLETION_BUDGET, "temperature": 0}
+    """The extraction request: the shared body, around local_model's own prompt.
 
-
-def _call(body: dict, key: str, timeout: int) -> dict:
-    from checker.robots import ssl_context
-    ctx = ssl_context()
-    if ctx is None:
-        raise ModelUnavailable("no CA trust store on this machine, so the Azure "
-                               "endpoint cannot be authenticated. Refusing.")
-    req = urllib.request.Request(
-        _url(), data=json.dumps(body).encode("utf-8"), method="POST",
-        headers={"Content-Type": "application/json", "api-key": key})
-    try:
-        with urllib.request.urlopen(req, timeout=timeout, context=ctx) as r:
-            return json.loads(r.read().decode("utf-8"))
-    except urllib.error.HTTPError as e:
-        body_text = e.read().decode("utf-8", "replace")[:200]
-        raise ModelUnavailable(f"Azure HTTP {e.code}: {body_text}") from None
-    except (urllib.error.URLError, TimeoutError, OSError) as e:
-        raise ModelUnavailable(f"Azure unreachable: {e}") from None
+    `_prompt` is imported rather than copied for the same reason the reply parser is --
+    a difference between two models must be a difference in what the models said, never
+    in what they were asked.
+    """
+    return chat_body(_prompt(document), deployment)
 
 
 def extract(document: str, *, model: str, timeout: int = 180
@@ -105,22 +72,8 @@ def extract(document: str, *, model: str, timeout: int = 180
             "document with nothing in it.")
     body = payload(document, model.removeprefix(PREFIX))
     data = _call(body, key, timeout)
-
-    try:
-        choice = data["choices"][0]
-        text = choice["message"].get("content") or ""
-    except (KeyError, IndexError, TypeError):
-        raise ModelUnavailable(
-            f"no choice in the Azure reply: {json.dumps(data)[:200]}") from None
-    finish = choice.get("finish_reason")
-    if finish == "content_filter":
-        raise ModelRefused("Azure content filter stopped the reply")
-    if finish != "stop":
-        raise ModelUnavailable(
-            f"the Azure reply did not finish (finish_reason={finish!r}); a "
-            f"truncated reply is not an answer")
-
-    proposal, parse, raw = parse_reply(text)
+    # Raises on a reply that did not finish, so a fragment never reaches parse_reply.
+    proposal, parse, raw = parse_reply(reply_text(data))
     usage = data.get("usage") or {}
     # tokens_in as well as out: a run whose cost is reported must report the side
     # of the bill that a 60-page AGM notice actually moves. Azure returns it as

@@ -11,7 +11,8 @@ Do not fix what you have not seen fail. If it is a UI bug, reproduce it in a bro
 
 ## 2. Write the check BEFORE the fix
 
-Add it to `scripts/verify.py` with `because=` naming this incident. Run it, **watch it fail.**
+Add it to the **module's own `_test()`**, beside the code it guards, naming this incident in the
+check's label. Run that one module — `PYTHONPATH=. python3 <module>` — and **watch it fail.**
 
 This ordering is the whole point. A check written after the fix tests the fix; a check written
 before tests the bug. Only the second one stops it coming back.
@@ -28,7 +29,7 @@ places; fixing one would have left three.
 ## 4. Fix, then verify
 
 ```bash
-python3 scripts/verify.py
+./scripts/verify_green.sh
 ```
 
 The new check must now pass, and nothing else may have broken.

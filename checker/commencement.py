@@ -113,15 +113,37 @@ def _english_part(text: str) -> str:
     return text[j - 40:] if j > 40 else text
 
 
-def _get(url: str, timeout: float = 45.0) -> bytes | None:
-    from checker.robots import USER_AGENT, ssl_context
+def _get(url: str, timeout: float = 45.0, *, expect_markup: bool = False) -> bytes | None:
+    """The bytes at `url`, or None. **Never HTML where HTML was not asked for.**
+
+    A Gazette bitstream is a PDF or a text dump; it is never a web page. India Code
+    answers a bitstream path it does not serve with HTTP 200 and the DSpace Angular
+    shell (re-measured 26-09-2026: 6,762 bytes of `text/html` on `indiacode.gov.in`,
+    against 3,281,971 bytes of `application/pdf` for the same path on
+    `www.indiacode.nic.in`). `from_text()` would have hashed that shell and entered it
+    in `corpus/sources/commencement/` as the notification that commenced a provision --
+    silently, because the status is 200, the bytes decode cleanly, and the length is
+    plausible.
+
+    The guard is `checker.robots.payload_refusal`, shared with every other fetcher
+    rather than copied. `expect_markup=True` is for a caller that genuinely wants a
+    page; the default refuses one.
+    """
+    from checker.robots import PDF, TEXT, USER_AGENT, HTML, payload_refusal, ssl_context
     ctx = ssl_context()
     if ctx is None:
         return None
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     try:
         with urllib.request.urlopen(req, timeout=timeout, context=ctx) as r:
-            return r.read() if r.status == 200 else None
+            if r.status != 200:
+                return None
+            body = r.read()
+            expect = (HTML,) if expect_markup else (PDF, TEXT)
+            if payload_refusal(body, expect=expect,
+                               content_type=r.headers.get("Content-Type") or ""):
+                return None
+            return body
     except Exception:
         return None
 
@@ -218,6 +240,49 @@ def _test() -> None:
            "a notification that omits the section is not provenance")
     check_(not Provenance(UNREACHABLE).confirmed, "an unreachable source is not provenance")
     check_(Provenance(CONFIRMED).confirmed, "only CONFIRMED counts")
+
+    # ── the soft-404: a 200 is not evidence of WHAT came back ────────────────
+    # `_get` fetches a Gazette bitstream, which is a PDF or a text dump and never a web
+    # page. India Code answers a bitstream path it does not serve with 200 and the DSpace
+    # Angular shell (re-measured 26-09-2026: 6,762 bytes of text/html). Decoding that as
+    # the notification text would have entered the shell into the record as the instrument
+    # that commenced a provision -- silently, because the status is 200, the bytes decode
+    # cleanly as UTF-8, and the length is plausible.
+    import urllib.request as _ur
+    from unittest import mock as _mock
+
+    class _Resp:
+        def __init__(self, body: bytes, ctype: str, status: int = 200):
+            self.status, self._b = status, body
+            self.headers = {"Content-Type": ctype}
+
+        def read(self) -> bytes:
+            return self._b
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    shell = b'<!DOCTYPE html>\n<html lang="en"><app-root></app-root></html>'
+    with _mock.patch.object(_ur, "urlopen", return_value=_Resp(shell, "text/html; charset=UTF-8")):
+        check_(_get("https://indiacode.gov.in/bitstream/123456789/2114/5/A2013-18.pdf") is None,
+               "the DSpace shell is refused, not returned as the notification's bytes")
+    with _mock.patch.object(_ur, "urlopen", return_value=_Resp(shell, "text/plain")):
+        check_(_get("https://indiacode.gov.in/bitstream/x") is None,
+               "...and still refused when a misconfigured host calls the page text/plain")
+    with _mock.patch.object(_ur, "urlopen",
+                            return_value=_Resp(b"%PDF-1.7\nS.O. 1833(E)", "application/pdf")):
+        check_(_get("https://www.indiacode.nic.in/bitstream/x") == b"%PDF-1.7\nS.O. 1833(E)",
+               "a real PDF bitstream is returned unchanged")
+    with _mock.patch.object(_ur, "urlopen", return_value=_Resp(body.encode(), "text/plain")):
+        got = _get("https://www.indiacode.nic.in/bitstream/x")
+    check_(got is not None and b"S.O. 1833(E)" in got,
+           "a plain-text Gazette dump is returned too -- both are legitimate here")
+    with _mock.patch.object(_ur, "urlopen", return_value=_Resp(shell, "text/html")):
+        check_(_get("https://indiacode.gov.in/x", expect_markup=True) == shell,
+               "a caller that genuinely wants a page can say so and gets it")
 
     live = load_cached("2018-05-07")
     if live:

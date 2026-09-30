@@ -97,6 +97,35 @@ class Lattice:
             return Verdict(self.best, None)
         return Verdict(self.states[found[0]], found[1])
 
+    def best_of(self, items: Iterable[T], status_of: Callable[[T], str]) -> Verdict:
+        """Strongest-alternative composition: the best state present, and what gave it.
+
+        The dual of `worst_of`, and it lives here rather than in a caller so that a
+        reader cannot find one half of the pair without the other.
+
+        Added 2026-09-26 for `checker/derivation.py` (PLAN_19 G2.1), where the two are
+        the semiring's operations: `worst_of` is ⊗ (a conclusion is only as good as its
+        weakest support) and this is ⊕ (an alternative route can be stronger).
+
+        **Empty returns `worst`, not `best`** -- the mirror of `worst_of`'s argument and
+        not a copy of it. `worst_of` returns `best` on empty because resting on no
+        dependencies IS unconstrained. Here, having no alternative means nothing supports
+        the claim at all, which is the weakest thing that can be said. Returning `best`
+        would make "no support" indistinguishable from "verified", which is the identity
+        this whole module exists to keep straight.
+
+        Ties resolve to the FIRST item at the best rank, the same rule as `worst_of`, so
+        a rollup over the same inputs in the same order always names the same witness.
+        """
+        found: tuple[int, T] | None = None
+        for item in items:
+            r = self.rank(status_of(item))     # raises on an unknown state
+            if found is None or r < found[0]:
+                found = (r, item)
+        if found is None:
+            return Verdict(self.worst, None)
+        return Verdict(self.states[found[0]], found[1])
+
 
 def _test() -> None:
     ok = fail = 0
@@ -163,6 +192,36 @@ def _test() -> None:
     tie = cur.worst_of([("p", UNACQUIRED), ("q", UNACQUIRED)], lambda t: t[1])
     check(tie.witness[0] == "p",
           f"on a tie the first worst wins, so the verdict is deterministic ({tie.witness[0]})")
+
+
+    # ---- best_of: the dual, added 2026-09-26 for checker/derivation.py --------------
+    L = Lattice("dual", ("VERIFIED", "CORROBORATED", "INFERRED", "UNRESOLVED"))
+    rows = [{"s": "INFERRED", "n": "a"}, {"s": "CORROBORATED", "n": "b"},
+            {"s": "UNRESOLVED", "n": "c"}]
+    g = lambda r: r["s"]                                          # noqa: E731
+    check(L.best_of(rows, g).state == "CORROBORATED"
+          and L.best_of(rows, g).witness["n"] == "b",
+          "best_of returns the STRONGEST state present and names what gave it")
+    check(L.worst_of(rows, g).state == "UNRESOLVED",
+          "...and worst_of still returns the weakest, unchanged")
+    # The empty cases are OPPOSITE, and that is the point rather than an oversight.
+    check(L.worst_of([], g).state == L.best and L.best_of([], g).state == L.worst,
+          "empty: worst_of -> best (resting on nothing is unconstrained); best_of -> worst "
+          "(no alternative means NOTHING supports the claim). Returning best from an empty "
+          "best_of would make 'no support' indistinguishable from 'verified'")
+    check(L.best_of([], g).witness is None and L.worst_of([], g).witness is None,
+          "...and neither invents a witness for an empty input")
+    ties = [{"s": "INFERRED", "n": "first"}, {"s": "INFERRED", "n": "second"}]
+    check(L.best_of(ties, g).witness["n"] == "first"
+          and L.worst_of(ties, g).witness["n"] == "first",
+          "both resolve ties to the FIRST item, so the same inputs always name the same "
+          "witness")
+    try:
+        L.best_of([{"s": "MADE_UP", "n": "x"}], g)
+        check(False, "best_of accepted a state outside the lattice")
+    except LatticeError:
+        check(True, "best_of raises on an unknown state, like worst_of -- it does not "
+                    "treat an unrecognised word as the weakest one")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:

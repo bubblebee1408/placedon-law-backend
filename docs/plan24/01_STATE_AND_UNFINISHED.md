@@ -56,7 +56,7 @@ open/blocked/ready, plus PLAN_23's O1–O9.
 | T0.3 | **D-002b:** move `checker/pdf_pages.extract_pages` to `pdfplumber` (already in `requirements-dev.txt`), then re-extract `corpus/rules/board_powers_2014.json` | Unblocks the 30 human-review items. That is the first source of real HUMAN labels |
 | T0.4 | **PLAN_23 O1:** finish `review_document`, `runs.approve` and the playbook text, all gated | `runs.approve/reject` is where labels are born (05 §2) |
 | T0.5 | **R-013, R-014:** the fetch-policy summary lists its own robots URL; acquisition logs live in two places | Small; they sit on the acquisition path T3 depends on |
-| T0.6 | **Website drift.** `placedon-claude-legal-3300/AGENTS.md` says the backend has "exactly six routes" and that `/v1/ask` does not exist. `main` serves eight, including `/v1/ask` | A contract the frontend builds against has to be true |
+| T0.6 | **Website drift.** The website repository's AGENTS.md (repo placedon-claude-legal-3300) says the backend has "exactly six routes" and that `/v1/ask` does not exist. `main` serves eight, including `/v1/ask` | A contract the frontend builds against has to be true |
 | T0.7 | **A-011:** independently re-verify `/v1/ask` (status "fixed — awaiting re-verification") | It is the answer path every new intent reuses |
 
 ### 3.2 A founder or counsel decision closes these

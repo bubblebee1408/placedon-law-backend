@@ -2,7 +2,7 @@
 
 Written 2026-09-24 for the founder. Plain language first, then the precise
 version, then where it lives in the code. Read it alongside
-[PLAN_16](PLAN_16_RESEARCH_PROGRAMME.md) (research) and
+[PLAN_21](PLAN_21_RESEARCH_PROGRAMME.md) (research) and
 [PLAN_17](PLAN_17_BETA_BUILD.md) (build).
 
 ---
@@ -286,10 +286,10 @@ evaluation or training.
 7. Miller, *Adding Error Bars to Evals* (2024) — how to report numbers honestly
 8. Guha et al., *LegalBench* (NeurIPS 2023) and Joshi et al., *IL-TUR* (ACL 2024) —
    legal benchmarks, incl. India
-9. The four 2025–26 temporal legal RAG papers in PLAN_16 §2.4 — the prior art for
+9. The four 2025–26 temporal legal RAG papers in PLAN_21 §2.4 — the prior art for
    our currency paper
 
-Links are in PLAN_16's source list.
+Links are in PLAN_21's source list.
 
 ---
 

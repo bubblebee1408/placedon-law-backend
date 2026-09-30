@@ -6,11 +6,13 @@
   "kind": "general"
  },
  "evidence_pack": {
+  "abstain_reason": "HELD_NOT_ADMITTED",
   "insufficient_evidence": true,
   "missing": [
    "RULE:COMPANIES_MEETINGS_BOARD_POWERS_2014:R2 (Definitions) was cited and DOES exist, but is not admitted for model use: UNREVIEWED. Its text is unknown to you.",
    "No provision was retrieved at all. This pack is empty."
   ],
+  "query_expansions": [],
   "retrieval_query": "rule 2(1)(t)",
   "route": "abstain",
   "unusable_keys": [],
@@ -39,7 +41,7 @@
   "held": [
    "Companies Act, 2013"
   ],
-  "sentence": "1 of 9 in-scope bodies of law are held"
+  "sentence": "1 of 11 in-scope bodies of law are held"
  },
  "state": "partial",
  "turn_id": "t_6c77ad3b8015",

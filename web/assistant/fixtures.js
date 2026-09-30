@@ -22,8 +22,10 @@ window.PLACEDON_ASK_FIXTURES = {
    "kind": "general"
   },
   "evidence_pack": {
+   "abstain_reason": "",
    "insufficient_evidence": false,
    "missing": [],
+   "query_expansions": [],
    "retrieval_query": "s.2(85)",
    "route": "exact",
    "unusable_keys": [],
@@ -105,7 +107,7 @@ window.PLACEDON_ASK_FIXTURES = {
    "held": [
     "Companies Act, 2013"
    ],
-   "sentence": "1 of 9 in-scope bodies of law are held"
+   "sentence": "1 of 11 in-scope bodies of law are held"
   },
   "state": "answered",
   "turn_id": "t_20ccadb72b4b",
@@ -245,7 +247,7 @@ window.PLACEDON_ASK_FIXTURES = {
    "held": [
     "Companies Act, 2013"
    ],
-   "sentence": "1 of 9 in-scope bodies of law are held"
+   "sentence": "1 of 11 in-scope bodies of law are held"
   },
   "scope_frame": {
    "as_of": "2026-09-15",
@@ -336,8 +338,10 @@ window.PLACEDON_ASK_FIXTURES = {
    "kind": "general"
   },
   "evidence_pack": {
+   "abstain_reason": "",
    "insufficient_evidence": false,
    "missing": [],
+   "query_expansions": [],
    "retrieval_query": "s.2(85)",
    "route": "exact",
    "unusable_keys": [],
@@ -373,7 +377,7 @@ window.PLACEDON_ASK_FIXTURES = {
    "held": [
     "Companies Act, 2013"
    ],
-   "sentence": "1 of 9 in-scope bodies of law are held"
+   "sentence": "1 of 11 in-scope bodies of law are held"
   },
   "state": "answered",
   "turn_id": "t_35e5e8a47ea0",
@@ -403,7 +407,7 @@ window.PLACEDON_ASK_FIXTURES = {
    "held": [
     "Companies Act, 2013"
    ],
-   "sentence": "1 of 9 in-scope bodies of law are held"
+   "sentence": "1 of 11 in-scope bodies of law are held"
   },
   "state": "out_of_scope",
   "turn_id": "t_53d5771a2f6d",
@@ -417,11 +421,13 @@ window.PLACEDON_ASK_FIXTURES = {
    "kind": "general"
   },
   "evidence_pack": {
+   "abstain_reason": "HELD_NOT_ADMITTED",
    "insufficient_evidence": true,
    "missing": [
     "RULE:COMPANIES_MEETINGS_BOARD_POWERS_2014:R2 (Definitions) was cited and DOES exist, but is not admitted for model use: UNREVIEWED. Its text is unknown to you.",
     "No provision was retrieved at all. This pack is empty."
    ],
+   "query_expansions": [],
    "retrieval_query": "rule 2(1)(t)",
    "route": "abstain",
    "unusable_keys": [],
@@ -450,7 +456,7 @@ window.PLACEDON_ASK_FIXTURES = {
    "held": [
     "Companies Act, 2013"
    ],
-   "sentence": "1 of 9 in-scope bodies of law are held"
+   "sentence": "1 of 11 in-scope bodies of law are held"
   },
   "state": "partial",
   "turn_id": "t_6c77ad3b8015",
@@ -483,10 +489,12 @@ window.PLACEDON_ASK_FIXTURES = {
    "action": "tell_us_blocking"
   },
   "evidence_pack": {
+   "abstain_reason": "",
    "insufficient_evidence": false,
    "missing": [
     "ACT:COMPANIES_ACT_2013:S16 exists in state SUSPENDED but is not admitted for model use"
    ],
+   "query_expansions": [],
    "retrieval_query": "s.173 and s.16",
    "route": "exact",
    "unusable_keys": [],
@@ -515,7 +523,7 @@ window.PLACEDON_ASK_FIXTURES = {
    "held": [
     "Companies Act, 2013"
    ],
-   "sentence": "1 of 9 in-scope bodies of law are held"
+   "sentence": "1 of 11 in-scope bodies of law are held"
   },
   "state": "partial",
   "turn_id": "t_87e16579523a",

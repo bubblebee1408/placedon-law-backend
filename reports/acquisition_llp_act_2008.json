@@ -1,0 +1,99 @@
+{
+  "schema": "acquisition_log/v1",
+  "instrument_id": "INDIACODE_LLP_ACT_2008",
+  "title": "Limited Liability Partnership Act, 2008 — India Code current text (actid UNCONFIRMED, handle UNCONFIRMED)",
+  "terminal_state": "HUMAN_RETRIEVAL_REQUIRED",
+  "handoff": "OPEN. The LLP Act 2008 was NOT acquired, no actid was confirmed, and no enumeration query was run. The blocker is the host, not the Act: indiacode.gov.in is the only permitted source and its robots.txt has answered HTTP 500 to four spaced probes, which checker/robots.py reads as a full disallow of the whole origin, as does RFC 9309. Every request that would have found the actid -- the handle page, /server/api/pid/find, /server/api/discover/search/objects -- would have gone through that shut gate, so none was made. Note also that the last ruleset this repository actually READ from India Code (docs/SOURCE_POLICY.md: 'disallows only /discover and /simple-search') disallows the search family, and /server/api/discover/search/objects is the REST twin of /discover: even on the optimistic reading the single route needed for enumeration is the one most likely refused. It must not be run on a literal-prefix technicality. What unblocks this, in order: (1) India Code fixes robots.txt -- there is nothing to do but re-check, and NOTHING IN THIS REPOSITORY RE-CHECKS, which is F15's 'fail-forever' defect still open; (2) failing that, a human opens indiacode.gov.in in a browser, finds the LLP Act 2008, and reads the actid out of the SectionPageContent request in the network tab, recording the exact URL it was read from -- a browser session is not subject to a robots rule, which is what makes this a five-minute human task and not a policy workaround. Until then llp2008 stays PENDING_ID in scripts/ingest_act.py's register, which is the correct state and already refuses to run. Do NOT substitute a PDF mirror, Indian Kanoon, or a law-firm copy. See docs/research/ACQUIRE_LLP2008_2026_09_27.md.",
+  "summary": {
+    "instrument_id": "INDIACODE_LLP_ACT_2008",
+    "title": "Limited Liability Partnership Act, 2008 — India Code current text (actid UNCONFIRMED, handle UNCONFIRMED)",
+    "attempts": 4,
+    "hosts_tried": [
+      "indiacode.gov.in",
+      "www.indiacode.gov.in"
+    ],
+    "by_outcome": {
+      "ACCESSIBLE": 1,
+      "BLOCKED": 2,
+      "UNREACHABLE": 1
+    },
+    "terminal_state": "HUMAN_RETRIEVAL_REQUIRED",
+    "terminal_state_is_success": true,
+    "human_retrieval_required": true,
+    "automated_retry_permitted": [
+      "https://www.indiacode.gov.in/robots.txt"
+    ],
+    "never_retry_automatically": [
+      "https://indiacode.gov.in/",
+      "https://indiacode.gov.in/robots.txt"
+    ],
+    "instrument_existence": "EXISTENCE_UNDETERMINED",
+    "existence_note": "Failure to DISCOVER an instrument is not evidence that the instrument does not exist. Every outcome below is a fact about a host or an address -- a refusal, an outage, a wrong path -- and none of them is a fact about the law. Disproving existence would require reading a source that would list the instrument if it existed; no such source was read. Existence stays undetermined, and nothing downstream may treat absence-from-corpus as absence-from-law.",
+    "chain": {
+      "length": 4,
+      "head": "32e9fa116e4af02364afd1b7372fe668ac77d88fe458d6f16327c5741566b405"
+    }
+  },
+  "records": [
+    {
+      "seq": 0,
+      "timestamp": "2026-09-27",
+      "instrument_id": "INDIACODE_LLP_ACT_2008",
+      "url": "https://indiacode.gov.in/robots.txt",
+      "host": "indiacode.gov.in",
+      "method": "GET",
+      "outcome": "BLOCKED",
+      "http_status": 500,
+      "error": null,
+      "note": "robots.txt for the ONE permitted host. Probed four times -- once with curl, then three times via checker.robots' own UA and TLS context, 15 seconds apart -- HTTP 500 every time, so this is not a transient. BLOCKED and not UNREACHABLE because the server ANSWERED: http_status carries the real 500 and this was never a 403. Consequence, and it is the whole verdict: rules_for_status(500) returns loaded=False, so robots.allowed() is False for EVERY path on this origin. RFC 9309 reads an unavailable robots.txt as a full disallow (subsection number deliberately not cited: the RFC was not read, and a sibling report cites a different one). docs/FAILURE_MODES.md F15 recorded the same endpoint answering 502 'continuously since ~21 August' and concluded the fail-closed gate is correct; today it answers 500. The four accessibility states have no slot for 5xx.",
+      "artifact_sha256": null,
+      "prev_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "entry_hash": "5392511d5a77f2972057839332a165ac5548bf90c0704d34b1eb9f3b672c0a7f"
+    },
+    {
+      "seq": 1,
+      "timestamp": "2026-09-27",
+      "instrument_id": "INDIACODE_LLP_ACT_2008",
+      "url": "https://www.indiacode.gov.in/robots.txt",
+      "host": "www.indiacode.gov.in",
+      "method": "GET",
+      "outcome": "UNREACHABLE",
+      "http_status": null,
+      "error": "SSL CERTIFICATE_VERIFY_FAILED: Hostname mismatch, certificate is not valid for 'www.indiacode.gov.in'",
+      "note": "check_host() in scripts/ingest_act.py permits subdomains of indiacode.gov.in, so this was probed to see whether a permitted subdomain publishes a readable ruleset that could stand in for the broken one. It does not: the TLS handshake fails on hostname mismatch, so there is no HTTP answer at all and UNREACHABLE is exact. Verification was NOT disabled to get past it (RT-14) -- this is the one fetch path in the repository where a man-in-the-middle rewrites a statute.",
+      "artifact_sha256": null,
+      "prev_hash": "5392511d5a77f2972057839332a165ac5548bf90c0704d34b1eb9f3b672c0a7f",
+      "entry_hash": "64d277a24700c40013a88fec31dcac86d5c3ac144f9c31f66153e0d5d25c6f9b"
+    },
+    {
+      "seq": 2,
+      "timestamp": "2026-09-27",
+      "instrument_id": "INDIACODE_LLP_ACT_2008",
+      "url": "https://indiacode.gov.in/",
+      "host": "indiacode.gov.in",
+      "method": "HEAD",
+      "outcome": "BLOCKED",
+      "http_status": 405,
+      "error": null,
+      "note": "HEAD on the origin root, to see whether indiacode.gov.in redirects to the www host (in which case www's ruleset would be the operative one). It does not redirect: 405 Method Not Allowed, served from indiacode.gov.in itself. The operative origin for robots purposes is therefore https://indiacode.gov.in, whose robots.txt is the 500 above. Never-retry is the right treatment here -- repeating a HEAD cannot make the method allowed.",
+      "artifact_sha256": null,
+      "prev_hash": "64d277a24700c40013a88fec31dcac86d5c3ac144f9c31f66153e0d5d25c6f9b",
+      "entry_hash": "902e8608b2fddab6abdd85034a076a67559015bbb014f03f15754080acd421f5"
+    },
+    {
+      "seq": 3,
+      "timestamp": "2026-09-27",
+      "instrument_id": "INDIACODE_LLP_ACT_2008",
+      "url": "https://indiacode.gov.in/",
+      "host": "indiacode.gov.in",
+      "method": "GET",
+      "outcome": "ACCESSIBLE",
+      "http_status": 200,
+      "error": null,
+      "note": "CONTROL PROBE, required by docs/ACQUISITION_POLICY.md 'Log a control probe', and deliberately carrying NO artifact hash: these bytes are the DSpace Angular shell, not the LLP Act. It is what separates 'India Code is down' -- retryable -- from 'India Code's robots endpoint is broken while the site serves' , and those two readings lead to opposite decisions. Measured: 200, text/html, 6,762 bytes, ZERO sectionId= matches. 6,762 bytes is byte-for-byte the SAME LENGTH scripts/ingest_act.py records for /handle/123456789/2114, which means the shell is served for every route on this host: the handle page is not a soft-404 for a missing handle, it is the SPA answering everything. So HTML-scrape enumeration cannot work for ANY Act here, and that is a property of the deployment, not of the LLP Act.",
+      "artifact_sha256": null,
+      "prev_hash": "902e8608b2fddab6abdd85034a076a67559015bbb014f03f15754080acd421f5",
+      "entry_hash": "32e9fa116e4af02364afd1b7372fe668ac77d88fe458d6f16327c5741566b405"
+    }
+  ]
+}

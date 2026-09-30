@@ -3,6 +3,12 @@
 Written 2026-09-30 on branch `claude/kind-mayer-rt20h0` (based on `main` at `d966e4f`).
 Nine documents. **A design, not a status.** Naming a module here is not a claim that it exists.
 
+> **Two documents carry the number 24.** The orchestration branch independently wrote
+> `docs/PLAN_24_INDIAN_SOURCES.md` (Indian sources: tiers, a terms register, build order S0–S5).
+> When they met in `main` on 2026-09-30, both were kept. Here, **"PLAN_24" means this folder,
+> `docs/plan24/`**, and the other is cited by its file name. Renumbering either one is a
+> founder decision, as PLAN_16→PLAN_21 was.
+
 > **Where the newest work lives.** PLAN_20–23, the gateway, `agents/`, the router and the
 > playbook are on `claude/harvey-india-platform-analysis-d2mmqi` (135 commits ahead of `main`,
 > head `22b8205`, unmerged on 2026-09-30). This plan was read against that branch with

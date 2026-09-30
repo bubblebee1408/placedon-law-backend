@@ -1,6 +1,6 @@
 # PLAN_19: a Gotham-grade workbench for Indian corporate lawyers, on Themis
 
-Written 2026-09-25 against `main` at `6cdb109`. Nine documents. This plan extends PLAN_16
+Written 2026-09-25 against `main` at `6cdb109`. Nine documents. This plan extends PLAN_21
 (research), PLAN_17 (beta milestones M0–M12) and PLAN_18 (technical design). It does not
 replace any of them. Where they already decide something, this set cites the decision and
 does not restate it.
@@ -76,5 +76,5 @@ refuses every source that cannot carry it.
   provenance semirings, Fellegi–Sunter, conformal inference) to a setting where we have not found
   them applied. That is an engineering contribution. Whether it is publishable depends on a
   literature search a person has not yet done.
-- **arxiv.org was blocked from this environment** (as it was for PLAN_16). Every arXiv citation is
+- **arxiv.org was blocked from this environment** (as it was for PLAN_21). Every arXiv citation is
   therefore [V] at best, via a publisher or proceedings page.

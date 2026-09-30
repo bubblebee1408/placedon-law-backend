@@ -101,6 +101,6 @@ rather than in a contract.
 4. **Demand is unproven.** The wedge (in-house legal teams) is a founder decision, not a measured
    market.
 
-*Sources: PLAN_00, PLAN_08 §5, PLAN_14 §3, PLAN_16 §2,
+*Sources: PLAN_00, PLAN_08 §5, PLAN_14 §3, PLAN_21 §2,
 `docs/research/DATA_ACCESS_AND_CONNECTORS_2026_09_25.md`,
 `docs/research/GOLDSET_FIRST_RUN_2026_09_25.md`, and docs/plan19/01–04.*

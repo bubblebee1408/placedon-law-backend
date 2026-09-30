@@ -63,7 +63,11 @@ def _law_version_at(provisions: list[str], requested: str) -> dict:
 def _pack_summary(d: dict, route: str) -> dict:
     return {"retrieval_query": d["query"], "route": route, "usable_keys": d["usable_keys"],
             "unusable_keys": d["unusable_keys"], "missing": d["missing"],
-            "insufficient_evidence": d["insufficient_evidence"]}
+            "insufficient_evidence": d["insufficient_evidence"],
+            # Additive. "" whenever the route did not abstain, so the type never varies.
+            "abstain_reason": d.get("abstain_reason", ""),
+            # Which abbreviations were expanded. Never silent (move 4).
+            "query_expansions": d.get("query_expansions", [])}
 
 
 def _figure(key: str, as_of: date) -> dict:

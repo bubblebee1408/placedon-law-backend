@@ -354,6 +354,56 @@ def _by_weight(terms: list[str]) -> list[str]:
 # --------------------------------------------------------------------------------------------
 # Public API
 # --------------------------------------------------------------------------------------------
+_ABBREV_PATH = Path(__file__).resolve().parent / "abbrev.json"
+_ABBREV_CACHE: tuple[tuple[str, str], ...] | None = None
+
+
+def _abbrev() -> tuple[tuple[str, str], ...]:
+    """(abbrev, expansion) pairs, VERIFIED ones only, read from checker/abbrev.json.
+
+    Every entry's provision was confirmed to contain its expansion verbatim in the held
+    corpus. Entries whose provision could not be confirmed sit in the file's `refused`
+    list with the reason and are NOT loaded here -- an expansion nobody can trace is a
+    guess, and a wrong expansion is a silent mis-retrieval, which is worse than a miss.
+    """
+    global _ABBREV_CACHE
+    if _ABBREV_CACHE is None:
+        d = json.loads(_ABBREV_PATH.read_text(encoding="utf-8"))
+        _ABBREV_CACHE = tuple((e["abbrev"], e["expansion"]) for e in d["verified"]
+                              if e.get("confirmed_in_corpus"))
+    return _ABBREV_CACHE
+
+
+def expand_query(query: str) -> tuple[str, tuple[tuple[str, str], ...]]:
+    """(query with abbreviations expanded, what was expanded).
+
+    Measured 2026-09-25: 19 of 22 terms an Indian corporate lawyer types every day
+    retrieve NOTHING -- AGM, KMP, MD, CIN, DIN, NCLT and the rest. The Act is drafted
+    in full words and never abbreviates; practitioners abbreviate almost everything, so
+    the corpus and the user share a subject and not a vocabulary
+    (docs/research/RETRIEVAL_DEFECT_2026_09_25.md).
+
+    The abbreviation is KEPT alongside its expansion rather than replaced. Dropping it
+    would silently rewrite the user's question, and `_idf` gives an unmatchable term the
+    maximum weight -- so removing it would also change the scoring denominator, which is
+    the mechanism behind the relaxation that was reverted on 25-09.
+
+    Matched on WORD BOUNDARIES and CASE-SENSITIVELY. "MD" is a defined abbreviation;
+    "md" inside another word is not, and "CS" must not fire on "cs" in "specs". A
+    case-insensitive match here would expand far more than it should.
+
+    Returns the expansions so a caller can SHOW them. An expansion the reader cannot
+    see is the engine answering a question the user did not ask.
+    """
+    used: list[tuple[str, str]] = []
+    out = query
+    for ab, exp in _abbrev():
+        if re.search(rf"(?<![A-Za-z]){re.escape(ab)}(?![A-Za-z])", out):
+            out = f"{out} {exp}"
+            used.append((ab, exp))
+    return out, tuple(used)
+
+
 def search(query: str, *, top_k: int = 5) -> list[dict]:
     """Find Companies Act 2013 sections by subject, when the section number is unknown.
 
@@ -371,7 +421,8 @@ def search(query: str, *, top_k: int = 5) -> list[dict]:
 
     Returns [] rather than a weak guess. Silence is a valid answer in this product.
     """
-    tokens = _tokens(query)
+    expanded, _expansions = expand_query(query)   # shown via retrieve(), not on rows
+    tokens = _tokens(expanded)
     terms = list(dict.fromkeys(_content(tokens)))
     if not terms:
         return []

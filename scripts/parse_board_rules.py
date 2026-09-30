@@ -72,9 +72,68 @@ def despace(s: str) -> str:
 _SPLITTABLE_SECTION = re.compile(r"s\s?e\s?c\s?t\s?i\s?o\s?n\s+(\d{1,3}[A-Z]{0,2})", re.I)
 
 
-def count_split_words(s: str) -> int:
-    """How many stranded fragments remain, so a reviewer knows the extraction's condition."""
-    return len(re.findall(r"\b[A-Za-z]{2,}\s+[a-z]{1,3}\b(?=[\s.,;:)])", s))
+# A trailing fragment is extraction damage only when rejoining it produces a token
+# the document itself uses elsewhere. No dictionary, no hand-written word list: the
+# document is its own evidence, which is the same principle as corroborating a span
+# against the amending Act rather than against our own confidence.
+def count_split_words(s: str, vocabulary: frozenset[str] | None = None) -> int:
+    """Fragments that are extraction damage, not English.
+
+    **This counted ordinary prose until 25-09-2026**, and the correction took two
+    passes, both recorded because each was wrong in an instructive way.
+
+    The original rule was "any word followed by a short word", which matches "with
+    the", "convening and", "if any". It reported 299 split words in rule 3, whose
+    text reads "A company shall comply with the following procedure..." -- clean
+    English. That false signal is part of why this instrument's rules sat in
+    HUMAN_REVIEW_PENDING looking unreadable, and it is what a reviewer would have
+    been sent in to proofread.
+
+    The first correction added a list of real short words. Better, and still wrong:
+    it kept flagging "take due", "income tax", "think fit", "notice pay" -- the list
+    can never be finished, and an unfinished list fails in the direction of crying
+    wolf.
+
+    The rule now asks the document. `head + tail` is a split only if that joined
+    token appears SOMEWHERE ELSE in the instrument as a word in its own right. "an"
+    + "d" -> "and", which the document uses constantly, so it is damage. "take" +
+    "due" -> "takedue", which appears nowhere, so it is two words.
+
+    Rejoining is NOT performed here. This counts; `despace` does the only repair this
+    file makes, and only for stranded single letters. CLAUDE.md's rule against
+    repairing a source stands, and the count is the unresolved marker a reviewer sees.
+    """
+    if vocabulary is None:
+        vocabulary = frozenset(w.lower() for w in re.findall(r"[A-Za-z]{3,}", s))
+    # Adjacent PAIRS, not a consuming regex. A regex match eats its head, so in
+    # "own na me" it pairs "own"+"na", decides that is not a word, and never looks at
+    # "na"+"me" -- the actual split. Candidates overlap, so the scan must too.
+    tokens = re.findall(r"[A-Za-z]+", s)
+    n = 0
+    for head, tail in zip(tokens, tokens[1:]):
+        if len(head) >= 2 and 1 <= len(tail) <= 3 and tail.islower():
+            if (head + tail).lower() in vocabulary:
+                n += 1
+    return n
+
+
+# Text rendered in a legacy non-Unicode Hindi font (Kruti Dev and relatives) extracts
+# as Latin letters that spell nothing: "Hkkjr dk". It is not a split word and the
+# counter above must not be asked to find it -- a different defect needs a different
+# name, or one number ends up meaning two things.
+_LEGACY_FONT = re.compile(r"\b(?=[a-zA-Z]{4,}\b)(?:[bcdfghjklmnpqrstvwxyzBCDFGHJKLMNPQRSTVWXYZ]"
+                          r"[a-zA-Z]*){1}\b")
+
+
+def count_legacy_font_runs(s: str) -> int:
+    """Tokens that look like a legacy Hindi font decoded as Latin.
+
+    Heuristic and labelled as one: 4+ letters with no vowel at all. "Hkkjr", "dk".
+    English has almost no such tokens; this document has them wherever the Hindi
+    half was set in a pre-Unicode font.
+    """
+    return sum(1 for w in re.findall(r"\b[A-Za-z]{4,}\b", s)
+               if not re.search(r"[aeiouAEIOU]", w))
 
 
 @dataclass
@@ -268,7 +327,20 @@ def _test() -> None:
     check(despace("in its own na me") == "in its own na me",
           "leaves an ambiguous two-letter split alone rather than guessing")
     check(despace("such a company") == "such a company", "'a' is a real word, never joined")
-    check(count_split_words("in its own na me") >= 1, "remaining splits are counted for review")
+    # The detector asks the document, so the fixture must supply the evidence: "name"
+    # appears as a word, which is what makes "na me" a split rather than two words.
+    check(count_split_words("the name on the register, in its own na me.") >= 1,
+          "a fragment is counted when rejoining it makes a word the text itself uses")
+    # The regression that mattered: this counted ordinary English for months.
+    check(count_split_words("A company shall comply with the following procedure, "
+                            "for convening and conducting the Board meetings.") == 0,
+          "ordinary prose counts zero -- 'with the', 'convening and' are not damage")
+    check(count_split_words("the annual turnover as mentioned in clause (a).") == 0,
+          "'turnover as' is English unless the text elsewhere uses 'turnoveras'")
+    check(count_legacy_font_runs("Hkkjr dk jkti=") >= 1,
+          "legacy-font Hindi is counted separately, not as a split word")
+    check(count_legacy_font_runs("the company shall maintain a register") == 0,
+          "English is not mistaken for legacy-font Hindi")
 
     secs, clause = enabling_sections(
         "In exercise of powers conferred under sections 173, 175 and section 191 read with "
@@ -285,7 +357,15 @@ def _test() -> None:
     nums = [r["rule_number"] for r in d["rules"]]
     check(nums == [str(i) for i in range(1, len(nums) + 1)],
           f"rule numbers are consecutive 1..{len(nums)} with no gap")
-    check(len(nums) == 15, f"15 rules parsed (got {len(nums)})")
+    # 16, not 15. The old pypdf reader merged rules 15 and 16 into one 13,322-char
+    # body -- which is why that record carried a "runs to end-of-document" warning --
+    # and rule 16, "Register of contracts or arrangements in which directors are
+    # interested", was absent from the corpus entirely. It is a real rule of this
+    # instrument. Changing the reader recovered it; this number records that.
+    check(len(nums) == 16, f"16 rules parsed (got {len(nums)})")
+    r16 = [r for r in d["rules"] if r["rule_number"] == "16"]
+    check(bool(r16) and "Register of contracts" in r16[0]["heading"],
+          "rule 16 is the register of contracts in which directors are interested")
     check(all(r["page_start"] >= 1 and r["page_end"] >= r["page_start"] for r in d["rules"]),
           "every rule carries a sane page range")
     check(all(r["status"] == "UNREVIEWED" for r in d["rules"]), "every rule is UNREVIEWED")

@@ -21,8 +21,11 @@ A task that adds a `client.messages.create()` to the product is in scope. A task
 runs the build loop is not.
 
 ## Read first
-`docs/05_HR_OPERATIONS_TRACK.md` §2 (which track a call belongs to) and the task's `Track:`
-and DoD in `BACKLOG.md`.
+`backend/budget.py` (the real cap arithmetic and the four billable token counters — it is the
+authority, not any prose about it) and the task's DoD in `research/TASKS.md` (the task ledger — BACKLOG.md, DECISIONS.md and RESEARCH_LOG.md are all gone).
+
+There are no longer two tracks, so there is no track to route a call to. Route on the model and
+the call's own token counts.
 
 ## The routing rule everything follows from
 

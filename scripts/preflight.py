@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parent.parent
 REQUIRED = [
     ("corpus/companies_act/_index.json",
      "section number -> corpus id index",
-     "python3 scripts/ingest_companies_act.py && python3 scripts/build_section_index.py"),
+     "python3 scripts/ingest_act.py companies_act && python3 scripts/build_section_index.py"),
     ("corpus/admission",
      "admission records and the review queue",
      "python3 scripts/seed_admission.py"),

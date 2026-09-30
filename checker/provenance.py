@@ -1027,8 +1027,17 @@ def _test() -> None:
 
         # An unreadable file is not an absent one (ASK-1 verifier, finding 9): a disk or
         # permission fault must not reach a reader as "the file is not on disk".
-        art.write_bytes(whole)
-        _os.chmod(art, 0)
+        #
+        # Proved by a mechanism that does not depend on who is running the suite.
+        # `chmod 0` does NOT make a file unreadable to uid 0, so running these checks as
+        # root failed them against a guard that was working perfectly -- the assertion was
+        # about the filesystem, not the code. Reported 2026-09-27.
+        #
+        # A DIRECTORY in the artifact's place is unreadable-as-a-file to every uid, root
+        # included, and exercises exactly the same branch: `stat()` succeeds, so this is
+        # not the absent path, and the read then raises OSError.
+        art.unlink()
+        art.mkdir()
         try:
             try:
                 file_digest(art)
@@ -1037,13 +1046,37 @@ def _test() -> None:
                 digest_raised = True
             unreadable = P880.artifact_problem(base)
         finally:
-            _os.chmod(art, 0o600)
-        check(digest_raised, "file_digest raises on a file it cannot read, rather than "
+            art.rmdir()
+            art.write_bytes(whole)
+        check(digest_raised, "file_digest raises on an artifact it cannot read, rather than "
                              "returning the None that means 'not there'")
         check(unreadable is not None and "could not be read" in unreadable
               and "not on disk" not in unreadable,
               f"...so an unreadable artifact is refused as unreadable, not as absent "
               f"({unreadable})")
+
+        # And the permission mechanism as well, because it is the one that happens in the
+        # field. Asserted only when the environment can actually produce the condition:
+        # as root it cannot, and that is a fact about the environment, so it is reported
+        # as one rather than failing a check about the guard. The guard itself is already
+        # proved above, in every environment.
+        _os.chmod(art, 0)
+        try:
+            try:
+                (art).read_bytes()
+                chmod_works = False          # uid 0, or a filesystem ignoring the mode
+            except OSError:
+                chmod_works = True
+            perm_problem = P880.artifact_problem(base) if chmod_works else None
+        finally:
+            _os.chmod(art, 0o600)
+        if chmod_works:
+            check(perm_problem is not None and "could not be read" in perm_problem,
+                  f"...and a real permission fault is refused the same way ({perm_problem})")
+        else:
+            check(True, f"...(chmod 0 cannot make a file unreadable to uid {_os.getuid()}, "
+                        f"so the permission variant is not assertable here; the guard is "
+                        f"proved by the directory case above)")
         art.unlink()
         gone = P880.artifact_problem(base)
         check(gone is not None and "not on disk" in gone,

@@ -31,6 +31,21 @@ def _fixture(name: str) -> dict:
     return json.loads((FIXTURES / name).read_text(encoding="utf-8"))
 
 
+# pypdf is pinned in requirements-dev.txt, and `sarvam_model` needs it to COUNT pages,
+# not merely to split them -- so every PDF path here depends on it, including a 2-page
+# file. Detected once, at import, because two blocks below must agree about it.
+#
+# Why this flag exists at all: until 2026-09-27 those blocks called `prepare_parts` and
+# `digitise` unguarded, so in an environment without pypdf the module's own (correct)
+# SarvamUnavailable refusal propagated out of the suite and it died with NO result line.
+# The sweep printed "checker/sarvam_model.py FAIL", which points at the wrong file.
+try:
+    import pypdf as _pypdf             # noqa: F401
+    _HAS_PYPDF = True
+except ImportError:
+    _HAS_PYPDF = False
+
+
 def _pdf_pages(data: bytes) -> int:
     import pypdf
     return len(pypdf.PdfReader(io.BytesIO(data)).pages)
@@ -165,13 +180,28 @@ def _checks(check, attempt, tmp: Path) -> None:
     no_opt_out.write_text("SOME_OTHER=1\n")
     private = tmp / "board_minutes_private.pdf"
     private.write_bytes(PUBLIC_2PAGE.read_bytes())      # public BYTES, private PATH
+    # Groups that need no pypdf. `_privacy` reasons about PATHS and .env lines, never
+    # about a PDF's contents, so it runs everywhere.
     _privacy(check, attempt, tmp, no_opt_out, private)
-    _chunks_and_parts(check, attempt, tmp)
-    _requests(check, attempt)
-    _fixtures(check, attempt)
-    _flow(check, attempt, no_opt_out)
-    _errors(check, attempt, no_opt_out)
-    _live_shape(check, attempt, no_opt_out)
+    _chunks_and_parts(check, attempt, tmp)      # splits internally; see _HAS_PYPDF there
+
+    # These five drive a PDF through `digitise`/`prepare_parts` end to end, and
+    # `sarvam_model` needs pypdf to COUNT pages, not merely to split them -- so without it
+    # not one of their checks can execute. They are not being skipped in any gated run:
+    # `scripts/run_tests.sh` now refuses to run ANY suite when a pinned dependency is
+    # missing (status=BLOCKED, exit 5), so this branch is only ever reached by someone
+    # invoking the module directly. For them, a named note beats a traceback that says
+    # "checker/sarvam_model.py FAIL" and points at the wrong file.
+    if _HAS_PYPDF:
+        _requests(check, attempt)
+        _fixtures(check, attempt)
+        _flow(check, attempt, no_opt_out)
+        _errors(check, attempt, no_opt_out)
+        _live_shape(check, attempt, no_opt_out)
+    else:
+        print("  [note] _requests, _fixtures, _flow, _errors and _live_shape all drive a "
+              "PDF through digitise() and need pypdf, which is absent. The refusal itself "
+              "is checked above. Install requirements-dev.txt to run them.")
 
 
 def _privacy(check, attempt, tmp, no_opt_out, private) -> None:
@@ -284,26 +314,63 @@ def _chunks_and_parts(check, attempt, tmp) -> None:
                      f"pages (failures: {bad_n[:5]})")
     check(isinstance(attempt(lambda: sm.plan_chunks(0)), ValueError), "0 pages is refused")
 
-    parts = sm.prepare_parts(PUBLIC_14PAGE)
-    check([(p.first_page, p.n_pages) for p in parts] == [(1, 10), (11, 4)],
-          "the 14-page public scan is split into pages 1-10 and 11-14")
-    check([_pdf_pages(p.data) for p in parts] == [10, 4],
-          "...and each split PDF, re-read, really holds 10 and 4 pages")
-    check(all(p.content_type == "application/pdf" for p in parts)
-          and parts[1].filename == "pages-0011-0014.pdf",
-          f"...named by the pages they carry ({parts[1].filename}), not by the local path")
-    whole = sm.prepare_parts(PUBLIC_2PAGE)
-    check(len(whole) == 1 and whole[0].data == PUBLIC_2PAGE.read_bytes(),
-          "a document within the limit is sent as its ORIGINAL bytes, not rewritten")
-    one = sm.prepare_parts(PUBLIC_2PAGE, page_range=(1, 1))
-    check(len(one) == 1 and one[0].n_pages == 1 and _pdf_pages(one[0].data) == 1,
-          "an explicit page_range sends only the pages asked for")
-    two = sm.prepare_parts(PUBLIC_14PAGE, page_range=(9, 12))
-    check([(p.first_page, p.n_pages) for p in two] == [(9, 4)],
-          "a range is chunked on its own pages (9-12 is one 4-page job)")
-    for bad in ((0, 1), (2, 1), (1, 3)):
-        check(isinstance(attempt(lambda b=bad: sm.prepare_parts(PUBLIC_2PAGE, page_range=b)),
-                         ValueError), f"page_range {bad} on a 2-page PDF is refused")
+    # ── the pypdf path, in BOTH environments ─────────────────────────────────
+    # Splitting a >10-page PDF needs pypdf (requirements-dev.txt). `prepare_parts`
+    # already refuses correctly when it is absent -- SarvamUnavailable, naming the
+    # dependency -- but this suite used to call it UNGUARDED, so in an environment
+    # without pypdf the refusal propagated out and the whole suite died with no result
+    # line at all. Reported 2026-09-27: it read as "checker/sarvam_model.py FAIL",
+    # which points at the wrong file; the module was behaving correctly.
+    #
+    # Neither branch is skipped. With pypdf, the split is checked as before. Without it,
+    # the REFUSAL is checked -- which is the more important property of the two, because
+    # it is the one a user hits. The branch taken is printed either way.
+    if _HAS_PYPDF:
+        parts = sm.prepare_parts(PUBLIC_14PAGE)
+        check([(p.first_page, p.n_pages) for p in parts] == [(1, 10), (11, 4)],
+              "the 14-page public scan is split into pages 1-10 and 11-14")
+        check([_pdf_pages(p.data) for p in parts] == [10, 4],
+              "...and each split PDF, re-read, really holds 10 and 4 pages")
+        check(all(p.content_type == "application/pdf" for p in parts)
+              and parts[1].filename == "pages-0011-0014.pdf",
+              f"...named by the pages they carry ({parts[1].filename}), not by the local path")
+    else:
+        refusal = attempt(lambda: sm.prepare_parts(PUBLIC_14PAGE))
+        check(isinstance(refusal, sm.SarvamUnavailable),
+              f"pypdf is ABSENT here, so splitting a 14-page scan is refused with "
+              f"SarvamUnavailable rather than crashing ({type(refusal).__name__})")
+        check("pypdf" in str(refusal) and "requirements-dev" in str(refusal),
+              f"...and the refusal names the missing dependency and where it is pinned "
+              f"({refusal})")
+        check(len(sm.plan_chunks(14)) == 2,
+              "...while page PLANNING, which needs no pypdf, still works")
+
+    if _HAS_PYPDF:
+        # Every one of these reaches _pdf_parts, which counts pages with pypdf -- even for
+        # a 2-page file that needs no splitting. So the guard covers the whole block, not
+        # just the >10-page split.
+        whole = sm.prepare_parts(PUBLIC_2PAGE)
+        check(len(whole) == 1 and whole[0].data == PUBLIC_2PAGE.read_bytes(),
+              "a document within the limit is sent as its ORIGINAL bytes, not rewritten")
+        one = sm.prepare_parts(PUBLIC_2PAGE, page_range=(1, 1))
+        check(len(one) == 1 and one[0].n_pages == 1 and _pdf_pages(one[0].data) == 1,
+              "an explicit page_range sends only the pages asked for")
+        two = sm.prepare_parts(PUBLIC_14PAGE, page_range=(9, 12))
+        check([(p.first_page, p.n_pages) for p in two] == [(9, 4)],
+              "a range is chunked on its own pages (9-12 is one 4-page job)")
+        for bad in ((0, 1), (2, 1), (1, 3)):
+            check(isinstance(attempt(lambda b=bad: sm.prepare_parts(PUBLIC_2PAGE,
+                                                                    page_range=bad)),
+                             ValueError), f"page_range {bad} on a 2-page PDF is refused")
+    else:
+        check(isinstance(attempt(lambda: sm.prepare_parts(PUBLIC_2PAGE)),
+                         sm.SarvamUnavailable),
+              "without pypdf even a 2-page PDF is refused, because page COUNTING needs it "
+              "too -- the refusal is not only about splitting")
+        check(isinstance(attempt(lambda: sm.prepare_parts(PUBLIC_2PAGE, page_range=(1, 1))),
+                         sm.SarvamUnavailable),
+              "...and an explicit page_range is refused for the same reason")
+
     txt = tmp / "note.txt"
     txt.write_text("x")
     check(isinstance(attempt(lambda: sm.prepare_parts(txt)), ValueError),
@@ -402,6 +469,7 @@ def _fixtures(check, attempt) -> None:
 
 def _flow(check, attempt, env) -> None:
     os.environ["SARVAM_API_KEY"] = "sk-TEST"
+
     try:
         clock, fake = Clock(), FakeSarvam()
         r = sm.digitise(PUBLIC_14PAGE, language="en-IN", output_format="html", env_path=env,

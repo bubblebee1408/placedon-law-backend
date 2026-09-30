@@ -67,6 +67,7 @@ from datetime import datetime, timezone
 
 from checker.feeds import ATTRIBUTION, FLOOR, FetchResult, Observation
 from checker.feeds.common.fetch import fetch as _fetch
+from checker.robots import HTML
 from checker.provenance import ACCESSIBLE
 
 __all__ = ["IbbiAnnouncementsFeed", "Announcement", "parse_listing", "page_url",
@@ -186,7 +187,8 @@ class IbbiAnnouncementsFeed:
         self._opener = opener
 
     def fetch(self, entry_url: str = ENTRY_URL) -> FetchResult:
-        kw = {"rules": self._rules, "allow_redirect_hosts": (HOST,)}
+        # FETCH-1: a Drupal public-announcement listing. HTML, declared.
+        kw = {"rules": self._rules, "allow_redirect_hosts": (HOST,), "expect": (HTML,)}
         if self._opener is not None:
             kw["opener"] = self._opener
         return _fetch(self.source_id, entry_url, **kw)
