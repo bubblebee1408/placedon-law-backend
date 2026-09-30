@@ -1095,6 +1095,40 @@ def _test() -> None:
     check(row["state"] == "APPLIES_NOT_SATISFIED" and not row.get("period"),
           f"...while three meetings in a FINISHED 2025 are still a shortfall -- the rule "
           f"moves only unended periods ({row['state']})")
+
+    # Rule 3 is about EVERY periodic duty, not s.173 alone (A-012 re-verification F1):
+    # s.149(3) is measured over a financial year, and s.96's AGM has until six months
+    # after the year closes. Before either period ends, a count so far is not a breach.
+    for label, prov, oid, facts, ev, running in (
+            ("s.149(3), FY 2026-27 still running", "s.149(3)", "CA13-S149-3-RESIDENT",
+             {"financial_year": "2026-27"}, {"resident_director_days": 100}, True),
+            ("s.149(3), FY 2025-26 closed", "s.149(3)", "CA13-S149-3-RESIDENT",
+             {"financial_year": "2025-26"}, {"resident_director_days": 100}, False),
+            ("s.96, AGM not yet due (FY closed 2026-03-31, due by 2026-09-30)", "s.96",
+             "CA13-S96-AGM", {}, {"agm_dates": [], "financial_year_end": "2026-03-31"},
+             True),
+            ("s.96, AGM overdue (FY closed 2025-03-31)", "s.96", "CA13-S96-AGM",
+             {}, {"agm_dates": [], "financial_year_end": "2025-03-31"}, False)):
+        body = {**_ask_facts, **facts, "as_of": "2026-08-31", "evidence": ev}
+        st, r = handle("POST", "/v1/compliance-pack", body, generated_at=GEN)
+        row = next((x for x in r.get("rows", []) if x["obligation_id"] == oid), {})
+        st2, r2 = ask_handle("POST", "/v1/ask",
+                             {"question": "Did we comply?", "facts": body,
+                              "as_of": "2026-08-31", "provisions": [prov]},
+                             generated_at=GEN)
+        item = next((i for i in r2.get("not_confirmed", []) if i.get("ref") == oid), {})
+        served = {x.get("obligation_id"): x.get("state") for x in r2.get("rows") or []}
+        if running:
+            check(st == 200 and row.get("period") == "IN_PROGRESS"
+                  and row.get("state") != "APPLIES_NOT_SATISFIED"
+                  and st2 == 200 and item.get("period") == "IN_PROGRESS"
+                  and served.get(oid) != "APPLIES_NOT_SATISFIED",
+                  f"{label}: IN PROGRESS on both routes, never a shortfall "
+                  f"({row.get('state')}/{row.get('period')}; ask {served.get(oid)}/"
+                  f"{item.get('period')})")
+        else:
+            check(row.get("state") == "APPLIES_NOT_SATISFIED" and not row.get("period"),
+                  f"{label}: still a shortfall -- the period has ended ({row.get('state')})")
     st, r = handle("POST", "/v1/compliance-pack", {**_ask_facts, "turnover": 5},
                    generated_at=GEN)
     check(st == 400 and "turnover" in r.get("detail", ""),

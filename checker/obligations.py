@@ -257,7 +257,7 @@ def _agm_applies(p: CompanyProfile) -> tuple[Result, str]:
     return Result.APPLIES, "s.96(1) reaches every company other than an OPC"
 
 
-def _decide_board(p: CompanyProfile, ev: Evidence) -> tuple[bool | None, str]:
+def _decide_board(p: CompanyProfile, ev: Evidence) -> tuple[bool | str | None, str]:
     """s.173 count and spacing, from the dates the user supplied.
 
     Delegates to checker.s173_slice, which already holds the ceiling-vs-floor
@@ -314,7 +314,7 @@ def _add_months(d: date, months: int) -> date:
     return date(y, m, min(d.day, last))
 
 
-def _decide_agm(p: CompanyProfile, ev: Evidence) -> tuple[bool | None, str]:
+def _decide_agm(p: CompanyProfile, ev: Evidence) -> tuple[bool | str | None, str]:
     """s.96 — did an AGM happen, and inside the fifteen-month gap.
 
     The gap limb only. The first-AGM deadline and the Registrar's extension are
@@ -326,6 +326,15 @@ def _decide_agm(p: CompanyProfile, ev: Evidence) -> tuple[bool | None, str]:
         return None, "no AGM dates were supplied"
     ds = sorted(ev.agm_dates)
     if not ds:
+        # s.96(1) allows six months from the close of the year (nine for the first).
+        # Before that deadline passes, no AGM yet is not a breach (founder rule 3).
+        due = (_add_months(ev.financial_year_end, 6) if ev.financial_year_end
+               else _add_months(ev.first_financial_year_end, 9)
+               if ev.first_financial_year_end else None)
+        if due is not None and ev.read_on is not None and ev.read_on <= due:
+            return IN_PROGRESS, (f"no annual general meeting yet, and s.96(1) allows "
+                                 f"until {due.isoformat()}; on {ev.read_on.isoformat()} "
+                                 f"that is not a breach")
         return False, "no annual general meeting was held"
 
     # s.96(1) requires an AGM "in each year". Two meetings can sit inside the
@@ -497,7 +506,14 @@ def _decide_annual_return(p: CompanyProfile, ev: Evidence) -> tuple[bool | None,
                    f"{'s' if late != 1 else ''} after the limit of {due} ({basis})")
 
 
-def _decide_resident_director(p: CompanyProfile, ev: Evidence) -> tuple[bool | None, str]:
+def _fy_end(fy: str | None) -> date | None:
+    """31 March closing an Indian financial year written "2026-27", or None."""
+    import re as _re
+    m = _re.fullmatch(r"\s*(\d{4})\s*-\s*\d{2,4}\s*", fy or "")
+    return date(int(m.group(1)) + 1, 3, 31) if m else None
+
+
+def _decide_resident_director(p: CompanyProfile, ev: Evidence) -> tuple[bool | str | None, str]:
     """s.149(3), verbatim from our corpus: "Every company shall have at least
     one director who stays in India for a total period of not less than one
     hundred and eighty-two days during the financial year".
@@ -521,6 +537,14 @@ def _decide_resident_director(p: CompanyProfile, ev: Evidence) -> tuple[bool | N
     if days >= 182:
         return True, (f"a director was resident in India {days} days, at or above "
                       f"the 182-day minimum")
+    # Days only accumulate, so a pass mid-year is final; a shortfall is not until the
+    # year closes (founder rule 3).
+    end = _fy_end(p.latest_financial_year)
+    if end is not None and ev.read_on is not None and ev.read_on < end:
+        return IN_PROGRESS, (f"financial year {p.latest_financial_year} has not ended on "
+                             f"{ev.read_on.isoformat()} (it closes {end.isoformat()}); "
+                             f"{days} days so far is not a shortfall of the 182 s.149(3) "
+                             f"requires during the year")
     return False, (f"the most-present director was in India {days} days, short of "
                    f"the 182-day minimum in s.149(3)")
 

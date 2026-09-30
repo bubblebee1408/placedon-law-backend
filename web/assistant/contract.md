@@ -296,7 +296,12 @@ undeclared field, a wrong type or an out-of-range value is a `400` — never a c
   with the same `period`. **The read date is the EARLIER of `as_of` and the day the answer is
   generated** — an `as_of` that has not arrived cannot end a year (until this, `as_of`
   2027-01-01 let a running 2026 through as ended and reported it short). Until 2026-09-30 a
-  running year was a `400`.
+  running year was a `400`. **The same rule governs every periodic duty the engine decides**: s.149(3)
+  (182 days during the financial year — below 182 before the year closes is IN PROGRESS; at or
+  above 182 is a pass whenever it is reached, since days only accumulate) and s.96 (no AGM
+  before the six-month deadline after the year closes, nine for the first year, is IN
+  PROGRESS; after it, a breach). AOC-4 and the annual return already refused to decide before
+  their deadlines.
 - `resident_director_days`: an `int` 0–366 — a financial year runs to 31 March (s.2(41)), so a
   full one has 365 or 366 days; a longer first year is s.149(3)'s proportionate proviso, which
   this engine does not compute.
