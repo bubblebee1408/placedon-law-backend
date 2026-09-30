@@ -100,6 +100,11 @@ class Claim:
     quote: str = ""
     source_id: str = ""
     span: tuple[int, int] | None = None
+    # The repo-relative path of the committed file this claim's quote was cleared against
+    # -- `public_only.Origin.path`. `checker/claim_bodies.py` reads THIS to set `body_id`,
+    # not `source_id`: a source_id is a human label written by whatever built the evidence
+    # and can say anything, while the path is established against a file with a git blob id.
+    evidence_path: str = ""
 
     @property
     def body_status(self) -> str:
@@ -108,7 +113,7 @@ class Claim:
     def to_dict(self) -> dict:
         return {"text": self.text, "body_id": self.body_id,
                 "body_status": self.body_status, "quote": self.quote,
-                "source_id": self.source_id,
+                "source_id": self.source_id, "evidence_path": self.evidence_path,
                 "span": list(self.span) if self.span else None}
 
 

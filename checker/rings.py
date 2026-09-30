@@ -119,6 +119,9 @@ REGISTRY: dict[str, int] = {
     # The event -> bodies table. Ring 0: which bodies of law a transaction engages is a
     # legal-core fact, and it decides whether an obligation may be decided at all.
     "checker.events": RING_0,
+    # Which body ONE claim rests on, read from the path of the evidence it traced to.
+    # Ring 0: it decides what an answer may be said to rest on.
+    "checker.claim_bodies": RING_0,
     "checker.ground_span": RING_0,
     "checker.as_of": RING_0,
     "checker.amendment": RING_0,
