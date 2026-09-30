@@ -82,7 +82,7 @@ def step_key(run_id: str, capability: str) -> str:
 # A human decision, as labelled data (PLAN_23 rule 5, migration 005). `quoted_span` is what
 # the reviewer was SHOWN, attested by the surface that showed it -- not re-derived here.
 DECISION_KEYS = ("decision_id", "run_id", "item_ref", "decision", "reason", "quoted_span",
-                 "actor_id", "decided_at")
+                 "quote_viewed", "law_versions", "actor_id", "decided_at")
 
 # Also in gateway/verbs.py and as a CHECK in 005_decisions.sql. "ok" is not a reason, and a
 # label whose text is "ok" teaches a later evaluation nothing.
@@ -123,8 +123,17 @@ NO_CALL_NOTE = ("no model was called on this step, so there is nothing to price.
                 "not a cost of zero.")
 
 
+def _copied(versions):
+    """A law-version map is stored by value: the caller's dict is not the store's."""
+    return None if versions is None else dict(versions)
+
+
 def _shaped(row: dict, keys: tuple[str, ...]) -> dict:
     out = {k: row.get(k) for k in keys}
+    if "law_versions" in keys:
+        out["law_versions"] = _copied(out["law_versions"])
+    if "quote_viewed" in keys:
+        out["quote_viewed"] = bool(out["quote_viewed"])
     if "degraded" in keys:
         out["degraded"] = bool(row.get("degraded", False))
     if "cost_note" in keys and out.get("cost_inr") is None and not out.get("cost_note"):
@@ -156,6 +165,8 @@ class MemoryBackend:
         rid = run["id"]
         self.runs[rid] = {k: v for k, v in run.items()
                           if k not in ("steps", "propositions")}
+        # Postgres returns the column whether or not it was written; so does this.
+        self.runs[rid]["law_versions"] = _copied(run.get("law_versions"))
         self.steps[rid] = [_shaped(s, STEP_KEYS) for s in run.get("steps", [])]
         self.props[rid] = [_shaped(p, PROPOSITION_KEYS)
                            for p in run.get("propositions", [])]
@@ -281,11 +292,13 @@ class PostgresBackend:
         with self._conn() as c:
             c.execute(
                 "INSERT INTO runs (run_id, tenant_id, actor_id, intent, status, "
-                "refusal_code) VALUES (%s,%s,%s,%s,%s,%s) "
+                "refusal_code, law_versions) VALUES (%s,%s,%s,%s,%s,%s,%s) "
                 "ON CONFLICT (run_id) DO UPDATE SET status = EXCLUDED.status, "
-                "refusal_code = EXCLUDED.refusal_code",
+                "refusal_code = EXCLUDED.refusal_code, "
+                "law_versions = EXCLUDED.law_versions",
                 (rid, self.tenant_id, self.actor_id, run.get("intent", ""),
-                 run.get("status", "PLANNED"), run.get("refusal_code")))
+                 run.get("status", "PLANNED"), run.get("refusal_code"),
+                 _json(run.get("law_versions"))))
             c.execute("DELETE FROM run_steps WHERE run_id = %s", (rid,))
             # Shaped on the way IN, the same as MemoryBackend: one normalisation for
             # both backends, or the two disagree about what a null cost means. The shared
@@ -321,12 +334,12 @@ class PostgresBackend:
         if not _UUID.match(run_id or ""):
             return None
         with self._conn() as c:
-            r = c.execute("SELECT run_id, intent, status, refusal_code, result FROM runs "
-                          "WHERE run_id = %s", (run_id,)).fetchone()
+            r = c.execute("SELECT run_id, intent, status, refusal_code, result, law_versions "
+                          "FROM runs WHERE run_id = %s", (run_id,)).fetchone()
             if r is None:
                 return None
             out = {"id": str(r[0]), "intent": r[1], "status": r[2], "refusal_code": r[3],
-                   "result": r[4]}
+                   "result": r[4], "law_versions": r[5]}
             out["steps"] = [
                 {"capability": s[0], "engine_capability": s[1], "status": s[2],
                  "model": s[3], "degraded": s[4], "provider": s[5], "region": s[6],
@@ -365,13 +378,14 @@ class PostgresBackend:
             try:
                 r = c.execute(
                     "INSERT INTO decisions (decision_id, run_id, tenant_id, item_ref, "
-                    "decision, reason, quoted_span, actor_id, decided_at) "
-                    "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,COALESCE(%s::timestamptz, now())) "
-                    "RETURNING decision_id, run_id, item_ref, decision, reason, "
-                    "quoted_span, actor_id, decided_at",
+                    "decision, reason, quoted_span, quote_viewed, law_versions, actor_id, "
+                    "decided_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,"
+                    "COALESCE(%s::timestamptz, now())) "
+                    "RETURNING " + _DECISION_COLS,
                     (decision["decision_id"], decision["run_id"], self.tenant_id,
                      decision["item_ref"], decision["decision"], decision["reason"],
-                     decision["quoted_span"], decision["actor_id"],
+                     decision["quoted_span"], bool(decision.get("quote_viewed")),
+                     _json(decision.get("law_versions")), decision["actor_id"],
                      decision.get("decided_at"))).fetchone()
             except psycopg.errors.UniqueViolation:
                 raise DecisionExists(
@@ -379,21 +393,16 @@ class PostgresBackend:
                     f"decision. A reviewer changing their mind writes a new one against a "
                     f"new run; overwriting would destroy the label, which is the point of "
                     f"storing it.") from None
-        return {"decision_id": str(r[0]), "run_id": str(r[1]), "item_ref": r[2],
-                "decision": r[3], "reason": r[4], "quoted_span": r[5],
-                "actor_id": str(r[6]), "decided_at": r[7].isoformat()}
+        return _decision_row(r)
 
     def read_decisions(self, run_id: str) -> list[dict]:
         if not _UUID.match(run_id or ""):
             return []
         with self._conn() as c:
             rows = c.execute(
-                "SELECT decision_id, run_id, item_ref, decision, reason, quoted_span, "
-                "actor_id, decided_at FROM decisions WHERE run_id = %s "
+                "SELECT " + _DECISION_COLS + " FROM decisions WHERE run_id = %s "
                 "ORDER BY decided_at, item_ref", (run_id,)).fetchall()
-        return [{"decision_id": str(r[0]), "run_id": str(r[1]), "item_ref": r[2],
-                 "decision": r[3], "reason": r[4], "quoted_span": r[5],
-                 "actor_id": str(r[6]), "decided_at": r[7].isoformat()} for r in rows]
+        return [_decision_row(r) for r in rows]
 
     def append_step(self, run_id: str, step: dict, *, key: str) -> bool:
         """Append unless the key is already there. The unique index decides, not a SELECT:
@@ -528,6 +537,27 @@ SAMPLE_RUN = {
 }
 
 
+# One column list and one row mapper for both decision reads, so RETURNING and SELECT
+# cannot drift apart -- they did once each for steps and propositions.
+_DECISION_COLS = ("decision_id, run_id, item_ref, decision, reason, quoted_span, "
+                  "quote_viewed, law_versions, actor_id, decided_at")
+
+
+def _decision_row(r) -> dict:
+    return {"decision_id": str(r[0]), "run_id": str(r[1]), "item_ref": r[2],
+            "decision": r[3], "reason": r[4], "quoted_span": r[5],
+            "quote_viewed": r[6], "law_versions": r[7],
+            "actor_id": str(r[8]), "decided_at": r[9].isoformat()}
+
+
+def _json(value):
+    """A dict for a jsonb column, or NULL. psycopg adapts dicts only through Jsonb."""
+    if value is None:
+        return None
+    from psycopg.types.json import Jsonb
+    return Jsonb(value)
+
+
 def conformance(backend) -> list[tuple[bool, str]]:
     """Every assertion both backends must satisfy. No I/O beyond the backend itself.
 
@@ -611,6 +641,21 @@ def conformance(backend) -> list[tuple[bool, str]]:
        "on one backend and None on the other")
     ck(sp and set(sp["propositions"][0]) == set(PROPOSITION_KEYS),
        "...and the same for a proposition")
+    ck(sp and "law_versions" in sp and sp["law_versions"] is None,
+       "a run written with no law versions reads back with None -- not recorded, which is "
+       "not the same claim as 'read no law'")
+
+    # The law versions a run read (PLAN_23 layer 10), stored by value.
+    lv = {"corpus/reference/SS-1.txt": "a" * 40, "playbooks/nda_v1.json": "b" * 40}
+    lv_id = str(_uuid.uuid4())
+    lv_run = {"id": lv_id, "intent": "review_document", "status": "ANSWERED",
+              "steps": [], "propositions": [], "law_versions": lv}
+    backend.write_run(lv_run)
+    lv["corpus/reference/SS-1.txt"] = "TAMPERED"
+    ck((backend.read_run(lv_id) or {}).get("law_versions")
+       == {"corpus/reference/SS-1.txt": "a" * 40, "playbooks/nda_v1.json": "b" * 40},
+       "a run's law versions read back as written, and a later change to the caller's map "
+       "does not reach the store")
 
     # A null cost always says WHY it is null.
     nulls = [st for st in (backend.read_run(sparse_id) or {}).get("steps", [])
@@ -638,6 +683,8 @@ def conformance(backend) -> list[tuple[bool, str]]:
            "item_ref": "playbook:NDA-08", "decision": "REJECTED",
            "reason": "The non-compete is one-way and we do not accept those.",
            "quoted_span": "The Receiving Party shall not compete for two years.",
+           "quote_viewed": False,
+           "law_versions": {"playbooks/nda_v1.json": "c" * 40},
            "actor_id": "00000000-0000-0000-0000-0000000000a1",
            "decided_at": "2026-09-30T10:00:00+00:00"}
     wrote = backend.write_decision(dict(dec))
@@ -651,12 +698,16 @@ def conformance(backend) -> list[tuple[bool, str]]:
        "actually read")
     ck(got[0]["decided_at"],
        "...and a time, defaulted by the store when the caller gives none")
+    ck(got[0]["quote_viewed"] is False
+       and got[0]["law_versions"] == {"playbooks/nda_v1.json": "c" * 40},
+       "...and whether the quote was viewed, and the law versions it was decided against")
 
     # One per item, on BOTH backends. Without this the dict keeps two labels for one item
     # and Postgres keeps one, and the disagreement surfaces as a lost review months later.
     try:
         backend.write_decision(dict(dec, decision_id=str(_uuid.uuid4()),
-                                    decision="APPROVED", reason="Changed my mind about it."))
+                                    decision="APPROVED", quote_viewed=True,
+                                    reason="Changed my mind about it."))
         ck(False, "a second decision on the same item is refused")
     except DecisionExists:
         ck(True, "a second decision on the SAME item is refused -- overwriting would "
@@ -667,6 +718,7 @@ def conformance(backend) -> list[tuple[bool, str]]:
     # A different item on the same run is a different label.
     backend.write_decision(dict(dec, decision_id=str(_uuid.uuid4()),
                                 item_ref="ss:T1.2", decision="APPROVED",
+                                quote_viewed=True,
                                 reason="Inspected the book; every page is initialled."))
     ck(len(backend.read_decisions(run["id"])) == 2,
        "...while a different item on the same run is a separate decision")

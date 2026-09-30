@@ -117,7 +117,7 @@ def _test() -> None:
     files = [p.name for p in migrations()]
     check(files == ["001_core.sql", "002_runs.sql", "003_step_provenance.sql",
                     "004_cost_note.sql", "005_decisions.sql", "006_jobs.sql",
-                    "007_cascade.sql"],
+                    "007_cascade.sql", "008_decision_evidence.sql"],
           f"every migration exists, in order ({files})")
     step_sql = (MIGRATIONS / "003_step_provenance.sql").read_text(encoding="utf-8")
     for col in ("provider", "region", "cost_inr"):
