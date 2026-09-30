@@ -76,7 +76,14 @@ LAST_RUN: str | None = (
     "rejected, and it is proved the same way as the other nine -- A sees its own row and "
     "none of B's; with the policy dropped it fails CLOSED and A sees nothing, not even its "
     "own; with RLS disabled B's row APPEARS, which is what shows the check measures the "
-    "protection rather than an empty table.")
+    "protection rather than an empty table. "
+    "008_decision_evidence (quote_viewed, law_versions; numbered 006 on t0/finish) was "
+    "proved SEPARATELY on a fresh database placedon_t0_rls on top of 001-005: 77 checks, "
+    "0 failures. "
+    "2026-09-30, at the merge of PR #22: 001-008 applied TOGETHER to a fresh throwaway "
+    "database on PostgreSQL 16.13 (Ubuntu, cloud container, local socket), asserted as "
+    "placedon_app: 127 checks, 0 failures, including the database refusing an approval "
+    "whose quote was not viewed. Not yet applied to placedon_dev.")
 
 TENANT_TABLES = ("actors", "api_keys", "documents", "audit_log",
                  "runs", "run_steps", "propositions", "decisions", "jobs",
@@ -174,7 +181,8 @@ def _seed(cur, tenant, actor, tag: str) -> None:
     # A human decision. This is the row whose leak would matter most: it carries a named
     # reviewer's words about another firm's document.
     cur.execute("INSERT INTO decisions (decision_id, run_id, tenant_id, item_ref, decision, "
-                "reason, quoted_span, actor_id) VALUES (%s,%s,%s,%s,'APPROVED',%s,%s,%s)",
+                "reason, quoted_span, quote_viewed, actor_id) "
+                "VALUES (%s,%s,%s,%s,'APPROVED',%s,%s,true,%s)",
                 (uuid.uuid4(), rid, tenant, "ss:T1.2",
                  f"{tag}: inspected the book, every page initialled.",
                  f"{tag} physical minutes book not inspected", actor))
@@ -272,7 +280,7 @@ def run(url: str) -> int:
 
         for f in ("001_core.sql", "002_runs.sql", "003_step_provenance.sql",
                   "004_cost_note.sql", "005_decisions.sql", "006_jobs.sql",
-                  "007_cascade.sql"):
+                  "007_cascade.sql", "008_decision_evidence.sql"):
             cur.execute(sql(f))
             print(f"  applied {f}")
         _ensure_app_role(cur)
@@ -424,6 +432,33 @@ def run(url: str) -> int:
                   "provider, cost_inr) VALUES (%s,2,%s,'classify','ANSWERED','gemini',0)",
                   (rid2, a))
         note(True, "...and a FREE provider may record 0, because its marginal cost is zero")
+
+        # PLAN_23 §1.8 in the schema (008): an approval must record the quote as viewed.
+        c.execute("INSERT INTO propositions (proposition_id, run_id, tenant_id, ordinal, "
+                  "status, source_ref) VALUES (%s,%s,%s,0,'VERIFIED','ss:T1.2')",
+                  (uuid.uuid4(), rid2, a))
+        try:
+            c.execute("INSERT INTO decisions (decision_id, run_id, tenant_id, item_ref, "
+                      "decision, reason, quoted_span, quote_viewed, actor_id) VALUES "
+                      "(%s,%s,%s,'ss:T1.2','APPROVED','Looks right to me here.','x',"
+                      "false,%s)", (uuid.uuid4(), rid2, a, actor_a))
+            note(False, "the database refuses an APPROVAL whose quote was not viewed")
+        except Exception as e:                                   # noqa: BLE001
+            note("decisions_approval_saw_quote" in str(e),
+                 "the DATABASE refuses an approval whose quote was not viewed, not only "
+                 "the API -- a backfill reaches the table, not the verb")
+        c.execute("INSERT INTO decisions (decision_id, run_id, tenant_id, item_ref, "
+                  "decision, reason, quoted_span, quote_viewed, actor_id) VALUES "
+                  "(%s,%s,%s,'ss:T1.2','REJECTED','Not what the book says.','x',false,%s)",
+                  (uuid.uuid4(), rid2, a, actor_a))
+        note(True, "...while a REJECTION without it is recorded, as not viewed")
+        try:
+            c.execute("UPDATE runs SET law_versions = '[\"a\"]'::jsonb WHERE run_id = %s",
+                      (rid2,))
+            note(False, "the database refuses law_versions that are not a map")
+        except Exception as e:                                   # noqa: BLE001
+            note("runs_law_versions_object" in str(e),
+                 "...and law_versions must be a {path: blob} map, not any JSON at all")
 
     # ── the SAME store contract the gate runs against the dict ──────────────
     print()

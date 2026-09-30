@@ -38,7 +38,7 @@ could not read it" is indistinguishable from "the document says nothing" — and
 compliance engine the second reads as *no obligation found*. The bug was not that
 pages were missed; it was that they were missed **quietly**.
 
-## Decision D-2 (founder, 2026-09-17): pypdf, offline only
+## Decision D-2 (founder, 2026-09-17), revised 2026-09-25: a library, offline only
 
 The standard-library fix was measured at ~400-450 lines — xref-stream parsing with
 variable `/W` widths, `/Prev` chain walking with loop guards, object-stream
@@ -47,29 +47,27 @@ plus the separate `/Contents` fix, with pure-Python AES as a live risk the day a
 encrypted gazette arrives. That is a PDF parser, and every line of it is a line that
 can be quietly wrong about the source text of the law.
 
-`pypdf` is BSD-3-Clause, pure Python, and has **zero mandatory transitive
-dependencies**. It is declared in `requirements-dev.txt`, never in
-`requirements.txt`.
+**The reader is pdfplumber (since `8c4bccd`, 2026-09-25).** D-2 first chose pypdf.
+Measured on the Board Rules gazette, pypdf invented spaces ("Board an d its", 4
+artifacts where pdfplumber and poppler both render "Board and its", 0 and 0) and
+emitted `/uniXXXX` glyph names for the Devanagari half. pdfplumber is declared in
+`requirements-dev.txt`, never in `requirements.txt`.
+
+**The two readers swapped roles, and the census stays two engines.**
+`scripts/text_layer_census.py` is the independent oracle that judges this reader, and
+it now reads with pypdf. pdfplumber wraps pdfminer.six; pypdf is its own parser.
+Comparing a reader against itself would stop the census being evidence.
 
 **The boundary that keeps README honest.** The README claims "no dependencies
 outside the standard library". That claim is about the SERVED path, and it stays
 true: `checker/api.py` and `backend/` import nothing from this module or from
 `pdf_text` -- verified 2026-09-17, zero hits. Every consumer of page extraction is
-offline tooling (`sweep.py` and five scripts). `_test()` below asserts that boundary
-rather than trusting it, in the same spirit as `api.py`'s assertion that the API
-imports no model library.
+offline tooling. `_test()` below asserts that boundary rather than trusting it.
 
 **PyMuPDF was rejected on licence.** It is AGPL-3.0 or a paid Artifex commercial
 licence. AGPL section 13 extends copyleft to network use, so shipping it in a served
 backend sold to Indian corporates would compel disclosure of the whole product's
 source. That is a legal exposure, not a preference.
-
-**pdfplumber was rejected for a subtler reason.** It is already a declared dev
-dependency, so it looked free. But `scripts/text_layer_census.py` uses pdfplumber as
-the INDEPENDENT ORACLE that judges this repository's reader. Adopting it here would
-make the census compare pdfplumber against pdfplumber, and the verification
-instrument would stop being evidence. pypdf is its own parser; pdfplumber wraps
-pdfminer.six. Two engines, so the two-reader census stays honest.
 
 ## What this module does not do
 

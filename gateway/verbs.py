@@ -32,6 +32,7 @@ from typing import Callable
 
 STRING = "string"
 OBJECT = "object"
+BOOLEAN = "boolean"
 
 V2 = "/v2"
 MCP_NAMESPACE = "themis"
@@ -215,12 +216,39 @@ def _ask(args: dict, ctx: Context) -> dict:
                        "source_ref": (s.citation.source_id
                                       if getattr(s, "citation", None) else None),
                        "span_start": None, "span_end": None}
-                      for s in (out.summary.sentences if out.summary else ())])
+                      for s in (out.summary.sentences if out.summary else ())],
+        law_versions={o.path: o.blob for o in origins})
     return d
 
 
+def law_versions_of(paths) -> dict[str, str]:
+    """{repo-relative path: git blob id} of the held text a run READ. PLAN_23 layer 10.
+
+    A law version is the hash of the text applied, in the form `public_only.Origin.blob`
+    already uses, so O7 recall and the O9 cache compare one identity. Computed from the
+    bytes on disk (git's own blob formula), not from HEAD: it records what was read.
+    A path that cannot be read raises -- a missing version is not an empty one.
+    """
+    import hashlib
+    from pathlib import Path
+    root = Path(__file__).resolve().parent.parent
+    out = {}
+    for rel in paths:
+        data = (root / rel).read_bytes()
+        out[rel] = hashlib.sha1(b"blob %d\0" % len(data) + data).hexdigest()
+    return out
+
+
+# What review_document applies. The checks are CODE (checker/ss/defects.py) and that is a
+# behaviour version, not a law version; the standards they encode are these two texts. Both
+# are recorded whatever the meeting kind: an over-broad recall is a re-review, an under-broad
+# one is a stale approval nobody is told about.
+SS_TEXTS = ("corpus/reference/SS-1.txt", "corpus/reference/SS-2.txt")
+
+
 def _persist_run(ctx: Context, *, intent: str, status: str, steps: list,
-                 propositions: list, refusal_code=None) -> str | None:
+                 propositions: list, refusal_code=None,
+                 law_versions: dict | None = None) -> str | None:
     """Write one run as runs + ordered steps + propositions. Returns the run id, or None.
 
     R-016's DERIVATION model, actually used: without this a verb answers and leaves no
@@ -234,7 +262,7 @@ def _persist_run(ctx: Context, *, intent: str, status: str, steps: list,
     import uuid
     run_id = str(uuid.uuid4())
     ctx.store.write({"id": run_id, "intent": intent, "status": status,
-                     "refusal_code": refusal_code,
+                     "refusal_code": refusal_code, "law_versions": law_versions,
                      "steps": steps, "propositions": propositions})
     return run_id
 
@@ -262,6 +290,14 @@ def _review_contract(args: dict, ctx: Context) -> dict:
             text, name=name, provider="azure",
             test_data=bool(args.get("test_data")))
     except public_only.NotPublic as e:
+        return _refuse("NOT_PERMITTED", str(e))
+    # Residency is a decision about the DOCUMENT, so it is taken before a route is sought.
+    # Checked only inside the Azure call, a gateway with no credentials refused NO_MODEL
+    # instead, and the reader was told "outage" where the answer was "not permitted".
+    from checker import azure_model
+    try:
+        azure_model.refuse_unconfirmed_region(origin)
+    except azure_model.ModelRefused as e:
         return _refuse("NOT_PERMITTED", str(e))
 
     served, refusal = _served_or_refusal(origin, name="review_contract",
@@ -311,7 +347,8 @@ def _review_contract(args: dict, ctx: Context) -> dict:
          "status": "ANSWERED", "degraded": False},
     ]
     d["run_id"] = _persist_run(ctx, intent="review_contract", status="ANSWERED",
-                               steps=steps, propositions=props)
+                               steps=steps, propositions=props,
+                               law_versions=law_versions_of((book_path,)))
     return d
 
 
@@ -373,7 +410,8 @@ def _review_document(args: dict, ctx: Context) -> dict:
          "cost_note": "no model is called by this intent; the checks are code"},
     ]
     d["run_id"] = _persist_run(ctx, intent="review_document", status="ANSWERED",
-                               steps=steps, propositions=props)
+                               steps=steps, propositions=props,
+                               law_versions=law_versions_of(SS_TEXTS))
     return d
 
 
@@ -381,6 +419,14 @@ def _review_document(args: dict, ctx: Context) -> dict:
 # documents.upload, and they are excluded from MCP by `mcp_tools` for exactly that reason --
 # a tool surface that can approve a finding is a tool surface that can clear a review.
 MIN_REASON_CHARS = 10
+
+
+def _affirmed(value) -> bool:
+    """True only for an explicit yes. `bool("false")` is True, so a string is never truthy
+    by being non-empty -- a CLI or form that sends "false" must not record a quote as seen."""
+    if value is True:
+        return True
+    return isinstance(value, str) and value.strip().lower() in ("true", "yes")
 
 
 def _decide(args: dict, ctx: Context, *, decision: str) -> dict:
@@ -396,6 +442,7 @@ def _decide(args: dict, ctx: Context, *, decision: str) -> dict:
     item_ref = (args.get("item_ref") or "").strip()
     reason = (args.get("reason") or "").strip()
     quoted_span = (args.get("quoted_span") or "").strip()
+    quote_viewed = _affirmed(args.get("quote_viewed"))
 
     if not run_id:
         return _refuse("BAD_REQUEST", "run_id is required")
@@ -416,6 +463,16 @@ def _decide(args: dict, ctx: Context, *, decision: str) -> dict:
             "quoted_span is required: it is the text the reviewer was looking at when they "
             "decided. Without it the label is attached to nothing a person can be shown to "
             "have read.")
+    # PLAN_23 §1.8: the quote is viewed before a finding can be ACCEPTED (Goddard et al.,
+    # JAMIA 2012, automation bias). A rejection without it is still recorded, as not viewed:
+    # it withholds a finding rather than clearing one. The flag is attested by the surface
+    # that showed the quote, the same standing as quoted_span; O6's UI is what enforces it.
+    if decision == "APPROVED" and not quote_viewed:
+        return _refuse(
+            "QUOTE_NOT_VIEWED",
+            "quote_viewed must be true to approve: the reviewer has to have seen the quoted "
+            "text before accepting the finding. An approval without it is a click, and it "
+            "would be stored as a person's agreement.")
     if ctx.store is None:
         return _refuse("NO_STORE",
                        "there is no store configured, so this decision could not be kept. "
@@ -437,6 +494,10 @@ def _decide(args: dict, ctx: Context, *, decision: str) -> dict:
     from gateway.store import DecisionExists
     row = {"decision_id": str(uuid.uuid4()), "run_id": run_id, "item_ref": item_ref,
            "decision": decision, "reason": reason, "quoted_span": quoted_span,
+           "quote_viewed": quote_viewed,
+           # Copied from the RUN, never taken from the caller: the versions a decision
+           # was made against are the ones the finding was computed against.
+           "law_versions": run.get("law_versions"),
            "actor_id": ctx.actor,
            "decided_at": ctx.clock() if ctx.clock else None}
     try:
@@ -671,7 +732,10 @@ VERBS: tuple[Verb, ...] = (
                 describes="why, in the reviewer's own words. At least 10 characters: a "
                           "decision with no reason is not a label"),
           Field("quoted_span", STRING, True,
-                describes="the text the reviewer was looking at when they decided")),
+                describes="the text the reviewer was looking at when they decided"),
+          Field("quote_viewed", BOOLEAN, False,
+                describes="true when the reviewer was shown the quoted text. Required to "
+                          "approve (PLAN_23 §1.8); a rejection records it either way")),
          "POST", read_only=False, run=_runs_approve),
 
     Verb("runs.reject",
@@ -684,7 +748,10 @@ VERBS: tuple[Verb, ...] = (
                 describes="why, in the reviewer's own words. At least 10 characters: a "
                           "decision with no reason is not a label"),
           Field("quoted_span", STRING, True,
-                describes="the text the reviewer was looking at when they decided")),
+                describes="the text the reviewer was looking at when they decided"),
+          Field("quote_viewed", BOOLEAN, False,
+                describes="true when the reviewer was shown the quoted text. Required to "
+                          "approve (PLAN_23 §1.8); a rejection records it either way")),
          "POST", read_only=False, run=_runs_reject),
 
     Verb("runs.submit",
@@ -966,7 +1033,23 @@ def _test() -> None:
     rid, item = drun["run_id"], "ss:T1.2"
     good = {"run_id": rid, "item_ref": item,
             "reason": "Inspected the book; the Chairman initialled every page.",
-            "quoted_span": "physical minutes book not inspected"}
+            "quoted_span": "physical minutes book not inspected", "quote_viewed": True}
+
+    # PLAN_23 §1.8: the quote is viewed before a finding is ACCEPTED.
+    for unseen, how in (({k: v for k, v in good.items() if k != "quote_viewed"}, "absent"),
+                        ({**good, "quote_viewed": False}, "false"),
+                        ({**good, "quote_viewed": "false"}, "the STRING 'false'"),
+                        ({**good, "quote_viewed": "no"}, "'no'")):
+        check(_runs_approve(unseen, dctx).get("code") == "QUOTE_NOT_VIEWED",
+              f"an approval with quote_viewed {how} is REFUSED -- a click without the quote "
+              f"would be stored as a person's agreement")
+    check(dstore.read_decisions(rid) == [],
+          "...and none of those refusals wrote a label")
+    drun_run = dstore.read_run(rid)
+    check(drun_run["law_versions"] == law_versions_of(SS_TEXTS)
+          and all(len(b) == 40 for b in drun_run["law_versions"].values()),
+          f"a review_document run records the SS-1/SS-2 texts it applied, as git blob ids "
+          f"({sorted(drun_run['law_versions'] or {})})")
 
     check(_runs_approve({**good, "reason": "ok"}, dctx)["code"] == "REASON_REQUIRED",
           "a one-word reason is REFUSED: a decision with no reason records that somebody "
@@ -989,6 +1072,10 @@ def _test() -> None:
           "...with the actor who made it and the time they made it")
     check(rec["reason"] == good["reason"] and rec["quoted_span"] == good["quoted_span"],
           "...and the reason and the span they were shown, verbatim: that IS the label")
+    check(rec["quote_viewed"] is True,
+          "...and that the quote was viewed")
+    check(rec["law_versions"] == drun_run["law_versions"],
+          "...and the law versions the finding was computed against, copied from the run")
     again = _runs_approve({**good, "reason": "Actually I changed my mind about this."}, dctx)
     check(again["code"] == "ALREADY_DECIDED",
           "...and a second decision on the same item is refused rather than overwriting the "
@@ -998,6 +1085,16 @@ def _test() -> None:
                        dctx)
     check(rej["decision"] == "REJECTED" and len(dstore.read_decisions(rid)) == 2,
           "...while a rejection on a different item is a separate label")
+    rej2 = _runs_reject({k: v for k, v in good.items() if k != "quote_viewed"}
+                        | {"item_ref": "ss:T1.4a",
+                           "reason": "Signed after the thirty-day window, per the book.",
+                           "law_versions": {"corpus/reference/SS-1.txt": "f" * 40}}, dctx)
+    check(rej2.get("status") == "RECORDED" and rej2["quote_viewed"] is False,
+          f"a REJECTION without the quote is recorded, as not viewed: it withholds a "
+          f"finding rather than clearing one ({rej2.get('status')}/{rej2.get('code')})")
+    check(rej2.get("law_versions") == drun_run["law_versions"],
+          "...and law_versions supplied by the CALLER are ignored: a reviewer cannot know "
+          "what a run read, and a label must not be filed against versions it never saw")
 
     # NOT MCP. A tool surface that can approve a finding is one that can clear a review.
     mcp_names = {t.name for t in mcp_tools()}
