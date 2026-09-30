@@ -83,7 +83,22 @@ LAST_RUN: str | None = (
     "2026-09-30, at the merge of PR #22: 001-008 applied TOGETHER to a fresh throwaway "
     "database on PostgreSQL 16.13 (Ubuntu, cloud container, local socket), asserted as "
     "placedon_app: 127 checks, 0 failures, including the database refusing an approval "
-    "whose quote was not viewed. Not yet applied to placedon_dev.")
+    "whose quote was not viewed. "
+    "2026-10-01: 001-009 applied TOGETHER to a fresh throwaway database on PostgreSQL "
+    "18.6 (Postgres.app, local socket), asserted as placedon_app (NOSUPERUSER, "
+    "NOBYPASSRLS): 137 checks, 0 failures, adding 009_source_documents. That table "
+    "INVERTS every other check in this file -- it is not row-level-security bound and "
+    "both tenants see the SAME public row, because one SEBI circular is one row shared on "
+    "purpose. What keeps a client contract out of it is a CHECK the database enforces, "
+    "proved by seven refused inserts: tier CLIENT, tier HELD, an unknown tier, a "
+    "terms_basis too short to be a quoted permission, a LICENSED row with no attribution, "
+    "a fetch dated in the future, and a plain-http url. A CHECK can only be SHOWN to "
+    "refuse on a live server, which is why those are here and not in gateway/schema.py. "
+    "placedon_dev still cannot take 008: it holds 64 APPROVED seed rows from earlier runs "
+    "of this script, written before quote_viewed existed, and 008's VALIDATE refuses them "
+    "by design -- \"the pre-existing approvals must be looked at by a person, not "
+    "defaulted\". They are this script's own synthetic seeds, so a fresh database is the "
+    "answer and not a change to 008.")
 
 TENANT_TABLES = ("actors", "api_keys", "documents", "audit_log",
                  "runs", "run_steps", "propositions", "decisions", "jobs",
@@ -280,7 +295,8 @@ def run(url: str) -> int:
 
         for f in ("001_core.sql", "002_runs.sql", "003_step_provenance.sql",
                   "004_cost_note.sql", "005_decisions.sql", "006_jobs.sql",
-                  "007_cascade.sql", "008_decision_evidence.sql"):
+                  "007_cascade.sql", "008_decision_evidence.sql",
+                  "009_source_documents.sql"):
             cur.execute(sql(f))
             print(f"  applied {f}")
         _ensure_app_role(cur)
@@ -367,6 +383,91 @@ def run(url: str) -> int:
         note(after_other == 0 and after_own >= 1,
              f"{tbl}: restored -> tenant A sees its own {after_own} again and {after_other} "
              f"of tenant B's")
+
+    # ── source_documents (009): the one table whose SHARING is the property ──
+    #
+    # Every check above asks "can tenant A see tenant B's row". This table inverts the
+    # question: public fetched material is shared on purpose, so BOTH tenants must see the
+    # same row, and what keeps a client contract out of it is a CHECK rather than a policy.
+    # Only a live server can prove a CHECK refuses a row, which is why this is here and not
+    # in gateway/schema.py.
+    print()
+    import datetime as _dt
+    _sha = "a" * 64
+    _basis = ("Material featured on this Website may be reproduced free of charge after "
+              "taking proper permission by sending a mail to us.")
+    with _connect(url) as admin:
+        cur = admin.cursor()
+        cur.execute("INSERT INTO source_documents (sha256, tier, source_id, url, "
+                    "fetched_at, payload_kind, bytes, attribution, terms_basis) "
+                    "VALUES (%s,'OFFICIAL_LIVE','sebi','https://www.sebi.gov.in/x.html',"
+                    "now(),'HTML',%s,%s,%s)",
+                    (_sha, b"<html>a circular</html>", "SEBI, prominently acknowledged",
+                     _basis))
+        note(True, "source_documents: a public OFFICIAL_LIVE row inserts")
+
+        # The load-bearing refusal. A client contract in a cross-tenant table is the worst
+        # bug this schema could ship, and the database refuses it, not the application.
+        for tier, why in (("CLIENT", "a client document belongs in `documents` under FORCE "
+                                     "RLS, never in a shared table"),
+                          ("HELD", "HELD is the git corpus, not fetched material"),
+                          ("NONSENSE", "an unknown tier is not a tier")):
+            try:
+                cur.execute("INSERT INTO source_documents (sha256, tier, source_id, url, "
+                            "fetched_at, payload_kind, bytes, terms_basis) VALUES "
+                            "(%s,%s,'x','https://x/','2026-09-30','HTML',%s,%s)",
+                            ("b" * 64, tier, b"x", _basis))
+                note(False, f"source_documents REFUSES tier {tier}: {why}")
+            except Exception:                                   # noqa: BLE001
+                admin.rollback() if not admin.autocommit else None
+                note(True, f"source_documents REFUSES tier {tier} -- {why}")
+
+        for label, cols, vals in (
+            ("terms_basis under 20 chars (a permission must be in words, not a boolean)",
+             "sha256, tier, source_id, url, fetched_at, payload_kind, bytes, terms_basis",
+             ("c" * 64, "OFFICIAL_LIVE", "sebi", "https://x/", "2026-09-30", "HTML",
+              b"x", "fine")),
+            ("a LICENSED row with no attribution (Indian Kanoon's terms require it for "
+             "RAG context, not only for display)",
+             "sha256, tier, source_id, url, fetched_at, payload_kind, bytes, terms_basis",
+             ("d" * 64, "LICENSED", "indiankanoon", "https://x/", "2026-09-30", "HTML",
+              b"x", _basis)),
+            ("a fetch dated in the future",
+             "sha256, tier, source_id, url, fetched_at, payload_kind, bytes, terms_basis",
+             ("e" * 64, "OFFICIAL_LIVE", "sebi", "https://x/", "2027-01-01", "HTML",
+              b"x", _basis)),
+            ("a plain-http url",
+             "sha256, tier, source_id, url, fetched_at, payload_kind, bytes, terms_basis",
+             ("f" * 64, "OFFICIAL_LIVE", "sebi", "http://x/", "2026-09-30", "HTML",
+              b"x", _basis)),
+        ):
+            try:
+                cur.execute(f"INSERT INTO source_documents ({cols}) VALUES "
+                            f"({','.join(['%s'] * len(vals))})", vals)
+                note(False, f"source_documents refuses {label}")
+            except Exception:                                   # noqa: BLE001
+                note(True, f"source_documents refuses {label}")
+
+    with _connect(url) as admin:
+        forced = admin.execute(
+            "SELECT relrowsecurity OR relforcerowsecurity FROM pg_class "
+            "WHERE relname = 'source_documents'").fetchone()[0]
+        note(not forced,
+             "source_documents is NOT row-level-security bound -- public material is "
+             "shared deliberately, and the tier CHECK is what makes that safe")
+
+    # Both tenants see the SAME row. The inverse of every other check in this file.
+    seen = {}
+    for who, tenant in (("A", a), ("B", b)):
+        with _connect(app_url) as app:
+            c = app.cursor()
+            c.execute("SELECT set_config('app.tenant_id', %s, false)", (str(tenant),))
+            seen[who] = c.execute("SELECT count(*) FROM source_documents WHERE sha256=%s",
+                                  (_sha,)).fetchone()[0]
+    note(seen["A"] == 1 and seen["B"] == 1,
+         f"source_documents: tenant A and tenant B BOTH see the same public row "
+         f"(A={seen['A']}, B={seen['B']}) -- one SEBI circular, one row, which is the "
+         f"point of it not being tenant-scoped")
 
     # ── append-only, as the application role ────────────────────────────────
     print()

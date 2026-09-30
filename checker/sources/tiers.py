@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """The five tiers, and the one that can make an answer VERIFIED.
 
-PLAN_24 §2. A tier is set by the connector's code and never by a model, so this module
+PLAN_26 §2. A tier is set by the connector's code and never by a model, so this module
 holds no logic a caller can talk round: a predicate, a label table, and two closed tuples.
 
 ## Why HELD is alone

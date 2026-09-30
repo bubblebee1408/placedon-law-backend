@@ -171,6 +171,9 @@ def _ask(args: dict, ctx: Context) -> dict:
     q = (args.get("question") or "").strip()
     if not q:
         return _refuse("BAD_REQUEST", "question is required")
+    user_facts, refusal = _company_facts(args.get("company_facts"))
+    if refusal:
+        return refusal
 
     ev = rq.evidence(q)
     origins = tuple(o for _, o in ev)
@@ -200,6 +203,17 @@ def _ask(args: dict, ctx: Context) -> dict:
                 "run_id": rid}
 
     d = out.to_dict()
+    if user_facts:
+        # PLAN_26 S2-alt: accepted, labelled "you told us", never presented as verified.
+        # They are RECORDED AND SHOWN and they do not steer the answer -- the answer is
+        # built from the held statute by deterministic engine calls, and threading an
+        # unverified company fact into that is a Ring 0 change this step did not make.
+        # Said in the payload rather than left for a reader to discover.
+        d["user_facts"] = [f.to_dict() for f in user_facts]
+        d["user_facts_note"] = (
+            "Recorded as you told them to us, and shown back so you can see what we hold. "
+            "They did not change this answer: it is read from the held Act. No company "
+            "fact is ever VERIFIED.")
     # The ANSWER, with its citations. to_dict() carries the verdict and the provisions but
     # not the prose, so the verb returned everything about an answer except the answer.
     # Summary.prose() is the served form: traced sentences with their spans, and the count
@@ -647,15 +661,115 @@ def _events_assess(args: dict, ctx: Context) -> dict:
                        f"{sorted(unknown)} are not facts this table reads; one of "
                        f"{list(events.FACTS)}. A fact that is silently ignored reads as "
                        f"one that was taken into account.")
+
+    # Company facts (PLAN_26 S2-alt): typed by the user, or read from a master-data page
+    # they uploaded. ONLY THE CONFIRMED ONES REACH THE TABLE, and the rest are reported.
+    from checker.sources import company_facts as cf
+    facts, refusal = _company_facts(args.get("company_facts"))
+    if refusal:
+        return refusal
+    used, recorded, pending = cf.for_event_table(facts)
+    clash = sorted(set(used) & set(raw_facts))
+    if clash:
+        # A contradiction is refused, not resolved by precedence. A silent winner would
+        # hide the fact that the caller told us two different things.
+        return _refuse("BAD_REQUEST",
+                       f"{clash} given both in `facts` and in `company_facts`. Which one "
+                       f"is true is not ours to choose by precedence: send one.")
+
     try:
-        result = events.assess(key, raw_facts)
+        result = events.assess(key, {**raw_facts, **used})
     except events.EventError as e:
         return _refuse("BAD_REQUEST", str(e))
 
     d = result.to_dict()
+    if facts:
+        d["company_facts"] = {
+            "used": [f.to_dict() for f in cf.confirmed(facts)
+                     if f.field in cf.EVENT_TABLE_FIELDS],
+            "recorded_not_read": [f.to_dict() for f in recorded],
+            "pending_confirmation": [f.to_dict() for f in pending],
+        }
     d["note"] = ("The event table says which bodies of law a transaction ENGAGES. It has "
                  "not been reviewed by a lawyer. No section, figure or deadline is stated "
-                 "for any body that is not held.")
+                 "for any body that is not held. A company fact is never VERIFIED: it is "
+                 "either what you told us or what your uploaded document says, and an "
+                 "unconfirmed one is not used at all.")
+    return d
+
+
+def _company_facts(raw: object) -> tuple[list, dict | None]:
+    """(CompanyFact list, a refusal) from the wire form. Never a partial list.
+
+    A malformed fact is refused rather than dropped: the caller believes every fact they
+    sent is being taken into account, and the one they typed wrong is exactly the one whose
+    silent absence would mislead them.
+    """
+    from checker.sources import company_facts as cf
+
+    if raw is None:
+        return [], None
+    if not isinstance(raw, list):
+        return [], _refuse("BAD_REQUEST", "company_facts must be a list of objects")
+    out = []
+    for i, item in enumerate(raw):
+        if not isinstance(item, dict):
+            return [], _refuse("BAD_REQUEST", f"company_facts[{i}] must be an object")
+        try:
+            if item.get("basis", cf.USER_FACT) == cf.USER_FACT:
+                fact = cf.user_fact(item.get("field") or "", item.get("value"))
+                if item.get("confirmed"):
+                    fact = cf.CompanyFact(**{**fact.__dict__, "confirmed": True})
+            else:
+                fact = cf.CompanyFact(
+                    field=item.get("field") or "", value=str(item.get("value") or ""),
+                    basis=item.get("basis") or "",
+                    quoted_span=item.get("quoted_span") or "",
+                    source_label=item.get("source_label") or "",
+                    confirmed=bool(item.get("confirmed")))
+        except cf.FactError as e:
+            return [], _refuse("BAD_REQUEST", f"company_facts[{i}]: {e}")
+        out.append(fact)
+    return out, None
+
+
+def _company_facts_extract(args: dict, ctx: Context) -> dict:
+    """Read an MCA Company Master Data page the USER uploaded. Nothing is used until
+    they confirm each field.
+
+    Takes TEXT, not a PDF path. Two reasons, and neither is laziness: a path argument on a
+    served verb is a file-read primitive pointed at our own disk, and `checker/pdf_pages`
+    is offline tooling whose own test asserts the served path imports no PDF reader. The
+    PDF -> text step is `mca_master_data.parse_pdf`, which raises CannotRead on a scan; a
+    scan that reaches here as empty text is refused by the same rule one layer up.
+    """
+    from checker.sources import mca_master_data as mca
+
+    text = args.get("text") or ""
+    uploaded_on = (args.get("uploaded_on") or "").strip()
+    if not text.strip():
+        return _refuse("CANNOT_READ",
+                       "no text was supplied. If the upload was a scan or a photograph it "
+                       "has no text layer, and we will not return an empty set of facts "
+                       "for it: 'we could not read this page' and 'this company has no "
+                       "details' must never be the same answer.")
+    if not uploaded_on:
+        return _refuse("BAD_REQUEST",
+                       "uploaded_on (YYYY-MM-DD) is required: a document fact is labelled "
+                       "with the date the user uploaded it")
+    try:
+        parsed = mca.parse_text(text, uploaded_on=uploaded_on)
+    except mca.CannotRead as e:
+        return _refuse("CANNOT_READ", str(e))
+    except mca.PersonalDataLeak as e:                              # pragma: no cover
+        return _refuse("PERSONAL_DATA", str(e))
+
+    d = parsed.to_dict()
+    d["confirm_required"] = True
+    d["tier"] = "CLIENT"
+    d["note"] = (d["note"] + " The document is tier CLIENT -- your own upload -- and each "
+                 "fact is tier COMPANY_FACT. Neither can make an answer VERIFIED. This "
+                 "engine never fetches from mca.gov.in; you downloaded this page yourself.")
     return d
 
 
@@ -713,7 +827,7 @@ def _sources_list(args: dict, ctx: Context) -> dict:
     return {"tiers": list(TIERS), "adapters": built_in, "external": out,
             "fetchable": [r["source_id"] for r in out if r["may_fetch"]],
             "cacheable": [r["source_id"] for r in out if r["may_cache"]],
-            "note": ("Only HELD can make an answer VERIFIED (PLAN_24 §2). External sources "
+            "note": ("Only HELD can make an answer VERIFIED (PLAN_26 §2). External sources "
                      "are listed with what their own terms permit, read on the date shown; "
                      "an unread term is OPEN, and OPEN is not permission.")}
 
@@ -776,7 +890,11 @@ VERBS: tuple[Verb, ...] = (
     Verb("ask", "One grounded research question against the held statute. Cited spans or "
                 "a named refusal.",
          (Field("question", STRING, True, describes="the question, in plain English"),
-          Field("available", OBJECT, False, describes="provider tuple to route over")),
+          Field("available", OBJECT, False, describes="provider tuple to route over"),
+          Field("company_facts", OBJECT, False,
+                describes="company facts you are telling us, e.g. "
+                          "[{'field':'listed','value':'yes'}]. Labelled 'you told us', "
+                          "shown back, never verified, and they do not steer the answer")),
          "POST", read_only=True, run=_ask),
 
     Verb("review_contract",
@@ -870,7 +988,11 @@ VERBS: tuple[Verb, ...] = (
          (Field("event", STRING, True,
                 describes="the event key, e.g. share_allotment, related_party_contract"),
           Field("facts", OBJECT, False,
-                describes="foreign_investor, listed, state — facts that add bodies")),
+                describes="foreign_investor, listed, state — facts that add bodies"),
+          Field("company_facts", OBJECT, False,
+                describes="company facts with their basis: typed by you (USER_FACT) or "
+                          "read from an MCA master-data page you uploaded (COMPANY_FACT, "
+                          "with the quoted span). ONLY THE CONFIRMED ONES ARE USED")),
          "POST", read_only=True, run=_events_assess),
 
     Verb("sources.list",
@@ -891,6 +1013,18 @@ VERBS: tuple[Verb, ...] = (
                           "UNVERIFIED against any external source, so a past date gets a "
                           "named refusal rather than today's text")),
          "POST", read_only=True, run=_sources_search),
+
+    Verb("company_facts.extract",
+         "Read an MCA Company Master Data page you downloaded from mca.gov.in and "
+         "uploaded. Every field comes back with the span it was read from, unconfirmed. "
+         "Director names and DINs are not read, not stored and not returned.",
+         (Field("text", STRING, True,
+                describes="the page's text. A scan has no text layer and is refused as "
+                          "CANNOT_READ, never as an empty set of facts"),
+          Field("uploaded_on", STRING, True,
+                describes="YYYY-MM-DD, the date you uploaded it. It is part of the "
+                          "source label every fact carries")),
+         "POST", read_only=True, run=_company_facts_extract),
 
     Verb("documents.upload",
          "Store a document and return the sha256 that identifies it.",
@@ -972,8 +1106,8 @@ def _test() -> None:
     check(names == {"ask", "review_contract", "review_document", "events.assess",
                     "runs.get", "runs.trace", "runs.approve", "runs.reject",
                     "runs.submit", "runs.cancel", "documents.upload",
-                    "sources.list", "sources.search"},
-          f"the thirteen verbs are declared once ({sorted(names)})")
+                    "sources.list", "sources.search", "company_facts.extract"},
+          f"the fourteen verbs are declared once ({sorted(names)})")
     # sources.* are READ-ONLY, so they reach MCP. That is the intended shape: an agent may
     # ask what a source permits and search what may be read, and there is no sources verb
     # that fetches, stores or spends. S3's Indian Kanoon connector will spend money, and
@@ -1051,7 +1185,7 @@ def _test() -> None:
           "...while a WRITE verb is kept out of MCP by mcp_tools(), not by the author "
           "remembering to")
     check("widgets.delete" in write_verbs(hypo), "...and is named in write_verbs()")
-    check(len(VERBS) == 13 and "widgets.count" not in rest_spec(),
+    check(len(VERBS) == 14 and "widgets.count" not in rest_spec(),
           "...and the probe changed nothing in this module: the surfaces are generated "
           "from an argument, not from a global the test rebound")
 
@@ -1275,7 +1409,67 @@ def _test() -> None:
     # CLI
     check(cli_spec()["events.assess"]["command"] == "events-assess",
           f"the CLI command is {cli_spec()['events.assess']['command']}")
-    check(cli_spec()["events.assess"]["flags"] == {"--event": True, "--facts": False},
+    # ── company facts at the VERB boundary (PLAN_26 S2-alt) ─────────────────
+    # The module tests prove the rules; these prove the wiring, which is where the
+    # user-facing guarantee actually lives.
+    from checker.sources import mca_fixture as _fx
+    _ctx = Context()
+    _un = [{"field": "state", "value": "Maharashtra"}, {"field": "listed", "value": "yes"}]
+    _r = by_name()["events.assess"].run(
+        {"event": "commercial_contract", "company_facts": _un}, _ctx)
+    check(_r["company_facts"]["used"] == []
+          and len(_r["company_facts"]["pending_confirmation"]) == 2,
+          "events.assess uses NO unconfirmed company fact, and reports both as pending")
+    _stamp = [f for f in _r["findings"] if f["body_id"] == "STAMP"]
+    check(_stamp and _stamp[0]["handling"] == "UNCLASSIFIED",
+          "...so STAMP stays UNCLASSIFIED: an unconfirmed State does not pick a regime")
+    _r2 = by_name()["events.assess"].run(
+        {"event": "commercial_contract",
+         "company_facts": [dict(x, confirmed=True) for x in _un]}, _ctx)
+    check([f["field"] for f in _r2["company_facts"]["used"]] == ["listed", "state"]
+          or sorted(f["field"] for f in _r2["company_facts"]["used"]) == ["listed", "state"],
+          "...and once CONFIRMED both are used")
+    _stamp2 = [f for f in _r2["findings"] if f["body_id"] == "STAMP"]
+    check(_stamp2 and _stamp2[0]["handling"] != "UNCLASSIFIED",
+          f"...which moves STAMP off UNCLASSIFIED ({_stamp2[0]['handling']}) -- the "
+          f"confirmation is doing visible work, not decorating a payload")
+    _r3 = by_name()["events.assess"].run(
+        {"event": "commercial_contract", "facts": {"state": "Kerala"},
+         "company_facts": [dict(x, confirmed=True) for x in _un]}, _ctx)
+    check(_r3["status"] == "REFUSED" and "not ours to choose" in _r3["detail"],
+          "a State given twice, differently, is REFUSED rather than resolved by precedence")
+    _bad = by_name()["events.assess"].run(
+        {"event": "commercial_contract",
+         "company_facts": [{"field": "director_name", "value": "X"}]}, _ctx)
+    check(_bad["status"] == "REFUSED" and "personal data" in _bad["detail"],
+          "a director_name company fact is REFUSED at the verb")
+
+    _x = by_name()["company_facts.extract"].run(
+        {"text": _fx.master_data_text(), "uploaded_on": "2026-10-01"}, _ctx)
+    check(len(_x["facts"]) == 8 and _x["tier"] == "CLIENT" and _x["confirm_required"],
+          f"company_facts.extract returns 8 unconfirmed CLIENT-tier facts "
+          f"({len(_x['facts'])})")
+    check(all(f["quoted_span"] and not f["confirmed"] and not f["can_verify"]
+              for f in _x["facts"]),
+          "...each with a span, unconfirmed, and never verifiable")
+    _blob = repr(_x)
+    check(all(d not in _blob and n not in _blob
+              for d, n in _fx.SYNTHETIC_DIRECTORS),
+          "...and no director name or DIN in the payload")
+    check(by_name()["company_facts.extract"].run(
+              {"text": "", "uploaded_on": "2026-10-01"}, _ctx)["code"] == "CANNOT_READ",
+          "an upload with no text is CANNOT_READ, never an empty set of facts")
+    check(by_name()["company_facts.extract"].run(
+              {"text": "Company Master Data\nCIN  U00000ZZ0000ZZZ000000",
+               "uploaded_on": ""}, _ctx)["status"] == "REFUSED",
+          "...and an extract with no upload date is refused: the label names the date")
+    check("company_facts.extract" not in write_verbs(),
+          "company_facts.extract does not write: it parses and returns, and a TOOL may "
+          "never confirm a fact -- confirmation is a person's act, and it arrives as an "
+          "argument")
+
+    check(cli_spec()["events.assess"]["flags"] == {"--event": True, "--facts": False,
+                                                   "--company-facts": False},
           f"...with the same fields as the other two surfaces "
           f"({cli_spec()['events.assess']['flags']})")
     check(len(_events.BY_KEY) == 8,
