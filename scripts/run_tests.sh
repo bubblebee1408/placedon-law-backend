@@ -227,6 +227,7 @@ extra+=("scripts/serve_ask.py --test")
 extra+=("checker/span_inventory.py --test")
 # The harness's own reproduction of the 2026-09-30 incident.
 extra+=("scripts/harness_selftest.py --test")
+extra+=("scripts/suite_floors.py --test")
 
 # A module that prints "9/10 passed" has failed, whatever its exit code says.
 # Eight modules once defined _test() without `raise SystemExit(1)`, so their
@@ -243,6 +244,9 @@ count_mismatch() {            # $1 = "N/M passed" (may be empty)
 
 fails=0
 nocount=0
+# Each green suite's passed count, for the floor ratchet below.
+counts_file=$(mktemp)
+trap 'rm -f "$counts_file"' EXIT
 for s in "${suites[@]}"; do
   [ -f "$s" ] || { printf '%-28s %s\n' "$s" "MISSING"; fails=$((fails+1)); continue; }
   out=$(python3 "$s" 2>&1); rc=$?
@@ -268,6 +272,7 @@ for s in "${suites[@]}"; do
     fails=$((fails+1)); nocount=$((nocount+1))
   else
     printf '%-28s ok    %s\n' "$s" "$res"
+    printf '%s\t%s\n' "$s" "${res%%/*}" >> "$counts_file"
   fi
 done
 
@@ -281,8 +286,19 @@ for e in "${extra[@]}"; do
     printf '%-28s FAIL  no count line (exit 0 but no "N/M passed" -- did this suite run?)\n' "${e%% *}"
     printf '%s\n' "$out" | tail -3 | sed 's/^/      /'
     fails=$((fails+1)); nocount=$((nocount+1))
-  else printf '%-28s ok    %s\n' "${e%% *}" "$res"; fi
+  else
+    printf '%-28s ok    %s\n' "${e%% *}" "$res"
+    printf '%s\t%s\n' "${e%% *}" "${res%%/*}" >> "$counts_file"
+  fi
 done
+
+# ── the floor ratchet: a suite may gain checks, never quietly lose them ──────
+# Run even when something else failed, because a regression and a breach are different
+# defects and a reader fixing one should be told about the other in the same pass.
+echo
+breaches=0
+if ! python3 scripts/suite_floors.py --gate "$counts_file"; then breaches=1; fi
+fails=$((fails+breaches))
 
 echo
 [ $fails -eq 0 ] && echo "all suites green" || echo "$fails suite(s) failing"
@@ -295,7 +311,7 @@ echo
 # fix is a parseable contract plus scripts/verify_green.sh as the single oracle.
 total=$(( ${#suites[@]} + ${#extra[@]} ))
 if [ "$fails" -eq 0 ]; then harness_status=GREEN; else harness_status=RED; fi
-printf 'HARNESS_RESULT suites=%d failed=%d nocount=%d status=%s\n' \
-  "$total" "$fails" "$nocount" "$harness_status"
+printf 'HARNESS_RESULT suites=%d failed=%d nocount=%d floor_breach=%d status=%s\n' \
+  "$total" "$fails" "$nocount" "$breaches" "$harness_status"
 
 exit $fails

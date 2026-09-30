@@ -79,6 +79,11 @@ def _harness_with(suite_paths, *, drop_rule: str = "") -> str:
     # fixture concern and the shipped harness is left alone.
     src = src.replace('for e in "${extra[@]}"; do',
                       'for e in ${extra[@]+"${extra[@]}"}; do')
+    # The ratchet is NOT exercised by the copy, and must not be reached by it: the first
+    # version let the copy call the real scripts/suite_floors.py, which duly recorded this
+    # module's temp fixtures as permanent suites in the committed floors file.
+    src = re.sub(r"^if ! python3 scripts/suite_floors\.py .*$", "breaches=0", src,
+                 flags=re.M)
     if drop_rule:
         src = re.sub(drop_rule, "", src, flags=re.M)
     return src
