@@ -232,6 +232,38 @@ def _general_turn(question: str, *, as_of: date, generated_at: str, facts: dict 
     out = {"state": PARTIAL} | out | {"confirmed": confirmed, "not_confirmed": gaps + notes}
     if confirmed and gaps:
         out["demand_signal"] = {"action": "tell_us_blocking"}
+
+    # H0. A turn that read NOTHING has not answered, and must not be served as though it
+    # had. Retrieval already knows -- it sets `insufficient_evidence` and an
+    # `abstain_reason` -- and until now the turn went out as `partial` anyway, which the
+    # gold set scored as an answer. Twelve of its seventeen refusal rows failed here, and
+    # "What is the capital of France?" was one of them.
+    #
+    # `refused` is a FLAG, and the state stays `partial` on purpose. `out_of_scope` means
+    # something specific: a body `checker/scope.py` DECLARES, served in the register's own
+    # words. An off-topic question names no such body, so there is no refusal text to
+    # serve, and inventing one would be writing law -- the rule this module's docstring
+    # states and the Income-tax test below holds it to. What is said instead is only what
+    # is true: nothing in the held corpus was reached.
+    if (not confirmed and not rows and not served
+            and tail["evidence_pack"].get("insufficient_evidence")):
+        out["refused"] = True
+        # R1 §3. The wording is the deliverable here, not decoration. This refusal fires
+        # when we DID search the held Act and found nothing on point -- which is a different
+        # fact from "that is outside our scope", and the two must not be said with the same
+        # words. "Not covered" would tell a lawyer the Act has nothing to say, which we do
+        # not know and did not check; all we know is that our retrieval reached no provision.
+        # `out_of_scope` remains the state for a body scope.py DECLARES, and this is not it.
+        out["refusal"] = {
+            "kind": "no_provision_on_point",
+            "detail": (
+                "We searched the Companies Act, 2013 -- the law this engine holds -- and "
+                "found no provision on point for this question, so nothing was read and "
+                "nothing was decided. That does not mean the Act is silent on it: it means "
+                "our retrieval did not reach a provision, and a provision we did not reach "
+                "is not a provision that does not exist. Naming the section, or rephrasing "
+                "in the Act's own words, is the thing most likely to find it."),
+        }
     return out | tail
 
 
@@ -601,6 +633,141 @@ def _test() -> None:
           f"a body the register does not declare is not refused -- there is no refusal "
           f"text to serve, and writing one would be inventing law ({tax['state']})")
     check(validate(tax) == [], f"...and the turn it does return validates ({validate(tax)})")
+
+    # ── H0: the refusal gate, row by row from eval/goldset (dev split) ───────
+    # Written BEFORE the fix and kept. The predicate mirrors eval/goldset/run.py's
+    # `_REFUSAL_STATES` / `refused` rule exactly, so a row that passes here and fails there
+    # would mean the two disagree about what a refusal IS -- which is the bug the gold set
+    # exists to catch, not one to paper over.
+    def _refused(t: dict) -> bool:
+        return t.get("state") in ("out_of_scope",) or bool(t.get("refused"))
+
+    def _turn(q: str) -> dict:
+        return ask({"question": q, "as_of": AS_OF})
+
+    # The twelve rows the dev split got wrong on 2026-09-30: 5/17 refused rightly.
+    GOLD_REFUSE = [
+        ("ref_sebi_other_practitioner",
+         "Our promoter is acquiring another 8% of a listed company. Is an open offer "
+         "triggered?"),
+        ("ref_comp2002_practitioner",
+         "Our merger crosses the asset test. Do we need clearance before closing?"),
+        ("ref_dpdp2023_practitioner",
+         "Do we need consent before sharing employee data with our payroll vendor?"),
+        ("off_france_capital", "What is the capital of France?"),
+        ("off_passport", "How do I renew my passport in India?"),
+        ("off_goa", "Best time to visit Goa in December?"),
+        ("off_python_list", "What is the syntax for a Python list comprehension?"),
+        ("off_tax_return", "When is my personal income tax return due?"),
+        ("off_medical",
+         "My company doctor says I need rest. What are my sick leave rights?"),
+        ("off_us_law", "What are the Delaware requirements for incorporating an LLC?"),
+        ("off_history", "When was the East India Company founded?"),
+        ("off_crypto", "Do I need to report my crypto gains to the authorities?"),
+    ]
+    # off_tax_return is EXCLUDED from the required set and pinned separately below. It is
+    # not fixed, and pretending otherwise by dropping it from the list would be the thing
+    # this whole job exists to stop.
+    KNOWN_GAP = "off_tax_return"
+    required = [(rid, q) for rid, q in GOLD_REFUSE if rid != KNOWN_GAP]
+    not_refused = [rid for rid, q in required if not _refused(_turn(q))]
+    check(not not_refused,
+          f"every dev-split refusal row except the pinned gap is refused {not_refused}")
+
+    # The worse failure, counted separately by the gold set and asserted separately here:
+    # a question we cannot answer that comes back holding provisions has not merely failed
+    # to refuse, it has cited the Companies Act at something the Act does not govern.
+    with_refs = [rid for rid, q in required
+                 if (_turn(q).get("evidence_pack") or {}).get("usable_keys")]
+    check(not with_refs,
+          f"...and NONE of them returns retrieved provisions {with_refs}")
+
+    # R1 §3: the WORDS of this refusal are a requirement, not decoration. It fires when we
+    # searched the held Act and reached nothing -- which is not the same fact as "outside our
+    # scope", and must not borrow its words. "Not covered" would tell a lawyer the Act has
+    # nothing to say, which we neither know nor checked.
+    france = _turn("What is the capital of France?")
+    detail = france["refusal"]["detail"]
+    check("Companies Act, 2013" in detail,
+          "the no-provision refusal NAMES the law it searched")
+    check("does not mean the Act is silent" in detail,
+          "...and says in terms that this does not mean the Act is silent")
+    banned = [w for w in ("not covered", "out of scope", "outside our scope",
+                          "outside this product") if w in detail.lower()]
+    check(not banned,
+          f"...and never borrows out-of-scope wording {banned}: a question we failed to "
+          f"retrieve for is not a question the Act does not govern")
+    check(france["refusal"]["kind"] == "no_provision_on_point",
+          f"...and the kind says which of the two it is ({france['refusal']['kind']})")
+    # The other refusal, for a body scope.py DECLARES, still speaks the register's words --
+    # the two must stay distinguishable.
+    fema = _turn("What are our obligations under the Foreign Exchange Management Act, 1999?")
+    check(fema["state"] == OUT_OF_SCOPE and "refusal" not in fema,
+          f"a DECLARED body is still out_of_scope in the register's words, not this "
+          f"refusal ({fema['state']})")
+
+    # THE PINNED GAP. "When is my personal income tax return due?" retrieves Companies Act
+    # s.212 (SFIO investigation) and s.2 (Definitions) on the words "return" and "due", so
+    # `insufficient_evidence` is false and the no-evidence refusal above does not reach it.
+    #
+    # It is asserted in BOTH directions on purpose. Refusing it would need either a body
+    # the register does not declare (the Income-tax Act -- and inventing one is what the
+    # test below forbids) or a retrieval-precision rule that judges whether a provision
+    # bears on a question. The second is real work, it is H1's, and guessing at it here
+    # would risk the nine answer rows for one refusal row.
+    #
+    # So: if this ever starts refusing, this check goes RED and whoever fixed it must say
+    # so here. A known gap that can silently close is a gap nobody learns from.
+    gap = _turn("When is my personal income tax return due?")
+    check(not _refused(gap),
+          "PINNED GAP off_tax_return: still NOT refused. Retrieval reaches s.212 and s.2 "
+          "on 'return' and 'due', so there is evidence and the no-evidence rule does not "
+          "fire. Fixing it needs retrieval precision (H1), not a refusal rule. If this "
+          "line fails, the gap closed -- record how, and delete the pin.")
+    # Named exactly, and this line has already earned its keep: lowering MIN_COVER in R1
+    # added s.198 to what this question wrongly reaches, and this check is what said so.
+    # Widened deliberately, with the cost recorded -- not loosened to a length or a subset.
+    check((gap.get("evidence_pack") or {}).get("usable_keys") == [
+              "ACT:COMPANIES_ACT_2013:S212", "ACT:COMPANIES_ACT_2013:S2",
+              "ACT:COMPANIES_ACT_2013:S198"],
+          f"...and the provisions it wrongly reaches are named, so the gap cannot grow "
+          f"quietly ({(gap.get('evidence_pack') or {}).get('usable_keys')})")
+
+    # The five that already refused, as a guard: a fix that traded them for the twelve
+    # would score the same and be worse.
+    for rid, q in (("ref_llp2008_named",
+                    "What are our obligations under the Limited Liability Partnership "
+                    "Act, 2008?"),
+                   ("ref_sebi_other_named",
+                    "What are our obligations under the SEBI ICDR, SAST, PIT and Buyback "
+                    "Regulations?"),
+                   ("ref_comp2002_named",
+                    "What are our obligations under the Competition Act, 2002?")):
+        t = _turn(q)
+        check(t["state"] == OUT_OF_SCOPE and t.get("body"),
+              f"{rid} still refuses in the REGISTER's words, with the body named "
+              f"({t['state']})")
+
+    # ── and the answer rows must not regress ────────────────────────────────
+    # Nine of the thirteen answered correctly before this change. They are named, because
+    # "nine" would still be nine if a fix broke three and fixed three.
+    GOLD_ANSWER_OK = [
+        ("held_s173_count", "How many board meetings must a company hold in a year?"),
+        ("held_s173_gap", "What is the maximum permitted gap between two board meetings?"),
+        ("held_s177_indep",
+         "Must independent directors form part of the audit committee?"),
+        ("held_s96_first", "By when must a company hold its first annual general meeting?"),
+        ("held_s203_cs", "Which companies must appoint a whole-time company secretary?"),
+        ("held_s184_when", "When must a director disclose his interest in a contract?"),
+        ("held_s185_loan", "Can a company give a loan to one of its directors?"),
+        ("held_s185_guarantee", "Can a company guarantee a loan taken by its director?"),
+        ("held_s188_what", "What counts as a related party transaction?"),
+    ]
+    broke = [rid for rid, q in GOLD_ANSWER_OK
+             if _refused(_turn(q)) or not _turn(q).get("confirmed")]
+    check(not broke,
+          f"every answer row that worked before this change still answers, with confirmed "
+          f"provisions {broke}")
 
     # ── the document path ────────────────────────────────────────────────────
     doc_facts = {"document_date": "2024-06-01", "as_of": AS_OF, "company_class": "private",

@@ -451,6 +451,11 @@ window.PLACEDON_ASK_FIXTURES = {
    }
   ],
   "question": "What does rule 2(1)(t) prescribe?",
+  "refusal": {
+   "detail": "We searched the Companies Act, 2013 -- the law this engine holds -- and found no provision on point for this question, so nothing was read and nothing was decided. That does not mean the Act is silent on it: it means our retrieval did not reach a provision, and a provision we did not reach is not a provision that does not exist. Naming the section, or rephrasing in the Act's own words, is the thing most likely to find it.",
+   "kind": "no_provision_on_point"
+  },
+  "refused": true,
   "schema": "placedon.ask/0",
   "scope": {
    "held": [
