@@ -236,6 +236,7 @@ extra+=("checker/span_inventory.py --test")
 extra+=("scripts/harness_selftest.py --test")
 extra+=("scripts/suite_floors.py --test")
 extra+=("scripts/retrieval_recall.py --test")
+extra+=("scripts/retrieval_bakeoff.py --test")
 
 # A module that prints "9/10 passed" has failed, whatever its exit code says.
 # Eight modules once defined _test() without `raise SystemExit(1)`, so their

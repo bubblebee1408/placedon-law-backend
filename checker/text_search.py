@@ -50,10 +50,15 @@ verbosity: s.173 (Meetings of Board) is long *because* board meetings are intric
 length prior pushed s.173 below s.146 for "can a director attend by video" -- the correct answer
 lost to a section about auditors, purely for being long. Measured, then removed.
 
+Re-tested 2026-09-30 on a different eval set and the finding HELD: at b=0.25, 0.50 and 0.75 the
+length prior broke both s.173 dev rows, every time. It did improve precision -- refusal leaks
+3/17 -> 1/17 -- and that trade was refused, because a rule fixed before the run said breaking a
+passing answer row disqualifies. `docs/RETRIEVAL_BAKEOFF_2026-09-30.md` has the table.
+
 Silence
 -------
-`search()` returns [] unless a result clears both `MIN_COVER` (it must account for at least half
-of what was asked, by IDF mass) and `SCORE_FLOOR`. A plausible-looking wrong section is worse than
+`search()` returns [] unless a result clears both `MIN_COVER` (a share of what was asked, by
+IDF mass -- see the constant for the share and why it is what it is) and `SCORE_FLOOR`. A plausible-looking wrong section is worse than
 no section, because the wrong one gets quoted. CLAUDE.md: "If evidence is incomplete, write OPEN
 or UNVERIFIED. Do not guess."
 
