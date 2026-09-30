@@ -451,8 +451,9 @@ def _test() -> None:
     # Named, not counted. The two human-gate verbs WRITE -- that is why `mcp_tools` keeps
     # them off the tool surface, and a tool that can approve a finding is a tool that can
     # clear a review without a person present.
-    check(set(write_verbs()) == {"documents.upload", "runs.approve", "runs.reject"},
-          f"three write verbs today, and each is named ({sorted(write_verbs())})")
+    check(set(write_verbs()) == {"documents.upload", "runs.approve", "runs.reject",
+                                 "runs.submit", "runs.cancel"},
+          f"five write verbs today, and each is named ({sorted(write_verbs())})")
 
     # ── auth: a key is required everywhere except liveness ──────────────────
     check(anon.get(HEALTH_PATH).status_code == 200,

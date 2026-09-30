@@ -116,7 +116,7 @@ def _test() -> None:
 
     files = [p.name for p in migrations()]
     check(files == ["001_core.sql", "002_runs.sql", "003_step_provenance.sql",
-                    "004_cost_note.sql", "005_decisions.sql"],
+                    "004_cost_note.sql", "005_decisions.sql", "006_jobs.sql"],
           f"every migration exists, in order ({files})")
     step_sql = (MIGRATIONS / "003_step_provenance.sql").read_text(encoding="utf-8")
     for col in ("provider", "region", "cost_inr"):
@@ -136,7 +136,7 @@ def _test() -> None:
 
     t = tables()
     check({"tenants", "actors", "api_keys", "documents", "audit_log",
-           "runs", "run_steps", "propositions", "decisions"} <= set(t),
+           "runs", "run_steps", "propositions", "decisions", "jobs"} <= set(t),
           f"every table the gateway needs is declared ({sorted(t)})")
 
     scoped = tenant_scoped()
@@ -144,7 +144,7 @@ def _test() -> None:
           "the tenants table is not tenant-scoped, and that is written down rather than "
           "inferred from a missing column")
     check(scoped == {"actors", "api_keys", "documents", "audit_log", "runs", "run_steps",
-                     "propositions", "decisions"},
+                     "propositions", "decisions", "jobs"},
           f"every other table is tenant-scoped, DERIVED from having a tenant_id ({sorted(scoped)})")
 
     # ── the check this module exists for ────────────────────────────────────

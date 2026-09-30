@@ -57,6 +57,8 @@ class Backend(Protocol):
     def get_document(self, sha256: str) -> dict | None: ...
     def write_decision(self, decision: dict) -> dict: ...
     def read_decisions(self, run_id: str) -> list[dict]: ...
+    def append_step(self, run_id: str, step: dict, *, key: str) -> bool: ...
+    def set_run(self, run_id: str, *, status: str, refusal_code=None, result=None) -> None: ...
 
 
 # ── in memory ────────────────────────────────────────────────────────────────
@@ -66,8 +68,15 @@ class Backend(Protocol):
 # normalising, `step["model"]` is a KeyError on memory and None on Postgres -- which is a
 # divergence that only shows up on the backend the gate does not run.
 STEP_KEYS = ("capability", "engine_capability", "status", "model", "degraded",
-             "provider", "region", "cost_inr", "cost_note")
+             "provider", "region", "cost_inr", "cost_note", "idempotency_key")
 PROPOSITION_KEYS = ("status", "source_ref", "span_start", "span_end")
+
+# What makes a retry safe. The key is DERIVED from (run_id, capability) by the worker, never
+# generated, so the same step computed twice produces the same key and the second append is
+# a no-op. Because cost_inr rides on the step row, that is also what stops a reclaimed job
+# from billing the same call twice.
+def step_key(run_id: str, capability: str) -> str:
+    return f"{run_id}:{capability}"
 # A human decision, as labelled data (PLAN_23 rule 5, migration 005). `quoted_span` is what
 # the reviewer was SHOWN, attested by the surface that showed it -- not re-derived here.
 DECISION_KEYS = ("decision_id", "run_id", "item_ref", "decision", "reason", "quoted_span",
@@ -126,6 +135,7 @@ class MemoryBackend:
         if run_id not in self.runs:
             return None
         out = dict(self.runs[run_id])
+        out.setdefault("result", None)
         out["steps"] = [dict(s) for s in self.steps.get(run_id, [])]
         out["propositions"] = [dict(p) for p in self.props.get(run_id, [])]
         return out
@@ -161,6 +171,25 @@ class MemoryBackend:
 
     def read_decisions(self, run_id: str) -> list[dict]:
         return [dict(d) for d in self.decisions.get(run_id, [])]
+
+    def append_step(self, run_id: str, step: dict, *, key: str) -> bool:
+        """Append one step unless `key` was already written. True if it was written now.
+
+        The return value matters: a worker that cannot tell "I wrote this" from "this was
+        already there" cannot tell a resumed run from a fresh one, and would re-bill.
+        """
+        rows = self.steps.setdefault(run_id, [])
+        if any(r.get("idempotency_key") == key for r in rows):
+            return False
+        rows.append({**_shaped(step, STEP_KEYS), "idempotency_key": key})
+        return True
+
+    def set_run(self, run_id: str, *, status: str, refusal_code=None, result=None) -> None:
+        row = self.runs.setdefault(run_id, {"id": run_id})
+        row["status"] = status
+        row["refusal_code"] = refusal_code
+        if result is not None:
+            row["result"] = result
 
     # The shape agents/runtime.Store expects, so a run can be executed straight onto it.
     def read(self, run_id: str) -> dict | None:
@@ -215,12 +244,13 @@ class PostgresBackend:
                 c.execute(
                     "INSERT INTO run_steps (run_id, ordinal, tenant_id, capability, "
                     "engine_capability, status, model, degraded, provider, region, "
-                    "cost_inr, cost_note) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+                    "cost_inr, cost_note, idempotency_key) "
+                    "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
                     (rid, i, self.tenant_id, s.get("capability", ""),
                      s.get("engine_capability"), s.get("status", "PLANNED"),
                      s.get("model"), bool(s.get("degraded", False)),
                      s.get("provider"), s.get("region"), s.get("cost_inr"),
-                     s.get("cost_note")))
+                     s.get("cost_note"), s.get("idempotency_key")))
             c.execute("DELETE FROM propositions WHERE run_id = %s", (rid,))
             for i, p in enumerate(_shaped(pr, PROPOSITION_KEYS)
                                   for pr in run.get("propositions", [])):
@@ -240,19 +270,20 @@ class PostgresBackend:
         if not _UUID.match(run_id or ""):
             return None
         with self._conn() as c:
-            r = c.execute("SELECT run_id, intent, status, refusal_code FROM runs "
+            r = c.execute("SELECT run_id, intent, status, refusal_code, result FROM runs "
                           "WHERE run_id = %s", (run_id,)).fetchone()
             if r is None:
                 return None
-            out = {"id": str(r[0]), "intent": r[1], "status": r[2], "refusal_code": r[3]}
+            out = {"id": str(r[0]), "intent": r[1], "status": r[2], "refusal_code": r[3],
+                   "result": r[4]}
             out["steps"] = [
                 {"capability": s[0], "engine_capability": s[1], "status": s[2],
                  "model": s[3], "degraded": s[4], "provider": s[5], "region": s[6],
                  "cost_inr": float(s[7]) if s[7] is not None else None,
-                 "cost_note": s[8]}
+                 "cost_note": s[8], "idempotency_key": s[9]}
                 for s in c.execute(
                     "SELECT capability, engine_capability, status, model, degraded, "
-                    "provider, region, cost_inr, cost_note "
+                    "provider, region, cost_inr, cost_note, idempotency_key "
                     "FROM run_steps WHERE run_id = %s ORDER BY ordinal", (run_id,)).fetchall()]
             out["propositions"] = [
                 {"status": p[0], "source_ref": p[1], "span_start": p[2], "span_end": p[3]}
@@ -312,6 +343,37 @@ class PostgresBackend:
         return [{"decision_id": str(r[0]), "run_id": str(r[1]), "item_ref": r[2],
                  "decision": r[3], "reason": r[4], "quoted_span": r[5],
                  "actor_id": str(r[6]), "decided_at": r[7].isoformat()} for r in rows]
+
+    def append_step(self, run_id: str, step: dict, *, key: str) -> bool:
+        """Append unless the key is already there. The unique index decides, not a SELECT:
+        a check-then-insert is two statements a second worker can interleave with."""
+        st = _shaped(step, STEP_KEYS)
+        with self._conn() as c:
+            n = c.execute(
+                "INSERT INTO run_steps (run_id, ordinal, tenant_id, capability, "
+                "engine_capability, status, model, degraded, provider, region, cost_inr, "
+                "cost_note, idempotency_key) SELECT %s, "
+                "(SELECT coalesce(max(ordinal) + 1, 0) FROM run_steps WHERE run_id = %s), "
+                "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s "
+                "ON CONFLICT (run_id, idempotency_key) WHERE idempotency_key IS NOT NULL "
+                "DO NOTHING",
+                (run_id, run_id, self.tenant_id, st.get("capability", ""),
+                 st.get("engine_capability"), st.get("status", "PLANNED"),
+                 st.get("model"), bool(st.get("degraded", False)), st.get("provider"),
+                 st.get("region"), st.get("cost_inr"), st.get("cost_note"), key)).rowcount
+        return bool(n)
+
+    def set_run(self, run_id: str, *, status: str, refusal_code=None, result=None) -> None:
+        import json as _json
+        with self._conn() as c:
+            c.execute(
+                "UPDATE runs SET status = %s, refusal_code = %s, "
+                "result = COALESCE(%s::jsonb, result), "
+                "finished_at = CASE WHEN %s THEN now() ELSE finished_at END "
+                "WHERE run_id = %s",
+                (status, refusal_code,
+                 None if result is None else _json.dumps(result),
+                 status in ("ANSWERED", "PARTIAL", "REFUSED", "FAILED"), run_id))
 
     def read(self, run_id: str) -> dict | None:
         return self.read_run(run_id)
@@ -514,6 +576,46 @@ def conformance(backend) -> list[tuple[bool, str]]:
                                 reason="Inspected the book; every page is initialled."))
     ck(len(backend.read_decisions(run["id"])) == 2,
        "...while a different item on the same run is a separate decision")
+
+    # ── idempotent steps: a retried step writes once (PLAN_23 O2) ───────────
+    idem = str(_uuid.uuid4())
+    backend.write_run({"id": idem, "intent": "review_document", "status": "PLANNED",
+                       "steps": [], "propositions": []})
+    k = step_key(idem, "document")
+    step = {"capability": "document", "status": "ANSWERED", "provider": "azure",
+            "region": "UAE North", "cost_inr": 0.05, "cost_note": "priced from tokens"}
+    ck(backend.append_step(idem, step, key=k) is True,
+       "a step appends and says it was written")
+    ck(backend.append_step(idem, step, key=k) is False,
+       "...and the SAME key appends nothing and says so -- which is how a worker tells a "
+       "resumed run from a fresh one")
+    after = backend.read_run(idem)
+    ck(after and len(after["steps"]) == 1,
+       f"...so a retried step is written ONCE ({len(after['steps']) if after else '?'})")
+    total = sum(s["cost_inr"] or 0 for s in after["steps"])
+    ck(abs(total - 0.05) < 1e-9,
+       f"...and billed once: the cost rides on the step row, so a duplicate step IS a "
+       f"duplicate charge ({total})")
+    ck(after["steps"][0]["idempotency_key"] == k,
+       "...and the key is readable, so the record says why the second write did nothing")
+    ck(backend.append_step(idem, {**step, "capability": "playbook"},
+                           key=step_key(idem, "playbook")) is True,
+       "...while a DIFFERENT step on the same run still appends")
+
+    # ── the run's status and result move without rewriting its steps ────────
+    backend.set_run(idem, status="ANSWERED", result={"findings": 3})
+    done = backend.read_run(idem)
+    ck(done["status"] == "ANSWERED" and len(done["steps"]) == 2,
+       f"setting the status leaves the trace alone ({done['status']}, "
+       f"{len(done['steps'])} steps)")
+    ck(done.get("result") == {"findings": 3},
+       f"...and the result is readable by a poller once the status goes final "
+       f"({done.get('result')})")
+    backend.set_run(idem, status="REFUSED", refusal_code="CANCELLED")
+    ck(backend.read_run(idem)["refusal_code"] == "CANCELLED",
+       "...and a cancelled run keeps its code, which is what the trace is read for")
+    ck(len(backend.read_run(idem)["steps"]) == 2,
+       "...with every step it had: cancellation never deletes")
     return out
 
 

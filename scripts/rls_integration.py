@@ -56,6 +56,7 @@ never uses.
 """
 from __future__ import annotations
 
+import json
 import os
 import sys
 import uuid
@@ -69,15 +70,16 @@ MIGRATIONS = ROOT / "gateway" / "migrations"
 # Set this to an ISO date and a server description the day it is actually run.
 LAST_RUN: str | None = (
     "2026-09-30 — PostgreSQL 18.6 (Postgres.app), local socket, database placedon_dev, "
-    "asserted as role placedon_app (NOSUPERUSER, NOBYPASSRLS). 71 checks, 0 failures, "
-    "migrations 001-005 applied. `decisions` is the eighth tenant-scoped table and was "
-    "proved the same way as the other seven: tenant A sees its own row and none of B's; "
-    "with the policy dropped it fails CLOSED and A sees nothing, not even its own; with "
-    "RLS disabled B's row APPEARS, which is what shows the check measures the protection "
-    "rather than an empty table.")
+    "asserted as role placedon_app (NOSUPERUSER, NOBYPASSRLS). 103 checks, 0 failures, "
+    "migrations 001-006 applied. `jobs` is the ninth tenant-scoped table and is proved the "
+    "same way as the other eight; it is also the one whose leak would be worst "
+    "OPERATIONALLY, because a worker that could see another tenant's job would EXECUTE "
+    "another firm's document. The Postgres queue runs the same conformance suite the gate "
+    "runs against a dict, plus the assertion SKIP LOCKED exists for: two workers claiming "
+    "at once get two different jobs, and a third finds nothing rather than blocking.")
 
 TENANT_TABLES = ("actors", "api_keys", "documents", "audit_log",
-                 "runs", "run_steps", "propositions", "decisions")
+                 "runs", "run_steps", "propositions", "decisions", "jobs")
 
 
 class RlsFailure(AssertionError):
@@ -175,6 +177,61 @@ def _seed(cur, tenant, actor, tag: str) -> None:
                 (uuid.uuid4(), rid, tenant, "ss:T1.2",
                  f"{tag}: inspected the book, every page initialled.",
                  f"{tag} physical minutes book not inspected", actor))
+    # A queued job. This is the row whose leak would be worst OPERATIONALLY: a worker that
+    # could see another tenant's job would execute another firm's document.
+    cur.execute("INSERT INTO jobs (job_id, run_id, tenant_id, actor_id, intent, args) "
+                "VALUES (%s,%s,%s,%s,'review_document',%s)",
+                (uuid.uuid4(), rid, tenant, actor, json.dumps({"tag": tag})))
+
+
+class _SeededQueue:
+    """The Postgres queue, with run ids that already have a `runs` row.
+
+    `gateway/jobs.conformance` invents run ids, which is right for the dict and impossible
+    on Postgres: `jobs.run_id` references `runs`. This hands out pre-created ids instead of
+    weakening the foreign key, because the foreign key is what stops a job pointing at a run
+    nobody can read.
+    """
+
+    def __init__(self, inner, run_ids):
+        self._inner = inner
+        self._ids = list(run_ids)
+        self._map: dict[str, str] = {}
+
+    def _real(self, run_id: str) -> str:
+        if run_id not in self._map:
+            self._map[run_id] = self._ids.pop(0) if self._ids else run_id
+        return self._map[run_id]
+
+    def _fake(self, job):
+        """Translate the run id BACK, so the suite compares against the ids it invented.
+        Without this the adapter is a one-way mirror and every assertion about which run a
+        job belongs to fails for a reason that has nothing to do with the queue."""
+        if job is None:
+            return None
+        import dataclasses
+        for fake, real in self._map.items():
+            if real == job.run_id:
+                return dataclasses.replace(job, run_id=fake)
+        return job
+
+    def enqueue(self, *, run_id, intent, args):
+        return self._inner.enqueue(run_id=self._real(run_id), intent=intent, args=args)
+
+    def claim(self, **kw):
+        return self._fake(self._inner.claim(**kw))
+
+    def finish(self, job_id, status):
+        return self._inner.finish(job_id, status)
+
+    def request_cancel(self, run_id):
+        return self._inner.request_cancel(self._real(run_id))
+
+    def get(self, run_id):
+        return self._fake(self._inner.get(self._real(run_id)))
+
+    def depth(self):
+        return self._inner.depth()
 
 
 def run(url: str) -> int:
@@ -204,7 +261,7 @@ def run(url: str) -> int:
               f"whose visibility is asserted\n")
 
         for f in ("001_core.sql", "002_runs.sql", "003_step_provenance.sql",
-                  "004_cost_note.sql", "005_decisions.sql"):
+                  "004_cost_note.sql", "005_decisions.sql", "006_jobs.sql"):
             cur.execute(sql(f))
             print(f"  applied {f}")
         _ensure_app_role(cur)
@@ -362,6 +419,48 @@ def run(url: str) -> int:
     for ok_, label in conformance(PostgresBackend(app_url, tenant_id=str(a),
                                                   actor_id=str(actor_a))):
         note(ok_, f"[postgres] {label}")
+
+    # ── and the SAME queue contract (PLAN_23 O2) ────────────────────────────
+    # The gate runs this against a dict. Here it runs against SELECT ... FOR UPDATE SKIP
+    # LOCKED, which is the only implementation that has to survive two workers at once.
+    print()
+    from gateway.jobs import PostgresQueue, conformance as queue_conformance
+    pq = PostgresQueue(app_url, tenant_id=str(a), actor_id=str(actor_a))
+    # conformance() enqueues against run ids of its own, so the runs have to exist first.
+    import uuid as _u
+    with _connect(url) as _c:
+        _c.execute("SELECT set_config('app.tenant_id', %s, false)", (str(a),))
+        _queue_runs = []
+        for _ in range(6):
+            _r = _u.uuid4()
+            _c.execute("INSERT INTO runs (run_id, tenant_id, actor_id, intent, status) "
+                       "VALUES (%s,%s,%s,'review_document','PLANNED')", (_r, a, actor_a))
+            _queue_runs.append(str(_r))
+    for ok_, label in queue_conformance(_SeededQueue(pq, _queue_runs)):
+        note(ok_, f"[postgres queue] {label}")
+
+    # Two workers, one queue: the assertion SKIP LOCKED exists for. Without it the second
+    # claim blocks on the first's lock instead of stepping over it.
+    with _connect(url) as _c:
+        _c.execute("SELECT set_config('app.tenant_id', %s, false)", (str(a),))
+        _r1, _r2 = _u.uuid4(), _u.uuid4()
+        for _r in (_r1, _r2):
+            _c.execute("INSERT INTO runs (run_id, tenant_id, actor_id, intent, status) "
+                       "VALUES (%s,%s,%s,'review_document','PLANNED')", (_r, a, actor_a))
+    pq.enqueue(run_id=str(_r1), intent="review_document", args={})
+    pq.enqueue(run_id=str(_r2), intent="review_document", args={})
+    j_a = pq.claim(worker="worker-1")
+    j_b = pq.claim(worker="worker-2")
+    note(j_a is not None and j_b is not None and j_a.job_id != j_b.job_id,
+         f"[postgres queue] two workers claiming at once get two DIFFERENT jobs "
+         f"({j_a and j_a.job_id[:8]} vs {j_b and j_b.job_id[:8]}) -- this is what FOR "
+         f"UPDATE SKIP LOCKED buys, and it is the check that fails if it is dropped")
+    note(pq.claim(worker="worker-3") is None,
+         "[postgres queue] ...and a third worker finds nothing claimable rather than "
+         "blocking on a lease someone else holds")
+    for _j in (j_a, j_b):
+        if _j:
+            pq.finish(_j.job_id, "DONE")
 
     print()
     if failures:

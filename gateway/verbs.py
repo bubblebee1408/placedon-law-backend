@@ -84,6 +84,12 @@ class Context:
     documents: dict = field(default_factory=dict)
     model_for: Callable | None = None
     clock: Callable[[], str] | None = None
+    queue: object | None = None
+    # The steps the last handler built, kept so the QUEUE path can reuse the very code the
+    # request path runs instead of a second implementation of it. `_persist_run` fills it.
+    # Without this the durable executor would have its own idea of what a run's steps are,
+    # and the two would drift the first time either changed.
+    last_steps: list = field(default_factory=list)
 
 
 # ── the three name derivations, each a pure function of the verb name ────────
@@ -222,6 +228,7 @@ def _persist_run(ctx: Context, *, intent: str, status: str, steps: list,
     here -- the verb still answered -- but the caller is told the id is None rather than
     handed one that resolves to nothing.
     """
+    ctx.last_steps = list(steps)
     if ctx.store is None:
         return None
     import uuid
@@ -447,6 +454,107 @@ def _runs_reject(args: dict, ctx: Context) -> dict:
     return _decide(args, ctx, decision="REJECTED")
 
 
+# ── the durable path (PLAN_23 O2) ────────────────────────────────────────────
+
+# Which intents a run may be submitted for. Deliberately a subset, and deliberately named:
+# every one of these is served by the SAME handler the synchronous verb calls, so a queued
+# run and a request-path run cannot answer differently.
+QUEUED_INTENTS: dict[str, str] = {
+    "review_document": "_review_document",
+    "review_contract": "_review_contract",
+    "research_question": "_ask",
+}
+
+
+def queue_handlers(ctx: "Context") -> dict:
+    """{intent: handler(args) -> (steps, result)} for gateway/worker.py.
+
+    Each one runs the request-path handler against a STORE-LESS context, so it builds its
+    steps and its answer without writing a second run, then hands both back. The worker owns
+    the persistence; the handler owns the meaning. One implementation, two callers.
+    """
+    from dataclasses import replace as _replace
+
+    def wrap(fn):
+        def run(args: dict):
+            inner = _replace(ctx, store=None, last_steps=[])
+            result = fn(args, inner)
+            return list(inner.last_steps), result
+        return run
+
+    by_name = {"_review_document": _review_document,
+               "_review_contract": _review_contract,
+               "_ask": _ask}
+    return {intent: wrap(by_name[fn]) for intent, fn in QUEUED_INTENTS.items()}
+
+
+def _runs_submit(args: dict, ctx: Context) -> dict:
+    """Accept work and return a run id. The answer arrives later, from a worker.
+
+    This is the verb PLAN_23 layer 3 asks for: the run is durable as soon as this returns,
+    and it is durable because it is in the database, not because the socket stayed open.
+    """
+    import uuid
+
+    intent = (args.get("intent") or "").strip()
+    if intent not in QUEUED_INTENTS:
+        return _refuse("BAD_REQUEST",
+                       f"{intent!r} is not an intent a run may be submitted for; one of "
+                       f"{sorted(QUEUED_INTENTS)}. An intent nobody declared is not an "
+                       f"intent with an empty plan.")
+    payload = args.get("args")
+    if payload is None:
+        payload = {}
+    if not isinstance(payload, dict):
+        return _refuse("BAD_REQUEST", "args must be an object")
+    if ctx.store is None or ctx.queue is None:
+        return _refuse("NO_STORE",
+                       "this deployment has no durable queue, so a submitted run could not "
+                       "survive the process that accepted it. Use the synchronous verb, or "
+                       "configure PLACEDON_DATABASE_URL.")
+
+    from gateway.jobs import QueueError
+    run_id = str(uuid.uuid4())
+    # The run row FIRST. A job pointing at a run that does not exist is a foreign-key error
+    # on Postgres and a dangling id in memory, and the poller would get NOT_FOUND for work
+    # that was accepted.
+    ctx.store.write({"id": run_id, "intent": intent, "status": "PLANNED",
+                     "refusal_code": None, "steps": [], "propositions": []})
+    try:
+        job = ctx.queue.enqueue(run_id=run_id, intent=intent, args=payload)
+    except QueueError as e:
+        return _refuse("BAD_REQUEST", str(e))
+    return {"status": "PLANNED", "run_id": run_id, "job_id": job.job_id,
+            "intent": intent,
+            "note": "accepted and queued. Poll runs.get for the status; it moves "
+                    "PLANNED -> RUNNING -> ANSWERED, REFUSED or FAILED."}
+
+
+def _runs_cancel(args: dict, ctx: Context) -> dict:
+    """Ask a run to stop at its next step boundary.
+
+    A REQUEST, not a kill. There is no way to stop a step mid-flight and there should not
+    be: a half-written step with no record of why is worse than one more step. What is
+    already done stays in the trace — PLAN_23 layer 3 says a cancellation compensates, it
+    does not delete.
+    """
+    run_id = (args.get("run_id") or "").strip()
+    if not run_id:
+        return _refuse("BAD_REQUEST", "run_id is required")
+    if ctx.queue is None:
+        return _refuse("NO_STORE", "this deployment has no queue, so there is no running "
+                                   "job to cancel.")
+    if ctx.queue.request_cancel(run_id):
+        return {"status": "CANCEL_REQUESTED", "run_id": run_id,
+                "note": "the run will stop at its next step boundary. Everything already "
+                        "done stays in the trace, marked CANCELLED where it stopped."}
+    # Not found and already-finished are one answer on purpose: both mean there is nothing
+    # running to stop, and telling them apart would leak whether a run id exists.
+    return _refuse("NOT_CANCELLABLE",
+                   f"run {run_id} has no job that is still running. A finished run is not "
+                   f"cancelled retroactively — its trace is what happened.")
+
+
 def _documents_upload(args: dict, ctx: Context) -> dict:
     """Store bytes under their own sha256. The identity IS the hash, not a counter."""
     import hashlib
@@ -536,6 +644,22 @@ VERBS: tuple[Verb, ...] = (
                 describes="the text the reviewer was looking at when they decided")),
          "POST", read_only=False, run=_runs_reject),
 
+    Verb("runs.submit",
+         "Accept a run and return its id immediately. A worker executes it from the "
+         "durable queue; the status moves PLANNED -> RUNNING -> final.",
+         (Field("intent", STRING, True,
+                describes="which intent to run: review_document, review_contract or "
+                          "research_question"),
+          Field("args", OBJECT, False,
+                describes="the arguments that intent's synchronous verb takes")),
+         "POST", read_only=False, run=_runs_submit),
+
+    Verb("runs.cancel",
+         "Ask a running run to stop at its next step boundary. What is already done stays "
+         "in the trace.",
+         (Field("run_id", STRING, True, in_path=True, describes="the run identifier"),),
+         "POST", read_only=False, run=_runs_cancel),
+
     Verb("documents.upload",
          "Store a document and return the sha256 that identifies it.",
          (Field("text", STRING, True, describes="the document text"),
@@ -614,12 +738,18 @@ def _test() -> None:
     names = {v.name for v in VERBS}
 
     check(names == {"ask", "review_contract", "review_document", "runs.get", "runs.trace",
-                    "runs.approve", "runs.reject", "documents.upload"},
-          f"the eight verbs are declared once ({sorted(names)})")
-    # The two that WRITE a human decision. Named here rather than counted, so adding a
-    # third write verb is a deliberate edit to this line and not a number going up.
-    check(set(write_verbs()) == {"documents.upload", "runs.approve", "runs.reject"},
-          f"...and exactly three of them write ({sorted(write_verbs())})")
+                    "runs.approve", "runs.reject", "runs.submit", "runs.cancel",
+                    "documents.upload"},
+          f"the ten verbs are declared once ({sorted(names)})")
+    # Every verb that WRITES, named rather than counted, so adding one is a deliberate edit
+    # to this line. All five are kept out of MCP by mcp_tools() for the same reason: a tool
+    # surface that can submit, cancel or approve is one that can act with nobody present.
+    check(set(write_verbs()) == {"documents.upload", "runs.approve", "runs.reject",
+                                 "runs.submit", "runs.cancel"},
+          f"...and exactly five of them write ({sorted(write_verbs())})")
+    check(not {t.name for t in mcp} & {f"{MCP_NAMESPACE}.runs.submit",
+                                       f"{MCP_NAMESPACE}.runs.cancel"},
+          "...so neither runs.submit nor runs.cancel reaches MCP")
 
     # ── PARITY, the point of the file ───────────────────────────────────────
     check(set(rest) == names and set(cli) == names,
@@ -681,7 +811,7 @@ def _test() -> None:
           "...while a WRITE verb is kept out of MCP by mcp_tools(), not by the author "
           "remembering to")
     check("widgets.delete" in write_verbs(hypo), "...and is named in write_verbs()")
-    check(len(VERBS) == 8 and "widgets.count" not in rest_spec(),
+    check(len(VERBS) == 10 and "widgets.count" not in rest_spec(),
           "...and the probe changed nothing in this module: the surfaces are generated "
           "from an argument, not from a global the test rebound")
 
@@ -823,6 +953,84 @@ def _test() -> None:
     check("runs.approve" in rest_spec() and "runs-approve" in
           {c["command"] for c in cli_spec().values()},
           "...while REST and the CLI both carry them, which is where a person acts")
+
+    # ── the durable path, end to end (PLAN_23 O2) ───────────────────────────
+    from gateway.jobs import MemoryQueue as _MQ
+    from gateway.store import MemoryBackend as _MB2
+    from gateway.worker import drain as _drain
+    from checker.ss import defects as _ss2
+
+    qstore, qq = _MB2(), _MQ()
+    qctx = Context(store=qstore, queue=qq)
+    sub = _runs_submit({"intent": "review_document",
+                        "args": {"text": _ss2.CLEAN, "meeting_date": "2026-05-12",
+                                 "entry_date": "2026-06-30"}}, qctx)
+    check(sub["status"] == "PLANNED" and sub.get("run_id"),
+          f"runs.submit returns a run id IMMEDIATELY, with status PLANNED "
+          f"({sub.get('status')}) -- the answer arrives later")
+    rid = sub["run_id"]
+    check(_runs_get({"run_id": rid}, qctx)["status"] == "PLANNED",
+          "...and the run is readable straight away, before any worker has touched it")
+    check(qstore.read_run(rid)["steps"] == [],
+          "...with no steps yet: nothing was executed inside the request")
+    check(qq.depth() == 1, f"...and exactly one job is queued ({qq.depth()})")
+
+    outs = _drain(queue=qq, store=qstore, handlers=queue_handlers(qctx))
+    check(len(outs) == 1 and outs[0].status == "ANSWERED",
+          f"a worker takes it to a terminal status ({outs and outs[0].status})")
+    done = _runs_get({"run_id": rid}, qctx)
+    check(done["status"] == "ANSWERED", "...and runs.get now serves the final status")
+    trace_q = _runs_trace({"run_id": rid}, qctx)["steps"]
+    check([st["capability"] for st in trace_q] == ["intake", "document", "verify"],
+          f"...and the trace is the plan agents/plans.py declares "
+          f"({[st['capability'] for st in trace_q]})")
+    check(all(st.get("idempotency_key") for st in trace_q),
+          "...every step carrying the key that makes a retry a no-op")
+
+    # The queue path and the request path are the SAME handler, so they must agree.
+    direct = _review_document({"text": _ss2.CLEAN, "meeting_date": "2026-05-12",
+                               "entry_date": "2026-06-30"}, Context())
+    stored = qstore.read_run(rid)["result"]
+    check(stored and stored["doc_type"] == direct["doc_type"]
+          and stored["defect_count"] == direct["defect_count"],
+          "the queued run and the synchronous verb give the SAME answer -- they are one "
+          "handler, called twice, not two implementations")
+
+    # Submitting the same work twice is two runs; a second JOB for one run is refused.
+    again = _runs_submit({"intent": "review_document", "args": {"text": _ss2.CLEAN}}, qctx)
+    check(again["run_id"] != rid, "a second submission is a second run, with its own id")
+    check(_runs_submit({"intent": "nonsense", "args": {}}, qctx)["code"] == "BAD_REQUEST",
+          "an undeclared intent is refused rather than queued to fail later")
+    check(_runs_submit({"intent": "review_document"}, Context())["code"] == "NO_STORE",
+          "...and with no durable queue, submit REFUSES rather than accepting work it "
+          "cannot keep")
+
+    # ── cancel: a request, honoured at a boundary ───────────────────────────
+    cq, cs = _MQ(), _MB2()
+    cctx = Context(store=cs, queue=cq)
+    csub = _runs_submit({"intent": "review_document", "args": {"text": _ss2.CLEAN}}, cctx)
+    crid = csub["run_id"]
+    cancelled = _runs_cancel({"run_id": crid}, cctx)
+    check(cancelled["status"] == "CANCEL_REQUESTED",
+          f"runs.cancel is accepted on a queued run ({cancelled.get('status')})")
+    _drain(queue=cq, store=cs, handlers=queue_handlers(cctx))
+    crow = _runs_get({"run_id": crid}, cctx)
+    check(crow["status"] == "REFUSED" and crow["refusal_code"] == "CANCELLED",
+          f"...and the run ends REFUSED / CANCELLED ({crow.get('status')}/"
+          f"{crow.get('refusal_code')}) -- a person decided this, so it is not FAILED")
+    ctrace = _runs_trace({"run_id": crid}, cctx)["steps"]
+    check(ctrace and any(st["status"] == "CANCELLED" for st in ctrace),
+          f"...with a CANCELLED step saying where it stopped "
+          f"({[st['status'] for st in ctrace]})")
+    check(_runs_cancel({"run_id": crid}, cctx)["code"] == "NOT_CANCELLABLE",
+          "...and cancelling it again is refused: a finished run is not cancelled "
+          "retroactively, because its trace is what happened")
+    check(_runs_cancel({"run_id": str(__import__("uuid").uuid4())}, cctx)["code"]
+          == "NOT_CANCELLABLE",
+          "...and an unknown run gets the SAME answer, so the code does not leak which "
+          "run ids exist")
+    check(_runs_cancel({"run_id": "x"}, Context())["code"] == "NO_STORE",
+          "...while with no queue at all it says so rather than claiming to have cancelled")
 
     # ── a verb that answers leaves a TRACE, which is what runs.trace serves ──
     from gateway.store import MemoryBackend
