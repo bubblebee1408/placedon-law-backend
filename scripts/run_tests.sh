@@ -248,6 +248,12 @@ extra+=("checker/sources/terms.py --test")
 extra+=("checker/sources/tiers.py --test" "checker/sources/evidence.py --test"
         "checker/sources/base.py --test" "checker/sources/held.py --test"
         "checker/sources/client.py --test" "checker/sources/contract.py --test")
+# Company facts without data.gov.in (PLAN_26 S2-alt). The fixture suite writes a PDF by
+# hand and reads it back through checker/pdf_pages, so it also proves the scanned-page case
+# the parser must call "cannot read" rather than "no facts".
+extra+=("checker/sources/company_facts.py --test"
+        "checker/sources/mca_fixture.py --test"
+        "checker/sources/mca_master_data.py --test")
 
 # A module that prints "9/10 passed" has failed, whatever its exit code says.
 # Eight modules once defined _test() without `raise SystemExit(1)`, so their

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """One result from one source, with everything needed to distrust it correctly.
 
-PLAN_24 §4. The record is `{tier, source, url or doc_id, fetched_at, sha256, quoted_span,
+PLAN_26 §4. The record is `{tier, source, url or doc_id, fetched_at, sha256, quoted_span,
 attribution}` and every field is required for a reason that has already gone wrong
 somewhere in this repository:
 
@@ -112,7 +112,7 @@ class Evidence:
         if self.attribution.strip() != want.strip():
             raise EvidenceError(
                 f"{self.source}: the attribution must be the terms' own words, not a "
-                f"label we chose. PLAN_24 §2 guessed 'Powered by IKanoon'; the clause "
+                f"label we chose. PLAN_26 §2 guessed 'Powered by IKanoon'; the clause "
                 f"actually requires the LOGO and names RAG context. Use "
                 f"terms.attribution_for({self.source!r})")
 

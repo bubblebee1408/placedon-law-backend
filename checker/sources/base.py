@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """The Source interface, the terms gate a connector loads through, and the payload check.
 
-PLAN_24 §4: `Source.search(query, *, as_of) -> list[Evidence]` and
+PLAN_26 §4: `Source.search(query, *, as_of) -> list[Evidence]` and
 `Source.fetch(ref) -> Evidence`. Two methods, because two questions are being asked of
 every source and conflating them is how a search result gets served as a document.
 
@@ -90,7 +90,7 @@ def load(source: Source) -> Source:
     if tier not in TIERS:
         raise SourceError(
             f"{source_id or type(source).__name__}: tier {tier!r} is not one of {TIERS}. "
-            f"A connector that cannot state its tier does not load (PLAN_24 §2)")
+            f"A connector that cannot state its tier does not load (PLAN_26 §2)")
     if not source_id.strip():
         raise SourceError(f"a connector at tier {tier} must state its source_id")
     for name in ("search", "fetch"):

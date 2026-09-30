@@ -106,6 +106,10 @@ KNOWN_TOOLS: frozenset[str] = frozenset({
     # does all three and will be argued for on its own.
     "themis.sources.list",
     "themis.sources.search",
+    # PLAN_26 S2-alt. Read-only: it parses text the USER uploaded and returns unconfirmed
+    # facts with their spans. It stores nothing, fetches nothing, and cannot confirm a
+    # fact -- confirmation is a person's act and arrives as an argument, never from a tool.
+    "themis.company_facts.extract",
     # PLAN_23 layer 1. Read-only, and the read is the whole point: it names the task and
     # runs nothing, so an agent may ask "what kind of request is this" without that
     # question starting any work or spending anything beyond one LOW-consequence
