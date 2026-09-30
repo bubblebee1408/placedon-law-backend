@@ -97,6 +97,7 @@ KNOWN_TOOLS: frozenset[str] = frozenset({
     # stays equal to READ_ONLY_TOOLS by construction rather than by remembering.
     "themis.review_contract",
     "themis.review_document",
+    "themis.events.assess",
     "themis.runs.get",
     "themis.runs.trace",
 })

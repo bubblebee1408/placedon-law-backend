@@ -472,8 +472,10 @@ def _test() -> None:
           f"(only in one: {names ^ set(KNOWN_TOOLS) or 'none'})")
     check(len(_HAND_WRITTEN) == 13,
           f"thirteen hand-written tools ({len(_HAND_WRITTEN)})")
-    check(len(TOOLS) == 17,
-          f"seventeen in all: four generated from gateway/verbs.py, the fourth being "
+    check(len(TOOLS) == 18,
+          f"eighteen in all: five generated from gateway/verbs.py, the fifth being "
+          f"events.assess on 30-09-2026 -- read-only and model-free, which is why it may "
+          f"be here at all; "
           f"review_document on 30-09-2026 (PLAN_23 O1); runs.approve and runs.reject write "
           f"and are therefore not among them "
           f"(got {len(TOOLS)})")

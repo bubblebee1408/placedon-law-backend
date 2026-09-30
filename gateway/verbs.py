@@ -555,6 +555,49 @@ def _runs_cancel(args: dict, ctx: Context) -> dict:
                    f"cancelled retroactively — its trace is what happened.")
 
 
+def _events_assess(args: dict, ctx: Context) -> dict:
+    """Which bodies of law an event engages, and what can be said about each.
+
+    Read-only and model-free: `checker/events.py` is a fixed table and the obligation
+    engine is deterministic, so nothing here reaches a network and there is no residency
+    question. That is why it may appear on MCP where runs.approve may not.
+
+    No company profile is taken. The held body is reported as engaged with the obligation
+    engine not run, which is a MISSING INPUT rather than a finding that nothing applies --
+    a profile is company data and this verb answers a question about a transaction type.
+    """
+    from checker import events
+
+    key = (args.get("event") or "").strip()
+    if not key:
+        return _refuse("BAD_REQUEST",
+                       f"event is required; one of {sorted(events.BY_KEY)}")
+    raw_facts = args.get("facts")
+    if raw_facts is None:
+        raw_facts = {}
+    if not isinstance(raw_facts, dict):
+        return _refuse("BAD_REQUEST", "facts must be an object")
+    unknown = [k for k in raw_facts if k not in events.FACTS]
+    if unknown:
+        # Refused rather than ignored: a fact this table does not read is a fact the
+        # caller believes changed the answer, and silently dropping it would let them
+        # think a body was considered when it was not.
+        return _refuse("BAD_REQUEST",
+                       f"{sorted(unknown)} are not facts this table reads; one of "
+                       f"{list(events.FACTS)}. A fact that is silently ignored reads as "
+                       f"one that was taken into account.")
+    try:
+        result = events.assess(key, raw_facts)
+    except events.EventError as e:
+        return _refuse("BAD_REQUEST", str(e))
+
+    d = result.to_dict()
+    d["note"] = ("The event table says which bodies of law a transaction ENGAGES. It has "
+                 "not been reviewed by a lawyer. No section, figure or deadline is stated "
+                 "for any body that is not held.")
+    return d
+
+
 def _documents_upload(args: dict, ctx: Context) -> dict:
     """Store bytes under their own sha256. The identity IS the hash, not a counter."""
     import hashlib
@@ -660,6 +703,16 @@ VERBS: tuple[Verb, ...] = (
          (Field("run_id", STRING, True, in_path=True, describes="the run identifier"),),
          "POST", read_only=False, run=_runs_cancel),
 
+    Verb("events.assess",
+         "Which bodies of law a corporate event engages, and what can be said about each: "
+         "the obligation engine for a held body, current text for a current-only body, and "
+         "the named refusal for one this corpus does not hold.",
+         (Field("event", STRING, True,
+                describes="the event key, e.g. share_allotment, related_party_contract"),
+          Field("facts", OBJECT, False,
+                describes="foreign_investor, listed, state — facts that add bodies")),
+         "POST", read_only=True, run=_events_assess),
+
     Verb("documents.upload",
          "Store a document and return the sha256 that identifies it.",
          (Field("text", STRING, True, describes="the document text"),
@@ -737,10 +790,10 @@ def _test() -> None:
     rest, cli, mcp = rest_spec(), cli_spec(), mcp_tools()
     names = {v.name for v in VERBS}
 
-    check(names == {"ask", "review_contract", "review_document", "runs.get", "runs.trace",
-                    "runs.approve", "runs.reject", "runs.submit", "runs.cancel",
-                    "documents.upload"},
-          f"the ten verbs are declared once ({sorted(names)})")
+    check(names == {"ask", "review_contract", "review_document", "events.assess",
+                    "runs.get", "runs.trace", "runs.approve", "runs.reject",
+                    "runs.submit", "runs.cancel", "documents.upload"},
+          f"the eleven verbs are declared once ({sorted(names)})")
     # Every verb that WRITES, named rather than counted, so adding one is a deliberate edit
     # to this line. All five are kept out of MCP by mcp_tools() for the same reason: a tool
     # surface that can submit, cancel or approve is one that can act with nobody present.
@@ -811,7 +864,7 @@ def _test() -> None:
           "...while a WRITE verb is kept out of MCP by mcp_tools(), not by the author "
           "remembering to")
     check("widgets.delete" in write_verbs(hypo), "...and is named in write_verbs()")
-    check(len(VERBS) == 10 and "widgets.count" not in rest_spec(),
+    check(len(VERBS) == 11 and "widgets.count" not in rest_spec(),
           "...and the probe changed nothing in this module: the surfaces are generated "
           "from an argument, not from a global the test rebound")
 
@@ -953,6 +1006,63 @@ def _test() -> None:
     check("runs.approve" in rest_spec() and "runs-approve" in
           {c["command"] for c in cli_spec().values()},
           "...while REST and the CLI both carry them, which is where a person acts")
+
+    # ── events.assess, on all THREE generated surfaces ──────────────────────
+    from checker import events as _events
+
+    ea = _events_assess({"event": "share_allotment",
+                         "facts": {"foreign_investor": True}}, Context())
+    check(ea["status"] == "PARTIAL",
+          f"events.assess on a foreign-investor allotment is PARTIAL ({ea['status']})")
+    bodies = {f["body_id"]: f for f in ea["findings"]}
+    check("FEMA1999" in bodies and bodies["FEMA1999"]["handling"] == "REFUSED",
+          f"...engaging FEMA1999 with its named refusal {sorted(bodies)}")
+    check("Foreign Exchange Management Act" in bodies["FEMA1999"]["text"],
+          "...whose text names the body, so a reader sees what is not held")
+    check(bodies["CA2013"]["body_status"] == "IN_CORPUS",
+          "...and the held body carries its status from the register")
+    check(all(f["text"].strip() for f in ea["findings"]),
+          "...every engaged body says SOMETHING: silence would read as no obligation found")
+    check("not been reviewed by a lawyer" in ea["note"],
+          "...and the reply says the table is not lawyer-reviewed")
+    stamp = _events_assess({"event": "commercial_contract"}, Context())
+    st = {f["body_id"]: f for f in stamp["findings"]}["STAMP"]
+    check(st["handling"] == "UNCLASSIFIED",
+          f"stamp duty with no State is UNCLASSIFIED, not a guess ({st['handling']})")
+
+    check(_events_assess({"event": ""}, Context())["code"] == "BAD_REQUEST",
+          "a missing event is refused, naming the ones that exist")
+    check(_events_assess({"event": "no_such_event"}, Context())["code"] == "BAD_REQUEST",
+          "...as is an undeclared event")
+    check(_events_assess({"event": "share_allotment", "facts": {"colour": "red"}},
+                         Context())["code"] == "BAD_REQUEST",
+          "...and a fact this table does not read is REFUSED, not ignored: a fact silently "
+          "dropped reads as one that was taken into account")
+    check(_events_assess({"event": "share_allotment", "facts": "listed"},
+                         Context())["code"] == "BAD_REQUEST",
+          "...and facts must be an object")
+
+    # REST
+    check(rest_spec()["events.assess"]["method"] == "POST"
+          and rest_spec()["events.assess"]["path"] == "/v2/events/assess",
+          f"REST exposes it at {rest_spec()['events.assess']['path']}")
+    check(rest_spec()["events.assess"]["required"] == ("event",),
+          f"...with `event` required and `facts` optional "
+          f"({rest_spec()['events.assess']['required']})")
+    # MCP -- it is READ-ONLY, so unlike runs.approve it belongs here.
+    mcp_names = {t.name for t in mcp_tools()}
+    check(f"{MCP_NAMESPACE}.events.assess" in mcp_names,
+          f"MCP carries it, because it is read-only and calls no model {sorted(mcp_names)}")
+    check("events.assess" not in write_verbs(),
+          "...and it is not a write verb, which is WHY it may appear there")
+    # CLI
+    check(cli_spec()["events.assess"]["command"] == "events-assess",
+          f"the CLI command is {cli_spec()['events.assess']['command']}")
+    check(cli_spec()["events.assess"]["flags"] == {"--event": True, "--facts": False},
+          f"...with the same fields as the other two surfaces "
+          f"({cli_spec()['events.assess']['flags']})")
+    check(len(_events.BY_KEY) == 8,
+          f"...covering the eight events the table declares ({len(_events.BY_KEY)})")
 
     # ── the durable path, end to end (PLAN_23 O2) ───────────────────────────
     from gateway.jobs import MemoryQueue as _MQ
