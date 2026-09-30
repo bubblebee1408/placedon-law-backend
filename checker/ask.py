@@ -248,13 +248,21 @@ def _general_turn(question: str, *, as_of: date, generated_at: str, facts: dict 
     if (not confirmed and not rows and not served
             and tail["evidence_pack"].get("insufficient_evidence")):
         out["refused"] = True
+        # R1 §3. The wording is the deliverable here, not decoration. This refusal fires
+        # when we DID search the held Act and found nothing on point -- which is a different
+        # fact from "that is outside our scope", and the two must not be said with the same
+        # words. "Not covered" would tell a lawyer the Act has nothing to say, which we do
+        # not know and did not check; all we know is that our retrieval reached no provision.
+        # `out_of_scope` remains the state for a body scope.py DECLARES, and this is not it.
         out["refusal"] = {
-            "kind": "nothing_held_reaches_it",
+            "kind": "no_provision_on_point",
             "detail": (
-                "Nothing in the held corpus was retrieved for this question, so there is "
-                "no provision to read and nothing was decided (" + scope.coverage()
-                + "). That is a statement about what this engine holds, not a finding "
-                  "that no obligation applies -- and not an answer to the question."),
+                "We searched the Companies Act, 2013 -- the law this engine holds -- and "
+                "found no provision on point for this question, so nothing was read and "
+                "nothing was decided. That does not mean the Act is silent on it: it means "
+                "our retrieval did not reach a provision, and a provision we did not reach "
+                "is not a provision that does not exist. Naming the section, or rephrasing "
+                "in the Act's own words, is the thing most likely to find it."),
         }
     return out | tail
 
@@ -673,6 +681,30 @@ def _test() -> None:
                  if (_turn(q).get("evidence_pack") or {}).get("usable_keys")]
     check(not with_refs,
           f"...and NONE of them returns retrieved provisions {with_refs}")
+
+    # R1 §3: the WORDS of this refusal are a requirement, not decoration. It fires when we
+    # searched the held Act and reached nothing -- which is not the same fact as "outside our
+    # scope", and must not borrow its words. "Not covered" would tell a lawyer the Act has
+    # nothing to say, which we neither know nor checked.
+    france = _turn("What is the capital of France?")
+    detail = france["refusal"]["detail"]
+    check("Companies Act, 2013" in detail,
+          "the no-provision refusal NAMES the law it searched")
+    check("does not mean the Act is silent" in detail,
+          "...and says in terms that this does not mean the Act is silent")
+    banned = [w for w in ("not covered", "out of scope", "outside our scope",
+                          "outside this product") if w in detail.lower()]
+    check(not banned,
+          f"...and never borrows out-of-scope wording {banned}: a question we failed to "
+          f"retrieve for is not a question the Act does not govern")
+    check(france["refusal"]["kind"] == "no_provision_on_point",
+          f"...and the kind says which of the two it is ({france['refusal']['kind']})")
+    # The other refusal, for a body scope.py DECLARES, still speaks the register's words --
+    # the two must stay distinguishable.
+    fema = _turn("What are our obligations under the Foreign Exchange Management Act, 1999?")
+    check(fema["state"] == OUT_OF_SCOPE and "refusal" not in fema,
+          f"a DECLARED body is still out_of_scope in the register's words, not this "
+          f"refusal ({fema['state']})")
 
     # THE PINNED GAP. "When is my personal income tax return due?" retrieves Companies Act
     # s.212 (SFIO investigation) and s.2 (Definitions) on the words "return" and "due", so
