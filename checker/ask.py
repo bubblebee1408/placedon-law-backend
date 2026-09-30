@@ -802,6 +802,24 @@ def _test() -> None:
                  "facts": FACTS, "provisions": [good]})
         check([x["obligation_id"] for x in r.get("rows", [])] == ["CA13-S2-85-SMALL"],
               f"...while {good!r} is one Companies Act citation and finds its row")
+    # ── ...and another instrument is not a clause (A-012 NEW-1, D23) ─────────
+    # The item grammar reads any 1-4 character parenthetical as a subsection, so
+    # "s.2(85)(LLP)" was the Companies Act's s.2(85) and ANSWERED. D23: another Act is a
+    # 400, never read as the Companies Act. A label naming an unheld body (the register's
+    # abbreviations, any case) or a year is another instrument, not a clause.
+    for bad in ("s.2(85)(LLP)", "s.2(85)(IBC)", "s.7(IBC)", "s.2(85)(fema)", "s.42(1956)"):
+        try:
+            answer({"question": "What does it say?", "as_of": AS_OF, "facts": FACTS,
+                    "provisions": [bad]}, generated_at=GEN)
+            check(False, f"{bad!r} is refused")
+        except BadRequest as e:
+            check("one Companies Act citation" in str(e),
+                  f"{bad!r} names another instrument in the clause slot and is refused, "
+                  f"saying why ({str(e)[:70]})")
+    from checker.ask_read import not_one_citation as _one
+    check(all(_one(ok) is None for ok in ("s.132(4)(c)(II)", "s.2(45)(za)", "s.2(85)(iv)")),
+          "...while the Act's own clause labels -- (II), (za), (iv) -- are still read")
+
     r = ask({"question": "What does rule 2(1)(t) prescribe?", "as_of": AS_OF,
              "provisions": ["rule 2(1)(t)"]})
     check(r["state"] == PARTIAL and r["confirmed"] == [],

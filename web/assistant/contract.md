@@ -276,7 +276,10 @@ saying why — never read as the Companies Act, and never resolved for another i
 none of them). A bare rule number ("rule 2(1)(t)") is still read as a rule under the Companies
 Act; it can abstain, never answer. This closes the joint-string and other-statute defects at
 once: the scanner had kept only the numbers, so "section 2(85) of the LLP Act" became the
-Companies Act's s.2(85).
+Companies Act's s.2(85). **The clause position included** (A-012 NEW-1, 2026-09-30): a
+parenthetical that is an abbreviation the scope register lists for an unheld body, in any case
+("s.2(85)(LLP)", "s.7(ibc)"), or a year ("s.42(1956)") names another instrument and is a `400`.
+The Act's own labels — "(II)", "(za)", "(iv)" — are read as before.
 
 **D24 — one evidence schema, declared once, typed strictly.** `api._EVIDENCE_FIELDS` is the
 single table: `EVIDENCE_KEYS` is derived from it, `api._evidence()` builds from it, and

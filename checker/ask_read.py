@@ -93,6 +93,25 @@ _HELD_AFTER = re.compile(r"\s*,?\s*(?:(?:of|under)\s+)?(?:the\s+)?Companies\s+Ac
 _US = re.compile(r"u/(?=s\b)", re.I)                 # "u/s 2(85)": the scanner reads the "s"
 
 
+def _instrument_label(sub: str) -> str | None:
+    """A parenthetical that names another instrument rather than a clause, or None.
+
+    The item grammar accepts any 1-4 character label as a subsection, so "s.2(85)(LLP)"
+    was the Companies Act's s.2(85) (A-012 NEW-1). A label is another instrument when it
+    is an abbreviation the scope register lists for a body we do not hold -- in any case,
+    "(fema)" too -- or a year ("(1956)"). The Act's own labels, "(II)" and "(za)" among
+    them, are neither: measured 2026-09-30, no parenthetical in the held text is a year or
+    a register abbreviation.
+    """
+    from checker import scope
+    names = {a.upper() for b in scope.BODIES if b.status != scope.IN_CORPUS
+             for a in (*b.abbreviations, *re.findall(r"\b[A-Z]{3,}\b", b.name))}
+    for lab in re.findall(r"\(\s*([0-9A-Za-z]{1,4})\s*\)", sub or ""):
+        if lab.upper() in names or re.fullmatch(r"(?:18|19|20)\d\d", lab):
+            return f"({lab})"
+    return None
+
+
 def not_one_citation(item: str) -> str | None:
     """Why this item is not exactly ONE Companies Act citation -- or None when it is.
 
@@ -112,6 +131,10 @@ def not_one_citation(item: str) -> str | None:
     num = _ITEM.match(rest, pre.end())
     if not num:
         return "no provision number follows the prefix"
+    other = _instrument_label(num.group("sub"))
+    if other:
+        return (f"{other!r} in the clause position names another instrument, not a clause "
+                f"of the Companies Act")
     tail = rest[num.end():]
     if pre.group("rule") and (held or tail.strip()):
         return ("a rule is cited by its number alone; a named Rules instrument is not "
