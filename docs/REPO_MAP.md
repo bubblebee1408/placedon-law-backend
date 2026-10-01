@@ -213,6 +213,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `agents/research_question.py` | R3 inference | research_question, end to end: a question about the Companies Act, answered or refused. |
 | `agents/review_contract.py` | R3 inference | review_contract, end to end: a contract against a company playbook, and what it will not say. |
 | `agents/review_document.py` | R3 inference | Intent `review_document` — a corporate filing against the SS-1 / SS-2 checks. |
+| `agents/review_grid.py` | R3 inference | One queue job per cell. Exactly once, resumable, cancellable. |
 | `agents/runtime.py` | R3 inference | Execute a run: fixed plan, persisted steps, bounded correction, honest failure. |
 | `agents/state.py` | R3 inference | The vocabulary of a run, and the one distinction that must never blur. |
 
@@ -306,6 +307,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/retrieval_recall.py` |  | Can retrieval find a section when you describe it? Measured, with no answer key. |
 | `scripts/review.py` |  | The review terminal: the 30 open items, one at a time, beside the gazette. |
 | `scripts/review_brief.py` |  | Assemble the evidence a reviewer needs, for every queued item, in one document. |
+| `scripts/review_table_eval.py` |  | Per-column precision, recall and false-NOT_FOUND rate for review grids, on CUAD. |
 | `scripts/rls_integration.py` |  | Row-level security, proved against a REAL Postgres. Deliberately outside the gate. |
 | `scripts/scan_testdocs.py` |  | Run the SS defect scanner against the REAL document corpus. |
 | `scripts/search_memory.py` |  | Agent retrieval over code and memory. The read half of `index_codebase.py`. |
@@ -328,4 +330,4 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/watch_gazette.py` |  | Run the Gazette watcher once: what did the Gazette publish since we last looked? |
 | `scripts/watch_ofac.py` |  | Poll OFAC's SDN list and report what CHANGED since the last trustworthy poll. |
 
-288 modules listed.
+290 modules listed.
