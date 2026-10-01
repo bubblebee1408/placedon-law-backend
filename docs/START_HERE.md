@@ -95,6 +95,19 @@ PLAN_24 to end that collision.
 | Add a table | `gateway/migrations/NNN_*.sql` | Tenant tables get FORCE RLS; run `scripts/rls_integration.py --run` |
 | Change retrieval | `checker/text_search.py` | Measure on the dev split only (`scripts/retrieval_recall.py`); the held-out split is spent |
 | Call a model | `checker/router.py`, `checker/model_cascade.py` | Client documents only to India-region endpoints; UNPRICED is never ₹0 |
+| Work on review tables (H4) | `checker/review_grid.py` and `agents/review_grid.py` | See the naming note below — three names, one feature |
+
+**Naming, because three names mean one feature here.** The review-table feature is
+`review_grid` **in the code** (`checker/review_grid.py` holds the cells, the states and the
+CSV export; `agents/review_grid.py` runs one queue job per cell) and `review_table.*` **in
+the verbs** (`review_table.create`, `.status`, `.export`), which is the name a user sees.
+
+**`checker/review_table.py` is a different, older module and is unrelated to any of it.**
+It is the human-review accounting for the eleven benchmark fixture proposals: for each
+proposed replacement claim it reports, per statutory qualifier, PRESERVED / MISSING /
+NOT_APPLICABLE, so a reviewer can rule on the proposal. It decides nothing and writes no
+gold label. It predates H4, and H4's plan row asked for its filename without that being
+checked — which is how the new module briefly overwrote it (restored from git, intact).
 
 ## 6. Running and testing
 

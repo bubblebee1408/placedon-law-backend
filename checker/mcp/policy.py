@@ -122,6 +122,11 @@ KNOWN_TOOLS: frozenset[str] = frozenset({
     "themis.conversation.list",
     "themis.conversation.get",
     "themis.citation.get",
+    # H4's read side. `review_table.create` is absent and that absence is the decision: it
+    # queues one run per cell and spends money, so mcp_tools() refuses to generate a tool
+    # for it. An agent may read a table and export it; it may not start 500 model calls.
+    "themis.review_table.status",
+    "themis.review_table.export",
 })
 # NOT here, and the absence is the decision: `themis.runs.approve` and `themis.runs.reject`
 # do not exist. They write a human decision, and mcp_tools() refuses to generate a tool for

