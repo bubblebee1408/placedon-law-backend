@@ -207,6 +207,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | File | Ring | Purpose |
 |---|---|---|
 | `agents/__init__.py` | R3 inference | The agent runtime: typed plans, persisted steps, bounded correction. |
+| `agents/intake.py` | R3 inference | Layer 1: which of six fixed tasks a request is, decided in code wherever code can. |
 | `agents/plans.py` | R3 inference | Intent -> a fixed step list, written in code. A model may pick, never invent. |
 | `agents/research_question.py` | R3 inference | research_question, end to end: a question about the Companies Act, answered or refused. |
 | `agents/review_contract.py` | R3 inference | review_contract, end to end: a contract against a company playbook, and what it will not say. |
@@ -223,6 +224,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `gateway/audit.py` | R2 feeds | Append-only audit, hash-chained. Metadata only — never document or prompt text. |
 | `gateway/auth.py` | R2 feeds | API keys, stored hashed, resolving to (tenant, actor). |
 | `gateway/cli.py` | R2 feeds | `placedon` -- the third surface, generated from the same verb table as the other two. |
+| `gateway/envelope.py` | R2 feeds | One answer envelope, versioned, validated against the schema file beside it. |
 | `gateway/jobs.py` | R2 feeds | The durable job queue. One contract, two backends, one conformance suite. |
 | `gateway/models.py` | R2 feeds | Turning a router decision into a callable, or into a NAMED refusal. |
 | `gateway/schema.py` | R2 feeds | The migrations, checked statically, because the live check cannot be in the gate. |
@@ -297,6 +299,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/register_sebi_lodr.py` |  | Register SEBI's consolidated LODR text -- and record what a consolidation is not. |
 | `scripts/render_review_html.py` |  | Render the fixture review table as a reviewable page. Writes no gold label. |
 | `scripts/render_review_table.py` |  | Render the fixture review table to markdown. Decides nothing, writes no label. |
+| `scripts/repo_map.py` |  | Write docs/REPO_MAP.md: every Python module, its ring, and the first line of its docstring. |
 | `scripts/resolve_missing_sections.py` |  | Resolve sections our PDF parse could not, using India Code as the authority. |
 | `scripts/retrieval_bakeoff.py` |  | One pass, three candidate rankers, three metrics, and a rule decided before the numbers. |
 | `scripts/retrieval_recall.py` |  | Can retrieval find a section when you describe it? Measured, with no answer key. |
@@ -324,4 +327,4 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/watch_gazette.py` |  | Run the Gazette watcher once: what did the Gazette publish since we last looked? |
 | `scripts/watch_ofac.py` |  | Poll OFAC's SDN list and report what CHANGED since the last trustworthy poll. |
 
-284 modules listed.
+287 modules listed.
