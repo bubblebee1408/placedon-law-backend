@@ -212,6 +212,11 @@ def _ask(args: dict, ctx: Context) -> dict:
                 "run_id": rid}
 
     d = out.to_dict()
+    # The traced spans, as citations. `to_dict()` carries the provision NAMES and not the
+    # spans, so the conversation layer had nothing to build citations[] from and shipped it
+    # empty for every task. The Summary has them; this is where they leave.
+    if out.summary is not None:
+        d["citations"] = _citations_from_summary(out.summary, ev)
     if user_facts:
         # PLAN_26 S2-alt: accepted, labelled "you told us", never presented as verified.
         # They are RECORDED AND SHOWN and they do not steer the answer -- the answer is
@@ -1108,9 +1113,110 @@ def _envelope_for(task: str, result: dict, *, as_of: str, run_id=None,
                     trace_url=trace)
 
 
+# ── citations: built from the traced spans, re-verified against the corpus ───
+
+def _split_provision(source_id: str) -> tuple[str, str]:
+    """"Companies Act 2013, s.174" -> ("Companies Act 2013", "s.174")."""
+    if ", s." in source_id:
+        head, _, tail = source_id.partition(", s.")
+        return head.strip(), f"s.{tail.strip()}"
+    return source_id.strip(), ""
+
+
+def verify_citation(c: dict) -> tuple[bool, str]:
+    """Re-read the section this citation names and confirm the quote is still in it.
+
+    **A real round-trip, through the same two functions the evidence path used**:
+    `section_index.section_by_number` for the record and `html_to_text` for the readable
+    form. The first version of `citation.get` built a throwaway object with the right
+    attribute names and handed it to `held.span_matches`, which checked a different field
+    against a different source -- a verification that could not fail for the reason it
+    claimed to check.
+
+    Three ways it fails, and each is a different fact:
+      the section is gone      the corpus no longer holds what the answer cited
+      the file changed         sha256 differs from the one recorded at answer time
+      the quote is absent      the words are not in the section they are attributed to
+    """
+    from checker import section_index
+    from checker.sarvam_model import html_to_text
+
+    number = (c.get("provision") or "").removeprefix("s.").strip()
+    if not number:
+        return False, "the citation names no provision, so there is nothing to re-read"
+    rec = section_index.section_by_number(number)
+    if not rec:
+        return False, (f"the corpus no longer holds s.{number}, which this citation "
+                       f"names")
+    if c.get("sha256") and rec.get("sha256") != c.get("sha256"):
+        return False, (f"s.{number} has changed since this answer was given: the corpus "
+                       f"file now hashes to {str(rec.get('sha256'))[:12]}..., the citation "
+                       f"records {str(c.get('sha256'))[:12]}.... The quote is not "
+                       f"re-verified against text we did not read")
+    text = html_to_text(rec.get("content") or "")
+    if not (c.get("quote") or "") or c["quote"] not in text:
+        return False, (f"the quote is NOT present in s.{number} as the corpus holds it "
+                       f"today, so nothing may rest on it")
+    return True, (f"re-read from corpus/companies_act/{rec['section_id']}.json and the "
+                  f"quote byte-matches")
+
+
+def _citations_from_summary(summary, pairs) -> list:
+    """The traced spans as citations. Every quote is the VERIFIED span, not the model's
+    claim about it.
+
+    `Citation.quoted` is what the model SAID it read; `sources[i].text[start:end]` is what
+    is actually there. `check_blocks` has already compared them -- that is what TRACED
+    means -- and taking the slice rather than the claim is what keeps that true downstream.
+    """
+    from gateway import envelope as ev
+
+    by_id = {src.source_id: org for src, org in pairs}
+    out, seen = [], set()
+    for sentence in summary.traced:
+        for cit in sentence.citations:
+            if not 0 <= cit.source_index < len(summary.sources):
+                continue
+            src = summary.sources[cit.source_index]
+            span = src.text[cit.start:cit.end]
+            key = (src.source_id, cit.start, cit.end)
+            if not span.strip() or key in seen:
+                continue
+            seen.add(key)
+            instrument, provision = _split_provision(src.source_id)
+            org = by_id.get(src.source_id)
+            number = provision.removeprefix("s.")
+            from checker import section_index
+            rec = section_index.section_by_number(number) or {}
+            try:
+                out.append(ev.citation(
+                    id=f"c{len(out) + 1}", instrument=instrument, provision=provision,
+                    source=(getattr(org, "path", None)
+                            or f"corpus/companies_act/{rec.get('section_id')}.json"),
+                    fetched_at=str(rec.get("fetched_at") or "unrecorded"),
+                    sha256=str(rec.get("sha256") or ""), quote=span,
+                    # Not available per section in the corpus record. NULL means NOT
+                    # RECORDED, and the schema says so -- a commencement date guessed
+                    # here would be a statutory date we invented.
+                    in_force_from=None))
+            except ev.EnvelopeError:
+                # A span we cannot describe fully is not shown. Same rule as the drop.
+                continue
+    return out
+
 def _citations_for(task: str, result: dict) -> tuple[list, list]:
-    """(citations, dropped). Filled by the research path in C2.2b; empty elsewhere."""
-    return [], []
+    """(kept, dropped). Every citation is re-verified against the corpus before it is shown.
+
+    Dropped, never flagged: a citation on screen is one a reader will trust, and the only
+    honest thing to do with a quote we cannot find in the section it names is remove it and
+    say how many were removed.
+    """
+    from gateway import envelope as ev
+
+    raw = result.get("citations") or []
+    if not raw:
+        return [], []
+    return ev.drop_unquoted(raw, verify=lambda c: verify_citation(c)[0])
 
 
 def _conversation_send(args: dict, ctx: Context) -> dict:
@@ -1305,14 +1411,13 @@ def _conversation_get(args: dict, ctx: Context) -> dict:
 
 
 def _citation_get(args: dict, ctx: Context) -> dict:
-    """One citation in full, for the source panel.
+    """One citation in full, for the source panel, RE-READ from the corpus.
 
-    Re-verifies the quote against the held corpus rather than trusting the stored
-    envelope: the panel is where a lawyer goes to check, so it is the last place that
-    should show a quote nobody re-read.
+    The panel is where a lawyer goes to check, so it is the last place that should show a
+    quote nobody re-read. `verify_citation` goes back to
+    `section_index.section_by_number` and `html_to_text` -- the same two functions the
+    evidence path used -- and reports which of three things failed if any did.
     """
-    from checker.sources.held import HeldCorpus, span_matches
-
     cid = (args.get("citation_id") or "").strip()
     conv_id = (args.get("conversation_id") or "").strip()
     if not cid:
@@ -1327,20 +1432,13 @@ def _citation_get(args: dict, ctx: Context) -> dict:
         for c in (msg.get("envelope") or {}).get("citations", ()):
             if c.get("id") != cid:
                 continue
-            verified, why = False, "not re-checked"
-            try:
-                ok = span_matches(type("E", (), {
-                    "doc_id": c.get("provision_id") or "", "quoted_span": c["quote"]})())
-                verified, why = bool(ok), ("re-read from the held corpus and the quote "
-                                           "byte-matches" if ok else
-                                           "the quote could NOT be found in the corpus "
-                                           "section it names")
-            except Exception as exc:                            # noqa: BLE001
-                verified, why = False, f"could not re-check ({type(exc).__name__})"
+            ok, why = verify_citation(c)
             return {"citation": c, "message_id": msg["message_id"],
-                    "reverified": verified, "reverified_note": why}
+                    "reverified": ok, "reverified_note": why,
+                    "note": ("The quote was re-read from the corpus just now, not trusted "
+                             "from the stored answer. reverified=false means nothing may "
+                             "rest on it, whatever the stored envelope says.")}
     return _refuse("NOT_FOUND", f"no citation {cid!r} in conversation {conv_id!r}")
-
 
 def _documents_upload(args: dict, ctx: Context) -> dict:
     """Store bytes under their own sha256. The identity IS the hash, not a counter.
@@ -2161,6 +2259,95 @@ def _test() -> None:
           f"{(_past.get('envelope') or {}).get('as_of')})")
     check(_send(text="What is the quorum?")["envelope"]["as_of"] == "2026-10-01",
           "...while today's date is stamped normally")
+
+    # ══ citations: a real Evidence round-trip ════════════════════════════════
+    from agents import research_question as _rq
+    _q = "What is the quorum for a meeting of the Board?"
+    _srcs = tuple(_s for _s, _o in _rq.evidence(_q))
+    _cctx2 = Context(store=_MB(), clock=lambda: "2026-10-01T00:00:00+00:00",
+                     model_for=lambda _o: _rq.quoting_model(_srcs))
+    _cr = by_name()["conversation.send"].run({"text": _q}, _cctx2)
+    _ce = _cr["envelope"]
+    check(len(_ce["citations"]) >= 1,
+          f"citations[] is POPULATED from the research path -- it was 0 for every task "
+          f"({len(_ce['citations'])})")
+    _c1 = _ce["citations"][0]
+    for _f in ("id", "instrument", "provision", "source", "fetched_at", "sha256", "quote"):
+        check(bool(_c1.get(_f)), f"...citation carries {_f} ({str(_c1.get(_f))[:30]!r})")
+    check(_c1["instrument"] == "Companies Act 2013" and _c1["provision"].startswith("s."),
+          f"...instrument and provision are split, not one string "
+          f"({_c1['instrument']} / {_c1['provision']})")
+    check(len(_c1["sha256"]) == 64 and _c1["source"].startswith("corpus/"),
+          f"...the sha256 is the CORPUS FILE's and the source is its repo path "
+          f"({_c1['source']})")
+    check(_c1.get("in_force_from") is None,
+          "...in_force_from is NULL: the corpus record does not carry a per-section "
+          "commencement date, and a statutory date guessed here would be invented")
+    check(_ev.errors(_ce) == [], f"...and the envelope validates ({_ev.errors(_ce)[:1]})")
+    check([b["citation_ids"] for b in _ce["text_blocks"]][0] == [c["id"] for c in
+                                                                _ce["citations"]],
+          "...the text block references exactly the citations that survived")
+
+    # Every quote really is in the section it names -- re-read, not trusted.
+    for _c in _ce["citations"]:
+        _ok, _why = verify_citation(_c)
+        check(_ok, f"{_c['id']}: the quote byte-matches {_c['provision']} on re-read "
+                   f"({_why[:54]})")
+
+    # ── a quote that no longer byte-matches is DROPPED, never shown ─────────
+    _bent = dict(_c1, id="bent",
+                 quote="(1) The quorum for a meeting of the Committee of Auditors")
+    _ok, _why = verify_citation(_bent)
+    check(not _ok and "NOT present" in _why,
+          f"a bent quote fails re-verification ({_why[:60]})")
+    _kept, _dropped = _citations_for("RESEARCH_QUESTION",
+                                     {"citations": [_c1, _bent]})
+    check([c["id"] for c in _kept] == [_c1["id"]] and [c["id"] for c in _dropped] == ["bent"],
+          f"...and is DROPPED, not flagged ({[c['id'] for c in _kept]} kept, "
+          f"{[c['id'] for c in _dropped]} dropped)")
+    _benv = _envelope_for("RESEARCH_QUESTION",
+                          {"citations": [_c1, _bent], "answer": "The quorum is...",
+                           "provisions": ["Companies Act 2013, s.174"]},
+                          as_of="2026-10-01", files=[], ctx=_cctx2, question=_q)
+    check("bent" not in [c["id"] for c in _benv["citations"]],
+          "...and never reaches the envelope")
+    check(any("dropped" in b["text"] for b in _benv["text_blocks"]),
+          "...while the DROP IS STATED in the answer, because a reader is looking at "
+          "something different from what we first built")
+    check(_ev.errors(_benv) == [], "...and that envelope still validates")
+
+    # The other two ways it can fail, each a different fact.
+    _moved = dict(_c1, id="moved", sha256="0" * 64)
+    _ok2, _why2 = verify_citation(_moved)
+    check(not _ok2 and "has changed since" in _why2,
+          f"a citation whose corpus file has CHANGED is not re-verified against text we "
+          f"did not read ({_why2[:50]})")
+    _gone = dict(_c1, id="gone", provision="s.99999")
+    _ok3, _why3 = verify_citation(_gone)
+    check(not _ok3 and "no longer holds" in _why3,
+          f"a citation naming a section the corpus does not hold fails ({_why3[:46]})")
+    check(verify_citation(dict(_c1, provision=""))[0] is False,
+          "...and one naming no provision has nothing to re-read")
+
+    # ── citation.get re-reads; it does not trust the stored envelope ────────
+    _cg = by_name()["citation.get"].run(
+        {"citation_id": _c1["id"], "conversation_id": _cr["conversation_id"]}, _cctx2)
+    check(_cg.get("reverified") is True and "byte-matches" in _cg["reverified_note"],
+          f"citation.get re-reads the corpus and says so ({_cg.get('reverified')})")
+    check(_cg["citation"]["quote"] == _c1["quote"],
+          "...returning the citation in full for the source panel")
+    # A bent citation that somehow IS stored must come back marked, not presented as good.
+    _st2 = _cctx2.store
+    _mid = [m for m in _st2.read_messages(_cr["conversation_id"])
+            if m["role"] == "assistant"][0]["message_id"]
+    _st2.set_message_envelope(_mid, dict(_ce, citations=[_bent]))
+    _cg2 = by_name()["citation.get"].run(
+        {"citation_id": "bent", "conversation_id": _cr["conversation_id"]}, _cctx2)
+    check(_cg2.get("reverified") is False and "NOT present" in _cg2["reverified_note"],
+          f"a bent citation found in a STORED envelope is returned marked "
+          f"reverified=false, never as a good one ({_cg2.get('reverified')})")
+    check("nothing may rest on it" in _cg2["note"],
+          "...and the note says what that means")
 
     # ── PARITY, the point of the file ───────────────────────────────────────
     check(set(rest) == names and set(cli) == names,

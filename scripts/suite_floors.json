@@ -209,7 +209,7 @@
     "gateway/jobs.py": 28,
     "gateway/schema.py": 55,
     "gateway/store.py": 101,
-    "gateway/verbs.py": 231,
+    "gateway/verbs.py": 257,
     "gateway/worker.py": 29,
     "scripts/acquire_cuad.py": 14,
     "scripts/acquire_rules.py": 38,
