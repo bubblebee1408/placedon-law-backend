@@ -68,10 +68,13 @@ REVIEW_DOCUMENT = "REVIEW_DOCUMENT"
 COMPANY_STANDING = "COMPANY_STANDING"
 LAW_CHANGES = "LAW_CHANGES"
 EVENT_ASSESS = "EVENT_ASSESS"
+# H3. Served by `draft.create`, a verb, not by a plan -- the same asymmetry EVENT_ASSESS
+# has, and appended for the same reason.
+DRAFT = "DRAFT"
 
-# Derived from the plan intents, so the two cannot drift. EVENT_ASSESS is appended because
-# it is served by a verb rather than by a plan.
-TASKS = tuple(i.upper() for i in plans.INTENTS) + (EVENT_ASSESS,)
+# Derived from the plan intents, so the two cannot drift. EVENT_ASSESS and DRAFT are
+# appended because each is served by a verb rather than by a plan.
+TASKS = tuple(i.upper() for i in plans.INTENTS) + (EVENT_ASSESS, DRAFT)
 
 # Not a task: the other outcome. It is kept out of TASKS deliberately -- a caller that
 # iterates TASKS is iterating things that can be RUN, and this cannot.
@@ -174,6 +177,24 @@ _CHANGE_PHRASES = ("what changed", "what has changed", "any amendments", "any am
                    "has anything changed", "latest amendments", "any changes to")
 
 # Standing is about US, now: our filings, our obligations, our exposure.
+# "Draft me a notice", "prepare a letter". An imperative asking for a DOCUMENT, which is a
+# different job from answering a question about one.
+#
+# A PATTERN and not a phrase list, because the first version listed "write me a" -- which
+# has no object and classified "Write me a poem about compliance." as DRAFT. That is
+# exactly the mistake the comment beside it warned about. The verb must be followed by an
+# article and then a DOCUMENT noun, so:
+#
+#     "draft a notice of the AGM"        -> DRAFT
+#     "write me a poem"                  -> no match (a poem is not a document we draft)
+#     "the draft minutes we attached"    -> no match (article before the verb, not after)
+_DRAFT_VERBS = r"(?:draft|prepare|write|write\s+up|produce)"
+_DRAFT_NOUNS = (r"(?:notice|resolution|letter|memo|memorandum|undertaking|declaration"
+                r"|certificate|minutes|agreement|deed|affidavit|circular|report)")
+_DRAFT_RE = re.compile(
+    rf"\b{_DRAFT_VERBS}\s+(?:me\s+|us\s+)?(?:a|an|the)\s+(?:\w+\s+){{0,2}}{_DRAFT_NOUNS}\b",
+    re.IGNORECASE)
+
 _STANDING_PHRASES = ("are we compliant", "am i compliant", "our compliance",
                      "compliance status", "our standing", "where do we stand",
                      "what do we owe", "our filings", "our obligations",
@@ -231,6 +252,7 @@ _NEIGHBOURS: dict[str, tuple[str, str]] = {
     COMPANY_STANDING: (LAW_CHANGES, RESEARCH_QUESTION),
     LAW_CHANGES: (RESEARCH_QUESTION, COMPANY_STANDING),
     EVENT_ASSESS: (RESEARCH_QUESTION, COMPANY_STANDING),
+    DRAFT: (RESEARCH_QUESTION, REVIEW_DOCUMENT),
 }
 
 
@@ -403,6 +425,15 @@ def _rules(message: str, files, facts) -> Classification | None:
             alternatives=_alts(EVENT_ASSESS),
             reason=f"it states the event {key!r} (matched {phrase!r}) rather than asking "
                    f"about it")
+
+    _m = _DRAFT_RE.search(text)
+    dr = _m.group(0) if _m else ""
+    if dr:
+        return Classification(
+            task=DRAFT, rule="draft_phrase", decided_by="rules",
+            alternatives=_alts(DRAFT),
+            reason=f"it asks for a document to be drafted (matched {dr!r}), which is a "
+                   f"different job from answering a question about one")
 
     ch = _any(text, _CHANGE_PHRASES)
     if ch:
@@ -612,15 +643,15 @@ def _test() -> int:
     print("agents.intake")
 
     # ── the closed set is derived from the plan intents ─────────────────────
-    check(len(TASKS) == 6 and len(set(TASKS)) == 6, f"six tasks, all distinct ({TASKS})")
+    check(len(TASKS) == 7 and len(set(TASKS)) == 7, f"seven tasks, all distinct ({TASKS})")
     for t in (RESEARCH_QUESTION, REVIEW_CONTRACT, REVIEW_DOCUMENT, COMPANY_STANDING,
-              LAW_CHANGES, EVENT_ASSESS):
+              LAW_CHANGES, EVENT_ASSESS, DRAFT):
         check(t in TASKS, f"{t} is one of them")
     check(all(t.upper() in TASKS for t in plans.INTENTS),
           f"every plan intent has a task ({plans.INTENTS})")
-    check(EVENT_ASSESS not in [i.upper() for i in plans.INTENTS],
-          "EVENT_ASSESS is the one task that is NOT a plan intent -- events.assess is a "
-          "verb, not a run")
+    for t in (EVENT_ASSESS, DRAFT):
+        check(t not in [i.upper() for i in plans.INTENTS],
+              f"{t} is NOT a plan intent -- it is served by a verb, not a run")
     check(NEEDS_CLARIFICATION not in TASKS,
           "NEEDS_CLARIFICATION is not in TASKS: a caller iterating TASKS is iterating "
           "things that can be run, and it cannot")
@@ -634,11 +665,33 @@ def _test() -> int:
         ("Are we compliant with our annual filings this year?", COMPANY_STANDING),
         ("What changed in the Companies Act since April 2024?", LAW_CHANGES),
         ("We are allotting shares to a new investor next week.", EVENT_ASSESS),
+        ("Please draft a notice of the annual general meeting.", DRAFT),
     ]
     for msg, want in typical:
         got = classify(msg)
         check(got.task == want,
               f"{want:<18} <- {msg[:46]!r} (got {got.task}, by {got.rule})")
+
+    # DRAFT asks for a document; a question ABOUT one is not a DRAFT.
+    check(classify("Draft me a board resolution for the allotment.").task == DRAFT,
+          "an imperative asking for a document is DRAFT")
+    check(classify("What must a notice of an annual general meeting contain?").task
+          == RESEARCH_QUESTION,
+          "...while a QUESTION about such a document is a research question")
+    check(classify("Check the draft minutes we attached.",
+                   files=[{"name": "board-minutes.pdf", "type": ""}]).task
+          == REVIEW_DOCUMENT,
+          "...and 'the draft minutes' is a noun phrase, not a request to draft")
+    check(classify("Write me a poem about compliance.").task != DRAFT,
+          f"...and 'write me a poem' is NOT a DRAFT: the first version of this rule listed "
+          f"the phrase 'write me a', which has no object and caught exactly that "
+          f"(got {classify('Write me a poem about compliance.').task})")
+    for _msg in ("Draft a resolution for the board.", "Prepare the notice of the AGM.",
+                 "Please produce a circular for the members."):
+        check(classify(_msg).task == DRAFT, f"DRAFT: {_msg[:38]!r}")
+    for _msg in ("Write me a poem about compliance.", "Draft minutes were circulated.",
+                 "Prepare for the audit."):
+        check(classify(_msg).task != DRAFT, f"not DRAFT: {_msg[:38]!r}")
 
     # ── a contract attached with "review this" ──────────────────────────────
     c = classify("Review this.", files=[{"name": "mutual-nda.docx",

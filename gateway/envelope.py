@@ -334,7 +334,13 @@ def _test() -> int:
                     files=[file_state("f1", "minutes.pdf", READ, pages=3)],
                     run_id="r1", trace_url="/v2/runs/r1/trace")
         check(errors(env) == [], f"the envelope validates for task {task}")
-    check(len(intake.TASKS) == 6, f"...all six tasks plus NEEDS_CLARIFICATION ({len(intake.TASKS)})")
+    check(len(intake.TASKS) == 7,
+          f"...all seven tasks plus NEEDS_CLARIFICATION ({len(intake.TASKS)})")
+    check(set(intake.TASKS) | {intake.NEEDS_CLARIFICATION}
+          == set(schema()["properties"]["task"]["enum"]),
+          "the schema's task enum is EXACTLY intake's closed set plus "
+          "NEEDS_CLARIFICATION -- so a task intake can name and the envelope cannot carry "
+          "is impossible, in either direction")
 
     # ── the independent oracle, over the SAME schema file ───────────────────
     import jsonschema

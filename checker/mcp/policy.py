@@ -127,6 +127,13 @@ KNOWN_TOOLS: frozenset[str] = frozenset({
     # for it. An agent may read a table and export it; it may not start 500 model calls.
     "themis.review_table.status",
     "themis.review_table.export",
+    # H3's read side. `draft.create` and `draft.revise` are absent and that absence is the
+    # decision: revise can carry an APPROVAL, and a tool surface that can approve a draft
+    # is one that can sign off a filing with no person present (PLAN_23 §1.8).
+    "themis.draft.status",
+    "themis.draft.versions",
+    "themis.draft.diff",
+    "themis.draft.export",
 })
 # NOT here, and the absence is the decision: `themis.runs.approve` and `themis.runs.reject`
 # do not exist. They write a human decision, and mcp_tools() refuses to generate a tool for
