@@ -75,10 +75,20 @@ FOUND = "FOUND"
 NOT_FOUND = "NOT_FOUND"
 NEEDS_LAWYER = "NEEDS_LAWYER"
 PENDING = "PENDING"          # queued, not yet run. Distinct from NOT_FOUND on purpose.
-STATES = (FOUND, NOT_FOUND, NEEDS_LAWYER, PENDING)
+# TRANSPORT ONLY. The cell did not run: a timeout, a dead provider, a crashed worker. It is
+# NOT a finding about the document, and `failed()` is the only way to reach it -- the same
+# rule and the same reason as `gateway/envelope.FAILED`, one layer down. A reader who takes
+# FAILED for NOT_FOUND concludes the clause is absent because our socket broke.
+FAILED = "FAILED"
+STATES = (FOUND, NOT_FOUND, NEEDS_LAWYER, PENDING, FAILED)
+
+# States that say something about the DOCUMENT. FAILED and PENDING do not, and an export or
+# a tally that mixes them into the findings is making a claim the run did not earn.
+FINDING_STATES = (FOUND, NOT_FOUND, NEEDS_LAWYER)
 
 # What a reader sees for a state that is not FOUND. Never "" -- see the module docstring.
-STATE_LABEL = {NOT_FOUND: "NOT FOUND", NEEDS_LAWYER: "NEEDS LAWYER", PENDING: "PENDING"}
+STATE_LABEL = {NOT_FOUND: "NOT FOUND", NEEDS_LAWYER: "NEEDS LAWYER", PENDING: "PENDING",
+               FAILED: "COULD NOT RUN"}
 
 _ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 # A number, optionally with a currency word or symbol. "unlimited" is a real contractual
@@ -169,6 +179,11 @@ class Cell:
         """What a reader sees. Never empty, for any state."""
         return self.value if self.state == FOUND else STATE_LABEL[self.state]
 
+    @property
+    def is_finding(self) -> bool:
+        """Does this cell say anything about the DOCUMENT? False for PENDING and FAILED."""
+        return self.state in FINDING_STATES
+
 
 def found(*, document_id: str, column: Column, value: str, quote: str,
           document_text: str) -> Cell:
@@ -211,6 +226,21 @@ def pending(*, document_id: str, column: Column) -> Cell:
                 reason="queued; this cell has not been run yet")
 
 
+def failed(*, document_id: str, column: Column, detail: str) -> Cell:
+    """A cell that did not run. TRANSPORT ONLY, and the only way to reach FAILED.
+
+    The wording is deliberately about us and not about the document: "could not run" and
+    not "not found". `gateway/envelope.failed()` makes the same distinction at the reply
+    level for the same reason, and a review grid is where it matters most -- forty rows of
+    NOT FOUND with three transport failures hidden among them is a diligence report that
+    says a clause is missing from documents nobody read.
+    """
+    return Cell(document_id=document_id, column=column.name, state=FAILED,
+                reason=(f"this cell did not complete: {detail}. That is a failure of ours "
+                        f"and says nothing about the document -- it was not read, so no "
+                        f"conclusion about this column follows from it"))
+
+
 @dataclass(frozen=True)
 class Table:
     table_id: str
@@ -251,7 +281,17 @@ class Table:
         for d in self.document_ids:
             for col in self.columns:
                 counts[self.cell(d, col.name).state] += 1
+        # Named, so a caller reporting "how many answers" cannot reach for the grid size
+        # and count a transport failure as an answer about a document.
+        counts["findings"] = sum(counts[s] for s in FINDING_STATES)
+        counts["cells"] = len(self.document_ids) * len(self.columns)
         return counts
+
+    @property
+    def complete(self) -> bool:
+        """Every cell has been run. A FAILED cell is run; a PENDING one is not."""
+        return all(self.cell(d, c.name).state != PENDING
+                   for d in self.document_ids for c in self.columns)
 
 
 def to_csv(table: Table, *, names: dict | None = None) -> str:
@@ -424,8 +464,11 @@ def _test() -> int:
           "...and renders as PENDING, not as empty")
     check(t.tally()[FOUND] == 5 and t.tally()[PENDING] == 5,
           f"the tally counts every pair, run or not ({t.tally()})")
-    check(sum(t.tally().values()) == len(t.document_ids) * len(t.columns),
-          "...and covers the whole grid")
+    check(sum(t.tally()[st] for st in STATES) == len(t.document_ids) * len(t.columns),
+          "...and covers the whole grid (summing the STATE keys: tally() also carries "
+          "`findings` and `cells`, and totalling everything would double-count)")
+    check(t.tally()["cells"] == len(t.document_ids) * len(t.columns),
+          "...which is what `cells` reports directly")
 
     # ── the table refuses to be built wrong ─────────────────────────────────
     for kw, why in [
@@ -471,6 +514,43 @@ def _test() -> int:
     check("PENDING" in out and "India" in out,
           "...a pending cell and a found one both appear, distinguishably")
     check(len(rows) == 1 + len(t.document_ids), f"one row per document ({len(rows) - 1})")
+
+    # ── FAILED is transport only, and is not a finding ──────────────────────
+    fl = failed(document_id="d2", column=CAP, detail="the provider timed out after 30s")
+    check(fl.state == FAILED and fl.rendered == "COULD NOT RUN",
+          f"a FAILED cell renders as COULD NOT RUN, never as NOT FOUND ({fl.rendered!r})")
+    check("says nothing about the document" in fl.reason,
+          "...and its reason says so in words")
+    check(not fl.is_finding and not pending(document_id="d2", column=CAP).is_finding,
+          "FAILED and PENDING are NOT findings: neither says anything about the document")
+    check(all(Cell(document_id="d1", column=LAW.name, state=st,
+                   reason="a long enough reason here").is_finding
+              for st in (NOT_FOUND, NEEDS_LAWYER)) and c.is_finding,
+          "FOUND, NOT_FOUND and NEEDS_LAWYER are findings")
+    check(FAILED not in FINDING_STATES and PENDING not in FINDING_STATES,
+          f"FINDING_STATES is exactly the three that describe a document ({FINDING_STATES})")
+    try:
+        Cell(document_id="d1", column=LAW.name, state=FAILED, value="India",
+             reason="a long enough reason here")
+        check(False, "a FAILED cell carrying a value is refused")
+    except TableError:
+        check(True, "a FAILED cell carrying a value is refused: it did not read anything")
+    t2 = Table("t2", "n", (LAW, CAP), ("d1", "d2"),
+               (c, fl, not_found(document_id="d2", column=LAW,
+                                 reason="the agreement names no governing law at all")))
+    ta = t2.tally()
+    check(ta["findings"] == 2 and ta["cells"] == 4,
+          f"the tally separates FINDINGS from cells, so a transport failure is never "
+          f"counted as an answer ({ta})")
+    check(ta[FAILED] == 1 and ta[PENDING] == 1, f"...and names both non-findings ({ta})")
+    check(not t2.complete, "a grid with a PENDING cell is not complete")
+    check(Table("t3", "n", (LAW,), ("d1",), (c,)).complete,
+          "...while one whose every cell has run is, FAILED cells included")
+    out2 = to_csv(t2)
+    check("COULD NOT RUN" in out2 and "NOT FOUND" in out2,
+          "the CSV distinguishes a transport failure from a document that lacks the clause")
+    empt = [v for r in csv.reader(io.StringIO(out2)) for v in r if not str(v).strip()]
+    check(not empt, f"...and still no cell is empty ({empt})")
 
     # ── Wilson ──────────────────────────────────────────────────────────────
     lo, hi = wilson(2, 2)
