@@ -59,6 +59,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `checker/coverage.py` |  | What was checked, what was not, and why — attached to every answer. |
 | `checker/cross_section_eval.py` |  | Cross-section retrieval eval: does a plain question reach the right section? |
 | `checker/currency.py` | R0 legal core | Corpus currency — does each obligation rest on law we can show is current? |
+| `checker/decompose.py` |  | Split a compound question into at most four, answer each, and join only what was cited. |
 | `checker/dense_index.py` |  | Dense retrieval over the Act — decision B, finally measured. |
 | `checker/derivation.py` | R1 bookmark | Every conclusion stores its witnesses, so revocation is re-evaluation not re-query. |
 | `checker/derived_date.py` |  | DerivedDate — the problem PLAN_01_ARCHITECTURE.md §0 identified as the hardest one. |
@@ -335,4 +336,4 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/watch_gazette.py` |  | Run the Gazette watcher once: what did the Gazette publish since we last looked? |
 | `scripts/watch_ofac.py` |  | Poll OFAC's SDN list and report what CHANGED since the last trustworthy poll. |
 
-295 modules listed.
+296 modules listed.

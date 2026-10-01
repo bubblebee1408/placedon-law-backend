@@ -256,6 +256,10 @@ extra+=("checker/draft_prose.py --test")
 # O9: the answer cache. Its rule is not "have we seen this" but "is the stored answer
 # still true", which is settled by re-reading the corpus.
 extra+=("checker/answer_cache.py --test")
+# O5: bounded decomposition. At most four sub-questions, one level, and a synthesis
+# that joins only the parts that came back cited.
+extra+=("checker/decompose.py --test")
+
 extra+=("scripts/cache_report.py --test")
 
 # H4's runner: one queue job per cell, exactly once, resumable, cancel as a saga.

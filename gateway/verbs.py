@@ -184,6 +184,12 @@ def _ask(args: dict, ctx: Context) -> dict:
     if refusal:
         return refusal
 
+    # O5. Decompose BEFORE the cache: each sub-question is cached on its own, which is
+    # where the reuse actually is -- "what notice is required" recurs across many compound
+    # questions that are each asked once.
+    if _affirmed(args.get("decompose")):
+        return _ask_decomposed(q, args, ctx)
+
     # O9. The cache is consulted ONLY when no company facts were supplied: a fact-dependent
     # answer is an answer about one company, and the key does not carry the facts, so a hit
     # would serve one company's answer to a question asked about another.
@@ -257,6 +263,96 @@ def _ask(args: dict, ctx: Context) -> dict:
         law_versions={o.path: o.blob for o in origins})
     _cache_store(cache_key, q, "RESEARCH_QUESTION", args.get("sources"), d, ctx)
     return d
+
+
+# ── O5: bounded decomposition ────────────────────────────────────────────────
+
+_SPLIT_PROMPT = (
+    "Split the question below into the smallest number of INDEPENDENT sub-questions that "
+    "together cover it, at most {n}. Each must be answerable on its own against Indian "
+    "company law. If it does not split, return it unchanged.\n"
+    "Reply with one sub-question per line, numbered 1., 2., ... and nothing else.\n\n"
+    "Question: {q}\n")
+
+
+def _split_proposer(ctx: Context):
+    """`propose(question) -> [str]` from the routed model, or one that raises.
+
+    Raising is the designed failure: `decompose.plan` turns a proposer that raises into a
+    single sub-question, which is the original. So "no model could be served" costs the
+    SPLIT and never the answer.
+    """
+    from checker import decompose, public_only, router
+
+    def propose(question: str):
+        origin = public_only.clear_matter(question, name="question to split",
+                                          provider=router.AZURE)
+        served, refusal = _served_or_refusal((origin,), name="decompose",
+                                             purpose=router.CLASSIFICATION, ctx=ctx,
+                                             consequence=router.LOW)
+        if refusal:
+            raise RuntimeError(f"no model to split the question: {refusal['code']}")
+        raw = str(served.call(_SPLIT_PROMPT.format(n=decompose.MAX_SUBQUESTIONS,
+                                                   q=question)) or "")
+        out = []
+        for line in raw.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            # "1. text" or "1) text"; anything else is taken whole rather than dropped.
+            parts = line.split(".", 1) if "." in line[:3] else line.split(")", 1)
+            text = (parts[1] if len(parts) == 2 and parts[0].strip().isdigit()
+                    else line).strip()
+            if text:
+                out.append(text)
+        return out
+
+    return propose
+
+
+def _ask_decomposed(question: str, args: dict, ctx: Context) -> dict:
+    """Split, answer each part through the FULL ask path, join only what is cited.
+
+    Each part is a real `_ask` -- the same retrieval, the same verifier, the same cache --
+    so a sub-answer is verified exactly as a whole answer is. `decompose` is not passed
+    down, which is what makes the depth one and keeps four the whole budget rather than
+    four per level.
+    """
+    from checker import decompose as dc
+
+    subs = dc.plan(question, propose=_split_proposer(ctx))
+    if len(subs) == 1 and subs[0].strip().lower() == question.strip().lower():
+        # It did not split. Answer it whole rather than wrapping one part in a synthesis
+        # that would report "1 sub-question" about a question nobody divided.
+        return _ask({k: v for k, v in args.items() if k != "decompose"}, ctx)
+
+    parts, run_ids = [], []
+    for sub in subs:
+        inner = dict(args)
+        inner.pop("decompose", None)
+        inner["question"] = sub
+        r = _ask(inner, ctx)
+        if r.get("run_id"):
+            run_ids.append(r["run_id"])
+        parts.append(dc.Part(
+            question=sub, status=str(r.get("status") or ""),
+            answer=str(r.get("answer") or ""),
+            citations=tuple(r.get("citations") or ()),
+            failure=str(r.get("detail") or r.get("error") or "")))
+    syn = dc.synthesise(parts, proposed=len(subs))
+    out = syn.to_dict()
+    out["sub_run_ids"] = run_ids
+    # The run that RECORDS the decomposition. Its steps name each sub-question, so
+    # runs.trace shows what was asked rather than one opaque "research" step.
+    out["run_id"] = _persist_run(
+        ctx, intent="research_question", status=syn.status,
+        steps=[{"capability": "intake", "status": "ANSWERED",
+                "cost_note": "the split is one model call, priced on its own run"}]
+              + [{"capability": f"research.part{i}", "status": p.status or "FAILED",
+                  "cost_note": f"sub-question: {p.question[:80]}"}
+                 for i, p in enumerate(parts, 1)],
+        propositions=[])
+    return out
 
 
 # ── O9: the answer cache ─────────────────────────────────────────────────────
@@ -2564,7 +2660,12 @@ VERBS: tuple[Verb, ...] = (
           Field("company_facts", ARRAY, False,
                 describes="company facts you are telling us, e.g. "
                           "[{'field':'listed','value':'yes'}]. Labelled 'you told us', "
-                          "shown back, never verified, and they do not steer the answer")),
+                          "shown back, never verified, and they do not steer the answer"),
+          Field("decompose", STRING, False,
+                describes="'true' to split a compound question into at most 4 "
+                          "sub-questions (PLAN_23 O5), answer each through the verified "
+                          "cascade and join only the parts that came back cited. One "
+                          "unanswered part makes the whole PARTIAL and is named")),
          "POST", read_only=True, run=_ask),
 
     Verb("review_contract",
@@ -3446,6 +3547,82 @@ def _test() -> None:
           "...and the drop is STATED in the reply, not left in a field a client may not "
           "render")
     check(_ev.errors(_dr["envelope"]) == [], "...and that envelope validates")
+
+    # ══ O5: bounded decomposition ═══════════════════════════════════════════
+    from checker import decompose as _dc
+    _CQ = ("What is the quorum for a meeting of the Board, and how many must be held "
+           "each year?")
+    _SUBS = ["What is the quorum for a meeting of the Board?",
+             "How many meetings of the Board must be held each year?"]
+
+    def _splitting(_origins):
+        def call(prompt):
+            if "Split the question" in prompt:
+                return "1. " + _SUBS[0] + "\n2. " + _SUBS[1] + "\n"
+            return _rq.quoting_model(_srcs)(prompt)
+        return call
+
+    _o5 = Context(store=_MB(), clock=lambda: "2026-10-01T10:00:00+05:30",
+                  model_for=_splitting)
+    _dr = by_name()["ask"].run({"question": _CQ, "decompose": "true"}, _o5)
+    check(_dr.get("sub_questions") == 2 and _dr.get("bound") == 4,
+          f"a compound question is split and the BOUND is reported "
+          f"({_dr.get('sub_questions')} of {_dr.get('bound')})")
+    check([p["question"] for p in _dr["parts"]] == _SUBS,
+          "...the parts are kept in the ORDER they were asked")
+    check(len(_dr.get("sub_run_ids") or []) == 2,
+          "...each sub-question is a REAL ask with its own run, so it went through the "
+          "same retrieval, verifier and cache as a whole question would")
+    check(_dr.get("run_id"), "...and the decomposition itself is a run")
+    _used = [p for p in _dr["parts"] if p["used"]]
+    check(_used and all(p["citations"] for p in _used),
+          "...and every part used in the synthesis carries a citation")
+    if _dr["status"] == "PARTIAL":
+        check(bool(_dr["unanswered"]) and _dr["unanswered"][0]["question"] in _SUBS,
+              f"a sub-question that did not answer is NAMED, never silently dropped "
+              f"({_dr['unanswered'][0]['question'][:40]!r})")
+        check(_dr["unanswered"][0]["why"],
+              "...with the reason, which is the part a lawyer acts on")
+        check(_dr["unanswered"][0]["question"] not in _dr["answer"],
+              "...and its text is not in the joined answer")
+    else:
+        check(_dr["status"] == "ANSWERED" and not _dr["unanswered"],
+              f"...or everything answered, and nothing is listed as missing "
+              f"({_dr['status']})")
+
+    # The bound, end to end: nine proposals must cost four asks, not nine.
+    _asked = []
+
+    def _greedy(_origins):
+        def call(prompt):
+            if "Split the question" in prompt:
+                return "\n".join(f"{i}. sub-question {i}?" for i in range(1, 10))
+            _asked.append(1)
+            return _rq.quoting_model(_srcs)(prompt)
+        return call
+
+    _o5b = Context(store=_MB(), clock=lambda: "2026-10-01T10:00:00+05:30",
+                   model_for=_greedy)
+    _br = by_name()["ask"].run({"question": _CQ, "decompose": "true"}, _o5b)
+    check(_br.get("sub_questions") == 4,
+          f"**nine proposed sub-questions run FOUR** ({_br.get('sub_questions')})")
+    check(len(_br.get("sub_run_ids") or []) == 4,
+          f"...and four runs, not nine: the bound caps SPEND, not just the report "
+          f"({len(_br.get('sub_run_ids') or [])})")
+    check(_br.get("proposed") == 4 and _br.get("bound") == _dc.MAX_SUBQUESTIONS,
+          "...and the report names the bound it applied")
+
+    # No model to split with: the question is answered whole, not refused.
+    _o5c = Context(store=_MB(), clock=lambda: "2026-10-01T10:00:00+05:30")
+    _nr = _ask_decomposed(_q, {"question": _q}, _o5c)
+    check("parts" not in _nr or _nr.get("sub_questions", 1) == 1,
+          "with NO model to propose a split, the question is answered WHOLE -- the "
+          "failure costs the split and never the answer")
+    check(not _affirmed(None) and _affirmed("true"),
+          "decompose is off unless explicitly asked for")
+    check("decompose" in {f.name for f in by_name()["ask"].inputs},
+          "...and it is a FIELD on ask, not a new verb: a new read-only verb would become "
+          "an MCP tool and need the policy allowlist changed in three files")
 
     # ══ O9: the answer cache ════════════════════════════════════════════════
     from checker import answer_cache as _ac
