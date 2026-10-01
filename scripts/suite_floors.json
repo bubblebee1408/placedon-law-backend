@@ -1,7 +1,7 @@
 {
   "note": "Each suite's passed-check count, as a floor. A suite reporting fewer is a FAILURE. Floors rise automatically on a green run; LOWERING one means editing this file in a commit that says why.",
   "floors": {
-    "agents/intake.py": 135,
+    "agents/intake.py": 137,
     "agents/plans.py": 24,
     "agents/research_question.py": 32,
     "agents/review_contract.py": 36,
@@ -59,6 +59,7 @@
     "checker/doc_verification.py": 25,
     "checker/document_date.py": 28,
     "checker/document_extract.py": 39,
+    "checker/draft_templates.py": 49,
     "checker/draft_versions.py": 46,
     "checker/drafting.py": 15,
     "checker/entail_baseline.py": 23,
@@ -212,7 +213,7 @@
     "gateway/jobs.py": 28,
     "gateway/schema.py": 85,
     "gateway/store.py": 145,
-    "gateway/verbs.py": 320,
+    "gateway/verbs.py": 337,
     "gateway/worker.py": 29,
     "scripts/acquire_cuad.py": 14,
     "scripts/acquire_rules.py": 38,

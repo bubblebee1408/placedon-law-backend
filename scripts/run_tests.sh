@@ -246,6 +246,10 @@ extra+=("checker/review_grid.py --test")
 # H3: draft history. Every save is a version; the diff names a sentence whose words are
 # unchanged and whose support is gone, which a text diff cannot show.
 extra+=("checker/draft_versions.py --test")
+# Job 3: the two draft templates. The rule it exists for: a statement of law comes from a
+# verified citation in the source run or it does not appear, and a model sentence that
+# asserts law with no citation is DROPPED, not labelled.
+extra+=("checker/draft_templates.py --test")
 # H4's runner: one queue job per cell, exactly once, resumable, cancel as a saga.
 extra+=("agents/review_grid.py --test")
 # H4's measurement on CUAD. Evaluation only: the suite also asserts no served or
