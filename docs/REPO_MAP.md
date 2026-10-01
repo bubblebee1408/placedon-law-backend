@@ -57,6 +57,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `checker/corpus_retrieval.py` |  | Cross-section retrieval: given a question, find the SECTION that governs it. |
 | `checker/corroborate.py` |  | Independent corroboration of prior wording, using the amending Act as witness. |
 | `checker/coverage.py` |  | What was checked, what was not, and why — attached to every answer. |
+| `checker/critic.py` |  | The critic: one pass, flag or remove, never add and never rewrite. |
 | `checker/cross_section_eval.py` |  | Cross-section retrieval eval: does a plain question reach the right section? |
 | `checker/currency.py` | R0 legal core | Corpus currency — does each obligation rest on law we can show is current? |
 | `checker/decompose.py` |  | Split a compound question into at most four, answer each, and join only what was cited. |
@@ -336,4 +337,4 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/watch_gazette.py` |  | Run the Gazette watcher once: what did the Gazette publish since we last looked? |
 | `scripts/watch_ofac.py` |  | Poll OFAC's SDN list and report what CHANGED since the last trustworthy poll. |
 
-296 modules listed.
+297 modules listed.

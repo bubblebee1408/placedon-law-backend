@@ -259,6 +259,10 @@ extra+=("checker/answer_cache.py --test")
 # O5: bounded decomposition. At most four sub-questions, one level, and a synthesis
 # that joins only the parts that came back cited.
 extra+=("checker/decompose.py --test")
+# PLAN_23 layer 7: the critic. Flag or remove only, at most one narrowing correction
+# per run (§1.4), and rewriting is unrepresentable rather than merely forbidden.
+extra+=("checker/critic.py --test")
+
 
 extra+=("scripts/cache_report.py --test")
 
