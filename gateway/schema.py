@@ -123,7 +123,7 @@ def _test() -> None:
                     "007_cascade.sql", "008_decision_evidence.sql",
                     "009_source_documents.sql", "010_conversations.sql",
                     "011_review_grids.sql", "012_drafts.sql",
-                    "013_grid_cell_cost.sql"],
+                    "013_grid_cell_cost.sql", "014_answer_cache.sql"],
           f"every migration exists, in order ({files})")
 
     # 012: H3's drafts. The CHECK that matters is the one the derivation cannot see.
@@ -287,7 +287,11 @@ def _test() -> None:
                      "propositions", "decisions", "jobs", "cascade_runs",
                      "conversations", "messages",
                      "review_grids", "review_grid_columns", "review_grid_cells",
-                     "drafts", "draft_versions"},
+                     "drafts", "draft_versions",
+                     # O9. The cache holds a lawyer's question and the answer we gave, so
+                     # it is as tenant-private as `conversations` -- which is why 014 does
+                     # not share even a purely statutory answer between tenants.
+                     "answer_cache", "answer_cache_stats"},
           f"every other table is tenant-scoped, DERIVED from having a tenant_id ({sorted(scoped)})")
 
     # ── the check this module exists for ────────────────────────────────────

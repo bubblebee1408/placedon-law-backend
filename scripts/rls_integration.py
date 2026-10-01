@@ -148,7 +148,19 @@ LAST_RUN: str | None = (
     "rows. review_grid_cells_ran_has_cost_note refused THIS SCRIPT'S OWN SEED on the first "
     "run, because the seed inserted a FOUND cell with neither a cost nor a note saying "
     "there is none. That is the constraint catching its own omission on a real server, and "
-    "the seed now carries a debit.")
+    "the seed now carries a debit. "
+    "2026-10-01, O9: 001-014 applied TOGETHER to a fresh throwaway database on "
+    "PostgreSQL 18.6, asserted as placedon_app (NOSUPERUSER, NOBYPASSRLS), adding "
+    "014_answer_cache: 248 checks, 0 failures. `answer_cache` and `answer_cache_stats` "
+    "are the EIGHTEENTH and NINETEENTH tenant-scoped tables. A cached answer holds the "
+    "question a lawyer asked in their own words and the citations we gave them, which is "
+    "why 014 scopes every row to a tenant and does NOT share even a purely statutory "
+    "answer -- PLAN_23 would permit that, and the cost of being wrong once about which "
+    "bucket an answer is in is one firm seeing another's document. The conformance list "
+    "also caught its own fault here: its cache checks asserted statistics START AT ZERO, "
+    "which held on an empty dict and failed on a live database this script had already "
+    "seeded. They now measure DELTAS -- a conformance check that only holds on an empty "
+    "table is not a conformance check.")
 
 TENANT_TABLES = ("actors", "api_keys", "documents", "audit_log",
                  "runs", "run_steps", "propositions", "decisions", "jobs",
@@ -165,7 +177,10 @@ TENANT_TABLES = ("actors", "api_keys", "documents", "audit_log",
                  "review_grids", "review_grid_columns", "review_grid_cells",
                  # H3's drafts. A draft version holds what a company was about to FILE,
                  # and who stood behind it.
-                 "drafts", "draft_versions")
+                 "drafts", "draft_versions",
+                 # O9: the answer cache. A cached answer carries the question a lawyer
+                 # asked and the citations we gave them, so it is proved like the rest.
+                 "answer_cache", "answer_cache_stats")
 
 
 class RlsFailure(AssertionError):
@@ -230,6 +245,9 @@ def _ensure_app_role(cur) -> None:
     cur.execute(f"GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public "
                 f"TO {APP_ROLE}")
     cur.execute(f"GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO {APP_ROLE}")
+
+
+import json as _json
 
 
 def _seed(cur, tenant, actor, tag: str) -> None:
@@ -300,6 +318,22 @@ def _seed(cur, tenant, actor, tag: str) -> None:
                  "INR 50,00,000",
                  f"{tag}: aggregate liability shall not exceed INR 50,00,000",
                  0.0412, f"{tag}: one extraction call, priced from reported tokens"))
+
+    # O9: a cached answer. The leak would carry the QUESTION another firm's lawyer asked
+    # and the answer we gave them -- the same kind of private thing `conversations` holds,
+    # which is why 014 scopes every row to a tenant rather than sharing statutory answers.
+    cur.execute("INSERT INTO answer_cache (tenant_id, lookup_key, content_key, question, "
+                "task, as_of, sources, citations, payload) "
+                "VALUES (%s,%s,%s,%s,'RESEARCH_QUESTION','2026-10-01','[]'::jsonb,"
+                "%s::jsonb,%s::jsonb)",
+                (tenant, ("a" if tag.startswith("A") else "b") * 64,
+                 ("c" if tag.startswith("A") else "d") * 64,
+                 f"{tag}: when must the board meet?",
+                 _json.dumps([{"id": "c1", "provision": "s.173", "sha256": "e" * 64,
+                               "quote": f"{tag}: four meetings every year"}]),
+                 _json.dumps({"status": "ANSWERED"})))
+    cur.execute("INSERT INTO answer_cache_stats (tenant_id, day, hits, misses, stale) "
+                "VALUES (%s, DATE '2026-10-01', 3, 1, 1)", (tenant,))
 
     # A draft and two versions: one blocked, one approved. The leak would carry what
     # another company was about to file and the name of the person who signed it off.
@@ -417,7 +451,7 @@ def run(url: str) -> int:
                   "007_cascade.sql", "008_decision_evidence.sql",
                   "009_source_documents.sql", "010_conversations.sql",
                   "011_review_grids.sql", "012_drafts.sql",
-                  "013_grid_cell_cost.sql"):
+                  "013_grid_cell_cost.sql", "014_answer_cache.sql"):
             cur.execute(sql(f))
             print(f"  applied {f}")
         _ensure_app_role(cur)

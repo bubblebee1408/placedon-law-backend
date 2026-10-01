@@ -74,6 +74,11 @@ class Backend(Protocol):
     def read_grid_cells(self, grid_id: str) -> list[dict]: ...
     def write_grid_cell(self, cell: dict, *, if_pending: bool = True) -> bool: ...
     def cancel_grid(self, grid_id: str) -> bool: ...
+    # O9: the answer cache (014_answer_cache.sql).
+    def write_cache_entry(self, entry: dict) -> bool: ...
+    def read_cache_entry(self, lookup_key: str) -> dict | None: ...
+    def bump_cache_stat(self, kind: str, *, day: str) -> None: ...
+    def read_cache_stats(self) -> dict: ...
     # H3: drafts and their versions (012_drafts.sql).
     def write_draft(self, draft: dict) -> dict: ...
     def read_draft(self, draft_id: str) -> dict | None: ...
@@ -183,6 +188,14 @@ GRID_CELL_KEYS = ("grid_id", "document_id", "column_name", "state", "value", "qu
 CASCADE_KEYS = ("cascade_id", "run_id", "status", "error", "attempts", "body_ids",
                 "claim_count", "refusal_count", "total_cost_inr")
 
+# O9. `served` is a counter and not in the shaped set: it is maintained by the store, not
+# supplied by a caller.
+CACHE_KEYS = ("lookup_key", "content_key", "question", "task", "as_of", "sources",
+              "citations", "payload", "created_at")
+# A stale find is NOT a miss. Counted apart so the hit rate cannot be flattered by folding
+# "the law moved" into "we had not seen it".
+CACHE_STATS = ("hits", "misses", "stale")
+
 
 class DecisionExists(StoreError):
     """One decision per item per run. A second one would overwrite the label."""
@@ -255,6 +268,8 @@ class MemoryBackend:
     grid_cells: dict = field(default_factory=dict)     # grid_id -> {(doc, col): row}
     drafts: dict = field(default_factory=dict)
     draft_versions: dict = field(default_factory=dict)  # draft_id -> [row]
+    cache: dict = field(default_factory=dict)           # lookup_key -> row
+    cache_stats: dict = field(default_factory=dict)     # day -> {hits, misses, stale}
 
     # ── H3: drafts ───────────────────────────────────────────────────────────
     def write_draft(self, draft: dict) -> dict:
@@ -381,6 +396,44 @@ class MemoryBackend:
         # Marked, never emptied: cancel stops scheduling and keeps every answered cell.
         row["cancelled_at"] = "cancelled"
         return True
+
+    # ── O9: the answer cache ─────────────────────────────────────────────────
+    def write_cache_entry(self, entry: dict) -> bool:
+        """Upsert by lookup_key. True when written.
+
+        014's CHECK restated: an entry that cites nothing is refused. `servable` could
+        never serve such a row, so writing it would create a row whose only possible use
+        is to be rejected.
+        """
+        key = str(entry.get("lookup_key") or "")
+        if not key:
+            raise StoreError("a cache entry needs a lookup_key")
+        if not (entry.get("citations") or []):
+            raise StoreError(
+                "a cache entry with NO citations is refused (014 "
+                "answer_cache.citations): an answer that cites nothing can never be shown "
+                "to be still true, so it could only ever be refused on read")
+        row = _shaped(entry, CACHE_KEYS)
+        row["served"] = int(entry.get("served") or 0)
+        self.cache[key] = row
+        return True
+
+    def read_cache_entry(self, lookup_key: str) -> dict | None:
+        row = self.cache.get(str(lookup_key or ""))
+        return dict(row) if row else None
+
+    def bump_cache_stat(self, kind: str, *, day: str) -> None:
+        if kind not in CACHE_STATS:
+            raise StoreError(f"{kind!r} is not a cache statistic; one of {CACHE_STATS}")
+        bucket = self.cache_stats.setdefault(str(day), {k: 0 for k in CACHE_STATS})
+        bucket[kind] += 1
+
+    def read_cache_stats(self) -> dict:
+        out = {k: 0 for k in CACHE_STATS}
+        for bucket in self.cache_stats.values():
+            for k in CACHE_STATS:
+                out[k] += int(bucket.get(k) or 0)
+        return out
 
     # ── C2: the chat layer ───────────────────────────────────────────────────
     def write_conversation(self, conversation: dict) -> dict:
@@ -946,6 +999,68 @@ class PostgresBackend:
                           "WHERE grid_id = %s AND cancelled_at IS NULL",
                           (grid_id,)).rowcount
         return bool(n)
+
+    # ── O9: the answer cache ─────────────────────────────────────────────────
+    def write_cache_entry(self, entry: dict) -> bool:
+        import json as _json
+        import psycopg
+        if not (entry.get("citations") or []):
+            raise StoreError(
+                "a cache entry with NO citations is refused (014 answer_cache.citations): "
+                "an answer that cites nothing can never be shown to be still true")
+        try:
+            with self._conn() as c:
+                n = c.execute(
+                    "INSERT INTO answer_cache (tenant_id, lookup_key, content_key, "
+                    "question, task, as_of, sources, citations, payload) VALUES "
+                    "(%s,%s,%s,%s,%s,%s,%s,%s,%s) "
+                    "ON CONFLICT (tenant_id, lookup_key) DO UPDATE SET "
+                    "content_key = EXCLUDED.content_key, citations = EXCLUDED.citations, "
+                    "payload = EXCLUDED.payload, created_at = now()",
+                    (self.tenant_id, entry["lookup_key"], entry["content_key"],
+                     entry.get("question") or "", entry.get("task") or "",
+                     entry.get("as_of") or "",
+                     _json.dumps(list(entry.get("sources") or [])),
+                     _json.dumps(list(entry.get("citations") or [])),
+                     _json.dumps(dict(entry.get("payload") or {})))).rowcount
+        except psycopg.errors.IntegrityError as exc:
+            raise StoreError(f"the database refused this cache entry: "
+                             f"{type(exc).__name__} "
+                             f"{str(exc).splitlines()[0][:150]}") from None
+        return bool(n)
+
+    def read_cache_entry(self, lookup_key: str) -> dict | None:
+        with self._conn() as c:
+            r = c.execute(
+                "SELECT lookup_key, content_key, question, task, as_of, sources, "
+                "citations, payload, created_at, served FROM answer_cache "
+                "WHERE lookup_key = %s", (str(lookup_key or ""),)).fetchone()
+        if not r:
+            return None
+        row = _shaped({"lookup_key": r[0], "content_key": r[1], "question": r[2],
+                       "task": r[3], "as_of": r[4], "sources": list(r[5] or []),
+                       "citations": list(r[6] or []), "payload": dict(r[7] or {}),
+                       "created_at": r[8].isoformat() if r[8] else ""}, CACHE_KEYS)
+        row["served"] = int(r[9] or 0)
+        return row
+
+    def bump_cache_stat(self, kind: str, *, day: str) -> None:
+        if kind not in CACHE_STATS:
+            raise StoreError(f"{kind!r} is not a cache statistic; one of {CACHE_STATS}")
+        # The column name is interpolated and that is safe ONLY because `kind` has just
+        # been checked against a fixed tuple. Never widen this without that check.
+        with self._conn() as c:
+            c.execute(
+                f"INSERT INTO answer_cache_stats (tenant_id, day, {kind}) "
+                f"VALUES (%s, %s, 1) ON CONFLICT (tenant_id, day) DO UPDATE SET "
+                f"{kind} = answer_cache_stats.{kind} + 1",
+                (self.tenant_id, str(day)))
+
+    def read_cache_stats(self) -> dict:
+        with self._conn() as c:
+            r = c.execute("SELECT COALESCE(SUM(hits),0), COALESCE(SUM(misses),0), "
+                          "COALESCE(SUM(stale),0) FROM answer_cache_stats").fetchone()
+        return {"hits": int(r[0]), "misses": int(r[1]), "stale": int(r[2])}
 
     # ── H3: drafts ───────────────────────────────────────────────────────────
     def write_draft(self, draft: dict) -> dict:
@@ -1636,6 +1751,70 @@ def conformance(backend) -> list[tuple[bool, str]]:
         ck(False, "a version for a draft that does not exist is refused")
     except Exception:
         ck(True, "a version for a draft that does not exist is refused")
+
+    # ── O9: the answer cache, on both backends ──────────────────────────────
+    _LK, _CK = "a" * 64, "b" * 64
+    _CIT = [{"id": "c1", "provision": "s.96", "sha256": "c" * 64, "quote": "a quote"}]
+    ck(backend.read_cache_entry(_LK) is None,
+       "an unknown cache key reads as None, not an empty entry")
+    ck(backend.write_cache_entry(
+        {"lookup_key": _LK, "content_key": _CK, "question": "When is the AGM?",
+         "task": "RESEARCH_QUESTION", "as_of": "2026-10-01", "sources": ["held"],
+         "citations": _CIT, "payload": {"status": "ANSWERED"},
+         "created_at": "2026-10-01T10:00:00+05:30"}),
+       "a cache entry is written")
+    _got = backend.read_cache_entry(_LK)
+    ck(_got and _got["content_key"] == _CK and _got["question"] == "When is the AGM?",
+       "...and reads back with its content key and question")
+    ck(_got and [c["id"] for c in _got["citations"]] == ["c1"]
+       and _got["citations"][0]["sha256"] == "c" * 64,
+       "...and its CITATIONS survive the round trip, which is the whole point: without "
+       "them the entry can never be re-verified")
+    ck(_got and _got["payload"].get("status") == "ANSWERED"
+       and isinstance(_got["sources"], list),
+       "...with the payload as an object and sources as a list on both backends")
+    ck(backend.write_cache_entry(
+        {"lookup_key": _LK, "content_key": "d" * 64, "question": "When is the AGM?",
+         "task": "RESEARCH_QUESTION", "as_of": "2026-10-01", "sources": ["held"],
+         "citations": _CIT, "payload": {"status": "ANSWERED"},
+         "created_at": "2026-10-01T11:00:00+05:30"}),
+       "writing the same key again UPDATES it: a re-answer replaces the entry rather than "
+       "conflicting, because the newer reading of the law is the one to keep")
+    ck((backend.read_cache_entry(_LK) or {}).get("content_key") == "d" * 64,
+       "...and the newer content key is what reads back")
+    try:
+        backend.write_cache_entry(
+            {"lookup_key": "e" * 64, "content_key": _CK, "question": "q", "task": "t",
+             "as_of": "2026-10-01", "sources": [], "citations": [],
+             "payload": {}, "created_at": "2026-10-01T10:00:00+05:30"})
+        ck(False, "an entry citing NOTHING is refused")
+    except StoreError:
+        ck(True, "an entry citing NOTHING is refused on both backends: it could only ever "
+                 "be rejected on read, so storing it is storing a row with no use")
+
+    # Measured as DELTAS, not against zero: this list also runs against a live database
+    # that scripts/rls_integration.py has already seeded, and an absolute assertion made
+    # the conformance fail on Postgres for a reason that had nothing to do with the
+    # backend. A conformance check that only holds on an empty table is not a conformance
+    # check.
+    _before = backend.read_cache_stats()
+    ck(set(_before) == {"hits", "misses", "stale"},
+       f"cache statistics report the same three names on both backends ({sorted(_before)})")
+    backend.bump_cache_stat("hits", day="2026-10-01")
+    backend.bump_cache_stat("hits", day="2026-10-01")
+    backend.bump_cache_stat("stale", day="2026-10-02")
+    backend.bump_cache_stat("misses", day="2026-10-02")
+    _st = backend.read_cache_stats()
+    _delta = {k: _st[k] - _before[k] for k in _before}
+    ck(_delta == {"hits": 2, "misses": 1, "stale": 1},
+       f"...and accumulate ACROSS DAYS, upserting rather than conflicting ({_delta})")
+    try:
+        backend.bump_cache_stat("hit", day="2026-10-01")
+        ck(False, "an unknown statistic name is refused")
+    except StoreError:
+        ck(True, "an unknown statistic name is refused -- the name reaches a column, and a "
+                 "fixed tuple is what keeps that safe")
+
     return out
 
 
@@ -1693,7 +1872,8 @@ def _test() -> None:
             "append_message", "read_messages", "set_message_envelope", "next_ordinal",
             "write_grid", "read_grid", "read_grid_cells", "write_grid_cell",
             "cancel_grid", "write_draft", "read_draft", "append_draft_version",
-            "read_draft_versions")
+            "read_draft_versions", "write_cache_entry", "read_cache_entry",
+            "bump_cache_stat", "read_cache_stats")
     for name in need:
         check(hasattr(MemoryBackend(), name)
               and hasattr(PostgresBackend("postgresql://x/y", tenant_id=T), name),

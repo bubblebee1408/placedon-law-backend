@@ -22,6 +22,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `checker/agm.py` |  | Section 96 AGM deadline — the proof artifact for this system's core thesis. |
 | `checker/amendment.py` | R0 legal core | Parse India Code amendment footnotes into structured records. |
 | `checker/annotation.py` |  | The gold set: how lawyer labour becomes training data without becoming opinion. |
+| `checker/answer_cache.py` |  | Serve an answer again only when the law it rests on has not moved. |
 | `checker/anthropic_model.py` |  | The concrete model callable: Anthropic, wired into the existing gates. |
 | `checker/api.py` |  | The JSON API over the compliance engine. Zero dependencies, pure and testable. |
 | `checker/as_of.py` | R0 legal core | Point-in-time reconstruction of a Companies Act section. |
@@ -280,6 +281,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/batch1_review.py` |  | The Batch 1 review screen. Presents proposed decisions; approves nothing. |
 | `scripts/benchmark_refreeze_request.py` |  | What a benchmark re-freeze would change. Writes nothing; asks for a decision. |
 | `scripts/build_section_index.py` |  | Build the section_number -> section_id index for the Companies Act corpus. |
+| `scripts/cache_report.py` |  | The answer cache's hit rate, and what the number does not include. |
 | `scripts/cascade_report.py` |  | What the cascade actually cost, from recorded runs. Never from an assumption. |
 | `scripts/check_deps.py` |  | Are the pinned dependencies importable? Exit 0 if yes. |
 | `scripts/check_doc_refs.py` |  | Every path an ACTIVE document cites must exist on disk. |
@@ -333,4 +335,4 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/watch_gazette.py` |  | Run the Gazette watcher once: what did the Gazette publish since we last looked? |
 | `scripts/watch_ofac.py` |  | Poll OFAC's SDN list and report what CHANGED since the last trustworthy poll. |
 
-293 modules listed.
+295 modules listed.
