@@ -126,7 +126,8 @@ def _test() -> None:
                     "013_grid_cell_cost.sql", "014_answer_cache.sql",
                     "015_failure_category.sql",
                     "016_critic_enabled.sql",
-                    "017_nonconformity.sql"],
+                    "017_nonconformity.sql",
+                    "018_users_roles.sql"],
           f"every migration exists, in order ({files})")
 
     # 012: H3's drafts. The CHECK that matters is the one the derivation cannot see.
@@ -294,7 +295,10 @@ def _test() -> None:
                      # O9. The cache holds a lawyer's question and the answer we gave, so
                      # it is as tenant-private as `conversations` -- which is why 014 does
                      # not share even a purely statutory answer between tenants.
-                     "answer_cache", "answer_cache_stats"},
+                     "answer_cache", "answer_cache_stats",
+                     # 8a. An invite names an email and a role inside one firm; it is as
+                     # tenant-private as the people it invites.
+                     "invites"},
           f"every other table is tenant-scoped, DERIVED from having a tenant_id ({sorted(scoped)})")
 
     # ── the check this module exists for ────────────────────────────────────
