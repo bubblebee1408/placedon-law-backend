@@ -121,8 +121,40 @@ def _test() -> None:
     check(files == ["001_core.sql", "002_runs.sql", "003_step_provenance.sql",
                     "004_cost_note.sql", "005_decisions.sql", "006_jobs.sql",
                     "007_cascade.sql", "008_decision_evidence.sql",
-                    "009_source_documents.sql", "010_conversations.sql"],
+                    "009_source_documents.sql", "010_conversations.sql",
+                    "011_review_grids.sql"],
           f"every migration exists, in order ({files})")
+
+    # 011: H4's review grids. What the derivation cannot see is the CHECKs, and the one
+    # that matters most is that the PRIMARY KEY is the idempotency key.
+    grid_sql = (MIGRATIONS / "011_review_grids.sql").read_text(encoding="utf-8")
+    for tbl in ("review_grids", "review_grid_columns", "review_grid_cells"):
+        check(f"CREATE TABLE IF NOT EXISTS {tbl}" in grid_sql,
+              f"011 creates {tbl}, idempotently")
+        check(tbl in tenant_scoped(), f"...and {tbl} is tenant-scoped, DERIVED")
+        check(declares("FORCE", tbl, grid_sql),
+              f"...and FORCE-bound: a diligence grid is the most concentrated client data "
+              f"in this schema")
+    check("PRIMARY KEY (grid_id, document_id, column_name)" in grid_sql,
+          "a cell's PRIMARY KEY is (grid, document, column) -- which IS H4's idempotency "
+          "key, so a worker handed the same cell twice conflicts rather than writing it "
+          "twice, with no dedupe table and no read-before-write")
+    check("review_grid_cells_found_has_quote" in grid_sql
+          and "length(btrim(quote)) >= 8" in grid_sql,
+          "...a FOUND cell must carry a value and a quote, checked by the DATABASE because "
+          "a second writer reaches the table and not the API")
+    check("review_grid_cells_other_has_reason" in grid_sql
+          and "length(btrim(reason)) >= 10" in grid_sql,
+          "...and every other state must say WHY in words: a blank reason renders as an "
+          "empty cell, and 'no cap exists' and 'we could not find the cap' are opposite")
+    check("'FAILED'" in grid_sql and "TRANSPORT ONLY" in grid_sql,
+          "...FAILED is in the state CHECK and the column comment says it is transport "
+          "only, because a reader taking it for NOT_FOUND concludes a clause is absent")
+    check("cancelled_at" in grid_sql and "never deletes" in grid_sql,
+          "...and cancel is a saga: it stops what has not run and deletes nothing, because "
+          "a lawyer who cancels at cell 30 of 40 still wants the 29 answers")
+    check("kind IN ('text', 'date', 'amount', 'yes_no', 'clause')" in grid_sql,
+          "...the five column kinds are enforced by the database too")
 
     # 010: the chat layer. Both tables carry a tenant_id, so `tenant_scoped()` picks them
     # up automatically and the RLS checks below cover them without a list being edited --
@@ -210,7 +242,8 @@ def _test() -> None:
     t = tables()
     check({"tenants", "actors", "api_keys", "documents", "audit_log",
            "runs", "run_steps", "propositions", "decisions", "jobs",
-           "cascade_runs", "source_documents", "conversations", "messages"} <= set(t),
+           "cascade_runs", "source_documents", "conversations", "messages",
+           "review_grids", "review_grid_columns", "review_grid_cells"} <= set(t),
           f"every table the gateway needs is declared ({sorted(t)})")
 
     scoped = tenant_scoped()
@@ -223,7 +256,8 @@ def _test() -> None:
           "decision, and the day someone adds a tenant_id to it this line is what argues")
     check(scoped == {"actors", "api_keys", "documents", "audit_log", "runs", "run_steps",
                      "propositions", "decisions", "jobs", "cascade_runs",
-                     "conversations", "messages"},
+                     "conversations", "messages",
+                     "review_grids", "review_grid_columns", "review_grid_cells"},
           f"every other table is tenant-scoped, DERIVED from having a tenant_id ({sorted(scoped)})")
 
     # ── the check this module exists for ────────────────────────────────────

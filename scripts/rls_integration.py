@@ -108,7 +108,16 @@ LAST_RUN: str | None = (
     "other ten are: A sees its own and none of B's; with the policy dropped they fail "
     "CLOSED and A sees nothing, not even its own; with RLS disabled B's rows APPEAR (1 "
     "conversation, 2 messages), which is what shows the check measures the protection "
-    "rather than an empty table; restoring returns to isolation. The store's chat methods also run through gateway/store.conformance() HERE, against Postgres, and that is what caught a real divergence: the dict raised StoreError on a duplicate ordinal while Postgres raised psycopg UniqueViolation, so one `except StoreError` handled the memory backend and crashed on the real one. PostgresBackend now translates IntegrityError into StoreError. Re-run after the fix: 165 checks, 0 failures.")
+    "rather than an empty table; restoring returns to isolation. The store's chat methods also run through gateway/store.conformance() HERE, against Postgres, and that is what caught a real divergence: the dict raised StoreError on a duplicate ordinal while Postgres raised psycopg UniqueViolation, so one `except StoreError` handled the memory backend and crashed on the real one. PostgresBackend now translates IntegrityError into StoreError. Re-run after the fix: 165 checks, 0 failures. "
+    "2026-10-01, H4: 001-011 applied TOGETHER to a fresh throwaway database on PostgreSQL "
+    "18.6 (Postgres.app, local socket), asserted as placedon_app (NOSUPERUSER, "
+    "NOBYPASSRLS), adding 011_review_grids. review_grids, review_grid_columns and "
+    "review_grid_cells are the THIRTEENTH to FIFTEENTH tenant-scoped tables and they hold "
+    "the most concentrated client data in the schema: another firm's contracts, the "
+    "questions their lawyer thought worth asking, and a quote from each. All three are "
+    "proved the way the other twelve are -- A sees its own and none of B's; the policy "
+    "dropped fails CLOSED; RLS disabled LEAKS, which is what shows the check measures the "
+    "protection; restoring returns to isolation.")
 
 TENANT_TABLES = ("actors", "api_keys", "documents", "audit_log",
                  "runs", "run_steps", "propositions", "decisions", "jobs",
@@ -118,7 +127,11 @@ TENANT_TABLES = ("actors", "api_keys", "documents", "audit_log",
                  # of B's, the policy dropped fails CLOSED, RLS disabled LEAKS, restoring
                  # returns to isolation. A conversation is the most obviously private
                  # thing in the schema: it is a lawyer's questions in their own words.
-                 "conversations", "messages")
+                 "conversations", "messages",
+                 # H4's review grids. A diligence grid is forty of another firm's
+                 # contracts, the questions their lawyer thought worth asking, and a quote
+                 # from each -- the most concentrated client data in the schema.
+                 "review_grids", "review_grid_columns", "review_grid_cells")
 
 
 class RlsFailure(AssertionError):
@@ -235,6 +248,21 @@ def _seed(cur, tenant, actor, tag: str) -> None:
                  json.dumps({"schema": "answer_envelope.v1", "status": "PARTIAL",
                              "task": "RESEARCH_QUESTION", "tenant_marker": tag})))
 
+    # A review grid, its column and one answered cell. The cell carries a QUOTE from
+    # another firm's contract, which is the leak a client would care about most.
+    grid = uuid.uuid4()
+    cur.execute("INSERT INTO review_grids (grid_id, tenant_id, actor_id, name) "
+                "VALUES (%s,%s,%s,%s)", (grid, tenant, actor, f"{tag}: NDA diligence"))
+    cur.execute("INSERT INTO review_grid_columns (grid_id, tenant_id, name, kind, "
+                "question, ordinal) VALUES (%s,%s,'liability cap','amount',%s,0)",
+                (grid, tenant, f"{tag}: what is the cap on aggregate liability?"))
+    cur.execute("INSERT INTO review_grid_cells (grid_id, tenant_id, document_id, "
+                "column_name, state, value, quote) "
+                "VALUES (%s,%s,%s,'liability cap','FOUND',%s,%s)",
+                (grid, tenant, ("a" if tag.startswith("A") else "b") * 64,
+                 "INR 50,00,000",
+                 f"{tag}: aggregate liability shall not exceed INR 50,00,000"))
+
     # A queued job. This is the row whose leak would be worst OPERATIONALLY: a worker that
     # could see another tenant's job would execute another firm's document.
     cur.execute("INSERT INTO jobs (job_id, run_id, tenant_id, actor_id, intent, args) "
@@ -330,7 +358,8 @@ def run(url: str) -> int:
         for f in ("001_core.sql", "002_runs.sql", "003_step_provenance.sql",
                   "004_cost_note.sql", "005_decisions.sql", "006_jobs.sql",
                   "007_cascade.sql", "008_decision_evidence.sql",
-                  "009_source_documents.sql", "010_conversations.sql"):
+                  "009_source_documents.sql", "010_conversations.sql",
+                  "011_review_grids.sql"):
             cur.execute(sql(f))
             print(f"  applied {f}")
         _ensure_app_role(cur)
