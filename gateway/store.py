@@ -68,6 +68,12 @@ class Backend(Protocol):
     def append_message(self, message: dict) -> dict: ...
     def read_messages(self, conversation_id: str) -> list[dict]: ...
     def set_message_envelope(self, message_id: str, envelope: dict) -> bool: ...
+    # H4: review grids (011_review_grids.sql).
+    def write_grid(self, grid: dict) -> dict: ...
+    def read_grid(self, grid_id: str) -> dict | None: ...
+    def read_grid_cells(self, grid_id: str) -> list[dict]: ...
+    def write_grid_cell(self, cell: dict, *, if_pending: bool = True) -> bool: ...
+    def cancel_grid(self, grid_id: str) -> bool: ...
 
 
 # ── in memory ────────────────────────────────────────────────────────────────
@@ -132,6 +138,9 @@ def _check_message(row: dict) -> None:
         raise MessageShape(f"envelope must be an object or absent, got "
                            f"{type(env).__name__}")
 
+
+GRID_CELL_KEYS = ("grid_id", "document_id", "column_name", "state", "value", "quote",
+                  "reason")
 
 CASCADE_KEYS = ("cascade_id", "run_id", "status", "error", "attempts", "body_ids",
                 "claim_count", "refusal_count", "total_cost_inr")
@@ -204,6 +213,81 @@ class MemoryBackend:
     cascades: list = field(default_factory=list)
     conversations: dict = field(default_factory=dict)
     messages: dict = field(default_factory=dict)       # conversation_id -> [row]
+    grids: dict = field(default_factory=dict)
+    grid_cells: dict = field(default_factory=dict)     # grid_id -> {(doc, col): row}
+
+    # ── H4: review grids ─────────────────────────────────────────────────────
+    def write_grid(self, grid: dict) -> dict:
+        gid = grid["grid_id"]
+        self.grids[gid] = {"grid_id": gid, "name": grid.get("name") or "",
+                           "columns": [dict(c) for c in grid.get("columns") or ()],
+                           "document_ids": list(grid.get("document_ids") or ()),
+                           "cancelled_at": self.grids.get(gid, {}).get("cancelled_at")}
+        cells = self.grid_cells.setdefault(gid, {})
+        # Materialise every cell as PENDING, exactly as the Postgres path does. The shared
+        # conformance list caught this on its first run: Postgres inserted the grid's cells
+        # and the dict did not, so `read_grid_cells` was empty on one backend and four rows
+        # on the other -- and a MISSING row and a PENDING one must not be the same thing,
+        # because "we have not looked" is an answer the grid has to be able to give.
+        for d in grid.get("document_ids") or ():
+            for col in grid.get("columns") or ():
+                key = (d, col["name"])
+                cells.setdefault(key, _shaped(
+                    {"grid_id": gid, "document_id": d, "column_name": col["name"],
+                     "state": "PENDING", "value": "", "quote": "",
+                     "reason": "queued; this cell has not been run yet"},
+                    GRID_CELL_KEYS))
+        return dict(self.grids[gid])
+
+    def read_grid(self, grid_id: str) -> dict | None:
+        row = self.grids.get(grid_id)
+        return dict(row) if row else None
+
+    def read_grid_cells(self, grid_id: str) -> list[dict]:
+        return [dict(r) for r in self.grid_cells.get(grid_id, {}).values()]
+
+    def write_grid_cell(self, cell: dict, *, if_pending: bool = True) -> bool:
+        """True when written. False when a terminal cell already exists for that key.
+
+        `if_pending` is the exactly-once half that lives in code: the key is the primary
+        key in Postgres, and refusing to overwrite a terminal cell is what makes a resumed
+        worker harmless rather than destructive.
+        """
+        gid = cell["grid_id"]
+        if gid not in self.grids:
+            raise StoreError(f"no review grid {gid!r} to write a cell to")
+        # 011's two CHECKs, restated here so the dict refuses exactly what Postgres does.
+        # Without this the memory backend accepts a FOUND cell with a three-character
+        # quote and the gate never sees the divergence.
+        state = cell.get("state")
+        value, quote = (cell.get("value") or ""), (cell.get("quote") or "")
+        reason = cell.get("reason") or ""
+        if state == "FOUND":
+            if not value.strip() or len(quote.strip()) < 8:
+                raise StoreError(
+                    f"a FOUND cell needs a value and a quote of at least 8 characters "
+                    f"(011 review_grid_cells_found_has_quote); got value={value!r} "
+                    f"quote={quote[:12]!r}")
+        else:
+            if value.strip() or quote.strip() or len(reason.strip()) < 10:
+                raise StoreError(
+                    f"a {state} cell carries no value and no quote and must say WHY in at "
+                    f"least 10 characters (011 review_grid_cells_other_has_reason)")
+        key = (cell["document_id"], cell["column_name"])
+        cells = self.grid_cells.setdefault(gid, {})
+        existing = cells.get(key)
+        if if_pending and existing is not None and existing.get("state") != "PENDING":
+            return False
+        cells[key] = _shaped(cell, GRID_CELL_KEYS)
+        return True
+
+    def cancel_grid(self, grid_id: str) -> bool:
+        row = self.grids.get(grid_id)
+        if row is None:
+            return False
+        # Marked, never emptied: cancel stops scheduling and keeps every answered cell.
+        row["cancelled_at"] = "cancelled"
+        return True
 
     # ── C2: the chat layer ───────────────────────────────────────────────────
     def write_conversation(self, conversation: dict) -> dict:
@@ -667,6 +751,95 @@ class PostgresBackend:
                           (_json(envelope), message_id)).rowcount
         return bool(n)
 
+    # ── H4: review grids ─────────────────────────────────────────────────────
+    def write_grid(self, grid: dict) -> dict:
+        import psycopg
+        gid = grid["grid_id"]
+        try:
+            with self._conn() as c:
+                c.execute("INSERT INTO review_grids (grid_id, tenant_id, name) "
+                          "VALUES (%s,%s,%s) ON CONFLICT (grid_id) DO UPDATE SET "
+                          "name = EXCLUDED.name",
+                          (gid, self.tenant_id, grid.get("name") or ""))
+                for i, col in enumerate(grid.get("columns") or ()):
+                    c.execute(
+                        "INSERT INTO review_grid_columns (grid_id, tenant_id, name, kind, "
+                        "question, ordinal) VALUES (%s,%s,%s,%s,%s,%s) "
+                        "ON CONFLICT (grid_id, name) DO NOTHING",
+                        (gid, self.tenant_id, col["name"], col["kind"], col["question"], i))
+                for d in grid.get("document_ids") or ():
+                    for col in grid.get("columns") or ():
+                        c.execute(
+                            "INSERT INTO review_grid_cells (grid_id, tenant_id, "
+                            "document_id, column_name, state, reason) VALUES "
+                            "(%s,%s,%s,%s,'PENDING',%s) ON CONFLICT DO NOTHING",
+                            (gid, self.tenant_id, d, col["name"],
+                             "queued; this cell has not been run yet"))
+        except psycopg.errors.IntegrityError as exc:
+            raise StoreError(f"the database refused this grid: {type(exc).__name__} "
+                             f"{str(exc).splitlines()[0][:150]}") from None
+        return self.read_grid(gid) or {"grid_id": gid}
+
+    def read_grid(self, grid_id: str) -> dict | None:
+        if not _UUID.match(grid_id or ""):
+            return None
+        with self._conn() as c:
+            g = c.execute("SELECT grid_id, name, cancelled_at FROM review_grids "
+                          "WHERE grid_id = %s", (grid_id,)).fetchone()
+            if g is None:
+                return None
+            cols = c.execute("SELECT name, kind, question FROM review_grid_columns "
+                             "WHERE grid_id = %s ORDER BY ordinal", (grid_id,)).fetchall()
+            docs = c.execute("SELECT DISTINCT document_id FROM review_grid_cells "
+                             "WHERE grid_id = %s ORDER BY document_id",
+                             (grid_id,)).fetchall()
+        return {"grid_id": str(g[0]), "name": g[1],
+                "cancelled_at": g[2].isoformat() if g[2] else None,
+                "columns": [{"name": r[0], "kind": r[1], "question": r[2]} for r in cols],
+                "document_ids": [r[0] for r in docs]}
+
+    def read_grid_cells(self, grid_id: str) -> list[dict]:
+        if not _UUID.match(grid_id or ""):
+            return []
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT grid_id, document_id, column_name, state, value, quote, reason "
+                "FROM review_grid_cells WHERE grid_id = %s "
+                "ORDER BY document_id, column_name", (grid_id,)).fetchall()
+        return [{"grid_id": str(r[0]), "document_id": r[1], "column_name": r[2],
+                 "state": r[3], "value": r[4], "quote": r[5], "reason": r[6]}
+                for r in rows]
+
+    def write_grid_cell(self, cell: dict, *, if_pending: bool = True) -> bool:
+        import psycopg
+        where = " AND review_grid_cells.state = 'PENDING'" if if_pending else ""
+        try:
+            with self._conn() as c:
+                n = c.execute(
+                    "INSERT INTO review_grid_cells (grid_id, tenant_id, document_id, "
+                    "column_name, state, value, quote, reason, answered_at) VALUES "
+                    "(%s,%s,%s,%s,%s,%s,%s,%s,now()) "
+                    "ON CONFLICT (grid_id, document_id, column_name) DO UPDATE SET "
+                    "state = EXCLUDED.state, value = EXCLUDED.value, "
+                    "quote = EXCLUDED.quote, reason = EXCLUDED.reason, "
+                    "answered_at = now() WHERE TRUE" + where,
+                    (cell["grid_id"], self.tenant_id, cell["document_id"],
+                     cell["column_name"], cell["state"], cell.get("value") or "",
+                     cell.get("quote") or "", cell.get("reason") or "")).rowcount
+        except psycopg.errors.IntegrityError as exc:
+            raise StoreError(f"the database refused this cell: {type(exc).__name__} "
+                             f"{str(exc).splitlines()[0][:150]}") from None
+        return bool(n)
+
+    def cancel_grid(self, grid_id: str) -> bool:
+        if not _UUID.match(grid_id or ""):
+            return False
+        with self._conn() as c:
+            n = c.execute("UPDATE review_grids SET cancelled_at = now() "
+                          "WHERE grid_id = %s AND cancelled_at IS NULL",
+                          (grid_id,)).rowcount
+        return bool(n)
+
     def next_ordinal(self, conversation_id: str) -> int:
         if not _UUID.match(conversation_id or ""):
             return 0
@@ -1095,6 +1268,93 @@ def conformance(backend) -> list[tuple[bool, str]]:
         ck(False, "a message for a conversation that does not exist is refused")
     except Exception:
         ck(True, "a message for a conversation that does not exist is refused")
+
+    # ── H4: review grids, on BOTH backends ──────────────────────────────────
+    gid = str(_uuid.uuid4())
+    DOC_A, DOC_B = "a" * 64, "b" * 64
+    backend.write_grid({"grid_id": gid, "name": "NDA diligence",
+                        "columns": [{"name": "governing law", "kind": "text",
+                                     "question": "Which law governs?"},
+                                    {"name": "term end", "kind": "date",
+                                     "question": "When does it expire?"}],
+                        "document_ids": [DOC_A, DOC_B]})
+    g = backend.read_grid(gid)
+    ck(g is not None and g["name"] == "NDA diligence", "a grid is written and read back")
+    ck([c["name"] for c in g["columns"]] == ["governing law", "term end"],
+       "...with its columns IN ORDER, which is the order the CSV exports")
+    ck(sorted(g["document_ids"]) == sorted([DOC_A, DOC_B]), "...and its documents")
+    ck(backend.read_grid(str(_uuid.uuid4())) is None,
+       "...and an unknown grid reads as None, not an empty one")
+    cells = backend.read_grid_cells(gid)
+    ck(len(cells) == 4 and {c["state"] for c in cells} == {"PENDING"},
+       f"creating a grid materialises every cell as PENDING ({len(cells)}) -- a missing "
+       f"row and a PENDING one must not be the same thing")
+    ck(all(set(c) >= set(GRID_CELL_KEYS) for c in cells),
+       f"...and every cell has every key on both backends ({sorted(cells[0])})")
+
+    ok1 = backend.write_grid_cell({"grid_id": gid, "document_id": DOC_A,
+                                   "column_name": "governing law", "state": "FOUND",
+                                   "value": "India",
+                                   "quote": "governed by the laws of India"})
+    ck(ok1, "a PENDING cell is answered")
+    got = {(c["document_id"], c["column_name"]): c
+           for c in backend.read_grid_cells(gid)}
+    ck(got[(DOC_A, "governing law")]["state"] == "FOUND"
+       and got[(DOC_A, "governing law")]["quote"].endswith("India"),
+       "...and reads back with its value and quote")
+
+    # The exactly-once half that lives in code: a terminal cell is not overwritten.
+    again = backend.write_grid_cell({"grid_id": gid, "document_id": DOC_A,
+                                     "column_name": "governing law", "state": "NOT_FOUND",
+                                     "reason": "a resumed worker writing it a second time"})
+    ck(not again,
+       "a cell already in a TERMINAL state is NOT overwritten, and the attempt returns "
+       "False -- which is what makes a resumed worker harmless rather than destructive")
+    ck(backend.read_grid_cells(gid) and
+       {(c["document_id"], c["column_name"]): c
+        for c in backend.read_grid_cells(gid)}[(DOC_A, "governing law")]["state"]
+       == "FOUND",
+       "...and the first answer survives the second attempt")
+    forced = backend.write_grid_cell({"grid_id": gid, "document_id": DOC_A,
+                                      "column_name": "governing law", "state": "NOT_FOUND",
+                                      "reason": "a deliberate correction by a person"},
+                                     if_pending=False)
+    ck(forced, "...while if_pending=False overwrites, for a deliberate correction")
+
+    for bad, why in (
+        ({"grid_id": gid, "document_id": DOC_B, "column_name": "governing law",
+          "state": "FOUND", "value": "India", "quote": "short"},
+         "a FOUND cell whose quote is under 8 characters"),
+        ({"grid_id": gid, "document_id": DOC_B, "column_name": "governing law",
+          "state": "FOUND", "value": "", "quote": "governed by the laws of India"},
+         "a FOUND cell with no value"),
+        ({"grid_id": gid, "document_id": DOC_B, "column_name": "governing law",
+          "state": "NOT_FOUND", "value": "India", "reason": "a long enough reason"},
+         "a NOT_FOUND cell carrying a value"),
+        ({"grid_id": gid, "document_id": DOC_B, "column_name": "governing law",
+          "state": "NOT_FOUND", "reason": "no"},
+         "a NOT_FOUND cell whose reason is two characters"),
+    ):
+        try:
+            backend.write_grid_cell(dict(bad))
+            ck(False, f"{why} is refused")
+        except StoreError:
+            ck(True, f"refused: {why}")
+    try:
+        backend.write_grid_cell({"grid_id": str(_uuid.uuid4()), "document_id": DOC_A,
+                                 "column_name": "x", "state": "FOUND", "value": "v",
+                                 "quote": "a long enough quote"})
+        ck(False, "a cell for a grid that does not exist is refused")
+    except Exception:
+        ck(True, "a cell for a grid that does not exist is refused")
+
+    ck(backend.cancel_grid(gid), "a grid is cancelled")
+    ck(backend.read_grid(gid).get("cancelled_at"), "...and says so when read back")
+    ck(len(backend.read_grid_cells(gid)) == 4,
+       "**cancelling deletes nothing**: all four cells survive, because a lawyer who "
+       "cancels at cell 30 of 40 still wants the 29 answers")
+    ck(not backend.cancel_grid(str(_uuid.uuid4())),
+       "cancelling an unknown grid is False, not a silent success")
     return out
 
 
@@ -1149,7 +1409,9 @@ def _test() -> None:
     need = ("write_run", "read_run", "put_document", "get_document", "read", "write",
             "write_decision", "read_decisions", "write_cascade", "read_cascades",
             "write_conversation", "read_conversation", "list_conversations",
-            "append_message", "read_messages", "set_message_envelope", "next_ordinal")
+            "append_message", "read_messages", "set_message_envelope", "next_ordinal",
+            "write_grid", "read_grid", "read_grid_cells", "write_grid_cell",
+            "cancel_grid")
     for name in need:
         check(hasattr(MemoryBackend(), name)
               and hasattr(PostgresBackend("postgresql://x/y", tenant_id=T), name),
