@@ -65,6 +65,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `checker/doc_verification.py` |  | Document verification as separate dimensions, never as one verdict. |
 | `checker/document_date.py` |  | The date a document declares on its own face — or nothing, said plainly. |
 | `checker/document_extract.py` |  | Grounding an extractor's proposals in the document it claims to have read. |
+| `checker/draft_templates.py` |  | Two drafts, built from a run that already happened. The model may join sentences, not make them. |
 | `checker/draft_versions.py` |  | Every save is a version, and any two versions diff exactly. |
 | `checker/drafting.py` |  | Controlled drafting: a document assembled from typed slots, never written free-hand. |
 | `checker/entail_baseline.py` | R0 legal core | Deterministic entailment baseline. No model. |
@@ -331,4 +332,4 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/watch_gazette.py` |  | Run the Gazette watcher once: what did the Gazette publish since we last looked? |
 | `scripts/watch_ofac.py` |  | Poll OFAC's SDN list and report what CHANGED since the last trustworthy poll. |
 
-291 modules listed.
+292 modules listed.
