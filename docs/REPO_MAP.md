@@ -40,6 +40,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `checker/benchmark_versions.py` |  | Immutable benchmark versions, and the correction records between them. |
 | `checker/bundles.py` |  | Tool bundles: capabilities the system declares, and refuses to fake. |
 | `checker/buyer_sim.py` |  | Ten questions an Indian buyer asks that are hard to answer, run against the code. |
+| `checker/calibration.py` |  | Conformal thresholds per (task, body of law) — which change nothing until the labels exist. |
 | `checker/calibration_contract.py` |  | No number reaches a reader without a track record that earns it. |
 | `checker/cascade.py` | R0 legal core | The verifier cascade, in one importable place. |
 | `checker/chunk_fusion.py` |  | Dense + RRF fusion over STRUCTURAL CHUNKS — does the cross-section win transfer? |
@@ -285,6 +286,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/benchmark_refreeze_request.py` |  | What a benchmark re-freeze would change. Writes nothing; asks for a decision. |
 | `scripts/build_section_index.py` |  | Build the section_number -> section_id index for the Companies Act corpus. |
 | `scripts/cache_report.py` |  | The answer cache's hit rate, and what the number does not include. |
+| `scripts/calibration_report.py` |  | What the lawyer labels can and cannot support, per (task, body of law). |
 | `scripts/cascade_report.py` |  | What the cascade actually cost, from recorded runs. Never from an assumption. |
 | `scripts/check_deps.py` |  | Are the pinned dependencies importable? Exit 0 if yes. |
 | `scripts/check_doc_refs.py` |  | Every path an ACTIVE document cites must exist on disk. |
@@ -339,4 +341,4 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/watch_gazette.py` |  | Run the Gazette watcher once: what did the Gazette publish since we last looked? |
 | `scripts/watch_ofac.py` |  | Poll OFAC's SDN list and report what CHANGED since the last trustworthy poll. |
 
-299 modules listed.
+301 modules listed.

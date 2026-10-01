@@ -266,6 +266,11 @@ extra+=("checker/critic.py --test")
 # the seven honest, and the weekly report that will not drop the untagged.
 extra+=("checker/failure_tags.py --test")
 extra+=("scripts/failure_report.py --test")
+# CAL-1: conformal thresholds per (task, body) that change NOTHING below 100 labels,
+# and may never gate an answer -- C4 forbids a confidence reaching a legal decision.
+extra+=("checker/calibration.py --test")
+extra+=("scripts/calibration_report.py --test")
+
 
 
 
