@@ -3,6 +3,8 @@
 ## Product
 Placedon — an India-first legal intelligence and audit platform.
 
+**New here? Read [docs/START_HERE.md](docs/START_HERE.md) first** — what is built, how a request flows, which documents are current. Per-file index: [docs/REPO_MAP.md](docs/REPO_MAP.md) (generated).
+
 ## Current focus
 An **evidence-backed audit layer for Indian corporate documents**, across the whole of
 corporate-law compliance. Not a general legal chatbot. Not a foundation-model project.
