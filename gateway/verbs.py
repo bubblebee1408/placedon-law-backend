@@ -940,6 +940,44 @@ TASK_INTENT: dict[str, str] = {
 }
 
 
+# Job 3. Which prior turn a draft can be built from, and which template builds it.
+# A task not in here cannot be a draft's source: there is no template for a review table,
+# and inventing one would mean writing the law into it from somewhere else.
+DRAFT_SOURCE_TASK: dict[str, str] = {"REVIEW_CONTRACT": "client_email",
+                                     "RESEARCH_QUESTION": "research_memo"}
+
+
+def _draft_source(cid: str, ctx: Context):
+    """(template, the source run's result, run_id) for the newest turn in this thread a
+    draft can be built from, or (None, None, None).
+
+    "Draft an email to the client about this review" means THIS review -- the last one in
+    this thread. Nothing is inferred from the user's words beyond the task they already
+    ran, because a draft built from the wrong contract is worse than no draft.
+    """
+    for msg in reversed(ctx.store.read_messages(cid) or ()):
+        if str(msg.get("role") or "") != "assistant":
+            continue
+        template = DRAFT_SOURCE_TASK.get(str(msg.get("task") or ""))
+        run_id = str(msg.get("run_id") or "")
+        if not template or not run_id:
+            continue
+        run = ctx.store.read_run(run_id) or {}
+        result = run.get("result")
+        if not isinstance(result, dict):
+            # The run exists and has no stored result -- still running, or it failed. Keep
+            # looking back: a half-finished run is not a source, and treating it as one
+            # would draft from nothing and call it a summary.
+            continue
+        if not result.get("question"):
+            # `ask` returns the answer, not the question. The run's own arguments hold it,
+            # and a memo that cannot say what was asked is a memo nobody can check.
+            result = dict(result,
+                          question=str((run.get("args") or {}).get("question") or ""))
+        return template, result, run_id
+    return None, None, None
+
+
 def _today(ctx: Context) -> str:
     if ctx.clock is not None:
         return str(ctx.clock())[:10]
@@ -1119,8 +1157,17 @@ def _envelope_for(task: str, result: dict, *, as_of: str, run_id=None,
             f"Draft {result['draft_id']} created at version {result.get('version')}. "
             f"{len(result.get('blocking') or [])} slot(s) block approval"
             + (f": {', '.join(result['blocking'])}. " if result.get('blocking') else ". ")
-            + "Nothing has been drafted for you: this engine does not write legal prose "
-              "unprompted. Fill the slots with draft.revise."))
+            + (f"Built from run {result['drafted_from']} with the "
+               f"{result.get('template')} template: every statement of law in it is a "
+               f"quote from that run's citations, and the model's connecting prose is a "
+               f"MODEL_SUGGESTION that blocks approval until a person accepts or edits "
+               f"it. " if result.get("drafted_from") else
+               "Nothing has been drafted for you: this engine does not write legal prose "
+               "unprompted. Fill the slots with draft.revise.")
+            + (f"{len(result['dropped_claims'])} sentence(s) the model wrote were DROPPED "
+               f"because they state something about the law with no citation behind it; "
+               f"they are in dropped_claims and are in no version of this draft."
+               if result.get("dropped_claims") else "")))
     citations, dropped = _citations_for(task, result)
     text = (result.get("answer") or result.get("detail")
             or result.get("note") or "See the findings.")
@@ -1260,6 +1307,32 @@ def _citations_for(task: str, result: dict) -> tuple[list, list]:
     return ev.drop_unquoted(raw, verify=lambda c: verify_citation(c)[0])
 
 
+def _persist_result(ctx: Context, result: dict) -> None:
+    """Record on the run what it produced, so a later turn can read it back.
+
+    `_persist_run` writes the run, its steps and its propositions and **not its result**,
+    so an inline-served run was stored as `status=ANSWERED, result=NULL` -- a row claiming
+    an answer exists while keeping nothing of it. A worker-served run does store one
+    (`gateway/worker.py`), so the same intent remembered different amounts depending on
+    which path ran it. Job 3 needs it because a draft is built FROM a run that already
+    happened, and the queued and inline paths must offer the draft the same thing.
+
+    The status is read back and written unchanged: this records a result, it never decides
+    one.
+    """
+    if ctx.store is None:
+        return
+    run_id = str(result.get("run_id") or "")
+    if not run_id:
+        return
+    row = ctx.store.read_run(run_id)
+    if row is None or row.get("result") is not None:
+        return
+    ctx.store.set_run(run_id, status=str(row.get("status") or "ANSWERED"),
+                      refusal_code=row.get("refusal_code"),
+                      result={k: v for k, v in result.items() if k != "run_id"})
+
+
 def _conversation_send(args: dict, ctx: Context) -> dict:
     """One turn: classify, dispatch, store, and return the envelope or a run_id.
 
@@ -1397,7 +1470,19 @@ def _conversation_send(args: dict, ctx: Context) -> dict:
 
     # 4c. short enough to answer now.
     verb = by_name()[verb_name]
-    result = verb.run(_task_args(task, text, raw_ids, ctx, args), ctx)
+    built = None
+    if task == "DRAFT":
+        template, source, source_run = _draft_source(cid, ctx)
+        if template:
+            from checker import draft_templates
+            prose = args.get("prose")
+            built = draft_templates.build(
+                template, source, prose=prose if isinstance(prose, list) else ())
+    result = verb.run(_task_args(task, text, raw_ids, ctx, args, built=built), ctx)
+    _persist_result(ctx, result)
+    if built is not None and result.get("status") != "REFUSED":
+        result = dict(result, drafted_from=source_run, template=built.kind,
+                      dropped_claims=[dict(d) for d in built.dropped])
     env = _envelope_for(task, result, as_of=as_of, run_id=result.get("run_id"),
                         files=files, ctx=ctx, question=text)
     store.append_message({"message_id": reply_id, "conversation_id": cid,
@@ -1410,12 +1495,19 @@ def _conversation_send(args: dict, ctx: Context) -> dict:
     if task == "DRAFT" and result.get("draft_id"):
         out["draft_id"] = result["draft_id"]
         out["version"] = result.get("version")
+        if built is not None:
+            # A drop is a fact about this reply, so it travels as a field and not only as
+            # a sentence a client may not render.
+            out["drafted_from"] = source_run
+            out["template"] = built.kind
+            out["dropped_claims"] = [dict(d) for d in built.dropped]
     if task == "REVIEW_TABLE" and result.get("grid_id"):
         out["grid_id"] = result["grid_id"]
     return out
 
 
-def _task_args(task: str, text: str, file_ids, ctx: Context, args: dict) -> dict:
+def _task_args(task: str, text: str, file_ids, ctx: Context, args: dict,
+               *, built=None) -> dict:
     """The arguments the target verb takes. One place, so a task cannot be dispatched with
     a field the verb does not declare."""
     doc = ""
@@ -1438,10 +1530,18 @@ def _task_args(task: str, text: str, file_ids, ctx: Context, args: dict) -> dict
                 "columns": [{"name": "answer", "kind": "text",
                              "question": text.strip() or "What does this document say?"}]}
     if task == "DRAFT":
-        # The conversation's words become the TITLE, and the body starts empty with an
-        # UNKNOWN slot: a draft this engine invented prose for would be a MODEL_SUGGESTION
-        # document, and `provenance_slots` exists to stop that reaching a filing. The user
-        # fills the slots through draft.revise.
+        if built is not None:
+            # Built from a run that already happened, by `checker/draft_templates.py`:
+            # every statement of law in it is a quote from that run's citations, and the
+            # model's connecting prose is MODEL_SUGGESTION, which blocks approval.
+            return {"title": built.title, "body": built.body,
+                    "slots": [s.to_dict() for s in built.slots],
+                    "citations": list(built.citations),
+                    "kind": args.get("kind") or built.kind}
+        # No prior run to draft from. The conversation's words become the TITLE, and the
+        # body starts empty with an UNKNOWN slot: a draft this engine invented prose for
+        # would be a MODEL_SUGGESTION document, and `provenance_slots` exists to stop that
+        # reaching a filing. The user fills the slots through draft.revise.
         return {"title": (text.strip()[:80] or "Draft"),
                 "body": "",
                 "slots": [{"name": "body", "value": "", "type": "UNKNOWN",
@@ -2350,7 +2450,12 @@ VERBS: tuple[Verb, ...] = (
           Field("facts", OBJECT, False, describes="event facts"),
           Field("test_data", STRING, False,
                 describes="set when a contract is a fixture, not a client document "
-                          "(PLAN_22 D3)")),
+                          "(PLAN_22 D3)"),
+          Field("prose", ARRAY, False,
+                describes="connecting sentences for a DRAFT, as [{text, citation_ids}]. "
+                          "Each is stored as a MODEL_SUGGESTION and blocks approval; one "
+                          "that states something about the law without a citation this "
+                          "run holds is DROPPED and reported in dropped_claims")),
          "POST", read_only=False, run=_conversation_send),
 
     Verb("conversation.list", "Every conversation for this tenant, newest first.",
@@ -3010,6 +3115,82 @@ def _test() -> None:
           f"a citation naming a section the corpus does not hold fails ({_why3[:46]})")
     check(verify_citation(dict(_c1, provision=""))[0] is False,
           "...and one naming no provision has nothing to re-read")
+
+    # ══ job 3: a draft built from a run, and a fabricated claim dropped ═════
+    # End to end on the same context: ask, then draft from the answer. Nothing hand-built
+    # -- the memo reads the run `conversation.send` really stored.
+    _dcid = _cr["conversation_id"]
+    _tmpl, _src, _srid = _draft_source(_dcid, _cctx2)
+    check(_tmpl == "research_memo" and _srid == _cr["run_id"],
+          f"a RESEARCH_QUESTION turn is a memo's source run ({_tmpl}/{_srid})")
+    check(_src.get("question") == _q,
+          "...and the question comes from the run's own arguments, because `ask` returns "
+          "the answer and not the question")
+    check((_cctx2.store.read_run(_srid) or {}).get("result") is not None,
+          "...which is readable only because an inline run now STORES its result -- it "
+          "was status=ANSWERED with result=NULL, a row claiming an answer and keeping "
+          "none of it")
+    _fake = ("Section 42 of the Companies Act requires a special resolution for every "
+             "allotment of shares.")
+    _dr = by_name()["conversation.send"].run(
+        {"conversation_id": _dcid, "text": "Draft a memo for the file about this.",
+         "prose": [{"text": "This note records the position for the file.",
+                    "citation_ids": []},
+                   {"text": _fake, "citation_ids": []}]}, _cctx2)
+    check(_dr["envelope"]["task"] == "DRAFT" and bool(_dr.get("draft_id")),
+          f"...the next turn is a DRAFT and a draft exists ({_dr['envelope']['task']})")
+    check(_dr.get("template") == "research_memo" and _dr.get("drafted_from") == _srid,
+          f"...built from that run, with the template named ({_dr.get('template')})")
+    check(len(_dr.get("dropped_claims") or []) == 1,
+          f"THE FABRICATED LEGAL CLAIM IS DROPPED end to end "
+          f"({len(_dr.get('dropped_claims') or [])} dropped)")
+    _ver = by_name()["draft.versions"].run({"draft_id": _dr["draft_id"]}, _cctx2)
+    _v1 = _ver["versions"][0]
+    check(_fake not in _v1["body"] and
+          all(_fake not in (sl.get("value") or "") for sl in _v1["slots"]),
+          "...and it is in NO part of the stored version -- not the body, not a slot")
+    check(_c1["quote"] in _v1["body"],
+          "...while the law in the memo is the run's own citation, quoted verbatim")
+    _dstat = by_name()["draft.status"].run({"draft_id": _dr["draft_id"]}, _cctx2)
+    check(any(sl["type"] == "MODEL_SUGGESTION" and sl["blocks_approval"]
+              for sl in _v1["slots"]) and len(_dstat.get("blocking") or []) >= 1,
+          f"...the connecting sentence is a MODEL_SUGGESTION and BLOCKS approval "
+          f"({_dstat.get('blocking')})")
+    check(_dstat.get("ready_for_approval") is False,
+          "...so the draft is NOT ready for approval until a person accepts or edits it")
+    check(any("DROPPED" in b["text"] for b in _dr["envelope"]["text_blocks"]),
+          "...and the drop is STATED in the reply, not left in a field a client may not "
+          "render")
+    check(_ev.errors(_dr["envelope"]) == [], "...and that envelope validates")
+
+    # The email template, from a real review_contract run in the same thread.
+    _ectx = Context(store=_MB(), clock=lambda: "2026-10-01T00:00:00+00:00")
+    _rc = by_name()["conversation.send"].run(
+        {"text": "Please review this contract against our standard.",
+         "task_override": "REVIEW_CONTRACT", "test_data": "fixture"}, _ectx)
+    _ecid = _rc["conversation_id"]
+    _et, _es, _erid = _draft_source(_ecid, _ectx)
+    if _et is None:
+        check(False, f"a REVIEW_CONTRACT turn is an email's source run "
+                     f"(got none; run={_rc.get('run_id')})")
+    else:
+        check(_et == "client_email", f"a REVIEW_CONTRACT turn is an email's source ({_et})")
+        _er = by_name()["conversation.send"].run(
+            {"conversation_id": _ecid,
+             "text": "draft an email to the client about this review",
+             "prose": [{"text": "Clause 4 is void for want of consideration.",
+                        "citation_ids": []}]}, _ectx)
+        check(_er["envelope"]["task"] == "DRAFT" and _er.get("template") == "client_email",
+              f"...and the user's own words reach the email template "
+              f"({_er['envelope']['task']}/{_er.get('template')})")
+        check(len(_er.get("dropped_claims") or []) == 1,
+              "...where an uncited 'is void' claim is dropped by the same rule")
+        _ev1 = by_name()["draft.versions"].run(
+            {"draft_id": _er["draft_id"]}, _ectx)["versions"][0]
+        check(not any(sl["type"] == "SOURCE_QUOTE" for sl in _ev1["slots"]),
+              "...and the email states NO law, because a contract review holds none")
+        check("not statements of law" in _ev1["body"],
+              "...and says so in the stored body, where a forward carries it")
 
     # ── citation.get re-reads; it does not trust the stored envelope ────────
     _cg = by_name()["citation.get"].run(
