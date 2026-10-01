@@ -59,6 +59,7 @@
     "checker/doc_verification.py": 25,
     "checker/document_date.py": 28,
     "checker/document_extract.py": 39,
+    "checker/draft_versions.py": 46,
     "checker/drafting.py": 15,
     "checker/entail_baseline.py": 23,
     "checker/entail_binding.py": 26,
