@@ -117,7 +117,14 @@ LAST_RUN: str | None = (
     "questions their lawyer thought worth asking, and a quote from each. All three are "
     "proved the way the other twelve are -- A sees its own and none of B's; the policy "
     "dropped fails CLOSED; RLS disabled LEAKS, which is what shows the check measures the "
-    "protection; restoring returns to isolation.")
+    "protection; restoring returns to isolation. "
+    "2026-10-01, H3: 001-012 applied TOGETHER to a fresh throwaway database on PostgreSQL "
+    "18.6, asserted as placedon_app (NOSUPERUSER, NOBYPASSRLS), adding 012_drafts. "
+    "`drafts` and `draft_versions` are the SIXTEENTH and SEVENTEENTH tenant-scoped tables: "
+    "a draft version holds what another company was about to FILE and the name of the "
+    "person who signed it off. Both are proved the way the others are, and the database "
+    "additionally REFUSES a version recorded as approved while blocking_count > 0, which "
+    "is the row that matters most.")
 
 TENANT_TABLES = ("actors", "api_keys", "documents", "audit_log",
                  "runs", "run_steps", "propositions", "decisions", "jobs",
@@ -131,7 +138,10 @@ TENANT_TABLES = ("actors", "api_keys", "documents", "audit_log",
                  # H4's review grids. A diligence grid is forty of another firm's
                  # contracts, the questions their lawyer thought worth asking, and a quote
                  # from each -- the most concentrated client data in the schema.
-                 "review_grids", "review_grid_columns", "review_grid_cells")
+                 "review_grids", "review_grid_columns", "review_grid_cells",
+                 # H3's drafts. A draft version holds what a company was about to FILE,
+                 # and who stood behind it.
+                 "drafts", "draft_versions")
 
 
 class RlsFailure(AssertionError):
@@ -263,6 +273,25 @@ def _seed(cur, tenant, actor, tag: str) -> None:
                  "INR 50,00,000",
                  f"{tag}: aggregate liability shall not exceed INR 50,00,000"))
 
+    # A draft and two versions: one blocked, one approved. The leak would carry what
+    # another company was about to file and the name of the person who signed it off.
+    draft = uuid.uuid4()
+    cur.execute("INSERT INTO drafts (draft_id, tenant_id, actor_id, kind, title) "
+                "VALUES (%s,%s,%s,'agm_notice',%s)",
+                (draft, tenant, actor, f"{tag}: notice of annual general meeting"))
+    cur.execute("INSERT INTO draft_versions (draft_id, tenant_id, version, title, body, "
+                "slots, blocking_count) VALUES (%s,%s,1,%s,%s,%s,1)",
+                (draft, tenant, f"{tag}: AGM notice",
+                 f"{tag}: Notice is hereby given.",
+                 json.dumps([{"name": "venue", "type": "MODEL_SUGGESTION"}])))
+    cur.execute("INSERT INTO draft_versions (draft_id, tenant_id, version, title, body, "
+                "slots, blocking_count, approved_by, approved_at) "
+                "VALUES (%s,%s,2,%s,%s,%s,0,%s,now())",
+                (draft, tenant, f"{tag}: AGM notice",
+                 f"{tag}: Notice is hereby given to the members.",
+                 json.dumps([{"name": "venue", "type": "USER_FACT"}]),
+                 f"{tag} reviewer"))
+
     # A queued job. This is the row whose leak would be worst OPERATIONALLY: a worker that
     # could see another tenant's job would execute another firm's document.
     cur.execute("INSERT INTO jobs (job_id, run_id, tenant_id, actor_id, intent, args) "
@@ -359,7 +388,7 @@ def run(url: str) -> int:
                   "004_cost_note.sql", "005_decisions.sql", "006_jobs.sql",
                   "007_cascade.sql", "008_decision_evidence.sql",
                   "009_source_documents.sql", "010_conversations.sql",
-                  "011_review_grids.sql"):
+                  "011_review_grids.sql", "012_drafts.sql"):
             cur.execute(sql(f))
             print(f"  applied {f}")
         _ensure_app_role(cur)

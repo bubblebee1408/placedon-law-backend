@@ -122,8 +122,35 @@ def _test() -> None:
                     "004_cost_note.sql", "005_decisions.sql", "006_jobs.sql",
                     "007_cascade.sql", "008_decision_evidence.sql",
                     "009_source_documents.sql", "010_conversations.sql",
-                    "011_review_grids.sql"],
+                    "011_review_grids.sql", "012_drafts.sql"],
           f"every migration exists, in order ({files})")
+
+    # 012: H3's drafts. The CHECK that matters is the one the derivation cannot see.
+    draft_sql = (MIGRATIONS / "012_drafts.sql").read_text(encoding="utf-8")
+    for tbl in ("drafts", "draft_versions"):
+        check(f"CREATE TABLE IF NOT EXISTS {tbl}" in draft_sql,
+              f"012 creates {tbl}, idempotently")
+        check(tbl in tenant_scoped() and declares("FORCE", tbl, draft_sql),
+              f"...and {tbl} is tenant-scoped and FORCE-bound")
+    check("PRIMARY KEY (draft_id, version)" in draft_sql,
+          "a version's PRIMARY KEY is (draft, version), so two concurrent saves cannot "
+          "both become version 3 -- one conflicts and the caller is told rather than "
+          "silently overwriting a colleague's revision")
+    check("draft_versions_no_approval_while_blocked" in draft_sql
+          and "approved_by IS NULL OR blocking_count = 0" in draft_sql,
+          "...and a version CANNOT be stored as approved while any slot blocks approval: "
+          "checker/draft_versions refuses to construct it, and the database refuses to "
+          "store it, because a second writer reaches the table and not the API")
+    check("draft_versions_approval_paired" in draft_sql,
+          "...an approval carries both a reviewer and a time, or neither")
+    check("draft_versions_reviewer_named" in draft_sql,
+          "...and an unattributed approval is refused")
+    check("draft_versions_slots_array" in draft_sql,
+          "...slots is a jsonb ARRAY and NOT NULL: '[]' is an empty template, NULL would "
+          "mean we did not record where anything came from")
+    check("provenance_slots.blocking_slots()" in draft_sql,
+          "...and the comment says where blocking_count comes from, so the denormalised "
+          "count cannot drift from the function that gates approval")
 
     # 011: H4's review grids. What the derivation cannot see is the CHECKs, and the one
     # that matters most is that the PRIMARY KEY is the idempotency key.
@@ -243,7 +270,8 @@ def _test() -> None:
     check({"tenants", "actors", "api_keys", "documents", "audit_log",
            "runs", "run_steps", "propositions", "decisions", "jobs",
            "cascade_runs", "source_documents", "conversations", "messages",
-           "review_grids", "review_grid_columns", "review_grid_cells"} <= set(t),
+           "review_grids", "review_grid_columns", "review_grid_cells",
+           "drafts", "draft_versions"} <= set(t),
           f"every table the gateway needs is declared ({sorted(t)})")
 
     scoped = tenant_scoped()
@@ -257,7 +285,8 @@ def _test() -> None:
     check(scoped == {"actors", "api_keys", "documents", "audit_log", "runs", "run_steps",
                      "propositions", "decisions", "jobs", "cascade_runs",
                      "conversations", "messages",
-                     "review_grids", "review_grid_columns", "review_grid_cells"},
+                     "review_grids", "review_grid_columns", "review_grid_cells",
+                     "drafts", "draft_versions"},
           f"every other table is tenant-scoped, DERIVED from having a tenant_id ({sorted(scoped)})")
 
     # ── the check this module exists for ────────────────────────────────────

@@ -210,7 +210,7 @@
     "gateway/cli.py": 76,
     "gateway/envelope.py": 62,
     "gateway/jobs.py": 28,
-    "gateway/schema.py": 73,
+    "gateway/schema.py": 85,
     "gateway/store.py": 126,
     "gateway/verbs.py": 290,
     "gateway/worker.py": 29,
