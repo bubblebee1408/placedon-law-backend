@@ -458,7 +458,24 @@ def fetch_rules(origin: str, *, timeout: float = 15.0) -> Rules:
 # is the RFC's letter and the wrong verdict. Measured 2026-09-17: bseindia.com
 # answers its robots.txt with an Akamai "Access Denied" 403, which the old rule read
 # as full permission.
-_DENIED = (401, 403, 407, 429)
+#
+# **418 joined the list on 2026-09-30, and it was measured, not guessed.**
+# `www.rbi.org.in/robots.txt` answers HTTP 418 with a `text/html` body titled
+# "Unauthorised Access": "You are not authorized to view this page. Please contact
+# concerned Support Team. Support ID: 679480896998159213". RFC 2324's teapot has become
+# the status WAFs use to refuse a client they will not name a reason for, and the RFC
+# 9309 "all 4xx are unavailable" reading turned that refusal into consent: RBI came back
+# `loaded=True` with zero rules, which `allowed()` reads as permission over every path.
+# The same fail-open as BSE, two weeks later, on a site whose own disclaimer says
+# "caching and links to, and the framing of this Web Site or any of the contents are
+# prohibited" -- so the guard was granting what the terms refuse.
+#
+# Why not the broader rule "any 4xx serving HTML is a refusal page": it was tried against
+# the measurements and it is WRONG. egazette.gov.in answers 404 with 1,245 bytes of IIS
+# `text/html` ("404 - File or directory not found."), and that is a genuine absence on a
+# permitted source the docstring below names. A body-shape heuristic would have locked out
+# the Gazette to catch RBI. Naming the status is narrower and provably right on both.
+_DENIED = (401, 403, 407, 418, 429)
 
 
 def rules_for_status(code: int, url: str) -> Rules:
@@ -630,6 +647,18 @@ def _test() -> None:
               f"...and the {code} refusal says why")
     check(not rules_for_status(429, u).loaded, "429 rate-limited is not an answer about rules -> closed")
     check(not rules_for_status(503, u).loaded, "5xx is not an answer -> closed")
+
+    # 418, measured on www.rbi.org.in 2026-09-30: HTTP 418 with a text/html body titled
+    # "Unauthorised Access", reading "You are not authorized to view this page. Please
+    # contact concerned Support Team. Support ID: 679480896998159213". That is a WAF
+    # saying no. The old rule put every 4xx except _DENIED into "no rules published",
+    # so RBI's refusal came back loaded=True with zero rules -- FULL PERMISSION over a
+    # site whose own disclaimer prohibits caching. Same shape as the BSE 403 above.
+    r418 = rules_for_status(418, u)
+    check(not r418.loaded and not allowed("https://www.rbi.org.in/Scripts/x.aspx", r418),
+          "418: a WAF refusal dressed as a joke status is a block, not an absence -> closed")
+    check("HTTP 418" in r418.source and "denied" in r418.source,
+          "...and the 418 refusal says why")
 
     r404 = Rules(loaded=True, source="HTTP 404: no rules published")
     check(allowed("https://cca.gov.in/anything", r404),

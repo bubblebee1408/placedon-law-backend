@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://placedon.com/schemas/answer_envelope.v1.json",
+  "title": "answer_envelope.v1",
+  "description": "One reply from the conversation layer. VERSIONED IN ITS FILENAME: v2 is a new file, never an edit to this one, because a stored message is rendered again months later and a schema edited in place would silently re-interpret it. FAILED is a transport outcome and is never rendered as a refusal.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "status", "task", "as_of", "text_blocks", "bodies", "citations", "files"],
+  "properties": {
+    "schema": {"const": "answer_envelope.v1"},
+    "status": {
+      "enum": ["ANSWERED", "PARTIAL", "NEEDS_LAWYER", "ABSTAINED", "NEEDS_CLARIFICATION", "FAILED"],
+      "description": "ANSWERED: every engaged body answered. PARTIAL: some answered, some not held. NEEDS_LAWYER: a person must decide. ABSTAINED: we read and declined to answer. NEEDS_CLARIFICATION: intake could not tell what was asked. FAILED: the attempt broke -- TRANSPORT ONLY, never a statement about the law."
+    },
+    "task": {
+      "enum": ["RESEARCH_QUESTION", "REVIEW_CONTRACT", "REVIEW_DOCUMENT", "COMPANY_STANDING", "LAW_CHANGES", "EVENT_ASSESS", "NEEDS_CLARIFICATION"],
+      "description": "The task intake named. NEEDS_CLARIFICATION appears here too, because the envelope must be able to say 'no task was chosen' without inventing one."
+    },
+    "as_of": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+      "description": "The date the law was read as at. Always present: an answer with no date is an answer about no particular law."
+    },
+    "text_blocks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["text", "citation_ids"],
+        "properties": {
+          "text": {"type": "string", "minLength": 1},
+          "citation_ids": {"type": "array", "items": {"type": "string", "minLength": 1}}
+        }
+      }
+    },
+    "bodies": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["body_id", "name", "status", "note"],
+        "properties": {
+          "body_id": {"type": "string", "minLength": 1},
+          "name": {"type": "string", "minLength": 1},
+          "status": {
+            "enum": ["ANSWERED", "NOT_HELD", "CURRENT_ONLY", "NEED_FACT", "NOT_ENGAGED"],
+            "description": "ANSWERED: obligations decided against held text. NOT_HELD: declared, and the refusal is named. CURRENT_ONLY: today's text held, no history, so no dated answer. NEED_FACT: engaged, and a fact is missing before it can even be classified. NOT_ENGAGED: considered and not engaged."
+          },
+          "note": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "citations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "instrument", "provision", "source", "fetched_at", "sha256", "quote"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "instrument": {"type": "string", "minLength": 1},
+          "provision": {"type": "string", "minLength": 1},
+          "in_force_from": {"type": ["string", "null"], "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
+          "source": {"type": "string", "minLength": 1},
+          "fetched_at": {"type": "string", "minLength": 1},
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "quote": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The verbatim span. A citation whose quote does not byte-match its source is DROPPED before it reaches here -- see gateway/envelope.py."
+          }
+        }
+      }
+    },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["file_id", "name", "state"],
+        "properties": {
+          "file_id": {"type": "string", "minLength": 1},
+          "name": {"type": "string", "minLength": 1},
+          "state": {
+            "enum": ["READING", "READ", "CANNOT_READ"],
+            "description": "CANNOT_READ must carry a reason. 'We could not read this page' and 'this document says nothing' are different answers and must never render the same."
+          },
+          "pages": {"type": ["integer", "null"], "minimum": 0},
+          "reason": {"type": ["string", "null"]}
+        }
+      }
+    },
+    "run_id": {"type": ["string", "null"]},
+    "trace_url": {"type": ["string", "null"]}
+  }
+}

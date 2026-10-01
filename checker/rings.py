@@ -201,6 +201,14 @@ PACKAGE_RINGS: dict[str, int] = {
     # remembered to register still cannot be read by a decider. It may CALL a Ring 0
     # decider (propagate.py takes one as a callable); it may never be imported BY one.
     "checker.forecast": RING_3,
+    # External sources: search and fetch over Indian case law, regulators and registries
+    # (PLAN_24). Ring 2 for the reason checker.feeds is -- it is an I/O surface over other
+    # people's servers, and a Ring 0 decider must never import it. That is the firewall
+    # doing the work the tier rule describes: the only tier that can make a claim VERIFIED
+    # is HELD, our own hash-stamped corpus, and a decider that could reach
+    # checker.sources.indiankanoon could rest a legal conclusion on a judgment nobody
+    # ingested. By PACKAGE, so a connector nobody remembered to register is still fenced.
+    "checker.sources": RING_2,
 }
 
 

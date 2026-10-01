@@ -35,7 +35,10 @@ LIVE_CHECK = ROOT / "scripts" / "rls_integration.py"
 # Tables that hold no tenant data and are therefore not tenant-scoped. Listed explicitly,
 # because "it has no tenant_id" must be a decision someone wrote down rather than an
 # omission nobody noticed.
-NOT_TENANT_SCOPED = frozenset({"tenants"})
+# `source_documents` (009) is public fetched material -- one SEBI circular, one row, shared
+# across tenants on purpose (PLAN_24 §4). What keeps a client contract out of it is the
+# tier CHECK in the migration, which admits only OFFICIAL_LIVE, LICENSED and COMPANY_FACT.
+NOT_TENANT_SCOPED = frozenset({"tenants", "source_documents"})
 
 
 def migrations() -> tuple[Path, ...]:
@@ -117,8 +120,77 @@ def _test() -> None:
     files = [p.name for p in migrations()]
     check(files == ["001_core.sql", "002_runs.sql", "003_step_provenance.sql",
                     "004_cost_note.sql", "005_decisions.sql", "006_jobs.sql",
-                    "007_cascade.sql", "008_decision_evidence.sql"],
+                    "007_cascade.sql", "008_decision_evidence.sql",
+                    "009_source_documents.sql", "010_conversations.sql"],
           f"every migration exists, in order ({files})")
+
+    # 010: the chat layer. Both tables carry a tenant_id, so `tenant_scoped()` picks them
+    # up automatically and the RLS checks below cover them without a list being edited --
+    # which is the property that file was built for. What is asserted here is what the
+    # derivation cannot see: the CHECKs, and the two nullable columns whose NULL means
+    # something specific.
+    conv_sql = (MIGRATIONS / "010_conversations.sql").read_text(encoding="utf-8")
+    for tbl in ("conversations", "messages"):
+        check(f"CREATE TABLE IF NOT EXISTS {tbl}" in conv_sql,
+              f"010 creates {tbl}, idempotently")
+        check(tbl in tenant_scoped(), f"...and {tbl} is tenant-scoped, DERIVED")
+    # The CHECK clause, not the file: the first version of this grepped the whole text for
+    # "'system'" and fired on the migration's own comment explaining why there is none.
+    # Second time that mistake has been made here (see the 009 RLS check above), so this
+    # one reads the constraint.
+    role_check = re.search(r"role\s+text\s+NOT NULL CHECK \((.*?)\)", conv_sql)
+    check(role_check is not None and "'user'" in role_check.group(1)
+          and "'assistant'" in role_check.group(1)
+          and "'system'" not in role_check.group(1),
+          f"messages.role admits user and assistant ONLY ({role_check.group(1) if role_check else None!r})"
+          f" -- a system prompt is not a message in a conversation, and storing it here "
+          f"would put untrusted document text and our own instructions in one column with "
+          f"a flag to tell them apart")
+    check("messages_user_has_no_envelope" in conv_sql
+          and "messages_assistant_has_no_files" in conv_sql,
+          "...a user message carries no envelope and an assistant message no file_ids, "
+          "checked by the DATABASE because a second writer reaches the table not the API")
+    check("messages_envelope_object" in conv_sql and "jsonb_typeof(envelope) = 'object'"
+          in conv_sql,
+          "...an envelope is an object, never a list or a bare string")
+    check("messages_ordinal_unique" in conv_sql,
+          "...and one ordinal per conversation: the order a thread is read in is not "
+          "something the application may get wrong twice")
+    check("ON DELETE SET NULL" in conv_sql,
+          "messages.run_id is ON DELETE SET NULL, not CASCADE: deleting a run must not "
+          "delete the conversation that asked for it")
+    check("envelope        jsonb," in conv_sql and "NOT NULL" not in
+          conv_sql.split("envelope        jsonb")[1].split("\n")[0],
+          "...and envelope is NULLABLE, because NULL means the reply has not arrived and "
+          "'{}' would claim an empty answer")
+
+    # 009 is the one table in this schema that is NOT tenant-scoped, so what keeps a
+    # client contract out of it is a CHECK rather than a policy. Asserted statically
+    # because the live check cannot run in the gate (see this module's docstring).
+    src_sql = (MIGRATIONS / "009_source_documents.sql").read_text(encoding="utf-8")
+    check("CREATE TABLE IF NOT EXISTS source_documents" in src_sql,
+          "009 creates source_documents, idempotently")
+    check("'OFFICIAL_LIVE', 'LICENSED', 'COMPANY_FACT'" in src_sql
+          and "'CLIENT'" not in src_sql.split("CONSTRAINT")[0],
+          "...and its tier CHECK admits only the three PUBLIC tiers -- CLIENT is refused "
+          "by the schema, because a client contract in a cross-tenant table is the worst "
+          "bug this file could ship")
+    check(not declares("ENABLE", "source_documents", src_sql)
+          and not declares("FORCE", "source_documents", src_sql),
+          "...it is deliberately NOT RLS-bound: public material is shared on purpose, and "
+          "the tier CHECK is what makes that safe. Asked of the SQL via declares(), not of "
+          "the prose -- the first version of this check grepped for the phrase and fired on "
+          "the file's own comment explaining the decision")
+    check("terms_basis_quoted" in src_sql and "length(btrim(terms_basis)) >= 20" in src_sql,
+          "...a row must carry the CLAUSE that permitted it, in words, not a boolean")
+    check("attribution_when_required" in src_sql,
+          "...and attribution is NOT NULL exactly where the terms demand it")
+    check("bytea" in src_sql and " text" in src_sql,
+          "...the material is BYTEA: a Gazette PDF decoded as text became mojibake that "
+          "looked like a short document")
+    check("may_cache" in src_sql,
+          "...and the file says nothing may be written yet, pointing at the function that "
+          "decides it rather than restating a verdict that can drift")
     step_sql = (MIGRATIONS / "003_step_provenance.sql").read_text(encoding="utf-8")
     for col in ("provider", "region", "cost_inr"):
         check(f"ADD COLUMN IF NOT EXISTS {col}" in step_sql,
@@ -138,15 +210,20 @@ def _test() -> None:
     t = tables()
     check({"tenants", "actors", "api_keys", "documents", "audit_log",
            "runs", "run_steps", "propositions", "decisions", "jobs",
-           "cascade_runs"} <= set(t),
+           "cascade_runs", "source_documents", "conversations", "messages"} <= set(t),
           f"every table the gateway needs is declared ({sorted(t)})")
 
     scoped = tenant_scoped()
     check("tenants" not in scoped,
           "the tenants table is not tenant-scoped, and that is written down rather than "
           "inferred from a missing column")
+    check("source_documents" in NOT_TENANT_SCOPED and "source_documents" not in scoped,
+          "source_documents is not tenant-scoped, and it is LISTED rather than left to a "
+          "missing tenant_id column -- sharing public material across tenants is a "
+          "decision, and the day someone adds a tenant_id to it this line is what argues")
     check(scoped == {"actors", "api_keys", "documents", "audit_log", "runs", "run_steps",
-                     "propositions", "decisions", "jobs", "cascade_runs"},
+                     "propositions", "decisions", "jobs", "cascade_runs",
+                     "conversations", "messages"},
           f"every other table is tenant-scoped, DERIVED from having a tenant_id ({sorted(scoped)})")
 
     # ── the check this module exists for ────────────────────────────────────

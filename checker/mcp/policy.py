@@ -100,6 +100,28 @@ KNOWN_TOOLS: frozenset[str] = frozenset({
     "themis.events.assess",
     "themis.runs.get",
     "themis.runs.trace",
+    # PLAN_24 S1. Both read-only: `sources.list` says what each source's own terms permit,
+    # `sources.search` returns Evidence rows that each carry their tier. Neither fetches
+    # from a third party, stores anything, or spends money -- S3's Indian Kanoon connector
+    # does all three and will be argued for on its own.
+    "themis.sources.list",
+    "themis.sources.search",
+    # PLAN_26 S2-alt. Read-only: it parses text the USER uploaded and returns unconfirmed
+    # facts with their spans. It stores nothing, fetches nothing, and cannot confirm a
+    # fact -- confirmation is a person's act and arrives as an argument, never from a tool.
+    "themis.company_facts.extract",
+    # PLAN_23 layer 1. Read-only, and the read is the whole point: it names the task and
+    # runs nothing, so an agent may ask "what kind of request is this" without that
+    # question starting any work or spending anything beyond one LOW-consequence
+    # classification call.
+    "themis.intake.classify",
+    # C2's read side. `conversation.send` is absent and that absence is the decision: it
+    # creates a thread, appends messages and may enqueue work, so mcp_tools() refuses to
+    # generate a tool for it. An agent may READ a conversation and re-check a citation; it
+    # may not start a turn.
+    "themis.conversation.list",
+    "themis.conversation.get",
+    "themis.citation.get",
 })
 # NOT here, and the absence is the decision: `themis.runs.approve` and `themis.runs.reject`
 # do not exist. They write a human decision, and mcp_tools() refuses to generate a tool for

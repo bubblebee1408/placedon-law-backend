@@ -224,7 +224,7 @@ if [ -n "${HARNESS_EXTRA_SUITE:-}" ]; then
 fi
 
 # --test flag rather than a bare run: this one takes a PDF argument in normal use.
-extra=("scripts/acquire_rules.py --test" "scripts/register_gsr700e.py --test" "scripts/register_gsr880e.py --test" "scripts/register_kmp_rules.py --test" "scripts/register_sebi_lodr.py --test" "scripts/register_pas_rules.py --test" "scripts/sweep_folder.py --test" "scripts/holdings.py --test" "scripts/provenance_census.py --test" "eval/realrun/run.py --test" "eval/realrun/text_field_probe.py --test" "eval/realrun/azure_model.py" "scripts/text_layer_census.py --test" "scripts/assistant_contract.py --test" "scripts/register_s188_rule15.py --test" "scripts/benchmark_refreeze_request.py --test" "scripts/parse_board_rules.py --test" "scripts/baseline_eval.py --test" "scripts/review.py --test" "scripts/review_brief.py --check" "scripts/slice_s96.py --test" "scripts/slice_s173.py --test" "scripts/serve_matrix.py --test" "scripts/serve_api.py --test" "scripts/record_interview.py --test" "scripts/verify_document.py --test" "scripts/ingest_act.py --test" "scripts/ingest_companies_act.py --test" "scripts/verify_section_index.py --test" "scripts/resolve_missing_sections.py --test" "scripts/prove_temporal.py --test" "scripts/batch1_omissions.py --test" "scripts/batch1_review.py --test" "scripts/find_commencement.py --test" "scripts/watch_gazette.py --test" "scripts/watch_ofac.py --test" "scripts/gazette_digest.py --test" "scripts/themis_slice.py --test" "scripts/themis_mcp.py --test" "scripts/bakeoff_retrieval.py --test" "scripts/bakeoff_models.py --test" "scripts/acquire_cuad.py --test" "scripts/bakeoff_indic.py --test" "scripts/smoke_adapters.py --test" "eval/prelabel/run_prelabel.py --test" "eval/goldset/run.py --test" "scripts/check_doc_refs.py --test" "scripts/cascade_report.py --test" "gateway/audit.py" "gateway/auth.py" "gateway/schema.py" "checker/model_cascade.py" "checker/events.py" "checker/claim_bodies.py" "gateway/store.py" "gateway/jobs.py" "gateway/worker.py" "gateway/app.py" "gateway/verbs.py" "gateway/cli.py --test" "agents/state.py" "agents/plans.py" "agents/runtime.py" "agents/research_question.py" "agents/review_contract.py" "agents/review_document.py")
+extra=("scripts/acquire_rules.py --test" "scripts/register_gsr700e.py --test" "scripts/register_gsr880e.py --test" "scripts/register_kmp_rules.py --test" "scripts/register_sebi_lodr.py --test" "scripts/register_pas_rules.py --test" "scripts/sweep_folder.py --test" "scripts/holdings.py --test" "scripts/provenance_census.py --test" "eval/realrun/run.py --test" "eval/realrun/text_field_probe.py --test" "eval/realrun/azure_model.py" "scripts/text_layer_census.py --test" "scripts/assistant_contract.py --test" "scripts/register_s188_rule15.py --test" "scripts/benchmark_refreeze_request.py --test" "scripts/parse_board_rules.py --test" "scripts/baseline_eval.py --test" "scripts/review.py --test" "scripts/review_brief.py --check" "scripts/slice_s96.py --test" "scripts/slice_s173.py --test" "scripts/serve_matrix.py --test" "scripts/serve_api.py --test" "scripts/record_interview.py --test" "scripts/verify_document.py --test" "scripts/ingest_act.py --test" "scripts/ingest_companies_act.py --test" "scripts/verify_section_index.py --test" "scripts/resolve_missing_sections.py --test" "scripts/prove_temporal.py --test" "scripts/batch1_omissions.py --test" "scripts/batch1_review.py --test" "scripts/find_commencement.py --test" "scripts/watch_gazette.py --test" "scripts/watch_ofac.py --test" "scripts/gazette_digest.py --test" "scripts/themis_slice.py --test" "scripts/themis_mcp.py --test" "scripts/bakeoff_retrieval.py --test" "scripts/bakeoff_models.py --test" "scripts/acquire_cuad.py --test" "scripts/bakeoff_indic.py --test" "scripts/smoke_adapters.py --test" "eval/prelabel/run_prelabel.py --test" "eval/goldset/run.py --test" "scripts/check_doc_refs.py --test" "scripts/cascade_report.py --test" "gateway/audit.py" "gateway/auth.py" "gateway/schema.py" "checker/model_cascade.py" "checker/events.py" "checker/claim_bodies.py" "gateway/store.py" "gateway/jobs.py" "gateway/worker.py" "gateway/app.py" "gateway/verbs.py" "gateway/cli.py --test" "agents/state.py" "agents/plans.py" "agents/runtime.py" "agents/research_question.py" "agents/review_contract.py" "agents/review_document.py" "agents/intake.py --test" "gateway/envelope.py --test")
 
 # The Ask demo server (D2): 127.0.0.1 only, serves web/assistant, forwards POST /v1/ask.
 extra+=("scripts/serve_ask.py --test")
@@ -235,6 +235,25 @@ extra+=("checker/span_inventory.py --test")
 # The harness's own reproduction of the 2026-09-30 incident.
 extra+=("scripts/harness_selftest.py --test")
 extra+=("scripts/suite_floors.py --test")
+extra+=("scripts/retrieval_recall.py --test")
+extra+=("scripts/retrieval_bakeoff.py --test")
+# The source register (PLAN_24 S0). Nothing is fetched on an unread term, so the register
+# is a test subject: it asserts which sources are closed, and a later edit that quietly
+# opens one has to break a check to do it.
+extra+=("checker/sources/terms.py --test")
+# The source framework (PLAN_24 S1). contract.py holds the five cross-module rules -- only
+# HELD can verify, every Evidence is hash-stamped and timed, a soft-404 raises rather than
+# reading as "no results" -- and is listed because a rule spanning three modules would
+# otherwise pass three times while the composition failed.
+extra+=("checker/sources/tiers.py --test" "checker/sources/evidence.py --test"
+        "checker/sources/base.py --test" "checker/sources/held.py --test"
+        "checker/sources/client.py --test" "checker/sources/contract.py --test")
+# Company facts without data.gov.in (PLAN_26 S2-alt). The fixture suite writes a PDF by
+# hand and reads it back through checker/pdf_pages, so it also proves the scanned-page case
+# the parser must call "cannot read" rather than "no facts".
+extra+=("checker/sources/company_facts.py --test"
+        "checker/sources/mca_fixture.py --test"
+        "checker/sources/mca_master_data.py --test")
 
 # A module that prints "9/10 passed" has failed, whatever its exit code says.
 # Eight modules once defined _test() without `raise SystemExit(1)`, so their

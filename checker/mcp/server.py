@@ -219,8 +219,8 @@ def _test() -> None:
     # ---- tools/list -----------------------------------------------------------------
     r = handle_message({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
     names = [t["name"] for t in r["result"]["tools"]]
-    check(len(names) == 18 and "themis.ask" in names,
-          f"tools/list returns all eighteen ({len(names)})")
+    check(len(names) == 25 and "themis.ask" in names,
+          f"tools/list returns all twenty-five ({len(names)})")
     check(not [n for n in names if n.endswith((".approve", ".reject"))],
           f"...and NOT the human-gate verbs: a tool that can approve a finding is one that "
           f"can clear a review with no person present {sorted(names)}")

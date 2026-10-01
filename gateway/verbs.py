@@ -33,6 +33,11 @@ from typing import Callable
 STRING = "string"
 OBJECT = "object"
 BOOLEAN = "boolean"
+# A list, and it is a separate kind because `mcp_tools()` puts `Field.kind` straight into
+# the JSON Schema as the declared type. Declaring a list field OBJECT told every MCP client
+# to send `{...}` where the handler reads a list -- a schema that lies about the verb.
+ARRAY = "array"
+KINDS = (STRING, OBJECT, BOOLEAN, ARRAY)
 
 V2 = "/v2"
 MCP_NAMESPACE = "themis"
@@ -47,6 +52,10 @@ class Field:
     describes: str = ""
 
     def __post_init__(self) -> None:
+        if self.kind not in KINDS:
+            raise ValueError(f"{self.name!r}: {self.kind!r} is not a field kind; one of "
+                             f"{KINDS}. The kind is published as the JSON Schema type, so "
+                             f"an unknown one is a contract nobody can read")
         if self.in_path and not self.required:
             raise ValueError(
                 f"{self.name!r} is in the path and optional, which cannot be: a URL either "
@@ -171,6 +180,9 @@ def _ask(args: dict, ctx: Context) -> dict:
     q = (args.get("question") or "").strip()
     if not q:
         return _refuse("BAD_REQUEST", "question is required")
+    user_facts, refusal = _company_facts(args.get("company_facts"))
+    if refusal:
+        return refusal
 
     ev = rq.evidence(q)
     origins = tuple(o for _, o in ev)
@@ -200,6 +212,17 @@ def _ask(args: dict, ctx: Context) -> dict:
                 "run_id": rid}
 
     d = out.to_dict()
+    if user_facts:
+        # PLAN_26 S2-alt: accepted, labelled "you told us", never presented as verified.
+        # They are RECORDED AND SHOWN and they do not steer the answer -- the answer is
+        # built from the held statute by deterministic engine calls, and threading an
+        # unverified company fact into that is a Ring 0 change this step did not make.
+        # Said in the payload rather than left for a reader to discover.
+        d["user_facts"] = [f.to_dict() for f in user_facts]
+        d["user_facts_note"] = (
+            "Recorded as you told them to us, and shown back so you can see what we hold. "
+            "They did not change this answer: it is read from the held Act. No company "
+            "fact is ever VERIFIED.")
     # The ANSWER, with its citations. to_dict() carries the verdict and the provisions but
     # not the prose, so the verb returned everything about an answer except the answer.
     # Summary.prose() is the served form: traced sentences with their spans, and the count
@@ -647,34 +670,712 @@ def _events_assess(args: dict, ctx: Context) -> dict:
                        f"{sorted(unknown)} are not facts this table reads; one of "
                        f"{list(events.FACTS)}. A fact that is silently ignored reads as "
                        f"one that was taken into account.")
+
+    # Company facts (PLAN_26 S2-alt): typed by the user, or read from a master-data page
+    # they uploaded. ONLY THE CONFIRMED ONES REACH THE TABLE, and the rest are reported.
+    from checker.sources import company_facts as cf
+    facts, refusal = _company_facts(args.get("company_facts"))
+    if refusal:
+        return refusal
+    used, recorded, pending = cf.for_event_table(facts)
+    clash = sorted(set(used) & set(raw_facts))
+    if clash:
+        # A contradiction is refused, not resolved by precedence. A silent winner would
+        # hide the fact that the caller told us two different things.
+        return _refuse("BAD_REQUEST",
+                       f"{clash} given both in `facts` and in `company_facts`. Which one "
+                       f"is true is not ours to choose by precedence: send one.")
+
     try:
-        result = events.assess(key, raw_facts)
+        result = events.assess(key, {**raw_facts, **used})
     except events.EventError as e:
         return _refuse("BAD_REQUEST", str(e))
 
     d = result.to_dict()
+    if facts:
+        d["company_facts"] = {
+            "used": [f.to_dict() for f in cf.confirmed(facts)
+                     if f.field in cf.EVENT_TABLE_FIELDS],
+            "recorded_not_read": [f.to_dict() for f in recorded],
+            "pending_confirmation": [f.to_dict() for f in pending],
+        }
     d["note"] = ("The event table says which bodies of law a transaction ENGAGES. It has "
                  "not been reviewed by a lawyer. No section, figure or deadline is stated "
-                 "for any body that is not held.")
+                 "for any body that is not held. A company fact is never VERIFIED: it is "
+                 "either what you told us or what your uploaded document says, and an "
+                 "unconfirmed one is not used at all.")
     return d
 
 
+def _company_facts(raw: object) -> tuple[list, dict | None]:
+    """(CompanyFact list, a refusal) from the wire form. Never a partial list.
+
+    A malformed fact is refused rather than dropped: the caller believes every fact they
+    sent is being taken into account, and the one they typed wrong is exactly the one whose
+    silent absence would mislead them.
+    """
+    from checker.sources import company_facts as cf
+
+    if raw is None:
+        return [], None
+    if not isinstance(raw, list):
+        return [], _refuse("BAD_REQUEST", "company_facts must be a list of objects")
+    out = []
+    for i, item in enumerate(raw):
+        if not isinstance(item, dict):
+            return [], _refuse("BAD_REQUEST", f"company_facts[{i}] must be an object")
+        try:
+            if item.get("basis", cf.USER_FACT) == cf.USER_FACT:
+                fact = cf.user_fact(item.get("field") or "", item.get("value"))
+                if item.get("confirmed"):
+                    fact = cf.CompanyFact(**{**fact.__dict__, "confirmed": True})
+            else:
+                fact = cf.CompanyFact(
+                    field=item.get("field") or "", value=str(item.get("value") or ""),
+                    basis=item.get("basis") or "",
+                    quoted_span=item.get("quoted_span") or "",
+                    source_label=item.get("source_label") or "",
+                    confirmed=bool(item.get("confirmed")))
+        except cf.FactError as e:
+            return [], _refuse("BAD_REQUEST", f"company_facts[{i}]: {e}")
+        out.append(fact)
+    return out, None
+
+
+def _company_facts_extract(args: dict, ctx: Context) -> dict:
+    """Read an MCA Company Master Data page the USER uploaded. Nothing is used until
+    they confirm each field.
+
+    Takes TEXT, not a PDF path. Two reasons, and neither is laziness: a path argument on a
+    served verb is a file-read primitive pointed at our own disk, and `checker/pdf_pages`
+    is offline tooling whose own test asserts the served path imports no PDF reader. The
+    PDF -> text step is `mca_master_data.parse_pdf`, which raises CannotRead on a scan; a
+    scan that reaches here as empty text is refused by the same rule one layer up.
+    """
+    from checker.sources import mca_master_data as mca
+
+    text = args.get("text") or ""
+    uploaded_on = (args.get("uploaded_on") or "").strip()
+    if not text.strip():
+        return _refuse("CANNOT_READ",
+                       "no text was supplied. If the upload was a scan or a photograph it "
+                       "has no text layer, and we will not return an empty set of facts "
+                       "for it: 'we could not read this page' and 'this company has no "
+                       "details' must never be the same answer.")
+    if not uploaded_on:
+        return _refuse("BAD_REQUEST",
+                       "uploaded_on (YYYY-MM-DD) is required: a document fact is labelled "
+                       "with the date the user uploaded it")
+    try:
+        parsed = mca.parse_text(text, uploaded_on=uploaded_on)
+    except mca.CannotRead as e:
+        return _refuse("CANNOT_READ", str(e))
+    except mca.PersonalDataLeak as e:                              # pragma: no cover
+        return _refuse("PERSONAL_DATA", str(e))
+
+    d = parsed.to_dict()
+    d["confirm_required"] = True
+    d["tier"] = "CLIENT"
+    d["note"] = (d["note"] + " The document is tier CLIENT -- your own upload -- and each "
+                 "fact is tier COMPANY_FACT. Neither can make an answer VERIFIED. This "
+                 "engine never fetches from mca.gov.in; you downloaded this page yourself.")
+    return d
+
+
+def _intake_origin(message: str):
+    """A `public_only` clearance for the user's OWN TYPED WORDS.
+
+    Finding 1 on PR #27. The classifier wraps the message in `<source>` delimiters, so
+    `azure_model.narrate` -> `public_only.verify_prompt` requires an origin that block can
+    clear against. The old code passed `()`, and `verify_prompt` refuses "no origin given;
+    there is nothing to clear the prompt against" -- so the classifier was UNREACHABLE and
+    every unmatched message came back NEEDS_CLARIFICATION for a reason that had nothing to
+    do with the message.
+
+    The right clearance is `clear_matter`, not a corpus origin, and the distinction is the
+    honest one: a lawyer's question is their client's business, not published text. That
+    routes it through PLAN_22 D3's gate rather than around it -- only a provider in
+    MATTER_PROVIDERS may receive it, and `refuse_unconfirmed_region` will refuse a
+    non-test_data matter document while the region is unconfirmed. Both of those are
+    refusals we WANT: they end in a fallback to RESEARCH_QUESTION, never in a question for
+    the user.
+
+    Returns None when no clearance can be made, which the caller treats as "no model".
+    """
+    from checker import public_only, router
+    try:
+        return public_only.clear_matter(message, name="intake message",
+                                        provider=router.AZURE)
+    except Exception:                                           # noqa: BLE001
+        return None
+
+
+def _intake_classify(args: dict, ctx: Context) -> dict:
+    """Which of six fixed tasks this request is. PLAN_23 layer 1.
+
+    **It never runs the task.** No plan is compiled, no run is persisted, no run_id comes
+    back -- the caller gets a name, two alternatives and a reason, and decides. That is what
+    makes a misclassification cost time rather than correctness, and it is why the model
+    call is router.CLASSIFICATION at LOW consequence while `ask` is NARRATION.
+
+    ONE call to `intake.classify`, with a `model_provider` it invokes only if the rules
+    cannot decide. The first version ran the rules, compared the returned RULE NAME against
+    two strings to guess whether a model was wanted, obtained one, and ran the rules again
+    -- which coupled this file to `agents/intake.py`'s internals and ran the rules twice.
+    """
+    from agents import intake
+
+    message = args.get("message")
+    if message is None:
+        message = ""
+    if not isinstance(message, str):
+        # BAD_REQUEST, not an exception. `message.strip()` on an int is a 500, and a
+        # malformed request is the caller's to fix, not an outage to page someone about.
+        return _refuse("BAD_REQUEST",
+                       f"message must be a string, got {type(message).__name__}")
+    raw_files = args.get("files")
+    if raw_files is None:
+        raw_files = []
+    if not isinstance(raw_files, list):
+        return _refuse("BAD_REQUEST", "files must be a list of {name, type} objects")
+    files = []
+    for i, f in enumerate(raw_files):
+        if not isinstance(f, dict):
+            return _refuse("BAD_REQUEST", f"files[{i}] must be an object with name/type")
+        files.append({"name": str(f.get("name") or ""), "type": str(f.get("type") or "")})
+    facts = args.get("facts")
+    if facts is not None and not isinstance(facts, dict):
+        return _refuse("BAD_REQUEST", "facts must be an object")
+    if not message.strip() and not files:
+        return _refuse("BAD_REQUEST",
+                       "a message or at least one file is required: there is nothing to "
+                       "classify otherwise")
+
+    unavailable: list = []
+
+    def provider():
+        """A model, or None. Called by classify() only if the rules did not decide."""
+        from checker import router
+        origin = _intake_origin(message)
+        if origin is None:
+            unavailable.append("NO_CLEARANCE")
+            return None
+        served, refusal = _served_or_refusal(origin, name="intake.classify",
+                                             purpose=router.CLASSIFICATION, ctx=ctx,
+                                             consequence=router.LOW)
+        if refusal:
+            unavailable.append(refusal["code"])
+            return None
+        return served.call
+
+    out = intake.classify(message, files=files, facts=facts,
+                          model_provider=provider).to_dict()
+    if unavailable:
+        # Not a refusal of the verb: the rules already produced an answer, and this only
+        # says the classifier could not be asked to improve on it.
+        out["classifier_unavailable"] = unavailable[0]
+    out["note"] = _INTAKE_NOTE
+    return out
+
+
+_INTAKE_NOTE = (
+    "Intake names the task and never runs it. Scope is not decided here: an off-topic "
+    "request still classifies, and the path it names is what refuses it -- so a question "
+    "about a body of law this engine does not hold comes back from `ask` with the named "
+    "refusal, not from here with silence.")
+
+
+# ── C2: the conversation layer ───────────────────────────────────────────────
+#
+# Which verb answers each task intake names. Written here rather than inferred, and the
+# two tasks with no verb are NAMED rather than omitted: an absent key would make
+# "not built" indistinguishable from "forgot to wire it".
+TASK_VERB: dict[str, str] = {
+    "RESEARCH_QUESTION": "ask",
+    "REVIEW_CONTRACT": "review_contract",
+    "REVIEW_DOCUMENT": "review_document",
+    "EVENT_ASSESS": "events.assess",
+    # No verb exists yet. `agents/plans.py` declares the intents and nothing serves them,
+    # so `conversation.send` ABSTAINS with that said in words rather than returning an
+    # empty answer that reads as "no obligation found".
+    "COMPANY_STANDING": "",
+    "LAW_CHANGES": "",
+}
+
+# Tasks whose work is long enough to belong on the queue rather than on the socket. Keyed
+# to QUEUED_INTENTS so a task cannot be queued for an intent no worker serves.
+TASK_INTENT: dict[str, str] = {
+    "RESEARCH_QUESTION": "research_question",
+    "REVIEW_CONTRACT": "review_contract",
+    "REVIEW_DOCUMENT": "review_document",
+}
+
+
+def _today(ctx: Context) -> str:
+    if ctx.clock is not None:
+        return str(ctx.clock())[:10]
+    from datetime import date
+    return date.today().isoformat()
+
+
+def _bodies_from_events(result: dict) -> list:
+    """events.assess findings -> envelope bodies. The mapping, in one place."""
+    from gateway import envelope as ev
+    from checker import events, scope
+    handling = {events.DECIDED: ev.B_ANSWERED,
+                events.CURRENT_TEXT_ONLY: ev.B_CURRENT_ONLY,
+                events.REFUSED: ev.B_NOT_HELD,
+                events.UNCLASSIFIED: ev.B_NEED_FACT}
+    out = []
+    for f in result.get("findings", ()):
+        try:
+            name = scope.body(f["body_id"]).name
+        except Exception:                                       # noqa: BLE001
+            name = f["body_id"]
+        out.append(ev.body(f["body_id"], name,
+                           handling.get(f.get("handling"), ev.B_NEED_FACT),
+                           f.get("text") or f.get("reason") or "engaged"))
+    return out
+
+
+def _bodies_from_ask(result: dict) -> list:
+    """An `ask` result -> envelope bodies, read from checker/scope.py.
+
+    The held Act is ANSWERED when anything was traced and ABSTAINED-shaped otherwise; a
+    body the question named that we do not hold is NOT_HELD with the REGISTER'S OWN words,
+    never a sentence composed here. That is what makes a CA2013 + FEMA question come back
+    PARTIAL rather than confidently short.
+    """
+    from gateway import envelope as ev
+    from checker import scope
+    out = []
+    held = scope.body("CA2013")
+    traced = bool(result.get("provisions") or result.get("citations"))
+    out.append(ev.body(held.key, held.name,
+                       ev.B_ANSWERED if traced else ev.B_NEED_FACT,
+                       "held and read" if traced else
+                       "held, and nothing on point was found for this question"))
+    refusal = result.get("refusal") or {}
+    for key in result.get("out_of_scope_bodies") or refusal.get("bodies") or ():
+        try:
+            b = scope.body(key)
+        except Exception:                                       # noqa: BLE001
+            continue
+        if b.key == held.key:
+            continue
+        out.append(ev.body(b.key, b.name,
+                           ev.B_CURRENT_ONLY if b.status == scope.CURRENT_ONLY
+                           else ev.B_NOT_HELD,
+                           scope.refusal_for(b.key)))
+    return out
+
+
+def _files_block(file_ids, ctx: Context) -> list:
+    """The file panel. A stored document is READ; one we cannot find is CANNOT_READ.
+
+    An unknown file_id is NOT silently dropped: a file the user attached and we cannot see
+    is exactly the case where an empty answer would read as "your document said nothing".
+    """
+    from gateway import envelope as ev
+    out = []
+    for fid in file_ids or ():
+        doc = ctx.documents.get(fid)
+        if doc is None and ctx.store is not None:
+            try:
+                doc = ctx.store.get_document(fid)
+            except Exception:                                   # noqa: BLE001
+                doc = None
+        if doc is None:
+            out.append(ev.file_state(fid, fid[:12] or "file", ev.CANNOT_READ,
+                                     reason=("this engine holds no document under that id, "
+                                             "so nothing was read from it. Upload it again "
+                                             "rather than treating this as a finding")))
+            continue
+        name = str(doc.get("name") or fid[:12])
+        # A STORED document is READ: `documents.upload` refuses blank text, so anything
+        # in the store has content. The first version of this checked `doc["text"]`, which
+        # upload does not keep -- it stores the hash, the byte count and the name -- so
+        # every real upload came back CANNOT_READ. A file panel that reports a readable
+        # document as unreadable is the same lie as the reverse, pointed the other way.
+        reason = doc.get("cannot_read")
+        if reason:
+            out.append(ev.file_state(fid, name, ev.CANNOT_READ, reason=str(reason)))
+        else:
+            out.append(ev.file_state(fid, name, ev.READ,
+                                     pages=doc.get("pages")))
+    return out
+
+
+def _envelope_for(task: str, result: dict, *, as_of: str, run_id=None,
+                  files=(), ctx: Context) -> dict:
+    """One result from one task -> one envelope. The only place a reply is shaped."""
+    from gateway import envelope as ev
+
+    trace = f"{V2}/runs/{run_id}/trace" if run_id else None
+    if result.get("status") == "FAILED":
+        return ev.failed(task=task, as_of=as_of,
+                         detail=str(result.get("error") or "the step did not complete"),
+                         run_id=run_id, trace_url=trace)
+
+    bodies = (_bodies_from_events(result) if task == "EVENT_ASSESS"
+              else _bodies_from_ask(result) if task == "RESEARCH_QUESTION" else [])
+    text = (result.get("answer") or result.get("detail")
+            or result.get("note") or "See the findings.")
+    blocks = [{"text": str(text), "citation_ids": []}] if str(text).strip() else []
+    unheld = [b for b in bodies if b["status"] in (ev.B_NOT_HELD, ev.B_CURRENT_ONLY)]
+    answered = [b for b in bodies if b["status"] == ev.B_ANSWERED]
+    if result.get("status") == "REFUSED":
+        status = ev.ABSTAINED
+    elif unheld and answered:
+        status = ev.PARTIAL
+    elif unheld and not answered:
+        status = ev.ABSTAINED
+    else:
+        status = ev.ANSWERED
+    return ev.build(status=status, task=task, as_of=as_of, text_blocks=blocks,
+                    bodies=bodies, citations=[], files=list(files), run_id=run_id,
+                    trace_url=trace)
+
+
+def _conversation_send(args: dict, ctx: Context) -> dict:
+    """One turn: classify, dispatch, store, and return the envelope or a run_id.
+
+    A WRITE verb, so it is not on MCP: it creates a conversation, appends messages and may
+    enqueue work. `mcp_tools()` enforces that rather than trusting this docstring.
+
+    Long work goes on the job queue and the reply returns the run_id at once, with the
+    assistant message's envelope NULL until a worker fills it -- which is why
+    `messages.envelope` is nullable and why NULL is not `{}`.
+    """
+    import uuid
+    from agents import intake
+    from gateway import envelope as ev
+
+    text = args.get("text") or ""
+    raw_ids = args.get("file_ids")
+    if raw_ids is None:
+        raw_ids = []
+    if not isinstance(raw_ids, list) or not all(isinstance(f, str) for f in raw_ids):
+        return _refuse("BAD_REQUEST", "file_ids must be a list of strings")
+    if not text.strip() and not raw_ids:
+        return _refuse("BAD_REQUEST", "text or at least one file_id is required")
+    as_of = (args.get("as_of") or "").strip() or _today(ctx)
+    sources = args.get("sources")
+    if sources is not None and not isinstance(sources, list):
+        return _refuse("BAD_REQUEST", "sources must be a list of source ids")
+    override = (args.get("task_override") or "").strip() or None
+    if override is not None and override not in intake.TASKS:
+        return _refuse("BAD_REQUEST",
+                       f"{override!r} is not a task; one of {list(intake.TASKS)}")
+
+    store = ctx.store
+    if store is None:
+        return _refuse("NO_STORE",
+                       "a conversation needs a store: it is a durable thread, and "
+                       "returning one that vanishes on restart would be a lie about what "
+                       "was saved")
+
+    # 1. the thread.
+    cid = (args.get("conversation_id") or "").strip() or str(uuid.uuid4())
+    if store.read_conversation(cid) is None:
+        store.write_conversation({"conversation_id": cid,
+                                  "title": (text.strip()[:60] or "Attachment")})
+
+    # 2. the user's message, stored before anything is attempted. A turn that fails must
+    #    still show what was asked.
+    ordinal = store.next_ordinal(cid)
+    store.append_message({"message_id": str(uuid.uuid4()), "conversation_id": cid,
+                          "ordinal": ordinal, "role": "user", "text": text,
+                          "file_ids": list(raw_ids)})
+
+    # 3. the task.
+    if override is not None:
+        task, classification = override, {"task": override, "decided_by": "override",
+                                          "reason": "the caller named the task"}
+    else:
+        named = [{"name": str((ctx.documents.get(f) or {}).get("name") or f), "type": ""}
+                 for f in raw_ids]
+        got = intake.classify(text, files=named, facts=args.get("facts"))
+        task, classification = got.task, got.to_dict()
+
+    files = _files_block(raw_ids, ctx)
+    reply_id = str(uuid.uuid4())
+
+    # 4a. nothing to run.
+    if task == intake.NEEDS_CLARIFICATION:
+        env = ev.build(status=ev.NEEDS_CLARIFICATION, task=task, as_of=as_of,
+                       text_blocks=[{"text": classification.get("question")
+                                     or "Could you say what you would like done?",
+                                     "citation_ids": []}],
+                       bodies=[], citations=[], files=files)
+        store.append_message({"message_id": reply_id, "conversation_id": cid,
+                              "ordinal": ordinal + 1, "role": "assistant", "text": "",
+                              "file_ids": [], "task": task, "envelope": env})
+        return {"conversation_id": cid, "message_id": reply_id,
+                "classification": classification, "envelope": env}
+
+    verb_name = TASK_VERB.get(task, "")
+    if not verb_name:
+        env = ev.build(status=ev.ABSTAINED, task=task, as_of=as_of,
+                       text_blocks=[{"text": (
+                           f"This is a {task} question and this engine cannot answer one "
+                           f"yet: the intent is declared in agents/plans.py and no verb "
+                           f"serves it. Nothing was read, so nothing follows about any "
+                           f"obligation."), "citation_ids": []}],
+                       bodies=[], citations=[], files=files)
+        store.append_message({"message_id": reply_id, "conversation_id": cid,
+                              "ordinal": ordinal + 1, "role": "assistant", "text": "",
+                              "file_ids": [], "task": task, "envelope": env})
+        return {"conversation_id": cid, "message_id": reply_id,
+                "classification": classification, "envelope": env}
+
+    # 4b. long work -> the queue, and the run_id comes back at once.
+    intent = TASK_INTENT.get(task)
+    if intent and ctx.queue is not None:
+        sub = _runs_submit({"intent": intent, "args": _task_args(task, text, raw_ids, ctx,
+                                                                 args)}, ctx)
+        if sub.get("status") == "REFUSED":
+            return sub
+        run_id = sub.get("run_id")
+        store.append_message({"message_id": reply_id, "conversation_id": cid,
+                              "ordinal": ordinal + 1, "role": "assistant", "text": "",
+                              "file_ids": [], "task": task, "run_id": run_id,
+                              "envelope": None})
+        return {"conversation_id": cid, "message_id": reply_id,
+                "classification": classification, "run_id": run_id,
+                "envelope": None,
+                "note": ("queued. The envelope is written when the worker finishes; poll "
+                         "runs.get, or read the message again. `envelope: null` means the "
+                         "reply has not arrived, which is not an empty answer.")}
+
+    # 4c. short enough to answer now.
+    verb = by_name()[verb_name]
+    result = verb.run(_task_args(task, text, raw_ids, ctx, args), ctx)
+    env = _envelope_for(task, result, as_of=as_of, run_id=result.get("run_id"),
+                        files=files, ctx=ctx)
+    store.append_message({"message_id": reply_id, "conversation_id": cid,
+                          "ordinal": ordinal + 1, "role": "assistant", "text": "",
+                          "file_ids": [], "task": task,
+                          "run_id": result.get("run_id"), "envelope": env})
+    return {"conversation_id": cid, "message_id": reply_id,
+            "classification": classification, "run_id": result.get("run_id"),
+            "envelope": env}
+
+
+def _task_args(task: str, text: str, file_ids, ctx: Context, args: dict) -> dict:
+    """The arguments the target verb takes. One place, so a task cannot be dispatched with
+    a field the verb does not declare."""
+    doc = ""
+    for fid in file_ids or ():
+        d = ctx.documents.get(fid) or {}
+        if d.get("text"):
+            doc = str(d["text"])
+            break
+    if task == "RESEARCH_QUESTION":
+        return {"question": text}
+    if task == "EVENT_ASSESS":
+        return {"event": (args.get("event") or "commercial_contract"),
+                "facts": args.get("facts") or {}}
+    if task == "REVIEW_CONTRACT":
+        return {"text": doc or text, "name": "conversation upload",
+                "test_data": args.get("test_data") or "unspecified"}
+    return {"text": doc or text, "name": "conversation upload"}
+
+
+def _conversation_list(args: dict, ctx: Context) -> dict:
+    """The threads, newest first. Tenant-scoped by the store, not by this handler."""
+    if ctx.store is None:
+        return _refuse("NO_STORE", "no store is configured, so there are no conversations")
+    limit = args.get("limit")
+    limit = int(limit) if isinstance(limit, (int, float, str)) and str(limit).isdigit() else 50
+    return {"conversations": ctx.store.list_conversations(limit=min(limit, 200))}
+
+
+def _conversation_get(args: dict, ctx: Context) -> dict:
+    """One thread and every message in it, in order, each with its stored envelope."""
+    if ctx.store is None:
+        return _refuse("NO_STORE", "no store is configured")
+    cid = (args.get("conversation_id") or "").strip()
+    if not cid:
+        return _refuse("BAD_REQUEST", "conversation_id is required")
+    conv = ctx.store.read_conversation(cid)
+    if conv is None:
+        return _refuse("NOT_FOUND", f"no conversation {cid!r} for this tenant")
+    return {"conversation": conv, "messages": ctx.store.read_messages(cid)}
+
+
+def _citation_get(args: dict, ctx: Context) -> dict:
+    """One citation in full, for the source panel.
+
+    Re-verifies the quote against the held corpus rather than trusting the stored
+    envelope: the panel is where a lawyer goes to check, so it is the last place that
+    should show a quote nobody re-read.
+    """
+    from checker.sources.held import HeldCorpus, span_matches
+
+    cid = (args.get("citation_id") or "").strip()
+    conv_id = (args.get("conversation_id") or "").strip()
+    if not cid:
+        return _refuse("BAD_REQUEST", "citation_id is required")
+    if ctx.store is None:
+        return _refuse("NO_STORE", "no store is configured")
+    if not conv_id:
+        return _refuse("BAD_REQUEST",
+                       "conversation_id is required: a citation is read back from the "
+                       "message that made it, so the tenant's own policy governs the read")
+    for msg in ctx.store.read_messages(conv_id):
+        for c in (msg.get("envelope") or {}).get("citations", ()):
+            if c.get("id") != cid:
+                continue
+            verified, why = False, "not re-checked"
+            try:
+                ok = span_matches(type("E", (), {
+                    "doc_id": c.get("provision_id") or "", "quoted_span": c["quote"]})())
+                verified, why = bool(ok), ("re-read from the held corpus and the quote "
+                                           "byte-matches" if ok else
+                                           "the quote could NOT be found in the corpus "
+                                           "section it names")
+            except Exception as exc:                            # noqa: BLE001
+                verified, why = False, f"could not re-check ({type(exc).__name__})"
+            return {"citation": c, "message_id": msg["message_id"],
+                    "reverified": verified, "reverified_note": why}
+    return _refuse("NOT_FOUND", f"no citation {cid!r} in conversation {conv_id!r}")
+
+
 def _documents_upload(args: dict, ctx: Context) -> dict:
-    """Store bytes under their own sha256. The identity IS the hash, not a counter."""
+    """Store bytes under their own sha256. The identity IS the hash, not a counter.
+
+    `cannot_read` records a file whose text could NOT be extracted -- a scan, a
+    photographed page -- with the reason. Without it such a file could only be left out of
+    the upload, and then the conversation's file panel would not show the document the user
+    attached at all: "we could not read your scan" would render as silence, which is the
+    failure `checker/pdf_pages` exists to refuse, one layer out. Text is not required in
+    that case, because there is none; everything else about the file is.
+
+    Extraction itself is not done here. `checker/pdf_pages` is offline tooling whose own
+    test asserts the served path imports no PDF reader, so the caller extracts and this
+    verb records what happened.
+    """
     import hashlib
     text = args.get("text") or ""
-    if not text.strip():
-        return _refuse("BAD_REQUEST", "text is required")
-    digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
+    cannot = (args.get("cannot_read") or "").strip()
+    if not text.strip() and not cannot:
+        return _refuse("BAD_REQUEST",
+                       "text is required, or cannot_read with the reason it could not be "
+                       "extracted")
+    if cannot and len(cannot) < 20:
+        return _refuse("BAD_REQUEST",
+                       f"cannot_read must say WHY in words, got {cannot!r}. A file shown "
+                       f"as unreadable with no reason invites the reader to assume the "
+                       f"document was empty")
+    name = args.get("name") or "document"
+    seed = text if text.strip() else f"{name}\u0000{cannot}"
+    digest = hashlib.sha256(seed.encode("utf-8")).hexdigest()
     ctx.documents[digest] = {"sha256": digest, "bytes": len(text.encode("utf-8")),
-                             "name": args.get("name") or "document",
-                             "tenant": ctx.tenant}
+                             "name": name, "tenant": ctx.tenant}
+    if cannot:
+        ctx.documents[digest]["cannot_read"] = cannot
     return {"document_id": digest, "sha256": digest,
             "bytes": ctx.documents[digest]["bytes"],
+            "state": ("CANNOT_READ" if cannot else "READ"),
+            "reason": cannot or None,
             "stored": "memory",
             "note": ("held in this process only. gateway/migrations/*.sql are not "
                      "applied, so nothing here survives a restart and no database "
                      "enforces tenant isolation.")}
+
+
+def _sources_list(args: dict, ctx: Context) -> dict:
+    """Every source, its tier, and whether it may be fetched — with the reason when not.
+
+    The reason travels with the refusal on purpose. "no" on its own invites someone to try
+    again with a different client; "robots: https://www.rbi.org.in BLOCKED HTTP 418" does
+    not, and it is also the answer to "why has nobody built the RBI connector".
+    """
+    from checker.sources import terms
+    from checker.sources.tiers import CLIENT, HELD, TIERS
+
+    out = []
+    for source_id in terms.SOURCE_IDS:
+        rec = terms.record_for(source_id)
+        fetch_ok, fetch_why = terms.may_fetch(source_id)
+        cache_ok, cache_why = terms.may_cache(source_id)
+        out.append({
+            "source_id": source_id,
+            "name": rec.name,
+            "terms_url": rec.terms_url,
+            "terms_read": rec.date_read or None,
+            "robots": [{"origin": o.origin, "state": o.state, "http": o.http}
+                       for o in rec.robots],
+            "may_fetch": fetch_ok, "may_fetch_reason": fetch_why,
+            "may_cache": cache_ok, "may_cache_reason": cache_why,
+            "clauses": {c.topic: c.state for c in rec.clauses},
+        })
+    # The two adapters that exist. Neither needs a terms record and both say why.
+    built_in = [{"source_id": "held", "name": "Companies Act 2013 (our corpus)",
+                 "tier": HELD, "may_fetch": True,
+                 "may_fetch_reason": "ours, hash-stamped; the only tier that can VERIFY"},
+                {"source_id": "client", "name": "Your uploaded documents", "tier": CLIENT,
+                 "may_fetch": True,
+                 "may_fetch_reason": "the tenant's own document, under review"}]
+    return {"tiers": list(TIERS), "adapters": built_in, "external": out,
+            "fetchable": [r["source_id"] for r in out if r["may_fetch"]],
+            "cacheable": [r["source_id"] for r in out if r["may_cache"]],
+            "note": ("Only HELD can make an answer VERIFIED (PLAN_26 §2). External sources "
+                     "are listed with what their own terms permit, read on the date shown; "
+                     "an unread term is OPEN, and OPEN is not permission.")}
+
+
+def _sources_search(args: dict, ctx: Context) -> dict:
+    """Search the loadable sources and return Evidence rows, each carrying its tier.
+
+    Today that is HELD and CLIENT. The five external sources S0 recorded either refuse us
+    by robots or have unread terms, so there is nothing to call — and this returns the
+    empty list with the reasons rather than pretending the sources do not exist.
+    """
+    from checker.sources.base import load
+    from checker.sources.client import ClientDocuments
+    from checker.sources.evidence import verifying
+    from checker.sources.held import AsOfUnsupported, HeldCorpus
+    from checker.sources.tiers import label_for
+
+    query = (args.get("query") or "").strip()
+    if not query:
+        return _refuse("BAD_REQUEST", "query is required")
+    wanted = args.get("tiers") or None
+    as_of = (args.get("as_of") or "").strip() or None
+
+    rows, refusals = [], []
+    for src in (HeldCorpus(), ClientDocuments(ctx.documents)):
+        if wanted and src.tier not in wanted:
+            continue
+        try:
+            rows.extend(load(src).search(query, as_of=as_of))
+        except AsOfUnsupported as exc:
+            # A named refusal, not a silent fallback to current text. CLAUDE.md:
+            # point-in-time reconstruction is UNVERIFIED against any external source.
+            return _refuse("AS_OF_UNSUPPORTED", str(exc))
+        except Exception as exc:                      # a connector that cannot load
+            refusals.append({"source_id": getattr(src, "source_id", "?"),
+                             "detail": str(exc)})
+    from checker.sources import terms
+    for source_id in terms.SOURCE_IDS:
+        ok, why = terms.may_fetch(source_id)
+        if not ok:
+            refusals.append({"source_id": source_id, "detail": why})
+
+    return {
+        "query": query,
+        "results": [{"tier": e.tier, "source": e.source, "ref": e.ref,
+                     "fetched_at": e.fetched_at, "sha256": e.sha256,
+                     "quoted_span": e.quoted_span, "attribution": e.attribution,
+                     "label": label_for(e.tier, date=e.fetched_at[:10], source=e.source),
+                     "can_verify": e.can_verify} for e in rows],
+        "verified_count": len(verifying(rows)),
+        "not_searched": refusals,
+        "note": ("Every row carries its tier. Only a HELD row may support a legal claim; "
+                 "`not_searched` says which sources were not asked and why."),
+    }
 
 
 # ── the table ────────────────────────────────────────────────────────────────
@@ -683,7 +1384,11 @@ VERBS: tuple[Verb, ...] = (
     Verb("ask", "One grounded research question against the held statute. Cited spans or "
                 "a named refusal.",
          (Field("question", STRING, True, describes="the question, in plain English"),
-          Field("available", OBJECT, False, describes="provider tuple to route over")),
+          Field("available", ARRAY, False, describes="provider tuple to route over"),
+          Field("company_facts", ARRAY, False,
+                describes="company facts you are telling us, e.g. "
+                          "[{'field':'listed','value':'yes'}]. Labelled 'you told us', "
+                          "shown back, never verified, and they do not steer the answer")),
          "POST", read_only=True, run=_ask),
 
     Verb("review_contract",
@@ -777,13 +1482,111 @@ VERBS: tuple[Verb, ...] = (
          (Field("event", STRING, True,
                 describes="the event key, e.g. share_allotment, related_party_contract"),
           Field("facts", OBJECT, False,
-                describes="foreign_investor, listed, state — facts that add bodies")),
+                describes="foreign_investor, listed, state — facts that add bodies"),
+          Field("company_facts", ARRAY, False,
+                describes="company facts with their basis: typed by you (USER_FACT) or "
+                          "read from an MCA master-data page you uploaded (COMPANY_FACT, "
+                          "with the quoted span). ONLY THE CONFIRMED ONES ARE USED")),
          "POST", read_only=True, run=_events_assess),
+
+    Verb("sources.list",
+         "Every source, its tier, and whether its own terms and robots.txt permit a fetch "
+         "-- with the reason when they do not.",
+         (),
+         "POST", read_only=True, run=_sources_list),
+
+    Verb("sources.search",
+         "Search every source that may be read, returning Evidence rows that each carry "
+         "their tier. Only a HELD row may support a legal claim.",
+         (Field("query", STRING, True, describes="what to look for"),
+          Field("tiers", ARRAY, False,
+                describes="restrict to these tiers, e.g. ['HELD']. Absent searches all "
+                          "loadable sources"),
+          Field("as_of", STRING, False,
+                describes="YYYY-MM-DD. REFUSED for HELD: point-in-time reconstruction is "
+                          "UNVERIFIED against any external source, so a past date gets a "
+                          "named refusal rather than today's text")),
+         "POST", read_only=True, run=_sources_search),
+
+    Verb("company_facts.extract",
+         "Read an MCA Company Master Data page you downloaded from mca.gov.in and "
+         "uploaded. Every field comes back with the span it was read from, unconfirmed. "
+         "Director names and DINs are not read, not stored and not returned.",
+         (Field("text", STRING, True,
+                describes="the page's text. A scan has no text layer and is refused as "
+                          "CANNOT_READ, never as an empty set of facts"),
+          Field("uploaded_on", STRING, True,
+                describes="YYYY-MM-DD, the date you uploaded it. It is part of the "
+                          "source label every fact carries")),
+         "POST", read_only=True, run=_company_facts_extract),
+
+    Verb("intake.classify",
+         "Which of six fixed tasks a request is, with two alternatives and a reason -- or "
+         "a one-sentence question when it is genuinely open. Decided by code wherever code "
+         "can; a model is asked only when the rules cannot, and its reply must be one of "
+         "the six names. This verb never runs the task.",
+         (Field("message", STRING, False,
+                describes="the user's words. Rendered verbatim, never parsed for meaning "
+                          "beyond the fixed signals"),
+          Field("files", ARRAY, False,
+                describes="the attachments as [{name, type}]. The NAME decides whether a "
+                          "file is a contract or a filing, because a .pdf is both"),
+          Field("facts", OBJECT, False,
+                describes="event facts (foreign_investor, listed, state). Recorded and "
+                          "passed through, never used to classify: they describe the "
+                          "company, not what is being asked")),
+         "POST", read_only=True, run=_intake_classify),
+
+    Verb("conversation.send",
+         "One turn of a conversation: classify the request, dispatch it to the verb that "
+         "answers it, store the message, and return the answer envelope -- or a run_id at "
+         "once when the work belongs on the queue.",
+         (Field("conversation_id", STRING, False,
+                describes="the thread to append to. Absent starts a new one"),
+          Field("text", STRING, False, describes="the user's words"),
+          Field("file_ids", ARRAY, False,
+                describes="sha256 ids from documents.upload"),
+          Field("as_of", STRING, False,
+                describes="YYYY-MM-DD, the date to read the law as at. Defaults to today"),
+          Field("sources", ARRAY, False,
+                describes="source ids to consult, from sources.list. Recorded; only HELD "
+                          "and CLIENT are loadable today"),
+          Field("task_override", STRING, False,
+                describes="name the task yourself instead of letting intake classify it"),
+          Field("event", STRING, False,
+                describes="the event key, when the task is EVENT_ASSESS"),
+          Field("facts", OBJECT, False, describes="event facts"),
+          Field("test_data", STRING, False,
+                describes="set when a contract is a fixture, not a client document "
+                          "(PLAN_22 D3)")),
+         "POST", read_only=False, run=_conversation_send),
+
+    Verb("conversation.list", "Every conversation for this tenant, newest first.",
+         (Field("limit", STRING, False, describes="how many, up to 200"),),
+         "POST", read_only=True, run=_conversation_list),
+
+    Verb("conversation.get", "One conversation and its messages, in order.",
+         (Field("conversation_id", STRING, True, in_path=True,
+                describes="the thread"),),
+         "GET", read_only=True, run=_conversation_get),
+
+    Verb("citation.get",
+         "One citation in full for the source panel, with its quote RE-VERIFIED against "
+         "the held corpus rather than trusted from the stored envelope.",
+         (Field("citation_id", STRING, True, describes="the citation's id"),
+          Field("conversation_id", STRING, True,
+                describes="the thread it was cited in, so the tenant's own policy governs "
+                          "the read")),
+         "POST", read_only=True, run=_citation_get),
 
     Verb("documents.upload",
          "Store a document and return the sha256 that identifies it.",
-         (Field("text", STRING, True, describes="the document text"),
-          Field("name", STRING, False, describes="a label for the document")),
+         (Field("text", STRING, False, describes="the document text"),
+          Field("name", STRING, False, describes="a label for the document"),
+          Field("cannot_read", STRING, False,
+                describes="the reason the text could NOT be extracted, for a scan or a "
+                          "photographed page. Recorded so the file panel shows the "
+                          "document with CANNOT_READ instead of omitting it")),
          "POST", read_only=False, run=_documents_upload),
 )
 
@@ -859,17 +1662,287 @@ def _test() -> None:
 
     check(names == {"ask", "review_contract", "review_document", "events.assess",
                     "runs.get", "runs.trace", "runs.approve", "runs.reject",
-                    "runs.submit", "runs.cancel", "documents.upload"},
-          f"the eleven verbs are declared once ({sorted(names)})")
+                    "runs.submit", "runs.cancel", "documents.upload",
+                    "sources.list", "sources.search", "company_facts.extract",
+                    "intake.classify", "conversation.send", "conversation.list",
+                    "conversation.get", "citation.get"},
+          f"the nineteen verbs are declared once ({sorted(names)})")
+    # sources.* are READ-ONLY, so they reach MCP. That is the intended shape: an agent may
+    # ask what a source permits and search what may be read, and there is no sources verb
+    # that fetches, stores or spends. S3's Indian Kanoon connector will spend money, and
+    # will be a separate verb argued for separately.
+    check({f"{MCP_NAMESPACE}.sources.list", f"{MCP_NAMESPACE}.sources.search"}
+          <= {t.name for t in mcp},
+          "...and both sources verbs reach MCP, being read-only")
     # Every verb that WRITES, named rather than counted, so adding one is a deliberate edit
     # to this line. All five are kept out of MCP by mcp_tools() for the same reason: a tool
     # surface that can submit, cancel or approve is one that can act with nobody present.
     check(set(write_verbs()) == {"documents.upload", "runs.approve", "runs.reject",
-                                 "runs.submit", "runs.cancel"},
-          f"...and exactly five of them write ({sorted(write_verbs())})")
+                                 "runs.submit", "runs.cancel", "conversation.send"},
+          f"...and exactly six of them write ({sorted(write_verbs())})")
+    check(f"{MCP_NAMESPACE}.conversation.send" not in {t.name for t in mcp},
+          "conversation.send WRITES -- it creates a thread, appends messages and may "
+          "enqueue work -- so mcp_tools() keeps it off MCP, by rule and not by the author "
+          "remembering")
+    for ro in ("conversation.list", "conversation.get", "citation.get"):
+        check(ro not in write_verbs() and f"{MCP_NAMESPACE}.{ro}" in {t.name for t in mcp},
+              f"...while {ro} is read-only and does reach MCP")
     check(not {t.name for t in mcp} & {f"{MCP_NAMESPACE}.runs.submit",
                                        f"{MCP_NAMESPACE}.runs.cancel"},
           "...so neither runs.submit nor runs.cancel reaches MCP")
+
+    # ── intake.classify (PLAN_23 layer 1) ───────────────────────────────────
+    check("intake.classify" not in write_verbs(),
+          "intake.classify is read-only, so it reaches MCP")
+    check(f"{MCP_NAMESPACE}.intake.classify" in {t.name for t in mcp},
+          "...and it does")
+    _ictx = Context()
+    _i = by_name()["intake.classify"].run(
+        {"message": "Please review the attached share purchase agreement.",
+         "files": [{"name": "spa-final.docx", "type": "application/pdf"}]}, _ictx)
+    check(_i["task"] == "REVIEW_CONTRACT", f"a contract with a review verb -> "
+                                           f"REVIEW_CONTRACT ({_i['task']})")
+    check("run_id" not in _i and _ictx.last_steps == [],
+          "**the verb never runs the task**: no run_id comes back and no step was built")
+    check(len(_i["alternatives"]) == 2 and _i["reason"],
+          f"...with two alternatives and a reason ({_i['alternatives']})")
+    _u = by_name()["intake.classify"].run(
+        {"files": [{"name": "board-minutes.pdf", "type": "application/pdf"}]}, _ictx)
+    check(_u["task"] == "NEEDS_CLARIFICATION" and len(_u["options"]) == 2
+          and _u["question"].endswith("?"),
+          f"minutes with no instruction -> NEEDS_CLARIFICATION, two options, one question "
+          f"({_u['task']})")
+    check("alternatives" not in _u,
+          "...and the undecided shape carries `options`, never `alternatives`")
+    _e = by_name()["intake.classify"].run(
+        {"message": "We are allotting shares to a new investor next week."}, _ictx)
+    check(_e["task"] == "EVENT_ASSESS" and _e["event"] == "share_allotment",
+          f"an event stated -> EVENT_ASSESS naming the event ({_e.get('event')})")
+    _o = by_name()["intake.classify"].run(
+        {"message": "Under the IBC, what is the CIRP timeline?"}, _ictx)
+    check(_o["task"] in [t for t in __import__("agents.intake", fromlist=["TASKS"]).TASKS],
+          f"an unheld-body question still CLASSIFIES ({_o['task']}) -- the refusal belongs "
+          f"to the ask path, and intake does not duplicate it")
+    check(by_name()["intake.classify"].run({}, _ictx)["status"] == "REFUSED",
+          "nothing to classify is a BAD_REQUEST, not an empty classification")
+
+    # ── C2: the conversation layer ──────────────────────────────────────────
+    from gateway import envelope as _ev
+    from gateway.store import MemoryBackend as _MB
+    _st = _MB()
+    _cctx = Context(store=_st, clock=lambda: "2026-10-01T00:00:00+00:00")
+    _V = by_name()
+
+    # The envelope validates for every task conversation.send can produce.
+    _r = _V["conversation.send"].run(
+        {"text": "What is the quorum for a meeting of the Board?"}, _cctx)
+    _cid = _r["conversation_id"]
+    _e = _r["envelope"]
+    check(_ev.errors(_e) == [], f"conversation.send returns a VALID envelope ({_ev.errors(_e)})")
+    check(_e["schema"] == _ev.SCHEMA_ID, f"...stamped {_ev.SCHEMA_ID}")
+    check(_e["task"] == "RESEARCH_QUESTION" and _e["as_of"] == "2026-10-01",
+          f"...with the task and the as_of date ({_e['task']}, {_e['as_of']})")
+    check([b["body_id"] for b in _e["bodies"]] == ["CA2013"],
+          f"...and CA2013 in bodies ({[b['body_id'] for b in _e['bodies']]})")
+
+    for _t, _args in [("RESEARCH_QUESTION", {"text": "What is the quorum for the Board?"}),
+                      ("EVENT_ASSESS", {"text": "We are allotting shares next week.",
+                                        "event": "share_allotment"}),
+                      ("COMPANY_STANDING", {"text": "Are we compliant with our filings?"}),
+                      ("LAW_CHANGES", {"text": "What changed in the Act since April 2024?"})]:
+        _o = _V["conversation.send"].run({**_args, "conversation_id": _cid}, _cctx)
+        check(_ev.errors(_o["envelope"]) == [],
+              f"the envelope validates for {_t} ({_ev.errors(_o['envelope'])[:1]})")
+        check(_o["envelope"]["task"] == _t, f"...and its task is {_t}")
+
+    # A task with no verb ABSTAINS and says so, rather than returning an empty answer.
+    _cs = _V["conversation.send"].run(
+        {"conversation_id": _cid, "text": "Are we compliant with our annual filings?"}, _cctx)
+    check(_cs["envelope"]["status"] == _ev.ABSTAINED
+          and "cannot answer one yet" in _cs["envelope"]["text_blocks"][0]["text"],
+          "a task no verb serves ABSTAINS and says so in words -- an empty answer would "
+          "read as 'no obligation found'")
+    check(_cs["envelope"]["bodies"] == [],
+          "...and claims nothing about any body")
+
+    # A CA2013 + FEMA question is PARTIAL with FEMA NOT_HELD.
+    from checker import scope as _scope
+    _mixed = _ev.build(
+        status=_ev.PARTIAL, task="RESEARCH_QUESTION", as_of="2026-10-01",
+        text_blocks=[{"text": "The Act's allotment return is filed.", "citation_ids": []}],
+        bodies=[_ev.body("CA2013", _scope.body("CA2013").name, _ev.B_ANSWERED, "held"),
+                _ev.body("FEMA1999", _scope.body("FEMA1999").name, _ev.B_NOT_HELD,
+                         _scope.refusal_for("FEMA1999"))])
+    check(_mixed["status"] == "PARTIAL", "a CA2013 + FEMA envelope is PARTIAL")
+    _bi = {b["body_id"]: b["status"] for b in _mixed["bodies"]}
+    check(_bi == {"CA2013": "ANSWERED", "FEMA1999": "NOT_HELD"},
+          f"...CA2013 ANSWERED and FEMA1999 NOT_HELD ({_bi})")
+    check(_scope.body("FEMA1999").status == _scope.DECLARED,
+          "...and NOT_HELD is read from checker/scope.py, not asserted here")
+
+    # A scanned PDF shows CANNOT_READ with a reason.
+    _scan = _V["documents.upload"].run(
+        {"name": "scan0001.pdf",
+         "cannot_read": "no text layer on any of 1 page(s); this looks like a scan"}, _cctx)
+    check(_scan["state"] == "CANNOT_READ" and _scan["reason"],
+          f"a scan uploads as CANNOT_READ with its reason ({_scan['state']})")
+    _sr = _V["conversation.send"].run(
+        {"conversation_id": _cid, "text": "Please review this.",
+         "file_ids": [_scan["document_id"]]}, _cctx)
+    _f = _sr["envelope"]["files"][0]
+    check(_f["state"] == "CANNOT_READ" and "text layer" in (_f["reason"] or ""),
+          f"...and the envelope's file panel shows CANNOT_READ with the reason "
+          f"({_f['state']}, {(_f['reason'] or '')[:34]!r})")
+    check(_ev.errors(_sr["envelope"]) == [], "...and that envelope validates")
+    _real = _V["documents.upload"].run(
+        {"text": "MINUTES OF THE BOARD MEETING. Present: three directors.",
+         "name": "minutes.pdf"}, _cctx)
+    _rr = _V["conversation.send"].run(
+        {"conversation_id": _cid, "text": "Please review the minutes.",
+         "file_ids": [_real["document_id"]]}, _cctx)
+    check(_rr["envelope"]["files"][0]["state"] == "READ",
+          f"...while a document that WAS read shows READ -- the first version of this "
+          f"reported every real upload as unreadable "
+          f"({_rr['envelope']['files'][0]['state']})")
+    _unknown = _V["conversation.send"].run(
+        {"conversation_id": _cid, "text": "Review this.", "file_ids": ["0" * 64]}, _cctx)
+    check(_unknown["envelope"]["files"][0]["state"] == "CANNOT_READ",
+          "...and a file_id we hold nothing for is CANNOT_READ, never omitted")
+    check(_V["documents.upload"].run({"name": "x.pdf", "cannot_read": "bad"},
+                                     _cctx)["status"] == "REFUSED",
+          "a cannot_read with no real reason is refused: 'unreadable' with no why invites "
+          "the reader to assume the document was empty")
+
+    # A transport error gives FAILED, and FAILED is never a refusal.
+    _fail = _envelope_for("RESEARCH_QUESTION",
+                          {"status": "FAILED", "error": "ReadTimeout: provider"},
+                          as_of="2026-10-01", run_id=None, files=[], ctx=_cctx)
+    check(_fail["status"] == "FAILED" and _ev.errors(_fail) == [],
+          "a transport error becomes a valid FAILED envelope")
+    check(not _ev.is_refusal(_fail) and _fail["bodies"] == [] and _fail["citations"] == [],
+          "...and FAILED is NOT a refusal, and carries no bodies and no citations")
+    check("not a finding about the law" in _fail["text_blocks"][0]["text"],
+          "...and says so in words")
+
+    # The thread, in order, with the envelope stored.
+    _g = _V["conversation.get"].run({"conversation_id": _cid}, _cctx)
+    check([m["ordinal"] for m in _g["messages"]]
+          == list(range(len(_g["messages"]))),
+          "conversation.get returns the messages in ordinal order with no gaps")
+    check(all(m["envelope"] is None for m in _g["messages"] if m["role"] == "user"),
+          "...a user message never carries an envelope")
+    check(all(m["envelope"] is not None for m in _g["messages"]
+              if m["role"] == "assistant"),
+          "...and every assistant message here does")
+    check(any(c["conversation_id"] == _cid
+              for c in _V["conversation.list"].run({}, _cctx)["conversations"]),
+          "conversation.list shows the thread")
+    check(_V["conversation.get"].run({"conversation_id": "nope"}, _cctx)["status"]
+          == "REFUSED", "an unknown conversation is REFUSED, not an empty thread")
+    check(_V["conversation.send"].run({}, _cctx)["status"] == "REFUSED",
+          "a send with neither text nor a file is refused")
+    check(_V["conversation.send"].run({"text": "x", "task_override": "SUMMARISE"},
+                                      _cctx)["status"] == "REFUSED",
+          "a task_override outside the six is refused")
+    _ov = _V["conversation.send"].run(
+        {"conversation_id": _cid, "text": "anything at all",
+         "task_override": "RESEARCH_QUESTION"}, _cctx)
+    check(_ov["envelope"]["task"] == "RESEARCH_QUESTION"
+          and _ov["classification"]["decided_by"] == "override",
+          "...and a valid override skips intake, recorded as decided_by=override")
+    check(_V["conversation.send"].run({"text": "x"}, Context())["status"] == "REFUSED",
+          "a send with no store is REFUSED -- returning a thread that vanishes on restart "
+          "would be a lie about what was saved")
+
+    # citation.get re-verifies rather than trusting the stored envelope.
+    check(_V["citation.get"].run({"citation_id": "c1"}, _cctx)["status"] == "REFUSED",
+          "citation.get without a conversation_id is refused: the read is governed by the "
+          "tenant's own policy on that thread")
+    check(_V["citation.get"].run({"citation_id": "nope", "conversation_id": _cid},
+                                 _cctx)["status"] == "REFUSED",
+          "...and an unknown citation id is REFUSED, never an empty citation")
+
+    # ══ REVIEW FINDINGS ON PR #27 ════════════════════════════════════════════
+
+    # ── 1. the model must be REACHABLE, checked against the real pre-send guard ─
+    # `_served_or_refusal((), ...)` passed NO origin, and `public_only.verify_prompt`
+    # refuses a prompt with no origin to clear against -- so the classifier could never be
+    # called, and every unmatched message came back NEEDS_CLARIFICATION because of
+    # NotPublic. The user's own typed words are MATTER text, not published corpus text,
+    # and clear_matter is the path for them.
+    from agents import intake as _ik
+    from checker import public_only as _po
+    _msg = "zzz mmm"
+    _org = _intake_origin(_msg)
+    check(_org is not None and _org.basis == _po.MATTER,
+          f"the intake classifier clears the user's message as MATTER text "
+          f"({getattr(_org, 'basis', None)})")
+    # THE REAL PRE-SEND CHECK. No stub: this is the function azure_model.narrate calls.
+    _cleared = _po.verify_prompt(_ik.prompt_for(_msg), _org)
+    check(len(_cleared) == 1 and _msg in _cleared[0],
+          f"...and the REAL verify_prompt clears the classification prompt against it "
+          f"({len(_cleared)} block(s))")
+    try:
+        _po.verify_prompt(_ik.prompt_for(_msg), ())
+        check(False, "...while no origin is refused, which is what used to happen")
+    except _po.NotPublic as e:
+        check("nothing to clear" in str(e),
+              f"...while NO origin is refused by that same guard ({e!s:.44}) -- the bug")
+    _ic = by_name()["intake.classify"].run({"message": _msg}, Context())
+    check(_ic["task"] != "NEEDS_CLARIFICATION",
+          f"an unmatched message never comes back NEEDS_CLARIFICATION for want of a "
+          f"clearance; it reaches the model or falls back to RESEARCH_QUESTION "
+          f"(got {_ic['task']} by {_ic['rule']})")
+    check(_ic["task"] == "RESEARCH_QUESTION", f"...here, the fallback ({_ic['task']})")
+
+    # ── 5. a list field is declared ARRAY, and MCP says so ──────────────────
+    _by = {v.name: v for v in VERBS}
+    _arr = [(v.name, f.name) for v in VERBS for f in v.inputs if f.kind == ARRAY]
+    check(("intake.classify", "files") in _arr,
+          f"intake.classify.files is declared ARRAY, not OBJECT -- it takes a list "
+          f"({_arr})")
+    _schemas = {t.name: t.schema for t in mcp_tools()}
+    _s = _schemas[f"{MCP_NAMESPACE}.intake.classify"]["properties"]["files"]
+    check(_s["type"] == "array",
+          f"...and the MCP inputSchema says array, matching what the verb accepts "
+          f"({_s['type']!r})")
+    for _vn, _fn in _arr:
+        _t = _schemas.get(f"{MCP_NAMESPACE}.{_vn}")
+        if _t is None:                      # a write verb: not on MCP at all
+            continue
+        check(_t["properties"][_fn]["type"] == "array",
+              f"{_vn}.{_fn}: MCP declares array, matching the handler")
+    # And a field declared ARRAY must actually be refused when handed an object.
+    check(by_name()["intake.classify"].run(
+              {"message": "x", "files": {"name": "a.pdf"}}, Context())["status"]
+          == "REFUSED",
+          "a field declared ARRAY is REFUSED when handed an object, so the declaration "
+          "and the handler agree")
+
+    # ── 6. a non-string message is BAD_REQUEST, not a 500 ───────────────────
+    for _bad in (5, 5.5, True, {"a": 1}, ["x"]):
+        _r6 = by_name()["intake.classify"].run({"message": _bad}, Context())
+        check(_r6.get("status") == "REFUSED" and _r6.get("code") == "BAD_REQUEST",
+              f"message={_bad!r} is BAD_REQUEST, not an exception "
+              f"({_r6.get('status')}/{_r6.get('code')})")
+    check(by_name()["intake.classify"].run({"message": None,
+                                            "files": [{"name": "nda.docx"}]},
+                                           Context())["task"] in
+          ("NEEDS_CLARIFICATION", "REVIEW_CONTRACT"),
+          "...while message=None with a file is still classified: absent is not malformed")
+
+    # ── 7 (caller side). One classify call, no rule-name matching ───────────
+    _src = __import__("inspect").getsource(_intake_classify)
+    check("default_no_attachment" not in _src
+          and "attachment+unrecognised_instruction" not in _src,
+          "the verb no longer matches intake's RULE NAMES to guess whether a model is "
+          "wanted -- that coupled the gateway to the module's internals")
+    check(_src.count("intake.classify(") == 1,
+          f"...and calls classify() exactly ONCE, so the rules cannot disagree with "
+          f"themselves between two runs ({_src.count('intake.classify(')})")
+    check("model_provider" in _src,
+          "...passing a model_provider, which classify() calls lazily and only if the "
+          "rules did not decide")
 
     # ── PARITY, the point of the file ───────────────────────────────────────
     check(set(rest) == names and set(cli) == names,
@@ -931,7 +2004,7 @@ def _test() -> None:
           "...while a WRITE verb is kept out of MCP by mcp_tools(), not by the author "
           "remembering to")
     check("widgets.delete" in write_verbs(hypo), "...and is named in write_verbs()")
-    check(len(VERBS) == 11 and "widgets.count" not in rest_spec(),
+    check(len(VERBS) == 19 and "widgets.count" not in rest_spec(),
           "...and the probe changed nothing in this module: the surfaces are generated "
           "from an argument, not from a global the test rebound")
 
@@ -1155,7 +2228,67 @@ def _test() -> None:
     # CLI
     check(cli_spec()["events.assess"]["command"] == "events-assess",
           f"the CLI command is {cli_spec()['events.assess']['command']}")
-    check(cli_spec()["events.assess"]["flags"] == {"--event": True, "--facts": False},
+    # ── company facts at the VERB boundary (PLAN_26 S2-alt) ─────────────────
+    # The module tests prove the rules; these prove the wiring, which is where the
+    # user-facing guarantee actually lives.
+    from checker.sources import mca_fixture as _fx
+    _ctx = Context()
+    _un = [{"field": "state", "value": "Maharashtra"}, {"field": "listed", "value": "yes"}]
+    _r = by_name()["events.assess"].run(
+        {"event": "commercial_contract", "company_facts": _un}, _ctx)
+    check(_r["company_facts"]["used"] == []
+          and len(_r["company_facts"]["pending_confirmation"]) == 2,
+          "events.assess uses NO unconfirmed company fact, and reports both as pending")
+    _stamp = [f for f in _r["findings"] if f["body_id"] == "STAMP"]
+    check(_stamp and _stamp[0]["handling"] == "UNCLASSIFIED",
+          "...so STAMP stays UNCLASSIFIED: an unconfirmed State does not pick a regime")
+    _r2 = by_name()["events.assess"].run(
+        {"event": "commercial_contract",
+         "company_facts": [dict(x, confirmed=True) for x in _un]}, _ctx)
+    check([f["field"] for f in _r2["company_facts"]["used"]] == ["listed", "state"]
+          or sorted(f["field"] for f in _r2["company_facts"]["used"]) == ["listed", "state"],
+          "...and once CONFIRMED both are used")
+    _stamp2 = [f for f in _r2["findings"] if f["body_id"] == "STAMP"]
+    check(_stamp2 and _stamp2[0]["handling"] != "UNCLASSIFIED",
+          f"...which moves STAMP off UNCLASSIFIED ({_stamp2[0]['handling']}) -- the "
+          f"confirmation is doing visible work, not decorating a payload")
+    _r3 = by_name()["events.assess"].run(
+        {"event": "commercial_contract", "facts": {"state": "Kerala"},
+         "company_facts": [dict(x, confirmed=True) for x in _un]}, _ctx)
+    check(_r3["status"] == "REFUSED" and "not ours to choose" in _r3["detail"],
+          "a State given twice, differently, is REFUSED rather than resolved by precedence")
+    _bad = by_name()["events.assess"].run(
+        {"event": "commercial_contract",
+         "company_facts": [{"field": "director_name", "value": "X"}]}, _ctx)
+    check(_bad["status"] == "REFUSED" and "personal data" in _bad["detail"],
+          "a director_name company fact is REFUSED at the verb")
+
+    _x = by_name()["company_facts.extract"].run(
+        {"text": _fx.master_data_text(), "uploaded_on": "2026-10-01"}, _ctx)
+    check(len(_x["facts"]) == 8 and _x["tier"] == "CLIENT" and _x["confirm_required"],
+          f"company_facts.extract returns 8 unconfirmed CLIENT-tier facts "
+          f"({len(_x['facts'])})")
+    check(all(f["quoted_span"] and not f["confirmed"] and not f["can_verify"]
+              for f in _x["facts"]),
+          "...each with a span, unconfirmed, and never verifiable")
+    _blob = repr(_x)
+    check(all(d not in _blob and n not in _blob
+              for d, n in _fx.SYNTHETIC_DIRECTORS),
+          "...and no director name or DIN in the payload")
+    check(by_name()["company_facts.extract"].run(
+              {"text": "", "uploaded_on": "2026-10-01"}, _ctx)["code"] == "CANNOT_READ",
+          "an upload with no text is CANNOT_READ, never an empty set of facts")
+    check(by_name()["company_facts.extract"].run(
+              {"text": "Company Master Data\nCIN  U00000ZZ0000ZZZ000000",
+               "uploaded_on": ""}, _ctx)["status"] == "REFUSED",
+          "...and an extract with no upload date is refused: the label names the date")
+    check("company_facts.extract" not in write_verbs(),
+          "company_facts.extract does not write: it parses and returns, and a TOOL may "
+          "never confirm a fact -- confirmation is a person's act, and it arrives as an "
+          "argument")
+
+    check(cli_spec()["events.assess"]["flags"] == {"--event": True, "--facts": False,
+                                                   "--company-facts": False},
           f"...with the same fields as the other two surfaces "
           f"({cli_spec()['events.assess']['flags']})")
     check(len(_events.BY_KEY) == 8,
