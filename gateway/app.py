@@ -237,6 +237,7 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
                         media_type="application/json")
 
     # ── /v2, generated from the verb table. No route is written by hand here ──
+    from gateway.roles import REQUIRED, may
     from gateway.verbs import VERBS, Context, rest_path
 
 
@@ -269,6 +270,20 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
                              "detail": "body must be a JSON object"}),
                             status_code=400, media_type="application/json")
                     args |= body
+            # 8a. The role check, HERE, before the handler runs and before any input is
+            # validated. Putting it in each handler would mean every new verb has to
+            # remember it, which is the failure mode gateway/roles.py exists to remove --
+            # and an unmapped verb is refused rather than allowed.
+            if not may(principal.role, verb.name):
+                _record(principal, action=audit_mod.READ,
+                        route=f"{verb.method} {path}", resource=verb.name,
+                        outcome="refused", status=403)
+                return Response(content=dumps(
+                    {"error": "forbidden",
+                     "detail": f"{verb.name} needs the "
+                               f"{REQUIRED.get(verb.name, 'admin')} role; this key has "
+                               f"{principal.role}"}),
+                    status_code=403, media_type="application/json")
             missing = [f.name for f in verb.inputs
                        if f.required and not str(args.get(f.name) or "").strip()]
             if missing:
@@ -335,6 +350,14 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
             store = app.state.backend_for(principal.tenant_id)
             ctx = Context(tenant=principal.tenant_id, actor=principal.actor,
                           store=store, documents=app.state.documents, clock=now)
+            if not may(principal.role, verb_name):
+                _record(principal, action=audit_mod.READ, route=f"GET {path}",
+                        resource=verb_name, outcome="refused", status=403)
+                return Response(content=dumps(
+                    {"error": "forbidden",
+                     "detail": f"{verb_name} needs the {REQUIRED.get(verb_name)} role; "
+                               f"this key has {principal.role}"}),
+                    status_code=403, media_type="application/json")
             args = dict(request.path_params) | dict(request.query_params)
             out = by_name()[verb_name].run(args, ctx)
             if isinstance(out, dict) and out.get("status") == "REFUSED":
@@ -431,7 +454,11 @@ def _test() -> None:
     T = "11111111-2222-3333-4444-555555555555"
     A = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
     keys = KeyStore()
-    KEY, PRINCIPAL = keys.mint(tenant_id=T, actor=A, label="gate")
+    # The harness acts as the firm's ADMIN. 8a made `viewer` the default, which is the
+    # safe default and which this suite immediately proved by refusing its own uploads.
+    KEY, PRINCIPAL = keys.mint(tenant_id=T, actor=A, label="gate", role="admin")
+    VIEWER_KEY, _ = keys.mint(tenant_id=T, actor=A, label="viewer", role="viewer")
+    LAWYER_KEY, _ = keys.mint(tenant_id=T, actor=A, label="lawyer", role="lawyer")
     # db_url="" forces memory REGARDLESS of the environment, so the gate is the same on a
     # developer's laptop with PLACEDON_DATABASE_URL exported as it is in a clean checkout.
     app = create_app(clock=lambda: GEN, keys=keys, db_url="")
@@ -677,6 +704,62 @@ def _test() -> None:
                    ).status_code == 401,
           "a download WITHOUT a key is refused: a file route that skipped auth would be "
           "the one way to read another tenant's draft")
+
+    # ── 8a: the role is checked on every verb, before the handler ───────────
+    viewer = TestClient(app, headers={"Authorization": f"Bearer {VIEWER_KEY}"})
+    lawyer = TestClient(app, headers={"Authorization": f"Bearer {LAWYER_KEY}"})
+
+    _vr = viewer.post("/v2/documents/upload", json={"text": "x", "name": "a.txt"})
+    check(_vr.status_code == 403,
+          f"a VIEWER cannot upload a document ({_vr.status_code})")
+    check(_vr.json().get("error") == "forbidden" and "viewer" in _vr.json().get("detail", ""),
+          f"...and the refusal names the role it has and the one it needs "
+          f"({_vr.json().get('detail')})")
+    check(viewer.post("/v2/ask", json={"question": "What is the quorum?"}).status_code
+          != 403,
+          "...while a viewer CAN ask: reading is not a professional act")
+
+    # The line the role model exists for.
+    _RUN = "11111111-1111-1111-1111-111111111111"
+    _va = viewer.post(f"/v2/runs/approve/{_RUN}", json={
+        "item_ref": "x", "reason": "a long enough reason", "quote_viewed": True})
+    check(_va.status_code == 403,
+          f"**a VIEWER cannot APPROVE a finding** -- it would turn an unreviewed finding "
+          f"into a reviewed one with no lawyer involved ({_va.status_code})")
+    _la = lawyer.post(f"/v2/runs/approve/{_RUN}", json={
+        "item_ref": "x", "reason": "a long enough reason", "quote_viewed": True})
+    check(_la.status_code != 403,
+          f"...and a LAWYER can (it fails for a missing run, not for the role: "
+          f"{_la.status_code})")
+
+    check(viewer.post("/v2/review-table/create", json={
+        "name": "g", "document_ids": [], "columns": []}).status_code == 403,
+        "a viewer cannot start work that spends money")
+
+    # The refusal is RECORDED, which is how a denied attempt is visible afterwards.
+    _chain = app.state.audit
+    check(any(getattr(e, "http_status", None) == 403 for e in _chain),
+          "a 403 is written to the audit chain: a denied attempt nobody can see is a "
+          "denied attempt nobody investigates")
+
+    # A download obeys the same rule.
+    _vd = viewer.get("/v2/drafts/00000000-0000-0000-0000-000000000000/export.docx")
+    check(_vd.status_code == 404,
+          f"a VIEWER may download a draft -- both export verbs are reads, so 404 (no such "
+          f"draft) is the right refusal and 403 would be wrong ({_vd.status_code})")
+    # That the download route CONSULTS the role is asserted structurally, because no role
+    # is below `viewer` to prove it with a request.
+    import ast as _ast
+    import inspect as _inspect
+    _appsrc = _inspect.getsource(create_app)
+    _binary_fn = [n for n in _ast.walk(_ast.parse(_appsrc))
+                  if isinstance(n, _ast.FunctionDef) and n.name == "_binary"]
+    check(_binary_fn and any(
+        isinstance(n, _ast.Call) and getattr(n.func, "id", "") == "may"
+        for n in _ast.walk(_binary_fn[0])),
+        "...and the binary route still CALLS may() -- read from the parsed function, "
+        "because no role sits below viewer to prove it with a request, and a file route "
+        "that skipped the check would be the way around every check above")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:

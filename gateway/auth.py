@@ -44,8 +44,17 @@ class Principal:
     actor: str
     key_id: str
     label: str = ""
+    # 8a. The SAFE default: a principal created without a role can read and change
+    # nothing. The dangerous default is the other one, and it is the one that gets chosen
+    # when a field is added to a class that already has callers.
+    role: str = "viewer"
 
     def __post_init__(self) -> None:
+        from gateway.roles import ROLES
+        if self.role not in ROLES:
+            raise ValueError(
+                f"role must be one of {ROLES}, got {self.role!r}. An unknown role is not "
+                f"treated as the lowest one: it is a row nobody meant to write.")
         for name in ("tenant_id", "actor"):
             if not _UUID.match(getattr(self, name) or ""):
                 raise ValueError(
@@ -70,7 +79,8 @@ class KeyStore:
     def __init__(self) -> None:
         self._by_hash: dict[str, Principal] = {}
 
-    def mint(self, *, tenant_id: str, actor: str, label: str = "") -> tuple[str, Principal]:
+    def mint(self, *, tenant_id: str, actor: str, label: str = "",
+             role: str = "viewer") -> tuple[str, Principal]:
         """Create a key. The raw value is returned ONCE and never stored.
 
         There is no `add_existing(key)`. A caller-supplied key could be low entropy, and
@@ -78,7 +88,8 @@ class KeyStore:
         being 256 random bits. Leaving that door shut is what keeps the docstring true.
         """
         raw = secrets.token_urlsafe(KEY_BYTES)
-        p = Principal(tenant_id=tenant_id, actor=actor, key_id=key_id(raw), label=label)
+        p = Principal(tenant_id=tenant_id, actor=actor, key_id=key_id(raw), label=label,
+                      role=role)
         self._by_hash[hash_key(raw)] = p
         return raw, p
 

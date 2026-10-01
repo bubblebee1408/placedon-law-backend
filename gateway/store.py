@@ -58,6 +58,11 @@ class Backend(Protocol):
     def write_decision(self, decision: dict) -> dict: ...
     def read_decisions(self, run_id: str) -> list[dict]: ...
     def read_labels(self) -> list[dict]: ...
+    # 8a: users, roles and invites (018_users_roles.sql).
+    def write_actor(self, actor: dict) -> dict: ...
+    def read_actor(self, actor_id: str) -> dict | None: ...
+    def create_invite(self, invite: dict) -> dict: ...
+    def accept_invite(self, token_hash: str, *, actor_id: str, now: str) -> dict | None: ...
     def append_step(self, run_id: str, step: dict, *, key: str) -> bool: ...
     def set_run(self, run_id: str, *, status: str, refusal_code=None, result=None) -> None: ...
     def read_failure_counts(self) -> list[dict]: ...
@@ -305,6 +310,8 @@ class MemoryBackend:
     grid_cells: dict = field(default_factory=dict)     # grid_id -> {(doc, col): row}
     drafts: dict = field(default_factory=dict)
     draft_versions: dict = field(default_factory=dict)  # draft_id -> [row]
+    actors: dict = field(default_factory=dict)          # actor_id -> row
+    invites: dict = field(default_factory=dict)         # invite_id -> row
     cache: dict = field(default_factory=dict)           # lookup_key -> row
     cache_stats: dict = field(default_factory=dict)     # day -> {hits, misses, stale}
 
@@ -641,6 +648,89 @@ class MemoryBackend:
                                result if result is not None else row.get("result"))
         row["failure_category"], row["failure_reason"] = cat, why
 
+    # ── 8a: users, roles and invites ─────────────────────────────────────────
+    def write_actor(self, actor: dict) -> dict:
+        """Create or update a user. 018's CHECKs restated, so the dict refuses what
+        Postgres refuses."""
+        from gateway.roles import ROLES
+        aid = str(actor.get("actor_id") or "")
+        if not aid:
+            raise StoreError("an actor needs an actor_id")
+        role = str(actor.get("role") or "viewer")
+        if role not in ROLES:
+            raise StoreError(
+                f"{role!r} is not a role (018 actors_role_known); one of {ROLES}")
+        pw = actor.get("password_hash")
+        if pw is not None and not str(pw).startswith("scrypt$"):
+            raise StoreError(
+                "a password hash is scrypt in its self-describing form, or nothing (018 "
+                "actors_password_is_scrypt). A bare digest would accept a SHA-256 of a "
+                "password, which gateway/passwords.py exists to make impossible")
+        email = str(actor.get("email") or "").strip() or None
+        if email:
+            for other, row in self.actors.items():
+                if other != aid and str(row.get("email") or "").lower() == email.lower():
+                    raise StoreError(
+                        f"{email!r} already has an account in this tenant (018 "
+                        f"actors_tenant_email_idx)")
+        row = {"actor_id": aid, "label": str(actor.get("label") or ""), "role": role,
+               "email": email, "password_hash": pw,
+               "disabled_at": actor.get("disabled_at")}
+        self.actors[aid] = row
+        return dict(row)
+
+    def read_actor(self, actor_id: str) -> dict | None:
+        row = self.actors.get(str(actor_id or ""))
+        return dict(row) if row else None
+
+    def create_invite(self, invite: dict) -> dict:
+        """One LIVE invite per email per tenant, as 018's partial unique index says."""
+        from gateway.roles import ROLES
+        email = str(invite.get("email") or "").strip()
+        if "@" not in email[1:]:
+            raise StoreError(f"{email!r} is not an email address")
+        if str(invite.get("role") or "") not in ROLES:
+            raise StoreError(f"an invite needs a real role; one of {ROLES}")
+        th = str(invite.get("token_hash") or "")
+        if len(th) != 64 or any(c not in "0123456789abcdef" for c in th):
+            raise StoreError("an invite stores the sha256 of its token, never the token")
+        if not str(invite.get("expires_at") or "").strip():
+            raise StoreError(
+                "an invite must expire. One with no horizon is a credential, and a "
+                "credential sitting in an inbox for a year is the one that gets used by "
+                "whoever buys the laptop")
+        for row in self.invites.values():
+            if row.get("accepted_at") is None and \
+                    str(row.get("email") or "").lower() == email.lower():
+                raise StoreError(
+                    f"{email!r} already has a live invite (018 invites_live_per_email_idx)")
+        row = {"invite_id": str(invite.get("invite_id") or ""), "email": email,
+               "role": invite["role"], "token_hash": th,
+               "invited_by": str(invite.get("invited_by") or ""),
+               "expires_at": str(invite["expires_at"]),
+               "accepted_at": None, "accepted_by": None}
+        self.invites[row["invite_id"]] = row
+        return dict(row)
+
+    def accept_invite(self, token_hash: str, *, actor_id: str, now: str) -> dict | None:
+        """Mark an invite used, ONCE. Returns the invite, or None if it cannot be used.
+
+        None covers three different situations deliberately -- unknown token, already
+        accepted, expired -- because telling them apart at this boundary is how a token is
+        probed. The caller gets one answer: this token does not let you in.
+        """
+        for row in self.invites.values():
+            if row.get("token_hash") != str(token_hash or ""):
+                continue
+            if row.get("accepted_at") is not None:
+                return None                      # single use, and it is already used
+            if str(row.get("expires_at") or "") <= str(now):
+                return None
+            row["accepted_at"] = str(now)
+            row["accepted_by"] = str(actor_id)
+            return dict(row)
+        return None
+
     def read_labels(self) -> list[dict]:
         """[{task, body, decision}] — every lawyer decision, with the run's intent.
 
@@ -874,6 +964,76 @@ class PostgresBackend:
                 (status, refusal_code,
                  None if result is None else _json.dumps(result), cat, why,
                  status in ("ANSWERED", "PARTIAL", "REFUSED", "FAILED"), run_id))
+
+    # ── 8a: users, roles and invites ─────────────────────────────────────────
+    def write_actor(self, actor: dict) -> dict:
+        import psycopg
+        try:
+            with self._conn() as c:
+                c.execute(
+                    "INSERT INTO actors (actor_id, tenant_id, label, role, email, "
+                    "password_hash, disabled_at) VALUES (%s,%s,%s,%s,%s,%s,%s) "
+                    "ON CONFLICT (actor_id) DO UPDATE SET label = EXCLUDED.label, "
+                    "role = EXCLUDED.role, email = EXCLUDED.email, "
+                    "password_hash = EXCLUDED.password_hash, "
+                    "disabled_at = EXCLUDED.disabled_at",
+                    (actor["actor_id"], self.tenant_id, actor.get("label") or "",
+                     actor.get("role") or "viewer",
+                     (str(actor.get("email") or "").strip() or None),
+                     actor.get("password_hash"), actor.get("disabled_at")))
+        except psycopg.errors.IntegrityError as exc:
+            raise StoreError(f"the database refused this actor: {type(exc).__name__} "
+                             f"{str(exc).splitlines()[0][:150]}") from None
+        return self.read_actor(actor["actor_id"]) or {}
+
+    def read_actor(self, actor_id: str) -> dict | None:
+        if not _UUID.match(actor_id or ""):
+            return None
+        with self._conn() as c:
+            r = c.execute("SELECT actor_id, label, role, email, password_hash, "
+                          "disabled_at FROM actors WHERE actor_id = %s",
+                          (actor_id,)).fetchone()
+        return None if r is None else {
+            "actor_id": str(r[0]), "label": r[1], "role": r[2], "email": r[3],
+            "password_hash": r[4], "disabled_at": r[5].isoformat() if r[5] else None}
+
+    def create_invite(self, invite: dict) -> dict:
+        import psycopg
+        try:
+            with self._conn() as c:
+                r = c.execute(
+                    "INSERT INTO invites (invite_id, tenant_id, email, role, token_hash, "
+                    "invited_by, expires_at) VALUES (%s,%s,%s,%s,%s,%s,%s) "
+                    "RETURNING invite_id, email, role, token_hash, invited_by, "
+                    "expires_at, accepted_at, accepted_by",
+                    (invite["invite_id"], self.tenant_id, invite["email"],
+                     invite["role"], invite["token_hash"], invite["invited_by"],
+                     invite["expires_at"])).fetchone()
+        except psycopg.errors.IntegrityError as exc:
+            raise StoreError(f"the database refused this invite: {type(exc).__name__} "
+                             f"{str(exc).splitlines()[0][:150]}") from None
+        return {"invite_id": str(r[0]), "email": r[1], "role": r[2], "token_hash": r[3],
+                "invited_by": str(r[4]), "expires_at": r[5].isoformat(),
+                "accepted_at": None, "accepted_by": None}
+
+    def accept_invite(self, token_hash: str, *, actor_id: str, now: str) -> dict | None:
+        """One UPDATE, so two simultaneous accepts cannot both win.
+
+        The `accepted_at IS NULL` in the WHERE clause is the single-use guarantee: the
+        second statement matches no row. Checking first and updating after would be a race
+        with a window exactly as wide as the round trip.
+        """
+        with self._conn() as c:
+            r = c.execute(
+                "UPDATE invites SET accepted_at = now(), accepted_by = %s "
+                "WHERE token_hash = %s AND accepted_at IS NULL AND expires_at > now() "
+                "RETURNING invite_id, email, role, token_hash, invited_by, expires_at, "
+                "accepted_at, accepted_by",
+                (actor_id, str(token_hash or ""))).fetchone()
+        return None if r is None else {
+            "invite_id": str(r[0]), "email": r[1], "role": r[2], "token_hash": r[3],
+            "invited_by": str(r[4]), "expires_at": r[5].isoformat(),
+            "accepted_at": r[6].isoformat(), "accepted_by": str(r[7])}
 
     def read_labels(self) -> list[dict]:
         with self._conn() as c:
@@ -1958,6 +2118,76 @@ def conformance(backend) -> list[tuple[bool, str]]:
     ck(not any(r["category"] is not None and r["category"] == "" for r in _counts),
        "...and an untagged run reads as category None, never an empty string")
 
+    # ── 8a: users, roles and invites, on both backends ──────────────────────
+    import hashlib as _hl
+    _ad = str(_uuid.uuid4())
+    backend.write_actor({"actor_id": _ad, "label": "admin", "role": "admin",
+                         "email": "admin@example.com"})
+    _arow = backend.read_actor(_ad) or {}
+    ck(_arow.get("role") == "admin" and _arow.get("email") == "admin@example.com",
+       f"an actor round-trips with its role and email ({_arow.get('role')})")
+    ck(backend.read_actor(str(_uuid.uuid4())) is None,
+       "...and an unknown actor reads as None")
+    for bad, why in (({"actor_id": str(_uuid.uuid4()), "role": "superuser"},
+                      "a role that is not one of the three"),
+                     ({"actor_id": str(_uuid.uuid4()), "role": "viewer",
+                       "password_hash": "d41d8cd98f00b204e9800998ecf8427e"},
+                      "a bare digest as a password hash")):
+        try:
+            backend.write_actor(bad)
+            ck(False, f"{why} is refused")
+        except StoreError:
+            ck(True, f"refused on both backends: {why}")
+
+    _tok = _hl.sha256(b"a-real-token").hexdigest()
+    _iid = str(_uuid.uuid4())
+    backend.create_invite({"invite_id": _iid, "email": "new@example.com",
+                           "role": "lawyer", "token_hash": _tok, "invited_by": _ad,
+                           "expires_at": "2099-01-01T00:00:00+00:00"})
+    try:
+        backend.create_invite({"invite_id": str(_uuid.uuid4()),
+                               "email": "new@example.com", "role": "viewer",
+                               "token_hash": _hl.sha256(b"other").hexdigest(),
+                               "invited_by": _ad,
+                               "expires_at": "2099-01-01T00:00:00+00:00"})
+        ck(False, "a second LIVE invite for one email is refused")
+    except StoreError:
+        ck(True, "a second LIVE invite for one email is refused on both backends")
+
+    _joiner = str(_uuid.uuid4())
+    backend.write_actor({"actor_id": _joiner, "label": "joiner", "role": "lawyer"})
+    _first = backend.accept_invite(_tok, actor_id=_joiner, now="2026-10-02T00:00:00+00:00")
+    ck(_first and _first.get("role") == "lawyer",
+       f"an invite is accepted once, and carries the role it was issued for "
+       f"({(_first or {}).get('role')})")
+    _second = backend.accept_invite(_tok, actor_id=_joiner,
+                                    now="2026-10-02T00:00:00+00:00")
+    ck(_second is None,
+       "**the same token cannot be used twice** -- single use is the database's job, not "
+       "a handler's: on Postgres the UPDATE carries `accepted_at IS NULL`, so two "
+       "simultaneous accepts cannot both win")
+    # An invite that EXPIRES while we watch. It cannot be created already-expired: 018's
+    # invites_expires_after_creation forbids that, correctly -- an invite dated into the
+    # past is not an expired invite, it is a nonsense row. So this one is given a second
+    # to live, and the second is allowed to pass. Postgres compares against its own
+    # clock, which is why real time has to elapse rather than a `now` being passed in.
+    import datetime as _dt
+    import time as _time
+    _soon = (_dt.datetime.now(_dt.timezone.utc) + _dt.timedelta(seconds=1)).isoformat()
+    _expired = _hl.sha256(b"expiring-token").hexdigest()
+    backend.create_invite({"invite_id": str(_uuid.uuid4()), "email": "old@example.com",
+                           "role": "viewer", "token_hash": _expired, "invited_by": _ad,
+                           "expires_at": _soon})
+    _time.sleep(1.2)
+    ck(backend.accept_invite(_expired, actor_id=_joiner,
+                             now=_dt.datetime.now(_dt.timezone.utc).isoformat()) is None,
+       "an EXPIRED invite cannot be accepted: a credential with no horizon is the one "
+       "that gets used by whoever buys the laptop")
+    ck(backend.accept_invite(_hl.sha256(b"never-issued").hexdigest(), actor_id=_joiner,
+                             now="2026-10-02T00:00:00+00:00") is None,
+       "...and an unknown token gets the SAME answer as a used or expired one, so a "
+       "token cannot be probed to learn which it was")
+
     # ── O9: the answer cache, on both backends ──────────────────────────────
     _LK, _CK = "a" * 64, "b" * 64
     _CIT = [{"id": "c1", "provision": "s.96", "sha256": "c" * 64, "quote": "a quote"}]
@@ -2080,7 +2310,8 @@ def _test() -> None:
             "cancel_grid", "write_draft", "read_draft", "append_draft_version",
             "read_draft_versions", "write_cache_entry", "read_cache_entry",
             "bump_cache_stat", "read_cache_stats", "read_failure_counts",
-            "read_labels")
+            "read_labels", "write_actor", "read_actor", "create_invite",
+            "accept_invite")
     for name in need:
         check(hasattr(MemoryBackend(), name)
               and hasattr(PostgresBackend("postgresql://x/y", tenant_id=T), name),

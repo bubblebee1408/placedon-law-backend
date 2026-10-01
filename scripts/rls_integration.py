@@ -198,7 +198,10 @@ TENANT_TABLES = ("actors", "api_keys", "documents", "audit_log",
                  "drafts", "draft_versions",
                  # O9: the answer cache. A cached answer carries the question a lawyer
                  # asked and the citations we gave them, so it is proved like the rest.
-                 "answer_cache", "answer_cache_stats")
+                 "answer_cache", "answer_cache_stats",
+                 # 8a: invites. The leak would be another firm's staff email addresses and
+                 # which of them was being made an admin.
+                 "invites")
 
 
 class RlsFailure(AssertionError):
@@ -337,6 +340,14 @@ def _seed(cur, tenant, actor, tag: str) -> None:
                  f"{tag}: aggregate liability shall not exceed INR 50,00,000",
                  0.0412, f"{tag}: one extraction call, priced from reported tokens"))
 
+    # 8a: an invite. The leak would be another firm's staff email addresses and which of
+    # them was being made an admin.
+    cur.execute("INSERT INTO invites (invite_id, tenant_id, email, role, token_hash, "
+                "invited_by, expires_at) VALUES (%s,%s,%s,'lawyer',%s,%s,"
+                "now() + interval '7 days')",
+                (uuid.uuid4(), tenant, f"{tag}-joiner@example.com",
+                 ("a" if tag.startswith("A") else "b") * 64, actor))
+
     # O9: a cached answer. The leak would carry the QUESTION another firm's lawyer asked
     # and the answer we gave them -- the same kind of private thing `conversations` holds,
     # which is why 014 scopes every row to a tenant rather than sharing statutory answers.
@@ -472,7 +483,8 @@ def run(url: str) -> int:
                   "013_grid_cell_cost.sql", "014_answer_cache.sql",
                   "015_failure_category.sql",
                   "016_critic_enabled.sql",
-                  "017_nonconformity.sql"):
+                  "017_nonconformity.sql",
+                  "018_users_roles.sql"):
             cur.execute(sql(f))
             print(f"  applied {f}")
         _ensure_app_role(cur)

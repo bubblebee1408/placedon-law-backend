@@ -273,6 +273,11 @@ extra+=("scripts/calibration_report.py --test")
 # The screen contract: which verb each screen calls and which fields it shows,
 # asserted against gateway/verbs.py and the envelope schema rather than described.
 extra+=("gateway/screens.py --test")
+# 8a: who may call what, and how a password is stored. The role map is exhaustive over
+# the verb table by test, so a verb added without a role fails the build.
+extra+=("gateway/roles.py --test")
+extra+=("gateway/passwords.py --test")
+
 
 
 

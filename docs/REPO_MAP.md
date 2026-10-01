@@ -237,6 +237,8 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `gateway/envelope.py` | R2 feeds | One answer envelope, versioned, validated against the schema file beside it. |
 | `gateway/jobs.py` | R2 feeds | The durable job queue. One contract, two backends, one conformance suite. |
 | `gateway/models.py` | R2 feeds | Turning a router decision into a callable, or into a NAMED refusal. |
+| `gateway/passwords.py` | R2 feeds | Password hashing with `hashlib.scrypt`. No new dependency, and no plaintext anywhere. |
+| `gateway/roles.py` | R2 feeds | Who may call what. Three roles, one table, and no verb without an entry. |
 | `gateway/schema.py` | R2 feeds | The migrations, checked statically, because the live check cannot be in the gate. |
 | `gateway/screens.py` | R2 feeds | Which verb each screen calls, and which fields it shows. Checked, not described. |
 | `gateway/store.py` | R2 feeds | Two backends, one interface, and one conformance suite that both must pass. |
@@ -342,4 +344,4 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/watch_gazette.py` |  | Run the Gazette watcher once: what did the Gazette publish since we last looked? |
 | `scripts/watch_ofac.py` |  | Poll OFAC's SDN list and report what CHANGED since the last trustworthy poll. |
 
-302 modules listed.
+304 modules listed.
