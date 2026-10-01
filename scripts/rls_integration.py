@@ -47,7 +47,23 @@ id. So this drops `tenant_isolation`, asserts the other tenant's rows become vis
 and restores it. If that middle step does NOT leak, the test FAILS -- because then it was
 never measuring the policy.
 
-Run:  PLACEDON_DATABASE_URL=postgres://... PYTHONPATH=. python3 scripts/rls_integration.py --run
+Run:  createdb placedon_throwaway_now
+      PLACEDON_DATABASE_URL=postgresql:///placedon_throwaway_now PYTHONPATH=. \\
+          python3 scripts/rls_integration.py --run
+      dropdb placedon_throwaway_now
+
+      The name is not decoration: --run only touches a database whose name starts
+      with `placedon_throwaway_`, and it reads PLACEDON_DATABASE_URL and nothing
+      else. See THROWAWAY_PREFIX for why.
+
+      `--test` exercises those two guards and needs no server. It is deliberately
+      NOT in scripts/run_tests.sh, and `gateway/schema.py` has a check that keeps
+      it out: a green "scripts/rls_integration.py" line in the gate would read as
+      the ISOLATION PROOF having passed, when all that ran was the guard. That is
+      the same failure the invariant already names -- a skipped security test
+      reading as a passing one -- wearing a different hat. Run it by hand:
+
+          PYTHONPATH=. python3 scripts/rls_integration.py --test
       PYTHONPATH=. python3 scripts/rls_integration.py            # prints this status
 
 `PLACEDON_DATABASE_URL` is the variable, the same one gateway/store.py selects on: two
@@ -723,24 +739,228 @@ def run(url: str) -> int:
     return 0
 
 
+# ── which database this script may destroy, and which variable names it ──────
+#
+# `--run` applies every migration, seeds rows, DROPS POLICIES and DISABLES RLS to show the
+# checks measure something. On a real database that sequence is destructive, and on
+# 2026-10-01 it was pointed at one: `DATABASE_URL=postgresql:///placedon_throwaway_013` was
+# set, `main` read `database_url() or os.getenv("DATABASE_URL")`, `database_url()` found
+# the .env's PLACEDON_DATABASE_URL first, and migrations 001-007 ran against placedon_dev.
+# 008 rolled back whole on its own BEGIN/COMMIT so nothing was lost -- by luck of how that
+# file is written, not by anything here.
+#
+# Two guards, because two separate things went wrong: the WRONG VARIABLE was consulted, and
+# NOTHING checked which database the connection named.
+
+# The one variable, named where every function can see it. `gateway/store.py` owns the
+# name; importing it rather than restating it is what stops the script and the application
+# from disagreeing about which variable holds the connection.
+from gateway.store import URL_ENV
+
+THROWAWAY_PREFIX = "placedon_throwaway_"
+
+# Refused by name as well as by prefix. A generic "wrong prefix" message would not say that
+# this is the database the incident actually touched, and the one a developer is most
+# likely to have in their shell.
+REFUSED_BY_NAME = frozenset({"placedon_dev", "placedon_t0_rls", "postgres", "template1"})
+
+
+def database_name(url: str) -> str:
+    """The database a connection string names, or "" when it names none.
+
+    Handles both libpq forms: a URL (`postgresql://user@host:5432/name?opts`) and a keyword
+    string (`dbname=name user=me`). Returns "" rather than guessing, because a default here
+    would be a guess about which database is about to be rewritten.
+    """
+    text = (url or "").strip()
+    if not text:
+        return ""
+    if "://" not in text:
+        for part in text.split():
+            if part.startswith("dbname="):
+                return part.split("=", 1)[1].strip()
+        return ""
+    from urllib.parse import urlsplit
+    return urlsplit(text).path.lstrip("/").split("?")[0].strip()
+
+
+def refuse_target(url: str) -> str | None:
+    """The reason this database may not be used, or None when it may be."""
+    name = database_name(url)
+    if not name:
+        return (f"this connection string names no database, so there is no way to tell "
+                f"what --run would rewrite. It must name one whose name starts with "
+                f"{THROWAWAY_PREFIX!r}.")
+    if name in REFUSED_BY_NAME:
+        return (f"{name!r} is refused BY NAME. --run applies every migration, seeds rows, "
+                f"drops policies and disables RLS; on {name!r} that is destructive. On "
+                f"2026-10-01 this script ran migrations 001-007 against placedon_dev "
+                f"because the wrong variable was set, and only 008's own transaction "
+                f"stopped it going further. Create a database named "
+                f"{THROWAWAY_PREFIX}<something> and drop it afterwards.")
+    if not name.startswith(THROWAWAY_PREFIX):
+        return (f"{name!r} does not start with {THROWAWAY_PREFIX!r}. --run is destructive "
+                f"-- it drops policies and disables RLS to prove the checks measure "
+                f"something -- so it will only touch a database whose NAME says it exists "
+                f"to be thrown away.")
+    return None
+
+
+def resolve_url(env) -> tuple[str | None, str | None]:
+    """(url, refusal) from the environment. Reads PLACEDON_DATABASE_URL and nothing else.
+
+    `DATABASE_URL` is not a fallback. It used to be, and the two names are close enough
+    that setting one while the other is in a .env is a mistake nobody notices until the
+    wrong database has been written to -- which is precisely what happened. Setting only
+    `DATABASE_URL` is therefore a LOUD failure and not a quiet substitution.
+    """
+    url = (env.get(URL_ENV) or "").strip()
+    other = (env.get("DATABASE_URL") or "").strip()
+    if url:
+        return url, None                      # DATABASE_URL is ignored, never merged
+    if other:
+        return None, (
+            f"DATABASE_URL is set but {URL_ENV} is not. This script reads {URL_ENV} ONLY. "
+            f"The two names are one word apart, and reading both is how a --run aimed at a "
+            f"throwaway database ended up applying migrations to placedon_dev on "
+            f"2026-10-01. Set {URL_ENV} explicitly.")
+    return None, (
+        f"{URL_ENV} is not set. Refusing to invent one: a connection string guessed here "
+        f"would either fail confusingly or hit the wrong database.")
+
+
 def main(argv: list[str]) -> int:
     print("scripts/rls_integration.py")
     print(f"  {status()}\n")
     if "--run" not in argv:
         print("  (pass --run with PLACEDON_DATABASE_URL set to prove it against a real server)")
         return 0
-    # The SAME variable gateway/store.py selects on, read through checker.env so .env is
-    # honoured. Two names for one connection is how a script proves isolation on a
-    # database the application never uses.
-    from gateway.store import URL_ENV, database_url
-    url = database_url() or os.getenv("DATABASE_URL")
-    if not url:
-        print(f"  {URL_ENV} is not set (nor DATABASE_URL). Refusing to invent one: a "
-              f"connection string guessed here would either fail confusingly or hit the "
-              f"wrong database.")
+    # PLACEDON_DATABASE_URL only, and only a database whose name says it is disposable.
+    # `database_url()` reads it through checker.env so a .env is honoured -- which is
+    # exactly why the environment is consulted here too: a .env value and a shell value
+    # must not be able to disagree silently.
+    from gateway.store import database_url
+    shell = dict(os.environ)
+    # The mix-up is judged on the SHELL environment, before a .env is allowed to fill the
+    # variable in. On this machine .env supplies PLACEDON_DATABASE_URL=...placedon_dev, so
+    # merging first would mean `DATABASE_URL=... --run` always looked like a correctly
+    # configured run aimed at the wrong database -- the incident, with the one message
+    # that would have explained it suppressed.
+    if shell.get("DATABASE_URL") and not shell.get(URL_ENV):
+        print(f"  REFUSED: {resolve_url(shell)[1]}")
         return 2
+    env = dict(shell)
+    if not env.get(URL_ENV):
+        from_file = database_url()
+        if from_file:
+            env[URL_ENV] = from_file
+    url, refusal = resolve_url(env)
+    if refusal:
+        print(f"  REFUSED: {refusal}")
+        return 2
+    target = refuse_target(url)
+    if target:
+        print(f"  REFUSED: {target}")
+        return 2
+    print(f"  target : {database_name(url)} (matches {THROWAWAY_PREFIX}*)\n")
     return run(url)
 
 
+def _test() -> int:
+    ok = fail = 0
+
+    def check(cond: bool, label: str) -> None:
+        nonlocal ok, fail
+        if cond:
+            ok += 1
+            print(f"  [PASS] {label}")
+        else:
+            fail += 1
+            print(f"  [FAIL] {label}")
+
+    print("rls_integration (the guard; the proof itself needs a server and --run)")
+
+    # ── which database this script is allowed to destroy ────────────────────
+    for url, name in (
+            ("postgresql:///placedon_throwaway_1", "placedon_throwaway_1"),
+            ("postgresql://me@localhost:5432/placedon_throwaway_x", "placedon_throwaway_x"),
+            ("postgres://u:p@h:5432/placedon_dev?sslmode=require", "placedon_dev"),
+            ("dbname=placedon_dev user=me", "placedon_dev"),
+            ("postgresql:///placedon_dev", "placedon_dev")):
+        check(database_name(url) == name,
+              f"the database name is read out of {url[:38]!r} -> {name}")
+    check(database_name("postgresql://host/") == "",
+          "...and a url naming no database reads as empty, never as a default")
+
+    check(refuse_target("postgresql:///placedon_throwaway_013") is None,
+          "a placedon_throwaway_ database is allowed: that is what this script is for")
+    for bad, why in (("postgresql:///placedon_dev", "placedon_dev"),
+                     ("dbname=placedon_dev user=me", "placedon_dev in key=value form"),
+                     ("postgresql:///placedon_rls_013", "a name I invented on the day"),
+                     ("postgresql:///postgres", "the cluster's own database"),
+                     ("postgresql:///placedon_t0_rls", "an older real database"),
+                     ("postgresql://host/", "a url naming no database at all")):
+        reason = refuse_target(bad)
+        check(bool(reason), f"REFUSED: {why}")
+        check(bool(reason) and THROWAWAY_PREFIX in (reason or ""),
+              f"...and the reason names the prefix it wanted ({(reason or '')[:40]!r})")
+    check("by name" in (refuse_target("postgresql:///placedon_dev") or "").lower(),
+          "placedon_dev is refused BY NAME, with its own reason -- it is the database that "
+          "actually got migrations run against it on 2026-10-01, and a generic prefix "
+          "message would not say so")
+    check(refuse_target("postgresql:///placedon_dev")
+          != refuse_target("postgresql:///placedon_rls_013"),
+          "...so its reason is not the same sentence every other refusal gets")
+
+    # ── which environment variable is read ─────────────────────────────────
+    url, refusal = resolve_url({"PLACEDON_DATABASE_URL": "postgresql:///placedon_throwaway_a"})
+    check(url == "postgresql:///placedon_throwaway_a" and refusal is None,
+          "PLACEDON_DATABASE_URL is read")
+    url2, refusal2 = resolve_url({"DATABASE_URL": "postgresql:///placedon_throwaway_b"})
+    check(url2 is None and bool(refusal2),
+          "DATABASE_URL ALONE is refused, not used")
+    check("DATABASE_URL" in (refusal2 or "") and "PLACEDON_DATABASE_URL" in (refusal2 or ""),
+          f"...and the refusal names BOTH variables, because the whole failure is that "
+          f"they look alike ({(refusal2 or '')[:60]!r})")
+    url3, refusal3 = resolve_url({"PLACEDON_DATABASE_URL": "postgresql:///placedon_throwaway_c",
+                                  "DATABASE_URL": "postgresql:///somewhere_else"})
+    check(url3 == "postgresql:///placedon_throwaway_c" and refusal3 is None,
+          "with both set, PLACEDON_DATABASE_URL wins and DATABASE_URL is ignored -- never "
+          "merged, never preferred")
+    url4, refusal4 = resolve_url({})
+    check(url4 is None and bool(refusal4) and "DATABASE_URL is set" not in (refusal4 or ""),
+          "neither set is refused, and NOT with the mistaken-variable message")
+
+    # The incident this exists for, replayed.
+    _, _r = resolve_url({"DATABASE_URL": "postgresql:///placedon_throwaway_013"})
+    check(bool(_r),
+          "THE 2026-10-01 INCIDENT: `DATABASE_URL=...throwaway python3 "
+          "scripts/rls_integration.py --run` is refused outright. It previously fell "
+          "through to `database_url() or os.getenv('DATABASE_URL')`, where the .env's "
+          "PLACEDON_DATABASE_URL won and migrations 001-007 ran against placedon_dev")
+
+    # The ordering that makes the mix-up message reachable at all.
+    _shell = {"DATABASE_URL": "postgresql:///placedon_throwaway_013"}
+    _merged = dict(_shell, **{URL_ENV: "postgresql:///placedon_dev"})   # as a .env would
+    check(resolve_url(_merged)[1] is None,
+          "once a .env supplies the variable, resolve_url is satisfied by it...")
+    check("DATABASE_URL is set" in (resolve_url(_shell)[1] or ""),
+          "...which is why `main` judges the MIX-UP on the shell environment first: "
+          "merging the .env in beforehand would hide the one message that explains what "
+          "the user actually did wrong")
+
+    check(THROWAWAY_PREFIX == "placedon_throwaway_",
+          f"the prefix is {THROWAWAY_PREFIX!r}")
+    check(URL_ENV == "PLACEDON_DATABASE_URL",
+          f"the variable is gateway/store.py's own URL_ENV, imported and not restated, so "
+          f"the script and the application cannot disagree about it ({URL_ENV})")
+    check("placedon_dev" in REFUSED_BY_NAME, "placedon_dev is in the by-name refusal list")
+
+    print(f"\n{ok}/{ok + fail} passed")
+    return 1 if fail else 0
+
+
 if __name__ == "__main__":
+    if "--test" in sys.argv:
+        raise SystemExit(_test())
     raise SystemExit(main(sys.argv))
