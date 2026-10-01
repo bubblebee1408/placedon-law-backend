@@ -334,8 +334,8 @@ def _test() -> int:
                     files=[file_state("f1", "minutes.pdf", READ, pages=3)],
                     run_id="r1", trace_url="/v2/runs/r1/trace")
         check(errors(env) == [], f"the envelope validates for task {task}")
-    check(len(intake.TASKS) == 7,
-          f"...all seven tasks plus NEEDS_CLARIFICATION ({len(intake.TASKS)})")
+    check(len(intake.TASKS) == 8,
+          f"...all eight tasks plus NEEDS_CLARIFICATION ({len(intake.TASKS)})")
     check(set(intake.TASKS) | {intake.NEEDS_CLARIFICATION}
           == set(schema()["properties"]["task"]["enum"]),
           "the schema's task enum is EXACTLY intake's closed set plus "

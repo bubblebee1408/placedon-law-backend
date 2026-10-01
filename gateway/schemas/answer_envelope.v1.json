@@ -39,6 +39,7 @@
         "LAW_CHANGES",
         "EVENT_ASSESS",
         "DRAFT",
+        "REVIEW_TABLE",
         "NEEDS_CLARIFICATION"
       ],
       "description": "The task intake named. NEEDS_CLARIFICATION appears here too, because the envelope must be able to say 'no task was chosen' without inventing one. DRAFT was ADDED to this enum rather than starting a v2: widening an enum does not re-interpret any stored envelope -- every v1 envelope still validates and still means what it meant -- which is the failure the version-in-the-filename rule exists to prevent. A change that altered the MEANING of a stored field would require v2. Once a client ships against v1, even a widening becomes v2, because an old reader would meet a task name it does not know."
