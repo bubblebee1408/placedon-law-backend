@@ -248,6 +248,8 @@ def _ask(args: dict, ctx: Context) -> dict:
     # Summary.prose() is the served form: traced sentences with their spans, and the count
     # of any that were dropped stated in the body rather than a footnote.
     d["answer"] = out.served
+    if _affirmed(args.get("critic")) and out.summary is not None:
+        d = _apply_critic(d, out.summary, ctx)
     fields = served.step_fields() if served else {}
     d["run_id"] = _persist_run(
         ctx, intent="research_question", status=out.status,
@@ -263,6 +265,104 @@ def _ask(args: dict, ctx: Context) -> dict:
         law_versions={o.path: o.blob for o in origins})
     _cache_store(cache_key, q, "RESEARCH_QUESTION", args.get("sources"), d, ctx)
     return d
+
+
+# ── layer 7: the critic ──────────────────────────────────────────────────────
+
+_CRITIC_PROMPT = (
+    "Below are the sentences of an answer about Indian company law. Each was already "
+    "traced to a verbatim statutory span by a verifier.\n\n"
+    "Your ONLY job is to object. You may:\n"
+    "  REMOVE <id> -- the sentence is not supported by the span it rests on\n"
+    "  FLAG   <id> -- the sentence is supported but reads more broadly than the span\n"
+    "You may NOT rewrite, add, or suggest better wording. There is nowhere to put it.\n"
+    "Reply with one line per objection: ACTION id: reason (at least 10 characters).\n"
+    "Reply with nothing at all if you have no objection. Do not invent an objection to "
+    "appear useful.\n\n")
+
+
+def _critic_for(ctx: Context):
+    """`critique(claims) -> [dict]` from the routed model, or one that raises.
+
+    Raising is the designed failure: `critic.review` turns it into "the critic did not
+    run" and the answer stands exactly as the verifier left it. This layer only ever
+    subtracts, so not running it is always the safe direction.
+    """
+    from checker import public_only, router
+    from checker.prompt_safety import UNTRUSTED_CLAUSE, wrap_untrusted
+
+    def critique(claims):
+        origins = tuple(public_only.clear_file(str(c.get("source")))
+                        for c in (getattr(critique, "sources", ()) or ())
+                        if str(c.get("source") or ""))
+        if not origins:
+            raise RuntimeError("no citation names the file it was read from, so the "
+                               "answer's own sentences cannot be cleared")
+        served, refusal = _served_or_refusal(origins, name="critic",
+                                             purpose=router.NARRATION, ctx=ctx,
+                                             consequence=router.LOW)
+        if refusal:
+            raise RuntimeError(f"no model to criticise with: {refusal['code']}")
+        body = "".join(f"{c['id']}:\n{wrap_untrusted(c['text'], 'an answer sentence')}\n"
+                       for c in claims)
+        raw = str(served.call(UNTRUSTED_CLAUSE + "\n\n" + _CRITIC_PROMPT + body) or "")
+        out = []
+        for line in raw.splitlines():
+            line = line.strip()
+            if ":" not in line:
+                continue
+            head, reason = line.split(":", 1)
+            bits = head.split()
+            if len(bits) != 2:
+                continue
+            out.append({"action": bits[0].strip().upper(), "claim_id": bits[1].strip(),
+                        "reason": reason.strip()})
+        return out
+
+    return critique
+
+
+def _apply_critic(d: dict, summary, ctx: Context) -> dict:
+    """Run the critic over the answer's own sentences and narrow the answer, or not.
+
+    The claims are the VERIFIER'S OUTPUT -- sentences already traced to a verbatim span --
+    which is what makes this an external check rather than the self-correction §1.4 rules
+    out: the critic is shown what the verifier admitted, not what a model wanted to say.
+    """
+    from checker import critic as cr
+    claims = [{"id": f"s{i}", "text": str(getattr(sent, "text", "") or ""),
+               "source": None}
+              for i, sent in enumerate(getattr(summary, "sentences", ()) or (), 1)]
+    if not claims:
+        return d
+    critique = _critic_for(ctx)
+    # The citations carry the corpus paths the sentences were traced to; the critic's
+    # prompt is cleared against those files.
+    critique.sources = list(d.get("citations") or ())
+    try:
+        verdict = cr.review(claims, critique=critique)
+    except cr.CriticError:
+        return d
+    out = dict(d)
+    out["critic"] = verdict.to_dict()
+    if verdict.removed:
+        kept_text = [c["text"] for c in verdict.kept if c["text"].strip()]
+        out["answer"] = "\n".join(kept_text)
+        out["critic_note"] = (
+            f"The critic removed {len(verdict.removed)} sentence(s) from this answer, "
+            f"with the reason recorded in critic.trace. It may remove at most one per run "
+            f"(PLAN_23 §1.4) and may never rewrite or add.")
+        if not kept_text:
+            # The whole answer went. ANSWERED with an empty body would read as "nothing
+            # applies" -- a finding of no obligation, produced by a critic rather than by
+            # the law. It is an abstention, and it says whose objection caused it.
+            out["status"] = "NEEDS_LAWYER"
+            out["critic_note"] = (
+                "The critic objected to EVERY sentence of this answer, so nothing is "
+                "served. This is not a finding that no obligation exists: it is an "
+                "answer withdrawn, and the objection is in critic.trace for a person to "
+                "agree or disagree with.")
+    return out
 
 
 # ── O5: bounded decomposition ────────────────────────────────────────────────
@@ -2661,6 +2761,11 @@ VERBS: tuple[Verb, ...] = (
                 describes="company facts you are telling us, e.g. "
                           "[{'field':'listed','value':'yes'}]. Labelled 'you told us', "
                           "shown back, never verified, and they do not steer the answer"),
+          Field("critic", STRING, False,
+                describes="'true' to run the layer-7 critic over the answer's own "
+                          "sentences after the verifier. It may FLAG or REMOVE only, at "
+                          "most one removal per run (PLAN_23 §1.4), and never rewrites or "
+                          "adds. Every removal is in critic.trace"),
           Field("decompose", STRING, False,
                 describes="'true' to split a compound question into at most 4 "
                           "sub-questions (PLAN_23 O5), answer each through the verified "
@@ -3547,6 +3652,55 @@ def _test() -> None:
           "...and the drop is STATED in the reply, not left in a field a client may not "
           "render")
     check(_ev.errors(_dr["envelope"]) == [], "...and that envelope validates")
+
+    # ══ layer 7: the critic ═════════════════════════════════════════════════
+    # `_crit`, not `_cr`: `_cr` already holds the conversation.send result used further
+    # down, and shadowing it turned a dict into a module.
+    from checker import critic as _crit
+
+    def _critic_model(_origins):
+        def call(prompt):
+            if "Your ONLY job is to object" in prompt:
+                return ("REMOVE s1: the span does not support this as stated\n"
+                        "REWRITE s1: here is better wording\n")
+            return _rq.quoting_model(_srcs)(prompt)
+        return call
+
+    _c7 = Context(store=_MB(), clock=lambda: "2026-10-01T10:00:00+05:30",
+                  model_for=_critic_model)
+    _cv = by_name()["ask"].run({"question": _q, "critic": "true"}, _c7)
+    _cd = _cv.get("critic") or {}
+    check(_cd.get("removed") and _cd["removed"][0]["claim_id"] == "s1",
+          f"the critic REMOVES a sentence the verifier had admitted ({_cd.get('removed')})")
+    check(any("REMOVED" in t for t in _cd.get("trace") or []),
+          "...and every removal is in the trace")
+    check(any(r["action"] == "REWRITE" for r in _cd.get("refused") or []),
+          "**a REWRITE is REFUSED**: the critic may flag or remove and nothing else")
+    check(not any("better wording" in str(v) for v in _cv.values()),
+          "...and the wording it proposed reaches no part of the answer")
+    check(_cd.get("removals_allowed") == 1,
+          "...and the result names the one-removal bound it applied")
+
+    # The case that would have shipped silently: everything removed.
+    check(_cv.get("status") == "NEEDS_LAWYER",
+          f"when the critic objects to EVERY sentence the answer is NEEDS_LAWYER, not an "
+          f"ANSWERED with an empty body ({_cv.get('status')})")
+    check("not a finding that no obligation exists" in str(_cv.get("critic_note")),
+          "...and says so, because an empty ANSWERED reads as 'nothing applies'")
+
+    # Off unless asked for, and a broken critic changes nothing.
+    _plain = by_name()["ask"].run({"question": _q}, Context(
+        store=_MB(), clock=lambda: "2026-10-01T10:00:00+05:30",
+        model_for=lambda _o: _rq.quoting_model(_srcs)))
+    check("critic" not in _plain,
+          "the critic does NOT run unless asked: it can only subtract, and subtracting "
+          "from every answer by default is a behaviour change nobody opted into")
+    check("critic" in {f.name for f in by_name()["ask"].inputs},
+          "...and it is a FIELD on ask, not a new verb")
+    _broke = _crit.review([{"id": "s1", "text": "x"}],
+                        critique=lambda c: (_ for _ in ()).throw(TimeoutError("down")))
+    check([c["id"] for c in _broke.kept] == ["s1"] and "did not run" in _broke.note,
+          "a critic that raises leaves the answer exactly as the verifier produced it")
 
     # ══ O5: bounded decomposition ═══════════════════════════════════════════
     from checker import decompose as _dc
