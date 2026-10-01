@@ -184,6 +184,15 @@ def _ask(args: dict, ctx: Context) -> dict:
     if refusal:
         return refusal
 
+    # O9. The cache is consulted ONLY when no company facts were supplied: a fact-dependent
+    # answer is an answer about one company, and the key does not carry the facts, so a hit
+    # would serve one company's answer to a question asked about another.
+    hit, cache_key = (None, None)
+    if ctx.store is not None and not user_facts:
+        hit, cache_key = _cache_lookup(q, "RESEARCH_QUESTION", args.get("sources"), ctx)
+    if hit is not None:
+        return hit
+
     ev = rq.evidence(q)
     origins = tuple(o for _, o in ev)
     served, refusal = (None, None)
@@ -246,7 +255,100 @@ def _ask(args: dict, ctx: Context) -> dict:
                        "span_start": None, "span_end": None}
                       for s in (out.summary.sentences if out.summary else ())],
         law_versions={o.path: o.blob for o in origins})
+    _cache_store(cache_key, q, "RESEARCH_QUESTION", args.get("sources"), d, ctx)
     return d
+
+
+# ── O9: the answer cache ─────────────────────────────────────────────────────
+#
+# `checker/answer_cache.py` holds the rules and 014_answer_cache.sql holds the rows. These
+# two functions are the whole of the wiring, and both fail SOFT: a cache that errors must
+# never stop an answer being given, because every entry in it is derived and the fallback
+# is simply to do the work.
+
+def _cache_lookup(question: str, task: str, sources, ctx: Context):
+    """(a servable result | None, the lookup key | None).
+
+    The gate is `verify_citation` -- the same re-read `citation.get` uses -- run over every
+    citation the stored answer carries. A stored answer whose provision has changed is NOT
+    served, and that is counted apart from a miss: it means the law moved, which is itself
+    the news.
+    """
+    from checker import answer_cache as ac
+    try:
+        key = ac.lookup_key(question=question, task=task, as_of=_today(ctx),
+                            sources=sources or ())
+    except ac.CacheError:
+        return None, None
+    try:
+        row = ctx.store.read_cache_entry(key)
+        entry = None if row is None else ac.Entry(
+            lookup=row["lookup_key"], content=row["content_key"],
+            question=row.get("question") or "", task=row.get("task") or "",
+            as_of=row.get("as_of") or "", sources=tuple(row.get("sources") or ()),
+            citations=tuple(row.get("citations") or ()),
+            payload=dict(row.get("payload") or {}),
+            created_at=row.get("created_at") or "")
+        ok, why = ac.servable(entry, verify=lambda c: verify_citation(c))
+        kind = "hits" if ok else ("misses" if entry is None else "stale")
+        ctx.store.bump_cache_stat(kind, day=_today(ctx))
+        if not ok:
+            return None, key
+        out = dict(entry.payload)
+        out["cached"] = True
+        out["cache_note"] = (f"served from the answer cache, stored {entry.created_at}. "
+                             f"{why}")
+        return out, key
+    except Exception:                                            # noqa: BLE001
+        # Derived rows only. A broken cache costs a re-answer and must never cost an
+        # answer, so nothing here is allowed to propagate.
+        return None, None
+
+
+def _cache_store(key, question: str, task: str, sources, result: dict,
+                 ctx: Context) -> None:
+    """Keep an answer only if it is the kind that can later be shown to be still true."""
+    from checker import answer_cache as ac
+    if not key or ctx.store is None or not isinstance(result, dict):
+        return
+    # ANSWERED only, and only with citations. A refusal may be a model that was briefly
+    # unavailable, and caching it would make a transient outage permanent; an uncited
+    # answer can never be re-verified, so `servable` would refuse it on every read.
+    if result.get("status") != "ANSWERED" or not (result.get("citations") or []):
+        return
+    try:
+        entry = ac.Entry.build(question=question, task=task, as_of=_today(ctx),
+                               sources=sources or (),
+                               citations=result.get("citations") or (),
+                               payload={k: v for k, v in result.items()
+                                        if k not in ("cached", "cache_note")},
+                               created_at=_now(ctx))
+        ctx.store.write_cache_entry(entry.to_dict())
+    except Exception:                                            # noqa: BLE001
+        return
+
+
+def _now(ctx: Context) -> str:
+    if ctx.clock is not None:
+        return str(ctx.clock())
+    from datetime import datetime, timezone
+    return datetime.now(timezone.utc).isoformat()
+
+
+def cache_stats(ctx: Context) -> dict:
+    """The hit rate, and what it does not include.
+
+    Deliberately NOT a verb. Every read-only verb is exported as an MCP tool -- there is no
+    opt-out, by design -- and a cache hit rate is an operator's number, not a capability an
+    agent should hold. Adding it would also have meant editing the MCP policy allowlist in
+    three files, one of them Project Themis's. `scripts/cache_report.py` prints it.
+    """
+    from checker.answer_cache import Stats
+    if ctx.store is None:
+        return {"error": "no store is configured, so there is no cache"}
+    raw = ctx.store.read_cache_stats()
+    return Stats(hits=int(raw.get("hits") or 0), misses=int(raw.get("misses") or 0),
+                 stale=int(raw.get("stale") or 0)).to_dict()
 
 
 def law_versions_of(paths) -> dict[str, str]:
@@ -3344,6 +3446,79 @@ def _test() -> None:
           "...and the drop is STATED in the reply, not left in a field a client may not "
           "render")
     check(_ev.errors(_dr["envelope"]) == [], "...and that envelope validates")
+
+    # ══ O9: the answer cache ════════════════════════════════════════════════
+    from checker import answer_cache as _ac
+    _o9 = Context(store=_MB(), clock=lambda: "2026-10-01T10:00:00+05:30",
+                  model_for=lambda _o: _rq.quoting_model(_srcs))
+    _a1 = by_name()["ask"].run({"question": _q}, _o9)
+    check(_a1.get("status") == "ANSWERED" and not _a1.get("cached"),
+          f"the first ask is answered and NOT cached ({_a1.get('status')})")
+    _a2 = by_name()["ask"].run({"question": _q}, _o9)
+    check(_a2.get("cached") is True,
+          "the second ask of the SAME question is served from the cache")
+    check(_a2.get("answer") == _a1.get("answer")
+          and [c["id"] for c in _a2.get("citations") or []]
+              == [c["id"] for c in _a1.get("citations") or []],
+          "...with the same answer and the same citations")
+    check("re-verifies" in str(_a2.get("cache_note")),
+          f"...and the note says the citations were RE-READ, not that it was recent "
+          f"({str(_a2.get('cache_note'))[:50]!r})")
+    _s1 = cache_stats(_o9)
+    check(_s1["hits"] == 1 and _s1["misses"] == 1 and _s1["hit_rate"] == 0.5,
+          f"**the hit rate is reported** ({_s1['hit_rate']})")
+
+    # Asking it differently is the same question; asking a different one is not.
+    by_name()["ask"].run({"question": "  what is the QUORUM for a meeting of the Board "},
+                         _o9)
+    check(cache_stats(_o9)["hits"] == 2,
+          "case and surrounding space do not make a new question")
+    by_name()["ask"].run({"question": "How many Board meetings must be held each year?"},
+                         _o9)
+    check(cache_stats(_o9)["misses"] == 2,
+          "...while a different question misses, rather than being served the first "
+          "answer")
+
+    # ── THE GATE: a stored answer whose law moved is NOT served ─────────────
+    _stale_ctx = Context(store=_MB(), clock=lambda: "2026-10-01T10:00:00+05:30",
+                         model_for=lambda _o: _rq.quoting_model(_srcs))
+    by_name()["ask"].run({"question": _q}, _stale_ctx)
+    _key = _ac.lookup_key(question=_q, task="RESEARCH_QUESTION", as_of="2026-10-01")
+    _row = _stale_ctx.store.read_cache_entry(_key)
+    check(_row is not None, "the answer was stored")
+    # Rewrite the stored citation's sha256: the corpus file no longer hashes to it, which
+    # is exactly what a real amendment to the section would do.
+    _moved = [dict(c, sha256="0" * 64) for c in _row["citations"]]
+    _stale_ctx.store.write_cache_entry(dict(_row, citations=_moved,
+                                            content_key=_ac.content_key(
+                                                _key, _ac.provision_hashes(_moved))))
+    _a3 = by_name()["ask"].run({"question": _q}, _stale_ctx)
+    check(not _a3.get("cached"),
+          "**a stored answer whose cited provision has CHANGED is not served** -- the "
+          "question is answered again")
+    _s2 = cache_stats(_stale_ctx)
+    check(_s2["stale"] == 1,
+          f"...and it is counted as STALE, apart from a miss: the law moved, which is not "
+          f"a cache fault ({_s2})")
+    check("corpus change and not a cache fault" in _s2["note"],
+          "...and the note says so, because that number is what shows the re-verification "
+          "gate does anything")
+
+    # ── what is never cached ───────────────────────────────────────────────
+    _nf = Context(store=_MB(), clock=lambda: "2026-10-01T10:00:00+05:30",
+                  model_for=lambda _o: _rq.quoting_model(_srcs))
+    by_name()["ask"].run({"question": _q, "company_facts": {"paid_up_capital": "1"}}, _nf)
+    check(_nf.store.read_cache_stats()["hits"] + _nf.store.read_cache_stats()["misses"]
+          == 0,
+          "an ask carrying COMPANY FACTS is not looked up at all: the key does not carry "
+          "the facts, so a hit would serve one company's answer to another's question")
+    check("no store" in cache_stats(Context())["error"],
+          "the hit rate with no store says so rather than reporting a rate of nothing")
+    check(_ac.Stats().to_dict()["hit_rate"] is None,
+          "...and an unqueried cache has NO rate, which is not a rate of zero")
+    check("cache.stats" not in {v.name for v in VERBS},
+          "the hit rate is NOT a verb: every read-only verb becomes an MCP tool with no "
+          "opt-out, and a cache hit rate is an operator's number, not an agent capability")
 
     # ── job 3c: the model writes the prose, and the same rule judges it ────
     # Stubs only. The gate never calls a model: a suite that needed one would be a suite
