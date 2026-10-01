@@ -57,6 +57,7 @@ class Backend(Protocol):
     def get_document(self, sha256: str) -> dict | None: ...
     def write_decision(self, decision: dict) -> dict: ...
     def read_decisions(self, run_id: str) -> list[dict]: ...
+    def read_labels(self) -> list[dict]: ...
     def append_step(self, run_id: str, step: dict, *, key: str) -> bool: ...
     def set_run(self, run_id: str, *, status: str, refusal_code=None, result=None) -> None: ...
     def read_failure_counts(self) -> list[dict]: ...
@@ -621,6 +622,26 @@ class MemoryBackend:
                                result if result is not None else row.get("result"))
         row["failure_category"], row["failure_reason"] = cat, why
 
+    def read_labels(self) -> list[dict]:
+        """[{task, body, decision}] — every lawyer decision, with the run's intent.
+
+        CAL-1's input. `body` is read from the run's result when it recorded one; a
+        decision whose run named no body comes back with body "" rather than being
+        dropped, because "we have 40 labels and cannot tell which law they are about" is
+        a different problem from "we have no labels".
+        """
+        out = []
+        for run_id, rows in self.decisions.items():
+            run = self.runs.get(run_id) or {}
+            result = run.get("result") if isinstance(run.get("result"), dict) else {}
+            bodies = [str(b.get("body") or "") for b in (result.get("bodies") or ())
+                      if isinstance(b, dict)]
+            for row in rows:
+                out.append({"task": str(run.get("intent") or ""),
+                            "body": bodies[0] if bodies else "",
+                            "decision": str(row.get("decision") or "")})
+        return out
+
     def read_failure_counts(self) -> list[dict]:
         """[{week, category, count}] over every tagged run. Untagged runs are their OWN
         row (category None), never dropped: excluding them would shrink the denominator
@@ -828,6 +849,14 @@ class PostgresBackend:
                 (status, refusal_code,
                  None if result is None else _json.dumps(result), cat, why,
                  status in ("ANSWERED", "PARTIAL", "REFUSED", "FAILED"), run_id))
+
+    def read_labels(self) -> list[dict]:
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT COALESCE(r.intent, ''), "
+                "       COALESCE(r.result #>> '{bodies,0,body}', ''), d.decision "
+                "FROM decisions d LEFT JOIN runs r ON r.run_id = d.run_id").fetchall()
+        return [{"task": r[0], "body": r[1], "decision": r[2]} for r in rows]
 
     def read_failure_counts(self) -> list[dict]:
         with self._conn() as c:
@@ -2005,7 +2034,8 @@ def _test() -> None:
             "write_grid", "read_grid", "read_grid_cells", "write_grid_cell",
             "cancel_grid", "write_draft", "read_draft", "append_draft_version",
             "read_draft_versions", "write_cache_entry", "read_cache_entry",
-            "bump_cache_stat", "read_cache_stats", "read_failure_counts")
+            "bump_cache_stat", "read_cache_stats", "read_failure_counts",
+            "read_labels")
     for name in need:
         check(hasattr(MemoryBackend(), name)
               and hasattr(PostgresBackend("postgresql://x/y", tenant_id=T), name),
