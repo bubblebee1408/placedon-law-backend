@@ -98,6 +98,7 @@ window.PLACEDON_ASK_FIXTURES = {
     "duty": "Establish whether the company is a small company",
     "missing_facts": [],
     "obligation_id": "CA13-S2-85-SMALL",
+    "period": null,
     "provision": "Companies Act 2013, s.2(85)",
     "state": "DOES_NOT_APPLY"
    }

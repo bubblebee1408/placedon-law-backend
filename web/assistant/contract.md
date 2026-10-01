@@ -196,7 +196,7 @@ so (`ask.LEXICAL`).
 
 | Case | State | Decision |
 |---|---|---|
-| The question is about a body `scope.py` declares and does not hold | `out_of_scope` | **D2 (revised).** Decided first, by `checker/ask_scope.py`, from `scope.py`'s strings alone. **A wrong refusal of held law is the worse error** — it tells a user we do not cover what we do — so the detector is built around not making it. *Title signals* (strong): multi-word chunks of the body's `name`, capitalised 3+-letter acronyms in it (`FDI`, `SEBI`, `ICDR`), and the key's own acronym where the key is one token (`LLP`, `FEMA`, `IBC`); acronyms match case-sensitively. *Regulator signals* (weak): each regulator named. Any signal that is also a **held** body's declared string is dropped (`MCA` regulates the Companies Act, so it refuses nothing). **`covers` phrases are never a trigger** — "board composition", "annual filings", "issue of capital", "internal committee" are the held Act's vocabulary too — and serve only to choose between bodies already named ("SEBI … insider trading" → SEBI_OTHER). Which of several named bodies: D20. The Companies Act's own forums, the NCLT and the IBBI, never refuse on their own: D19. The text is NFKC-normalised, dotted acronyms collapsed (`R.B.I.`), whitespace collapsed; homoglyphs from other scripts are **not** folded (no confusables table is held). |
+| The question is about a body `scope.py` declares and does not hold | `out_of_scope` | **D2 (revised).** Decided first, by `checker/ask_scope.py`, from `scope.py`'s strings alone. **A wrong refusal of held law is the worse error** — it tells a user we do not cover what we do — so the detector is built around not making it. *Title signals* (strong): multi-word chunks of the body's `name`, capitalised 3+-letter acronyms in it (`FDI`, `SEBI`, `ICDR`), and the abbreviations the register **lists** for the body (`Body.abbreviations`: `LLP`, `FEMA`, `IBC`, `CIRP`, `DPDP`, `POSH`); acronyms match case-sensitively, **and an all-caps word is an abbreviation only if it is listed in `checker/abbrev.json` or in the scope register** — never derived from a register key, so "CONTRACT" or "ARBITRATION" in a question is an ordinary word and a s.188 question using it is answered on s.188 (A-012 NEW-3, founder rule 2, 2026-09-30). *Regulator signals* (weak): each regulator named — except the legislature: "Parliament of India" or "the Legislature" enacts the held Act too, so it is never a signal (A-012, founder rule 1, 2026-09-30). Any signal that is also a **held** body's declared string is dropped (`MCA` regulates the Companies Act, so it refuses nothing). **`covers` phrases are never a trigger** — "board composition", "annual filings", "issue of capital", "internal committee" are the held Act's vocabulary too — and serve only to choose between bodies already named ("SEBI … insider trading" → SEBI_OTHER). Which of several named bodies: D20. The Companies Act's own forums, the NCLT and the IBBI, never refuse on their own: D19. The text is NFKC-normalised, dotted acronyms collapsed (`R.B.I.`), whitespace collapsed; homoglyphs from other scripts are **not** folded (no confusables table is held). |
 | A declared body's **title** named next to held law | `partial` (MIXED) | **D2.** Held law = the held body's title ("Companies Act") in the question, or `provisions` in the request. The held part is read; the unheld part is one `cannot_verify` item, `ref` = the body key, `detail` = `scope.refusal_for` verbatim; **no row is decided and the facts are not applied**, because a row would be Companies Act reasoning applied to a matter the unheld body may govern ("Is our LLP a small company?" is never answered as a company). A bare section number next to a title is that body's section ("section 6 of FEMA"), not held law. |
 | A **regulator** named next to held law, including a bare citation | not refused | **D2.** A regulator named next to held law is the held Act's own procedure, not a refusal. A regulator named with **no** held law still refuses as the body the register lists it under ("report to RBI … foreign investor" → FEMA1999), which can be the wrong body ("RBI" in an NBFC-director question → FEMA) — open, recorded in the notice. (Until round 3 this row recorded "NCLT approval to reduce share capital" → IBC2016 as a known false positive; D19 closed it.) |
 | Rows or figures, every one decided, nothing not confirmed, every citation rested on | `answered` | **D3.** "Decided" excludes any row carrying `missing_facts`, a `blocked_by`, or state `APPLIES_UNDETERMINED` / `CANNOT_DETERMINE`: those move to `not_confirmed` (kind `cannot_verify`, with the facts they needed) and are not served as rows. |
@@ -276,17 +276,35 @@ saying why — never read as the Companies Act, and never resolved for another i
 none of them). A bare rule number ("rule 2(1)(t)") is still read as a rule under the Companies
 Act; it can abstain, never answer. This closes the joint-string and other-statute defects at
 once: the scanner had kept only the numbers, so "section 2(85) of the LLP Act" became the
-Companies Act's s.2(85).
+Companies Act's s.2(85). **The clause position included** (A-012 NEW-1, 2026-09-30): a
+parenthetical that is an abbreviation the scope register lists for an unheld body, in any case
+("s.2(85)(LLP)", "s.7(ibc)"), or a year ("s.42(1956)") names another instrument and is a `400`.
+The Act's own labels — "(II)", "(za)", "(iv)" — are read as before.
 
 **D24 — one evidence schema, declared once, typed strictly.** `api._EVIDENCE_FIELDS` is the
 single table: `EVIDENCE_KEYS` is derived from it, `api._evidence()` builds from it, and
 `checker/ask.py` refuses by it, so no field can be read by one route and ignored by another. An
 undeclared field, a wrong type or an out-of-range value is a `400` — never a coercion, never a
 `500`. Two ranges, and where they come from:
-- `calendar_year`: an `int` from **2015** to the last calendar year **ended** by the read date.
-  2015 because `checker/as_of.COMMENCEMENT` is 01-04-2014, so calendar 2014 straddles the 1956
-  Act; the upper bound because `s173_slice` counts meetings without knowing the date it is read
-  on, so a year still running would be reported short of four meetings in September.
+- `calendar_year`: an `int` from **2015** to the year of the **read date**. 2015 because
+  `checker/as_of.COMMENCEMENT` is 01-04-2014, so calendar 2014 straddles the 1956 Act; a later
+  year has not begun and is a `400`. **A year still running on the read date is IN PROGRESS,
+  never a shortfall** (A-012 NEW-5, founder rule 3, 2026-09-30): s.173 sets a minimum for the
+  whole year, so three meetings by September is not short of four. The row keeps a state from
+  `ROW_STATES` (`APPLIES_UNDETERMINED`, no missing facts) and carries `period: "IN_PROGRESS"`
+  beside it, with a basis that starts `IN PROGRESS`; `/v1/ask` names it in `not_confirmed`
+  with the same `period`. **The read date is the EARLIER of `as_of` and the day the answer is
+  generated** — an `as_of` that has not arrived cannot end a year (until this, `as_of`
+  2027-01-01 let a running 2026 through as ended and reported it short). Until 2026-09-30 a
+  running year was a `400`. **The same rule governs every periodic duty the engine decides**: s.149(3)
+  (182 days during the financial year — below 182 before the year closes is IN PROGRESS; at or
+  above 182 is a pass whenever it is reached, since days only accumulate) and s.96 (no AGM
+  before the six-month deadline after the year closes, nine for the first year, is IN
+  PROGRESS; after it, a breach). This needs the period's end: a `financial_year` the engine can
+  read ("2026-27", "2026-2027", "2026/27"; the second year must follow the first) or a
+  `financial_year_end` / `first_financial_year_end`. **Without one, the row is decided as it was
+  before this rule** — below 182 days, or no AGM, still reads as a breach — which is open
+  (TASKS A-014). AOC-4 and the annual return decide nothing without their filing date.
 - `resident_director_days`: an `int` 0–366 — a financial year runs to 31 March (s.2(41)), so a
   full one has 365 or 366 days; a longer first year is s.149(3)'s proportionate proviso, which
   this engine does not compute.

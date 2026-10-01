@@ -12,8 +12,9 @@ So a question is refused only on something that identifies the unheld body and n
 
 - **Title signals** (strong): multi-word chunks of the body's `name` ("Insolvency and
   Bankruptcy Code"), capitalised acronyms of three or more letters in that name ("FDI",
-  "SEBI", "ICDR"), and the register key's own acronym where the key is one token ("LLP",
-  "FEMA", "IBC"). Acronyms match case-sensitively: "POSH" is a statute, "posh" is not.
+  "SEBI", "ICDR"), and the abbreviations the register LISTS for the body ("LLP", "FEMA",
+  "IBC"). Acronyms match case-sensitively: "POSH" is a statute, "posh" is not. An all-caps
+  word the register does not list is not an abbreviation ("CONTRACT", A-012 NEW-3).
 - **Terms of art** (strong): words that name one unheld body and nothing we hold
   (`TERMS_OF_ART`: "CIRP", "resolution professional"), each proven absent from the held text.
 - **Regulator signals** (weak): each regulator the register names ("RBI", "SEBI").
@@ -154,6 +155,12 @@ def _shared(signal: str) -> bool:
         for b in _held())
 
 
+# Parliament enacts every Act, the held one included, so the legislature named in a
+# question says nothing about WHICH body it is about (A-012 NEW-2; founder rule 1,
+# 2026-09-30). scope.py may still record it as a regulator; it is never a signal.
+LEGISLATURE = re.compile(r"(?i)\b(parliament|legislature)\b")
+
+
 def _signals(b) -> tuple[list[str], list[str]]:
     """(title signals, regulator signals) this body declares, minus the held Act's words.
 
@@ -162,11 +169,10 @@ def _signals(b) -> tuple[list[str], list[str]]:
     titles = _chunks(b.name)
     titles += re.findall(r"\b[A-Z]{3,}\b", b.name)
     titles += TERMS_OF_ART.get(b.key, ())
-    key = re.sub(r"\d+$", "", b.key)
-    if re.fullmatch(r"[A-Z]{3,}", key):
-        titles.append(key)
+    titles += list(b.abbreviations)           # listed in the register, never derived
     regulators = [r.strip() for r in re.split(r"[,/]", b.regulator)
-                  if len(r.strip()) >= 3 and any(ch.isalpha() for ch in r)]
+                  if len(r.strip()) >= 3 and any(ch.isalpha() for ch in r)
+                  and not LEGISLATURE.search(r)]
     keep = lambda xs: list(dict.fromkeys(x for x in xs if not _shared(x)))
     return keep(titles), keep(regulators)
 
@@ -276,6 +282,43 @@ def _test() -> None:
         r = read(q)
         check(r.refuse and r.body.key == key,
               f"{q[:44]!r} -> {key} ({r.body.key if r.body else None})")
+
+    # ── the legislature is not a scope signal (A-012 NEW-2, founder rule 1) ──
+    # scope.py lists "Parliament of India" as the regulator of the Contract and Arbitration
+    # Acts. Parliament enacts every Act, the held one included, so naming it says nothing
+    # about which body a question is about -- and it refused held-law questions.
+    for q in ("When did the Parliament of India last amend the definition of small company?",
+              "Has the Parliament of India changed the CSR threshold recently?",
+              "Did the Legislature intend s.188 to cover this transaction?",
+              "What did Parliament say when it enacted the Companies Act?"):
+        r = read(q)
+        check(r.body is None, f"not refused: {q[:58]!r} ({r.body.key if r.body else None})")
+    check(not any(re.search(r"(?i)\b(parliament|legislature)\b", sig)
+                  for b in _unheld() for sig in _signals(b)[0] + _signals(b)[1]),
+          "no body carries the legislature as a title or regulator signal")
+
+    # ── an all-caps word is not an abbreviation unless listed (A-012 NEW-3) ──
+    # Founder rule 2 (2026-09-30): only an abbreviation listed in checker/abbrev.json or in
+    # the scope register counts. The register KEY is an identifier, not a listing: taking
+    # "CONTRACT1872" -> "CONTRACT" made an ordinary capitalised word refuse held law.
+    for q in ("Our CONTRACT with the director needs board approval under s.188?",
+              "What about ARBITRATION clauses in our AOA?",
+              "Is the STAMP on this share certificate valid under s.46?",
+              "Does the director's COMP package need approval under s.197?"):
+        r = read(q)
+        check(r.body is None, f"not refused: {q[:58]!r} ({r.body.key if r.body else None})")
+    for q, key in (("Does DPDP apply to our employee records?", "DPDP2023"),
+                   ("Is our LLP required to hold an AGM?", "LLP2008")):
+        r = read(q)
+        check(r.refuse and r.body.key == key,
+              f"...while a LISTED abbreviation still refuses: {q[:40]!r} -> {key} "
+              f"({r.body.key if r.body else None})")
+    listed = lambda b: set(scope.body(b.key).abbreviations) | set(
+        re.findall(r"\b[A-Z]{3,}\b", b.name))
+    check(all(sig in listed(b) for b in _unheld() for sig in _signals(b)[0]
+              if re.fullmatch(r"[A-Z]{3,}", sig)),
+          "every all-caps title signal is an abbreviation the register lists (in the name "
+          "or in `abbreviations`), never one derived from a key")
 
     # ── the Companies Act's own forums never refuse (round 3, item 1) ────────
     # The NCLT is constituted by the held Act (s.408); registered valuers under s.247

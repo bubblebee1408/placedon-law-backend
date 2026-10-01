@@ -135,23 +135,22 @@ def _calendar_year(ev: dict, key: str, as_of: date):
 
     First: the first calendar year wholly under the Companies Act 2013, from
     checker/as_of.COMMENCEMENT (01-04-2014, when the bulk of the Act commenced) -- 2014
-    itself straddles the 1956 Act. Last: the last calendar year that has ENDED on the read
-    date. s.173 sets a minimum "every year" and s173_slice counts meetings without knowing
-    the date it is read on, so a year still running would be reported short of four
-    meetings in September -- another false defect.
+    itself straddles the 1956 Act. Last: the year the read date falls in. A year still
+    running on the read date is accepted and decided IN PROGRESS, never short of four
+    meetings in September (A-012 NEW-5, founder rule 3); a year that has not begun is a 400.
     """
     from checker.as_of import COMMENCEMENT
     year = _typed(ev, key, int)
     if year is None:
         return None
     first = COMMENCEMENT.year + 1
-    last = as_of.year if (as_of.month, as_of.day) == (12, 31) else as_of.year - 1
+    last = as_of.year
     if not first <= year <= last:
         raise BadRequest(
             f"'calendar_year' {year} cannot be evaluated: this engine checks s.173 for "
             f"calendar years {first}-{last} -- from the first year wholly under the Act "
-            f"(commenced {COMMENCEMENT.isoformat()}) to the last year ended by the read date "
-            f"{as_of.isoformat()}")
+            f"(commenced {COMMENCEMENT.isoformat()}) to the year of the read date "
+            f"{as_of.isoformat()}; a later year has not begun")
     return year
 
 
@@ -188,7 +187,15 @@ def _evidence(payload: dict, as_of: date) -> Evidence:
     if unknown:
         raise BadRequest(f"unknown evidence field(s): {', '.join(sorted(unknown))}. "
                          f"Declared: {', '.join(sorted(EVIDENCE_KEYS))}")
-    return Evidence(**{k: read(ev, k, as_of) for k, read in _EVIDENCE_FIELDS.items()})
+    return Evidence(**{k: read(ev, k, as_of) for k, read in _EVIDENCE_FIELDS.items()},
+                    read_on=as_of)
+
+
+def read_date(as_of: date, generated_at: str) -> date:
+    """The date evidence is read on: the EARLIER of as_of and the day the answer is made.
+    An as_of that has not arrived cannot end a period (A-012 NEW-5) -- the facts supplied
+    are only facts up to today."""
+    return min(as_of, date.fromisoformat(generated_at[:10]))
 
 
 def _row_json(r) -> dict:
@@ -201,6 +208,9 @@ def _row_json(r) -> dict:
         "basis": r.basis,
         "missing_facts": list(r.missing_facts),
         "blocked_by": r.blocked_by or None,
+        # IN_PROGRESS when the duty's period has not ended on the read date (D24). Beside
+        # `state`, not in it: a client that knows only ROW_STATES still reads no defect.
+        "period": r.period or None,
         "cited_spans": [{"path": c.path, "sha256": c.sha256, "resolved": c.resolved}
                         for c in structural_cites(r.obligation_id)],
     }
@@ -212,7 +222,8 @@ def compliance_pack(payload: dict, *, generated_at: str) -> dict:
         raise BadRequest("request body must be a JSON object")
     _reject_unknown(payload, PROFILE_KEYS | {"evidence"}, "request")
     profile = _profile(payload)
-    pack = build_pack(profile, _evidence(payload, profile.as_of), generated_at=generated_at)
+    pack = build_pack(profile, _evidence(payload, read_date(profile.as_of, generated_at)),
+                      generated_at=generated_at)
     return {
         "company_class": pack.company_class,
         "cin": pack.cin,
@@ -1019,8 +1030,8 @@ def _test() -> None:
                        {"board_meetings": _meet, "calendar_year": 1999}),
                       ("calendar_year 2014 (the Act commenced 01-04-2014, mid-year)",
                        {"board_meetings": _meet, "calendar_year": 2014}),
-                      ("calendar_year 2026, not yet over on the as_of date",
-                       {"board_meetings": _meet, "calendar_year": 2026}),
+                      ("calendar_year 2027, a year that has not begun on the read date",
+                       {"board_meetings": _meet, "calendar_year": 2027}),
                       ('resident_director_days "many"', {"resident_director_days": "many"}),
                       ("resident_director_days 400", {"resident_director_days": 400}),
                       ("resident_director_days -1", {"resident_director_days": -1}),
@@ -1037,6 +1048,116 @@ def _test() -> None:
     row = next(x for x in r["rows"] if x["obligation_id"] == "CA13-S173-BOARD")
     check(st == 200 and row["state"] != "APPLIES_NOT_SATISFIED",
           f"...while four meetings in a finished 2025 are never a defect ({row['state']})")
+
+    # ── a period that has not ended is IN PROGRESS, never a shortfall (A-012 NEW-5) ─
+    # Founder rule 3 (2026-09-30), D24's own rule: s.173 counts meetings "every year", so
+    # a year still running is not short of four in September. Before, a running year was
+    # a 400 -- and a FUTURE as_of let it through as ended, reporting the shortfall D24
+    # exists to prevent. The read date is the EARLIER of as_of and the day the answer is
+    # generated: an as_of that has not arrived cannot make a year over.
+    _running = {"board_meetings": ["2026-02-10", "2026-05-12", "2026-08-11"],
+                "calendar_year": 2026}
+    for label, as_of in (("as_of 2026-08-31 (the year is running)", "2026-08-31"),
+                         ("as_of 2027-01-01, after the answer's own date (NEW-5)",
+                          "2027-01-01")):
+        st, r = handle("POST", "/v1/compliance-pack",
+                       {**_ask_facts, "as_of": as_of, "evidence": _running},
+                       generated_at=GEN)
+        row = next((x for x in r.get("rows", []) if x["obligation_id"] == "CA13-S173-BOARD"),
+                   {})
+        check(st == 200 and row.get("state") != "APPLIES_NOT_SATISFIED"
+              and row.get("period") == "IN_PROGRESS" and "IN PROGRESS" in row.get("basis", "")
+              and not row.get("missing_facts"),
+              f"compliance-pack, {label}: s.173 for 2026 is IN PROGRESS, not a shortfall, "
+              f"and not a data gap ({st}: {row.get('state')}/{row.get('period')} "
+              f"{r.get('detail', '')[:60]})")
+        st, r = ask_handle("POST", "/v1/ask",
+                           {"question": "Are our board meetings compliant?",
+                            "facts": {**_ask_facts, "as_of": as_of, "evidence": _running},
+                            "as_of": as_of, "provisions": ["s.173"]}, generated_at=GEN)
+        # The ask contract never SERVES an undetermined row as a decision; it names it in
+        # not_confirmed. So on /v1/ask IN PROGRESS arrives as that item, never as a row.
+        rows = r.get("rows") or []
+        item = next((i for i in r.get("not_confirmed", [])
+                     if i.get("ref") == "CA13-S173-BOARD"), {})
+        check(st == 200 and not any(x.get("state") == "APPLIES_NOT_SATISFIED" for x in rows)
+              and item.get("period") == "IN_PROGRESS"
+              and item.get("detail", "").startswith("IN PROGRESS")
+              and not item.get("missing_facts"),
+              f"...and /v1/ask alike: named IN PROGRESS, never a shortfall row ({st}: "
+              f"{[x.get('state') for x in rows]} {item.get('period')} "
+              f"{r.get('detail', '')[:60]})")
+    st, r = handle("POST", "/v1/compliance-pack",
+                   {**_ask_facts, "as_of": "2026-08-31",
+                    "evidence": {"board_meetings": ["2025-02-10", "2025-05-12", "2025-08-11"],
+                                 "calendar_year": 2025}}, generated_at=GEN)
+    row = next(x for x in r["rows"] if x["obligation_id"] == "CA13-S173-BOARD")
+    check(row["state"] == "APPLIES_NOT_SATISFIED" and not row.get("period"),
+          f"...while three meetings in a FINISHED 2025 are still a shortfall -- the rule "
+          f"moves only unended periods ({row['state']})")
+
+    # Rule 3 is about EVERY periodic duty, not s.173 alone (A-012 re-verification F1):
+    # s.149(3) is measured over a financial year, and s.96's AGM has until six months
+    # after the year closes. Before either period ends, a count so far is not a breach.
+    for label, prov, oid, facts, ev, running in (
+            ("s.149(3), FY 2026-27 still running", "s.149(3)", "CA13-S149-3-RESIDENT",
+             {"financial_year": "2026-27"}, {"resident_director_days": 100}, True),
+            ("s.149(3), FY 2025-26 closed", "s.149(3)", "CA13-S149-3-RESIDENT",
+             {"financial_year": "2025-26"}, {"resident_director_days": 100}, False),
+            ("s.96, AGM not yet due (FY closed 2026-03-31, due by 2026-09-30)", "s.96",
+             "CA13-S96-AGM", {}, {"agm_dates": [], "financial_year_end": "2026-03-31"},
+             True),
+            ("s.96, AGM overdue (FY closed 2025-03-31)", "s.96", "CA13-S96-AGM",
+             {}, {"agm_dates": [], "financial_year_end": "2025-03-31"}, False)):
+        body = {**_ask_facts, **facts, "as_of": "2026-08-31", "evidence": ev}
+        st, r = handle("POST", "/v1/compliance-pack", body, generated_at=GEN)
+        row = next((x for x in r.get("rows", []) if x["obligation_id"] == oid), {})
+        st2, r2 = ask_handle("POST", "/v1/ask",
+                             {"question": "Did we comply?", "facts": body,
+                              "as_of": "2026-08-31", "provisions": [prov]},
+                             generated_at=GEN)
+        item = next((i for i in r2.get("not_confirmed", []) if i.get("ref") == oid), {})
+        served = {x.get("obligation_id"): x.get("state") for x in r2.get("rows") or []}
+        if running:
+            check(st == 200 and row.get("period") == "IN_PROGRESS"
+                  and row.get("state") != "APPLIES_NOT_SATISFIED"
+                  and st2 == 200 and item.get("period") == "IN_PROGRESS"
+                  and served.get(oid) != "APPLIES_NOT_SATISFIED",
+                  f"{label}: IN PROGRESS on both routes, never a shortfall "
+                  f"({row.get('state')}/{row.get('period')}; ask {served.get(oid)}/"
+                  f"{item.get('period')})")
+        else:
+            check(row.get("state") == "APPLIES_NOT_SATISFIED" and not row.get("period"),
+                  f"{label}: still a shortfall -- the period has ended ({row.get('state')})")
+
+    # The financial year is a user string: it must never crash the row, and nonsense must
+    # not be read as a year (e8f8d31 re-verification, findings 1, 2 and 4).
+    for fy in ("9999-00", "0000-01", "2026-99", "2026-2020"):
+        st, r = handle("POST", "/v1/compliance-pack",
+                       {**_ask_facts, "financial_year": fy, "as_of": "2026-08-31",
+                        "evidence": {"resident_director_days": 100}}, generated_at=GEN)
+        row = next((x for x in r.get("rows", [])
+                    if x["obligation_id"] == "CA13-S149-3-RESIDENT"), {})
+        check(st == 200 and row.get("period") != "IN_PROGRESS",
+              f"financial_year {fy!r} is not a year it can close: no crash, and not read "
+              f"as one ({st}: {row.get('state')}/{row.get('period')})")
+    for fy in ("2026-27", "2026-2027", "2026\u201327", "2026/27"):
+        st, r = handle("POST", "/v1/compliance-pack",
+                       {**_ask_facts, "financial_year": fy, "as_of": "2026-08-31",
+                        "evidence": {"resident_director_days": 100}}, generated_at=GEN)
+        row = next((x for x in r.get("rows", [])
+                    if x["obligation_id"] == "CA13-S149-3-RESIDENT"), {})
+        check(st == 200 and row.get("period") == "IN_PROGRESS",
+              f"...while {fy!r} is FY 2026-27, still running ({st}: {row.get('period')})")
+    st, r = handle("POST", "/v1/compliance-pack",
+                   {**_ask_facts, "as_of": "2026-11-15",
+                    "evidence": {"agm_dates": [], "financial_year_end": "2026-03-31",
+                                 "first_financial_year_end": "2026-03-31"}},
+                   generated_at="2026-11-15T00:00:00Z")
+    row = next(x for x in r["rows"] if x["obligation_id"] == "CA13-S96-AGM")
+    check(row.get("period") == "IN_PROGRESS",
+          f"a FIRST year with no AGM yet has nine months, not six: on 2026-11-15 it is IN "
+          f"PROGRESS until 2026-12-31 ({row['state']}/{row.get('period')})")
     st, r = handle("POST", "/v1/compliance-pack", {**_ask_facts, "turnover": 5},
                    generated_at=GEN)
     check(st == 400 and "turnover" in r.get("detail", ""),

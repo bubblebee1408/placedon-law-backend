@@ -51,6 +51,10 @@ class Body:
     status: str
     note: str = ""
     feed: str | None = None          # a machine-readable change signal, if any
+    # Abbreviations a question may use for this body ("IBC"). Listed, never derived: the
+    # key is an identifier, and deriving "CONTRACT" from CONTRACT1872 made an ordinary
+    # capitalised word refuse held law (A-012 NEW-3; founder rule 2, 2026-09-30).
+    abbreviations: tuple[str, ...] = ()
 
     @property
     def answerable(self) -> bool:
@@ -86,7 +90,8 @@ BODIES: tuple[Body, ...] = (
          DECLARED,
          "No instrument acquired. An LLP question must be refused, not answered "
          "from Companies Act reasoning -- the two regimes differ on almost every "
-         "obligation that matters."),
+         "obligation that matters.",
+         abbreviations=("LLP",)),
 
     Body("SEBI_LODR", "SEBI (Listing Obligations and Disclosure Requirements) "
          "Regulations, 2015", "SEBI",
@@ -113,13 +118,15 @@ BODIES: tuple[Body, ...] = (
          "downstream investment",
          DECLARED,
          "Nothing acquired. Sectoral caps change by press note, which is a "
-         "different acquisition problem from a Gazette rule."),
+         "different acquisition problem from a Gazette rule.",
+         abbreviations=("FEMA",)),
 
     Body("IBC2016", "Insolvency and Bankruptcy Code, 2016", "IBBI / NCLT",
          "insolvency resolution, liquidation, director conduct in the twilight period",
          DECLARED,
          "Nothing acquired. NCLT and IBBI orders are natively text PDFs, so the "
-         "acquisition route is clearer here than most."),
+         "acquisition route is clearer here than most.",
+         abbreviations=("IBC", "CIRP")),
 
     Body("COMP2002", "Competition Act, 2002", "CCI",
          "combination notification thresholds, anti-competitive agreements",
@@ -159,13 +166,15 @@ BODIES: tuple[Body, ...] = (
          "Previously recorded OUT_OF_SCOPE on 2026-08-16, when the product was "
          "Companies Act only. The widening to corporate-law compliance brings it "
          "back in scope as a declared area. Nothing acquired, and the SDF "
-         "designation remains a gazette lookup, never a computed threshold."),
+         "designation remains a gazette lookup, never a computed threshold.",
+         abbreviations=("DPDP",)),
 
     Body("POSH", "Sexual Harassment of Women at Workplace (Prevention, "
          "Prohibition and Redressal) Act, 2013", "—",
          "internal committee, complaint handling",
          OUT_OF_SCOPE,
-         "Retired product direction, not a gap. See docs/RETIRED_POSH.md."),
+         "Retired product direction, not a gap. See docs/RETIRED_POSH.md.",
+         abbreviations=("POSH",)),
 
     Body("AI_LAW", "AI regulation", "—", "—", OUT_OF_SCOPE,
          "Excluded until an enacted Indian statute exists to verify against. "

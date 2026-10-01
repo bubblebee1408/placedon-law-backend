@@ -212,6 +212,11 @@ def _ask(args: dict, ctx: Context) -> dict:
                 "run_id": rid}
 
     d = out.to_dict()
+    # The traced spans, as citations. `to_dict()` carries the provision NAMES and not the
+    # spans, so the conversation layer had nothing to build citations[] from and shipped it
+    # empty for every task. The Summary has them; this is where they leave.
+    if out.summary is not None:
+        d["citations"] = _citations_from_summary(out.summary, ev)
     if user_facts:
         # PLAN_26 S2-alt: accepted, labelled "you told us", never presented as verified.
         # They are RECORDED AND SHOWN and they do not steer the answer -- the answer is
@@ -938,36 +943,93 @@ def _bodies_from_events(result: dict) -> list:
     return out
 
 
-def _bodies_from_ask(result: dict) -> list:
-    """An `ask` result -> envelope bodies, read from checker/scope.py.
+def _bodies_from_ask(result: dict, question: str = "") -> list:
+    """An `ask` result -> envelope bodies, read from the two authorities.
 
-    The held Act is ANSWERED when anything was traced and ABSTAINED-shaped otherwise; a
-    body the question named that we do not hold is NOT_HELD with the REGISTER'S OWN words,
-    never a sentence composed here. That is what makes a CA2013 + FEMA question come back
-    PARTIAL rather than confidently short.
+    **`checker/ask_scope.read()` is asked, not the result dict.** The first version read
+    `result["out_of_scope_bodies"]` and `result["refusal"]["bodies"]` -- and the `ask` verb
+    returns NEITHER key. So the unheld-body branch was dead code, the spec's own named case
+    (CA2013 + FEMA -> PARTIAL with FEMA NOT_HELD) came back ABSTAINED with one body, and
+    nothing failed to say so. `ask_scope` is the module `checker/ask.py` itself uses to
+    decide out-of-scope, so asking it is asking the same authority rather than hoping a
+    result carries a summary of it.
+
+    A body we do not hold is NOT_HELD with the REGISTER'S OWN words. CA2013 is ANSWERED
+    when provisions were traced, NOT_ENGAGED when the question was wholly about another
+    body, and NEED_FACT when it was ours to answer and nothing on point was found.
     """
     from gateway import envelope as ev
-    from checker import scope
+    from checker import ask_scope, scope
+
     out = []
     held = scope.body("CA2013")
     traced = bool(result.get("provisions") or result.get("citations"))
-    out.append(ev.body(held.key, held.name,
-                       ev.B_ANSWERED if traced else ev.B_NEED_FACT,
-                       "held and read" if traced else
-                       "held, and nothing on point was found for this question"))
-    refusal = result.get("refusal") or {}
-    for key in result.get("out_of_scope_bodies") or refusal.get("bodies") or ():
-        try:
-            b = scope.body(key)
-        except Exception:                                       # noqa: BLE001
-            continue
-        if b.key == held.key:
-            continue
+    reading = ask_scope.read(question or result.get("question") or "")
+
+    if reading.refuse:
+        # The question is wholly about law we do not hold. Saying CA2013 was "read and
+        # found nothing" would be answering a question nobody asked.
+        out.append(ev.body(held.key, held.name, ev.B_NOT_ENGAGED,
+                           "this question is about another body of law, so the Companies "
+                           "Act was not engaged"))
+    else:
+        out.append(ev.body(held.key, held.name,
+                           ev.B_ANSWERED if traced else ev.B_NEED_FACT,
+                           "held and read as at the date shown" if traced else
+                           "held, and nothing on point was found for this question"))
+
+    if reading.body is not None and reading.body.key != held.key:
+        b = reading.body
         out.append(ev.body(b.key, b.name,
                            ev.B_CURRENT_ONLY if b.status == scope.CURRENT_ONLY
                            else ev.B_NOT_HELD,
                            scope.refusal_for(b.key)))
     return out
+
+
+# Which bodies a document-review task reads against. Named, because an empty bodies[] on a
+# review said nothing about what the findings rest on -- and for a CONTRACT that silence is
+# the dangerous direction: a playbook finding looks like a legal one unless the envelope
+# says the law it would rest on is not held.
+_REVIEW_DOC_BODIES = ("CA2013",)
+_REVIEW_CONTRACT_BODIES = ("CONTRACT1872", "ARBITRATION1996")
+
+
+def _bodies_for_review(task: str, result: dict) -> list:
+    from gateway import envelope as ev
+    from checker import scope
+
+    out = []
+    if task == "REVIEW_DOCUMENT":
+        for key in _REVIEW_DOC_BODIES:
+            b = scope.body(key)
+            out.append(ev.body(b.key, b.name, ev.B_ANSWERED,
+                               f"the SS-1/SS-2 checks are read against {b.name}, which is "
+                               f"held; a check that does not apply to this document type "
+                               f"makes no claim"))
+        return out
+    for key in _REVIEW_CONTRACT_BODIES:
+        b = scope.body(key)
+        out.append(ev.body(
+            b.key, b.name,
+            ev.B_ANSWERED if b.status == scope.IN_CORPUS else ev.B_NOT_HELD,
+            f"{scope.refusal_for(b.key)} Every finding here is a POTENTIAL_ISSUE against "
+            f"your own playbook, which is a company standard and not a statement of law."
+            if b.status != scope.IN_CORPUS else "held"))
+    return out
+
+
+def _bodies_for(task: str, result: dict, question: str = "") -> list:
+    """The body table for any task. One place, so no task silently reports none."""
+    if task == "EVENT_ASSESS":
+        return _bodies_from_events(result)
+    if task == "RESEARCH_QUESTION":
+        return _bodies_from_ask(result, question)
+    if task in ("REVIEW_DOCUMENT", "REVIEW_CONTRACT"):
+        return _bodies_for_review(task, result)
+    # A task no verb serves ran nothing, so it claims nothing about any body. The
+    # ABSTAINED text says so in words; an invented NOT_ENGAGED row would imply we looked.
+    return []
 
 
 def _files_block(file_ids, ctx: Context) -> list:
@@ -1007,7 +1069,7 @@ def _files_block(file_ids, ctx: Context) -> list:
 
 
 def _envelope_for(task: str, result: dict, *, as_of: str, run_id=None,
-                  files=(), ctx: Context) -> dict:
+                  files=(), ctx: Context, question: str = "") -> dict:
     """One result from one task -> one envelope. The only place a reply is shaped."""
     from gateway import envelope as ev
 
@@ -1017,15 +1079,29 @@ def _envelope_for(task: str, result: dict, *, as_of: str, run_id=None,
                          detail=str(result.get("error") or "the step did not complete"),
                          run_id=run_id, trace_url=trace)
 
-    bodies = (_bodies_from_events(result) if task == "EVENT_ASSESS"
-              else _bodies_from_ask(result) if task == "RESEARCH_QUESTION" else [])
+    bodies = _bodies_for(task, result, question)
+    citations, dropped = _citations_for(task, result)
     text = (result.get("answer") or result.get("detail")
             or result.get("note") or "See the findings.")
-    blocks = [{"text": str(text), "citation_ids": []}] if str(text).strip() else []
+    blocks = [{"text": str(text), "citation_ids": [c["id"] for c in citations]}] \
+        if str(text).strip() else []
+    if dropped:
+        # Stated, not silent. A dropped citation changes what the reader is looking at.
+        blocks.append({"text": (
+            f"{len(dropped)} citation(s) were dropped because the quote no longer "
+            f"byte-matches the section it names. Nothing rests on them."),
+            "citation_ids": []})
+
     unheld = [b for b in bodies if b["status"] in (ev.B_NOT_HELD, ev.B_CURRENT_ONLY)]
     answered = [b for b in bodies if b["status"] == ev.B_ANSWERED]
     if result.get("status") == "REFUSED":
         status = ev.ABSTAINED
+    elif result.get("requires_review"):
+        # A finding a machine cannot close. `review_contract` is the clear case: every
+        # finding is a POTENTIAL_ISSUE against the company's own playbook, which is not
+        # law, so there is no outcome this system may call compliant. NEEDS_LAWYER was in
+        # the enum and nothing produced it, which made the enum a wish.
+        status = ev.NEEDS_LAWYER
     elif unheld and answered:
         status = ev.PARTIAL
     elif unheld and not answered:
@@ -1033,8 +1109,114 @@ def _envelope_for(task: str, result: dict, *, as_of: str, run_id=None,
     else:
         status = ev.ANSWERED
     return ev.build(status=status, task=task, as_of=as_of, text_blocks=blocks,
-                    bodies=bodies, citations=[], files=list(files), run_id=run_id,
+                    bodies=bodies, citations=citations, files=list(files), run_id=run_id,
                     trace_url=trace)
+
+
+# ── citations: built from the traced spans, re-verified against the corpus ───
+
+def _split_provision(source_id: str) -> tuple[str, str]:
+    """"Companies Act 2013, s.174" -> ("Companies Act 2013", "s.174")."""
+    if ", s." in source_id:
+        head, _, tail = source_id.partition(", s.")
+        return head.strip(), f"s.{tail.strip()}"
+    return source_id.strip(), ""
+
+
+def verify_citation(c: dict) -> tuple[bool, str]:
+    """Re-read the section this citation names and confirm the quote is still in it.
+
+    **A real round-trip, through the same two functions the evidence path used**:
+    `section_index.section_by_number` for the record and `html_to_text` for the readable
+    form. The first version of `citation.get` built a throwaway object with the right
+    attribute names and handed it to `held.span_matches`, which checked a different field
+    against a different source -- a verification that could not fail for the reason it
+    claimed to check.
+
+    Three ways it fails, and each is a different fact:
+      the section is gone      the corpus no longer holds what the answer cited
+      the file changed         sha256 differs from the one recorded at answer time
+      the quote is absent      the words are not in the section they are attributed to
+    """
+    from checker import section_index
+    from checker.sarvam_model import html_to_text
+
+    number = (c.get("provision") or "").removeprefix("s.").strip()
+    if not number:
+        return False, "the citation names no provision, so there is nothing to re-read"
+    rec = section_index.section_by_number(number)
+    if not rec:
+        return False, (f"the corpus no longer holds s.{number}, which this citation "
+                       f"names")
+    if c.get("sha256") and rec.get("sha256") != c.get("sha256"):
+        return False, (f"s.{number} has changed since this answer was given: the corpus "
+                       f"file now hashes to {str(rec.get('sha256'))[:12]}..., the citation "
+                       f"records {str(c.get('sha256'))[:12]}.... The quote is not "
+                       f"re-verified against text we did not read")
+    text = html_to_text(rec.get("content") or "")
+    if not (c.get("quote") or "") or c["quote"] not in text:
+        return False, (f"the quote is NOT present in s.{number} as the corpus holds it "
+                       f"today, so nothing may rest on it")
+    return True, (f"re-read from corpus/companies_act/{rec['section_id']}.json and the "
+                  f"quote byte-matches")
+
+
+def _citations_from_summary(summary, pairs) -> list:
+    """The traced spans as citations. Every quote is the VERIFIED span, not the model's
+    claim about it.
+
+    `Citation.quoted` is what the model SAID it read; `sources[i].text[start:end]` is what
+    is actually there. `check_blocks` has already compared them -- that is what TRACED
+    means -- and taking the slice rather than the claim is what keeps that true downstream.
+    """
+    from gateway import envelope as ev
+
+    by_id = {src.source_id: org for src, org in pairs}
+    out, seen = [], set()
+    for sentence in summary.traced:
+        for cit in sentence.citations:
+            if not 0 <= cit.source_index < len(summary.sources):
+                continue
+            src = summary.sources[cit.source_index]
+            span = src.text[cit.start:cit.end]
+            key = (src.source_id, cit.start, cit.end)
+            if not span.strip() or key in seen:
+                continue
+            seen.add(key)
+            instrument, provision = _split_provision(src.source_id)
+            org = by_id.get(src.source_id)
+            number = provision.removeprefix("s.")
+            from checker import section_index
+            rec = section_index.section_by_number(number) or {}
+            try:
+                out.append(ev.citation(
+                    id=f"c{len(out) + 1}", instrument=instrument, provision=provision,
+                    source=(getattr(org, "path", None)
+                            or f"corpus/companies_act/{rec.get('section_id')}.json"),
+                    fetched_at=str(rec.get("fetched_at") or "unrecorded"),
+                    sha256=str(rec.get("sha256") or ""), quote=span,
+                    # Not available per section in the corpus record. NULL means NOT
+                    # RECORDED, and the schema says so -- a commencement date guessed
+                    # here would be a statutory date we invented.
+                    in_force_from=None))
+            except ev.EnvelopeError:
+                # A span we cannot describe fully is not shown. Same rule as the drop.
+                continue
+    return out
+
+def _citations_for(task: str, result: dict) -> tuple[list, list]:
+    """(kept, dropped). Every citation is re-verified against the corpus before it is shown.
+
+    Dropped, never flagged: a citation on screen is one a reader will trust, and the only
+    honest thing to do with a quote we cannot find in the section it names is remove it and
+    say how many were removed.
+    """
+    from gateway import envelope as ev
+
+    raw = result.get("citations") or []
+    if not raw:
+        return [], []
+    return ev.drop_unquoted(raw, verify=lambda c: verify_citation(c)[0])
 
 
 def _conversation_send(args: dict, ctx: Context) -> dict:
@@ -1052,6 +1234,8 @@ def _conversation_send(args: dict, ctx: Context) -> dict:
     from gateway import envelope as ev
 
     text = args.get("text") or ""
+    if not isinstance(text, str):
+        return _refuse("BAD_REQUEST", f"text must be a string, got {type(text).__name__}")
     raw_ids = args.get("file_ids")
     if raw_ids is None:
         raw_ids = []
@@ -1060,6 +1244,20 @@ def _conversation_send(args: dict, ctx: Context) -> dict:
     if not text.strip() and not raw_ids:
         return _refuse("BAD_REQUEST", "text or at least one file_id is required")
     as_of = (args.get("as_of") or "").strip() or _today(ctx)
+    today = _today(ctx)
+    if as_of < today:
+        # The envelope's `as_of` is what the law was read AS AT, and nothing on this path
+        # reads it as at a past date: the ask verb takes no as_of, and
+        # `checker/sources/held.py` raises on one because point-in-time reconstruction of
+        # substituted spans is UNVERIFIED against any external source (CLAUDE.md,
+        # docs/RETRACTIONS.md). Stamping 2017-04-01 on today's consolidated text is the
+        # retracted mistake with a field name on it, so it is refused rather than served.
+        return _refuse("AS_OF_UNSUPPORTED",
+                       f"as_of={as_of} is in the past, and this engine reads the law as it "
+                       f"stands today ({today}). Point-in-time reconstruction is "
+                       f"UNVERIFIED against any external source, so an answer stamped with "
+                       f"a past date would be today's text wearing one. Ask without as_of, "
+                       f"or ask what changed.")
     sources = args.get("sources")
     if sources is not None and not isinstance(sources, list):
         return _refuse("BAD_REQUEST", "sources must be a list of source ids")
@@ -1141,9 +1339,17 @@ def _conversation_send(args: dict, ctx: Context) -> dict:
                               "ordinal": ordinal + 1, "role": "assistant", "text": "",
                               "file_ids": [], "task": task, "run_id": run_id,
                               "envelope": None})
+        # READING, and this is the only path that can honestly say it: a worker holds the
+        # file and has not finished with it. Returned alongside the run_id so the panel has
+        # something to show while `envelope` is null -- without it READING was a state in
+        # the schema that nothing ever produced.
+        reading = [dict(f, state=ev.READING, pages=None, reason=None)
+                   if f["state"] == ev.READ else f for f in files]
+        reading = [{k: v for k, v in f.items() if v is not None or k in
+                    ("file_id", "name", "state")} for f in reading]
         return {"conversation_id": cid, "message_id": reply_id,
                 "classification": classification, "run_id": run_id,
-                "envelope": None,
+                "envelope": None, "files": reading, "task": task,
                 "note": ("queued. The envelope is written when the worker finishes; poll "
                          "runs.get, or read the message again. `envelope: null` means the "
                          "reply has not arrived, which is not an empty answer.")}
@@ -1152,7 +1358,7 @@ def _conversation_send(args: dict, ctx: Context) -> dict:
     verb = by_name()[verb_name]
     result = verb.run(_task_args(task, text, raw_ids, ctx, args), ctx)
     env = _envelope_for(task, result, as_of=as_of, run_id=result.get("run_id"),
-                        files=files, ctx=ctx)
+                        files=files, ctx=ctx, question=text)
     store.append_message({"message_id": reply_id, "conversation_id": cid,
                           "ordinal": ordinal + 1, "role": "assistant", "text": "",
                           "file_ids": [], "task": task,
@@ -1205,14 +1411,13 @@ def _conversation_get(args: dict, ctx: Context) -> dict:
 
 
 def _citation_get(args: dict, ctx: Context) -> dict:
-    """One citation in full, for the source panel.
+    """One citation in full, for the source panel, RE-READ from the corpus.
 
-    Re-verifies the quote against the held corpus rather than trusting the stored
-    envelope: the panel is where a lawyer goes to check, so it is the last place that
-    should show a quote nobody re-read.
+    The panel is where a lawyer goes to check, so it is the last place that should show a
+    quote nobody re-read. `verify_citation` goes back to
+    `section_index.section_by_number` and `html_to_text` -- the same two functions the
+    evidence path used -- and reports which of three things failed if any did.
     """
-    from checker.sources.held import HeldCorpus, span_matches
-
     cid = (args.get("citation_id") or "").strip()
     conv_id = (args.get("conversation_id") or "").strip()
     if not cid:
@@ -1227,20 +1432,13 @@ def _citation_get(args: dict, ctx: Context) -> dict:
         for c in (msg.get("envelope") or {}).get("citations", ()):
             if c.get("id") != cid:
                 continue
-            verified, why = False, "not re-checked"
-            try:
-                ok = span_matches(type("E", (), {
-                    "doc_id": c.get("provision_id") or "", "quoted_span": c["quote"]})())
-                verified, why = bool(ok), ("re-read from the held corpus and the quote "
-                                           "byte-matches" if ok else
-                                           "the quote could NOT be found in the corpus "
-                                           "section it names")
-            except Exception as exc:                            # noqa: BLE001
-                verified, why = False, f"could not re-check ({type(exc).__name__})"
+            ok, why = verify_citation(c)
             return {"citation": c, "message_id": msg["message_id"],
-                    "reverified": verified, "reverified_note": why}
+                    "reverified": ok, "reverified_note": why,
+                    "note": ("The quote was re-read from the corpus just now, not trusted "
+                             "from the stored answer. reverified=false means nothing may "
+                             "rest on it, whatever the stored envelope says.")}
     return _refuse("NOT_FOUND", f"no citation {cid!r} in conversation {conv_id!r}")
-
 
 def _documents_upload(args: dict, ctx: Context) -> dict:
     """Store bytes under their own sha256. The identity IS the hash, not a counter.
@@ -1943,6 +2141,213 @@ def _test() -> None:
     check("model_provider" in _src,
           "...passing a model_provider, which classify() calls lazily and only if the "
           "rules did not decide")
+
+    # ══ C2 GAPS, found by auditing the envelope against the spec ═════════════
+    # Measured before any of this was written: citations[] was 0 for every task, bodies[]
+    # empty for four of six, READING and PARTIAL and NEEDS_LAWYER never produced, and
+    # `_bodies_from_ask` read two keys (`out_of_scope_bodies`, `refusal`) that the `ask`
+    # verb does not return -- so the FEMA branch was dead code and the spec's own named
+    # case failed end to end.
+    _gctx = Context(store=_MB(), clock=lambda: "2026-10-01T00:00:00+00:00")
+    _gV = by_name()
+
+    def _send(**kw):
+        return _gV["conversation.send"].run({"conversation_id": "c-gap", **kw}, _gctx)
+
+    # ── the spec's named case: CA2013 + FEMA -> PARTIAL, FEMA NOT_HELD ──────
+    # PARTIAL means part was ANSWERED and part was not held, so the question has to be one
+    # the Act really answers part of. This one is: the quorum is s.174, and FEMA is named
+    # alongside it.
+    _mx = _send(text="What is the quorum for a meeting of the Board under the Companies "
+                     "Act, and does FEMA affect it?")["envelope"]
+    _mb = {b["body_id"]: b for b in _mx["bodies"]}
+    check(_mx["status"] == "PARTIAL",
+          f"a CA2013 + FEMA question is PARTIAL end to end, through conversation.send "
+          f"(got {_mx['status']})")
+    check(_mb.get("FEMA1999", {}).get("status") == "NOT_HELD",
+          f"...with FEMA1999 NOT_HELD ({sorted(_mb)})")
+    check("CA2013" in _mb and _mb["CA2013"]["status"] == _ev.B_ANSWERED,
+          f"...and CA2013 ANSWERED ({_mb.get('CA2013', {}).get('status')})")
+    from checker import scope as _sc
+    check(_mb["FEMA1999"]["note"] == _sc.refusal_for("FEMA1999"),
+          "...and FEMA's note is the REGISTER'S OWN refusal text, not a sentence composed "
+          "here")
+    # And the case that must NOT be PARTIAL: a second body is named, but the Act has
+    # nothing on point, so nothing was answered. ABSTAINED is the honest outcome and
+    # PARTIAL here would be a claim to have answered half of it.
+    _mx0 = _send(text="Under the Companies Act and FEMA, what applies when a foreign "
+                      "investor subscribes to shares?")["envelope"]
+    _mb0 = {b["body_id"]: b["status"] for b in _mx0["bodies"]}
+    check(_mx0["status"] == _ev.ABSTAINED and _mb0.get("CA2013") == _ev.B_NEED_FACT,
+          f"...while a mixed question the Act has NOTHING on point for is ABSTAINED with "
+          f"CA2013 NEED_FACT -- PARTIAL would claim half an answer that does not exist "
+          f"({_mx0['status']}, {_mb0})")
+    check(_mb0.get("FEMA1999") == "NOT_HELD",
+          "...and FEMA is still named NOT_HELD in it")
+
+    # ── a question wholly about unheld law: ABSTAINED, and the body named ───
+    _ibc = _send(text="Under the IBC, what is the CIRP timeline?")["envelope"]
+    _ib = {b["body_id"]: b for b in _ibc["bodies"]}
+    check(_ibc["status"] == _ev.ABSTAINED,
+          f"a question wholly about unheld law ABSTAINS ({_ibc['status']})")
+    check(_ib.get("IBC2016", {}).get("status") == "NOT_HELD",
+          f"...naming IBC2016 NOT_HELD ({sorted(_ib)})")
+
+    # ── bodies[] for the tasks that had none ────────────────────────────────
+    _rdoc = _send(text="Check the minutes of the board meeting.")["envelope"]
+    check([b["body_id"] for b in _rdoc["bodies"]] == ["CA2013"],
+          f"REVIEW_DOCUMENT names CA2013: SS-1/SS-2 are read against the Act "
+          f"({[b['body_id'] for b in _rdoc['bodies']]})")
+    _up = _gV["documents.upload"].run(
+        {"text": "1. The Receiving Party shall keep Confidential Information secret.",
+         "name": "mutual-nda.docx"}, _gctx)
+    _rc = _send(text="Please review this NDA against our playbook.",
+                file_ids=[_up["document_id"]], test_data="fixture")["envelope"]
+    _rcb = {b["body_id"]: b for b in _rc["bodies"]}
+    check("CONTRACT1872" in _rcb and _rcb["CONTRACT1872"]["status"] == "NOT_HELD",
+          f"REVIEW_CONTRACT names the Contract Act as NOT_HELD -- a playbook finding is a "
+          f"company standard and never a statement of law ({sorted(_rcb)})")
+
+    # ── NEEDS_LAWYER, which nothing produced ───────────────────────────────
+    check(_rc["status"] == _ev.NEEDS_LAWYER,
+          f"a contract review REQUIRES a lawyer: every finding is a POTENTIAL_ISSUE "
+          f"against a company standard, so no machine outcome closes it "
+          f"(got {_rc['status']})")
+
+    # ── READING, which nothing produced ────────────────────────────────────
+    from gateway.jobs import MemoryQueue as _MQ
+    _qctx = Context(store=_MB(), queue=_MQ(), clock=lambda: "2026-10-01T00:00:00+00:00")
+    _qu = by_name()["documents.upload"].run(
+        {"text": "MINUTES OF THE BOARD MEETING.", "name": "minutes.pdf"}, _qctx)
+    _qr = by_name()["conversation.send"].run(
+        {"text": "Please check these minutes.", "file_ids": [_qu["document_id"]]}, _qctx)
+    check(_qr.get("run_id") and _qr.get("envelope") is None,
+          f"queued work returns a run_id at once with no envelope yet "
+          f"({_qr.get('run_id') is not None})")
+    check(_qr.get("files") and _qr["files"][0]["state"] == _ev.READING,
+          f"...and the file panel says READING while the worker has it "
+          f"({(_qr.get('files') or [{}])[0].get('state')})")
+
+    # ── every status is reachable, and FAILED only by the transport path ────
+    _nc = _gV["conversation.send"].run(
+        {"conversation_id": "c-gap2",
+         "file_ids": [_gV["documents.upload"].run(
+             {"text": "MINUTES OF THE BOARD MEETING.",
+              "name": "board-minutes.pdf"}, _gctx)["document_id"]]}, _gctx)
+    _plain = _send(text="What is the quorum for a meeting of the Board?")["envelope"]
+    check(_plain["status"] == _ev.ANSWERED,
+          f"a question wholly within held law is ANSWERED ({_plain['status']})")
+    _seen = {_mx["status"], _ibc["status"], _rdoc["status"], _rc["status"],
+             _nc["envelope"]["status"], _plain["status"]}
+    check({_ev.ANSWERED, _ev.PARTIAL, _ev.NEEDS_LAWYER, _ev.ABSTAINED,
+           _ev.NEEDS_CLARIFICATION} <= _seen,
+          f"every LEGAL status is reachable from conversation.send -- before this, only "
+          f"ANSWERED and ABSTAINED were ({sorted(_seen)})")
+    check(_ev.FAILED not in _seen,
+          "...and FAILED is not among them: it is reachable only through the transport "
+          "path, never from a task that ran")
+
+    # ── as_of: never stamp a date the engine did not read as at ────────────
+    _past = _send(text="What is the quorum for a meeting of the Board?",
+                  as_of="2017-04-01")
+    check(_past.get("status") == "REFUSED" or
+          _past["envelope"]["as_of"] == "2026-10-01",
+          f"a PAST as_of is refused rather than stamped on an answer read as at today -- "
+          f"point-in-time reconstruction is UNVERIFIED (CLAUDE.md), and an envelope "
+          f"claiming 2017-04-01 over today's text is the retracted mistake with a field "
+          f"name on it (got {_past.get('status')}/"
+          f"{(_past.get('envelope') or {}).get('as_of')})")
+    check(_send(text="What is the quorum?")["envelope"]["as_of"] == "2026-10-01",
+          "...while today's date is stamped normally")
+
+    # ══ citations: a real Evidence round-trip ════════════════════════════════
+    from agents import research_question as _rq
+    _q = "What is the quorum for a meeting of the Board?"
+    _srcs = tuple(_s for _s, _o in _rq.evidence(_q))
+    _cctx2 = Context(store=_MB(), clock=lambda: "2026-10-01T00:00:00+00:00",
+                     model_for=lambda _o: _rq.quoting_model(_srcs))
+    _cr = by_name()["conversation.send"].run({"text": _q}, _cctx2)
+    _ce = _cr["envelope"]
+    check(len(_ce["citations"]) >= 1,
+          f"citations[] is POPULATED from the research path -- it was 0 for every task "
+          f"({len(_ce['citations'])})")
+    _c1 = _ce["citations"][0]
+    for _f in ("id", "instrument", "provision", "source", "fetched_at", "sha256", "quote"):
+        check(bool(_c1.get(_f)), f"...citation carries {_f} ({str(_c1.get(_f))[:30]!r})")
+    check(_c1["instrument"] == "Companies Act 2013" and _c1["provision"].startswith("s."),
+          f"...instrument and provision are split, not one string "
+          f"({_c1['instrument']} / {_c1['provision']})")
+    check(len(_c1["sha256"]) == 64 and _c1["source"].startswith("corpus/"),
+          f"...the sha256 is the CORPUS FILE's and the source is its repo path "
+          f"({_c1['source']})")
+    check(_c1.get("in_force_from") is None,
+          "...in_force_from is NULL: the corpus record does not carry a per-section "
+          "commencement date, and a statutory date guessed here would be invented")
+    check(_ev.errors(_ce) == [], f"...and the envelope validates ({_ev.errors(_ce)[:1]})")
+    check([b["citation_ids"] for b in _ce["text_blocks"]][0] == [c["id"] for c in
+                                                                _ce["citations"]],
+          "...the text block references exactly the citations that survived")
+
+    # Every quote really is in the section it names -- re-read, not trusted.
+    for _c in _ce["citations"]:
+        _ok, _why = verify_citation(_c)
+        check(_ok, f"{_c['id']}: the quote byte-matches {_c['provision']} on re-read "
+                   f"({_why[:54]})")
+
+    # ── a quote that no longer byte-matches is DROPPED, never shown ─────────
+    _bent = dict(_c1, id="bent",
+                 quote="(1) The quorum for a meeting of the Committee of Auditors")
+    _ok, _why = verify_citation(_bent)
+    check(not _ok and "NOT present" in _why,
+          f"a bent quote fails re-verification ({_why[:60]})")
+    _kept, _dropped = _citations_for("RESEARCH_QUESTION",
+                                     {"citations": [_c1, _bent]})
+    check([c["id"] for c in _kept] == [_c1["id"]] and [c["id"] for c in _dropped] == ["bent"],
+          f"...and is DROPPED, not flagged ({[c['id'] for c in _kept]} kept, "
+          f"{[c['id'] for c in _dropped]} dropped)")
+    _benv = _envelope_for("RESEARCH_QUESTION",
+                          {"citations": [_c1, _bent], "answer": "The quorum is...",
+                           "provisions": ["Companies Act 2013, s.174"]},
+                          as_of="2026-10-01", files=[], ctx=_cctx2, question=_q)
+    check("bent" not in [c["id"] for c in _benv["citations"]],
+          "...and never reaches the envelope")
+    check(any("dropped" in b["text"] for b in _benv["text_blocks"]),
+          "...while the DROP IS STATED in the answer, because a reader is looking at "
+          "something different from what we first built")
+    check(_ev.errors(_benv) == [], "...and that envelope still validates")
+
+    # The other two ways it can fail, each a different fact.
+    _moved = dict(_c1, id="moved", sha256="0" * 64)
+    _ok2, _why2 = verify_citation(_moved)
+    check(not _ok2 and "has changed since" in _why2,
+          f"a citation whose corpus file has CHANGED is not re-verified against text we "
+          f"did not read ({_why2[:50]})")
+    _gone = dict(_c1, id="gone", provision="s.99999")
+    _ok3, _why3 = verify_citation(_gone)
+    check(not _ok3 and "no longer holds" in _why3,
+          f"a citation naming a section the corpus does not hold fails ({_why3[:46]})")
+    check(verify_citation(dict(_c1, provision=""))[0] is False,
+          "...and one naming no provision has nothing to re-read")
+
+    # ── citation.get re-reads; it does not trust the stored envelope ────────
+    _cg = by_name()["citation.get"].run(
+        {"citation_id": _c1["id"], "conversation_id": _cr["conversation_id"]}, _cctx2)
+    check(_cg.get("reverified") is True and "byte-matches" in _cg["reverified_note"],
+          f"citation.get re-reads the corpus and says so ({_cg.get('reverified')})")
+    check(_cg["citation"]["quote"] == _c1["quote"],
+          "...returning the citation in full for the source panel")
+    # A bent citation that somehow IS stored must come back marked, not presented as good.
+    _st2 = _cctx2.store
+    _mid = [m for m in _st2.read_messages(_cr["conversation_id"])
+            if m["role"] == "assistant"][0]["message_id"]
+    _st2.set_message_envelope(_mid, dict(_ce, citations=[_bent]))
+    _cg2 = by_name()["citation.get"].run(
+        {"citation_id": "bent", "conversation_id": _cr["conversation_id"]}, _cctx2)
+    check(_cg2.get("reverified") is False and "NOT present" in _cg2["reverified_note"],
+          f"a bent citation found in a STORED envelope is returned marked "
+          f"reverified=false, never as a good one ({_cg2.get('reverified')})")
+    check("nothing may rest on it" in _cg2["note"],
+          "...and the note says what that means")
 
     # ── PARITY, the point of the file ───────────────────────────────────────
     check(set(rest) == names and set(cli) == names,
