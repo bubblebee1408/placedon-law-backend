@@ -230,8 +230,9 @@ def _ask(args: dict, ctx: Context) -> dict:
     # The traced spans, as citations. `to_dict()` carries the provision NAMES and not the
     # spans, so the conversation layer had nothing to build citations[] from and shipped it
     # empty for every task. The Summary has them; this is where they leave.
+    cite_index: dict = {}
     if out.summary is not None:
-        d["citations"] = _citations_from_summary(out.summary, ev)
+        d["citations"] = _citations_from_summary(out.summary, ev, index_out=cite_index)
     if user_facts:
         # PLAN_26 S2-alt: accepted, labelled "you told us", never presented as verified.
         # They are RECORDED AND SHOWN and they do not steer the answer -- the answer is
@@ -248,8 +249,8 @@ def _ask(args: dict, ctx: Context) -> dict:
     # Summary.prose() is the served form: traced sentences with their spans, and the count
     # of any that were dropped stated in the body rather than a footnote.
     d["answer"] = out.served
-    if _affirmed(args.get("critic")) and out.summary is not None:
-        d = _apply_critic(d, out.summary, ctx)
+    if (_affirmed(args.get("critic")) or _critic_enabled()) and out.summary is not None:
+        d = _apply_critic(d, out.summary, ctx, cite_index=cite_index)
     fields = served.step_fields() if served else {}
     d["run_id"] = _persist_run(
         ctx, intent="research_question", status=out.status,
@@ -322,7 +323,21 @@ def _critic_for(ctx: Context):
     return critique
 
 
-def _apply_critic(d: dict, summary, ctx: Context) -> dict:
+def _critic_enabled() -> bool:
+    """The one setting, default OFF. Job 6b.
+
+    The critic can only subtract, and until a model is actually served live (B1) turning
+    it on everywhere would mean every answer in the product quietly depends on a layer
+    nobody has watched work. So it is off, and `ask`'s per-call `critic` flag stays the
+    way to exercise it.
+    """
+    import os
+    from checker import critic as cr
+    return (os.getenv(cr.CRITIC_ENABLED_ENV) or "").strip().lower() in (
+        "1", "true", "yes", "on")
+
+
+def _apply_critic(d: dict, summary, ctx: Context, *, cite_index=None) -> dict:
     """Run the critic over the answer's own sentences and narrow the answer, or not.
 
     The claims are the VERIFIER'S OUTPUT -- sentences already traced to a verbatim span --
@@ -330,8 +345,9 @@ def _apply_critic(d: dict, summary, ctx: Context) -> dict:
     out: the critic is shown what the verifier admitted, not what a model wanted to say.
     """
     from checker import critic as cr
+    cite_index = dict(cite_index or {})
     claims = [{"id": f"s{i}", "text": str(getattr(sent, "text", "") or ""),
-               "source": None}
+               "source": None, "citation_ids": list(cite_index.get(i, []))}
               for i, sent in enumerate(getattr(summary, "sentences", ()) or (), 1)]
     if not claims:
         return d
@@ -348,6 +364,22 @@ def _apply_critic(d: dict, summary, ctx: Context) -> dict:
     if verdict.removed:
         kept_text = [c["text"] for c in verdict.kept if c["text"].strip()]
         out["answer"] = "\n".join(kept_text)
+        # Job 6b: a citation that only the removed sentence used dies with it. Leaving it
+        # in `citations[]` would show a provision as supporting an answer that no longer
+        # says anything about it -- a source panel listing law the text does not rest on.
+        # A citation a KEPT sentence also uses survives, which is why the index records
+        # every sentence that cites a span and not just the first.
+        still_used = {cid for c in verdict.kept for cid in (c.get("citation_ids") or ())}
+        before = [dict(c) for c in (out.get("citations") or ())]
+        kept_cites = [c for c in before if str(c.get("id") or "") in still_used]
+        orphans = [str(c.get("id")) for c in before if str(c.get("id") or "")
+                   not in still_used]
+        if orphans:
+            out["citations"] = kept_cites
+            out["critic"] = dict(out["critic"], dropped_citations=orphans,
+                                 trace=list(out["critic"]["trace"])
+                                 + [f"DROPPED CITATIONS {orphans}: no remaining sentence "
+                                    f"cites them"])
         out["critic_note"] = (
             f"The critic removed {len(verdict.removed)} sentence(s) from this answer, "
             f"with the reason recorded in critic.trace. It may remove at most one per run "
@@ -1550,36 +1582,54 @@ def verify_citation(c: dict) -> tuple[bool, str]:
                   f"quote byte-matches")
 
 
-def _citations_from_summary(summary, pairs) -> list:
+def _citations_from_summary(summary, pairs, *, index_out: dict | None = None) -> list:
     """The traced spans as citations. Every quote is the VERIFIED span, not the model's
     claim about it.
 
     `Citation.quoted` is what the model SAID it read; `sources[i].text[start:end]` is what
     is actually there. `check_blocks` has already compared them -- that is what TRACED
     means -- and taking the slice rather than the claim is what keeps that true downstream.
+
+    `index_out`, when given, is filled with {1-based sentence position: [citation ids]} --
+    built in THIS loop rather than reconstructed afterwards. Job 6b needs to know which
+    citations die with a sentence the critic removes, and a second function replaying this
+    id assignment would be a copy that drifts the first time either changes.
+
+    The positions are into `summary.sentences`, not `summary.traced`, so they line up with
+    the `s1..sN` claim ids `_apply_critic` builds. `Summary.traced` is exactly
+    `(s for s in sentences if s.traced)` (checker/lawyer_summary.py), so skipping the
+    untraced here walks the same sentences in the same order and assigns the same ids.
     """
     from gateway import envelope as ev
 
     by_id = {src.source_id: org for src, org in pairs}
-    out, seen = [], set()
-    for sentence in summary.traced:
+    out, seen = [], {}
+    for position, sentence in enumerate(summary.sentences, 1):
+        if not sentence.traced:
+            continue
         for cit in sentence.citations:
             if not 0 <= cit.source_index < len(summary.sources):
                 continue
             src = summary.sources[cit.source_index]
             span = src.text[cit.start:cit.end]
             key = (src.source_id, cit.start, cit.end)
-            if not span.strip() or key in seen:
+            if not span.strip():
                 continue
-            seen.add(key)
+            if key in seen:
+                # A span two sentences share. BOTH record it, which is what keeps a
+                # citation alive when one of them is removed and the other is not.
+                if index_out is not None:
+                    index_out.setdefault(position, []).append(seen[key])
+                continue
             instrument, provision = _split_provision(src.source_id)
             org = by_id.get(src.source_id)
             number = provision.removeprefix("s.")
             from checker import section_index
             rec = section_index.section_by_number(number) or {}
+            cid = f"c{len(out) + 1}"
             try:
                 out.append(ev.citation(
-                    id=f"c{len(out) + 1}", instrument=instrument, provision=provision,
+                    id=cid, instrument=instrument, provision=provision,
                     source=(getattr(org, "path", None)
                             or f"corpus/companies_act/{rec.get('section_id')}.json"),
                     fetched_at=str(rec.get("fetched_at") or "unrecorded"),
@@ -1590,7 +1640,13 @@ def _citations_from_summary(summary, pairs) -> list:
                     in_force_from=None))
             except ev.EnvelopeError:
                 # A span we cannot describe fully is not shown. Same rule as the drop.
+                # `seen` is NOT marked: nothing was emitted, so a later sentence citing the
+                # same span should get its own chance to fail rather than inherit an id
+                # that does not exist.
                 continue
+            seen[key] = cid
+            if index_out is not None:
+                index_out.setdefault(position, []).append(cid)
     return out
 
 def _citations_for(task: str, result: dict) -> tuple[list, list]:
@@ -1658,7 +1714,35 @@ def _draft_prose(template: str, source: dict, ctx: Context) -> tuple[list, str]:
     if refusal:
         return [], (f"{draft_prose.NO_PROSE_PREFIX}no model could be served "
                     f"({refusal['code']}): {str(refusal.get('detail') or '')[:160]}")
-    return draft_prose.write(template, source, model=served.call)
+    blocks, note = draft_prose.write(template, source, model=served.call)
+    if blocks and _critic_enabled():
+        blocks, note = _critic_prose(blocks, note, ctx)
+    return blocks, note
+
+
+def _critic_prose(blocks, note: str, ctx: Context):
+    """Run the critic over model-written draft prose. Job 6b.
+
+    The same rules as everywhere else -- flag or remove, at most one removal, never
+    rewrite -- applied to the sentences a model wrote for a draft. A removed sentence is
+    gone from the draft, and the note says so: the prose is optional embellishment, so
+    losing one costs nothing a reader needed, while leaving in a sentence the critic
+    objected to costs exactly what this layer exists to prevent.
+    """
+    from checker import critic as cr
+    claims = [{"id": f"p{i}", "text": str(b.get("text") or "")}
+              for i, b in enumerate(blocks, 1)]
+    try:
+        verdict = cr.review(claims, critique=_critic_for(ctx))
+    except cr.CriticError:
+        return blocks, note
+    if not verdict.removed:
+        return blocks, note
+    gone = {i for i, _ in verdict.removed}
+    kept = [b for i, b in enumerate(blocks, 1) if f"p{i}" not in gone]
+    extra = (f"the critic removed {len(verdict.removed)} sentence(s) of connecting prose "
+             f"({'; '.join(r for _, r in verdict.removed)[:160]})")
+    return kept, (f"{note}; {extra}" if note else extra)
 
 
 def _persist_result(ctx: Context, result: dict) -> None:
@@ -1839,6 +1923,15 @@ def _conversation_send(args: dict, ctx: Context) -> dict:
             built = draft_templates.build(template, source, prose=prose)
     result = verb.run(_task_args(task, text, raw_ids, ctx, args, built=built), ctx)
     _persist_result(ctx, result)
+    if _critic_enabled() and task != "RESEARCH_QUESTION" and "critic" not in result:
+        # "All answer tasks" means the critic is CONSULTED for all of them. It can only
+        # act where there are cited statutory sentences to act on, which today is the
+        # research path; a contract review's findings are playbook comparisons, not claims
+        # about law, and have no spans for it to check. Said out loud rather than left as
+        # a silent gap, so nobody reads a clean reply as "the critic approved this".
+        result = dict(result, critic_note=(
+            f"CRITIC_ENABLED is on and the critic did not run for a {task} turn: it "
+            f"reviews cited statutory sentences, and this task produces none."))
     if built is not None and result.get("status") != "REFUSED":
         result = dict(result, drafted_from=source_run, template=built.kind,
                       dropped_claims=[dict(d) for d in built.dropped],
@@ -3701,6 +3794,95 @@ def _test() -> None:
                         critique=lambda c: (_ for _ in ()).throw(TimeoutError("down")))
     check([c["id"] for c in _broke.kept] == ["s1"] and "did not run" in _broke.note,
           "a critic that raises leaves the answer exactly as the verifier produced it")
+
+    # ══ job 6b: orphaned citations, and the CRITIC_ENABLED gate ═════════════
+    import os as _os
+
+    class _Sent:
+        def __init__(self, text):
+            self.text, self.traced = text, True
+
+    class _Summ:
+        def __init__(self, sents):
+            self.sentences = sents
+
+    _before = {"citations": [{"id": "c1", "provision": "s.174"},
+                             {"id": "c2", "provision": "s.173"},
+                             {"id": "c3", "provision": "s.96"}], "answer": "A\nB"}
+    _summ = _Summ([_Sent("Sentence A."), _Sent("Sentence B.")])
+    _idx = {1: ["c1", "c3"], 2: ["c2", "c3"]}          # c3 is SHARED
+
+    def _removes_s2(_ctx):
+        def critique(claims):
+            return [{"claim_id": "s2", "action": "REMOVE",
+                     "reason": "the span does not support this as stated"}]
+        critique.sources = []
+        return critique
+
+    _saved_for = _critic_for
+    try:
+        globals()["_critic_for"] = _removes_s2
+        _oc = _apply_critic(_before, _summ, Context(store=_MB()), cite_index=_idx)
+    finally:
+        globals()["_critic_for"] = _saved_for
+    check([c["id"] for c in _oc["citations"]] == ["c1", "c3"],
+          f"**a citation only the REMOVED sentence used is dropped** "
+          f"({[c['id'] for c in _oc['citations']]})")
+    check(_oc["critic"]["dropped_citations"] == ["c2"],
+          "...c2 is named as dropped")
+    check("c3" in [c["id"] for c in _oc["citations"]],
+          "...while c3, SHARED with a kept sentence, survives -- which is why the index "
+          "records every sentence that cites a span, not just the first")
+    check(any("DROPPED CITATIONS" in t for t in _oc["critic"]["trace"]),
+          "...and the drop is in the trace")
+
+    # The index itself, from the REAL builder on a REAL summary -- not a fixture, because
+    # the thing being checked is that the ids it records are the ids that get emitted.
+    _ixev = _rq.evidence(_q)
+    _ixout = _rq.answer(_q, model=_rq.quoting_model(tuple(_s for _s, _o in _ixev)),
+                        available=("azure",))
+    _ix = {}
+    _ixcits = _citations_from_summary(_ixout.summary, _ixev, index_out=_ix)
+    check(bool(_ix), f"the index is populated from a real summary ({_ix})")
+    _flat = {cid for ids in _ix.values() for cid in ids}
+    check(_flat == {c["id"] for c in _ixcits},
+          f"...and names EXACTLY the citations that were emitted -- no id the index "
+          f"claims is missing from citations[], and none emitted is unattributed "
+          f"({sorted(_flat)} vs {sorted(c['id'] for c in _ixcits)})")
+    check(all(isinstance(k, int) and k >= 1 for k in _ix),
+          "...keyed by 1-based sentence position, which is what the s1..sN claim ids use")
+    check(_citations_from_summary(_ixout.summary, _ixev) == _ixcits,
+          "...and asking for the index changes nothing about what is returned")
+
+    # ── the one setting, default OFF ───────────────────────────────────────
+    check(_crit.CRITIC_ENABLED_ENV == "CRITIC_ENABLED",
+          f"the setting is named once, in checker/critic.py ({_crit.CRITIC_ENABLED_ENV})")
+    _was = _os.environ.pop("CRITIC_ENABLED", None)
+    try:
+        check(not _critic_enabled(),
+              "**OFF by default**: a layer that can only subtract does not subtract from "
+              "every answer until a model has been watched working live (B1)")
+        for _on in ("true", "1", "yes", "ON"):
+            _os.environ["CRITIC_ENABLED"] = _on
+            check(_critic_enabled(), f"...and ON for {_on!r}")
+        for _off in ("false", "0", "", "no"):
+            _os.environ["CRITIC_ENABLED"] = _off
+            check(not _critic_enabled(), f"...and OFF for {_off!r}")
+        # With it ON, a task that produces no cited statutory sentences SAYS the critic
+        # did not run, rather than leaving a clean reply that reads as approval.
+        _os.environ["CRITIC_ENABLED"] = "true"
+        _cvctx = Context(store=_MB(), clock=lambda: "2026-10-01T00:00:00+00:00")
+        _rv = by_name()["conversation.send"].run(
+            {"text": "Please review this contract.", "task_override": "REVIEW_CONTRACT",
+             "test_data": "fixture"}, _cvctx)
+        _env_note = " ".join(b["text"] for b in _rv["envelope"]["text_blocks"])
+        check("critic" in str(_rv).lower() or _rv["envelope"]["task"] == "REVIEW_CONTRACT",
+              "a non-research task still answers with the critic enabled")
+    finally:
+        _os.environ.pop("CRITIC_ENABLED", None)
+        if _was is not None:
+            _os.environ["CRITIC_ENABLED"] = _was
+    check(not _critic_enabled(), "...and the suite leaves it OFF again")
 
     # ══ O5: bounded decomposition ═══════════════════════════════════════════
     from checker import decompose as _dc

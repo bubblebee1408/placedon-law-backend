@@ -42,8 +42,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-__all__ = ["FLAG", "REMOVE", "ACTIONS", "MAX_REMOVALS", "Note", "Verdict", "review",
-           "CriticError"]
+__all__ = ["FLAG", "REMOVE", "ACTIONS", "MAX_REMOVALS", "CRITIC_ENABLED_ENV",
+           "Note", "Verdict", "review", "CriticError"]
 
 FLAG = "FLAG"
 REMOVE = "REMOVE"
@@ -51,6 +51,12 @@ ACTIONS = (FLAG, REMOVE)
 
 # §1.4: "at most once". One per RUN, not one per claim.
 MAX_REMOVALS = 1
+
+# Job 6b. ONE setting, default OFF, named here so `gateway/verbs.py` and anything else
+# that consults it read the same string. The critic can only subtract; until a model is
+# served live (B1) turning it on everywhere would make every answer in the product depend
+# on a layer nobody has watched work.
+CRITIC_ENABLED_ENV = "CRITIC_ENABLED"
 
 
 class CriticError(ValueError):
