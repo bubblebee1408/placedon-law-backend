@@ -91,6 +91,24 @@ def render(files: list[str]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def check_current() -> tuple[bool, str]:
+    """(is the committed map current, a line the HARNESS can read).
+
+    The message carries a `N/N passed` count on purpose. `scripts/run_tests.sh` rule (a)
+    treats a suite that prints no count line as a FAILURE -- deliberately, because eight
+    modules once defined `_test()` without raising and their failures never reached the
+    exit code. So `--check` printing only prose would have been marked nocount=FAIL on the
+    runs where it PASSED, and the obvious response to that is to pull it back out of the
+    gate, which is how a staleness check stops existing.
+    """
+    body = render(tracked_python())
+    current = OUT.read_text(encoding="utf-8") if OUT.exists() else ""
+    if current == body:
+        return True, "1/1 passed — docs/REPO_MAP.md is current"
+    return False, ("0/1 passed — docs/REPO_MAP.md is out of date: run "
+                   "python3 scripts/repo_map.py")
+
+
 def _test() -> None:
     passed = failed = 0
 
@@ -111,6 +129,29 @@ def _test() -> None:
     check(text == render(files), "the output is deterministic")
     check(first_line(ROOT / "checker" / "scope.py") != "(no docstring)",
           "a documented module shows its purpose")
+
+    # ── the committed map is current ────────────────────────────────────────
+    ok, line = check_current()
+    check(ok, f"docs/REPO_MAP.md matches the code ({line})")
+    # And the message `--check` prints must carry a count in BOTH states, or the harness
+    # marks the passing run as nocount=FAIL. Asserted rather than assumed: this is the
+    # property that lets the check live in the gate at all.
+    for text in (check_current()[1],
+                 "0/1 passed — docs/REPO_MAP.md is out of date: run "
+                 "python3 scripts/repo_map.py"):
+        import re as _re
+        check(bool(_re.search(r"\d+/\d+ passed", text)),
+              f"--check prints a count line the harness can read ({text[:40]!r})")
+    check("1/1" in check_current()[1] or "0/1" in check_current()[1],
+          "...and the count reflects the verdict rather than being decoration")
+
+    # Newly-added modules must appear. A map that silently omits a file is the stale map
+    # this generator replaced.
+    text_now = render(tracked_python())
+    for rel in ("agents/intake.py", "gateway/envelope.py"):
+        if (ROOT / rel).exists():
+            check(f"`{rel}`" in text_now, f"{rel} is listed")
+
     print(f"{passed}/{passed + failed} passed")
     sys.exit(1 if failed else 0)
 
@@ -120,11 +161,8 @@ if __name__ == "__main__":
         _test()
     body = render(tracked_python())
     if "--check" in sys.argv:
-        current = OUT.read_text(encoding="utf-8") if OUT.exists() else ""
-        if current != body:
-            print("docs/REPO_MAP.md is out of date: run python3 scripts/repo_map.py")
-            sys.exit(1)
-        print("docs/REPO_MAP.md is current")
-        sys.exit(0)
+        ok, line = check_current()
+        print(line)
+        sys.exit(0 if ok else 1)
     OUT.write_text(body, encoding="utf-8")
     print(f"wrote {OUT.relative_to(ROOT)}")
