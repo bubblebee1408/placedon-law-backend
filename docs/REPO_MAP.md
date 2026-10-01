@@ -155,6 +155,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `checker/resubmission.py` |  | Replacements for proposals a reviewer sent back. Proposes; changes nothing. |
 | `checker/retrieval_eval.py` |  | A retrieval eval set for structural chunk selection — with an honest boundary. |
 | `checker/retrieve.py` |  | The composed retrieval entry point: query in, evidence pack out. |
+| `checker/review_grid.py` |  | Review grids: documents down the side, questions across the top, one cell per pair. |
 | `checker/review_queue.py` |  | The human review queue: what a person must check before law is served. |
 | `checker/review_record.py` |  | The reviewer's decisions, recorded and never applied here. |
 | `checker/review_table.py` |  | The human-review table for the eleven fixture proposals. Decides nothing. |
@@ -327,4 +328,4 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/watch_gazette.py` |  | Run the Gazette watcher once: what did the Gazette publish since we last looked? |
 | `scripts/watch_ofac.py` |  | Poll OFAC's SDN list and report what CHANGED since the last trustworthy poll. |
 
-287 modules listed.
+288 modules listed.
