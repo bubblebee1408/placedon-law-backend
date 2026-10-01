@@ -243,6 +243,8 @@ extra+=("scripts/suite_floors.py --test")
 # H4 (review grids). The core rules: a FOUND cell cannot exist without a quote that
 # byte-matches its document, and no exported cell is ever empty.
 extra+=("checker/review_grid.py --test")
+# H4's runner: one queue job per cell, exactly once, resumable, cancel as a saga.
+extra+=("agents/review_grid.py --test")
 extra+=("scripts/retrieval_recall.py --test")
 extra+=("scripts/retrieval_bakeoff.py --test")
 # The source register (PLAN_24 S0). Nothing is fetched on an unread term, so the register

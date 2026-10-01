@@ -213,6 +213,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `agents/research_question.py` | R3 inference | research_question, end to end: a question about the Companies Act, answered or refused. |
 | `agents/review_contract.py` | R3 inference | review_contract, end to end: a contract against a company playbook, and what it will not say. |
 | `agents/review_document.py` | R3 inference | Intent `review_document` — a corporate filing against the SS-1 / SS-2 checks. |
+| `agents/review_grid.py` | R3 inference | One queue job per cell. Exactly once, resumable, cancellable. |
 | `agents/runtime.py` | R3 inference | Execute a run: fixed plan, persisted steps, bounded correction, honest failure. |
 | `agents/state.py` | R3 inference | The vocabulary of a run, and the one distinction that must never blur. |
 
@@ -328,4 +329,4 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/watch_gazette.py` |  | Run the Gazette watcher once: what did the Gazette publish since we last looked? |
 | `scripts/watch_ofac.py` |  | Poll OFAC's SDN list and report what CHANGED since the last trustworthy poll. |
 
-288 modules listed.
+289 modules listed.
