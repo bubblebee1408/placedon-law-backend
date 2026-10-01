@@ -191,8 +191,12 @@ _CHANGE_PHRASES = ("what changed", "what has changed", "any amendments", "any am
 #     "write me a poem"                  -> no match (a poem is not a document we draft)
 #     "the draft minutes we attached"    -> no match (article before the verb, not after)
 _DRAFT_VERBS = r"(?:draft|prepare|write|write\s+up|produce)"
-_DRAFT_NOUNS = (r"(?:notice|resolution|letter|memo|memorandum|undertaking|declaration"
-                r"|certificate|minutes|agreement|deed|affidavit|circular|report)")
+# `email` and `note` were missing, which made "draft an email to the client about this
+# review" -- the commonest thing anyone asks a legal team for, and job 3's own worked
+# example -- fall through to RESEARCH_QUESTION and come back as an answer about the law.
+_DRAFT_NOUNS = (r"(?:notice|resolution|letter|email|note|memo|memorandum|undertaking"
+                r"|declaration|certificate|minutes|agreement|deed|affidavit|circular"
+                r"|report)")
 _DRAFT_RE = re.compile(
     rf"\b{_DRAFT_VERBS}\s+(?:me\s+|us\s+)?(?:a|an|the)\s+(?:\w+\s+){{0,2}}{_DRAFT_NOUNS}\b",
     re.IGNORECASE)
@@ -713,7 +717,13 @@ def _test() -> int:
           f"the phrase 'write me a', which has no object and caught exactly that "
           f"(got {classify('Write me a poem about compliance.').task})")
     for _msg in ("Draft a resolution for the board.", "Prepare the notice of the AGM.",
-                 "Please produce a circular for the members."):
+                 "Please produce a circular for the members.",
+                 # Job 3's own worked example. It classified as RESEARCH_QUESTION until
+                 # 2026-10-01: `email` and `note` were absent from the document nouns, so
+                 # the commonest draft a lawyer asks for -- a covering note to the client
+                 # -- was answered as a question about the law.
+                 "draft an email to the client about this review",
+                 "Write up a short note for the client on this."):
         check(classify(_msg).task == DRAFT, f"DRAFT: {_msg[:38]!r}")
     for _msg in ("Write me a poem about compliance.", "Draft minutes were circulated.",
                  "Prepare for the audit."):
