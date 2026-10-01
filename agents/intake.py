@@ -71,10 +71,12 @@ EVENT_ASSESS = "EVENT_ASSESS"
 # H3. Served by `draft.create`, a verb, not by a plan -- the same asymmetry EVENT_ASSESS
 # has, and appended for the same reason.
 DRAFT = "DRAFT"
+# H4. Served by `review_table.create`, a verb.
+REVIEW_TABLE = "REVIEW_TABLE"
 
-# Derived from the plan intents, so the two cannot drift. EVENT_ASSESS and DRAFT are
-# appended because each is served by a verb rather than by a plan.
-TASKS = tuple(i.upper() for i in plans.INTENTS) + (EVENT_ASSESS, DRAFT)
+# Derived from the plan intents, so the two cannot drift. EVENT_ASSESS, DRAFT and
+# REVIEW_TABLE are appended because each is served by a verb rather than by a plan.
+TASKS = tuple(i.upper() for i in plans.INTENTS) + (EVENT_ASSESS, DRAFT, REVIEW_TABLE)
 
 # Not a task: the other outcome. It is kept out of TASKS deliberately -- a caller that
 # iterates TASKS is iterating things that can be RUN, and this cannot.
@@ -195,6 +197,14 @@ _DRAFT_RE = re.compile(
     rf"\b{_DRAFT_VERBS}\s+(?:me\s+|us\s+)?(?:a|an|the)\s+(?:\w+\s+){{0,2}}{_DRAFT_NOUNS}\b",
     re.IGNORECASE)
 
+# "Compare these", "a table across these contracts", "for each of these". A request about
+# SEVERAL documents at once, which is a grid and not a review -- reviewing three contracts
+# one at a time answers a different question from putting them side by side.
+_TABLE_PHRASES = ("compare", "comparison", "side by side", "side-by-side", "table",
+                  "across these", "across all", "for each of these", "for each document",
+                  "in each of these", "which of these", "all of these contracts",
+                  "summarise each", "summarize each", "tabulate", "matrix")
+
 _STANDING_PHRASES = ("are we compliant", "am i compliant", "our compliance",
                      "compliance status", "our standing", "where do we stand",
                      "what do we owe", "our filings", "our obligations",
@@ -253,6 +263,7 @@ _NEIGHBOURS: dict[str, tuple[str, str]] = {
     LAW_CHANGES: (RESEARCH_QUESTION, COMPANY_STANDING),
     EVENT_ASSESS: (RESEARCH_QUESTION, COMPANY_STANDING),
     DRAFT: (RESEARCH_QUESTION, REVIEW_DOCUMENT),
+    REVIEW_TABLE: (REVIEW_CONTRACT, REVIEW_DOCUMENT),
 }
 
 
@@ -359,6 +370,21 @@ def _rules(message: str, files, facts) -> Classification | None:
     has_file = bool(kinds)
     has_instruction = bool(text)
     verb = _any(text, _REVIEW_VERBS)
+
+    # 0. SEVERAL files and a comparison request -> a grid, not a review.
+    #
+    # This runs before the single-document rules on purpose: "compare the governing law
+    # across these three contracts" names a review verb and three files, and the
+    # attachment rule below would answer it by reviewing one of them. Two files is the
+    # threshold because one document cannot be compared with anything.
+    tbl = _any_word(text, _TABLE_PHRASES)
+    if len(kinds) >= 2 and tbl:
+        return Classification(
+            task=REVIEW_TABLE, rule="several_files+table_phrase", decided_by="rules",
+            alternatives=_alts(REVIEW_TABLE),
+            reason=(f"{len(kinds)} files are attached and the message says {tbl!r}, which "
+                    f"asks about them together -- reviewing them one at a time answers a "
+                    f"different question"))
 
     # 1. an attachment plus a review verb.
     if attached and verb:
@@ -643,13 +669,13 @@ def _test() -> int:
     print("agents.intake")
 
     # ── the closed set is derived from the plan intents ─────────────────────
-    check(len(TASKS) == 7 and len(set(TASKS)) == 7, f"seven tasks, all distinct ({TASKS})")
+    check(len(TASKS) == 8 and len(set(TASKS)) == 8, f"eight tasks, all distinct ({TASKS})")
     for t in (RESEARCH_QUESTION, REVIEW_CONTRACT, REVIEW_DOCUMENT, COMPANY_STANDING,
-              LAW_CHANGES, EVENT_ASSESS, DRAFT):
+              LAW_CHANGES, EVENT_ASSESS, DRAFT, REVIEW_TABLE):
         check(t in TASKS, f"{t} is one of them")
     check(all(t.upper() in TASKS for t in plans.INTENTS),
           f"every plan intent has a task ({plans.INTENTS})")
-    for t in (EVENT_ASSESS, DRAFT):
+    for t in (EVENT_ASSESS, DRAFT, REVIEW_TABLE):
         check(t not in [i.upper() for i in plans.INTENTS],
               f"{t} is NOT a plan intent -- it is served by a verb, not a run")
     check(NEEDS_CLARIFICATION not in TASKS,
@@ -692,6 +718,26 @@ def _test() -> int:
     for _msg in ("Write me a poem about compliance.", "Draft minutes were circulated.",
                  "Prepare for the audit."):
         check(classify(_msg).task != DRAFT, f"not DRAFT: {_msg[:38]!r}")
+
+    # ── several files + a comparison request is a TABLE, not a review ──────
+    _three = [{"name": f"nda-{i}.docx", "type": ""} for i in range(3)]
+    check(classify("Compare the governing law across these three contracts.",
+                   files=_three).task == REVIEW_TABLE,
+          "three contracts and 'compare' is a REVIEW_TABLE")
+    check(classify("Please review the governing law in each of these.",
+                   files=_three).task == REVIEW_TABLE,
+          "...and so is 'in each of these', even though it also says 'review' -- the "
+          "attachment rule would otherwise answer it by reviewing one of the three")
+    check(classify("Please review this NDA.", files=_three[:1]).task == REVIEW_CONTRACT,
+          "...while ONE contract with a review verb is still a single review")
+    check(classify("Compare this with the standard.", files=_three[:1]).task
+          != REVIEW_TABLE,
+          "...and one file cannot be compared with anything, so 'compare' alone is not a "
+          "table")
+    check(classify("Review these.", files=_three).task in (REVIEW_CONTRACT,
+                                                           REVIEW_DOCUMENT),
+          "...and several files with NO comparison phrase is still a review: 'review "
+          "these' does not say they belong side by side")
 
     # ── a contract attached with "review this" ──────────────────────────────
     c = classify("Review this.", files=[{"name": "mutual-nda.docx",

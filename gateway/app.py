@@ -453,9 +453,9 @@ def _test() -> None:
     # clear a review without a person present.
     check(set(write_verbs()) == {"documents.upload", "runs.approve", "runs.reject",
                                  "runs.submit", "runs.cancel", "conversation.send",
-                                 "review_table.create", "draft.create",
-                                 "draft.revise"},
-          f"nine write verbs today, and each is named ({sorted(write_verbs())})")
+                                 "review_table.create", "review_table.cancel",
+                                 "draft.create", "draft.revise"},
+          f"ten write verbs today, and each is named ({sorted(write_verbs())})")
 
     # ── auth: a key is required everywhere except liveness ──────────────────
     check(anon.get(HEALTH_PATH).status_code == 200,

@@ -552,7 +552,15 @@ QUEUED_INTENTS: dict[str, str] = {
     "review_document": "_review_document",
     "review_contract": "_review_contract",
     "research_question": "_ask",
+    # H4: one cell of a review grid. Unlike the three above, this handler WRITES -- the
+    # cell is the product, not a run record -- so `queue_handlers` hands it the real
+    # context. See the comment there.
+    "review_grid_cell": "_review_grid_cell",
 }
+
+# Intents whose handler needs the STORE, because what they produce is not a run record.
+# Everything else runs store-less so it cannot write a second run.
+STORE_WRITING_INTENTS = frozenset({"review_grid_cell"})
 
 
 def queue_handlers(ctx: "Context") -> dict:
@@ -564,17 +572,29 @@ def queue_handlers(ctx: "Context") -> dict:
     """
     from dataclasses import replace as _replace
 
-    def wrap(fn):
+    def wrap(fn, *, keep_store: bool = False):
         def run(args: dict):
-            inner = _replace(ctx, store=None, last_steps=[])
+            # Store-less by default: a handler that could write a run would write a SECOND
+            # one, and the worker already owns that record.
+            #
+            # `keep_store` is the exception, and it is narrow. A review-grid cell's answer
+            # is not a run record -- it is the product, one row of the table the user is
+            # waiting for -- and the worker persists runs, not cells. So the cell handler
+            # gets the real store and writes its own row, idempotently
+            # (`write_grid_cell(if_pending=True)`), while the worker persists the run as
+            # it does for every other intent.
+            inner = ctx if keep_store else _replace(ctx, store=None, last_steps=[])
+            inner = _replace(inner, last_steps=[])
             result = fn(args, inner)
             return list(inner.last_steps), result
         return run
 
     by_name = {"_review_document": _review_document,
                "_review_contract": _review_contract,
-               "_ask": _ask}
-    return {intent: wrap(by_name[fn]) for intent, fn in QUEUED_INTENTS.items()}
+               "_ask": _ask,
+               "_review_grid_cell": _review_grid_cell}
+    return {intent: wrap(by_name[fn], keep_store=(intent in STORE_WRITING_INTENTS))
+            for intent, fn in QUEUED_INTENTS.items()}
 
 
 def _runs_submit(args: dict, ctx: Context) -> dict:
@@ -907,6 +927,8 @@ TASK_VERB: dict[str, str] = {
     "LAW_CHANGES": "",
     # H3. Served by a verb, like EVENT_ASSESS.
     "DRAFT": "draft.create",
+    # H4.
+    "REVIEW_TABLE": "review_table.create",
 }
 
 # Tasks whose work is long enough to belong on the queue rather than on the socket. Keyed
@@ -1082,6 +1104,14 @@ def _envelope_for(task: str, result: dict, *, as_of: str, run_id=None,
                          run_id=run_id, trace_url=trace)
 
     bodies = _bodies_for(task, result, question)
+    if task == "REVIEW_TABLE" and result.get("grid_id"):
+        t = result.get("scheduled") or {}
+        result = dict(result, note=(
+            f"Review table {result['grid_id']} created: {result.get('documents')} "
+            f"document(s) x {result.get('columns')} column(s) = {result.get('cells')} "
+            f"cells, {len(t.get('enqueued') or [])} queued. Nothing is answered until a "
+            f"worker runs each cell, and a PENDING cell is not a NOT_FOUND one. Poll "
+            f"review_table.status."))
     if task == "DRAFT" and result.get("draft_id"):
         # The id is what the next turn revises, so it has to come back. Put in the text
         # block rather than invented as a new envelope field: the schema is a contract.
@@ -1399,6 +1429,14 @@ def _task_args(task: str, text: str, file_ids, ctx: Context, args: dict) -> dict
     if task == "EVENT_ASSESS":
         return {"event": (args.get("event") or "commercial_contract"),
                 "facts": args.get("facts") or {}}
+    if task == "REVIEW_TABLE":
+        # One column per question asked, and with nothing to go on there is exactly one:
+        # the user's own words. Inventing a six-column diligence grid from a sentence
+        # would be guessing at what they want and spending a run per guess.
+        return {"name": (text.strip()[:60] or "Review table"),
+                "document_ids": list(file_ids or ()),
+                "columns": [{"name": "answer", "kind": "text",
+                             "question": text.strip() or "What does this document say?"}]}
     if task == "DRAFT":
         # The conversation's words become the TITLE, and the body starts empty with an
         # UNKNOWN slot: a draft this engine invented prose for would be a MODEL_SUGGESTION
@@ -1887,6 +1925,115 @@ def _draft_status_verb(args: dict, ctx: Context) -> dict:
     return _draft_status(ctx, draft_id)
 
 
+def _cell_answerer(ctx: Context):
+    """`answer(question, kind, text) -> (value, quote) | None`, from the routed model.
+
+    Raises when no model can be served, and that is deliberate: `agents/review_grid.run_cell`
+    turns a raise into a FAILED cell ("this did not run"), which is the truth. Returning
+    None would make it NOT_FOUND -- asserting the clause is absent from a document nobody
+    read, in a table a lawyer will rely on.
+    """
+    from checker import router
+    from checker.prompt_safety import UNTRUSTED_CLAUSE, wrap_untrusted
+
+    def answer(question: str, kind: str, text: str):
+        from checker import public_only
+        origin = public_only.clear_matter(text, name="review grid cell",
+                                          provider=router.AZURE)
+        served, refusal = _served_or_refusal(origin, name="review_grid_cell",
+                                             purpose=router.EXTRACTION, ctx=ctx,
+                                             consequence=router.LOW)
+        if refusal:
+            raise RuntimeError(f"no model for this cell: {refusal['code']}")
+        prompt = (UNTRUSTED_CLAUSE + "\n\n"
+                  + f"Answer this question about the document below, as a {kind} value.\n"
+                  + f"Question: {question}\n\n"
+                  + "Reply with exactly two lines:\n"
+                  + "VALUE: <the answer, or NONE if the document does not answer it>\n"
+                  + "QUOTE: <the sentence you read it from, verbatim>\n\n"
+                  + wrap_untrusted(text, "the document"))
+        raw = str(served.call(prompt) or "")
+        value = quote = ""
+        for line in raw.splitlines():
+            if line.upper().startswith("VALUE:"):
+                value = line.split(":", 1)[1].strip()
+            elif line.upper().startswith("QUOTE:"):
+                quote = line.split(":", 1)[1].strip()
+        if not value or value.upper() == "NONE":
+            return None
+        return (value, quote)
+
+    return answer
+
+
+def _review_grid_cell(args: dict, ctx: Context) -> dict:
+    """Answer ONE cell and write it. The queue handler for `review_grid_cell`.
+
+    Writes through `write_grid_cell(if_pending=True)`, so a worker handed the same cell
+    twice after a crash does not overwrite the answer the first attempt gave. The write
+    returning False is reported, not swallowed: it is the exactly-once guard firing.
+    """
+    from agents import review_grid as rgr
+
+    if ctx.store is None:
+        return {"status": "FAILED", "error": "a grid cell needs the store to write to"}
+    answer = (ctx.model_for(()) if ctx.model_for is not None else None)
+    if answer is None:
+        answer = _cell_answerer(ctx)
+    try:
+        cell = rgr.run_cell(args, documents=ctx.documents, answer=answer)
+    except rgr.RunnerError as e:
+        return {"status": "FAILED", "error": str(e)}
+    wrote = ctx.store.write_grid_cell(
+        {"grid_id": args["grid_id"], "document_id": cell.document_id,
+         "column_name": cell.column, "state": cell.state, "value": cell.value,
+         "quote": cell.quote, "reason": cell.reason})
+    ctx.last_steps.append({
+        "capability": "review_grid.cell", "status": "ANSWERED",
+        "cost_note": ("one extraction call for one cell"
+                      if cell.state != "FAILED" else
+                      "the call did not complete; no cost is claimed for a call whose "
+                      "outcome is unknown")})
+    return {"status": "ANSWERED" if wrote else "ANSWERED",
+            "grid_id": args["grid_id"], "document_id": cell.document_id,
+            "column": cell.column, "cell_state": cell.state,
+            "written": wrote,
+            "note": (None if wrote else
+                     "this cell was already answered; the earlier answer was kept. A "
+                     "worker handed the same cell twice does not overwrite it.")}
+
+
+def _review_table_cancel(args: dict, ctx: Context) -> dict:
+    """Stop scheduling. Deletes nothing. A WRITE verb, so it is off MCP.
+
+    The compensation for "you changed your mind at cell 30 of 40" is to stop, not to undo
+    29 answers that were correct and paid for (PLAN_23 §1.9). Cells already answered stay
+    exactly as they are; cells not yet run stay PENDING, not FAILED -- nothing went wrong,
+    and FAILED would put transport language on a decision the user made.
+    """
+    if ctx.store is None:
+        return _refuse("NO_STORE", "no store is configured")
+    grid_id = (args.get("grid_id") or "").strip()
+    if not grid_id:
+        return _refuse("BAD_REQUEST", "grid_id is required")
+    table, already = _load_grid(ctx, grid_id)
+    if table is None:
+        return _refuse("NOT_FOUND", f"no review table {grid_id!r} for this tenant")
+    if already:
+        return _refuse("ALREADY_CANCELLED",
+                       f"review table {grid_id} was already cancelled; cancelling twice "
+                       f"is not an error worth hiding, but it changed nothing")
+    ctx.store.cancel_grid(grid_id)
+    t = table.tally()
+    return {"grid_id": grid_id, "cancelled": True,
+            "findings_kept": t["findings"], "pending_stopped": t["PENDING"],
+            "cells": t["cells"],
+            "note": (f"{t['findings']} answered cell(s) are KEPT and {t['PENDING']} "
+                     f"unrun cell(s) stay PENDING. Cancelling stops scheduling; it does "
+                     f"not undo work that was done, and it does not mark unrun cells as "
+                     f"failed.")}
+
+
 def _documents_upload(args: dict, ctx: Context) -> dict:
     """Store bytes under their own sha256. The identity IS the hash, not a counter.
 
@@ -2300,6 +2447,12 @@ VERBS: tuple[Verb, ...] = (
           Field("format", STRING, False, describes="docx (default) or text")),
          "POST", read_only=True, run=_draft_export),
 
+    Verb("review_table.cancel",
+         "Stop scheduling a review table's remaining cells. Answered cells are kept; "
+         "unrun cells stay PENDING, not failed.",
+         (Field("grid_id", STRING, True, describes="the table"),),
+         "POST", read_only=False, run=_review_table_cancel),
+
     Verb("documents.upload",
          "Store a document and return the sha256 that identifies it.",
          (Field("text", STRING, False, describes="the document text"),
@@ -2387,10 +2540,11 @@ def _test() -> None:
                     "sources.list", "sources.search", "company_facts.extract",
                     "intake.classify", "conversation.send", "conversation.list",
                     "conversation.get", "citation.get", "review_table.create",
-                    "review_table.status", "review_table.export", "draft.create",
+                    "review_table.status", "review_table.export",
+                    "review_table.cancel", "draft.create",
                     "draft.revise", "draft.status", "draft.versions", "draft.diff",
                     "draft.export"},
-          f"the twenty-eight verbs are declared once ({sorted(names)})")
+          f"the twenty-nine verbs are declared once ({sorted(names)})")
     # sources.* are READ-ONLY, so they reach MCP. That is the intended shape: an agent may
     # ask what a source permits and search what may be read, and there is no sources verb
     # that fetches, stores or spends. S3's Indian Kanoon connector will spend money, and
@@ -2403,9 +2557,9 @@ def _test() -> None:
     # surface that can submit, cancel or approve is one that can act with nobody present.
     check(set(write_verbs()) == {"documents.upload", "runs.approve", "runs.reject",
                                  "runs.submit", "runs.cancel", "conversation.send",
-                                 "review_table.create", "draft.create",
-                                 "draft.revise"},
-          f"...and exactly nine of them write ({sorted(write_verbs())})")
+                                 "review_table.create", "review_table.cancel",
+                                 "draft.create", "draft.revise"},
+          f"...and exactly ten of them write ({sorted(write_verbs())})")
     check(f"{MCP_NAMESPACE}.conversation.send" not in {t.name for t in mcp},
           "conversation.send WRITES -- it creates a thread, appends messages and may "
           "enqueue work -- so mcp_tools() keeps it off MCP, by rule and not by the author "
@@ -3013,6 +3167,170 @@ def _test() -> None:
           "a negative amount is guarded too, and exports as text -- a number that reads "
           "oddly beats an export that runs")
 
+    # ══ H4 END TO END: the worker actually drains a grid ═════════════════════
+    # Required by job 2b. Not a unit test of the runner -- the real queue, the real worker
+    # loop, the real store, and the real verbs.
+    import csv as _csv2, io as _io2
+    from gateway.jobs import MemoryQueue as _Q
+    from gateway.worker import run_one as _run_once
+    from gateway import worker as _wk
+
+    _DOCS = {
+        "a" * 64: "NDA ONE. 3. Governed by the laws of India. 4. Expires 2029-03-31.",
+        "b" * 64: "NDA TWO. 3. Governed by the laws of Singapore. 4. No expiry stated.",
+        "c" * 64: "SUPPLY AGREEMENT. No governing law clause appears anywhere.",
+    }
+
+    def _answerer(_origins=None):
+        """A deterministic cell answerer, injected as ctx.model_for would inject a model."""
+        def answer(question, kind, text):
+            q = question.lower()
+            if "law" in q and "govern" in q:
+                for seat in ("India", "Singapore"):
+                    if f"laws of {seat}" in text:
+                        return (seat, f"Governed by the laws of {seat}")
+                return None
+            if "expire" in q:
+                import re as _re
+                m = _re.search(r"\d{4}-\d{2}-\d{2}", text)
+                return (m.group(0), f"Expires {m.group(0)}") if m else None
+            return None
+        return answer
+
+    _e2e = Context(store=_MB(), queue=_Q(), clock=lambda: "2026-10-01T10:00:00+05:30",
+                   model_for=_answerer)
+    for _sha, _txt in _DOCS.items():
+        _e2e.documents[_sha] = {"sha256": _sha, "name": f"{_sha[:4]}.txt",
+                                "text": _txt, "bytes": len(_txt)}
+    _eV = by_name()
+    _made = _eV["review_table.create"].run(
+        {"name": "NDA diligence", "document_ids": list(_DOCS),
+         "columns": [{"name": "governing law", "kind": "text",
+                      "question": "Which law governs this agreement?"},
+                     {"name": "term end", "kind": "date",
+                      "question": "On what date does it expire?"}]}, _e2e)
+    _gid = _made["grid_id"]
+    check(_made["cells"] == 6 and len(_made["scheduled"]["enqueued"]) == 6,
+          f"a 3x2 table queues 6 cells ({_made['cells']})")
+    check(_eV["review_table.status"].run({"grid_id": _gid}, _e2e)["by_state"]["PENDING"]
+          == 6, "...and all six start PENDING")
+
+    # THE WORKER DRAINS IT. The real loop, one job at a time, until the queue is empty.
+    _handlers = queue_handlers(_e2e)
+    _drained = 0
+    for _ in range(20):
+        _oc = _run_once(queue=_e2e.queue, store=_e2e.store, handlers=_handlers,
+                        worker="w1")
+        if _oc is None:
+            break
+        _drained += 1
+    check(_drained == 6, f"the worker drained exactly 6 jobs ({_drained})")
+
+    _st = _eV["review_table.status"].run({"grid_id": _gid}, _e2e)
+    check(_st["complete"], f"**.status shows the table COMPLETE** ({_st['by_state']})")
+    check(_st["by_state"]["PENDING"] == 0, "...no cell is left PENDING")
+    check(_st["by_state"]["FAILED"] == 0,
+          f"...and no cell FAILED: FAILED is transport only and nothing broke "
+          f"({_st['by_state']})")
+    _terminal = {"FOUND", "NOT_FOUND", "NEEDS_LAWYER"}
+    _states = {c["state"] for c in _st["cells_detail"]}
+    check(_states <= _terminal,
+          f"**every cell ended FOUND / NOT_FOUND / NEEDS_LAWYER** ({sorted(_states)})")
+    check(_st["findings"] == 6, f"...all six are findings ({_st['findings']})")
+    _by = {(c["document_id"], c["column"]): c for c in _st["cells_detail"]}
+    check(_by[("a" * 64, "governing law")]["state"] == "FOUND"
+          and _by[("a" * 64, "governing law")]["value"] == "India",
+          "the answer is right where the document answers it")
+    check(_by[("a" * 64, "governing law")]["quote"] in _DOCS["a" * 64],
+          "...and its quote byte-matches that document")
+    check(_by[("c" * 64, "governing law")]["state"] == "NOT_FOUND",
+          f"a document with no such clause is NOT_FOUND, not FAILED "
+          f"({_by[('c' * 64, 'governing law')]['state']})")
+    check(_by[("b" * 64, "term end")]["state"] == "NOT_FOUND",
+          "...and a date column with no date is NOT_FOUND too")
+
+    # .export gives a safe CSV.
+    _ex2 = _eV["review_table.export"].run({"grid_id": _gid}, _e2e)
+    _rows2 = [r for r in _csv2.reader(_io2.StringIO(_ex2["csv"]))]
+    check(len(_rows2) == 4 and _rows2[0] == ["document", "governing law", "term end"],
+          f"**.export gives a header and one row per document** ({len(_rows2) - 1} rows)")
+    check(not [v for r in _rows2[1:] for v in r if not str(v).strip()],
+          "...no cell is empty")
+    check(not any(v.startswith(("=", "+", "@")) for r in _rows2 for v in r),
+          "...and nothing in it can run as a formula")
+    check("NOT FOUND" in _ex2["csv"] and "India" in _ex2["csv"],
+          "...with findings and absences both legible")
+
+    # A transport error is the ONLY way to FAILED.
+    _ft = Context(store=_MB(), queue=_Q(), clock=lambda: "2026-10-01T10:00:00+05:30",
+                  model_for=lambda _o: (lambda *_a: (_ for _ in ()).throw(
+                      TimeoutError("the provider did not respond"))))
+    _ft.documents.update(_e2e.documents)
+    _fg = _eV["review_table.create"].run(
+        {"name": "t", "document_ids": ["a" * 64],
+         "columns": [{"name": "governing law", "kind": "text", "question": "Which law?"}]},
+        _ft)["grid_id"]
+    _fh = queue_handlers(_ft)
+    _run_once(queue=_ft.queue, store=_ft.store, handlers=_fh, worker="w1")
+    _fs = _eV["review_table.status"].run({"grid_id": _fg}, _ft)
+    check(_fs["by_state"]["FAILED"] == 1 and _fs["findings"] == 0,
+          f"an INJECTED transport error is the only route to FAILED, and it is not a "
+          f"finding ({_fs['by_state']})")
+    check("COULD NOT RUN" in _eV["review_table.export"].run({"grid_id": _fg},
+                                                            _ft)["csv"],
+          "...and it exports as COULD NOT RUN, never as NOT FOUND")
+
+    # ══ cancel mid-run: nothing left running, no double execution ════════════
+    _cc = Context(store=_MB(), queue=_Q(), clock=lambda: "2026-10-01T10:00:00+05:30",
+                  model_for=_answerer)
+    _cc.documents.update(_e2e.documents)
+    _cg = _eV["review_table.create"].run(
+        {"name": "cancel me", "document_ids": list(_DOCS),
+         "columns": [{"name": "governing law", "kind": "text", "question":
+                      "Which law governs this agreement?"}]}, _cc)["grid_id"]
+    _ch = queue_handlers(_cc)
+    _run_once(queue=_cc.queue, store=_cc.store, handlers=_ch, worker="w1")   # 1 of 3
+    _mid = _eV["review_table.status"].run({"grid_id": _cg}, _cc)
+    check(_mid["findings"] == 1 and _mid["by_state"]["PENDING"] == 2,
+          f"one cell is answered and two are still PENDING ({_mid['by_state']})")
+
+    _can = _eV["review_table.cancel"].run({"grid_id": _cg}, _cc)
+    check(_can["cancelled"] and _can["findings_kept"] == 1
+          and _can["pending_stopped"] == 2,
+          f"cancel KEEPS the answer and stops the rest ({_can['findings_kept']} kept, "
+          f"{_can['pending_stopped']} stopped)")
+    _after = _eV["review_table.status"].run({"grid_id": _cg}, _cc)
+    check(_after["findings"] == 1,
+          "**the answered cell survives the cancel** -- a lawyer who cancels at cell 1 of "
+          "3 still wants the 1")
+    check(_after["by_state"]["PENDING"] == 2 and _after["by_state"]["FAILED"] == 0,
+          f"...and the unrun cells stay PENDING, NOT FAILED: nothing went wrong "
+          f"({_after['by_state']})")
+    check(_after["cancelled"], "...and the table reports itself cancelled")
+    check(not _eV["review_table.create"].run(
+              {"name": "x", "document_ids": list(_DOCS),
+               "columns": [{"name": "governing law", "kind": "text",
+                            "question": "Which law governs this agreement?"}],
+               "grid_id": _cg}, _cc).get("scheduled", {}).get("enqueued"),
+          "re-creating a cancelled grid schedules NOTHING new: every cell is either "
+          "answered or already queued, so the two exactly-once guards hold")
+
+    # No double execution: drain whatever is left and assert the answered cell is
+    # unchanged and each cell was written at most once.
+    _before_val = _after["cells_detail"]
+    for _ in range(10):
+        if _run_once(queue=_cc.queue, store=_cc.store, handlers=_ch, worker="w2") is None:
+            break
+    _end = _eV["review_table.status"].run({"grid_id": _cg}, _cc)
+    _first = {(c["document_id"], c["column"]): c["value"]
+              for c in _before_val if c["state"] == "FOUND"}
+    _last = {(c["document_id"], c["column"]): c["value"]
+             for c in _end["cells_detail"] if c["state"] == "FOUND"}
+    check(all(_last.get(k) == v for k, v in _first.items()),
+          "**no double execution**: a cell answered before the cancel holds exactly the "
+          "value it held, after every remaining job has been drained")
+    check(_end["cells"] == 3, "...and the grid is still three cells, not six")
+
     # ── PARITY, the point of the file ───────────────────────────────────────
     check(set(rest) == names and set(cli) == names,
           f"REST and CLI expose every verb (rest {sorted(set(rest) ^ names)}, "
@@ -3073,7 +3391,7 @@ def _test() -> None:
           "...while a WRITE verb is kept out of MCP by mcp_tools(), not by the author "
           "remembering to")
     check("widgets.delete" in write_verbs(hypo), "...and is named in write_verbs()")
-    check(len(VERBS) == 28 and "widgets.count" not in rest_spec(),
+    check(len(VERBS) == 29 and "widgets.count" not in rest_spec(),
           "...and the probe changed nothing in this module: the surfaces are generated "
           "from an argument, not from a global the test rebound")
 
