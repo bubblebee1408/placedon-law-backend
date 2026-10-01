@@ -300,6 +300,77 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
     for _v in VERBS:
         _mount(_v)
 
+    # ── binary downloads ────────────────────────────────────────────────────
+    #
+    # The verbs already produce these bytes, and they hand them back as base64 inside a
+    # JSON object. **No browser downloads that.** A user who clicks "export" wants a file
+    # on disk with a name, and getting one from `{"docx_base64": "UEsDB..."}` means
+    # writing JavaScript to decode a string into a Blob -- which is a real feature with a
+    # real failure mode (the filename is lost, the MIME type is guessed) reimplemented in
+    # every client.
+    #
+    # Written by hand rather than generated from the verb table, on purpose: the table
+    # generates JSON routes, and a verb that returned a file would make every surface --
+    # REST, MCP, CLI -- grow a binary case for the two verbs that need one.
+
+    def _attachment(data: bytes, *, filename: str, media_type: str) -> Response:
+        # `filename*=UTF-8''...` is the RFC 6266 form. The plain `filename=` is kept
+        # beside it for clients that do not read the extended one, with anything
+        # non-ASCII stripped rather than mangled.
+        from urllib.parse import quote
+        safe = "".join(ch for ch in filename if 32 <= ord(ch) < 127 and ch not in '"\\')
+        return Response(
+            content=data, media_type=media_type,
+            headers={"content-disposition":
+                     f'attachment; filename="{safe or "download"}"; '
+                     f"filename*=UTF-8''{quote(filename)}",
+                     "content-length": str(len(data))})
+
+    def _binary(path: str, verb_name: str, to_bytes, *, param: str):
+        async def _route(request: Request) -> Response:
+            try:
+                principal = _principal(request)
+            except AuthError:
+                return _unauthorised()
+            store = app.state.backend_for(principal.tenant_id)
+            ctx = Context(tenant=principal.tenant_id, actor=principal.actor,
+                          store=store, documents=app.state.documents, clock=now)
+            args = dict(request.path_params) | dict(request.query_params)
+            out = by_name()[verb_name].run(args, ctx)
+            if isinstance(out, dict) and out.get("status") == "REFUSED":
+                code = {"NOT_FOUND": 404, "NO_STORE": 503}.get(out.get("code"), 400)
+                _record(principal, action=audit_mod.READ,
+                        route=f"GET {path}", resource=str(args.get(param) or verb_name),
+                        outcome="refused", status=code)
+                return Response(content=dumps(out), status_code=code,
+                                media_type="application/json")
+            data, filename, media_type = to_bytes(out)
+            _record(principal, action=audit_mod.READ, route=f"GET {path}",
+                    resource=str(args.get(param) or verb_name), outcome="served",
+                    status=200)
+            return _attachment(data, filename=filename, media_type=media_type)
+
+        app.add_api_route(path, _route, methods=["GET"], name=f"download:{verb_name}")
+
+    def _docx_bytes(out: dict):
+        import base64
+        return (base64.b64decode(out.get("docx_base64") or ""),
+                str(out.get("filename") or "draft.docx"),
+                str(out.get("content_type")
+                    or "application/vnd.openxmlformats-officedocument."
+                       "wordprocessingml.document"))
+
+    def _csv_bytes(out: dict):
+        return (str(out.get("csv") or "").encode("utf-8"),
+                str(out.get("filename") or "review-table.csv"),
+                "text/csv; charset=utf-8")
+
+    from gateway.verbs import by_name
+    _binary("/v2/drafts/{draft_id}/export.docx", "draft.export", _docx_bytes,
+            param="draft_id")
+    _binary("/v2/review_tables/{grid_id}/export.csv", "review_table.export", _csv_bytes,
+            param="grid_id")
+
     return app
 
 
@@ -559,6 +630,53 @@ def _test() -> None:
     check(pb.kind == P_KIND and pb.tenant_id == T,
           "on Postgres a backend is built PER REQUEST, bound to the tenant the key "
           "resolved to -- app.tenant_id is what the policies compare against")
+
+    # ── binary downloads: real bytes, a real filename, no base64 ────────────
+    _d = client.post("/v2/draft/create", json={
+        "title": "AGM Notice", "body": "Notice is hereby given.",
+        "slots": [{"name": "x", "value": "v", "type": "TEMPLATE_TEXT"}]})
+    if _d.status_code == 200 and _d.json().get("draft_id"):
+        _did = _d.json()["draft_id"]
+        _dl = client.get(f"/v2/drafts/{_did}/export.docx")
+        check(_dl.status_code == 200, f"the .docx download returns 200 ({_dl.status_code})")
+        check(_dl.content[:2] == b"PK",
+              f"...and the body is a real ZIP -- a .docx IS a zip, so this is the file "
+              f"itself and not base64 of it ({_dl.content[:4]!r})")
+        check("attachment" in _dl.headers.get("content-disposition", ""),
+              f"...served as an ATTACHMENT, which is what makes a browser save it "
+              f"({_dl.headers.get('content-disposition')})")
+        check(".docx" in _dl.headers.get("content-disposition", ""),
+              "...with a filename, which base64-in-JSON loses")
+        check("wordprocessingml" in _dl.headers.get("content-type", ""),
+              f"...and the Word media type, not application/json "
+              f"({_dl.headers.get('content-type')})")
+        check(b"docx_base64" not in _dl.content,
+              "...and the JSON envelope is NOT in the body")
+    else:
+        check(False, f"a draft could be created to download ({_d.status_code})")
+
+    _up = client.post("/v2/documents/upload", json={"text": "Governed by the laws of India.",
+                                             "name": "a.txt"})
+    _g = client.post("/v2/review-table/create", json={
+        "name": "g", "document_ids": [_up.json().get("document_id")],
+        "columns": [{"name": "governing law", "kind": "text", "question": "Which law?"}]})
+    if _g.status_code == 200 and _g.json().get("grid_id"):
+        _csv = client.get(f"/v2/review_tables/{_g.json()['grid_id']}/export.csv")
+        check(_csv.status_code == 200 and _csv.content,
+              f"the CSV download returns 200 with a body ({_csv.status_code})")
+        check(_csv.headers.get("content-type", "").startswith("text/csv"),
+              f"...as text/csv ({_csv.headers.get('content-type')})")
+        check("attachment" in _csv.headers.get("content-disposition", ""),
+              "...and as an attachment")
+        check(b"," in _csv.content and b"{" not in _csv.content[:1],
+              "...the CSV itself, not a JSON object wrapping it")
+    else:
+        check(False, f"a review table could be created to download ({_g.status_code})")
+
+    check(anon.get("/v2/drafts/00000000-0000-0000-0000-000000000000/export.docx"
+                   ).status_code == 401,
+          "a download WITHOUT a key is refused: a file route that skipped auth would be "
+          "the one way to read another tenant's draft")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:

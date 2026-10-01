@@ -270,6 +270,10 @@ extra+=("scripts/failure_report.py --test")
 # and may never gate an answer -- C4 forbids a confidence reaching a legal decision.
 extra+=("checker/calibration.py --test")
 extra+=("scripts/calibration_report.py --test")
+# The screen contract: which verb each screen calls and which fields it shows,
+# asserted against gateway/verbs.py and the envelope schema rather than described.
+extra+=("gateway/screens.py --test")
+
 
 
 
