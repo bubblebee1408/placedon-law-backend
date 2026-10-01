@@ -151,6 +151,136 @@ def run_one(*, queue, store, handlers: dict[str, Callable], worker: str = "w1",
     return Outcome(job.run_id, final, code, written, replayed)
 
 
+# ── the long-lived service ───────────────────────────────────────────────────
+#
+# `drain` empties the queue and returns; this keeps going. The difference that matters is
+# not the loop -- it is WHERE it is allowed to stop.
+
+# How long to wait for work before looking again, when nothing wakes us. A fallback, not
+# the mechanism: on Postgres a NOTIFY wakes the wait immediately, and this only bounds how
+# stale the health numbers can get if a notification is ever missed.
+IDLE_SECONDS = 5.0
+
+
+@dataclass
+class ServiceReport:
+    jobs: int = 0
+    idle_waits: int = 0
+    stopped_because: str = ""
+
+    def to_dict(self) -> dict:
+        return {"jobs": self.jobs, "idle_waits": self.idle_waits,
+                "stopped_because": self.stopped_because}
+
+
+def serve(*, queue, store, handlers, worker: str = "w1", should_stop=None, wait=None,
+          max_jobs: int | None = None, idle_seconds: float = IDLE_SECONDS,
+          **kw) -> ServiceReport:
+    """Claim and run until asked to stop. Returns what it did.
+
+    **The stop is checked BETWEEN jobs and never inside one.** A worker that dropped a job
+    half-finished on SIGTERM would leave a run RUNNING with steps written and no outcome,
+    and the next worker to pick it up could not tell that from a crash. Finishing the job
+    in hand costs at most one job's time and is the whole of "graceful" here.
+
+    `should_stop` and `wait` are INJECTED, so this loop is tested without a database, a
+    signal, or a real sleep -- the three things that make a service loop usually untested.
+    `main()` supplies the real ones.
+    """
+    report = ServiceReport()
+    stop = should_stop or (lambda: False)
+    idle = wait or (lambda timeout: __import__("time").sleep(timeout))
+    while True:
+        if stop():
+            report.stopped_because = "asked to stop"
+            return report
+        if max_jobs is not None and report.jobs >= max_jobs:
+            report.stopped_because = f"reached max_jobs={max_jobs}"
+            return report
+        outcome = run_one(queue=queue, store=store, handlers=handlers, worker=worker, **kw)
+        if outcome is not None:
+            report.jobs += 1
+            continue
+        # Nothing claimable. Wait to be told, or time out and look again.
+        if stop():
+            report.stopped_because = "asked to stop"
+            return report
+        report.idle_waits += 1
+        idle(idle_seconds)
+
+
+def listen_waiter(url: str, channel: str | None = None):
+    """A `wait(timeout)` backed by Postgres LISTEN/NOTIFY.
+
+    Returns a waiter that blocks until a NOTIFY arrives on `channel` or `timeout` passes.
+    The timeout is not a formality: a notification sent while nobody was listening is
+    gone, so a worker that only ever woke on NOTIFY would sleep through the job that was
+    enqueued during its last run. The poll is the floor, the notification is the speed.
+    """
+    import psycopg
+    from gateway.jobs import NOTIFY_CHANNEL
+    channel = channel or NOTIFY_CHANNEL          # one string, named in gateway/jobs.py
+    conn = psycopg.connect(url, autocommit=True)
+    conn.execute(f"LISTEN {channel}")
+
+    def wait(timeout: float) -> None:
+        import select
+        select.select([conn], [], [], timeout)
+        # Drain whatever arrived; the content is irrelevant, only that something did.
+        conn.execute("SELECT 1")
+
+    wait.close = conn.close                              # type: ignore[attr-defined]
+    return wait
+
+
+def main(argv=None) -> int:
+    """The process. Signals here, never in `serve`.
+
+    SIGTERM and SIGINT set a flag; `serve` reads it between jobs. launchd sends SIGTERM on
+    `launchctl unload` and SIGKILL some seconds later, so finishing the job in hand has to
+    be quick -- which it is, because `run_one` already caps a step at
+    STEP_TIMEOUT_SECONDS.
+    """
+    import signal
+    import sys
+    from gateway.store import database_url, select
+    from gateway.verbs import Context, queue_handlers
+    from gateway.jobs import PostgresQueue, MemoryQueue
+
+    argv = list(sys.argv if argv is None else argv)
+    stopping = {"now": False, "why": ""}
+
+    def _signal(signum, _frame):
+        stopping["now"] = True
+        stopping["why"] = signal.Signals(signum).name
+        print(f"worker: {stopping['why']} received; finishing the job in hand",
+              flush=True)
+
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        signal.signal(sig, _signal)
+
+    url = database_url()
+    store = select()
+    if url:
+        queue = PostgresQueue(url, tenant_id=store.tenant_id)
+        wait = listen_waiter(url)
+    else:
+        # A worker with no database is a worker whose queue vanishes on restart. Allowed
+        # for a smoke test and said out loud, because "it ran and did nothing" and "there
+        # was nothing to run" look identical in a log.
+        print("worker: no PLACEDON_DATABASE_URL — running against an in-memory queue, "
+              "which keeps nothing across a restart", flush=True)
+        queue, wait = MemoryQueue(), None
+    ctx = Context(store=store, queue=queue)
+    report = serve(queue=queue, store=store, handlers=queue_handlers(ctx),
+                   worker=f"launchd-{__import__('os').getpid()}",
+                   should_stop=lambda: stopping["now"], wait=wait)
+    report.stopped_because = stopping["why"] or report.stopped_because
+    print(f"worker: stopped after {report.jobs} job(s) "
+          f"({report.stopped_because or 'no reason recorded'})", flush=True)
+    return 0
+
+
 def drain(*, queue, store, handlers, limit: int = 100, **kw) -> list[Outcome]:
     """Work until the queue is empty. The shape a `while True` loop would have in a daemon,
     bounded so a test cannot spin."""
@@ -346,10 +476,120 @@ def _test() -> None:
     check(drain(queue=queue, store=store, handlers={}) == [],
           "...and draining an empty queue does nothing")
 
+    # ── the long-lived service ──────────────────────────────────────────────
+    from gateway.jobs import MemoryQueue
+
+    def _svc(n_jobs: int):
+        q, store2 = MemoryQueue(), MemoryBackend()
+        for i in range(n_jobs):
+            rid = str(uuid.uuid4())
+            store2.write_run({"id": rid, "intent": "ask", "status": "PLANNED",
+                              "steps": [], "propositions": []})
+            q.enqueue(run_id=rid, intent="ask", args={"n": i})
+        return q, store2
+
+    _hand = {"ask": lambda args: ([{"capability": "research", "status": "ANSWERED"}],
+                                  {"status": "ANSWERED", "answer": "x"})}
+
+    # max_jobs bounds it, and the loop really stops.
+    q3, s3 = _svc(5)
+    r3 = serve(queue=q3, store=s3, handlers=_hand, max_jobs=2, wait=lambda t: None)
+    check(r3.jobs == 2 and "max_jobs" in r3.stopped_because,
+          f"serve stops at max_jobs ({r3.jobs}, {r3.stopped_because})")
+    check(q3.depth() == 3, f"...leaving the rest QUEUED ({q3.depth()})")
+
+    # It waits when the queue is empty rather than spinning.
+    waits = []
+    q4, s4 = _svc(1)
+    serve(queue=q4, store=s4, handlers=_hand, wait=lambda t: waits.append(t),
+          should_stop=lambda: len(waits) >= 2)
+    check(waits and all(t == IDLE_SECONDS for t in waits),
+          f"an empty queue WAITS rather than spinning, for IDLE_SECONDS ({waits})")
+
+    # ── graceful: the stop is honoured BETWEEN jobs, never inside one ───────
+    seen = []
+    stop_after_first = {"n": 0}
+
+    def _counting(args):
+        seen.append(args.get("n"))
+        stop_after_first["n"] += 1
+        return [{"capability": "research", "status": "ANSWERED"}], {"status": "ANSWERED"}
+
+    q5, s5 = _svc(4)
+    r5 = serve(queue=q5, store=s5, handlers={"ask": _counting},
+               should_stop=lambda: stop_after_first["n"] >= 1, wait=lambda t: None)
+    check(r5.jobs == 1 and len(seen) == 1,
+          f"a stop requested during the first job lets THAT job finish and starts no "
+          f"other ({r5.jobs} run, {len(seen)} handler call(s))")
+    check(q5.depth() == 3,
+          "...and the unstarted jobs are still QUEUED, not failed: nothing went wrong "
+          "with them")
+    _ran = [r for r in s5.runs.values() if r.get("status") == "ANSWERED"]
+    check(len(_ran) == 1,
+          "...and exactly one run reached a terminal state. A worker that dropped a job "
+          "half-finished would leave a run RUNNING with steps and no outcome, which the "
+          "next worker cannot tell from a crash")
+    check(r5.stopped_because == "asked to stop", "...and it says why it stopped")
+
+    # ── the crash property: killed mid-job, the job finishes EXACTLY once ───
+    # A kill is a worker that claims and never finishes. The lease is what makes that
+    # recoverable, and the step key is what stops the retry writing a second time.
+    q6, s6 = _svc(1)
+    rid6 = next(iter(s6.runs))
+    held = q6.claim(worker="doomed", lease_seconds=60)     # claimed and held
+    check(held is not None and q6.claim(worker="other") is None,
+          "a claimed job is not claimable by anyone else while the lease holds")
+    # Now the "kill": the lease lapses with the job never finished.
+    q6.jobs[held.job_id]["lease_expires_at"] = q6._now()
+    o6 = run_one(queue=q6, store=s6, handlers=_hand, worker="restarted")
+    check(o6 is not None and o6.run_id == rid6,
+          f"once the lease EXPIRES a restarted worker claims and runs the SAME job -- "
+          f"which is what makes a killed worker recoverable rather than a lost job "
+          f"({o6 and o6.run_id == rid6})")
+    terminal = [r for r in s6.runs.values() if r.get("status") in ("ANSWERED", "FAILED")]
+    check(len(terminal) == 1,
+          f"**the run reaches a terminal state exactly once** ({len(terminal)})")
+    steps6 = (s6.read_run(rid6) or {}).get("steps") or []
+    check(len([x for x in steps6 if x.get("capability") == "research"]) == 1,
+          f"...and the step is written ONCE despite two attempts: the idempotency key is "
+          f"derived from (run_id, capability), so the replay is a no-op "
+          f"({len(steps6)} step(s))")
+
+    check(IDLE_SECONDS > 0,
+          "the idle wait is a FALLBACK with a real timeout: a NOTIFY sent while nobody "
+          "was listening is gone, so a worker that only woke on notifications would sleep "
+          "through the job enqueued during its last run")
+    # Read from the PARSED function, not its text: the first version of this grepped the
+    # source for "signal" and failed on the word in serve's own docstring -- the same
+    # prose-for-structure mistake this repo has made five times.
+    import ast as _ast
+    import inspect as _inspect
+    _tree = _ast.parse(_inspect.getsource(serve))
+    _names = {n.id for n in _ast.walk(_tree) if isinstance(n, _ast.Name)}
+    _attrs = {n.attr for n in _ast.walk(_tree) if isinstance(n, _ast.Attribute)}
+    _imports = {a.name.split(".")[0] for n in _ast.walk(_tree)
+                if isinstance(n, _ast.Import) for a in n.names}
+    check("signal" not in _names | _imports and not {"SIGTERM", "SIGINT"} & _attrs,
+          f"serve installs NO signal handler and imports no signal module: `should_stop` "
+          f"is injected, which is what lets this loop be tested without a signal, a "
+          f"database or a real sleep ({sorted(_imports)})")
+    check("signal" in {a.name.split(".")[0] for n in _ast.walk(_ast.parse(
+              _inspect.getsource(main))) if isinstance(n, _ast.Import) for a in n.names},
+          "...while main() DOES import signal: the process handles signals, the loop does "
+          "not")
+
     print(f"\n{ok}/{ok + fail} passed")
     if fail:
         raise SystemExit(1)
 
 
 if __name__ == "__main__":
+    # `--serve` runs the service; BARE runs the tests. That looks backwards for a service
+    # module and is deliberate: scripts/run_tests.sh invokes this file as
+    # "gateway/worker.py" with no flag, so making the service the default would have the
+    # gate start a worker and block until the timeout, on every run, for ever. The flag
+    # costs one word in the launchd plist and removes that entirely.
+    import sys as _sys
+    if "--serve" in _sys.argv:
+        raise SystemExit(main())
     _test()

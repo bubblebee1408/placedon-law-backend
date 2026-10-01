@@ -50,6 +50,10 @@ TERMINAL = (DONE, FAILED, CANCELLED)
 # later: the worker renews nothing, so this is a cap on how long one step may take.
 DEFAULT_LEASE_SECONDS = 120
 
+# The channel a worker LISTENs on. Named here, used by gateway/worker.listen_waiter,
+# so the sender and the listener cannot disagree about the string.
+NOTIFY_CHANNEL = "placedon_jobs"
+
 _UUID = re.compile(r"^[0-9a-fA-F-]{36}$")
 
 
@@ -86,6 +90,7 @@ class Queue(Protocol):
     def request_cancel(self, run_id: str) -> bool: ...
     def get(self, run_id: str) -> Job | None: ...
     def depth(self) -> int: ...
+    def oldest_pending_seconds(self) -> float | None: ...
 
 
 # ── in memory ────────────────────────────────────────────────────────────────
@@ -116,6 +121,19 @@ class MemoryQueue:
                              "attempts": 0, "claimed_by": None, "lease_expires_at": None,
                              "cancel_requested": False, "created_at": self._now()}
         return self._job(self.jobs[job_id])
+
+    def oldest_pending_seconds(self) -> float | None:
+        """Age in seconds of the oldest QUEUED job, or None when there are none.
+
+        None, NOT 0.0. An empty queue has no oldest job, and 0 would read as "a job is
+        waiting and it just arrived" -- the opposite of the truth, on the one number an
+        operator looks at to decide whether the worker is still alive.
+        """
+        waiting = [r for r in self.jobs.values() if r["status"] == QUEUED]
+        if not waiting:
+            return None
+        now = self._now()
+        return max((now - r["created_at"]).total_seconds() for r in waiting)
 
     @staticmethod
     def _job(row: dict) -> Job:
@@ -213,6 +231,12 @@ class PostgresQueue:
             raise QueueError(
                 f"run {run_id} already has a job. A second job for one run is the double "
                 f"execution the queue exists to prevent.") from None
+        # Wake a listening worker. AFTER the insert and outside the failure path, so a
+        # notification is never sent for a job that does not exist. A missed notification
+        # costs latency and nothing else -- `gateway/worker.serve` polls on a timeout as
+        # well, because a NOTIFY sent while nobody was listening is simply gone.
+        with self._conn() as c:
+            c.execute(f"NOTIFY {NOTIFY_CHANNEL}")
         return self._job(r)
 
     def claim(self, *, worker: str, lease_seconds: int = DEFAULT_LEASE_SECONDS) -> Job | None:
@@ -270,6 +294,12 @@ class PostgresQueue:
     def depth(self) -> int:
         with self._conn() as c:
             return c.execute("SELECT count(*) FROM jobs WHERE status = 'QUEUED'").fetchone()[0]
+
+    def oldest_pending_seconds(self) -> float | None:
+        with self._conn() as c:
+            r = c.execute("SELECT EXTRACT(EPOCH FROM (now() - min(created_at))) "
+                          "FROM jobs WHERE status = 'QUEUED'").fetchone()
+        return None if r is None or r[0] is None else float(r[0])
 
 
 # ── the shared contract ──────────────────────────────────────────────────────

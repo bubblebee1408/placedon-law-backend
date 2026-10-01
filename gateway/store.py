@@ -226,6 +226,19 @@ NO_CALL_NOTE = ("no model was called on this step, so there is nothing to price.
                 "not a cost of zero.")
 
 
+def _critic_enabled_now():
+    """Whether the critic is on, as `checker/critic.enabled()` answers it right now.
+
+    None rather than False if that cannot be determined: NULL means NOT RECORDED, and
+    False would claim we looked and it was off.
+    """
+    try:
+        from checker import critic
+        return bool(critic.enabled())
+    except Exception:                                            # noqa: BLE001
+        return None
+
+
 def failure_tag(status: str, refusal_code, result) -> tuple:
     """(category, reason) for a terminal run, or (None, None) when there is no failure.
 
@@ -515,6 +528,10 @@ class MemoryBackend:
                           if k not in ("steps", "propositions")}
         # Postgres returns the column whether or not it was written; so does this.
         self.runs[rid]["law_versions"] = _copied(run.get("law_versions"))
+        # 016. Recorded at write time from checker/critic.enabled(), because a setting read
+        # per call leaves no trace of itself -- and the critic's success case is INVISIBLE:
+        # "found nothing" and "was off" are the same clean answer afterwards.
+        self.runs[rid]["critic_enabled"] = _critic_enabled_now()
         self.steps[rid] = [_shaped(s, STEP_KEYS) for s in run.get("steps", [])]
         self.props[rid] = [_shaped(p, PROPOSITION_KEYS)
                            for p in run.get("propositions", [])]
@@ -658,13 +675,15 @@ class PostgresBackend:
         with self._conn() as c:
             c.execute(
                 "INSERT INTO runs (run_id, tenant_id, actor_id, intent, status, "
-                "refusal_code, law_versions) VALUES (%s,%s,%s,%s,%s,%s,%s) "
+                "refusal_code, law_versions, critic_enabled) "
+                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s) "
                 "ON CONFLICT (run_id) DO UPDATE SET status = EXCLUDED.status, "
                 "refusal_code = EXCLUDED.refusal_code, "
-                "law_versions = EXCLUDED.law_versions",
+                "law_versions = EXCLUDED.law_versions, "
+                "critic_enabled = EXCLUDED.critic_enabled",
                 (rid, self.tenant_id, self.actor_id, run.get("intent", ""),
                  run.get("status", "PLANNED"), run.get("refusal_code"),
-                 _json(run.get("law_versions"))))
+                 _json(run.get("law_versions")), _critic_enabled_now()))
             c.execute("DELETE FROM run_steps WHERE run_id = %s", (rid,))
             # Shaped on the way IN, the same as MemoryBackend: one normalisation for
             # both backends, or the two disagree about what a null cost means. The shared
@@ -701,7 +720,8 @@ class PostgresBackend:
             return None
         with self._conn() as c:
             r = c.execute("SELECT run_id, intent, status, refusal_code, result, "
-                          "law_versions, failure_category, failure_reason "
+                          "law_versions, failure_category, failure_reason, "
+                          "critic_enabled "
                           "FROM runs WHERE run_id = %s", (run_id,)).fetchone()
             if r is None:
                 return None
@@ -710,7 +730,8 @@ class PostgresBackend:
                    # O8. Written by set_run and read back here; without these two the
                    # category existed on Postgres and was invisible to every reader, which
                    # the conformance list caught on its first live run.
-                   "failure_category": r[6], "failure_reason": r[7]}
+                   "failure_category": r[6], "failure_reason": r[7],
+                   "critic_enabled": r[8]}
             out["steps"] = [
                 {"capability": s[0], "engine_capability": s[1], "status": s[2],
                  "model": s[3], "degraded": s[4], "provider": s[5], "region": s[6],
@@ -1808,6 +1829,30 @@ def conformance(backend) -> list[tuple[bool, str]]:
         ck(False, "a version for a draft that does not exist is refused")
     except Exception:
         ck(True, "a version for a draft that does not exist is refused")
+
+    # ── 016: was the critic on when this run was written? ───────────────────
+    import os as _os
+    _cwas = _os.environ.pop("CRITIC_ENABLED", None)
+    try:
+        _os.environ["CRITIC_ENABLED"] = "true"
+        _cr_on = str(_uuid.uuid4())
+        backend.write_run({"id": _cr_on, "intent": "ask", "status": "PLANNED",
+                           "steps": [], "propositions": []})
+        _os.environ["CRITIC_ENABLED"] = "false"
+        _cr_off = str(_uuid.uuid4())
+        backend.write_run({"id": _cr_off, "intent": "ask", "status": "PLANNED",
+                           "steps": [], "propositions": []})
+        ck((backend.read_run(_cr_on) or {}).get("critic_enabled") is True
+           and (backend.read_run(_cr_off) or {}).get("critic_enabled") is False,
+           f"every run records whether the CRITIC was on when it was written, on both "
+           f"backends -- 'the critic found nothing' and 'the critic was off' are the same "
+           f"clean answer afterwards, and without this nothing tells them apart "
+           f"({(backend.read_run(_cr_on) or {}).get('critic_enabled')} / "
+           f"{(backend.read_run(_cr_off) or {}).get('critic_enabled')})")
+    finally:
+        _os.environ.pop("CRITIC_ENABLED", None)
+        if _cwas is not None:
+            _os.environ["CRITIC_ENABLED"] = _cwas
 
     # ── O8: failure tagging, on both backends ───────────────────────────────
     _fr = str(_uuid.uuid4())

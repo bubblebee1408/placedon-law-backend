@@ -331,10 +331,8 @@ def _critic_enabled() -> bool:
     nobody has watched work. So it is off, and `ask`'s per-call `critic` flag stays the
     way to exercise it.
     """
-    import os
     from checker import critic as cr
-    return (os.getenv(cr.CRITIC_ENABLED_ENV) or "").strip().lower() in (
-        "1", "true", "yes", "on")
+    return cr.enabled()                       # one answer, in checker/critic.py
 
 
 def _apply_critic(d: dict, summary, ctx: Context, *, cite_index=None) -> dict:
@@ -725,7 +723,20 @@ def _runs_trace(args: dict, ctx: Context) -> dict:
     row = ctx.store.read(args["run_id"])
     if row is None:
         return _refuse("NOT_FOUND", f"no run {args['run_id']!r}")
-    return {"run_id": row.get("id"), "steps": row.get("steps", [])}
+    # `critic_enabled` travels with the trace (016). A trace is what someone reads to
+    # work out why an answer says what it says, and "a layer that may REMOVE sentences was
+    # running" belongs there rather than only in a column nobody queries. NULL is NOT
+    # RECORDED -- every run from before 016 -- and is reported as such, not as false.
+    enabled = row.get("critic_enabled")
+    return {"run_id": row.get("id"), "steps": row.get("steps", []),
+            "critic_enabled": enabled,
+            "critic_note": ("not recorded for this run: it predates the setting being "
+                            "stored, and false would claim we looked"
+                            if enabled is None else
+                            "the critic was ON when this run was written; a sentence it "
+                            "removed is in the steps" if enabled else
+                            "the critic was OFF when this run was written, so nothing was "
+                            "removed by it")}
 
 
 def _review_document(args: dict, ctx: Context) -> dict:

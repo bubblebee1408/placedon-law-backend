@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.placedon.worker</string>
+
+  <!-- Absolute paths: launchd has no PATH worth relying on and no shell to expand ~. -->
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/env</string>
+    <string>python3</string>
+    <string>-m</string>
+    <string>gateway.worker</string>
+    <string>--serve</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/nishantsingh/PlacedOn/placedon-law-backend</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PYTHONPATH</key>
+    <string>/Users/nishantsingh/PlacedOn/placedon-law-backend</string>
+    <!-- PLACEDON_DATABASE_URL is deliberately NOT here. It is read from the repo's .env
+         by checker/env.py, so this file carries no credential and can be committed. -->
+    <key>PYTHONUNBUFFERED</key>
+    <string>1</string>
+  </dict>
+
+  <!-- Restart if it exits for any reason, with a floor so a crash loop does not spin. -->
+  <key>KeepAlive</key>
+  <true/>
+  <key>ThrottleInterval</key>
+  <integer>10</integer>
+
+  <!-- SIGTERM first; the worker finishes the job in hand and exits. 30s is well above
+       STEP_TIMEOUT_SECONDS = 90 / the usual job, and launchd SIGKILLs after it. If a job
+       routinely needs longer than this, raise it here rather than teaching the worker to
+       abandon work. -->
+  <key>ExitTimeOut</key>
+  <integer>30</integer>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>StandardOutPath</key>
+  <string>/Users/nishantsingh/PlacedOn/placedon-law-backend/ops/worker.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/nishantsingh/PlacedOn/placedon-law-backend/ops/worker.log</string>
+</dict>
+</plist>

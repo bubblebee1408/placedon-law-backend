@@ -90,11 +90,39 @@ class Deployment:
         return self.store != POSTGRES_STORE
 
 
-def health_body(engine_body: dict, deployment: Deployment) -> dict:
-    """The engine's health, plus the one thing only the gateway knows."""
-    return dict(engine_body) | {"store": {"kind": deployment.store,
+def health_body(engine_body: dict, deployment: Deployment, queue=None) -> dict:
+    """The engine's health, plus the two things only the gateway knows.
+
+    `queue`, when given, adds the pair an operator actually watches: how many jobs are
+    waiting, and how long the oldest has waited. Depth alone cannot tell a busy worker
+    from a dead one -- a queue of 3 is healthy if the oldest is 2 seconds old and an
+    outage if it is 40 minutes old. Neither number means anything without the other.
+
+    `oldest_pending_seconds` is None for an empty queue, NOT 0: zero would read as "a job
+    is waiting and it just arrived", which is the opposite of the truth on exactly the
+    number a pager rule would threshold.
+    """
+    body = dict(engine_body) | {"store": {"kind": deployment.store,
                                           "degraded": deployment.degraded,
                                           "note": deployment.note}}
+    if queue is not None:
+        try:
+            depth = queue.depth()
+            oldest = queue.oldest_pending_seconds()
+        except Exception as e:                                   # noqa: BLE001
+            # A health endpoint that 500s during the outage it exists to report is worse
+            # than one that says it could not read the queue.
+            body["queue"] = {"error": f"{type(e).__name__}: {str(e)[:120]}",
+                             "note": "the queue could not be read; this says nothing "
+                                     "about whether work is pending"}
+            return body
+        body["queue"] = {
+            "depth": depth, "oldest_pending_seconds": oldest,
+            "note": ("nothing is waiting" if not depth else
+                     f"{depth} job(s) waiting, the oldest for "
+                     f"{oldest:.0f}s" if oldest is not None else
+                     f"{depth} job(s) waiting")}
+    return body
 
 
 # GET /v1/health is the one route served without a key. A liveness probe that needs a
@@ -104,7 +132,7 @@ PUBLIC_ROUTES = frozenset({HEALTH_PATH})
 
 
 def create_app(*, deployment: Deployment | None = None, clock=None, handler=None,
-               keys: KeyStore | None = None, db_url: str | None = None):
+               keys: KeyStore | None = None, db_url: str | None = None, queue=None):
     """The FastAPI app. Every dependency injected so the test reaches no network or clock."""
     # The store is SELECTED, and /v1/health reports what was selected rather than what
     # was hoped for. `db_url=""` forces memory, which is what the gate uses so a developer
@@ -193,7 +221,14 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
             path = f"{path}?{request.url.query}"
         status, payload = handle(request.method, path, body, generated_at=now())
         if bare == HEALTH_PATH and status == 200:
-            payload = health_body(payload, dep)
+            # `queue` is INJECTED and defaults to None, so health keeps its current
+            # shape unless an operator wires one in. /v1/health is served without a key,
+            # and the queue block is deployment-level counts -- no tenant content, no
+            # question text, no run ids. A depth read under RLS is scoped to the tenant
+            # the injected queue was built for, which is the right scope for a
+            # single-tenant deployment and the wrong one for a shared gateway; wiring it
+            # on a shared gateway is a decision, not a default.
+            payload = health_body(payload, dep, queue=queue)
         if principal is not None:
             _record(principal, action=audit_mod.READ, route=f"{request.method} {bare}",
                     resource=bare, outcome="served" if status < 400 else "refused",

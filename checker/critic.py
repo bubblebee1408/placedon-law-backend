@@ -43,7 +43,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 __all__ = ["FLAG", "REMOVE", "ACTIONS", "MAX_REMOVALS", "CRITIC_ENABLED_ENV",
-           "Note", "Verdict", "review", "CriticError"]
+           "enabled", "Note", "Verdict", "review", "CriticError"]
 
 FLAG = "FLAG"
 REMOVE = "REMOVE"
@@ -57,6 +57,20 @@ MAX_REMOVALS = 1
 # served live (B1) turning it on everywhere would make every answer in the product depend
 # on a layer nobody has watched work.
 CRITIC_ENABLED_ENV = "CRITIC_ENABLED"
+
+_ON = ("1", "true", "yes", "on")
+
+
+def enabled() -> bool:
+    """Is the critic on right now? The ONE answer, read by the gateway and the store.
+
+    Recorded on every run (015/016) because a setting read per call leaves no trace of
+    itself: without this, an answer from last Tuesday cannot say whether a layer that may
+    REMOVE sentences was running when it was produced. "The critic found nothing" and
+    "the critic was off" are different facts about the same clean answer.
+    """
+    import os
+    return (os.getenv(CRITIC_ENABLED_ENV) or "").strip().lower() in _ON
 
 
 class CriticError(ValueError):

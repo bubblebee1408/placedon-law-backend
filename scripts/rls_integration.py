@@ -167,7 +167,11 @@ LAST_RUN: str | None = (
     "so the isolation proof is unchanged. The conformance list caught a real divergence "
     "again: set_run wrote failure_category on Postgres and read_run did not SELECT it, so "
     "the value was stored and invisible to every reader. Green on the dict, wrong on the "
-    "backend that ships.")
+    "backend that ships. "
+    "2026-10-02, job 8: 001-016 applied TOGETHER to a fresh throwaway database on "
+    "PostgreSQL 18.6, asserted as placedon_app (NOSUPERUSER, NOBYPASSRLS), adding "
+    "015_failure_category and 016_critic_enabled: 255 checks, 0 failures. Neither adds a "
+    "table, so the isolation proof is unchanged.")
 
 TENANT_TABLES = ("actors", "api_keys", "documents", "audit_log",
                  "runs", "run_steps", "propositions", "decisions", "jobs",
@@ -459,7 +463,8 @@ def run(url: str) -> int:
                   "009_source_documents.sql", "010_conversations.sql",
                   "011_review_grids.sql", "012_drafts.sql",
                   "013_grid_cell_cost.sql", "014_answer_cache.sql",
-                  "015_failure_category.sql"):
+                  "015_failure_category.sql",
+                  "016_critic_enabled.sql"):
             cur.execute(sql(f))
             print(f"  applied {f}")
         _ensure_app_role(cur)
