@@ -48,7 +48,8 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
-__all__ = ["MIN_LABELS", "APPROVED", "REJECTED", "Label", "Bucket", "bucket_labels",
+__all__ = ["MIN_LABELS", "APPROVED", "REJECTED", "Label", "bucket_labels",
+           "nonconformity", "ESCALATION_WEIGHT",
            "calibrate", "Readiness", "CalibrationError"]
 
 # PLAN_23 CAL-1. Below this, nothing is computed and nothing changes. 100 is the brief's
@@ -98,6 +99,48 @@ class Readiness:
                 "rejected": self.rejected, "scored": self.scored,
                 "threshold": self.threshold, "alpha": self.alpha,
                 "minimum": MIN_LABELS, "ready": self.ready, "note": self.note}
+
+
+# ── the nonconformity score ──────────────────────────────────────────────────
+#
+# Decided by the founder, 2026-10-02:
+#
+#     (1 - share of sentences with a byte-matched quote AND passed entailment)
+#     + 0.5 * number of cascade escalations
+#
+# Both terms are "the system had to work harder, or had less to stand on". Neither is a
+# model's opinion of itself, which is what makes it admissible at all (PLAN_23 §1.5).
+
+ESCALATION_WEIGHT = 0.5
+
+
+def nonconformity(*, verified: int, total: int, escalations: int) -> tuple:
+    """(score, why) for one run, or (None, why) when it cannot be computed.
+
+    `verified` counts sentences that are BOTH byte-matched to a span AND passed
+    entailment. Both halves are required because they are different checks:
+    `checker/lawyer_summary.py` says so in terms -- "TRACED IS NOT ENTAILMENT. A sentence
+    can quote a real span, at real offsets, share its vocabulary, and still assert
+    something the span does not say."
+
+    **A run with no sentences scores None, not 1.0.** Zero of zero is not "nothing was
+    supported" -- it is "there was nothing to support", and a refusal would otherwise come
+    out as maximally nonconforming and drag every threshold computed from it.
+    """
+    if total <= 0:
+        return None, ("no sentences were produced, so there is no share to take. Zero of "
+                      "zero is not 'nothing was supported'")
+    if verified < 0 or verified > total:
+        raise CalibrationError(
+            f"verified={verified} of total={total} is impossible; a count outside its own "
+            f"denominator means the two were measured over different things")
+    if escalations < 0:
+        raise CalibrationError(f"escalations cannot be negative, got {escalations}")
+    share = verified / total
+    score = (1.0 - share) + ESCALATION_WEIGHT * escalations
+    return round(score, 4), (
+        f"{verified}/{total} sentence(s) byte-matched AND entailed, "
+        f"{escalations} escalation(s)")
 
 
 def bucket_labels(labels) -> dict:
@@ -266,11 +309,58 @@ def _test() -> int:
               for x in calibrate(scored)),
           "to_dict reports the threshold and the floor it had to clear")
 
-    # ── nothing served imports this ────────────────────────────────────────
+    # ── the nonconformity score the founder specified ──────────────────────
+    check(ESCALATION_WEIGHT == 0.5, "the escalation weight is 0.5")
+    check(nonconformity(verified=10, total=10, escalations=0)[0] == 0.0,
+          "every sentence supported and no escalation scores 0 -- perfectly conforming")
+    check(nonconformity(verified=0, total=10, escalations=0)[0] == 1.0,
+          "nothing supported scores 1")
+    check(nonconformity(verified=5, total=10, escalations=0)[0] == 0.5,
+          "half supported scores 0.5")
+    check(nonconformity(verified=10, total=10, escalations=2)[0] == 1.0,
+          "...and two escalations add 1.0, so escalation alone can match total failure "
+          "-- which is the weight the founder chose, not one this file picked")
+    check(nonconformity(verified=8, total=10, escalations=1)[0] == 0.7,
+          f"(1 - 0.8) + 0.5*1 = 0.7 "
+          f"({nonconformity(verified=8, total=10, escalations=1)[0]})")
+    check(nonconformity(verified=3, total=4, escalations=0)[1].startswith("3/4"),
+          "...and the reason shows the fraction it came from")
+
+    _none, _why = nonconformity(verified=0, total=0, escalations=0)
+    check(_none is None,
+          "**a run with NO sentences scores None, not 1.0**: zero of zero is 'there was "
+          "nothing to support', and a refusal scoring maximally nonconforming would drag "
+          "every threshold computed from it")
+    check("not 'nothing was supported'" in _why, "...and says so")
+    for bad in ((11, 10, 0), (-1, 10, 0)):
+        try:
+            nonconformity(verified=bad[0], total=bad[1], escalations=bad[2])
+            check(False, f"verified={bad[0]} of {bad[1]} raises")
+        except CalibrationError:
+            check(True, f"verified={bad[0]} of total={bad[1]} RAISES: a count outside its "
+                        f"own denominator means the two measured different things")
+    try:
+        nonconformity(verified=1, total=2, escalations=-1)
+        check(False, "negative escalations raise")
+    except CalibrationError:
+        check(True, "negative escalations raise")
+
+    # ── what a served module may and may not take from this file ───────────
+    #
+    # The original rule was "nothing served imports this at all", and it broke the day the
+    # founder asked for the nonconformity SCORE to be recorded on every run -- which means
+    # `gateway/verbs.py` has to import something from here.
+    #
+    # The rule was too broad, not wrong. What must never reach the answer path is the
+    # THRESHOLD: a number computed from past decisions, used to decide a present legal
+    # question. RECORDING a measurement is not deciding with it. So the check now names
+    # what may cross and asserts the rest does not.
+    SCORE_API = {"nonconformity", "ESCALATION_WEIGHT", "CalibrationError"}
+    DECIDING_API = {"calibrate", "Readiness", "MIN_LABELS", "Label", "bucket_labels"}
     import ast as _ast
     import pathlib as _pl
     root = _pl.Path(__file__).resolve().parent.parent
-    importers = []
+    offenders, importers = [], []
     for path in list((root / "gateway").glob("*.py")) + list((root / "agents").glob("*.py")) \
             + list((root / "checker").glob("*.py")):
         if path.name == "calibration.py":
@@ -282,13 +372,23 @@ def _test() -> int:
         for node in _ast.walk(tree):
             if isinstance(node, _ast.ImportFrom) and "calibration" in (node.module or ""):
                 importers.append(path.name)
+                for alias in node.names:
+                    if alias.name in DECIDING_API:
+                        offenders.append(f"{path.name}:{alias.name}")
             elif isinstance(node, _ast.Import) and any(
                     "calibration" in a.name for a in node.names):
-                importers.append(path.name)
-    check(not importers,
-          f"NO served module imports this one -- read from their import statements, not "
-          f"from their text. A threshold that reached the answer path would be a "
-          f"probability deciding a legal question ({importers})")
+                # A whole-module import takes everything, including the threshold API.
+                offenders.append(f"{path.name}:<whole module>")
+    check(not offenders,
+          f"NO served module imports the DECIDING api {sorted(DECIDING_API)} -- a "
+          f"threshold reaching the answer path would be a number from past decisions "
+          f"deciding a present legal question ({offenders})")
+    check(set(importers) <= {"verbs.py"},
+          f"...and only gateway/verbs.py imports this file at all, to RECORD the score "
+          f"({sorted(set(importers))})")
+    check(SCORE_API & DECIDING_API == set(),
+          "the two halves of this module's api do not overlap, so 'may import' and 'may "
+          "not' is a decidable question rather than a judgement call")
 
     try:
         calibrate([{"task": "x"}])

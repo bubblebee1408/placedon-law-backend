@@ -525,6 +525,20 @@ class MemoryBackend:
 
     def write_run(self, run: dict) -> None:
         rid = run["id"]
+        # 002's runs_refusal_code_iff_refused, restated. Postgres refuses a REFUSED run
+        # with no code and the dict accepted one, so a test row that could never exist in
+        # production passed the gate and failed on the live server -- a rule only Postgres
+        # enforces is a rule the gate never runs.
+        status, code = str(run.get("status") or ""), run.get("refusal_code")
+        if status == "REFUSED" and not str(code or "").strip():
+            raise StoreError(
+                "a REFUSED run must carry a refusal_code (002 "
+                "runs_refusal_code_iff_refused): a refusal with no nameable reason is "
+                "indistinguishable from a failure")
+        if status != "REFUSED" and str(code or "").strip():
+            raise StoreError(
+                f"only a REFUSED run carries a refusal_code (002 "
+                f"runs_refusal_code_iff_refused); status={status!r} has {code!r}")
         self.runs[rid] = {k: v for k, v in run.items()
                           if k not in ("steps", "propositions")}
         # Postgres returns the column whether or not it was written; so does this.
@@ -533,6 +547,11 @@ class MemoryBackend:
         # per call leaves no trace of itself -- and the critic's success case is INVISIBLE:
         # "found nothing" and "was off" are the same clean answer afterwards.
         self.runs[rid]["critic_enabled"] = _critic_enabled_now()
+        # 017. Supplied by the caller that has the sentence counts; NULL when the path
+        # produced no entailment verdict to count. Never derived here from TRACED alone,
+        # which would be a different measurement under the same name.
+        self.runs[rid]["nonconformity"] = run.get("nonconformity")
+        self.runs[rid]["nonconformity_note"] = run.get("nonconformity_note")
         self.steps[rid] = [_shaped(s, STEP_KEYS) for s in run.get("steps", [])]
         self.props[rid] = [_shaped(p, PROPOSITION_KEYS)
                            for p in run.get("propositions", [])]
@@ -696,15 +715,19 @@ class PostgresBackend:
         with self._conn() as c:
             c.execute(
                 "INSERT INTO runs (run_id, tenant_id, actor_id, intent, status, "
-                "refusal_code, law_versions, critic_enabled) "
-                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s) "
+                "refusal_code, law_versions, critic_enabled, nonconformity, "
+                "nonconformity_note) "
+                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) "
                 "ON CONFLICT (run_id) DO UPDATE SET status = EXCLUDED.status, "
                 "refusal_code = EXCLUDED.refusal_code, "
                 "law_versions = EXCLUDED.law_versions, "
-                "critic_enabled = EXCLUDED.critic_enabled",
+                "critic_enabled = EXCLUDED.critic_enabled, "
+                "nonconformity = EXCLUDED.nonconformity, "
+                "nonconformity_note = EXCLUDED.nonconformity_note",
                 (rid, self.tenant_id, self.actor_id, run.get("intent", ""),
                  run.get("status", "PLANNED"), run.get("refusal_code"),
-                 _json(run.get("law_versions")), _critic_enabled_now()))
+                 _json(run.get("law_versions")), _critic_enabled_now(),
+                 run.get("nonconformity"), run.get("nonconformity_note")))
             c.execute("DELETE FROM run_steps WHERE run_id = %s", (rid,))
             # Shaped on the way IN, the same as MemoryBackend: one normalisation for
             # both backends, or the two disagree about what a null cost means. The shared
@@ -742,7 +765,7 @@ class PostgresBackend:
         with self._conn() as c:
             r = c.execute("SELECT run_id, intent, status, refusal_code, result, "
                           "law_versions, failure_category, failure_reason, "
-                          "critic_enabled "
+                          "critic_enabled, nonconformity, nonconformity_note "
                           "FROM runs WHERE run_id = %s", (run_id,)).fetchone()
             if r is None:
                 return None
@@ -752,7 +775,9 @@ class PostgresBackend:
                    # category existed on Postgres and was invisible to every reader, which
                    # the conformance list caught on its first live run.
                    "failure_category": r[6], "failure_reason": r[7],
-                   "critic_enabled": r[8]}
+                   "critic_enabled": r[8],
+                   "nonconformity": float(r[9]) if r[9] is not None else None,
+                   "nonconformity_note": r[10]}
             out["steps"] = [
                 {"capability": s[0], "engine_capability": s[1], "status": s[2],
                  "model": s[3], "degraded": s[4], "provider": s[5], "region": s[6],
@@ -1858,6 +1883,26 @@ def conformance(backend) -> list[tuple[bool, str]]:
         ck(False, "a version for a draft that does not exist is refused")
     except Exception:
         ck(True, "a version for a draft that does not exist is refused")
+
+    # ── 017: the CAL-1 nonconformity score ──────────────────────────────────
+    _nc = str(_uuid.uuid4())
+    backend.write_run({"id": _nc, "intent": "ask", "status": "ANSWERED", "steps": [],
+                       "propositions": [], "nonconformity": 0.7,
+                       "nonconformity_note": "8/10 byte-matched AND entailed, 1 escalation"})
+    _ncrow = backend.read_run(_nc) or {}
+    ck(_ncrow.get("nonconformity") == 0.7 and "escalation" in
+       str(_ncrow.get("nonconformity_note") or ""),
+       f"the nonconformity score and its reason round-trip on both backends "
+       f"({_ncrow.get('nonconformity')})")
+    ck(isinstance(_ncrow.get("nonconformity"), float),
+       f"...as a float on both, not Decimal on one "
+       f"({type(_ncrow.get('nonconformity')).__name__})")
+    _nn = str(_uuid.uuid4())
+    backend.write_run({"id": _nn, "intent": "ask", "status": "REFUSED",
+                       "refusal_code": "NO_MODEL", "steps": [], "propositions": []})
+    ck((backend.read_run(_nn) or {}).get("nonconformity") is None,
+       "a run with no score reads back NULL, which means NOT COMPUTED -- and is not the "
+       "same as 0, which means every sentence was supported with no escalation")
 
     # ── 016: was the critic on when this run was written? ───────────────────
     import os as _os
