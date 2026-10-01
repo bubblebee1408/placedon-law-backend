@@ -98,11 +98,27 @@ LAST_RUN: str | None = (
     "of this script, written before quote_viewed existed, and 008's VALIDATE refuses them "
     "by design -- \"the pre-existing approvals must be looked at by a person, not "
     "defaulted\". They are this script's own synthetic seeds, so a fresh database is the "
-    "answer and not a change to 008.")
+    "answer and not a change to 008. "
+    "2026-10-01, C2: 001-010 applied TOGETHER to a fresh throwaway database on PostgreSQL "
+    "18.6 (Postgres.app, local socket), asserted as placedon_app (NOSUPERUSER, "
+    "NOBYPASSRLS): 145 checks, 0 failures, adding 010_conversations. `conversations` and "
+    "`messages` are the ELEVENTH and TWELFTH tenant-scoped tables and they are the most "
+    "obviously private things in the schema -- a lawyer's questions in their own words, "
+    "and the envelope we answered with, citations included. Both are proved the way the "
+    "other ten are: A sees its own and none of B's; with the policy dropped they fail "
+    "CLOSED and A sees nothing, not even its own; with RLS disabled B's rows APPEAR (1 "
+    "conversation, 2 messages), which is what shows the check measures the protection "
+    "rather than an empty table; restoring returns to isolation. The store's chat methods also run through gateway/store.conformance() HERE, against Postgres, and that is what caught a real divergence: the dict raised StoreError on a duplicate ordinal while Postgres raised psycopg UniqueViolation, so one `except StoreError` handled the memory backend and crashed on the real one. PostgresBackend now translates IntegrityError into StoreError. Re-run after the fix: 165 checks, 0 failures.")
 
 TENANT_TABLES = ("actors", "api_keys", "documents", "audit_log",
                  "runs", "run_steps", "propositions", "decisions", "jobs",
-                 "cascade_runs")
+                 "cascade_runs",
+                 # C2's chat layer. Listed here rather than checked separately, because
+                 # this tuple drives the whole proof below -- A sees its own rows and none
+                 # of B's, the policy dropped fails CLOSED, RLS disabled LEAKS, restoring
+                 # returns to isolation. A conversation is the most obviously private
+                 # thing in the schema: it is a lawyer's questions in their own words.
+                 "conversations", "messages")
 
 
 class RlsFailure(AssertionError):
@@ -201,6 +217,24 @@ def _seed(cur, tenant, actor, tag: str) -> None:
                 (uuid.uuid4(), rid, tenant, "ss:T1.2",
                  f"{tag}: inspected the book, every page initialled.",
                  f"{tag} physical minutes book not inspected", actor))
+    # A conversation and its two messages. The leak that would matter most to a CLIENT:
+    # not a finding about their document but the question they asked in their own words,
+    # and the answer we gave. The envelope is stored, so a leak would carry the citations
+    # too.
+    conv = uuid.uuid4()
+    cur.execute("INSERT INTO conversations (conversation_id, tenant_id, actor_id, title) "
+                "VALUES (%s,%s,%s,%s)", (conv, tenant, actor, f"{tag}: board meeting"))
+    cur.execute("INSERT INTO messages (message_id, conversation_id, tenant_id, ordinal, "
+                "role, text, file_ids) VALUES (%s,%s,%s,0,'user',%s,%s)",
+                (uuid.uuid4(), conv, tenant,
+                 f"{tag}: are we late filing MGT-7 for FY24?", json.dumps([])))
+    cur.execute("INSERT INTO messages (message_id, conversation_id, tenant_id, ordinal, "
+                "role, text, task, envelope) VALUES (%s,%s,%s,1,'assistant',%s,%s,%s)",
+                (uuid.uuid4(), conv, tenant, f"{tag}: answer",
+                 "RESEARCH_QUESTION",
+                 json.dumps({"schema": "answer_envelope.v1", "status": "PARTIAL",
+                             "task": "RESEARCH_QUESTION", "tenant_marker": tag})))
+
     # A queued job. This is the row whose leak would be worst OPERATIONALLY: a worker that
     # could see another tenant's job would execute another firm's document.
     cur.execute("INSERT INTO jobs (job_id, run_id, tenant_id, actor_id, intent, args) "
@@ -296,7 +330,7 @@ def run(url: str) -> int:
         for f in ("001_core.sql", "002_runs.sql", "003_step_provenance.sql",
                   "004_cost_note.sql", "005_decisions.sql", "006_jobs.sql",
                   "007_cascade.sql", "008_decision_evidence.sql",
-                  "009_source_documents.sql"):
+                  "009_source_documents.sql", "010_conversations.sql"):
             cur.execute(sql(f))
             print(f"  applied {f}")
         _ensure_app_role(cur)

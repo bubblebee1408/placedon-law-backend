@@ -121,8 +121,48 @@ def _test() -> None:
     check(files == ["001_core.sql", "002_runs.sql", "003_step_provenance.sql",
                     "004_cost_note.sql", "005_decisions.sql", "006_jobs.sql",
                     "007_cascade.sql", "008_decision_evidence.sql",
-                    "009_source_documents.sql"],
+                    "009_source_documents.sql", "010_conversations.sql"],
           f"every migration exists, in order ({files})")
+
+    # 010: the chat layer. Both tables carry a tenant_id, so `tenant_scoped()` picks them
+    # up automatically and the RLS checks below cover them without a list being edited --
+    # which is the property that file was built for. What is asserted here is what the
+    # derivation cannot see: the CHECKs, and the two nullable columns whose NULL means
+    # something specific.
+    conv_sql = (MIGRATIONS / "010_conversations.sql").read_text(encoding="utf-8")
+    for tbl in ("conversations", "messages"):
+        check(f"CREATE TABLE IF NOT EXISTS {tbl}" in conv_sql,
+              f"010 creates {tbl}, idempotently")
+        check(tbl in tenant_scoped(), f"...and {tbl} is tenant-scoped, DERIVED")
+    # The CHECK clause, not the file: the first version of this grepped the whole text for
+    # "'system'" and fired on the migration's own comment explaining why there is none.
+    # Second time that mistake has been made here (see the 009 RLS check above), so this
+    # one reads the constraint.
+    role_check = re.search(r"role\s+text\s+NOT NULL CHECK \((.*?)\)", conv_sql)
+    check(role_check is not None and "'user'" in role_check.group(1)
+          and "'assistant'" in role_check.group(1)
+          and "'system'" not in role_check.group(1),
+          f"messages.role admits user and assistant ONLY ({role_check.group(1) if role_check else None!r})"
+          f" -- a system prompt is not a message in a conversation, and storing it here "
+          f"would put untrusted document text and our own instructions in one column with "
+          f"a flag to tell them apart")
+    check("messages_user_has_no_envelope" in conv_sql
+          and "messages_assistant_has_no_files" in conv_sql,
+          "...a user message carries no envelope and an assistant message no file_ids, "
+          "checked by the DATABASE because a second writer reaches the table not the API")
+    check("messages_envelope_object" in conv_sql and "jsonb_typeof(envelope) = 'object'"
+          in conv_sql,
+          "...an envelope is an object, never a list or a bare string")
+    check("messages_ordinal_unique" in conv_sql,
+          "...and one ordinal per conversation: the order a thread is read in is not "
+          "something the application may get wrong twice")
+    check("ON DELETE SET NULL" in conv_sql,
+          "messages.run_id is ON DELETE SET NULL, not CASCADE: deleting a run must not "
+          "delete the conversation that asked for it")
+    check("envelope        jsonb," in conv_sql and "NOT NULL" not in
+          conv_sql.split("envelope        jsonb")[1].split("\n")[0],
+          "...and envelope is NULLABLE, because NULL means the reply has not arrived and "
+          "'{}' would claim an empty answer")
 
     # 009 is the one table in this schema that is NOT tenant-scoped, so what keeps a
     # client contract out of it is a CHECK rather than a policy. Asserted statically
@@ -170,7 +210,7 @@ def _test() -> None:
     t = tables()
     check({"tenants", "actors", "api_keys", "documents", "audit_log",
            "runs", "run_steps", "propositions", "decisions", "jobs",
-           "cascade_runs", "source_documents"} <= set(t),
+           "cascade_runs", "source_documents", "conversations", "messages"} <= set(t),
           f"every table the gateway needs is declared ({sorted(t)})")
 
     scoped = tenant_scoped()
@@ -182,7 +222,8 @@ def _test() -> None:
           "missing tenant_id column -- sharing public material across tenants is a "
           "decision, and the day someone adds a tenant_id to it this line is what argues")
     check(scoped == {"actors", "api_keys", "documents", "audit_log", "runs", "run_steps",
-                     "propositions", "decisions", "jobs", "cascade_runs"},
+                     "propositions", "decisions", "jobs", "cascade_runs",
+                     "conversations", "messages"},
           f"every other table is tenant-scoped, DERIVED from having a tenant_id ({sorted(scoped)})")
 
     # ── the check this module exists for ────────────────────────────────────

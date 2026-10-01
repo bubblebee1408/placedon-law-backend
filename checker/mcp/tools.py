@@ -472,8 +472,8 @@ def _test() -> None:
           f"(only in one: {names ^ set(KNOWN_TOOLS) or 'none'})")
     check(len(_HAND_WRITTEN) == 13,
           f"thirteen hand-written tools ({len(_HAND_WRITTEN)})")
-    check(len(TOOLS) == 21,
-          f"twenty-one in all: eight generated from gateway/verbs.py, the last two being "
+    check(len(TOOLS) == 25,
+          f"twenty-five in all: twelve generated from gateway/verbs.py, the last two being "
           f"sources.list and sources.search on 30-09-2026 (PLAN_24 S1) -- read-only, and "
           f"neither fetches, stores nor spends; events.assess on 30-09-2026 -- "
           f"events.assess on 30-09-2026 -- read-only and model-free, which is why it may "
