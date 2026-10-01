@@ -59,6 +59,7 @@ class Backend(Protocol):
     def read_decisions(self, run_id: str) -> list[dict]: ...
     def append_step(self, run_id: str, step: dict, *, key: str) -> bool: ...
     def set_run(self, run_id: str, *, status: str, refusal_code=None, result=None) -> None: ...
+    def read_failure_counts(self) -> list[dict]: ...
     def write_cascade(self, record: dict, *, run_id: str | None = None) -> dict: ...
     def read_cascades(self, *, run_id: str | None = None, limit: int = 1000) -> list[dict]: ...
     # C2: the chat layer (010_conversations.sql).
@@ -223,6 +224,28 @@ def _check_cascade(row: dict) -> None:
 
 NO_CALL_NOTE = ("no model was called on this step, so there is nothing to price. This is "
                 "not a cost of zero.")
+
+
+def failure_tag(status: str, refusal_code, result) -> tuple:
+    """(category, reason) for a terminal run, or (None, None) when there is no failure.
+
+    O8. Computed HERE, inside the one function every terminal write routes through, so a
+    caller cannot forget to tag a run -- the same reasoning that puts cost_inr on the step
+    row rather than asking each verb to remember it.
+
+    `checker/failure_tags` is the authority on the words. This is Ring 2 reading Ring 0,
+    which the firewall permits; the reverse would not be.
+    """
+    from checker import failure_tags as ft
+    if str(status or "").upper() == "ANSWERED":
+        return None, None
+    try:
+        return ft.classify({"status": status, "refusal_code": refusal_code,
+                            "result": result})
+    except ft.TagError:
+        # A run we cannot even hand to the classifier is left UNTAGGED rather than given
+        # a word. NULL reads as "not recorded", which is true.
+        return None, None
 
 
 def _copied(versions):
@@ -577,6 +600,24 @@ class MemoryBackend:
         row["refusal_code"] = refusal_code
         if result is not None:
             row["result"] = result
+        cat, why = failure_tag(status, refusal_code,
+                               result if result is not None else row.get("result"))
+        row["failure_category"], row["failure_reason"] = cat, why
+
+    def read_failure_counts(self) -> list[dict]:
+        """[{week, category, count}] over every tagged run. Untagged runs are their OWN
+        row (category None), never dropped: excluding them would shrink the denominator
+        and make the tagged failures look like the whole picture."""
+        buckets: dict = {}
+        for row in self.runs.values():
+            if str(row.get("status") or "").upper() == "ANSWERED":
+                continue
+            week = str(row.get("finished_at") or row.get("created_at") or "")[:10] or None
+            key = (week, row.get("failure_category"))
+            buckets[key] = buckets.get(key, 0) + 1
+        return [{"week": w, "category": c, "count": n}
+                for (w, c), n in sorted(buckets.items(), key=lambda kv: (str(kv[0][0]),
+                                                                        str(kv[0][1])))]
 
     # The shape agents/runtime.Store expects, so a run can be executed straight onto it.
     def read(self, run_id: str) -> dict | None:
@@ -659,12 +700,17 @@ class PostgresBackend:
         if not _UUID.match(run_id or ""):
             return None
         with self._conn() as c:
-            r = c.execute("SELECT run_id, intent, status, refusal_code, result, law_versions "
+            r = c.execute("SELECT run_id, intent, status, refusal_code, result, "
+                          "law_versions, failure_category, failure_reason "
                           "FROM runs WHERE run_id = %s", (run_id,)).fetchone()
             if r is None:
                 return None
             out = {"id": str(r[0]), "intent": r[1], "status": r[2], "refusal_code": r[3],
-                   "result": r[4], "law_versions": r[5]}
+                   "result": r[4], "law_versions": r[5],
+                   # O8. Written by set_run and read back here; without these two the
+                   # category existed on Postgres and was invisible to every reader, which
+                   # the conformance list caught on its first live run.
+                   "failure_category": r[6], "failure_reason": r[7]}
             out["steps"] = [
                 {"capability": s[0], "engine_capability": s[1], "status": s[2],
                  "model": s[3], "degraded": s[4], "provider": s[5], "region": s[6],
@@ -751,14 +797,25 @@ class PostgresBackend:
     def set_run(self, run_id: str, *, status: str, refusal_code=None, result=None) -> None:
         import json as _json
         with self._conn() as c:
+            cat, why = failure_tag(status, refusal_code, result)
             c.execute(
                 "UPDATE runs SET status = %s, refusal_code = %s, "
                 "result = COALESCE(%s::jsonb, result), "
+                "failure_category = %s, failure_reason = %s, "
                 "finished_at = CASE WHEN %s THEN now() ELSE finished_at END "
                 "WHERE run_id = %s",
                 (status, refusal_code,
-                 None if result is None else _json.dumps(result),
+                 None if result is None else _json.dumps(result), cat, why,
                  status in ("ANSWERED", "PARTIAL", "REFUSED", "FAILED"), run_id))
+
+    def read_failure_counts(self) -> list[dict]:
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT to_char(date_trunc('week', COALESCE(finished_at, created_at)), "
+                "       'IYYY-\"W\"IW') AS week, failure_category, count(*) "
+                "FROM runs WHERE status <> 'ANSWERED' "
+                "GROUP BY 1, 2 ORDER BY 1, 2").fetchall()
+        return [{"week": r[0], "category": r[1], "count": int(r[2])} for r in rows]
 
     def write_cascade(self, record: dict, *, run_id: str | None = None) -> dict:
         import json as _json
@@ -1752,6 +1809,36 @@ def conformance(backend) -> list[tuple[bool, str]]:
     except Exception:
         ck(True, "a version for a draft that does not exist is refused")
 
+    # ── O8: failure tagging, on both backends ───────────────────────────────
+    _fr = str(_uuid.uuid4())
+    backend.write_run({"id": _fr, "intent": "research_question", "status": "PLANNED",
+                       "steps": [], "propositions": []})
+    backend.set_run(_fr, status="FAILED",
+                    result={"error": "ConnectionResetError: reset by peer"})
+    _frow = backend.read_run(_fr)
+    ck(_frow and _frow.get("failure_category") == "transport",
+       f"a FAILED run is TAGGED by set_run on both backends -- the one function every "
+       f"terminal write routes through ({(_frow or {}).get('failure_category')})")
+    ck(_frow and str(_frow.get("failure_reason") or "").strip(),
+       "...and the reason is stored with it: a bare word in a weekly report is a number "
+       "nobody can check")
+    _ar = str(_uuid.uuid4())
+    backend.write_run({"id": _ar, "intent": "research_question", "status": "PLANNED",
+                       "steps": [], "propositions": []})
+    backend.set_run(_ar, status="ANSWERED", result={"answer": "x"})
+    ck((backend.read_run(_ar) or {}).get("failure_category") is None,
+       "an ANSWERED run carries NO category: a success with a failure word on it would be "
+       "counted as a failure by every query that follows")
+    _counts = backend.read_failure_counts()
+    ck(isinstance(_counts, list) and all(set(r) == {"week", "category", "count"}
+                                         for r in _counts),
+       f"read_failure_counts returns week/category/count rows on both backends "
+       f"({_counts[:1]})")
+    ck(any(r["category"] == "transport" and r["count"] >= 1 for r in _counts),
+       "...including the run just tagged")
+    ck(not any(r["category"] is not None and r["category"] == "" for r in _counts),
+       "...and an untagged run reads as category None, never an empty string")
+
     # ── O9: the answer cache, on both backends ──────────────────────────────
     _LK, _CK = "a" * 64, "b" * 64
     _CIT = [{"id": "c1", "provision": "s.96", "sha256": "c" * 64, "quote": "a quote"}]
@@ -1873,7 +1960,7 @@ def _test() -> None:
             "write_grid", "read_grid", "read_grid_cells", "write_grid_cell",
             "cancel_grid", "write_draft", "read_draft", "append_draft_version",
             "read_draft_versions", "write_cache_entry", "read_cache_entry",
-            "bump_cache_stat", "read_cache_stats")
+            "bump_cache_stat", "read_cache_stats", "read_failure_counts")
     for name in need:
         check(hasattr(MemoryBackend(), name)
               and hasattr(PostgresBackend("postgresql://x/y", tenant_id=T), name),

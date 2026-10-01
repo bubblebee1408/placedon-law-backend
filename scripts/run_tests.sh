@@ -262,6 +262,11 @@ extra+=("checker/decompose.py --test")
 # PLAN_23 layer 7: the critic. Flag or remove only, at most one narrowing correction
 # per run (§1.4), and rewriting is unrepresentable rather than merely forbidden.
 extra+=("checker/critic.py --test")
+# O8: why a run did not answer, in one of seven words -- plus the eighth that keeps
+# the seven honest, and the weekly report that will not drop the untagged.
+extra+=("checker/failure_tags.py --test")
+extra+=("scripts/failure_report.py --test")
+
 
 
 extra+=("scripts/cache_report.py --test")
