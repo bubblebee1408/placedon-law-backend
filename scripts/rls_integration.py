@@ -124,7 +124,15 @@ LAST_RUN: str | None = (
     "a draft version holds what another company was about to FILE and the name of the "
     "person who signed it off. Both are proved the way the others are, and the database "
     "additionally REFUSES a version recorded as approved while blocking_count > 0, which "
-    "is the row that matters most.")
+    "is the row that matters most. "
+    "2026-10-01, job 3b: 001-013 applied TOGETHER to a fresh throwaway database on "
+    "PostgreSQL 18.6, asserted as placedon_app (NOSUPERUSER, NOBYPASSRLS), adding "
+    "013_grid_cell_cost: 229 checks, 0 failures. No new table -- three columns on "
+    "review_grid_cells -- so the isolation proof is unchanged; what 013 adds is refused "
+    "rows. review_grid_cells_ran_has_cost_note refused THIS SCRIPT'S OWN SEED on the first "
+    "run, because the seed inserted a FOUND cell with neither a cost nor a note saying "
+    "there is none. That is the constraint catching its own omission on a real server, and "
+    "the seed now carries a debit.")
 
 TENANT_TABLES = ("actors", "api_keys", "documents", "audit_log",
                  "runs", "run_steps", "propositions", "decisions", "jobs",
@@ -266,12 +274,16 @@ def _seed(cur, tenant, actor, tag: str) -> None:
     cur.execute("INSERT INTO review_grid_columns (grid_id, tenant_id, name, kind, "
                 "question, ordinal) VALUES (%s,%s,'liability cap','amount',%s,0)",
                 (grid, tenant, f"{tag}: what is the cap on aggregate liability?"))
+    # 013: the cell carries its debit. A FOUND cell with neither a cost nor a note is
+    # refused by review_grid_cells_ran_has_cost_note, which this seed proved on its first
+    # run against a real server.
     cur.execute("INSERT INTO review_grid_cells (grid_id, tenant_id, document_id, "
-                "column_name, state, value, quote) "
-                "VALUES (%s,%s,%s,'liability cap','FOUND',%s,%s)",
+                "column_name, state, value, quote, provider, cost_inr, cost_note) "
+                "VALUES (%s,%s,%s,'liability cap','FOUND',%s,%s,'azure',%s,%s)",
                 (grid, tenant, ("a" if tag.startswith("A") else "b") * 64,
                  "INR 50,00,000",
-                 f"{tag}: aggregate liability shall not exceed INR 50,00,000"))
+                 f"{tag}: aggregate liability shall not exceed INR 50,00,000",
+                 0.0412, f"{tag}: one extraction call, priced from reported tokens"))
 
     # A draft and two versions: one blocked, one approved. The leak would carry what
     # another company was about to file and the name of the person who signed it off.
@@ -388,7 +400,8 @@ def run(url: str) -> int:
                   "004_cost_note.sql", "005_decisions.sql", "006_jobs.sql",
                   "007_cascade.sql", "008_decision_evidence.sql",
                   "009_source_documents.sql", "010_conversations.sql",
-                  "011_review_grids.sql", "012_drafts.sql"):
+                  "011_review_grids.sql", "012_drafts.sql",
+                  "013_grid_cell_cost.sql"):
             cur.execute(sql(f))
             print(f"  applied {f}")
         _ensure_app_role(cur)

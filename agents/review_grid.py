@@ -60,6 +60,22 @@ from checker import review_grid as rg
 INTENT = "review_grid_cell"
 
 
+class Unreadable(RuntimeError):
+    """The model replied and the reply could not be read.
+
+    A THIRD outcome, and the reason it has to exist: the answerer's contract was a pair for
+    FOUND, None for NOT_FOUND and a raise for FAILED, and a reply with no `VALUE:` line in
+    it fell through the parser with `value = ""` and returned None. So a model that answered
+    in prose, or in JSON, or apologised, made the cell say **NOT_FOUND** -- "this clause is
+    absent from this document" -- about a document it had in fact read and described. In a
+    table a lawyer relies on, that is the worst available failure: an absence is a finding,
+    and this one was manufactured by a parser.
+
+    It is not FAILED either. FAILED means the step did not run; this ran, cost money and
+    produced something. NEEDS_LAWYER is what "a person has to look at this" means here.
+    """
+
+
 class RunnerError(RuntimeError):
     """The runner cannot proceed. Never a silent skip."""
 
@@ -156,9 +172,14 @@ def run_cell(args: dict, *, documents: dict, answer) -> rg.Cell:
     """Answer one cell. Returns a Cell; raises only on a malformed job.
 
     `answer(question, kind, text) -> (value, quote) | None` is injected:
-      a pair      the value and the span it was read from -> FOUND, verified here
-      None        the answer is not in the document        -> NOT_FOUND
-      a raise     transport                                -> FAILED, not a finding
+      a pair         the value and the span it was read from -> FOUND, verified here
+      None           the answer is not in the document      -> NOT_FOUND
+      Unreadable     the reply could not be read            -> NEEDS_LAWYER
+      another raise  transport                              -> FAILED, not a finding
+
+    `None` means the MODEL said the document does not answer the question. A reply nobody
+    could parse means no such thing and must never reach NOT_FOUND, which is why
+    `Unreadable` is a separate outcome and is caught first.
 
     The FOUND path goes through `review_grid.found()`, so the quote is checked against the
     document text and a value that does not satisfy its column kind becomes NEEDS_LAWYER
@@ -182,6 +203,12 @@ def run_cell(args: dict, *, documents: dict, answer) -> rg.Cell:
                     f"was read"))
     try:
         got = answer(args["question"], args["kind"], text)
+    except Unreadable as exc:
+        # Caught BEFORE the generic handler, because order is the whole fix: an unreadable
+        # reply used to arrive here as None and leave as NOT_FOUND.
+        return rg.needs_lawyer(
+            document_id=args["document_id"], column=col,
+            reason=f"unreadable model reply: {exc}")
     except Exception as exc:                                    # noqa: BLE001
         return rg.failed(document_id=args["document_id"], column=col,
                          detail=f"{type(exc).__name__}: {str(exc)[:120]}")
@@ -340,6 +367,31 @@ def _test() -> int:
     check(fl.state == rg.FAILED and "TimeoutError" in fl.reason,
           f"a transport error is FAILED ({fl.state})")
     check(not fl.is_finding, "...and is not a finding about the document")
+    # ── an UNREADABLE reply is NEEDS_LAWYER, and never NOT_FOUND ───────────
+    # The bug this replaces: the parser found no VALUE: line, returned None, and the cell
+    # said the clause was ABSENT from a document the model had just described.
+    def garbled(question, kind, text):
+        raise Unreadable("no VALUE: line in a 42-character reply, so nothing was read "
+                         "from it")
+
+    _ur = run_cell({"grid_id": "g1", "document_id": D1, "column": LAW.name,
+                    "kind": LAW.kind, "question": LAW.question},
+                   documents=DOCS, answer=garbled)
+    check(_ur.state == rg.NEEDS_LAWYER,
+          f"an UNREADABLE model reply is NEEDS_LAWYER ({_ur.state})")
+    check(_ur.state != rg.NOT_FOUND,
+          "...and specifically NOT NOT_FOUND: the document was read and described, so an "
+          "absence would be a finding this parser invented")
+    check(_ur.state != rg.FAILED,
+          "...and not FAILED either: the call ran and cost money, it just said something "
+          "nobody could read")
+    check("unreadable model reply" in _ur.reason,
+          f"...with that named in the reason ({_ur.reason[:50]!r})")
+    check("no VALUE: line" in _ur.reason,
+          "...carrying what the answerer said went wrong, so a person can see it")
+    check(_ur.value == "" and _ur.quote == "",
+          "...and it proposes no value and no quote, because nothing was read")
+
     missing = run_cell({"grid_id": "g1", "document_id": "c" * 64, "column": LAW.name,
                         "kind": LAW.kind, "question": LAW.question},
                        documents=DOCS, answer=answerer)
