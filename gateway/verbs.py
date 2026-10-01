@@ -263,7 +263,11 @@ def _ask(args: dict, ctx: Context) -> dict:
                                       if getattr(s, "citation", None) else None),
                        "span_start": None, "span_end": None}
                       for s in (out.summary.sentences if out.summary else ())],
-        law_versions={o.path: o.blob for o in origins})
+        law_versions={o.path: o.blob for o in origins},
+        # CAL-1. `entailed` is None on this path, so the score is not computed and the
+        # note records which half is missing -- see `nonconformity_for`.
+        traced=len(out.summary.traced) if out.summary else 0,
+        sentences=len(out.summary.sentences) if out.summary else 0)
     _cache_store(cache_key, q, "RESEARCH_QUESTION", args.get("sources"), d, ctx)
     return d
 
@@ -604,7 +608,9 @@ SS_TEXTS = ("corpus/reference/SS-1.txt", "corpus/reference/SS-2.txt")
 
 def _persist_run(ctx: Context, *, intent: str, status: str, steps: list,
                  propositions: list, refusal_code=None,
-                 law_versions: dict | None = None) -> str | None:
+                 law_versions: dict | None = None,
+                 entailed=None, traced: int = 0, sentences: int = 0,
+                 escalations: int = 0) -> str | None:
     """Write one run as runs + ordered steps + propositions. Returns the run id, or None.
 
     R-016's DERIVATION model, actually used: without this a verb answers and leaves no
@@ -617,10 +623,38 @@ def _persist_run(ctx: Context, *, intent: str, status: str, steps: list,
         return None
     import uuid
     run_id = str(uuid.uuid4())
+    score, why = nonconformity_for(entailed=entailed, traced=traced, total=sentences,
+                                   escalations=escalations)
     ctx.store.write({"id": run_id, "intent": intent, "status": status,
                      "refusal_code": refusal_code, "law_versions": law_versions,
-                     "steps": steps, "propositions": propositions})
+                     "steps": steps, "propositions": propositions,
+                     "nonconformity": score, "nonconformity_note": why})
     return run_id
+
+
+def nonconformity_for(*, entailed, traced, total, escalations: int = 0) -> tuple:
+    """(score, note) for a run, from `checker/calibration.nonconformity`. CAL-1.
+
+    `entailed` is the count of sentences that passed ENTAILMENT, and it is deliberately a
+    separate argument from `traced`. A sentence can quote a real span at real offsets and
+    still assert something the span does not say -- `checker/lawyer_summary.py` says
+    exactly that, and declares its ENTAILED verdict reserved and never returned.
+
+    So when `entailed` is None the score is NOT computed and the note says why. Scoring
+    from `traced` alone would be a different measurement under the same name, and it is
+    the one every threshold would later be computed from.
+    """
+    from checker.calibration import nonconformity
+    if not total:
+        return None, None                 # nothing ran; NULL, with nothing to explain
+    if entailed is None:
+        return None, (
+            f"not computed: {traced} of {total} sentence(s) byte-matched, but this path "
+            f"produces no entailment verdict (checker/lawyer_summary.py declares ENTAILED "
+            f"reserved and never returned), and the score needs both. Scoring from the "
+            f"byte match alone would be a different measurement under the same name.")
+    return nonconformity(verified=int(entailed), total=int(total),
+                         escalations=int(escalations))
 
 
 def _review_contract(args: dict, ctx: Context) -> dict:
@@ -3805,6 +3839,28 @@ def _test() -> None:
                         critique=lambda c: (_ for _ in ()).throw(TimeoutError("down")))
     check([c["id"] for c in _broke.kept] == ["s1"] and "did not run" in _broke.note,
           "a critic that raises leaves the answer exactly as the verifier produced it")
+
+    # ══ CAL-1: the nonconformity score on a real run ════════════════════════
+    check(nonconformity_for(entailed=8, traced=10, total=10, escalations=1)[0] == 0.7,
+          "the founder's formula: (1 - 8/10) + 0.5*1 = 0.7")
+    _ncs, _ncw = nonconformity_for(entailed=None, traced=3, total=4)
+    check(_ncs is None and "no entailment verdict" in _ncw,
+          f"a path with NO entailment verdict records NO score, and the note says which "
+          f"half is missing ({_ncw[:46]!r})")
+    check("different measurement under the same name" in _ncw,
+          "...and why scoring from the byte match alone is not a fallback")
+    check(nonconformity_for(entailed=None, traced=0, total=0) == (None, None),
+          "a run with no sentences records neither a score nor a reason: nothing ran")
+    _ncctx = Context(store=_MB(), clock=lambda: "2026-10-01T10:00:00+05:30",
+                     model_for=lambda _o: _rq.quoting_model(_srcs))
+    _ncr = by_name()["ask"].run({"question": _q}, _ncctx)
+    _ncrow = _ncctx.store.read_run(_ncr["run_id"]) or {}
+    check("nonconformity" in _ncrow,
+          "**every run now carries the field**, whether or not it could be computed")
+    check(_ncrow.get("nonconformity") is None
+          and "byte-matched" in str(_ncrow.get("nonconformity_note") or ""),
+          f"...and a real ask records NULL with the reason, because the ask path produces "
+          f"TRACED and not entailment ({_ncrow.get('nonconformity')})")
 
     # ══ job 6b: orphaned citations, and the CRITIC_ENABLED gate ═════════════
     import os as _os

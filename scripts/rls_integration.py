@@ -171,7 +171,14 @@ LAST_RUN: str | None = (
     "2026-10-02, job 8: 001-016 applied TOGETHER to a fresh throwaway database on "
     "PostgreSQL 18.6, asserted as placedon_app (NOSUPERUSER, NOBYPASSRLS), adding "
     "015_failure_category and 016_critic_enabled: 255 checks, 0 failures. Neither adds a "
-    "table, so the isolation proof is unchanged.")
+    "table, so the isolation proof is unchanged. "
+    "2026-10-02, CAL-1 score: 001-017 applied TOGETHER to a fresh throwaway database "
+    "on PostgreSQL 18.6, asserted as placedon_app (NOSUPERUSER, NOBYPASSRLS), adding "
+    "017_nonconformity: 258 checks, 0 failures. The conformance list caught one more "
+    "divergence, this time in ITSELF: it wrote a run with status REFUSED and no "
+    "refusal_code, which 002's runs_refusal_code_iff_refused forbids. The dict "
+    "accepted it and Postgres refused it, so a row that could never exist in "
+    "production passed the gate. MemoryBackend.write_run now restates that CHECK.")
 
 TENANT_TABLES = ("actors", "api_keys", "documents", "audit_log",
                  "runs", "run_steps", "propositions", "decisions", "jobs",
@@ -464,7 +471,8 @@ def run(url: str) -> int:
                   "011_review_grids.sql", "012_drafts.sql",
                   "013_grid_cell_cost.sql", "014_answer_cache.sql",
                   "015_failure_category.sql",
-                  "016_critic_enabled.sql"):
+                  "016_critic_enabled.sql",
+                  "017_nonconformity.sql"):
             cur.execute(sql(f))
             print(f"  applied {f}")
         _ensure_app_role(cur)
