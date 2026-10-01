@@ -243,6 +243,9 @@ extra+=("scripts/suite_floors.py --test")
 # H4 (review grids). The core rules: a FOUND cell cannot exist without a quote that
 # byte-matches its document, and no exported cell is ever empty.
 extra+=("checker/review_grid.py --test")
+# H3: draft history. Every save is a version; the diff names a sentence whose words are
+# unchanged and whose support is gone, which a text diff cannot show.
+extra+=("checker/draft_versions.py --test")
 # H4's runner: one queue job per cell, exactly once, resumable, cancel as a saga.
 extra+=("agents/review_grid.py --test")
 # H4's measurement on CUAD. Evaluation only: the suite also asserts no served or

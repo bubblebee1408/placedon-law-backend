@@ -74,6 +74,11 @@ class Backend(Protocol):
     def read_grid_cells(self, grid_id: str) -> list[dict]: ...
     def write_grid_cell(self, cell: dict, *, if_pending: bool = True) -> bool: ...
     def cancel_grid(self, grid_id: str) -> bool: ...
+    # H3: drafts and their versions (012_drafts.sql).
+    def write_draft(self, draft: dict) -> dict: ...
+    def read_draft(self, draft_id: str) -> dict | None: ...
+    def append_draft_version(self, version: dict) -> int: ...
+    def read_draft_versions(self, draft_id: str) -> list[dict]: ...
 
 
 # ── in memory ────────────────────────────────────────────────────────────────
@@ -121,6 +126,33 @@ class MessageShape(StoreError):
     so the memory backend and Postgres refuse the same rows."""
 
 
+def _check_draft_version(row: dict) -> None:
+    """012's CHECKs, in code, so both backends refuse the same rows.
+
+    The one that matters is the last: a version recorded as approved while any slot still
+    blocks approval. `checker/draft_versions.Version` will not construct it, 012 will not
+    store it, and this is the third place -- because the memory backend reaches neither.
+    """
+    if not str(row.get("title") or "").strip():
+        raise StoreError("a draft version needs a title")
+    if not isinstance(row.get("slots") or [], list):
+        raise StoreError("slots must be an array; NULL would mean we did not record where "
+                         "anything came from")
+    blocking = int(row.get("blocking_count") or 0)
+    if blocking < 0:
+        raise StoreError(f"blocking_count cannot be negative, got {blocking}")
+    by, at = row.get("approved_by"), row.get("approved_at")
+    if bool(by) != bool(at):
+        raise StoreError("an approval carries both a reviewer and a time, or neither")
+    if by is not None and not str(by).strip():
+        raise StoreError("an unattributed approval is not an approval")
+    if by and blocking:
+        raise StoreError(
+            f"a version cannot be approved by {str(by)[:24]!r} while {blocking} slot(s) "
+            f"still block approval (012 draft_versions_no_approval_while_blocked). That "
+            f"row is the record of a gate that did not hold")
+
+
 def _check_message(row: dict) -> None:
     role = row.get("role")
     if role not in ROLES:
@@ -138,6 +170,9 @@ def _check_message(row: dict) -> None:
         raise MessageShape(f"envelope must be an object or absent, got "
                            f"{type(env).__name__}")
 
+
+DRAFT_VERSION_KEYS = ("draft_id", "version", "title", "body", "slots", "citations",
+                      "blocking_count", "approved_by", "approved_at")
 
 GRID_CELL_KEYS = ("grid_id", "document_id", "column_name", "state", "value", "quote",
                   "reason")
@@ -215,6 +250,44 @@ class MemoryBackend:
     messages: dict = field(default_factory=dict)       # conversation_id -> [row]
     grids: dict = field(default_factory=dict)
     grid_cells: dict = field(default_factory=dict)     # grid_id -> {(doc, col): row}
+    drafts: dict = field(default_factory=dict)
+    draft_versions: dict = field(default_factory=dict)  # draft_id -> [row]
+
+    # ── H3: drafts ───────────────────────────────────────────────────────────
+    def write_draft(self, draft: dict) -> dict:
+        did = draft["draft_id"]
+        self.drafts[did] = {"draft_id": did, "kind": draft.get("kind") or "agm_notice",
+                            "title": draft.get("title") or ""}
+        self.draft_versions.setdefault(did, [])
+        return dict(self.drafts[did])
+
+    def read_draft(self, draft_id: str) -> dict | None:
+        row = self.drafts.get(draft_id)
+        return dict(row) if row else None
+
+    def append_draft_version(self, version: dict) -> int:
+        """The new version number. Raises on a version that 012 would refuse."""
+        did = version["draft_id"]
+        if did not in self.drafts:
+            raise StoreError(f"no draft {did!r} to append a version to")
+        _check_draft_version(version)
+        rows = self.draft_versions.setdefault(did, [])
+        n = int(version.get("version") or len(rows) + 1)
+        if any(r["version"] == n for r in rows):
+            # 012's PRIMARY KEY (draft_id, version). Two concurrent saves cannot both be
+            # version 3; the loser is told rather than overwriting a colleague's revision.
+            raise StoreError(
+                f"draft {did[:8]} already has version {n}. Another save got there first; "
+                f"re-read and revise from the latest rather than overwriting it")
+        row = _shaped(dict(version, version=n), DRAFT_VERSION_KEYS)
+        row["slots"] = list(version.get("slots") or [])
+        row["citations"] = list(version.get("citations") or [])
+        rows.append(row)
+        return n
+
+    def read_draft_versions(self, draft_id: str) -> list[dict]:
+        return [dict(r) for r in sorted(self.draft_versions.get(draft_id, []),
+                                        key=lambda r: r["version"])]
 
     # ── H4: review grids ─────────────────────────────────────────────────────
     def write_grid(self, grid: dict) -> dict:
@@ -840,6 +913,71 @@ class PostgresBackend:
                           (grid_id,)).rowcount
         return bool(n)
 
+    # ── H3: drafts ───────────────────────────────────────────────────────────
+    def write_draft(self, draft: dict) -> dict:
+        import psycopg
+        did = draft["draft_id"]
+        try:
+            with self._conn() as c:
+                c.execute("INSERT INTO drafts (draft_id, tenant_id, kind, title) "
+                          "VALUES (%s,%s,%s,%s) ON CONFLICT (draft_id) DO UPDATE SET "
+                          "title = EXCLUDED.title, updated_at = now()",
+                          (did, self.tenant_id, draft.get("kind") or "agm_notice",
+                           draft.get("title") or ""))
+        except psycopg.errors.IntegrityError as exc:
+            raise StoreError(f"the database refused this draft: {type(exc).__name__}") from None
+        return self.read_draft(did) or {"draft_id": did}
+
+    def read_draft(self, draft_id: str) -> dict | None:
+        if not _UUID.match(draft_id or ""):
+            return None
+        with self._conn() as c:
+            r = c.execute("SELECT draft_id, kind, title FROM drafts WHERE draft_id = %s",
+                          (draft_id,)).fetchone()
+        return None if r is None else {"draft_id": str(r[0]), "kind": r[1], "title": r[2]}
+
+    def append_draft_version(self, version: dict) -> int:
+        import psycopg
+        _check_draft_version(version)
+        did = version["draft_id"]
+        try:
+            with self._conn() as c:
+                n = version.get("version")
+                if n is None:
+                    row = c.execute("SELECT coalesce(max(version), 0) + 1 FROM "
+                                    "draft_versions WHERE draft_id = %s",
+                                    (did,)).fetchone()
+                    n = int(row[0]) if row else 1
+                c.execute(
+                    "INSERT INTO draft_versions (draft_id, tenant_id, version, title, "
+                    "body, slots, citations, blocking_count, approved_by, approved_at) "
+                    "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+                    (did, self.tenant_id, n, version.get("title") or "",
+                     version.get("body") or "", _json(list(version.get("slots") or [])),
+                     _json(list(version.get("citations") or [])),
+                     int(version.get("blocking_count") or 0),
+                     version.get("approved_by"), version.get("approved_at")))
+                c.execute("UPDATE drafts SET updated_at = now() WHERE draft_id = %s",
+                          (did,))
+        except psycopg.errors.IntegrityError as exc:
+            raise StoreError(
+                f"the database refused this draft version: {type(exc).__name__} "
+                f"{str(exc).splitlines()[0][:150]}") from None
+        return int(n)
+
+    def read_draft_versions(self, draft_id: str) -> list[dict]:
+        if not _UUID.match(draft_id or ""):
+            return []
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT draft_id, version, title, body, slots, citations, "
+                "blocking_count, approved_by, approved_at FROM draft_versions "
+                "WHERE draft_id = %s ORDER BY version", (draft_id,)).fetchall()
+        return [{"draft_id": str(r[0]), "version": r[1], "title": r[2], "body": r[3],
+                 "slots": list(r[4] or []), "citations": list(r[5] or []),
+                 "blocking_count": r[6], "approved_by": r[7],
+                 "approved_at": r[8].isoformat() if r[8] else None} for r in rows]
+
     def next_ordinal(self, conversation_id: str) -> int:
         if not _UUID.match(conversation_id or ""):
             return 0
@@ -1355,6 +1493,71 @@ def conformance(backend) -> list[tuple[bool, str]]:
        "cancels at cell 30 of 40 still wants the 29 answers")
     ck(not backend.cancel_grid(str(_uuid.uuid4())),
        "cancelling an unknown grid is False, not a silent success")
+
+    # ── H3: drafts, on BOTH backends ────────────────────────────────────────
+    did = str(_uuid.uuid4())
+    backend.write_draft({"draft_id": did, "kind": "agm_notice",
+                         "title": "Notice of AGM"})
+    ck(backend.read_draft(did)["title"] == "Notice of AGM",
+       "a draft is written and read back")
+    ck(backend.read_draft(str(_uuid.uuid4())) is None,
+       "...and an unknown draft reads as None")
+    v1 = backend.append_draft_version(
+        {"draft_id": did, "title": "Notice of AGM", "body": "Notice is hereby given.",
+         "slots": [{"name": "venue", "type": "MODEL_SUGGESTION"}], "blocking_count": 1})
+    v2 = backend.append_draft_version(
+        {"draft_id": did, "title": "Notice of AGM",
+         "body": "Notice is hereby given to the members.",
+         "slots": [{"name": "venue", "type": "USER_FACT"}], "blocking_count": 0})
+    ck((v1, v2) == (1, 2), f"versions number themselves 1 then 2 ({v1}, {v2})")
+    vs = backend.read_draft_versions(did)
+    ck([v["version"] for v in vs] == [1, 2], "...and read back in order")
+    ck(vs[0]["body"] == "Notice is hereby given.",
+       "**version 1 is unchanged by the second save** -- append-only is the feature")
+    ck(all(set(v) >= set(DRAFT_VERSION_KEYS) for v in vs),
+       f"...every version has every key on both backends ({sorted(vs[0])})")
+    ck(vs[0]["blocking_count"] == 1 and vs[1]["blocking_count"] == 0,
+       "...and the blocking count survives the round trip")
+
+    try:
+        backend.append_draft_version(
+            {"draft_id": did, "version": 1, "title": "t", "body": "b",
+             "slots": [], "blocking_count": 0})
+        ck(False, "a version number already used is refused")
+    except StoreError as e:
+        ck("already has version" in str(e) or "refused" in str(e),
+           "re-using a version number is REFUSED (012's primary key): two concurrent saves "
+           "cannot both be version 3, and the loser is told rather than overwriting")
+    ck(len(backend.read_draft_versions(did)) == 2,
+       "...and the refused save wrote nothing")
+
+    for bad, why in (
+        ({"draft_id": did, "title": "t", "slots": [], "blocking_count": 1,
+          "approved_by": "A. Reviewer", "approved_at": "2026-10-01T10:00:00+05:30"},
+         "a version APPROVED while a slot still blocks approval"),
+        ({"draft_id": did, "title": "t", "slots": [], "blocking_count": 0,
+          "approved_by": "A. Reviewer"}, "an approval with no time"),
+        ({"draft_id": did, "title": "t", "slots": [], "blocking_count": 0,
+          "approved_by": "   ", "approved_at": "2026-10-01T10:00:00+05:30"},
+         "an unattributed approval"),
+        ({"draft_id": did, "title": "", "slots": [], "blocking_count": 0}, "no title"),
+    ):
+        try:
+            backend.append_draft_version(dict(bad))
+            ck(False, f"{why} is refused")
+        except StoreError:
+            ck(True, f"refused: {why}")
+    ok3 = backend.append_draft_version(
+        {"draft_id": did, "title": "t", "body": "b", "slots": [], "blocking_count": 0,
+         "approved_by": "A. Reviewer", "approved_at": "2026-10-01T10:00:00+05:30"})
+    ck(ok3 == 3 and backend.read_draft_versions(did)[2]["approved_by"] == "A. Reviewer",
+       "...while an approval with blocking_count 0 IS stored, with its reviewer")
+    try:
+        backend.append_draft_version({"draft_id": str(_uuid.uuid4()), "title": "t",
+                                      "slots": [], "blocking_count": 0})
+        ck(False, "a version for a draft that does not exist is refused")
+    except Exception:
+        ck(True, "a version for a draft that does not exist is refused")
     return out
 
 
@@ -1411,7 +1614,8 @@ def _test() -> None:
             "write_conversation", "read_conversation", "list_conversations",
             "append_message", "read_messages", "set_message_envelope", "next_ordinal",
             "write_grid", "read_grid", "read_grid_cells", "write_grid_cell",
-            "cancel_grid")
+            "cancel_grid", "write_draft", "read_draft", "append_draft_version",
+            "read_draft_versions")
     for name in need:
         check(hasattr(MemoryBackend(), name)
               and hasattr(PostgresBackend("postgresql://x/y", tenant_id=T), name),

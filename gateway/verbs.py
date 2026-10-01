@@ -905,6 +905,8 @@ TASK_VERB: dict[str, str] = {
     # empty answer that reads as "no obligation found".
     "COMPANY_STANDING": "",
     "LAW_CHANGES": "",
+    # H3. Served by a verb, like EVENT_ASSESS.
+    "DRAFT": "draft.create",
 }
 
 # Tasks whose work is long enough to belong on the queue rather than on the socket. Keyed
@@ -1080,6 +1082,15 @@ def _envelope_for(task: str, result: dict, *, as_of: str, run_id=None,
                          run_id=run_id, trace_url=trace)
 
     bodies = _bodies_for(task, result, question)
+    if task == "DRAFT" and result.get("draft_id"):
+        # The id is what the next turn revises, so it has to come back. Put in the text
+        # block rather than invented as a new envelope field: the schema is a contract.
+        result = dict(result, note=(
+            f"Draft {result['draft_id']} created at version {result.get('version')}. "
+            f"{len(result.get('blocking') or [])} slot(s) block approval"
+            + (f": {', '.join(result['blocking'])}. " if result.get('blocking') else ". ")
+            + "Nothing has been drafted for you: this engine does not write legal prose "
+              "unprompted. Fill the slots with draft.revise."))
     citations, dropped = _citations_for(task, result)
     text = (result.get("answer") or result.get("detail")
             or result.get("note") or "See the findings.")
@@ -1363,9 +1374,15 @@ def _conversation_send(args: dict, ctx: Context) -> dict:
                           "ordinal": ordinal + 1, "role": "assistant", "text": "",
                           "file_ids": [], "task": task,
                           "run_id": result.get("run_id"), "envelope": env})
-    return {"conversation_id": cid, "message_id": reply_id,
-            "classification": classification, "run_id": result.get("run_id"),
-            "envelope": env}
+    out = {"conversation_id": cid, "message_id": reply_id,
+           "classification": classification, "run_id": result.get("run_id"),
+           "envelope": env}
+    if task == "DRAFT" and result.get("draft_id"):
+        out["draft_id"] = result["draft_id"]
+        out["version"] = result.get("version")
+    if task == "REVIEW_TABLE" and result.get("grid_id"):
+        out["grid_id"] = result["grid_id"]
+    return out
 
 
 def _task_args(task: str, text: str, file_ids, ctx: Context, args: dict) -> dict:
@@ -1382,6 +1399,18 @@ def _task_args(task: str, text: str, file_ids, ctx: Context, args: dict) -> dict
     if task == "EVENT_ASSESS":
         return {"event": (args.get("event") or "commercial_contract"),
                 "facts": args.get("facts") or {}}
+    if task == "DRAFT":
+        # The conversation's words become the TITLE, and the body starts empty with an
+        # UNKNOWN slot: a draft this engine invented prose for would be a MODEL_SUGGESTION
+        # document, and `provenance_slots` exists to stop that reaching a filing. The user
+        # fills the slots through draft.revise.
+        return {"title": (text.strip()[:80] or "Draft"),
+                "body": "",
+                "slots": [{"name": "body", "value": "", "type": "UNKNOWN",
+                           "note": ("nothing has been drafted yet: this engine does not "
+                                    "write legal prose unprompted, and an UNKNOWN slot "
+                                    "blocks approval until a person fills it")}],
+                "kind": args.get("kind") or "agm_notice"}
     if task == "REVIEW_CONTRACT":
         return {"text": doc or text, "name": "conversation upload",
                 "test_data": args.get("test_data") or "unspecified"}
@@ -1605,6 +1634,257 @@ def _load_grid(ctx: Context, grid_id: str):
     table = rg.Table(grid_id, row.get("name") or "", columns,
                      tuple(row.get("document_ids") or ()), tuple(cells))
     return table, bool(row.get("cancelled_at"))
+
+
+# ── H3: drafts ───────────────────────────────────────────────────────────────
+#
+# `checker/draft_versions.py` holds the history and the diff; `checker/provenance_slots.py`
+# types every value and is what blocks approval. These verbs are the surface.
+
+def _slots_from(raw) -> tuple:
+    """Wire slots -> Slot objects. A malformed one is refused, never dropped."""
+    from checker.provenance_slots import Slot
+    out = []
+    for i, item in enumerate(raw or ()):
+        if not isinstance(item, dict):
+            raise ValueError(f"slots[{i}] must be an object")
+        out.append(Slot(name=str(item.get("name") or ""),
+                        value=str(item.get("value") or ""),
+                        slot_type=str(item.get("type") or item.get("slot_type") or ""),
+                        source=str(item.get("source") or ""),
+                        working=str(item.get("working") or ""),
+                        note=str(item.get("note") or "")))
+    return tuple(out)
+
+
+def _draft_history(ctx: Context, draft_id: str):
+    """(History, the draft row) or (None, None). Rebuilt from the store every time."""
+    from checker.draft_versions import History, Version
+    from checker.provenance_slots import Slot
+
+    row = ctx.store.read_draft(draft_id)
+    if row is None:
+        return None, None
+    versions = []
+    for v in ctx.store.read_draft_versions(draft_id):
+        slots = tuple(Slot(name=s.get("name") or "", value=s.get("value") or "",
+                           slot_type=s.get("type") or s.get("slot_type") or "UNKNOWN",
+                           source=s.get("source") or "", working=s.get("working") or "",
+                           note=s.get("note") or "")
+                      for s in v.get("slots") or ())
+        versions.append(Version(
+            draft_id=draft_id, version=v["version"], title=v["title"],
+            body=v.get("body") or "", slots=slots,
+            citations=tuple(v.get("citations") or ()),
+            created_at=v.get("created_at") or "2026-01-01T00:00:00+00:00",
+            approved_by=v.get("approved_by") or "",
+            approved_at=v.get("approved_at") or ""))
+    return History(draft_id, tuple(versions)), row
+
+
+def _save_version(ctx: Context, draft_id: str, *, title: str, body: str, slots: tuple,
+                  citations: tuple, approved_by: str = "", approved_at: str = "") -> int:
+    """Persist one version, with blocking_count from the same call that gates approval."""
+    from checker.provenance_slots import blocking_slots
+    return ctx.store.append_draft_version({
+        "draft_id": draft_id, "title": title, "body": body,
+        "slots": [s.to_dict() for s in slots], "citations": list(citations),
+        # From blocking_slots(), the function Version.approve() gates on -- so the
+        # denormalised count in 012 cannot drift from the rule it enforces.
+        "blocking_count": len(blocking_slots(slots)),
+        "approved_by": approved_by or None, "approved_at": approved_at or None})
+
+
+def _draft_create(args: dict, ctx: Context) -> dict:
+    """Start a draft at version 1. A WRITE verb, so it is off MCP."""
+    import uuid
+    if ctx.store is None:
+        return _refuse("NO_STORE", "a draft is a durable document; it needs a store")
+    title = (args.get("title") or "").strip()
+    if not title:
+        return _refuse("BAD_REQUEST", "a draft needs a title")
+    try:
+        slots = _slots_from(args.get("slots"))
+    except Exception as e:                                      # noqa: BLE001
+        return _refuse("BAD_REQUEST", f"slots: {e}")
+    body = args.get("body") or ""
+    if not isinstance(body, str):
+        return _refuse("BAD_REQUEST", "body must be a string")
+    draft_id = (args.get("draft_id") or "").strip() or str(uuid.uuid4())
+    ctx.store.write_draft({"draft_id": draft_id,
+                           "kind": (args.get("kind") or "agm_notice"), "title": title})
+    try:
+        n = _save_version(ctx, draft_id, title=title, body=body, slots=slots,
+                          citations=tuple(args.get("citations") or ()))
+    except Exception as e:                                      # noqa: BLE001
+        return _refuse("BAD_REQUEST", str(e))
+    return _draft_status(ctx, draft_id, version=n,
+                         note="Version 1 saved. Every save is a new version; nothing is "
+                              "edited in place.")
+
+
+def _draft_revise(args: dict, ctx: Context) -> dict:
+    """Save a NEW version. Never edits one. Optionally records an approval."""
+    if ctx.store is None:
+        return _refuse("NO_STORE", "no store is configured")
+    draft_id = (args.get("draft_id") or "").strip()
+    if not draft_id:
+        return _refuse("BAD_REQUEST", "draft_id is required")
+    history, row = _draft_history(ctx, draft_id)
+    if history is None:
+        return _refuse("NOT_FOUND", f"no draft {draft_id!r} for this tenant")
+    latest = history.latest
+    try:
+        slots = (_slots_from(args["slots"]) if "slots" in args
+                 else tuple(latest.slots if latest else ()))
+    except Exception as e:                                      # noqa: BLE001
+        return _refuse("BAD_REQUEST", f"slots: {e}")
+    title = (args.get("title") or (latest.title if latest else row["title"]))
+    body = args.get("body") if args.get("body") is not None else (
+        latest.body if latest else "")
+    citations = tuple(args.get("citations") or (latest.citations if latest else ()))
+
+    reviewer = (args.get("approved_by") or "").strip()
+    approved_at = ""
+    if reviewer:
+        from checker.draft_versions import Version, VersionError
+        probe = Version(draft_id=draft_id, version=1, title=title, body=body,
+                        slots=slots, citations=citations,
+                        created_at=_now_iso(ctx))
+        try:
+            probe.approve(reviewer, _now_iso(ctx))
+        except VersionError as e:
+            # The gate, before anything is written. An unsupported draft cannot be
+            # approved, and saying so is more useful than storing an unapproved version.
+            return _refuse("APPROVAL_BLOCKED", str(e))
+        approved_at = _now_iso(ctx)
+    try:
+        n = _save_version(ctx, draft_id, title=title, body=body, slots=slots,
+                          citations=citations, approved_by=reviewer,
+                          approved_at=approved_at)
+    except Exception as e:                                      # noqa: BLE001
+        return _refuse("CONFLICT", str(e))
+    return _draft_status(ctx, draft_id, version=n,
+                         note=("Saved as a new version." + (" Approved." if reviewer
+                                                            else "")))
+
+
+def _now_iso(ctx: Context) -> str:
+    if ctx.clock is not None:
+        return str(ctx.clock())
+    from datetime import datetime, timezone
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def _draft_status(ctx: Context, draft_id: str, *, version=None, note: str = "") -> dict:
+    history, row = _draft_history(ctx, draft_id)
+    if history is None:
+        return _refuse("NOT_FOUND", f"no draft {draft_id!r} for this tenant")
+    latest = history.latest
+    ready = bool(latest and latest.ready)
+    return {"draft_id": draft_id, "title": row["title"], "kind": row.get("kind"),
+            "versions": len(history.versions), "version": version or (
+                latest.version if latest else 0),
+            "ready_for_approval": ready,
+            # A draft with an unsupported slot needs a PERSON, which is what NEEDS_LAWYER
+            # means. `_envelope_for` reads this, so a DRAFT turn does not come back
+            # ANSWERED while a slot is still blank -- "here is your document" about a
+            # document nobody has written is the worst thing this envelope could say.
+            "requires_review": not ready,
+            "blocking": [s.name for s in (latest.blockers() if latest else ())],
+            "approved": bool(latest and latest.approved),
+            "approved_by": (latest.approved_by or None) if latest else None,
+            "note": note or ("A MODEL_SUGGESTION or UNKNOWN slot blocks approval: a "
+                             "fluent sentence is not evidence of anything, and a blank "
+                             "in a legal document is not a small problem.")}
+
+
+def _draft_versions(args: dict, ctx: Context) -> dict:
+    """Every version of a draft, in order. Read-only."""
+    if ctx.store is None:
+        return _refuse("NO_STORE", "no store is configured")
+    draft_id = (args.get("draft_id") or "").strip()
+    if not draft_id:
+        return _refuse("BAD_REQUEST", "draft_id is required")
+    history, row = _draft_history(ctx, draft_id)
+    if history is None:
+        return _refuse("NOT_FOUND", f"no draft {draft_id!r} for this tenant")
+    return {"draft_id": draft_id, "title": row["title"],
+            "versions": [v.to_dict() for v in history.versions],
+            "note": ("Append-only: a version is never edited, so an earlier one is "
+                     "exactly what was written then -- including what was NOT supported "
+                     "and why.")}
+
+
+def _draft_diff(args: dict, ctx: Context) -> dict:
+    """The exact diff between two versions: the text, and the provenance."""
+    from checker.draft_versions import VersionError, diff as _diff
+
+    if ctx.store is None:
+        return _refuse("NO_STORE", "no store is configured")
+    draft_id = (args.get("draft_id") or "").strip()
+    if not draft_id:
+        return _refuse("BAD_REQUEST", "draft_id is required")
+    history, _row = _draft_history(ctx, draft_id)
+    if history is None:
+        return _refuse("NOT_FOUND", f"no draft {draft_id!r} for this tenant")
+    try:
+        a = history.at(int(args.get("from_version") or 1))
+        b = history.at(int(args.get("to_version") or (history.latest.version
+                                                      if history.latest else 1)))
+    except (VersionError, ValueError, TypeError) as e:
+        return _refuse("BAD_REQUEST", str(e))
+    return _diff(a, b)
+
+
+def _draft_export(args: dict, ctx: Context) -> dict:
+    """One version as text or .docx. The .docx is written with the standard library."""
+    import base64
+    from checker.draft_versions import VersionError, to_docx, to_text
+
+    if ctx.store is None:
+        return _refuse("NO_STORE", "no store is configured")
+    draft_id = (args.get("draft_id") or "").strip()
+    if not draft_id:
+        return _refuse("BAD_REQUEST", "draft_id is required")
+    history, row = _draft_history(ctx, draft_id)
+    if history is None:
+        return _refuse("NOT_FOUND", f"no draft {draft_id!r} for this tenant")
+    fmt = (args.get("format") or "docx").strip().lower()
+    if fmt not in ("docx", "text"):
+        return _refuse("BAD_REQUEST", f"format must be docx or text, got {fmt!r}")
+    try:
+        v = history.at(int(args.get("version") or (history.latest.version
+                                                   if history.latest else 1)))
+    except (VersionError, ValueError, TypeError) as e:
+        return _refuse("BAD_REQUEST", str(e))
+    safe = re.sub(r"[^A-Za-z0-9._-]+", "-", row["title"])[:40].strip("-") or "draft"
+    out = {"draft_id": draft_id, "version": v.version, "format": fmt,
+           "filename": f"{safe}-v{v.version}.{'docx' if fmt == 'docx' else 'txt'}",
+           "ready_for_approval": v.ready, "approved": v.approved,
+           "note": ("An exported draft that is not approvable says so on its own face, "
+                    "because the file travels away from this system.")}
+    if fmt == "text":
+        out["text"] = to_text(v)
+        out["content_type"] = "text/plain"
+        return out
+    data = to_docx(v)
+    out["content_type"] = ("application/vnd.openxmlformats-officedocument."
+                           "wordprocessingml.document")
+    out["bytes"] = len(data)
+    # base64 because a verb returns JSON. The archive itself is deterministic, so the
+    # same version always encodes identically and can be hashed or cached.
+    out["docx_base64"] = base64.b64encode(data).decode("ascii")
+    return out
+
+
+def _draft_status_verb(args: dict, ctx: Context) -> dict:
+    if ctx.store is None:
+        return _refuse("NO_STORE", "no store is configured")
+    draft_id = (args.get("draft_id") or "").strip()
+    if not draft_id:
+        return _refuse("BAD_REQUEST", "draft_id is required")
+    return _draft_status(ctx, draft_id)
 
 
 def _documents_upload(args: dict, ctx: Context) -> dict:
@@ -1970,6 +2250,56 @@ VERBS: tuple[Verb, ...] = (
          (Field("grid_id", STRING, True, describes="the table"),),
          "POST", read_only=True, run=_review_table_export),
 
+    Verb("draft.create",
+         "Start a draft at version 1. A MODEL_SUGGESTION or UNKNOWN slot blocks approval.",
+         (Field("title", STRING, True, describes="the document's title"),
+          Field("body", STRING, False, describes="the rendered text"),
+          Field("slots", ARRAY, False,
+                describes="[{name, value, type, source?, working?}]; type is "
+                          "SOURCE_QUOTE|USER_FACT|DERIVED_FACT|TEMPLATE_TEXT|"
+                          "MODEL_SUGGESTION|UNKNOWN"),
+          Field("citations", ARRAY, False, describes="the legal basis, as strings"),
+          Field("kind", STRING, False, describes="the template, e.g. agm_notice"),
+          Field("draft_id", STRING, False, describes="supply one to make it idempotent")),
+         "POST", read_only=False, run=_draft_create),
+
+    Verb("draft.revise",
+         "Save a NEW version of a draft; never edits one. Pass approved_by to approve, "
+         "which is refused while any slot is unsupported.",
+         (Field("draft_id", STRING, True, describes="the draft"),
+          Field("title", STRING, False, describes="a new title; absent keeps the last"),
+          Field("body", STRING, False, describes="new text; absent keeps the last"),
+          Field("slots", ARRAY, False, describes="new slots; absent keeps the last"),
+          Field("citations", ARRAY, False, describes="new citations"),
+          Field("approved_by", STRING, False,
+                describes="the reviewer's name. Refused while anything blocks approval")),
+         "POST", read_only=False, run=_draft_revise),
+
+    Verb("draft.status", "One draft: its version count, whether it is approvable, and "
+                         "which slots block it.",
+         (Field("draft_id", STRING, True, describes="the draft"),),
+         "POST", read_only=True, run=_draft_status_verb),
+
+    Verb("draft.versions", "Every version of a draft, in order, with its provenance.",
+         (Field("draft_id", STRING, True, describes="the draft"),),
+         "POST", read_only=True, run=_draft_versions),
+
+    Verb("draft.diff",
+         "The exact diff between two versions: a unified text diff, and the provenance "
+         "changes a text diff cannot show.",
+         (Field("draft_id", STRING, True, describes="the draft"),
+          Field("from_version", STRING, False, describes="default 1"),
+          Field("to_version", STRING, False, describes="default the latest")),
+         "POST", read_only=True, run=_draft_diff),
+
+    Verb("draft.export",
+         "One version as .docx or text. The .docx is written with the standard library; "
+         "an unapprovable draft says so on its own face.",
+         (Field("draft_id", STRING, True, describes="the draft"),
+          Field("version", STRING, False, describes="default the latest"),
+          Field("format", STRING, False, describes="docx (default) or text")),
+         "POST", read_only=True, run=_draft_export),
+
     Verb("documents.upload",
          "Store a document and return the sha256 that identifies it.",
          (Field("text", STRING, False, describes="the document text"),
@@ -2057,8 +2387,10 @@ def _test() -> None:
                     "sources.list", "sources.search", "company_facts.extract",
                     "intake.classify", "conversation.send", "conversation.list",
                     "conversation.get", "citation.get", "review_table.create",
-                    "review_table.status", "review_table.export"},
-          f"the twenty-two verbs are declared once ({sorted(names)})")
+                    "review_table.status", "review_table.export", "draft.create",
+                    "draft.revise", "draft.status", "draft.versions", "draft.diff",
+                    "draft.export"},
+          f"the twenty-eight verbs are declared once ({sorted(names)})")
     # sources.* are READ-ONLY, so they reach MCP. That is the intended shape: an agent may
     # ask what a source permits and search what may be read, and there is no sources verb
     # that fetches, stores or spends. S3's Indian Kanoon connector will spend money, and
@@ -2071,8 +2403,9 @@ def _test() -> None:
     # surface that can submit, cancel or approve is one that can act with nobody present.
     check(set(write_verbs()) == {"documents.upload", "runs.approve", "runs.reject",
                                  "runs.submit", "runs.cancel", "conversation.send",
-                                 "review_table.create"},
-          f"...and exactly seven of them write ({sorted(write_verbs())})")
+                                 "review_table.create", "draft.create",
+                                 "draft.revise"},
+          f"...and exactly nine of them write ({sorted(write_verbs())})")
     check(f"{MCP_NAMESPACE}.conversation.send" not in {t.name for t in mcp},
           "conversation.send WRITES -- it creates a thread, appends messages and may "
           "enqueue work -- so mcp_tools() keeps it off MCP, by rule and not by the author "
@@ -2740,7 +3073,7 @@ def _test() -> None:
           "...while a WRITE verb is kept out of MCP by mcp_tools(), not by the author "
           "remembering to")
     check("widgets.delete" in write_verbs(hypo), "...and is named in write_verbs()")
-    check(len(VERBS) == 22 and "widgets.count" not in rest_spec(),
+    check(len(VERBS) == 28 and "widgets.count" not in rest_spec(),
           "...and the probe changed nothing in this module: the surfaces are generated "
           "from an argument, not from a global the test rebound")
 
