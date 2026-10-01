@@ -147,6 +147,7 @@
     "checker/resubmission.py": 13,
     "checker/retrieval_eval.py": 11,
     "checker/retrieve.py": 34,
+    "checker/review_grid.py": 41,
     "checker/review_queue.py": 18,
     "checker/review_record.py": 19,
     "checker/review_table.py": 18,

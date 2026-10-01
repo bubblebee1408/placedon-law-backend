@@ -235,6 +235,9 @@ extra+=("checker/span_inventory.py --test")
 # The harness's own reproduction of the 2026-09-30 incident.
 extra+=("scripts/harness_selftest.py --test")
 extra+=("scripts/suite_floors.py --test")
+# H4 (review grids). The core rules: a FOUND cell cannot exist without a quote that
+# byte-matches its document, and no exported cell is ever empty.
+extra+=("checker/review_grid.py --test")
 extra+=("scripts/retrieval_recall.py --test")
 extra+=("scripts/retrieval_bakeoff.py --test")
 # The source register (PLAN_24 S0). Nothing is fetched on an unread term, so the register
