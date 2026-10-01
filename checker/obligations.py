@@ -37,7 +37,7 @@ one.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, timedelta
 from typing import Callable
 
@@ -86,6 +86,13 @@ class Evidence:
     annual_return_filed_on: date | None = None     # s.92(4)
     resident_director_days: int | None = None      # s.149(3): max days-in-India
                                                    # among the directors, this FY
+    # WHICH financial year those days were counted in. s.149(3) is a duty about one year,
+    # and it is not always the year the FIGURES are for: a diligence pack filed in
+    # October 2026 carries FY 2025-26 accounts and residency counted so far in 2026-27.
+    # Reading the period off `profile.latest_financial_year` made the decider test the
+    # days against an ALREADY-CLOSED year, so a part-year count came back as a shortfall.
+    # Absent falls back to the profile's, which is right when they are the same year.
+    residency_financial_year: str | None = None
     incorporated_this_financial_year: bool | None = None  # s.149(3) proviso
     # The date the evidence is READ on: the earlier of as_of and the day the answer is
     # made. A periodic duty whose period ends after it is IN_PROGRESS. None = not told.
@@ -258,6 +265,12 @@ def _agm_applies(p: CompanyProfile) -> tuple[Result, str]:
     return Result.APPLIES, "s.96(1) reaches every company other than an OPC"
 
 
+# s.173(1): "not more than one hundred and twenty days shall intervene between two
+# consecutive meetings of the Board". Named, because it is used mid-year to settle a gap
+# that is already complete.
+_S173_MAX_GAP_DAYS = 120
+
+
 def _decide_board(p: CompanyProfile, ev: Evidence) -> tuple[bool | str | None, str]:
     """s.173 count and spacing, from the dates the user supplied.
 
@@ -288,11 +301,35 @@ def _decide_board(p: CompanyProfile, ev: Evidence) -> tuple[bool | str | None, s
 
     year_end = date(ev.calendar_year, 12, 31)
     if ev.read_on is not None and year_end > ev.read_on:
+        held = sorted(d for d in ev.board_meetings
+                      if d.year == ev.calendar_year and d <= ev.read_on)
+        # A gap between two meetings that have BOTH already happened is complete: no
+        # later meeting can shorten it. s.173(1)'s ceiling of 120 days between
+        # consecutive meetings is therefore decidable mid-year, and hiding it behind
+        # IN_PROGRESS reports a certain breach as an open question.
+        #
+        # Only under the STANDARD regime. s.173(5) relaxes small companies to one meeting
+        # per half-year with a minimum gap, and there is no 120-day ceiling to breach --
+        # applying one would impose a duty the company does not owe, which is the same
+        # error the small-company refusal above exists to avoid.
+        if cls == "other" and len(held) >= 2:
+            gaps = [(b - a).days for a, b in zip(held, held[1:])]
+            worst = max(gaps)
+            if worst > _S173_MAX_GAP_DAYS:
+                a, b = next((a, b) for a, b in zip(held, held[1:])
+                            if (b - a).days == worst)
+                return False, (
+                    f"s.173(1) allows not more than {_S173_MAX_GAP_DAYS} days between two "
+                    f"consecutive board meetings, and {a.isoformat()} to {b.isoformat()} "
+                    f"is {worst} days. Both meetings have already happened, so the gap is "
+                    f"complete and no later meeting can shorten it -- the breach is "
+                    f"certain now, not once the year ends")
         n = len([d for d in ev.board_meetings if d.year == ev.calendar_year])
         return IN_PROGRESS, (
             f"calendar year {ev.calendar_year} has not ended on {ev.read_on.isoformat()}. "
             f"s.173 sets a minimum for the whole year, so {n} meeting(s) so far is not a "
-            f"shortfall; it is decided once the year ends")
+            f"shortfall; it is decided once the year ends. No completed gap between "
+            f"meetings held so far exceeds {_S173_MAX_GAP_DAYS} days")
 
     r = review(company_class=cls, calendar_year=ev.calendar_year,
                meetings=list(ev.board_meetings),
@@ -552,13 +589,28 @@ def _decide_resident_director(p: CompanyProfile, ev: Evidence) -> tuple[bool | s
         return True, (f"a director was resident in India {days} days, at or above "
                       f"the 182-day minimum")
     # Days only accumulate, so a pass mid-year is final; a shortfall is not until the
-    # year closes (founder rule 3).
-    end = _fy_end(p.latest_financial_year)
+    # year closes (founder rule 3) -- UNLESS the arithmetic has already settled it.
+    fy = ev.residency_financial_year or p.latest_financial_year
+    end = _fy_end(fy)
     if end is not None and ev.read_on is not None and ev.read_on < end:
-        return IN_PROGRESS, (f"financial year {p.latest_financial_year} has not ended on "
+        remaining = (end - ev.read_on).days
+        if days + remaining < 182:
+            # IN_PROGRESS is for a question the year has not answered yet. This one it
+            # HAS: even if the director is in India every remaining day, the total cannot
+            # reach 182. Waiting for 31 March to say so tells the reader nothing they
+            # could act on, and a row that reads "not decided yet" about a breach that is
+            # already certain is the most misleading state this matrix can show.
+            return False, (
+                f"the most-present director was in India {days} days, and only "
+                f"{remaining} days of financial year {fy} remain after "
+                f"{ev.read_on.isoformat()} -- so the total CANNOT reach the 182 days "
+                f"s.149(3) requires, whatever happens next. The shortfall is already "
+                f"certain, not merely likely")
+        return IN_PROGRESS, (f"financial year {fy} has not ended on "
                              f"{ev.read_on.isoformat()} (it closes {end.isoformat()}); "
                              f"{days} days so far is not a shortfall of the 182 s.149(3) "
-                             f"requires during the year")
+                             f"requires during the year, and {remaining} days remain in "
+                             f"which to reach it")
     return False, (f"the most-present director was in India {days} days, short of "
                    f"the 182-day minimum in s.149(3)")
 
@@ -873,6 +925,16 @@ def build(profile: CompanyProfile,
     duty attaches and nothing about whether it was met.
     """
     ev = evidence or Evidence()
+    # The RUNNING-PERIOD input, derived here so every caller gets it. `read_on` is what
+    # tells a periodic decider that its period has not closed, and only a caller who knew
+    # to set it ever got IN_PROGRESS -- `checker/matrix_view.parse_evidence` does not set
+    # it, so the whole web matrix could never show a period as running. It is the same
+    # date `profile.as_of` already carries, so asking the caller for it twice was the bug.
+    #
+    # An explicitly supplied read_on WINS: a caller answering as at one date about
+    # evidence read on an earlier one is telling us something we must not overwrite.
+    if ev.read_on is None and profile.as_of is not None:
+        ev = replace(ev, read_on=profile.as_of)
     rows: list[Row] = []
     for ob in register:
         verdict, basis = ob.applies_when(profile)
@@ -1513,6 +1575,95 @@ def _test() -> None:
     r203 = [x for x in build(listed_pub) if x.obligation_id == "CA13-S203-KMP"][0]
     check(r203.state == CANNOT_DETERMINE and r203.blocked_by == "S-203-RULES",
           f"s.203 refuses (entirely prescribed) naming S-203-RULES ({r203.state}/{r203.blocked_by})")
+
+    # ══ REVIEW FINDINGS ON PR #23 (A-012). Tests written before the fixes. ═══
+
+    # ── 8. the running period must reach EVERY caller, not just one that knows
+    #       to pass read_on. build() fills it from profile.as_of.
+    _p8 = CompanyProfile(company_class="public",
+                         **{**common, "as_of": date(2026, 8, 1),
+                            "latest_financial_year": "2026-27"})
+    _ev8 = Evidence(board_meetings=(date(2026, 3, 2),), calendar_year=2026)
+    _rows8 = {r.obligation_id: r for r in build(_p8, evidence=_ev8)}
+    _b8 = _rows8.get("CA13-S173-BOARD")
+    check(_b8 is not None, f"the s.173 row exists ({sorted(_rows8)[:6]})")
+    check(_b8.period == IN_PROGRESS,
+          f"build() derives read_on from profile.as_of, so an unfinished calendar year is "
+          f"IN_PROGRESS even though the caller never set read_on "
+          f"(period={_b8.period!r}, state={_b8.state})")
+
+    # ...and THROUGH matrix_view, which is the caller that never sets it.
+    import checker.matrix_view as _mv
+    _params = {"company_class": ["public"],
+               "incorporation_date": ["2019-06-01"], "as_of": ["2026-08-01"],
+               "latest_financial_year": ["2026-27"],
+               "board_meetings": ["2026-03-02"], "calendar_year": ["2026"]}
+    _prof = _mv.parse_profile(_params)
+    _evm = _mv.parse_evidence(_params)
+    _html = _mv._rows_html(_prof, _evm)
+    check("IN PROGRESS" in _html,
+          "matrix_view shows IN PROGRESS for a period that has not ended -- it never "
+          "passes read_on, so before this it could not")
+
+    # ── 9. s.149(3) reads its OWN financial year, not the profile's latest ──
+    # Figures for FY 2025-26; residency days counted in FY 2026-27; read mid-2026-27.
+    _p9 = CompanyProfile(company_class="private",
+                         **{**common, "as_of": date(2026, 10, 1),
+                            "latest_financial_year": "2025-26"})
+    _ev9 = Evidence(resident_director_days=100, residency_financial_year="2026-27",
+                    read_on=date(2026, 10, 1))
+    _got9, _why9 = _decide_resident_director(_p9, _ev9)
+    check(_got9 == IN_PROGRESS,
+          f"s.149(3) takes the residency period from residency_financial_year (2026-27, "
+          f"which closes 31-03-2027), not from the profile's latest_financial_year "
+          f"(2025-26, already closed) -- so 100 days read on 01-10-2026 is IN_PROGRESS, "
+          f"not a shortfall (got {_got9!r}: {_why9[:70]})")
+    check("2026-27" in _why9,
+          f"...and the reason names the year it actually used ({_why9[:60]!r})")
+    _ev9b = Evidence(resident_director_days=100, read_on=date(2026, 10, 1))
+    check(_decide_resident_director(CompanyProfile(company_class="private",
+                                        **{**common,
+                                           "latest_financial_year": "2026-27"}),
+                         _ev9b)[0] == IN_PROGRESS,
+          "...and with no residency year given it still falls back to the profile's")
+
+    # ── 10a. IN_PROGRESS never hides a CERTAIN s.149(3) breach ──────────────
+    # 10 days so far, 30 days left in the year: 40 < 182, so the shortfall is already
+    # arithmetically certain and waiting for the year to close tells the reader nothing.
+    _ev10 = Evidence(resident_director_days=10, residency_financial_year="2026-27",
+                     read_on=date(2027, 3, 1))
+    _got10, _why10 = _decide_resident_director(_p9, _ev10)
+    check(_got10 is False,
+          f"s.149(3): days + days_remaining < 182 is a breach ALREADY CERTAIN, reported "
+          f"mid-year rather than hidden behind IN_PROGRESS (got {_got10!r})")
+    check("cannot" in _why10.lower() or "certain" in _why10.lower()
+          or "remain" in _why10.lower(),
+          f"...and the reason says why it is already settled ({_why10[:80]!r})")
+    _ev10b = Evidence(resident_director_days=170, residency_financial_year="2026-27",
+                      read_on=date(2027, 3, 1))
+    check(_decide_resident_director(_p9, _ev10b)[0] == IN_PROGRESS,
+          "...while 170 days with 30 left CAN still reach 182, so that stays IN_PROGRESS")
+
+    # ── 10b. IN_PROGRESS never hides a CERTAIN s.173 breach ────────────────
+    # Two meetings already held, 161 days apart. s.173(1)'s 120-day ceiling is breached by
+    # a gap that is COMPLETE; no later meeting can shorten it.
+    _p10 = CompanyProfile(company_class="public",
+                          **{**common, "as_of": date(2026, 8, 1)})
+    _ev173 = Evidence(board_meetings=(date(2026, 1, 10), date(2026, 6, 20)),
+                      calendar_year=2026, read_on=date(2026, 8, 1),
+                      total_board_strength=3)
+    _got173, _why173 = _decide_board(_p10, _ev173)
+    check(_got173 is False,
+          f"s.173: a COMPLETED gap over 120 days is reported mid-year -- no later meeting "
+          f"can shorten a gap that has already elapsed (got {_got173!r}: {_why173[:60]})")
+    check("120" in _why173 and "161" in _why173,
+          f"...naming the ceiling and the gap ({_why173[:90]!r})")
+    _ev173b = Evidence(board_meetings=(date(2026, 1, 10), date(2026, 4, 10)),
+                       calendar_year=2026, read_on=date(2026, 8, 1),
+                       total_board_strength=3)
+    check(_decide_board(_p10, _ev173b)[0] == IN_PROGRESS,
+          "...while gaps inside 120 days in an unfinished year stay IN_PROGRESS: the "
+          "COUNT for the year is genuinely not decided yet")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:

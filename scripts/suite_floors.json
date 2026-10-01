@@ -117,7 +117,7 @@
     "checker/mvp_freeze.py": 94,
     "checker/objection_sim.py": 13,
     "checker/obligation_citations.py": 7,
-    "checker/obligations.py": 114,
+    "checker/obligations.py": 126,
     "checker/observation_store.py": 20,
     "checker/ollama_runner.py": 20,
     "checker/ontology.py": 20,
