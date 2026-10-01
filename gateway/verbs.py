@@ -1166,8 +1166,11 @@ def _envelope_for(task: str, result: dict, *, as_of: str, run_id=None,
                "unprompted. Fill the slots with draft.revise.")
             + (f"{len(result['dropped_claims'])} sentence(s) the model wrote were DROPPED "
                f"because they state something about the law with no citation behind it; "
-               f"they are in dropped_claims and are in no version of this draft."
-               if result.get("dropped_claims") else "")))
+               f"they are in dropped_claims and are in no version of this draft. "
+               if result.get("dropped_claims") else "")
+            + (f"No connecting prose was written -- {result['prose_note']}. The draft "
+               f"below is built from the run's own findings, which is the whole of it."
+               if result.get("prose_note") else "")))
     citations, dropped = _citations_for(task, result)
     text = (result.get("answer") or result.get("detail")
             or result.get("note") or "See the findings.")
@@ -1305,6 +1308,59 @@ def _citations_for(task: str, result: dict) -> tuple[list, list]:
     if not raw:
         return [], []
     return ev.drop_unquoted(raw, verify=lambda c: verify_citation(c)[0])
+
+
+def _draft_prose(template: str, source: dict, ctx: Context) -> tuple[list, str]:
+    """(blocks, note) for a draft's connecting sentences. Never raises.
+
+    The clearance lives HERE, with every other model call, and not in
+    `checker/draft_prose.py`, which is pure. Which origin a draft's facts need is decided
+    by what those facts ARE:
+
+      research_memo   the citations' own corpus files -> PUBLIC, `clear_file`
+      client_email    playbook findings, which carry values read out of the client's
+                      contract -> MATTER, `clear_matter`, and D3 applies
+
+    So while the deployment region is unconfirmed an email gets NO prose and a note saying
+    exactly that, and the draft is still built from the findings. That is not a
+    degradation to paper over: it is the residency rule working, and the note is how a
+    user learns the difference between "we chose not to" and "we could not".
+    """
+    from checker import draft_prose, public_only, router
+    try:
+        sensitivity = draft_prose.sensitivity_of(template)
+    except draft_prose.ProseError as e:
+        return [], f"{draft_prose.NO_PROSE_PREFIX}{e}"
+
+    facts = draft_prose.facts_for(template, source)
+    if not facts:
+        return [], (f"{draft_prose.NO_PROSE_PREFIX}the source run carries no findings to "
+                    f"write about")
+    try:
+        if sensitivity == draft_prose.PUBLIC:
+            # The citations' own files. A quote we are about to send is cleared against
+            # the corpus file it was read from, not asserted public by this function.
+            origins = tuple(public_only.clear_file(str(c.get("source")))
+                            for c in (source.get("citations") or ())
+                            if str(c.get("source") or ""))
+            if not origins:
+                return [], (f"{draft_prose.NO_PROSE_PREFIX}no citation in this run names "
+                            f"the file it was read from, so nothing can be cleared")
+        else:
+            origins = (public_only.clear_matter(
+                draft_prose.matter_text(facts), name=f"{template} findings",
+                provider=router.AZURE),)
+    except Exception as e:                                       # noqa: BLE001
+        return [], (f"{draft_prose.NO_PROSE_PREFIX}these findings could not be cleared to "
+                    f"leave the device ({type(e).__name__}: {str(e)[:140]})")
+
+    served, refusal = _served_or_refusal(origins, name="draft_prose",
+                                         purpose=router.NARRATION, ctx=ctx,
+                                         consequence=router.LOW)
+    if refusal:
+        return [], (f"{draft_prose.NO_PROSE_PREFIX}no model could be served "
+                    f"({refusal['code']}): {str(refusal.get('detail') or '')[:160]}")
+    return draft_prose.write(template, source, model=served.call)
 
 
 def _persist_result(ctx: Context, result: dict) -> None:
@@ -1471,18 +1527,24 @@ def _conversation_send(args: dict, ctx: Context) -> dict:
     # 4c. short enough to answer now.
     verb = by_name()[verb_name]
     built = None
+    prose_note = ""
     if task == "DRAFT":
         template, source, source_run = _draft_source(cid, ctx)
         if template:
             from checker import draft_templates
             prose = args.get("prose")
-            built = draft_templates.build(
-                template, source, prose=prose if isinstance(prose, list) else ())
+            if not isinstance(prose, list):
+                # Nobody supplied sentences, so ask a model for them. Job 3c. Whatever
+                # comes back goes through the SAME admit/drop rule as caller-supplied
+                # prose -- there is no second path and no softer rule for our own model.
+                prose, prose_note = _draft_prose(template, source, ctx)
+            built = draft_templates.build(template, source, prose=prose)
     result = verb.run(_task_args(task, text, raw_ids, ctx, args, built=built), ctx)
     _persist_result(ctx, result)
     if built is not None and result.get("status") != "REFUSED":
         result = dict(result, drafted_from=source_run, template=built.kind,
-                      dropped_claims=[dict(d) for d in built.dropped])
+                      dropped_claims=[dict(d) for d in built.dropped],
+                      prose_note=prose_note)
     env = _envelope_for(task, result, as_of=as_of, run_id=result.get("run_id"),
                         files=files, ctx=ctx, question=text)
     store.append_message({"message_id": reply_id, "conversation_id": cid,
@@ -1501,6 +1563,7 @@ def _conversation_send(args: dict, ctx: Context) -> dict:
             out["drafted_from"] = source_run
             out["template"] = built.kind
             out["dropped_claims"] = [dict(d) for d in built.dropped]
+            out["prose_note"] = prose_note
     if task == "REVIEW_TABLE" and result.get("grid_id"):
         out["grid_id"] = result["grid_id"]
     return out
@@ -3281,6 +3344,81 @@ def _test() -> None:
           "...and the drop is STATED in the reply, not left in a field a client may not "
           "render")
     check(_ev.errors(_dr["envelope"]) == [], "...and that envelope validates")
+
+    # ── job 3c: the model writes the prose, and the same rule judges it ────
+    # Stubs only. The gate never calls a model: a suite that needed one would be a suite
+    # that fails when the region is unconfirmed, which is most of the time.
+    from checker import draft_prose as _dp
+    from checker import draft_templates as _dtpl
+    _FAKE3C = "Section 42 of the Companies Act requires a special resolution for this."
+
+    def _fabricating(_origins):
+        return lambda prompt: ("1. This note sets out what was found. [c1]\n"
+                               f"2. {_FAKE3C}\n")
+
+    # The research turn needs the REAL quoting model so its citations name the corpus file
+    # they were read from; only the DRAFT turn is served by the fabricating stub. Reusing
+    # one stub for both produced citations with no source, and the prose was then refused
+    # for having nothing to clear -- a fixture fault that read exactly like a real one.
+    _p3 = Context(store=_MB(), clock=lambda: "2026-10-01T00:00:00+00:00",
+                  model_for=lambda _o: _rq.quoting_model(_srcs))
+    _b3, _n3 = _draft_prose("research_memo", _src,
+                            Context(store=_MB(), model_for=_fabricating))
+    check(_n3 == "" and len(_b3) == 2,
+          f"the prose writer returns the model's sentences ({_n3[:40]!r})")
+    check(_dp.build_prompt("research_memo", _src).count("<source") >= 1,
+          "...from a prompt whose quotes sit in DELIMITED blocks, each cleared against "
+          "the corpus file it was read from")
+    check(_q not in _dp.build_prompt("client_email", {"findings": [
+              {"rule_id": "R", "clause": "C", "kind": "POTENTIAL_ISSUE", "detail": "d"}]}),
+          "...and the user's message is not in the prompt: the model is shown findings, "
+          "so it can only write about findings")
+
+    # End to end: the model's fabricated law is dropped by the SAME admit rule.
+    _p3.documents.update(_cctx2.documents)
+    _pr1 = by_name()["conversation.send"].run({"text": _q}, _p3)
+    _pcid = _pr1["conversation_id"]
+    _p3.model_for = _fabricating        # from here, the stub writes the prose
+    if _draft_source(_pcid, _p3)[0] is None:
+        check(False, "a stub-served research turn is a memo source")
+    else:
+        _pr2 = by_name()["conversation.send"].run(
+            {"conversation_id": _pcid, "text": "Draft a memo for the file about this."},
+            _p3)
+        check(_pr2.get("prose_note") == "",
+              f"prose was written, so there is no note ({_pr2.get('prose_note')!r})")
+        check(len(_pr2.get("dropped_claims") or []) == 1,
+              f"**the MODEL's uncited legal claim is DROPPED** end to end "
+              f"({len(_pr2.get('dropped_claims') or [])})")
+        _pv = by_name()["draft.versions"].run(
+            {"draft_id": _pr2["draft_id"]}, _p3)["versions"][0]
+        check(_FAKE3C not in _pv["body"]
+              and all(_FAKE3C not in (sl.get("value") or "") for sl in _pv["slots"]),
+              "...and is in no part of the stored version")
+        check(any(sl["type"] == "MODEL_SUGGESTION" and sl["blocks_approval"]
+                  for sl in _pv["slots"]),
+              "...while the surviving sentence BLOCKS approval, so no model-written draft "
+              "is approvable without a person")
+
+    # A model that raises gives the note and a draft that still stands.
+    def _exploding(_origins):
+        def boom(prompt):
+            raise TimeoutError("the deployment did not answer")
+        return boom
+
+    _b4, _n4 = _draft_prose("research_memo", _src,
+                            Context(store=_MB(), model_for=_exploding))
+    check(_b4 == [] and _n4.startswith(_dp.NO_PROSE_PREFIX) and "TimeoutError" in _n4,
+          f"**a model that RAISES gives 'prose not generated', not FAILED** ({_n4[:50]!r})")
+    _still = _dtpl.research_memo(_src, prose=_b4)
+    check(any(s.slot_type == "SOURCE_QUOTE" for s in _still.slots),
+          "...and the draft is still built from the run's citations")
+
+    # The email's facts are MATTER, so D3 decides whether it can have prose at all.
+    check(_dp.sensitivity_of("client_email") == _dp.MATTER
+          and _dp.sensitivity_of("research_memo") == _dp.PUBLIC,
+          "an email's facts are client data and a memo's are corpus quotes -- which is "
+          "why one of them can be refused on residency while the other is not")
 
     # The email template, from a real review_contract run in the same thread.
     _ectx = Context(store=_MB(), clock=lambda: "2026-10-01T00:00:00+00:00")

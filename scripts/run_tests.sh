@@ -250,6 +250,9 @@ extra+=("checker/draft_versions.py --test")
 # verified citation in the source run or it does not appear, and a model sentence that
 # asserts law with no citation is DROPPED, not labelled.
 extra+=("checker/draft_templates.py --test")
+# Job 3c: the model that writes a draft's joining sentences. It is shown the run's findings
+# and never the user's message, and whatever it writes goes through the same admit/drop rule.
+extra+=("checker/draft_prose.py --test")
 # H4's runner: one queue job per cell, exactly once, resumable, cancel as a saga.
 extra+=("agents/review_grid.py --test")
 # H4's measurement on CUAD. Evaluation only: the suite also asserts no served or
