@@ -307,6 +307,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/retrieval_recall.py` |  | Can retrieval find a section when you describe it? Measured, with no answer key. |
 | `scripts/review.py` |  | The review terminal: the 30 open items, one at a time, beside the gazette. |
 | `scripts/review_brief.py` |  | Assemble the evidence a reviewer needs, for every queued item, in one document. |
+| `scripts/review_table_eval.py` |  | Per-column precision, recall and false-NOT_FOUND rate for review grids, on CUAD. |
 | `scripts/rls_integration.py` |  | Row-level security, proved against a REAL Postgres. Deliberately outside the gate. |
 | `scripts/scan_testdocs.py` |  | Run the SS defect scanner against the REAL document corpus. |
 | `scripts/search_memory.py` |  | Agent retrieval over code and memory. The read half of `index_codebase.py`. |
@@ -329,4 +330,4 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/watch_gazette.py` |  | Run the Gazette watcher once: what did the Gazette publish since we last looked? |
 | `scripts/watch_ofac.py` |  | Poll OFAC's SDN list and report what CHANGED since the last trustworthy poll. |
 
-289 modules listed.
+290 modules listed.

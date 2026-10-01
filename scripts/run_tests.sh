@@ -245,6 +245,9 @@ extra+=("scripts/suite_floors.py --test")
 extra+=("checker/review_grid.py --test")
 # H4's runner: one queue job per cell, exactly once, resumable, cancel as a saga.
 extra+=("agents/review_grid.py --test")
+# H4's measurement on CUAD. Evaluation only: the suite also asserts no served or
+# feature module IMPORTS it, so no figure from it can reach a user.
+extra+=("scripts/review_table_eval.py --test")
 extra+=("scripts/retrieval_recall.py --test")
 extra+=("scripts/retrieval_bakeoff.py --test")
 # The source register (PLAN_24 S0). Nothing is fetched on an unread term, so the register

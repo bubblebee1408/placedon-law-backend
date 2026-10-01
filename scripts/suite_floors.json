@@ -247,6 +247,7 @@
     "scripts/retrieval_recall.py": 10,
     "scripts/review.py": 55,
     "scripts/review_brief.py": 10,
+    "scripts/review_table_eval.py": 30,
     "scripts/serve_api.py": 4,
     "scripts/serve_ask.py": 71,
     "scripts/serve_matrix.py": 14,
