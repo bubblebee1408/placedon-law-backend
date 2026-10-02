@@ -25,6 +25,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `checker/answer_cache.py` |  | Serve an answer again only when the law it rests on has not moved. |
 | `checker/anthropic_model.py` |  | The concrete model callable: Anthropic, wired into the existing gates. |
 | `checker/api.py` |  | The JSON API over the compliance engine. Zero dependencies, pure and testable. |
+| `checker/archive_guard.py` |  | Refuse an archive that would cost more to open than it claims to be. |
 | `checker/as_of.py` | R0 legal core | Point-in-time reconstruction of a Companies Act section. |
 | `checker/ask.py` |  | `POST /v1/ask` — one turn of the Ask surface, answered from deterministic calls alone. |
 | `checker/ask_contract.py` |  | The `placedon.ask/0` validator — what a `/v1/ask` response must be before anyone renders it. |
@@ -236,6 +237,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `gateway/auth.py` | R2 feeds | API keys, stored hashed, resolving to (tenant, actor). |
 | `gateway/cli.py` | R2 feeds | `placedon` -- the third surface, generated from the same verb table as the other two. |
 | `gateway/envelope.py` | R2 feeds | One answer envelope, versioned, validated against the schema file beside it. |
+| `gateway/filestore.py` | R2 feeds | Where a vault's bytes live. Local today; S3 is BLOCKED by name, not stubbed. |
 | `gateway/jobs.py` | R2 feeds | The durable job queue. One contract, two backends, one conformance suite. |
 | `gateway/models.py` | R2 feeds | Turning a router decision into a callable, or into a NAMED refusal. |
 | `gateway/passwords.py` | R2 feeds | Password hashing with `hashlib.scrypt`. No new dependency, and no plaintext anywhere. |
@@ -346,4 +348,4 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/watch_gazette.py` |  | Run the Gazette watcher once: what did the Gazette publish since we last looked? |
 | `scripts/watch_ofac.py` |  | Poll OFAC's SDN list and report what CHANGED since the last trustworthy poll. |
 
-306 modules listed.
+308 modules listed.

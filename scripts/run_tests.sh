@@ -286,6 +286,12 @@ extra+=("checker/compliance_calendar.py --test")
 # different things, and a step that could not run never prints PASS.
 extra+=("scripts/demo_inhouse.py --test")
 
+# V1: the vault. The archive guard reads an archive's DECLARED sizes before extracting
+# anything and caps the real extraction too; the file store keys bytes by their own
+# sha256, so dedupe is what the key means rather than a check-then-write race.
+extra+=("checker/archive_guard.py --test")
+extra+=("gateway/filestore.py --test")
+
 
 
 
