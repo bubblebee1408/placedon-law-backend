@@ -187,7 +187,15 @@ LAST_RUN: str | None = (
     "which is the most commercially sensitive row in the schema. Both are proved the way "
     "the others are. Each was added to the seed only after its isolation checks reported "
     "0 rows -- a check that measures an empty table proves nothing, which is the same "
-    "fault the cache statistics had.")
+    "fault the cache statistics had. "
+    "2026-10-02, V1: 001-020 applied TOGETHER to a fresh throwaway database on "
+    "PostgreSQL 18.6, asserted as placedon_app (NOSUPERUSER, NOBYPASSRLS), adding "
+    "020_vault: 319 checks, 0 failures. vault_documents, vault_chunks and "
+    "vault_tags are the TWENTY-SECOND to TWENTY-FOURTH tenant-scoped tables and "
+    "they hold the client's DOCUMENTS THEMSELVES -- the most concentrated "
+    "confidential data the product keeps. All three proved the way the rest are: A "
+    "sees its own and none of B's, the policy dropped fails CLOSED, RLS disabled "
+    "leaks B's rows, restoring returns to isolation.")
 
 TENANT_TABLES = ("actors", "api_keys", "documents", "audit_log",
                  "runs", "run_steps", "propositions", "decisions", "jobs",
