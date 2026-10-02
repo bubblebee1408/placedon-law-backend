@@ -53,6 +53,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `checker/code_transition.py` |  | Which code governs — and why a flat `ipc_bns_map` table is the wrong shape. |
 | `checker/commencement.py` |  | Commencement provenance: which provisions a notification actually brought into force. |
 | `checker/company_profile.py` |  | The company facts a Companies Act obligation is decided against. |
+| `checker/compliance_calendar.py` |  | What falls due in the next 90 days, and what cannot be dated at all. |
 | `checker/corporate_data.py` | R1 bookmark | The seam where live corporate data enters — L1 of the Bloomberg-for-India design. |
 | `checker/corpus_currency.py` |  | Is the ACT's amendment ledger current? -- the currency map, turned on ourselves. |
 | `checker/corpus_retrieval.py` |  | Cross-section retrieval: given a question, find the SECTION that governs it. |
@@ -344,4 +345,4 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/watch_gazette.py` |  | Run the Gazette watcher once: what did the Gazette publish since we last looked? |
 | `scripts/watch_ofac.py` |  | Poll OFAC's SDN list and report what CHANGED since the last trustworthy poll. |
 
-304 modules listed.
+305 modules listed.

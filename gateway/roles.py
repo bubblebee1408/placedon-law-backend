@@ -60,6 +60,7 @@ def rank(role: str) -> int:
 REQUIRED: dict[str, str] = {
     # ── reading ─────────────────────────────────────────────────────────────
     "ask": VIEWER,
+    "calendar.upcoming": VIEWER,
     "citation.get": VIEWER,
     "conversation.get": VIEWER,
     "conversation.list": VIEWER,
