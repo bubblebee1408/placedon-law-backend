@@ -293,6 +293,8 @@ extra+=("checker/archive_guard.py --test")
 extra+=("gateway/filestore.py --test")
 extra+=("checker/doc_classifier.py --test")
 extra+=("checker/vault_search.py --test")
+extra+=("checker/clause_tags.py --test")
+extra+=("agents/vault_ingest.py --test")
 extra+=("scripts/vault_retrieval_bakeoff.py --test")
 
 

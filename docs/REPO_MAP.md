@@ -50,6 +50,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `checker/claim_schema.py` |  | The atomic claim: the unit this system is willing to be held to. |
 | `checker/claim_verifier.py` |  | Verify each claim against the pack it was supposed to come from. |
 | `checker/classify.py` |  | Company classification under the Companies Act. Decided by code, never a model. |
+| `checker/clause_tags.py` |  | Which clauses a document contains, each with the sentence it was found in. |
 | `checker/clauses.py` |  | A contract, split into clauses by CODE, with the offsets that make a quote checkable. |
 | `checker/code_transition.py` |  | Which code governs — and why a flat `ipc_bns_map` table is the wrong shape. |
 | `checker/commencement.py` |  | Commencement provenance: which provisions a notification actually brought into force. |
@@ -228,6 +229,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `agents/review_grid.py` | R3 inference | One queue job per cell. Exactly once, resumable, cancellable. |
 | `agents/runtime.py` | R3 inference | Execute a run: fixed plan, persisted steps, bounded correction, honest failure. |
 | `agents/state.py` | R3 inference | The vocabulary of a run, and the one distinction that must never blur. |
+| `agents/vault_ingest.py` | R3 inference | One ingest job per file: read it, classify it, chunk it, tag it -- or say why not. |
 
 ## gateway/: the HTTP, MCP and CLI surface, auth, tenancy, queue
 
@@ -351,4 +353,4 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/watch_gazette.py` |  | Run the Gazette watcher once: what did the Gazette publish since we last looked? |
 | `scripts/watch_ofac.py` |  | Poll OFAC's SDN list and report what CHANGED since the last trustworthy poll. |
 
-311 modules listed.
+313 modules listed.
