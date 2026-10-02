@@ -76,6 +76,12 @@ REQUIRED: dict[str, str] = {
     "runs.get": VIEWER,
     "runs.trace": VIEWER,
     "matters.list": VIEWER,
+    "vault.compile": VIEWER,
+    "vault.find": VIEWER,
+    "vault.research": VIEWER,
+    "vault.status": VIEWER,
+    "vault.summarize": VIEWER,
+    "vault.verify": VIEWER,
     "sources.list": VIEWER,
     "sources.search": VIEWER,
 
@@ -93,6 +99,10 @@ REQUIRED: dict[str, str] = {
     "review_table.create": LAWYER,
     "runs.cancel": LAWYER,
     "runs.submit": LAWYER,
+    # Putting a document in and destroying one are both a lawyer's acts. A
+    # viewer may read the vault and may not change what is in it.
+    "vault.upload": LAWYER,
+    "vault.delete": LAWYER,
 
     # ── signing off ─────────────────────────────────────────────────────────
     # The line this file exists for. A decision here becomes labelled data (CAL-1) and the

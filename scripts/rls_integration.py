@@ -187,7 +187,15 @@ LAST_RUN: str | None = (
     "which is the most commercially sensitive row in the schema. Both are proved the way "
     "the others are. Each was added to the seed only after its isolation checks reported "
     "0 rows -- a check that measures an empty table proves nothing, which is the same "
-    "fault the cache statistics had.")
+    "fault the cache statistics had. "
+    "2026-10-02, V1: 001-020 applied TOGETHER to a fresh throwaway database on "
+    "PostgreSQL 18.6, asserted as placedon_app (NOSUPERUSER, NOBYPASSRLS), adding "
+    "020_vault: 319 checks, 0 failures. vault_documents, vault_chunks and "
+    "vault_tags are the TWENTY-SECOND to TWENTY-FOURTH tenant-scoped tables and "
+    "they hold the client's DOCUMENTS THEMSELVES -- the most concentrated "
+    "confidential data the product keeps. All three proved the way the rest are: A "
+    "sees its own and none of B's, the policy dropped fails CLOSED, RLS disabled "
+    "leaks B's rows, restoring returns to isolation.")
 
 TENANT_TABLES = ("actors", "api_keys", "documents", "audit_log",
                  "runs", "run_steps", "propositions", "decisions", "jobs",
@@ -212,7 +220,9 @@ TENANT_TABLES = ("actors", "api_keys", "documents", "audit_log",
                  # which of them was being made an admin.
                  "invites",
                  # 8b: matters. The leak would be another firm's CLIENT LIST.
-                 "matters")
+                 "matters",
+                 # V1: the vault. The leak would be another firm's documents themselves.
+                 "vault_documents", "vault_chunks", "vault_tags")
 
 
 class RlsFailure(AssertionError):
@@ -350,6 +360,21 @@ def _seed(cur, tenant, actor, tag: str) -> None:
                  "INR 50,00,000",
                  f"{tag}: aggregate liability shall not exceed INR 50,00,000",
                  0.0412, f"{tag}: one extraction call, priced from reported tokens"))
+
+    # V1: a vault document with a chunk and a tag. The leak would be the client's
+    # documents themselves -- the most concentrated confidential data in the schema.
+    vdoc = uuid.uuid4()
+    cur.execute("INSERT INTO vault_documents (document_id, tenant_id, matter_id, sha256, "
+                "name, byte_count, state, doc_class, class_reason, text_chars) "
+                "VALUES (%s,%s,NULL,%s,%s,2048,'INGESTED','nda',%s,1200)",
+                (vdoc, tenant, ("a" if tag.startswith("A") else "b") * 64,
+                 f"{tag}: Petrichor NDA.pdf", f"{tag}: nda on 6 points"))
+    cur.execute("INSERT INTO vault_chunks (document_id, tenant_id, ordinal, text) "
+                "VALUES (%s,%s,0,%s)",
+                (vdoc, tenant, f"{tag}: the term is five years from the Effective Date"))
+    cur.execute("INSERT INTO vault_tags (document_id, tenant_id, tag, quote) "
+                "VALUES (%s,%s,'Term',%s)",
+                (vdoc, tenant, f"{tag}: the term is five years"))
 
     # 8b: a matter. The leak would be another firm's CLIENT LIST -- who they act for,
     # which is the most commercially sensitive thing a firm has.
@@ -503,7 +528,8 @@ def run(url: str) -> int:
                   "016_critic_enabled.sql",
                   "017_nonconformity.sql",
                   "018_users_roles.sql",
-                  "019_matters.sql"):
+                  "019_matters.sql",
+                  "020_vault.sql"):
             cur.execute(sql(f))
             print(f"  applied {f}")
         _ensure_app_role(cur)

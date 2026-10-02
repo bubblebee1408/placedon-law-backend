@@ -25,6 +25,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `checker/answer_cache.py` |  | Serve an answer again only when the law it rests on has not moved. |
 | `checker/anthropic_model.py` |  | The concrete model callable: Anthropic, wired into the existing gates. |
 | `checker/api.py` |  | The JSON API over the compliance engine. Zero dependencies, pure and testable. |
+| `checker/archive_guard.py` |  | Refuse an archive that would cost more to open than it claims to be. |
 | `checker/as_of.py` | R0 legal core | Point-in-time reconstruction of a Companies Act section. |
 | `checker/ask.py` |  | `POST /v1/ask` — one turn of the Ask surface, answered from deterministic calls alone. |
 | `checker/ask_contract.py` |  | The `placedon.ask/0` validator — what a `/v1/ask` response must be before anyone renders it. |
@@ -49,6 +50,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `checker/claim_schema.py` |  | The atomic claim: the unit this system is willing to be held to. |
 | `checker/claim_verifier.py` |  | Verify each claim against the pack it was supposed to come from. |
 | `checker/classify.py` |  | Company classification under the Companies Act. Decided by code, never a model. |
+| `checker/clause_tags.py` |  | Which clauses a document contains, each with the sentence it was found in. |
 | `checker/clauses.py` |  | A contract, split into clauses by CODE, with the offsets that make a quote checkable. |
 | `checker/code_transition.py` |  | Which code governs — and why a flat `ipc_bns_map` table is the wrong shape. |
 | `checker/commencement.py` |  | Commencement provenance: which provisions a notification actually brought into force. |
@@ -67,6 +69,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `checker/derivation.py` | R1 bookmark | Every conclusion stores its witnesses, so revocation is re-evaluation not re-query. |
 | `checker/derived_date.py` |  | DerivedDate — the problem PLAN_01_ARCHITECTURE.md §0 identified as the hardest one. |
 | `checker/diligence_pack.py` |  | The pre-diligence evidence pack — the matrix as a dated, cited document. |
+| `checker/doc_classifier.py` |  | What kind of document is this? A fixed list, rules first, and `unknown` is an answer. |
 | `checker/doc_verification.py` |  | Document verification as separate dimensions, never as one verdict. |
 | `checker/document_date.py` |  | The date a document declares on its own face — or nothing, said plainly. |
 | `checker/document_extract.py` |  | Grounding an extractor's proposals in the document it claims to have read. |
@@ -209,6 +212,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `checker/text_search.py` |  | Title + body search over the Companies Act 2013 corpus, for users who do not know the number. |
 | `checker/timeline.py` |  | Amendment timeline for a Companies Act section. |
 | `checker/trust.py` |  | X.509 chain validation against the Indian government's own root certificates. |
+| `checker/vault_search.py` |  | BM25 over a vault's chunks, per tenant, with each chunk told where it came from. |
 | `checker/voyage_model.py` |  | Voyage AI: a legal embedding model and a reranker, wired as retrieval CANDIDATES. |
 | `checker/witness_span.py` |  | Resolve an amendment span's boundary from the instrument that created it. |
 
@@ -225,6 +229,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `agents/review_grid.py` | R3 inference | One queue job per cell. Exactly once, resumable, cancellable. |
 | `agents/runtime.py` | R3 inference | Execute a run: fixed plan, persisted steps, bounded correction, honest failure. |
 | `agents/state.py` | R3 inference | The vocabulary of a run, and the one distinction that must never blur. |
+| `agents/vault_ingest.py` | R3 inference | One ingest job per file: read it, classify it, chunk it, tag it -- or say why not. |
 
 ## gateway/: the HTTP, MCP and CLI surface, auth, tenancy, queue
 
@@ -236,6 +241,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `gateway/auth.py` | R2 feeds | API keys, stored hashed, resolving to (tenant, actor). |
 | `gateway/cli.py` | R2 feeds | `placedon` -- the third surface, generated from the same verb table as the other two. |
 | `gateway/envelope.py` | R2 feeds | One answer envelope, versioned, validated against the schema file beside it. |
+| `gateway/filestore.py` | R2 feeds | Where a vault's bytes live. Local today; S3 is BLOCKED by name, not stubbed. |
 | `gateway/jobs.py` | R2 feeds | The durable job queue. One contract, two backends, one conformance suite. |
 | `gateway/models.py` | R2 feeds | Turning a router decision into a callable, or into a NAMED refusal. |
 | `gateway/passwords.py` | R2 feeds | Password hashing with `hashlib.scrypt`. No new dependency, and no plaintext anywhere. |
@@ -339,6 +345,8 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/text_layer_census.py` |  | Per-page text-layer census of the public test corpus. MEASURED, and narrow. |
 | `scripts/themis_mcp.py` |  | Serve Themis to an MCP client over stdio. |
 | `scripts/themis_slice.py` |  | The THEMIS V0 vertical slice, end to end, on real data. |
+| `scripts/vault_load_test.py` |  | Two thousand documents through the real ingest path, timed. |
+| `scripts/vault_retrieval_bakeoff.py` |  | Does giving a chunk its context actually help? Measured, before and after. |
 | `scripts/verify_against_pdf.py` |  | Cross-validate the ingested corpus against an INDEPENDENT rendering of the same Act. |
 | `scripts/verify_document.py` |  | Is this document real? |
 | `scripts/verify_reconstruction.py` |  | Ground-truth test for point-in-time reconstruction. |
@@ -346,4 +354,4 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/watch_gazette.py` |  | Run the Gazette watcher once: what did the Gazette publish since we last looked? |
 | `scripts/watch_ofac.py` |  | Poll OFAC's SDN list and report what CHANGED since the last trustworthy poll. |
 
-306 modules listed.
+314 modules listed.

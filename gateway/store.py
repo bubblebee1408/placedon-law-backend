@@ -74,6 +74,16 @@ class Backend(Protocol):
     def list_conversations(self, *, matter_id: str, limit: int = 50) -> list[dict]: ...
     # 8b: matters (019_matters.sql).
     def write_matter(self, matter: dict) -> dict: ...
+    # V1: the vault (020_vault.sql).
+    def write_vault_document(self, doc: dict) -> dict: ...
+    def read_vault_document(self, document_id: str) -> dict | None: ...
+    def list_vault_documents(self, *, matter_id: str) -> list[dict]: ...
+    def write_vault_chunks(self, document_id: str, chunks: list) -> int: ...
+    def read_vault_chunks(self) -> list[dict]: ...
+    def write_vault_tags(self, document_id: str, tags: list) -> int: ...
+    def read_vault_tags(self, document_id: str) -> list[dict]: ...
+    def delete_vault_document(self, document_id: str, *, now: str) -> bool: ...
+    def vault_counts(self) -> dict: ...
     def list_matters(self) -> list[dict]: ...
     def append_message(self, message: dict) -> dict: ...
     def read_messages(self, conversation_id: str) -> list[dict]: ...
@@ -209,6 +219,10 @@ CACHE_KEYS = ("lookup_key", "content_key", "question", "task", "as_of", "sources
 # "the law moved" into "we had not seen it".
 CACHE_STATS = ("hits", "misses", "stale")
 
+# V1. 020's state CHECK, named once so the dict and the database cannot disagree.
+VAULT_STATES = ("PENDING", "INGESTED", "CANNOT_READ", "DELETED")
+VAULT_OCR_STATES = ("NOT_NEEDED", "NEEDED", "BLOCKED", "DONE")
+
 
 class DecisionExists(StoreError):
     """One decision per item per run. A second one would overwrite the label."""
@@ -335,6 +349,9 @@ class MemoryBackend:
     grid_cells: dict = field(default_factory=dict)     # grid_id -> {(doc, col): row}
     drafts: dict = field(default_factory=dict)
     draft_versions: dict = field(default_factory=dict)  # draft_id -> [row]
+    vault_docs: dict = field(default_factory=dict)      # document_id -> row
+    vault_chunks: dict = field(default_factory=dict)    # document_id -> [row]
+    vault_tags: dict = field(default_factory=dict)      # document_id -> [row]
     matters: dict = field(default_factory=dict)         # matter_id -> row
     actors: dict = field(default_factory=dict)          # actor_id -> row
     invites: dict = field(default_factory=dict)         # invite_id -> row
@@ -548,6 +565,134 @@ class MemoryBackend:
     def list_matters(self) -> list[dict]:
         return [dict(r) for r in sorted(self.matters.values(),
                                         key=lambda r: r["name"].lower())]
+
+    # ── V1: the vault ────────────────────────────────────────────────────────
+    def write_vault_document(self, doc: dict) -> dict:
+        """020's CHECKs restated, so the dict refuses exactly what Postgres refuses."""
+        did = str(doc.get("document_id") or "")
+        if not did:
+            raise StoreError("a vault document needs a document_id")
+        sha = str(doc.get("sha256") or "")
+        if len(sha) != 64 or any(c not in "0123456789abcdef" for c in sha):
+            raise StoreError("a vault document is keyed by its bytes' sha256")
+        if not str(doc.get("name") or "").strip():
+            raise StoreError("a vault document needs a name (020 vault_documents.name)")
+        state = str(doc.get("state") or "PENDING")
+        if state not in VAULT_STATES:
+            raise StoreError(f"{state!r} is not a vault state; one of {VAULT_STATES}")
+        if doc.get("doc_class") and not str(doc.get("class_reason") or "").strip():
+            raise StoreError(
+                "a classified document says WHY (020 vault_documents_class_has_reason): a "
+                "bare class in a list of twenty thousand is a number nobody can check")
+        if state == "DELETED" and doc.get("text_chars") is not None:
+            raise StoreError(
+                "a DELETED document carries no text (020 "
+                "vault_documents_deleted_has_no_text)")
+        # Dedupe is per tenant: the same bytes twice is one document.
+        for other, row in self.vault_docs.items():
+            if other != did and row.get("sha256") == sha and not row.get("deleted_at"):
+                raise StoreError(
+                    f"these bytes are already in this tenant's vault as {other} (020 "
+                    f"vault_documents_tenant_sha)")
+        row = {"document_id": did, "matter_id": doc.get("matter_id"), "sha256": sha,
+               "name": str(doc["name"]), "byte_count": int(doc.get("byte_count") or 0),
+               "state": state, "doc_class": doc.get("doc_class"),
+               "class_reason": doc.get("class_reason"),
+               "text_chars": doc.get("text_chars"),
+               "ocr_state": str(doc.get("ocr_state") or "NOT_NEEDED"),
+               "deleted_at": doc.get("deleted_at")}
+        self.vault_docs[did] = row
+        return dict(row)
+
+    def read_vault_document(self, document_id: str) -> dict | None:
+        row = self.vault_docs.get(str(document_id or ""))
+        return dict(row) if row else None
+
+    def list_vault_documents(self, *, matter_id: str) -> list[dict]:
+        """One matter's documents. 8b: there is no cross-matter listing."""
+        want = _matter_scope(matter_id)
+        return [dict(r) for r in sorted(self.vault_docs.values(),
+                                        key=lambda r: r["name"].lower())
+                if str(r.get("matter_id") or "") == want and not r.get("deleted_at")]
+
+    def write_vault_chunks(self, document_id: str, chunks: list) -> int:
+        did = str(document_id or "")
+        if did not in self.vault_docs:
+            raise StoreError(f"no vault document {did!r} to chunk")
+        rows = []
+        for i, text in enumerate(chunks or ()):
+            if not str(text or "").strip():
+                raise StoreError(f"chunk {i} is empty (020 vault_chunks.text)")
+            rows.append({"document_id": did, "ordinal": i, "text": str(text)})
+        self.vault_chunks[did] = rows
+        return len(rows)
+
+    def read_vault_chunks(self) -> list[dict]:
+        """Every live chunk in this tenant, with its document's name and class.
+
+        Tenant-wide on purpose: V1 specifies BM25 PER TENANT, and a vault whose search
+        stopped at a matter boundary could not answer "have we ever agreed to this".
+        Listing is matter-scoped (8b); searching is not, and the result says which.
+        """
+        out = []
+        for did, rows in self.vault_chunks.items():
+            doc = self.vault_docs.get(did) or {}
+            if doc.get("deleted_at"):
+                continue
+            for r in rows:
+                out.append(dict(r, name=doc.get("name") or "",
+                                doc_class=doc.get("doc_class") or "",
+                                matter_id=doc.get("matter_id")))
+        return out
+
+    def write_vault_tags(self, document_id: str, tags: list) -> int:
+        did = str(document_id or "")
+        if did not in self.vault_docs:
+            raise StoreError(f"no vault document {did!r} to tag")
+        rows = []
+        for t in tags or ():
+            quote = str((t or {}).get("quote") or "")
+            if len(quote.strip()) < 8:
+                raise StoreError(
+                    "a tag carries a quote of at least 8 characters (020 "
+                    "vault_tags.quote): a tag with no span is an assertion about a "
+                    "document nobody can check against it")
+            if not str((t or {}).get("tag") or "").strip():
+                raise StoreError("a tag needs a name")
+            rows.append({"document_id": did, "tag": str(t["tag"]), "quote": quote,
+                         "span_start": t.get("span_start"),
+                         "span_end": t.get("span_end")})
+        self.vault_tags[did] = rows
+        return len(rows)
+
+    def read_vault_tags(self, document_id: str) -> list[dict]:
+        return [dict(r) for r in self.vault_tags.get(str(document_id or ""), [])]
+
+    def delete_vault_document(self, document_id: str, *, now: str) -> bool:
+        """The ROW survives; the text and the chunks do not.
+
+        "We never had it" and "we had it and destroyed it on 4 March" are different
+        answers to a regulator, and only one of them is true.
+        """
+        row = self.vault_docs.get(str(document_id or ""))
+        if row is None or row.get("deleted_at"):
+            return False
+        row["state"] = "DELETED"
+        row["deleted_at"] = str(now)
+        row["text_chars"] = None
+        self.vault_chunks.pop(str(document_id), None)
+        self.vault_tags.pop(str(document_id), None)
+        return True
+
+    def vault_counts(self) -> dict:
+        live = [r for r in self.vault_docs.values() if not r.get("deleted_at")]
+        by_state: dict = {}
+        for r in live:
+            by_state[r["state"]] = by_state.get(r["state"], 0) + 1
+        return {"documents": len(live), "by_state": by_state,
+                "deleted": len(self.vault_docs) - len(live),
+                "unsearchable": sum(1 for r in live
+                                    if r["state"] in ("PENDING", "CANNOT_READ"))}
 
     def append_message(self, message: dict) -> dict:
         _check_message(message)
@@ -1217,6 +1362,136 @@ class PostgresBackend:
                              "ORDER BY lower(name)").fetchall()
         return [{"matter_id": str(r[0]), "name": r[1], "client_ref": r[2],
                  "closed_at": r[3].isoformat() if r[3] else None} for r in rows]
+
+    # ── V1: the vault ────────────────────────────────────────────────────────
+    def write_vault_document(self, doc: dict) -> dict:
+        import psycopg
+        try:
+            with self._conn() as c:
+                c.execute(
+                    "INSERT INTO vault_documents (document_id, tenant_id, matter_id, "
+                    "sha256, name, byte_count, state, doc_class, class_reason, "
+                    "text_chars, ocr_state) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) "
+                    "ON CONFLICT (document_id) DO UPDATE SET state = EXCLUDED.state, "
+                    "doc_class = EXCLUDED.doc_class, "
+                    "class_reason = EXCLUDED.class_reason, "
+                    "text_chars = EXCLUDED.text_chars, ocr_state = EXCLUDED.ocr_state, "
+                    "matter_id = EXCLUDED.matter_id, "
+                    "ingested_at = CASE WHEN EXCLUDED.state = 'INGESTED' THEN now() "
+                    "ELSE vault_documents.ingested_at END",
+                    (doc["document_id"], self.tenant_id,
+                     (str(doc.get("matter_id") or "").strip() or None), doc["sha256"],
+                     doc.get("name") or "", int(doc.get("byte_count") or 0),
+                     doc.get("state") or "PENDING", doc.get("doc_class"),
+                     doc.get("class_reason"), doc.get("text_chars"),
+                     doc.get("ocr_state") or "NOT_NEEDED"))
+        except psycopg.errors.IntegrityError as exc:
+            raise StoreError(f"the database refused this vault document: "
+                             f"{type(exc).__name__} "
+                             f"{str(exc).splitlines()[0][:150]}") from None
+        return self.read_vault_document(doc["document_id"]) or {}
+
+    def read_vault_document(self, document_id: str) -> dict | None:
+        if not _UUID.match(document_id or ""):
+            return None
+        with self._conn() as c:
+            r = c.execute(
+                "SELECT document_id, matter_id, sha256, name, byte_count, state, "
+                "doc_class, class_reason, text_chars, ocr_state, deleted_at "
+                "FROM vault_documents WHERE document_id = %s", (document_id,)).fetchone()
+        return None if r is None else {
+            "document_id": str(r[0]), "matter_id": str(r[1]) if r[1] else None,
+            "sha256": r[2], "name": r[3], "byte_count": int(r[4]), "state": r[5],
+            "doc_class": r[6], "class_reason": r[7],
+            "text_chars": int(r[8]) if r[8] is not None else None, "ocr_state": r[9],
+            "deleted_at": r[10].isoformat() if r[10] else None}
+
+    def list_vault_documents(self, *, matter_id: str) -> list[dict]:
+        want = _matter_scope(matter_id)
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT document_id FROM vault_documents WHERE matter_id = %s "
+                "AND deleted_at IS NULL ORDER BY lower(name)", (want,)).fetchall()
+        return [self.read_vault_document(str(r[0])) or {} for r in rows]
+
+    def write_vault_chunks(self, document_id: str, chunks: list) -> int:
+        import psycopg
+        try:
+            with self._conn() as c:
+                c.execute("DELETE FROM vault_chunks WHERE document_id = %s",
+                          (document_id,))
+                for i, text in enumerate(chunks or ()):
+                    c.execute("INSERT INTO vault_chunks (document_id, tenant_id, ordinal, "
+                              "text) VALUES (%s,%s,%s,%s)",
+                              (document_id, self.tenant_id, i, str(text)))
+        except psycopg.errors.IntegrityError as exc:
+            raise StoreError(f"the database refused a chunk: {type(exc).__name__} "
+                             f"{str(exc).splitlines()[0][:150]}") from None
+        return len(chunks or ())
+
+    def read_vault_chunks(self) -> list[dict]:
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT c.document_id, c.ordinal, c.text, d.name, d.doc_class, "
+                "       d.matter_id "
+                "FROM vault_chunks c JOIN vault_documents d "
+                "  ON d.document_id = c.document_id "
+                "WHERE d.deleted_at IS NULL ORDER BY c.document_id, c.ordinal").fetchall()
+        return [{"document_id": str(r[0]), "ordinal": int(r[1]), "text": r[2],
+                 "name": r[3], "doc_class": r[4] or "",
+                 "matter_id": str(r[5]) if r[5] else None} for r in rows]
+
+    def write_vault_tags(self, document_id: str, tags: list) -> int:
+        import psycopg
+        try:
+            with self._conn() as c:
+                c.execute("DELETE FROM vault_tags WHERE document_id = %s", (document_id,))
+                for t in tags or ():
+                    c.execute(
+                        "INSERT INTO vault_tags (document_id, tenant_id, tag, quote, "
+                        "span_start, span_end) VALUES (%s,%s,%s,%s,%s,%s) "
+                        "ON CONFLICT DO NOTHING",
+                        (document_id, self.tenant_id, (t or {}).get("tag"),
+                         (t or {}).get("quote"), (t or {}).get("span_start"),
+                         (t or {}).get("span_end")))
+        except psycopg.errors.IntegrityError as exc:
+            raise StoreError(f"the database refused a tag: {type(exc).__name__} "
+                             f"{str(exc).splitlines()[0][:150]}") from None
+        return len(tags or ())
+
+    def read_vault_tags(self, document_id: str) -> list[dict]:
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT tag, quote, span_start, span_end FROM vault_tags "
+                "WHERE document_id = %s ORDER BY tag, quote", (document_id,)).fetchall()
+        return [{"document_id": str(document_id), "tag": r[0], "quote": r[1],
+                 "span_start": r[2], "span_end": r[3]} for r in rows]
+
+    def delete_vault_document(self, document_id: str, *, now: str) -> bool:
+        """One statement, so a second delete cannot also claim to be the first."""
+        with self._conn() as c:
+            n = c.execute(
+                "UPDATE vault_documents SET state = 'DELETED', deleted_at = now(), "
+                "text_chars = NULL WHERE document_id = %s AND deleted_at IS NULL",
+                (document_id,)).rowcount
+            if n:
+                c.execute("DELETE FROM vault_chunks WHERE document_id = %s",
+                          (document_id,))
+                c.execute("DELETE FROM vault_tags WHERE document_id = %s",
+                          (document_id,))
+        return bool(n)
+
+    def vault_counts(self) -> dict:
+        with self._conn() as c:
+            rows = c.execute("SELECT state, count(*) FROM vault_documents "
+                             "WHERE deleted_at IS NULL GROUP BY state").fetchall()
+            gone = c.execute("SELECT count(*) FROM vault_documents "
+                             "WHERE deleted_at IS NOT NULL").fetchone()[0]
+        by_state = {r[0]: int(r[1]) for r in rows}
+        return {"documents": sum(by_state.values()), "by_state": by_state,
+                "deleted": int(gone),
+                "unsearchable": by_state.get("PENDING", 0)
+                + by_state.get("CANNOT_READ", 0)}
 
     def append_message(self, message: dict) -> dict:
         """Append one message, translating the database's refusals into StoreError.
@@ -2208,6 +2483,105 @@ def conformance(backend) -> list[tuple[bool, str]]:
     ck(not any(r["category"] is not None and r["category"] == "" for r in _counts),
        "...and an untagged run reads as category None, never an empty string")
 
+    # ── V1: the vault, on both backends ─────────────────────────────────────
+    _vm = str(_uuid.uuid4())
+    backend.write_matter({"matter_id": _vm, "name": f"vault matter {_vm[:8]}"})
+    _vd = str(_uuid.uuid4())
+    backend.write_vault_document({
+        "document_id": _vd, "matter_id": _vm, "sha256": "a" * 64, "name": "NDA.pdf",
+        "byte_count": 2048, "state": "INGESTED", "doc_class": "nda",
+        "class_reason": "nda on 6 points", "text_chars": 1200})
+    _got = backend.read_vault_document(_vd) or {}
+    ck(_got.get("doc_class") == "nda" and _got.get("text_chars") == 1200,
+       f"a vault document round-trips with its class and text length "
+       f"({_got.get('doc_class')})")
+    ck(backend.read_vault_document(str(_uuid.uuid4())) is None,
+       "...and an unknown one reads as None")
+
+    for bad, why in (
+            ({"document_id": str(_uuid.uuid4()), "matter_id": _vm, "sha256": "zz",
+              "name": "x", "byte_count": 1}, "a sha256 that is not one"),
+            ({"document_id": str(_uuid.uuid4()), "matter_id": _vm, "sha256": "b" * 64,
+              "name": "  ", "byte_count": 1}, "a document with no name"),
+            ({"document_id": str(_uuid.uuid4()), "matter_id": _vm, "sha256": "c" * 64,
+              "name": "x", "byte_count": 1, "doc_class": "nda"},
+             "a class with no reason"),
+            ({"document_id": str(_uuid.uuid4()), "matter_id": _vm, "sha256": "d" * 64,
+              "name": "x", "byte_count": 1, "state": "DELETED", "text_chars": 10},
+             "a DELETED document that still carries text")):
+        try:
+            backend.write_vault_document(bad)
+            ck(False, f"{why} is refused")
+        except StoreError:
+            ck(True, f"refused on both backends: {why}")
+
+    # Dedupe is per tenant: the same bytes twice is one document.
+    try:
+        backend.write_vault_document({
+            "document_id": str(_uuid.uuid4()), "matter_id": _vm, "sha256": "a" * 64,
+            "name": "NDA (copy).pdf", "byte_count": 2048})
+        ck(False, "the same bytes twice is refused")
+    except StoreError:
+        ck(True, "**the same bytes twice is ONE document**: dedupe is a constraint, not a "
+                 "check the caller remembers")
+
+    ck(backend.write_vault_chunks(_vd, ["2. Term\n\nThe term is five years.",
+                                        "7. Governing law\n\nIndia."]) == 2,
+       "chunks are written")
+    _chunks = [c for c in backend.read_vault_chunks() if c["document_id"] == _vd]
+    ck(len(_chunks) == 2 and _chunks[0]["name"] == "NDA.pdf"
+       and _chunks[0]["doc_class"] == "nda",
+       f"...and read back WITH the document's name and class, which is what the "
+       f"contextual index needs ({len(_chunks)})")
+    try:
+        backend.write_vault_chunks(_vd, ["ok", "   "])
+        ck(False, "an empty chunk is refused")
+    except StoreError:
+        ck(True, "an empty chunk is refused (020 vault_chunks.text)")
+
+    ck(backend.write_vault_tags(_vd, [
+        {"tag": "Term", "quote": "The term is five years."}]) == 1, "a tag is written")
+    ck([t["tag"] for t in backend.read_vault_tags(_vd)] == ["Term"],
+       "...and reads back")
+    try:
+        backend.write_vault_tags(_vd, [{"tag": "Term", "quote": "short"}])
+        ck(False, "a tag with a 5-character quote is refused")
+    except StoreError:
+        ck(True, "a tag whose quote is under 8 characters is REFUSED: a tag with no span "
+                 "is an assertion about a document nobody can check against it")
+
+    _listed = backend.list_vault_documents(matter_id=_vm)
+    ck([d["document_id"] for d in _listed] == [_vd],
+       f"a matter's documents list ({len(_listed)})")
+    try:
+        backend.list_vault_documents(matter_id="")
+        ck(False, "listing with no matter is refused")
+    except StoreError:
+        ck(True, "listing vault documents with NO matter is refused, exactly as "
+                 "conversations are (8b)")
+
+    _counts = backend.vault_counts()
+    ck(_counts["documents"] >= 1 and _counts["by_state"].get("INGESTED", 0) >= 1,
+       f"vault_counts reports what is there ({_counts['by_state']})")
+
+    # ── deletion keeps the row and removes everything searchable ───────────
+    ck(backend.delete_vault_document(_vd, now="2026-10-02T00:00:00+00:00"),
+       "a document is deleted")
+    _after = backend.read_vault_document(_vd) or {}
+    ck(_after.get("state") == "DELETED" and _after.get("deleted_at"),
+       f"**the ROW survives, marked DELETED with a date**: 'we never had it' and 'we had "
+       f"it and destroyed it on 4 March' are different answers to a regulator "
+       f"({_after.get('state')})")
+    ck(_after.get("text_chars") is None,
+       "...and it carries no text length any more")
+    ck(not [c for c in backend.read_vault_chunks() if c["document_id"] == _vd],
+       "...its chunks are gone, so nothing searchable survives")
+    ck(not backend.read_vault_tags(_vd), "...and its tags are gone")
+    ck(not backend.list_vault_documents(matter_id=_vm),
+       "...and it is absent from the matter's listing")
+    ck(not backend.delete_vault_document(_vd, now="2026-10-02T00:00:00+00:00"),
+       "deleting it again returns False rather than claiming to be the first")
+
     # ── 8b: matters, and NO CROSS-MATTER LISTING ────────────────────────────
     _m1, _m2 = str(_uuid.uuid4()), str(_uuid.uuid4())
     backend.write_matter({"matter_id": _m1, "name": "Acme acquisition",
@@ -2447,7 +2821,11 @@ def _test() -> None:
             "read_draft_versions", "write_cache_entry", "read_cache_entry",
             "bump_cache_stat", "read_cache_stats", "read_failure_counts",
             "read_labels", "write_actor", "read_actor", "create_invite",
-            "accept_invite", "write_matter", "list_matters")
+            "accept_invite", "write_matter", "list_matters",
+            "write_vault_document", "read_vault_document",
+            "list_vault_documents", "write_vault_chunks",
+            "read_vault_chunks", "write_vault_tags", "read_vault_tags",
+            "delete_vault_document", "vault_counts")
     for name in need:
         check(hasattr(MemoryBackend(), name)
               and hasattr(PostgresBackend("postgresql://x/y", tenant_id=T), name),

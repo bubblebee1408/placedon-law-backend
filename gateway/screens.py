@@ -139,14 +139,30 @@ SCREENS = (
              "no director name and no DIN: personal data is refused at the parser"),
     )),
     Screen("vault", "Twenty thousand documents, searchable and attributable.", (
-        Call("vault.upload", ("file", "name"), ("result.document_id",)),
-        Call("vault.status", ("document_id",), ("result.state",)),
-        Call("vault.find", ("query",), ("result.hits",)),
-        Call("vault.verify", ("document_id",), ("result.verified",)),
-        Call("vault.summarize", ("document_id",), ("result.summary",)),
-        Call("vault.research", ("query",), ("result.answer",)),
-        Call("vault.compile", ("matter_id",), ("result.bundle",)),
-    ), status=PLANNED),
+        Call("vault.upload", ("name", "text", "matter_id"),
+             ("result.document_id", "result.state", "result.job_id"),
+             "PENDING is not INGESTED: nothing is searchable until a worker reads it"),
+        Call("vault.status", ("document_id",),
+             ("result.documents", "result.by_state", "result.unsearchable"),
+             "the count of documents the vault CANNOT search is on this screen, not "
+             "buried: a search answers from the rest and looks complete"),
+        Call("vault.find", ("query", "limit"),
+             ("result.hits", "result.unsearchable", "result.scope"),
+             "contextual BM25 across the firm, not one matter"),
+        Call("vault.verify", ("document_id",), ("result.verified", "result.detail")),
+        Call("vault.summarize", ("document_id",),
+             ("result.doc_class", "result.tags", "result.chunks"),
+             "what is RECORDED, not a written summary: no model has read the document"),
+        Call("vault.research", ("query", "limit"),
+             ("result.passages", "result.answer"),
+             "`answer` is always null -- the passages are the answer, and a sentence "
+             "synthesised over a client's contracts is a claim about their position"),
+        Call("vault.compile", ("matter_id",),
+             ("result.documents", "result.count", "result.not_ingested")),
+        Call("vault.delete", ("document_id",),
+             ("result.deleted", "result.bytes_destroyed"),
+             "the record stays and says it was deleted; the bytes do not"),
+    )),
 )
 
 
@@ -245,7 +261,34 @@ def _test() -> int:
     grid = table["review_table.create"].run(
         {"name": "g", "document_ids": [did],
          "columns": [{"name": "c", "kind": "text", "question": "q?"}]}, ctx)
+    # V1: a real vault round trip, so the vault screen's result fields are EXECUTED and
+    # not skipped. The screens test is only worth its name for the verbs it actually runs.
+    import tempfile as _tf
+    from gateway.filestore import LocalFileStore
+    from agents.vault_ingest import ingest as _ingest
+    _tmp = _tf.mkdtemp()
+    ctx.files = LocalFileStore(_tmp)
+    _vmatter = table["matters.create"].run({"name": "screens vault matter"},
+                                           ctx)["matter_id"]
+    _up = table["vault.upload"].run(
+        {"name": "Screens NDA.pdf", "matter_id": _vmatter,
+         "text": "2. Term\n\nThis Agreement is governed by the laws of India. "
+                 "Confidential Information means anything disclosed."}, ctx)
+    _ingest({"document_id": _up["document_id"], "sha256": _up["sha256"],
+             "name": "Screens NDA.pdf", "matter_id": _vmatter},
+            files=ctx.files, store=ctx.store,
+            extract=lambda d, n: d.decode("utf-8", "replace"))
+    _vid = _up["document_id"]
+
     ran = {
+        "vault.upload": _up,
+        "vault.status": table["vault.status"].run({}, ctx),
+        "vault.find": table["vault.find"].run({"query": "governing law"}, ctx),
+        "vault.verify": table["vault.verify"].run({"document_id": _vid}, ctx),
+        "vault.summarize": table["vault.summarize"].run({"document_id": _vid}, ctx),
+        "vault.research": table["vault.research"].run({"query": "confidential"}, ctx),
+        "vault.compile": table["vault.compile"].run({"matter_id": _vmatter}, ctx),
+        "vault.delete": table["vault.delete"].run({"document_id": _vid}, ctx),
         "documents.upload": doc,
         "draft.create": drafted,
         "draft.versions": table["draft.versions"].run(
@@ -274,19 +317,24 @@ def _test() -> int:
             check(not missing,
                   f"{s.name}/{c.verb}: every shown result field is REALLY RETURNED "
                   f"({missing or 'all present'})")
-    check(len(ran) >= 9,
-          f"...and that was checked by running {len(ran)} verbs, not by trusting a second "
+    check(len(ran) >= 17,
+          f"...and that was checked by RUNNING {len(ran)} verbs, not by trusting a second "
           f"list of keys that would drift")
+    check({v for v in ran if v.startswith("vault.")} == {
+        "vault.upload", "vault.status", "vault.find", "vault.verify", "vault.summarize",
+        "vault.research", "vault.compile", "vault.delete"},
+        "...including every vault verb: a screen contract is only worth its name for the "
+        "verbs it actually runs")
 
-    # ── the PLANNED screen is honest in both directions ────────────────────
-    check(len(planned) == 1 and planned[0].name == "vault",
-          "the vault is the one PLANNED screen")
-    for c in planned[0].calls:
-        check(c.verb not in table,
-              f"vault: {c.verb!r} is NOT in the verb table yet, and the screen says "
-              f"PLANNED rather than promising it")
-    check(planned[0].status == PLANNED,
-          "...so a reader sees the whole surface without a contract nothing serves")
+    # ── PLANNED still means what it meant, and nothing is PLANNED today ────
+    check(not planned,
+          f"no screen is PLANNED any more: the vault was, and V1 built it "
+          f"({[p.name for p in planned]})")
+    check(all(c.verb in table for s in SCREENS for c in s.calls),
+          "...so every call on every screen names a verb that exists")
+    check(PLANNED in (BUILT, PLANNED) and BUILT != PLANNED,
+          "the PLANNED machinery is still here for the next surface declared before it "
+          "is served")
 
     # ── no screen quietly calls a WRITE verb it does not mean to ───────────
     writes = {v.name for v in VERBS if not v.read_only}
@@ -295,7 +343,8 @@ def _test() -> int:
         ("conversation", "conversation.send"), ("contract_review", "runs.approve"),
         ("contract_review", "runs.reject"), ("draft", "draft.create"),
         ("draft", "draft.revise"), ("review_table", "review_table.create"),
-        ("review_table", "review_table.cancel"), ("attachments", "documents.upload")},
+        ("review_table", "review_table.cancel"), ("attachments", "documents.upload"),
+        ("vault", "vault.upload"), ("vault", "vault.delete")},
         f"exactly the expected screens call a WRITE verb -- a new one appearing here is a "
         f"screen that changed what it can do ({sorted(used_writes)})")
 

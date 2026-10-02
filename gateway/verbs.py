@@ -105,6 +105,9 @@ class Context:
     model_for: Callable | None = None
     clock: Callable[[], str] | None = None
     queue: object | None = None
+    # V1. Where a vault's bytes live. None means no vault is configured on this
+    # deployment, and the vault verbs refuse by name rather than writing nowhere.
+    files: object | None = None
     # The steps the last handler built, kept so the QUEUE path can reuse the very code the
     # request path runs instead of a second implementation of it. `_persist_run` fills it.
     # Without this the durable executor would have its own idea of what a run's steps are,
@@ -2067,6 +2070,238 @@ def _task_args(task: str, text: str, file_ids, ctx: Context, args: dict,
     return {"text": doc or text, "name": "conversation upload"}
 
 
+# ── V1: the vault ────────────────────────────────────────────────────────────
+#
+# Every READ verb here is `mcp=False`, and that is a judgement rather than a limitation: a
+# vault is the client's documents themselves, and there is no agent task that should be
+# able to search one by default. `matters.list` opts out for the same kind of reason.
+
+
+def _vault_ready(ctx: Context):
+    if ctx.store is None:
+        return _refuse("NO_STORE", "a vault is durable; it needs a store")
+    if ctx.files is None:
+        return _refuse("NO_VAULT",
+                       "no file store is configured on this deployment, so there is "
+                       "nowhere to put the bytes. Refused by name rather than accepting "
+                       "an upload and writing it nowhere")
+    return None
+
+
+def _vault_upload(args: dict, ctx: Context) -> dict:
+    """Store the bytes and queue one ingest job. A WRITE verb."""
+    import uuid
+    refusal = _vault_ready(ctx)
+    if refusal:
+        return refusal
+    name = (args.get("name") or "").strip()
+    text = args.get("text")
+    if not name:
+        return _refuse("BAD_REQUEST", "a vault document needs a name")
+    if not isinstance(text, str) or not text.strip():
+        return _refuse("BAD_REQUEST",
+                       "text is required. Binary upload is a route, not a verb -- see "
+                       "the download routes in gateway/app.py for the shape it will take")
+    data = text.encode("utf-8")
+    from checker import archive_guard as ag
+    verdict = ag.inspect(data)
+    if not verdict.ok:
+        return _refuse("ARCHIVE_REFUSED", verdict.reason)
+    try:
+        sha = ctx.files.put(data)
+    except Exception as e:                                       # noqa: BLE001
+        return _refuse("BAD_REQUEST", f"{type(e).__name__}: {str(e)[:140]}")
+    did = str(uuid.uuid4())
+    try:
+        ctx.store.write_vault_document({
+            "document_id": did, "matter_id": (args.get("matter_id") or "").strip() or None,
+            "sha256": sha, "name": name, "byte_count": len(data), "state": "PENDING"})
+    except Exception as e:                                       # noqa: BLE001
+        # Dedupe fires here: the same bytes twice is one document, and saying so is more
+        # useful than a second row that would never be searched separately.
+        return _refuse("CONFLICT", str(e)[:200])
+    queued = None
+    if ctx.queue is not None:
+        from agents.vault_ingest import INTENT
+        try:
+            queued = ctx.queue.enqueue(run_id=did, intent=INTENT,
+                                       args={"document_id": did, "sha256": sha,
+                                             "name": name,
+                                             "matter_id": args.get("matter_id")}).job_id
+        except Exception:                                        # noqa: BLE001
+            queued = None
+    return {"document_id": did, "sha256": sha, "state": "PENDING", "job_id": queued,
+            "note": ("stored and queued for ingestion. PENDING is not INGESTED: nothing "
+                     "is searchable until a worker has read it."
+                     if queued else
+                     "stored. No queue is configured, so nothing will ingest it and it "
+                     "will stay PENDING -- said plainly rather than left to look done.")}
+
+
+def _vault_status(args: dict, ctx: Context) -> dict:
+    """One document, or the whole vault's counts. Read-only, off MCP."""
+    if ctx.store is None:
+        return _refuse("NO_STORE", "no store is configured")
+    did = (args.get("document_id") or "").strip()
+    if did:
+        row = ctx.store.read_vault_document(did)
+        if row is None:
+            return _refuse("NOT_FOUND", f"no vault document {did!r} for this tenant")
+        return dict(row, tags=ctx.store.read_vault_tags(did))
+    counts = ctx.store.vault_counts()
+    return dict(counts, note=(
+        f"{counts['documents']} document(s). {counts['unsearchable']} cannot be searched "
+        f"-- they are PENDING or CANNOT_READ, and a search answers from the rest. "
+        f"{counts['deleted']} have been deleted; their rows remain and their bytes do "
+        f"not."))
+
+
+def _vault_index(ctx: Context):
+    from checker.vault_search import Index
+    counts = ctx.store.vault_counts()
+    return Index.build(ctx.store.read_vault_chunks(), tenant_id=str(ctx.tenant),
+                       unsearchable=int(counts.get("unsearchable") or 0))
+
+
+def _vault_find(args: dict, ctx: Context) -> dict:
+    """BM25 across this TENANT's vault. Read-only, off MCP."""
+    if ctx.store is None:
+        return _refuse("NO_STORE", "no store is configured")
+    query = (args.get("query") or "").strip()
+    if not query:
+        return _refuse("BAD_REQUEST", "a query is required")
+    try:
+        limit = int(args.get("limit") or 10)
+    except (TypeError, ValueError):
+        return _refuse("BAD_REQUEST", "limit must be a whole number")
+    res = _vault_index(ctx).search(query, limit=max(1, min(limit, 50))).to_dict()
+    res["scope"] = "tenant"
+    res["scope_note"] = ("searched the whole firm's vault, not one matter. Listing is "
+                         "per matter (8b); searching is per tenant, which is what V1 "
+                         "specifies and what answers 'have we ever agreed to this'")
+    return res
+
+
+def _vault_verify(args: dict, ctx: Context) -> dict:
+    """Do the stored bytes still hash to the key they were stored under? Read-only."""
+    refusal = _vault_ready(ctx)
+    if refusal:
+        return refusal
+    did = (args.get("document_id") or "").strip()
+    row = ctx.store.read_vault_document(did) if did else None
+    if row is None:
+        return _refuse("NOT_FOUND", f"no vault document {did!r} for this tenant")
+    if row.get("deleted_at"):
+        return {"document_id": did, "verified": False,
+                "detail": "this document was deleted; its bytes are gone, and that is the "
+                          "intended state rather than a corruption"}
+    try:
+        data = ctx.files.get(row["sha256"])
+    except Exception as e:                                       # noqa: BLE001
+        return {"document_id": did, "verified": False,
+                "detail": f"{type(e).__name__}: {str(e)[:160]}"}
+    if data is None:
+        return {"document_id": did, "verified": False,
+                "detail": "the row names bytes the file store does not hold"}
+    return {"document_id": did, "verified": True,
+            "detail": f"re-read {len(data)} bytes and they hash to the key they were "
+                      f"stored under"}
+
+
+def _vault_summarize(args: dict, ctx: Context) -> dict:
+    """What is KNOWN about one document. Not a model summary, and it says so."""
+    if ctx.store is None:
+        return _refuse("NO_STORE", "no store is configured")
+    did = (args.get("document_id") or "").strip()
+    row = ctx.store.read_vault_document(did) if did else None
+    if row is None:
+        return _refuse("NOT_FOUND", f"no vault document {did!r} for this tenant")
+    tags = ctx.store.read_vault_tags(did)
+    chunks = [c for c in ctx.store.read_vault_chunks() if c["document_id"] == did]
+    return {"document_id": did, "name": row.get("name"),
+            "doc_class": row.get("doc_class"), "class_reason": row.get("class_reason"),
+            "state": row.get("state"), "text_chars": row.get("text_chars"),
+            "chunks": len(chunks), "tags": tags,
+            "note": ("This is what is RECORDED about the document -- its class, the "
+                     "clauses found and the sentence each was found in. It is not a "
+                     "written summary: no model has read this document, and a paragraph "
+                     "of prose here would be the one thing in the vault nobody could "
+                     "check against the file.")}
+
+
+def _vault_research(args: dict, ctx: Context) -> dict:
+    """Search the vault and return the PASSAGES. No prose, and it says why."""
+    found = _vault_find(args, ctx)
+    if found.get("status") == "REFUSED":
+        return found
+    hits = found.get("hits") or []
+    return dict(found, passages=hits, answer=None, note=(
+        f"{len(hits)} passage(s) from the firm's own documents, each with the document it "
+        f"came from. No answer is written over them: a sentence synthesised from a "
+        f"client's contracts is a statement about that client's position, and this engine "
+        f"states nothing it cannot quote. Read the passages."))
+
+
+def _vault_compile(args: dict, ctx: Context) -> dict:
+    """One matter's documents, with their classes and clause tags. Read-only."""
+    if ctx.store is None:
+        return _refuse("NO_STORE", "no store is configured")
+    matter_id = (args.get("matter_id") or "").strip()
+    if not matter_id:
+        return _refuse("BAD_REQUEST",
+                       "matter_id is required: a bundle is compiled for one matter (8b)")
+    try:
+        docs = ctx.store.list_vault_documents(matter_id=matter_id)
+    except Exception as e:                                       # noqa: BLE001
+        return _refuse("BAD_REQUEST", str(e)[:200])
+    out = []
+    for d in docs:
+        out.append(dict(d, tags=ctx.store.read_vault_tags(d["document_id"])))
+    unreadable = [d["name"] for d in docs if d.get("state") != "INGESTED"]
+    return {"matter_id": matter_id, "documents": out, "count": len(out),
+            "not_ingested": unreadable,
+            "note": (f"{len(out)} document(s) filed to this matter. "
+                     + (f"{len(unreadable)} could not be read and are listed by name, so "
+                        f"a bundle is never quietly short: {unreadable[:5]}"
+                        if unreadable else "Every one was read."))}
+
+
+def _vault_delete(args: dict, ctx: Context) -> dict:
+    """Destroy the bytes, keep the record. A WRITE verb."""
+    refusal = _vault_ready(ctx)
+    if refusal:
+        return refusal
+    did = (args.get("document_id") or "").strip()
+    row = ctx.store.read_vault_document(did) if did else None
+    if row is None:
+        return _refuse("NOT_FOUND", f"no vault document {did!r} for this tenant")
+    if row.get("deleted_at"):
+        return _refuse("ALREADY_DELETED",
+                       f"{did} was already deleted on {row['deleted_at']}. Saying so is "
+                       f"more useful than reporting a second destruction that did not "
+                       f"happen")
+    sha = row["sha256"]
+    gone = ctx.store.delete_vault_document(did, now=_now(ctx))
+    # The bytes last, and only if no live document still points at them: dedupe means two
+    # documents can share a key, and destroying the file would blank the other one.
+    others = [d for d in ctx.store.read_vault_chunks() if d.get("document_id") != did]
+    shared = any((ctx.store.read_vault_document(d["document_id"]) or {}).get("sha256")
+                 == sha for d in others)
+    bytes_gone = False
+    if gone and not shared:
+        try:
+            bytes_gone = bool(ctx.files.delete(sha))
+        except Exception:                                        # noqa: BLE001
+            bytes_gone = False
+    return {"document_id": did, "deleted": bool(gone), "bytes_destroyed": bytes_gone,
+            "note": ("The record stays and says it was deleted, with the date. The bytes, "
+                     "the text and the chunks are gone. 'We never had it' and 'we had it "
+                     "and destroyed it' are different answers to a regulator."
+                     + ("" if bytes_gone or not gone else
+                        " The bytes were kept because another document in this vault has "
+                        "the same content."))}
+
+
 def _calendar_upcoming(args: dict, ctx: Context) -> dict:
     """What falls due in the next 90 days, and what cannot be dated. 8c.
 
@@ -3233,6 +3468,58 @@ VERBS: tuple[Verb, ...] = (
                           "run holds is DROPPED and reported in dropped_claims")),
          "POST", read_only=False, run=_conversation_send),
 
+    # V1: the vault. Every READ here is mcp=False on principle -- a vault is the client's
+    # documents themselves, and no agent task should be able to search one by default.
+    Verb("vault.upload",
+         "Put a document in the vault and queue it for ingestion. PENDING is not "
+         "INGESTED: nothing is searchable until a worker has read it.",
+         (Field("name", STRING, True, describes="the document's name"),
+          Field("text", STRING, True, describes="its text"),
+          Field("matter_id", STRING, False, describes="the matter to file it under")),
+         "POST", read_only=False, run=_vault_upload),
+
+    Verb("vault.status",
+         "One document's state and tags, or the whole vault's counts including how many "
+         "documents cannot be searched.",
+         (Field("document_id", STRING, False, describes="one document, or omit for all"),),
+         "POST", read_only=True, mcp=False, run=_vault_status),
+
+    Verb("vault.find",
+         "Search this firm's vault. Contextual BM25 across every matter; the result says "
+         "how many documents it could not look at.",
+         (Field("query", STRING, True, describes="what to search for"),
+          Field("limit", STRING, False, describes="how many passages, up to 50")),
+         "POST", read_only=True, mcp=False, run=_vault_find),
+
+    Verb("vault.verify",
+         "Do the stored bytes still hash to the key they were stored under?",
+         (Field("document_id", STRING, True, describes="the document to re-read"),),
+         "POST", read_only=True, mcp=False, run=_vault_verify),
+
+    Verb("vault.summarize",
+         "What is RECORDED about a document: its class, its clauses, and the sentence "
+         "each was found in. Not a written summary.",
+         (Field("document_id", STRING, True, describes="the document"),),
+         "POST", read_only=True, mcp=False, run=_vault_summarize),
+
+    Verb("vault.research",
+         "Search the vault and return the passages, each with the document it came from. "
+         "No prose is written over them.",
+         (Field("query", STRING, True, describes="the question"),
+          Field("limit", STRING, False, describes="how many passages")),
+         "POST", read_only=True, mcp=False, run=_vault_research),
+
+    Verb("vault.compile",
+         "One matter's documents with their classes and clause tags, and the names of any "
+         "that could not be read.",
+         (Field("matter_id", STRING, True, describes="the matter"),),
+         "POST", read_only=True, mcp=False, run=_vault_compile),
+
+    Verb("vault.delete",
+         "Destroy a document's bytes and keep the record that it existed and was deleted.",
+         (Field("document_id", STRING, True, describes="the document to destroy"),),
+         "POST", read_only=False, run=_vault_delete),
+
     Verb("calendar.upcoming",
          "What falls due in the next 90 days, and what cannot be dated at all. A missing "
          "fact gives an UNKNOWN entry naming the fact, never a guessed date.",
@@ -3464,8 +3751,11 @@ def _test() -> None:
                     "review_table.cancel", "draft.create",
                     "draft.revise", "draft.status", "draft.versions", "draft.diff",
                     "draft.export", "matters.create", "matters.list",
-                    "calendar.upcoming"},
-          f"the thirty-two verbs are declared once ({sorted(names)})")
+                    "calendar.upcoming"} | {"vault.upload", "vault.status", "vault.find",
+                                            "vault.verify", "vault.summarize",
+                                            "vault.research", "vault.compile",
+                                            "vault.delete"},
+          f"the forty verbs are declared once ({sorted(names)})")
     # sources.* are READ-ONLY, so they reach MCP. That is the intended shape: an agent may
     # ask what a source permits and search what may be read, and there is no sources verb
     # that fetches, stores or spends. S3's Indian Kanoon connector will spend money, and
@@ -3479,8 +3769,9 @@ def _test() -> None:
     check(set(write_verbs()) == {"documents.upload", "runs.approve", "runs.reject",
                                  "runs.submit", "runs.cancel", "conversation.send",
                                  "review_table.create", "review_table.cancel",
-                                 "draft.create", "draft.revise", "matters.create"},
-          f"...and exactly eleven of them write ({sorted(write_verbs())})")
+                                 "draft.create", "draft.revise", "matters.create",
+                                 "vault.upload", "vault.delete"},
+          f"...and exactly thirteen of them write ({sorted(write_verbs())})")
     check(f"{MCP_NAMESPACE}.conversation.send" not in {t.name for t in mcp},
           "conversation.send WRITES -- it creates a thread, appends messages and may "
           "enqueue work -- so mcp_tools() keeps it off MCP, by rule and not by the author "
@@ -4863,13 +5154,17 @@ def _test() -> None:
     check(mcp_names == expected_mcp,
           f"MCP exposes every read-only verb THAT OPTS IN, and no other "
           f"({sorted(mcp_names)})")
-    check({v.name for v in VERBS if v.read_only and not v.mcp}
-          == {"matters.list", "calendar.upcoming"},
-          f"...and exactly two verbs opt out today -- matters.list on principle (a client "
-          f"list names who the firm acts for) and calendar.upcoming on a LIMITATION (the "
-          f"MCP policy allowlist cannot be extended from this side of the repository). "
-          f"The two reasons are different and the handlers say which "
-          f"({sorted(v.name for v in VERBS if v.read_only and not v.mcp)})")
+    _opted = {v.name for v in VERBS if v.read_only and not v.mcp}
+    check(_opted == {"matters.list", "calendar.upcoming", "vault.status", "vault.find",
+                     "vault.verify", "vault.summarize", "vault.research",
+                     "vault.compile"},
+          f"...and the verbs that opt out are the ones that should: a client list, and "
+          f"every read of the VAULT -- which is the client's documents themselves. "
+          f"calendar.upcoming is the odd one, out on a LIMITATION rather than a "
+          f"principle, and its handler says so ({sorted(_opted)})")
+    check(all(not v.mcp for v in VERBS if v.name.startswith("vault.") and v.read_only),
+          "**no vault read is an MCP tool**: there is no agent task that should be able "
+          "to search a firm's documents by default")
     _opted_out = {v.name for v in VERBS if v.read_only and not v.mcp}
     check({n.split(".", 1)[1] for n in mcp_names}
           == names - set(write_verbs()) - _opted_out,
@@ -4925,7 +5220,7 @@ def _test() -> None:
           "...while a WRITE verb is kept out of MCP by mcp_tools(), not by the author "
           "remembering to")
     check("widgets.delete" in write_verbs(hypo), "...and is named in write_verbs()")
-    check(len(VERBS) == 32 and "widgets.count" not in rest_spec(),
+    check(len(VERBS) == 40 and "widgets.count" not in rest_spec(),
           "...and the probe changed nothing in this module: the surfaces are generated "
           "from an argument, not from a global the test rebound")
 
