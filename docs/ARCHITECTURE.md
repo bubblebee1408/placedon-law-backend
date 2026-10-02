@@ -284,3 +284,147 @@ once ≥100 lawyer labels exist per (task, body of law); it never gates an answe
 | 10 | T8 | Spaces |
 | 11 | H1 + B1 | AWS hosting and live Bedrock, when AWS is ready |
 | 12 | Themis T4 | Horizon Scanning + Recall, on its branch |
+
+---
+
+## 17. API catalogue — every external API, what it is for, what it may see
+
+All model APIs are called only through the model gateway (`checker/router.py`); all data APIs only
+through `checker/sources/` behind a `terms.py` record. No other code calls an external API.
+
+### 17.1 Model and document APIs
+
+| API | Job | Data class allowed | Billing | Key |
+|---|---|---|---|---|
+| AWS Bedrock — Claude Haiku (ap-south-1 / India geography) | extract, classify fallback, prose, cells | CLIENT | per token | AWS |
+| AWS Bedrock — Claude Sonnet | escalation on verifier rejection, critic, supervisor | CLIENT | per token | AWS |
+| AWS Bedrock — Llama 3 70B (open source) | bake-off alternative | CLIENT | per token | AWS |
+| AWS Textract (ap-south-1) | OCR, tables, English handwriting | CLIENT | per page | AWS |
+| Self-hosted vLLM on AWS GPU (open models: gpt-oss, Llama, Mistral) | batch bake-offs, started and stopped per run | CLIENT if ap-south-1 | per GPU hour | AWS |
+| Sarvam (Vision + language) | Indian scripts, Hindi handwriting | CLIENT only if India hosting confirmed in writing | per call | have |
+| Voyage `voyage-law-2` | semantic search bake-off | PUBLIC law only | per token | have |
+| Gemini (free tier) | comparison, backup | PUBLIC / SYNTHETIC | free | have |
+| OpenRouter free models | comparison across open models | PUBLIC / SYNTHETIC | free, 50/day | get |
+| Mistral free tier | bulk public jobs (CUAD, synthetic documents) | PUBLIC / SYNTHETIC (trains on inputs) | free | get |
+| Azure Foundry Llama 3.3 70B (UAE North) | test backup | PUBLIC / SYNTHETIC | per token | have |
+
+### 17.2 Legal and government data APIs
+
+| API | Gives | Access | Status |
+|---|---|---|---|
+| India Code REST (`indiacode.gov.in/server/api`) + PDFs (`indiacode.nic.in`) | Acts, sections, footnotes | open, no key | corpus BUILT; live connector G1 |
+| e-Gazette | notifications, commencement | PDF | G1, terms first |
+| data.gov.in OGD | MCA company master data by CIN | free key, GODL attribution | G1, key pending |
+| SEBI | regulations, circulars | pages/PDF, read-on-request | G1 |
+| RBI | FEMA directions | read-only, never cached | G1, BLOCKED (418) |
+| IBBI | IBC regulations | pages | Themis feed |
+| Indian Kanoon | judgments | paid token, logo attribution | G1, key pending |
+
+### 17.3 Infrastructure APIs
+
+AWS S3 (vault files, backups) · AWS SES (invites, login, nudges) · AWS Secrets Manager (keys) ·
+AWS Budgets (alerts) — all ap-south-1.
+
+### 17.4 Placedon's own API (what customers and other systems call)
+
+One verb table → REST `/v2/...`, MCP tools, CLI. Main verbs:
+`conversation.send/list/get` · `runs.preview/start/get/trace/approve/reject/cancel` ·
+`vault.upload/status/find/verify/summarize/research/compile/delete` · `contract.playbook_review` ·
+`review_table.create/status/export/cancel` · `draft.create/revise/versions/diff/export` ·
+`events.assess` · `calendar.upcoming` · `matters.create/list` · `sources.list/search` ·
+`citation.get` · `usage.status` · `ops.summary` · `intake.classify`.
+
+## 18. MCP — how Placedon connects to other AI tools
+
+MCP (Model Context Protocol) is the standard way AI assistants call tools. Placedon uses it in two
+directions.
+
+### 18.1 Inbound: Placedon as an MCP server
+
+Lawyers already use Claude, ChatGPT or Copilot. Placedon exposes its read-only verbs as MCP tools
+(`checker/mcp/`, generated from the same verb table), so those assistants can ask Placedon for a
+verified answer instead of guessing. Tool names today carry the prefix `themis.` (`themis.ask`,
+`themis.search_law`, `themis.review_contract`, `themis.events.assess`, `themis.runs.get`,
+`themis.sources.search`, ...; full list in `checker/mcp/policy.py` `KNOWN_TOOLS`). Renaming the
+prefix is a separate decision because external clients bind to these names.
+
+```
+Lawyer in Claude / ChatGPT / Copilot
+   → MCP tool call: themis.ask("AGM deadline for our company, as of 1 Oct 2026")
+   → Placedon gateway: OAuth token → tenant + user + role, caps, audit
+   → normal pipeline (§5): retrieve → verify → envelope with citations and law_versions
+   ← tool result: status, cited sentences, refusals by name
+   → the outside assistant shows Placedon's cited answer
+```
+
+Rules: read-only verbs only on MCP (no approve, create, delete), enforced by `mcp_tools()` and a test that `READ_ONLY_TOOLS == KNOWN_TOOLS`; some read verbs are also `mcp=False` on purpose (client lists, matters); OAuth per user (PLAN_22 D7, TODO — today the gateway key);
+CLIENT data never leaves through MCP to a non-India model on the caller's side unless the tenant
+admin enables it; every call audited.
+
+### 18.2 Outbound: connectors as MCP clients
+
+Placedon's agents read the customer's existing systems through MCP servers or APIs, each one a
+registered source with a `terms.py` record and a data class:
+
+| Connector | Through | Data class | Use |
+|---|---|---|---|
+| SharePoint / OneDrive | Microsoft Graph or its MCP server, OAuth, read-only | CLIENT | pull contracts into the vault |
+| Google Drive | Drive API / MCP, OAuth, read-only | CLIENT | same |
+| Email (Outlook/Gmail) | Graph / Gmail API, read-only, per-message consent | CLIENT | attachments into the vault |
+| DMS (iManage, NetDocuments) | vendor API when licensed | CLIENT | later |
+
+A connector result enters the vault like an upload (sha256, classify, index) and is then used by
+the normal tasks. A connector never feeds a model directly.
+
+## 19. External legal AI products and agents
+
+Placedon does not run on another legal-AI company's agents. Reasons: their outputs are not
+verified against held Indian law, their data paths are outside India, and a dependency on a
+competitor is a business risk. What we use and how:
+
+| External thing | Use | How |
+|---|---|---|
+| General models (Claude, Llama, open models) | the reading and writing inside our agents | via the model gateway (§9) |
+| Anthropic's open-source `claude-for-legal` plugins (GitHub) | reference patterns for legal workflows and prompts; licence checked before reuse | study and adapt into our registry; never run as an unverified agent |
+| Other legal-AI vendors' MCP servers | only if a customer already licenses one and wants interop | as a WEB/LICENSED-tier source; never VERIFIED |
+| Indian Kanoon | case law | licensed source (§17.2) |
+
+## 20. Worked examples (end to end)
+
+### 20.1 "We are allotting shares to a Singapore investor — what applies?"
+
+1. `conversation.send` → intake: EVENT_ASSESS, event = share allotment, foreign_investor = true.
+2. `events.assess` → bodies engaged: Companies Act (HELD), FEMA (DECLARED), stamp duty (needs State).
+3. Researcher agent (Haiku, India) on Companies Act → BM25 finds Section 62 → quote verified.
+4. Envelope: PARTIAL; Section 62(1)(c) cited with sha256; FEMA NOT_HELD by name; stamp duty NEED_FACT
+   ("which State?"); law_versions records Section 62's hash.
+5. Lawyer approves. Months later the Gazette amends Section 62 → Themis recall lists this answer.
+
+### 20.2 "Review these 40 vendor NDAs and draft a risk memo" (multi-agent)
+
+1. Intake: MULTI_AGENT. Supervisor plans: doc_auth ×40 → extractor ×40 → comparer → critic → drafter.
+2. Code validates the plan (registry only, ≤8 agent types, depth 1, budget ₹X) → lawyer previews → starts.
+3. Jobs fan out on the bulk lane; each extraction is verified (exact quote) before comparison.
+4. doc_auth flags 3 unsigned and 1 expired; comparer finds 7 governing-law deviations.
+5. Critic removes one weak finding; drafter writes the memo from verified findings only, prose marked
+   as suggestion. NEEDS_LAWYER items become nudges. Cost and per-agent trace in the ledger.
+
+### 20.3 "Is this board resolution real?" (Document Check)
+
+Upload → DOC_AUTHENTICATE: PDF integrity READ · sha256 NEW · PKCS#7 signature SIGNED_VALID against the
+CCA chain · face date CURRENT · execution block PRESENT · party MATCHES the tenant's company ·
+no injection text. Each line is a finding with its evidence; anything unverifiable is NEEDS_LAWYER.
+
+### 20.4 Lawyer inside Claude asks Placedon (MCP)
+
+Claude calls `themis.ask` → Placedon answers with cited, verified sentences or a named refusal →
+Claude shows it. The outside model never decides the law; Placedon does, in code.
+
+## 21. Features not built on purpose
+
+- Free agents that invent their own steps (MAST failure FM-1.1); only registered agents run.
+- Answers on state laws not acquired (Shops & Establishments, professional tax, stamp duty):
+  refused by State name until a pilot funds acquiring one State pack.
+- People-scoring ("should this associate be removed"): out. Command Center shows aggregates only.
+- Benchmarks against other firms: no Indian contract corpus exists to support them.
+- Case-outcome or judge prediction in the product: research only, after legal review.
