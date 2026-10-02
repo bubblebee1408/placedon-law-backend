@@ -91,7 +91,9 @@ def run_one(*, queue, store, handlers: dict[str, Callable], worker: str = "w1",
         # Not a refusal: nobody decided anything about the question. The deployment is
         # missing a handler, which is our fault and is reported as ours.
         store.set_run(job.run_id, status=FAILED, result=None)
-        queue.finish(job.job_id, q.FAILED)
+        # A1. NOT retryable: a missing handler is a deployment that does not have the code,
+        # and two more leases only learn the same thing. Straight to DEAD, with the reason.
+        queue.fail(job.job_id, f"no handler for intent {job.intent!r}", retryable=False)
         return Outcome(job.run_id, FAILED, error=f"no handler for intent {job.intent!r}")
 
     store.set_run(job.run_id, status=RUNNING)
@@ -102,7 +104,9 @@ def run_one(*, queue, store, handlers: dict[str, Callable], worker: str = "w1",
     except Exception as e:                                        # noqa: BLE001
         store.set_run(job.run_id, status=FAILED,
                       result={"error": f"{type(e).__name__}: {e}"})
-        queue.finish(job.job_id, q.FAILED)
+        # A1. Retryable: a handler that raised may have hit a transport error. `fail` decides
+        # retry-with-backoff or DEAD, so the policy is not restated here.
+        queue.fail(job.job_id, f"{type(e).__name__}: {e}")
         return Outcome(job.run_id, FAILED, error=f"{type(e).__name__}: {e}")
 
     written = replayed = 0
@@ -133,7 +137,8 @@ def run_one(*, queue, store, handlers: dict[str, Callable], worker: str = "w1",
             store.set_run(job.run_id, status=FAILED, result={
                 "error": f"StepTimeout: {step.get('capability')} exceeded "
                          f"{timeout_seconds}s"})
-            queue.finish(job.job_id, q.FAILED)
+            queue.fail(job.job_id, f"StepTimeout: {step.get('capability')} exceeded "
+                                   f"{timeout_seconds}s")
             return Outcome(job.run_id, FAILED, None, written, replayed,
                            error=f"StepTimeout: {step.get('capability')}")
 

@@ -226,7 +226,7 @@
     "gateway/cli.py": 133,
     "gateway/envelope.py": 65,
     "gateway/filestore.py": 24,
-    "gateway/jobs.py": 28,
+    "gateway/jobs.py": 45,
     "gateway/limits.py": 17,
     "gateway/logs.py": 21,
     "gateway/passwords.py": 21,

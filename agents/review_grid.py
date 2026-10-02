@@ -156,7 +156,9 @@ def schedule(table: rg.Table, *, queue, cancelled: bool = False) -> Scheduled:
                 done.append(key)
                 continue
             try:
-                queue.enqueue(
+                # A1. REVIEW_CELL: wanted soon, but nobody is blocked on one cell.
+                from gateway.jobs import REVIEW_CELL as _LANE_CELL
+                queue.enqueue(lane=_LANE_CELL, 
                     run_id=run_id_for_cell(table.table_id, d, col.name), intent=INTENT,
                     args={"grid_id": table.table_id, "document_id": d,
                           "column": col.name, "kind": col.kind,

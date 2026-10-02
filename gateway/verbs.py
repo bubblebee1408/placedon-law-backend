@@ -1018,7 +1018,10 @@ def _runs_submit(args: dict, ctx: Context) -> dict:
     ctx.store.write({"id": run_id, "intent": intent, "status": "PLANNED",
                      "refusal_code": None, "steps": [], "propositions": []})
     try:
-        job = ctx.queue.enqueue(run_id=run_id, intent=intent, args=payload)
+        # A1. INTERACTIVE: this is the path a person is watching a spinner on.
+        from gateway.jobs import INTERACTIVE as _LANE_INTERACTIVE
+        job = ctx.queue.enqueue(run_id=run_id, intent=intent, args=payload,
+                                lane=_LANE_INTERACTIVE)
     except QueueError as e:
         return _refuse("BAD_REQUEST", str(e))
     return {"status": "PLANNED", "run_id": run_id, "job_id": job.job_id,
@@ -2124,7 +2127,10 @@ def _vault_upload(args: dict, ctx: Context) -> dict:
     if ctx.queue is not None:
         from agents.vault_ingest import INTENT
         try:
-            queued = ctx.queue.enqueue(run_id=did, intent=INTENT,
+            # A1. BULK: vault ingest and OCR are wanted eventually, and must never take a
+            # slot reserved for someone waiting.
+            from gateway.jobs import BULK as _LANE_BULK
+            queued = ctx.queue.enqueue(run_id=did, intent=INTENT, lane=_LANE_BULK,
                                        args={"document_id": did, "sha256": sha,
                                              "name": name,
                                              "matter_id": args.get("matter_id")}).job_id
