@@ -36,14 +36,25 @@ it calls touches a network.
 
 ## ENABLED, and what would turn it off
 
-Measured on the frozen strict set (`entail_pairs_v2.all_pairs`, n=67, 2026-09-28) through the
-same composition a runtime reaches -- `cascade.judge_row` -- scored by
-`metric_policy.evaluate_gate`:
+Measured on the frozen strict set (`entail_pairs_v2.all_pairs`, n=67, re-measured
+2026-10-02) through the same composition a runtime reaches -- `cascade.judge_row` -- scored
+by `metric_policy.evaluate_gate`:
 
     false accepts  2      ceiling 10     PASS
-    F1             0.625  floor   0.40   PASS
+    F1             0.581  floor   0.40   PASS
     abstention     0.00   cap     0.25   PASS
     buckets        3      minimum 3      PASS
+
+F1 was 0.625 until 02-10-2026, when `checker/entail_substitution.py` was added to the
+cascade as a second gate. It cost one true positive on this set and bought the following,
+measured over 400 real held provisions by `scripts/verifier_error_rates.py`:
+
+    negation mutations accepted   264/268  ->  0/268
+    shall -> may accepted         294/304  ->  9/304
+    quantity changed accepted      11/98   ->  0/98
+
+That is the trade this gate exists to make, and it is recorded here rather than in a
+commit message because the number above is what a future reader will check against.
 
 So it ships ENABLED. `docs/METRIC_POLICY.md` requires shipping disabled if the bar is not met,
 and `_test()` re-measures on every run: if the gate ever stops passing, the suite goes red

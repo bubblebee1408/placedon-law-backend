@@ -84,6 +84,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `checker/entail_paraphrase.py` | R0 legal core | Paraphrase pairs: where surface matching must fail. |
 | `checker/entail_qualifier.py` | R0 legal core | E6: did the claim drop a qualifier the provision attaches to the rule? |
 | `checker/entail_role.py` | R0 legal core | E5: does the quantity play the role the claim gives it? |
+| `checker/entail_substitution.py` |  | E7: did a swap inside otherwise-identical text change what the rule says? |
 | `checker/entailment_gate.py` |  | The only path from a lexical verdict to SUPPORTED. |
 | `checker/entity_graph.py` | R1 bookmark | A deterministic graph of corporate entities and their relationships. |
 | `checker/env.py` |  | Read a local .env so a key can live in a file instead of a shell session. |
@@ -158,6 +159,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `checker/provenance.py` | R0 legal core | Evidence states and source records. |
 | `checker/provenance_slots.py` |  | Typed provenance for every value that reaches a document. |
 | `checker/public_only.py` |  | The one gate between this repository's text and a third-party free-tier model. |
+| `checker/quote_mutations.py` |  | Break a real statutory quote in six specific ways, so a verifier can be measured. |
 | `checker/quoted_span.py` |  | Attribution without a Citations API: the model quotes, and we go and find the quote. |
 | `checker/reasoning.py` |  | The model contract: what a model may propose, and what happens when it doesn't. |
 | `checker/redteam.py` |  | The adversary: model stubs that misbehave on purpose, and the layer each one should hit. |
@@ -347,6 +349,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/themis_slice.py` |  | The THEMIS V0 vertical slice, end to end, on real data. |
 | `scripts/vault_load_test.py` |  | Two thousand documents through the real ingest path, timed. |
 | `scripts/vault_retrieval_bakeoff.py` |  | Does giving a chunk its context actually help? Measured, before and after. |
+| `scripts/verifier_error_rates.py` |  | How often does a verifier accept a quote that has been broken? Measured, per check. |
 | `scripts/verify_against_pdf.py` |  | Cross-validate the ingested corpus against an INDEPENDENT rendering of the same Act. |
 | `scripts/verify_document.py` |  | Is this document real? |
 | `scripts/verify_reconstruction.py` |  | Ground-truth test for point-in-time reconstruction. |
@@ -354,4 +357,4 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/watch_gazette.py` |  | Run the Gazette watcher once: what did the Gazette publish since we last looked? |
 | `scripts/watch_ofac.py` |  | Poll OFAC's SDN list and report what CHANGED since the last trustworthy poll. |
 
-314 modules listed.
+317 modules listed.

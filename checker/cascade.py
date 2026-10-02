@@ -6,8 +6,15 @@ composition again — and the release gate would then be scoring code that merel
 resembled what shipped. Every number this project reports about the cascade was
 a property of a closure inside a test.
 
-The order is E6 -> E5 -> E4 -> E3, and each step earns its position:
+The order is E7 -> E6 -> E5 -> E4 -> E3, and each step earns its position:
 
+    E7  GATE        may refuse, never accept. A single-token substitution that
+                    changes the rule -- "shall not" to "shall", "shall" to "may",
+                    "thirty" to "sixty" -- is refused before any module that scores
+                    term overlap sees it, because `not` and `no` are stopwords in
+                    all three of those modules and digits match none of their
+                    patterns, so the swap is invisible to every one of them.
+                    Measured: 264/268 negation mutations accepted without it.
     E6  GATE        may refuse, never accept. It knows whether a qualifier was
                     dropped, not whether the claim binds the right quantity to
                     the right obligation, so letting it accept would put a
@@ -85,15 +92,22 @@ def e6(premise: str, claim: str) -> bool | None:
     return None if v.status == UNRESOLVED else v.entailed
 
 
+def e7(premise: str, claim: str) -> bool | None:
+    from checker.entail_substitution import judge, UNRESOLVED
+    v = judge(premise, claim)
+    return None if v.status == UNRESOLVED else v.entailed
+
+
 def verdict(premise: str, claim: str) -> Verdict:
     """Run the cascade. This is the composition the release gate scores."""
     steps: list[Step] = []
 
-    g = e6(premise, claim)
-    steps.append(Step("E6", GATE, g is not None, g,
-                      "gate: may refuse, never accept"))
-    if g is False:
-        return Verdict(NOT_SUPPORTED, "E6", tuple(steps))
+    for name, gate in (("E7", e7), ("E6", e6)):
+        g = gate(premise, claim)
+        steps.append(Step(name, GATE, g is not None, g,
+                          "gate: may refuse, never accept"))
+        if g is False:
+            return Verdict(NOT_SUPPORTED, name, tuple(steps))
 
     for name, fn in (("E5", e5), ("E4", e4)):
         v = fn(premise, claim)
@@ -138,8 +152,12 @@ def _test() -> None:
     from checker.entail_binding import judge as e4j, UNRESOLVED as U4
     from checker.entail_role import judge_claim as e5j, UNRESOLVED as U5
     from checker.entail_qualifier import judge as e6j, UNRESOLVED as U6
+    from checker.entail_substitution import judge as e7j, UNRESOLVED as U7
 
     def inlined(r):
+        sub = e7j(r.source_span, r.claim)
+        if sub.status != U7 and sub.entailed is False:
+            return False
         q = e6j(r.source_span, r.claim)
         if q.status != U6 and q.entailed is False:
             return False
@@ -168,11 +186,30 @@ def _test() -> None:
     gated = [r for r in rows if e6(r.source_span, r.claim) is False]
     check(all(judge_row(r) is False for r in gated),
           "every E6 refusal is final")
-    accepted_by_e6 = [r for r in rows
-                      if e6(r.source_span, r.claim) is True
-                      and judge_row(r) is not True]
-    check(bool(accepted_by_e6) or True,
-          "E6 acceptance does not short-circuit the specialists")
+    # A gate may refuse and may abstain. It may NOT accept: an acceptance here would put
+    # a qualifier check above the modules that read the binding, and the same for a
+    # substitution check. Asserted over every benchmark row, for both gates.
+    #
+    # This check read `bool(accepted_by_e6) or True` until 02-10-2026, which cannot fail
+    # and so proved nothing -- it passed just as readily on a gate that accepted every
+    # row. Rewritten as the invariant it was describing.
+    for label, gate in (("E6", e6), ("E7", e7)):
+        accepted = [r for r in rows if gate(r.source_span, r.claim) is True]
+        decided = [r.id for r in accepted if verdict(r.source_span, r.claim).decided_by == label]
+        check(not decided,
+              f"{label} may RETURN True, but it never DECIDES on one -- the cascade reads "
+              f"only its refusal, so an acceptance cannot rule above the specialists "
+              f"({len(accepted)} accepted, {decided[:3]} decided)")
+
+    # E7 goes further: it cannot accept at all, and that is structural rather than a
+    # policy the composition enforces on its behalf. Its only non-abstaining verdict is a
+    # refusal, so there is no True for a future caller to misread.
+    from checker.entail_substitution import SUBSTITUTED, UNRESOLVED as _U7
+    from checker.entail_substitution import judge as _e7j
+    _vs = {_e7j(r.source_span, r.claim).status for r in rows}
+    check(_vs <= {SUBSTITUTED, _U7} and not any(
+              _e7j(r.source_span, r.claim).entailed is True for r in rows),
+          f"E7 returns only a refusal or an abstention, never an acceptance ({_vs})")
     for r in rows[:40]:
         v = verdict(r.source_span, r.claim)
         if v.decided_by == "E6":
@@ -181,10 +218,17 @@ def _test() -> None:
 
     # A verdict explains itself.
     v = verdict(rows[0].source_span, rows[0].claim)
-    check(v.decided_by in ("E3", "E4", "E5", "E6"),
+    check(v.decided_by in ("E3", "E4", "E5", "E6", "E7"),
           f"the deciding module is named ({v.decided_by})")
-    check(v.steps and v.steps[0].module == "E6",
-          "the gate is always the first step recorded")
+    check(v.steps and [x.module for x in v.steps][:2] == ["E7", "E6"],
+          f"both gates run first, in order ({[x.module for x in v.steps]})")
+    check(all(s.role == GATE for s in v.steps if s.module in ("E6", "E7")),
+          "...and both are recorded as gates")
+
+    # Every E7 refusal is final, the same contract E6 has.
+    refused = [r for r in rows if e7(r.source_span, r.claim) is False]
+    check(all(judge_row(r) is False for r in refused),
+          f"every E7 refusal is final ({len(refused)} refused)")
     check(all(isinstance(s.answered, bool) for s in v.steps),
           "every step records whether it answered")
 
