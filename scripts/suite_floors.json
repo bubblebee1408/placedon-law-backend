@@ -226,7 +226,7 @@
     "gateway/roles.py": 16,
     "gateway/schema.py": 92,
     "gateway/screens.py": 98,
-    "gateway/store.py": 205,
+    "gateway/store.py": 237,
     "gateway/verbs.py": 443,
     "gateway/worker.py": 43,
     "scripts/acquire_cuad.py": 14,

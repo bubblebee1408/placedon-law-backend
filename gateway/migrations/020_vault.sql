@@ -30,7 +30,10 @@
 -- a blank page. The vault's search tells the user how many of its documents it cannot read.
 --
 -- STATUS: applied 2026-10-02 by scripts/rls_integration.py to a fresh PostgreSQL 18.6
--- database as 001-020 together, asserted as placedon_app (NOSUPERUSER, NOBYPASSRLS).
+-- database as 001-020 together, asserted as placedon_app (NOSUPERUSER, NOBYPASSRLS):
+-- 319 checks, 0 failures, then dropped. vault_documents, vault_chunks and vault_tags are
+-- the TWENTY-SECOND to TWENTY-FOURTH tenant-scoped tables, and they hold the client's
+-- documents themselves. All three proved the way the rest are.
 
 BEGIN;
 

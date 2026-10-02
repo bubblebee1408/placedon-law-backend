@@ -353,6 +353,21 @@ def _seed(cur, tenant, actor, tag: str) -> None:
                  f"{tag}: aggregate liability shall not exceed INR 50,00,000",
                  0.0412, f"{tag}: one extraction call, priced from reported tokens"))
 
+    # V1: a vault document with a chunk and a tag. The leak would be the client's
+    # documents themselves -- the most concentrated confidential data in the schema.
+    vdoc = uuid.uuid4()
+    cur.execute("INSERT INTO vault_documents (document_id, tenant_id, matter_id, sha256, "
+                "name, byte_count, state, doc_class, class_reason, text_chars) "
+                "VALUES (%s,%s,NULL,%s,%s,2048,'INGESTED','nda',%s,1200)",
+                (vdoc, tenant, ("a" if tag.startswith("A") else "b") * 64,
+                 f"{tag}: Petrichor NDA.pdf", f"{tag}: nda on 6 points"))
+    cur.execute("INSERT INTO vault_chunks (document_id, tenant_id, ordinal, text) "
+                "VALUES (%s,%s,0,%s)",
+                (vdoc, tenant, f"{tag}: the term is five years from the Effective Date"))
+    cur.execute("INSERT INTO vault_tags (document_id, tenant_id, tag, quote) "
+                "VALUES (%s,%s,'Term',%s)",
+                (vdoc, tenant, f"{tag}: the term is five years"))
+
     # 8b: a matter. The leak would be another firm's CLIENT LIST -- who they act for,
     # which is the most commercially sensitive thing a firm has.
     matter = uuid.uuid4()
