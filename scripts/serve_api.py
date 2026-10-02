@@ -22,6 +22,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from checker.api import handle
 
 HOST = "127.0.0.1"
+# P2: every urlopen in this repository carries a timeout, with no exception list --
+# scripts/hardening.py asserts it. These three are a test client against this module's
+# own in-process server, so the risk is a hung GATE rather than a hung request.
+SELFTEST_TIMEOUT = 30
 DEFAULT_PORT = 8020
 MAX_BODY = 256 * 1024        # a company payload is small; cap to refuse abuse
 
@@ -104,7 +108,7 @@ def _test() -> int:
         base = f"http://{HOST}:{port}"
 
         # GET health
-        with urllib.request.urlopen(base + "/v1/health") as r:
+        with urllib.request.urlopen(base + "/v1/health", timeout=SELFTEST_TIMEOUT) as r:
             h = json.loads(r.read())
         check(r.status == 200 and h["status"] == "ok", "GET /v1/health serves ok")
 
@@ -118,7 +122,7 @@ def _test() -> int:
         }).encode()
         req = urllib.request.Request(base + "/v1/compliance-pack", data=payload,
                                      headers={"Content-Type": "application/json"})
-        with urllib.request.urlopen(req) as r:
+        with urllib.request.urlopen(req, timeout=SELFTEST_TIMEOUT) as r:
             body = json.loads(r.read())
         check(r.status == 200 and "rows" in body, "POST /v1/compliance-pack returns a pack")
         check(r.getheader("Cache-Control") == "no-store", "responses are no-store")
@@ -127,7 +131,7 @@ def _test() -> int:
         req2 = urllib.request.Request(base + "/v1/compliance-pack", data=b"not json",
                                       headers={"Content-Type": "application/json"})
         try:
-            urllib.request.urlopen(req2)
+            urllib.request.urlopen(req2, timeout=SELFTEST_TIMEOUT)
             check(False, "an invalid JSON body is refused")
         except urllib.error.HTTPError as e:
             check(e.code == 400, "an invalid JSON body returns 400")
