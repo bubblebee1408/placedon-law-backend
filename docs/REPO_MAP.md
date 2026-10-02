@@ -345,6 +345,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/text_layer_census.py` |  | Per-page text-layer census of the public test corpus. MEASURED, and narrow. |
 | `scripts/themis_mcp.py` |  | Serve Themis to an MCP client over stdio. |
 | `scripts/themis_slice.py` |  | The THEMIS V0 vertical slice, end to end, on real data. |
+| `scripts/vault_load_test.py` |  | Two thousand documents through the real ingest path, timed. |
 | `scripts/vault_retrieval_bakeoff.py` |  | Does giving a chunk its context actually help? Measured, before and after. |
 | `scripts/verify_against_pdf.py` |  | Cross-validate the ingested corpus against an INDEPENDENT rendering of the same Act. |
 | `scripts/verify_document.py` |  | Is this document real? |
@@ -353,4 +354,4 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/watch_gazette.py` |  | Run the Gazette watcher once: what did the Gazette publish since we last looked? |
 | `scripts/watch_ofac.py` |  | Poll OFAC's SDN list and report what CHANGED since the last trustworthy poll. |
 
-313 modules listed.
+314 modules listed.
