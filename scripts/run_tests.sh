@@ -292,6 +292,8 @@ extra+=("scripts/demo_inhouse.py --test")
 extra+=("checker/archive_guard.py --test")
 extra+=("gateway/filestore.py --test")
 extra+=("checker/doc_classifier.py --test")
+extra+=("checker/vault_search.py --test")
+extra+=("scripts/vault_retrieval_bakeoff.py --test")
 
 
 

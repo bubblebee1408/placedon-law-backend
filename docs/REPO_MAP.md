@@ -211,6 +211,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `checker/text_search.py` |  | Title + body search over the Companies Act 2013 corpus, for users who do not know the number. |
 | `checker/timeline.py` |  | Amendment timeline for a Companies Act section. |
 | `checker/trust.py` |  | X.509 chain validation against the Indian government's own root certificates. |
+| `checker/vault_search.py` |  | BM25 over a vault's chunks, per tenant, with each chunk told where it came from. |
 | `checker/voyage_model.py` |  | Voyage AI: a legal embedding model and a reranker, wired as retrieval CANDIDATES. |
 | `checker/witness_span.py` |  | Resolve an amendment span's boundary from the instrument that created it. |
 
@@ -342,6 +343,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/text_layer_census.py` |  | Per-page text-layer census of the public test corpus. MEASURED, and narrow. |
 | `scripts/themis_mcp.py` |  | Serve Themis to an MCP client over stdio. |
 | `scripts/themis_slice.py` |  | The THEMIS V0 vertical slice, end to end, on real data. |
+| `scripts/vault_retrieval_bakeoff.py` |  | Does giving a chunk its context actually help? Measured, before and after. |
 | `scripts/verify_against_pdf.py` |  | Cross-validate the ingested corpus against an INDEPENDENT rendering of the same Act. |
 | `scripts/verify_document.py` |  | Is this document real? |
 | `scripts/verify_reconstruction.py` |  | Ground-truth test for point-in-time reconstruction. |
@@ -349,4 +351,4 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/watch_gazette.py` |  | Run the Gazette watcher once: what did the Gazette publish since we last looked? |
 | `scripts/watch_ofac.py` |  | Poll OFAC's SDN list and report what CHANGED since the last trustworthy poll. |
 
-309 modules listed.
+311 modules listed.
