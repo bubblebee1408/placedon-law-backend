@@ -196,6 +196,10 @@ No Google Cloud hosting. No local models. Search is BM25 unless a bake-off prove
 
 ## 10. Features, one by one
 
+The full feature list for Indian law users, every outside integration, document verification,
+Central/State law and the parallel-agent design are in
+[PLATFORM_FEATURES_AND_INTEGRATIONS.md](PLATFORM_FEATURES_AND_INTEGRATIONS.md).
+
 Status: **BUILT** (on main, tested), **PARTIAL**, **TODO**.
 
 | Feature | What the user does | Task / verbs | How it works | Status |
