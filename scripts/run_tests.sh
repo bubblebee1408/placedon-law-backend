@@ -124,6 +124,7 @@ suites=(
   checker/entail_role.py
   checker/entail_qualifier.py
   checker/entail_substitution.py
+  checker/retrieval_metrics.py
   checker/quote_mutations.py
   checker/cascade.py
   checker/entailment_gate.py
@@ -315,6 +316,7 @@ extra+=("scripts/review_table_eval.py --test")
 extra+=("scripts/retrieval_recall.py --test")
 extra+=("scripts/retrieval_bakeoff.py --test")
 extra+=("scripts/verifier_error_rates.py --test")
+extra+=("scripts/retrieval_dev_metrics.py --test")
 # The source register (PLAN_24 S0). Nothing is fetched on an unread term, so the register
 # is a test subject: it asserts which sources are closed, and a later edit that quietly
 # opens one has to break a check to do it.

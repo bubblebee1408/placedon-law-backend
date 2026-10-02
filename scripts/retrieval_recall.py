@@ -99,17 +99,18 @@ def _dev_ids() -> set:
     return set(ids_for("dev"))
 
 
-def dev_recall(*, top_k: int = 5) -> dict:
-    """The dev rows that name a governing provision, and whether retrieval reaches it.
+def dev_runs(*, top_k: int = 5) -> list[dict]:
+    """One ranked run per dev row that names a governing provision.
 
-    Only rows with `expected_refs`. A refusal row names none, so it is not a recall case --
-    counting it would mix two different questions into one number.
+    `{question_id, question, want, ranked}`. Public because `checker/retrieval_metrics.py`
+    needs the ranked LIST to compute MRR and nDCG, which a hit count has already discarded
+    (M3). Only rows with `expected_refs`: a refusal row names none, so it is not a recall
+    case, and counting it would mix two different questions into one number.
     """
     from checker.text_search import search
 
     dev = _dev_ids()
-    hit = 0
-    cases, misses = [], []
+    runs = []
     for line in GOLD.read_text(encoding="utf-8").splitlines():
         if not line.strip():
             continue
@@ -120,12 +121,30 @@ def dev_recall(*, top_k: int = 5) -> dict:
                 for m in [re.search(r":S(\d+[A-Z]*)$", ref)] if m}
         if not want:
             continue
-        cases.append(r["question_id"])
-        got = [h["section_number"] for h in search(r["question"], top_k=top_k)]
+        runs.append({"question_id": r["question_id"], "question": r["question"],
+                     "want": sorted(want),
+                     "ranked": [h["section_number"]
+                                for h in search(r["question"], top_k=top_k)]})
+    return runs
+
+
+def dev_recall(*, top_k: int = 5) -> dict:
+    """The dev rows that name a governing provision, and whether retrieval reaches it.
+
+    Derived from `dev_runs` so the two cannot drift: this reports the HIT RATE (did any
+    wanted provision come back), which `checker/retrieval_metrics.py` names as such and
+    distinguishes from true recall -- they coincide only while every row names one
+    provision, which is true of all 13 dev rows today.
+    """
+    hit = 0
+    cases, misses = [], []
+    for run in dev_runs(top_k=top_k):
+        want, got = set(run["want"]), run["ranked"]
+        cases.append(run["question_id"])
         if want & set(got):
             hit += 1
         else:
-            misses.append((r["question_id"], sorted(want), got[:5]))
+            misses.append((run["question_id"], sorted(want), got[:5]))
     return {"n": len(cases), "hit": hit, "misses": misses}
 
 

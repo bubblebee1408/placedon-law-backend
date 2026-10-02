@@ -168,6 +168,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `checker/reranker.py` |  | A learned reranker that can be read — M4, the "perceptron". |
 | `checker/resubmission.py` |  | Replacements for proposals a reviewer sent back. Proposes; changes nothing. |
 | `checker/retrieval_eval.py` |  | A retrieval eval set for structural chunk selection — with an honest boundary. |
+| `checker/retrieval_metrics.py` |  | Ranking metrics, as pure functions, with the denominators written down. |
 | `checker/retrieve.py` |  | The composed retrieval entry point: query in, evidence pack out. |
 | `checker/review_grid.py` |  | Review grids: documents down the side, questions across the top, one cell per pair. |
 | `checker/review_queue.py` |  | The human review queue: what a person must check before law is served. |
@@ -328,6 +329,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/repo_map.py` |  | Write docs/REPO_MAP.md: every Python module, its ring, and the first line of its docstring. |
 | `scripts/resolve_missing_sections.py` |  | Resolve sections our PDF parse could not, using India Code as the authority. |
 | `scripts/retrieval_bakeoff.py` |  | One pass, three candidate rankers, three metrics, and a rule decided before the numbers. |
+| `scripts/retrieval_dev_metrics.py` |  | recall@1/5/10, MRR and nDCG@5 on the dev split, with bootstrap intervals. |
 | `scripts/retrieval_recall.py` |  | Can retrieval find a section when you describe it? Measured, with no answer key. |
 | `scripts/review.py` |  | The review terminal: the 30 open items, one at a time, beside the gazette. |
 | `scripts/review_brief.py` |  | Assemble the evidence a reviewer needs, for every queued item, in one document. |
@@ -357,4 +359,4 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/watch_gazette.py` |  | Run the Gazette watcher once: what did the Gazette publish since we last looked? |
 | `scripts/watch_ofac.py` |  | Poll OFAC's SDN list and report what CHANGED since the last trustworthy poll. |
 
-317 modules listed.
+319 modules listed.
