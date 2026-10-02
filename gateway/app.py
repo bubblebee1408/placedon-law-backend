@@ -164,9 +164,37 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
     app.state.run_store = app.state.memory_backend
     app.state.documents = app.state.memory_backend.documents
     app.state.keys = keys if keys is not None else KeyStore()
+    # P2. One limiter for the deployment, shared by /v1 and /v2. Two surfaces read a body,
+    # and a limit wired into one of them is a limit the other does not have.
+    from gateway import limits as limits_mod
+    app.state.limiter = limits_mod.Limiter()
     # The audit chain, in memory with the rest of it. Append-only and hash-chained already
     # (gateway/audit.py); what is missing is Postgres, not the chain.
     app.state.audit = ()
+
+    def _limit_response(refusal) -> Response:
+        """A Refusal as an HTTP response. One shape, so both surfaces answer alike."""
+        headers = ({} if refusal.retry_after is None
+                   else {"Retry-After": str(refusal.retry_after)})
+        return Response(content=dumps({"error": refusal.code.lower(),
+                                       "detail": refusal.detail}),
+                        status_code=refusal.http_status, media_type="application/json",
+                        headers=headers)
+
+    def _too_large(raw: bytes | None, request: Request):
+        """A Refusal if this body is over the cap, else None. Checked on BOTH surfaces."""
+        return limits_mod.check_body_size(
+            raw, content_length=request.headers.get("content-length"))
+
+    def _rate_limited(principal):
+        """A Refusal if this TENANT is over its rate, else None.
+
+        Per tenant, which is what P2 asks for, and which means an UNAUTHENTICATED flood is
+        not limited here -- there is no tenant to attribute it to. That belongs at the
+        reverse proxy, with the body-size limit the server enforces before this process sees
+        a request (H1's deployment scripts). Stated rather than left to be assumed.
+        """
+        return app.state.limiter.check(principal.tenant_id)
 
     def _unauthorised() -> Response:
         return Response(content=dumps({"error": "unauthorized",
@@ -200,6 +228,10 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
         body = None
         if request.method == "POST":
             raw = await request.body()
+            # Size first: it protects this process's memory and needs no identity.
+            over = _too_large(raw, request)
+            if over:
+                return _limit_response(over)
             if raw:
                 try:
                     body = json.loads(raw)
@@ -216,6 +248,12 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
                 principal = _principal(request)
             except AuthError:
                 return _unauthorised()
+            slow = _rate_limited(principal)
+            if slow:
+                _record(principal, action=audit_mod.READ,
+                        route=f"{request.method} {bare}", resource=bare,
+                        outcome="refused", status=slow.http_status)
+                return _limit_response(slow)
         path = request.url.path
         if request.url.query:
             path = f"{path}?{request.url.query}"
@@ -250,12 +288,21 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
                 principal = _principal(request)
             except AuthError:
                 return _unauthorised()
+            slow = _rate_limited(principal)
+            if slow:
+                _record(principal, action=audit_mod.READ,
+                        route=f"{verb.method} {path}", resource=verb.name,
+                        outcome="refused", status=slow.http_status)
+                return _limit_response(slow)
             store = app.state.backend_for(principal.tenant_id)
             ctx = Context(tenant=principal.tenant_id, actor=principal.actor,
                           store=store, documents=app.state.documents, clock=now)
             args = dict(request.path_params)
             if verb.method == "POST":
                 raw = await request.body()
+                over = _too_large(raw, request)
+                if over:
+                    return _limit_response(over)
                 if raw:
                     try:
                         body = json.loads(raw)
@@ -761,6 +808,72 @@ def _test() -> None:
         "...and the binary route still CALLS may() -- read from the parsed function, "
         "because no role sits below viewer to prove it with a request, and a file route "
         "that skipped the check would be the way around every check above")
+
+    # ── P2: rate and request-size limits, on BOTH surfaces ──────────────────
+    # The property that matters is not that a limit exists, it is that it exists on both.
+    # /v1 and /v2 each read a body, and a guard wired into one of them is a guard the other
+    # does not have -- which is how this kind of thing is usually half-applied.
+    from gateway import limits as _lim
+
+    big = "x" * (_lim.MAX_BODY_BYTES + 1)
+    r = client.post("/v1/ask", content=json.dumps({"question": big}),
+                    headers={"Content-Type": "application/json"})
+    check(r.status_code == 413,
+          f"/v1 refuses an oversized body with 413 ({r.status_code})")
+    check(_lim.TOO_LARGE.lower() in r.json()["error"],
+          f"...naming the reason ({r.json()['error']})")
+
+    r = client.post("/v2/matters/create", content=json.dumps({"name": big}),
+                    headers={"Content-Type": "application/json"})
+    check(r.status_code == 413,
+          f"/v2 refuses it TOO -- the generated routes are the other surface "
+          f"({r.status_code})")
+
+    # A fresh app per rate test, so the bucket is not already spent by the checks above.
+    def _fresh():
+        a = create_app(clock=lambda: GEN, handler=handle, keys=keys, db_url="")
+        return TestClient(a, headers={"Authorization": f"Bearer {KEY}"}), a
+
+    c1, a1 = _fresh()
+    a1.state.limiter = _lim.Limiter(per_minute=60, burst=2)
+    codes = [c1.get(f"/v1/health?x={i}").status_code for i in range(4)]
+    check(codes.count(429) == 0,
+          f"/v1/health is PUBLIC, so it has no tenant to limit and is not rate limited "
+          f"here -- an unauthenticated flood is the reverse proxy's job ({codes})")
+
+    c2, a2 = _fresh()
+    a2.state.limiter = _lim.Limiter(per_minute=60, burst=2)
+    codes = [c2.post("/v1/ask", content=json.dumps({"question": "q"}),
+                     headers={"Content-Type": "application/json"}).status_code
+             for _ in range(4)]
+    check(429 in codes, f"/v1 rate-limits an authenticated tenant past its burst ({codes})")
+    first = c2.post("/v1/ask", content=json.dumps({"question": "q"}),
+                    headers={"Content-Type": "application/json"})
+    check(first.status_code == 429 and first.headers.get("Retry-After"),
+          f"...with a Retry-After header ({first.headers.get('Retry-After')})")
+
+    c3, a3 = _fresh()
+    a3.state.limiter = _lim.Limiter(per_minute=60, burst=2)
+    codes = [c3.post("/v2/matters/create", content=json.dumps({"name": f"m{i}"}),
+                     headers={"Content-Type": "application/json"}).status_code
+             for i in range(4)]
+    check(429 in codes,
+          f"/v2 rate-limits as well, from the SAME limiter on app.state ({codes})")
+
+    # One tenant's limit must not touch another's.
+    c4, a4 = _fresh()
+    a4.state.limiter = _lim.Limiter(per_minute=60, burst=1)
+    other = KeyStore()
+    OTHER_KEY = other.issue(tenant_id=A, actor="other", role="admin") \
+        if hasattr(other, "issue") else None
+    for _ in range(3):
+        c4.post("/v1/ask", content=json.dumps({"question": "q"}),
+                headers={"Content-Type": "application/json"})
+    check(a4.state.limiter.tokens_for(T) < 1.0,
+          "the limiter's bucket is keyed by TENANT, and this firm's is spent")
+    check(a4.state.limiter.tokens_for("some-other-tenant") == 1.0,
+          "...while another tenant's is untouched -- one noisy firm cannot spend another's "
+          "capacity")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:

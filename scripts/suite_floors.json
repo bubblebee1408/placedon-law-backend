@@ -220,7 +220,7 @@
     "eval/realrun/run.py": 14,
     "eval/realrun/text_field_probe.py": 47,
     "eval/temporal/harness.py": 20,
-    "gateway/app.py": 74,
+    "gateway/app.py": 83,
     "gateway/audit.py": 19,
     "gateway/auth.py": 25,
     "gateway/cli.py": 133,
