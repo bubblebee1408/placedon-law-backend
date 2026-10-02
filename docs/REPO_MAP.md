@@ -305,6 +305,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/check_doc_refs.py` |  | Every path an ACTIVE document cites must exist on disk. |
 | `scripts/cross_validate_corpus.py` |  | Compare the two renderings of the Companies Act we already hold. |
 | `scripts/date_properties.py` |  | Thousands of seeded random dates over every DerivedDate rule, checking stated properties. |
+| `scripts/demo.py` |  | One command: walk the whole product on synthetic data, and say pass or fail. |
 | `scripts/demo_inhouse.py` |  | The in-house lawyer's day, end to end, on synthetic data. |
 | `scripts/failure_report.py` |  | Weekly counts of why runs did not answer. |
 | `scripts/find_commencement.py` |  | Find which notification commenced a given section of an amending Act. |
@@ -360,4 +361,4 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/watch_gazette.py` |  | Run the Gazette watcher once: what did the Gazette publish since we last looked? |
 | `scripts/watch_ofac.py` |  | Poll OFAC's SDN list and report what CHANGED since the last trustworthy poll. |
 
-320 modules listed.
+321 modules listed.

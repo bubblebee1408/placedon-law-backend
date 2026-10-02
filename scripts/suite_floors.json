@@ -249,6 +249,7 @@
     "scripts/cascade_report.py": 34,
     "scripts/check_doc_refs.py": 40,
     "scripts/date_properties.py": 29,
+    "scripts/demo.py": 17,
     "scripts/demo_inhouse.py": 7,
     "scripts/failure_report.py": 12,
     "scripts/find_commencement.py": 20,

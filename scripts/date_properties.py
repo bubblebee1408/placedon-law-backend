@@ -471,6 +471,16 @@ def report(r: dict, sr: dict | None = None) -> str:
         if sr["missed"]:
             lines.append(f"\n  {len(sr['missed'])} mutant(s) NOT caught -- those rules are "
                          f"unmeasured, whatever the HELDs above say.")
+    # A verdict line, so a reader (and scripts/demo.py) does not have to read the last
+    # mutant as though it were the summary.
+    held = sum(1 for p in r["properties"] if p["held"])
+    lines.append("")
+    if sr:
+        caught = sum(1 for m in sr["mutants"] if m["caught"])
+        lines.append(f"  {held}/{len(r['properties'])} properties held, "
+                     f"{caught}/{len(sr['mutants'])} mutants caught")
+    else:
+        lines.append(f"  {held}/{len(r['properties'])} properties held")
     return "\n".join(lines)
 
 
