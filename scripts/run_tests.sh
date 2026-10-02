@@ -278,6 +278,10 @@ extra+=("gateway/screens.py --test")
 extra+=("gateway/roles.py --test")
 extra+=("gateway/passwords.py --test")
 
+# 8c: the compliance calendar. A missing fact gives an UNKNOWN entry naming the fact,
+# never a guessed date -- and an undatable obligation is never dropped from the view.
+extra+=("checker/compliance_calendar.py --test")
+
 
 
 

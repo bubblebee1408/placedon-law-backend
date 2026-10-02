@@ -2067,6 +2067,95 @@ def _task_args(task: str, text: str, file_ids, ctx: Context, args: dict,
     return {"text": doc or text, "name": "conversation upload"}
 
 
+def _calendar_upcoming(args: dict, ctx: Context) -> dict:
+    """What falls due in the next 90 days, and what cannot be dated. 8c.
+
+    Read-only, and `mcp=False` -- which here is a LIMITATION and not a principle, so it is
+    said plainly: a compliance calendar is a reasonable thing for an agent to read. The
+    MCP policy allowlist is partly in a Project Themis file whose tool count is hardcoded
+    and which must not be edited from here, so a new MCP tool cannot be added from this
+    side of the repository at all. When that is resolved, flip this flag.
+    """
+    from datetime import date as _date
+
+    from checker import compliance_calendar as cal
+    from checker import obligations as ob
+    from checker import section_index
+    from checker.sarvam_model import html_to_text
+
+    as_of_raw = (args.get("as_of") or "").strip() or _today(ctx)
+    try:
+        as_of = _date.fromisoformat(as_of_raw[:10])
+    except ValueError:
+        return _refuse("BAD_REQUEST", f"as_of must be YYYY-MM-DD, got {as_of_raw!r}")
+    horizon = args.get("horizon_days")
+    try:
+        horizon = int(horizon) if horizon else cal.HORIZON_DAYS
+    except (TypeError, ValueError):
+        return _refuse("BAD_REQUEST", "horizon_days must be a whole number of days")
+
+    # `company`, NOT `company_facts`. They are different vocabularies and conflating them
+    # fails for every caller: `company_facts` is the MCA master-data channel
+    # (checker/sources/company_facts.py) with a fixed field list -- cin, name, status, roc,
+    # address, state, incorporated_on, listed -- and its own personal-data rules. The
+    # obligations register wants a CompanyProfile: company_class, paid_up_capital,
+    # director_count and the rest. Asking for one and reading the other produced a refusal
+    # naming fields the caller never sent.
+    raw_company = args.get("company")
+    if raw_company is not None and not isinstance(raw_company, dict):
+        return _refuse("BAD_REQUEST", "company must be an object of profile fields")
+    supplied = {k: v for k, v in (raw_company or {}).items()
+                if k in ob.CompanyProfile.__dataclass_fields__ and k != "as_of"}
+    unknown_fields = sorted(set(raw_company or {}) - set(supplied) - {"as_of"})
+    if unknown_fields:
+        return _refuse("BAD_REQUEST",
+                       f"{unknown_fields} are not CompanyProfile fields. Refused rather "
+                       f"than ignored: a caller who sent one believes it was taken into "
+                       f"account")
+    # The three the register cannot proceed without. Refused BY NAME rather than
+    # defaulted: a calendar built on an assumed company class would date duties that may
+    # not attach at all, which is the guessed date this job exists to prevent, one layer up.
+    needed = [k for k in ("company_class", "incorporation_date") if not supplied.get(k)]
+    if needed:
+        return _refuse("BAD_REQUEST",
+                       f"a calendar needs {', '.join(needed)} before any duty can be "
+                       f"decided. These are not defaulted: an assumed company class would "
+                       f"date duties that may not attach at all")
+    try:
+        supplied["incorporation_date"] = _date.fromisoformat(
+            str(supplied["incorporation_date"])[:10])
+    except ValueError:
+        return _refuse("BAD_REQUEST", "incorporation_date must be YYYY-MM-DD")
+    profile = ob.CompanyProfile(as_of=as_of, **supplied)
+    rows = ob.build(profile)
+
+    # Anchors come from the CALLER, as dates they have actually supplied. Nothing here
+    # derives an anchor from another fact: that is how a guessed date gets in.
+    anchors = {}
+    for label, raw in (args.get("anchors") or {}).items():
+        try:
+            anchors[str(label)] = _date.fromisoformat(str(raw)[:10])
+        except (TypeError, ValueError):
+            return _refuse("BAD_REQUEST",
+                           f"anchor {label!r} is not a date: {raw!r}. A calendar never "
+                           f"guesses one")
+
+    # The provision's own text, read from the corpus. An obligation whose section is not
+    # held has no text, and `upcoming` records NO_INTERVAL rather than assuming a period.
+    texts = {}
+    for row in rows:
+        number = str(row.provision or "").split("s.")[-1].split("(")[0].strip()
+        rec = section_index.section_by_number(number) if number else None
+        if rec:
+            texts[row.obligation_id] = html_to_text(rec.get("content") or "")
+
+    out = cal.upcoming(rows, anchors=anchors, source_texts=texts,
+                       intervals=args.get("intervals") or {}, as_of=as_of,
+                       horizon_days=horizon).to_dict()
+    out["anchors_supplied"] = sorted(anchors)
+    return out
+
+
 def _matters_create(args: dict, ctx: Context) -> dict:
     """Open a matter. A WRITE verb, so it is off MCP by that rule already."""
     import uuid
@@ -3144,6 +3233,24 @@ VERBS: tuple[Verb, ...] = (
                           "run holds is DROPPED and reported in dropped_claims")),
          "POST", read_only=False, run=_conversation_send),
 
+    Verb("calendar.upcoming",
+         "What falls due in the next 90 days, and what cannot be dated at all. A missing "
+         "fact gives an UNKNOWN entry naming the fact, never a guessed date.",
+         (Field("company", OBJECT, True,
+                describes="the company PROFILE: company_class and incorporation_date at "
+                          "least, plus any of paid_up_capital, turnover, director_count "
+                          "and the rest. NOT the `company_facts` vocabulary, which is MCA "
+                          "master data and a different thing"),
+          Field("anchors", OBJECT, False,
+                describes="{anchor_label: YYYY-MM-DD} the dates this company has "
+                          "supplied. Nothing is derived from another fact"),
+          Field("intervals", OBJECT, False,
+                describes="{obligation_id: anchor_label} which supplied date each duty "
+                          "runs from"),
+          Field("as_of", STRING, False, describes="YYYY-MM-DD, default today"),
+          Field("horizon_days", STRING, False, describes="default 90")),
+         "POST", read_only=True, mcp=False, run=_calendar_upcoming),
+
     Verb("matters.create",
          "Open a matter: one piece of work for one client. Work is filed to it, and "
          "conversations are listed one matter at a time.",
@@ -3356,8 +3463,9 @@ def _test() -> None:
                     "review_table.status", "review_table.export",
                     "review_table.cancel", "draft.create",
                     "draft.revise", "draft.status", "draft.versions", "draft.diff",
-                    "draft.export", "matters.create", "matters.list"},
-          f"the thirty-one verbs are declared once ({sorted(names)})")
+                    "draft.export", "matters.create", "matters.list",
+                    "calendar.upcoming"},
+          f"the thirty-two verbs are declared once ({sorted(names)})")
     # sources.* are READ-ONLY, so they reach MCP. That is the intended shape: an agent may
     # ask what a source permits and search what may be read, and there is no sources verb
     # that fetches, stores or spends. S3's Indian Kanoon connector will spend money, and
@@ -4755,9 +4863,13 @@ def _test() -> None:
     check(mcp_names == expected_mcp,
           f"MCP exposes every read-only verb THAT OPTS IN, and no other "
           f"({sorted(mcp_names)})")
-    check({v.name for v in VERBS if v.read_only and not v.mcp} == {"matters.list"},
-          f"...and exactly one verb opts out today: a client list names who the firm acts "
-          f"for ({sorted(v.name for v in VERBS if v.read_only and not v.mcp)})")
+    check({v.name for v in VERBS if v.read_only and not v.mcp}
+          == {"matters.list", "calendar.upcoming"},
+          f"...and exactly two verbs opt out today -- matters.list on principle (a client "
+          f"list names who the firm acts for) and calendar.upcoming on a LIMITATION (the "
+          f"MCP policy allowlist cannot be extended from this side of the repository). "
+          f"The two reasons are different and the handlers say which "
+          f"({sorted(v.name for v in VERBS if v.read_only and not v.mcp)})")
     _opted_out = {v.name for v in VERBS if v.read_only and not v.mcp}
     check({n.split(".", 1)[1] for n in mcp_names}
           == names - set(write_verbs()) - _opted_out,
@@ -4813,7 +4925,7 @@ def _test() -> None:
           "...while a WRITE verb is kept out of MCP by mcp_tools(), not by the author "
           "remembering to")
     check("widgets.delete" in write_verbs(hypo), "...and is named in write_verbs()")
-    check(len(VERBS) == 31 and "widgets.count" not in rest_spec(),
+    check(len(VERBS) == 32 and "widgets.count" not in rest_spec(),
           "...and the probe changed nothing in this module: the surfaces are generated "
           "from an argument, not from a global the test rebound")
 
