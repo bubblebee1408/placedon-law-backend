@@ -34,13 +34,30 @@ import os
 import uuid
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Literal, Protocol, runtime_checkable
 
 # ── The numbers. Change these here, nowhere else. ────────────────────────────
 MONTHLY_CAP_INR = 3_500.0
 DAILY_CAP_INR = round(MONTHLY_CAP_INR / 30, 2)      # ₹116.67 — derived, not asserted
+
+# P2. Caps INSIDE the global one, so a single tenant or user cannot spend the whole month.
+#
+# ₹700 x 5 = ₹3,500 exactly, so five tenants at their cap fill the global one and a sixth is
+# refused by the global cap rather than its own. That is arithmetic, not a coincidence to be
+# relied on: raising MONTHLY_CAP_INR without touching this leaves the ratio silently changed.
+TENANT_MONTHLY_CAP_INR = 700.0
+
+# ⚠ CURRENTLY UNREACHABLE, and left at the specified value on purpose.
+#
+# ₹150/day sits ABOVE the derived global daily cap of ₹116.67, so the global cap always binds
+# first and this one can never refuse a call. It is implemented, recorded and reported anyway,
+# because the alternative -- quietly lowering it to fit, or quietly raising DAILY_CAP_INR to
+# make it bite -- would be changing a spend limit nobody asked to change. `_test()` asserts the
+# shadowing, so whoever raises DAILY_CAP_INR past ₹150 is told by a failing test that this cap
+# has come alive rather than discovering it from a refused call.
+USER_DAILY_CAP_INR = 150.0
 USD_INR = 95.23                                      # 2026-08-06
 
 # Anthropic pricing, USD per million tokens. LIST price, deliberately — see below.
@@ -577,7 +594,7 @@ class BudgetTracker:
         if raw.get("corrupt"):
             return {"corrupt": True, "day": "", "month": "", "day_inr": 0.0,
                     "month_inr": 0.0, "calls_today": 0, "calls_by_model": {},
-                    "spend_cap": False,
+                    "spend_cap": False, "tenant_month_inr": {}, "user_day_inr": {},
                     "credit_exhausted": False, "reservations": {}}
         day_key, month_key = self._today.isoformat(), self._today.strftime("%Y-%m")
         same_day = raw.get("day") == day_key
@@ -597,6 +614,15 @@ class BudgetTracker:
             "calls_by_model": ({str(k): int(v) for k, v in
                                 (raw.get("calls_by_model") or {}).items()}
                                if same_day else {}),
+            # P2. Per-tenant spend is MONTH-scoped and per-user spend is DAY-scoped, each
+            # matching the cap it is checked against, and each rolling over on the calendar
+            # exactly as the global counters above do rather than by a job nobody runs.
+            "tenant_month_inr": ({str(k): float(v) for k, v in
+                                  (raw.get("tenant_month_inr") or {}).items()}
+                                 if raw.get("month") == month_key else {}),
+            "user_day_inr": ({str(k): float(v) for k, v in
+                              (raw.get("user_day_inr") or {}).items()}
+                             if same_day else {}),
             # Scoped to the month, so it clears itself exactly when the provider's cap does.
             "spend_cap": raw.get("spend_cap_month") == month_key,
             # Scoped to the DAY, unlike the spend cap above, because the two clear on
@@ -626,6 +652,10 @@ class BudgetTracker:
         }
         if s["calls_by_model"]:
             row["calls_by_model"] = dict(s["calls_by_model"])
+        if s["tenant_month_inr"]:
+            row["tenant_month_inr"] = dict(s["tenant_month_inr"])
+        if s["user_day_inr"]:
+            row["user_day_inr"] = dict(s["user_day_inr"])
         if s["spend_cap"]:
             row["spend_cap_month"] = s["month"]
         if s["credit_exhausted"]:
@@ -637,6 +667,9 @@ class BudgetTracker:
             row.pop("reservations", None)
         if not row.get("calls_by_model"):
             row.pop("calls_by_model", None)
+        for scoped in ("tenant_month_inr", "user_day_inr"):
+            if not row.get(scoped):
+                row.pop(scoped, None)
         return row
 
     def _mutate(self, build: Callable[[dict], dict]) -> dict:
@@ -660,7 +693,8 @@ class BudgetTracker:
     # ── the gate ─────────────────────────────────────────────────────────
     def can_make_call(self, estimated_inr: float | None = None, *, model: str = DEFAULT_MODEL,
                       input_tokens: int | None = None, output_tokens: int | None = None,
-                      per_model_cap: int | None = None) -> Verdict:
+                      per_model_cap: int | None = None,
+                      tenant_id: str | None = None, user_id: str | None = None) -> Verdict:
         # A half-given pair is refused rather than zero-filled, on `estimate_tokens`' rule:
         # supplying the missing half quietly is wrong in whichever direction the caller did
         # not mean, and a zero-filled OUTPUT count is wrong in the cheap one.
@@ -704,6 +738,29 @@ class BudgetTracker:
                            f"Monthly still has ₹{MONTHLY_CAP_INR - s['month_inr']:.2f}.",
                            s["day_inr"], s["month_inr"], reserved)
 
+        # P2. Scoped caps, AFTER the global ones: if the global cap is exhausted no tenant
+        # can spend anyway, so reporting a tenant cap first would name the smaller problem.
+        # Each is skipped when the caller does not say who is spending -- an unattributed
+        # call is checked against the global caps alone, which is what every existing caller
+        # does today and is wrong only in the direction of the old behaviour.
+        if tenant_id is not None:
+            used = s["tenant_month_inr"].get(tenant_id, 0.0)
+            if used + estimated_inr > TENANT_MONTHLY_CAP_INR:
+                return Verdict(False, "budget",
+                               f"tenant {tenant_id} has used ₹{used:.2f} of its "
+                               f"₹{TENANT_MONTHLY_CAP_INR:.0f} monthly cap. The global cap "
+                               f"still has ₹{MONTHLY_CAP_INR - s['month_inr']:.2f}, so this "
+                               f"is this tenant's limit and not the deployment's.",
+                               s["day_inr"], s["month_inr"], reserved)
+
+        if user_id is not None:
+            used = s["user_day_inr"].get(user_id, 0.0)
+            if used + estimated_inr > USER_DAILY_CAP_INR:
+                return Verdict(False, "budget",
+                               f"user {user_id} has used ₹{used:.2f} of their "
+                               f"₹{USER_DAILY_CAP_INR:.0f} daily cap.",
+                               s["day_inr"], s["month_inr"], reserved)
+
         # Counted, not priced. This is the only gate a ₹0.00 call can fail, and it is
         # checked last so a paid call that breaches both still reports the money first —
         # that is the number a person can act on.
@@ -734,12 +791,19 @@ class BudgetTracker:
         return Verdict(True, "normal", "within budget",
                        s["day_inr"], s["month_inr"], reserved)
 
-    def record_call(self, actual_inr: float, *, model: str | None = None) -> Verdict:
+    def record_call(self, actual_inr: float, *, model: str | None = None,
+                    tenant_id: str | None = None, user_id: str | None = None) -> Verdict:
         """Record a call whose cost is already known. `settle()` is the reserved path.
 
         `model` is optional and only the per-model counter needs it. A caller that omits it
         still moves `calls_today`, so the rupee and request gates are unaffected -- but the
         per-model quota cannot see the call, which is why gemini_model passes it.
+
+        `tenant_id` and `user_id` are optional for the same reason and with the same
+        consequence: the global counters always move, and an unattributed call is invisible
+        to the scoped caps. So a caller that gates on a tenant and records without one
+        spends from the global budget while its own bucket stays empty -- which is why
+        `scoped_call` exists and why every new caller should use it instead.
         """
         if actual_inr < 0:
             raise ValueError(f"actual cost must be >= 0, got {actual_inr}")
@@ -751,14 +815,86 @@ class BudgetTracker:
                 return dict(st["calls_by_model"])
             return dict(st["calls_by_model"]) | {model: st["calls_by_model"].get(model, 0) + 1}
 
+        def _scoped(st: dict, key: str, who: str | None) -> dict:
+            if who is None:
+                return dict(st[key])
+            return dict(st[key]) | {who: round(st[key].get(who, 0.0) + actual_inr, 4)}
+
         row = self._mutate(lambda st: self._row(
             st,
             day_inr=round(st["day_inr"] + actual_inr, 4),
             month_inr=round(st["month_inr"] + actual_inr, 4),
+            tenant_month_inr=_scoped(st, "tenant_month_inr", tenant_id),
+            user_day_inr=_scoped(st, "user_day_inr", user_id),
             calls_by_model=_by_model(st),
             calls_today=st["calls_today"] + 1))
         return Verdict(True, "normal", "recorded", row["day_inr"], row["month_inr"],
                        _reserved_total(row.get("reservations", {})))
+
+    def scoped_call(self, *, tenant_id: str, user_id: str, model: str = DEFAULT_MODEL,
+                    estimated_inr: float | None = None) -> tuple[Verdict, Callable[[float], Verdict]]:
+        """(verdict, record) for one attributed call. The pair cannot drift apart.
+
+        `can_make_call` and `record_call` both take `tenant_id` and `user_id` separately, so
+        a caller can gate on a tenant and then record without one -- the global counters
+        move, the tenant's bucket does not, and the cap it just passed never fills. That is a
+        silent over-spend, and the shape of the API invites it.
+
+        This returns the verdict together with the recorder already bound to the same ids, so
+        there is one place the pair is written and no second chance to disagree. Callers that
+        reserve and settle keep using those; this is for the common record-after-the-fact path.
+        """
+        verdict = self.can_make_call(estimated_inr, model=model,
+                                     tenant_id=tenant_id, user_id=user_id)
+
+        def record(actual_inr: float) -> Verdict:
+            return self.record_call(actual_inr, model=model,
+                                    tenant_id=tenant_id, user_id=user_id)
+
+        return verdict, record
+
+    def usage(self, *, tenant_id: str | None = None, user_id: str | None = None) -> dict:
+        """What has been spent and what is left, at every scope that applies.
+
+        The shape `usage.status` returns. `None` for a scope the caller did not name, never
+        0.0: "this tenant has spent nothing" and "you did not say which tenant" are different
+        answers and a zero would merge them.
+        """
+        s = self._state()
+        if s["corrupt"]:
+            return {"readable": False,
+                    "reason": "budget ledger unreadable; no figure here would be a balance"}
+        reserved = _reserved_total(s["reservations"])
+        out = {
+            "readable": True,
+            "day": s["day"], "month": s["month"],
+            "global": {"day_inr": s["day_inr"], "day_cap_inr": DAILY_CAP_INR,
+                       "month_inr": s["month_inr"], "month_cap_inr": MONTHLY_CAP_INR,
+                       "reserved_inr": reserved,
+                       "remaining_month_inr": round(MONTHLY_CAP_INR - s["month_inr"]
+                                                    - reserved, 2)},
+            "tenant": None, "user": None,
+            "calls_today": s["calls_today"], "call_cap_today": DAILY_REQUEST_CAP,
+        }
+        if tenant_id is not None:
+            spent = s["tenant_month_inr"].get(tenant_id, 0.0)
+            out["tenant"] = {"tenant_id": tenant_id, "month_inr": spent,
+                             "month_cap_inr": TENANT_MONTHLY_CAP_INR,
+                             "remaining_inr": round(TENANT_MONTHLY_CAP_INR - spent, 2)}
+        if user_id is not None:
+            spent = s["user_day_inr"].get(user_id, 0.0)
+            out["user"] = {"user_id": user_id, "day_inr": spent,
+                           "day_cap_inr": USER_DAILY_CAP_INR,
+                           "remaining_inr": round(USER_DAILY_CAP_INR - spent, 2),
+                           # Reported, because a caller reading remaining_inr would otherwise
+                           # believe this cap is what will stop them.
+                           "cap_binds": USER_DAILY_CAP_INR < DAILY_CAP_INR,
+                           "note": ("" if USER_DAILY_CAP_INR < DAILY_CAP_INR else
+                                    f"the per-user daily cap of ₹{USER_DAILY_CAP_INR:.0f} is "
+                                    f"above the global daily cap of ₹{DAILY_CAP_INR:.2f}, so "
+                                    f"the global one always binds first and this cap cannot "
+                                    f"currently refuse a call")}
+        return out
 
     def record_credit_exhausted(self) -> bool:
         """The provider said the balance is empty. Remember it for the rest of today.
@@ -1486,6 +1622,126 @@ if __name__ == "__main__":
     check("  ...and the daily cap could never have prevented a per-minute burst: it "
           "permits a whole minute's budget in one second",
           DAILY_REQUEST_CAP > FREE_TIER_RPM, True)
+
+    # ── P2: per-tenant and per-user caps inside the global one ───────────────
+    def tracker():
+        return BudgetTracker(store=Mem(), today=date(2026, 10, 2))
+
+    t = tracker()
+    check("a tenant under its cap may spend",
+          t.can_make_call(1.0, tenant_id="firm-a").allowed, True)
+    check("  ...and an UNATTRIBUTED call is checked against the global caps only, which is "
+          "what every existing caller does",
+          t.can_make_call(1.0).allowed, True)
+
+    # A tenant can only REACH its ₹700 monthly cap across many days, because the global
+    # DAILY cap of ₹116.67 stops it long before ₹700 in any one day. So the ledger is filled
+    # the way a real month fills it, day by day -- which also exercises the day rollover.
+    def fill_tenant(store, who: str, target: float, start=date(2026, 10, 2)):
+        """Spend `target` for `who` in daily instalments under the global daily cap."""
+        spent, day = 0.0, start
+        while spent < target:
+            chunk = min(DAILY_CAP_INR - 0.5, target - spent)
+            BudgetTracker(store=store, today=day).record_call(chunk, tenant_id=who)
+            spent, day = spent + chunk, day + timedelta(days=1)
+        return day
+
+    store = Mem()
+    day = fill_tenant(store, "firm-a", TENANT_MONTHLY_CAP_INR - 0.5)
+    t = BudgetTracker(store=store, today=day)
+    v = t.can_make_call(1.0, tenant_id="firm-a")
+    check("a tenant at its monthly cap is REFUSED", v.allowed, False)
+    check("  ...for budget, not offline", v.mode, "budget")
+    check("  ...and the reason says it is the TENANT's limit, not the deployment's",
+          "not the deployment" in v.reason, True)
+    check("  ...while a DIFFERENT tenant is unaffected -- the buckets are per tenant",
+          t.can_make_call(1.0, tenant_id="firm-b").allowed, True)
+    check("  ...and the global MONTHLY cap still has room, which is what makes the refusal "
+          "the tenant's own",
+          t.usage()["global"]["remaining_month_inr"] > 0, True)
+    check("  ...and the global daily cap stops a tenant reaching ₹700 in ONE day, which is "
+          "why this was filled day by day",
+          DAILY_CAP_INR < TENANT_MONTHLY_CAP_INR, True)
+
+    # Five tenants at ₹700 fill ₹3,500 exactly, so the sixth is stopped by the GLOBAL cap.
+    check("₹700 x 5 is the global ₹3,500 exactly",
+          TENANT_MONTHLY_CAP_INR * 5, MONTHLY_CAP_INR)
+    # ...but five tenants cannot actually REACH ₹700 each inside one month: ₹3,500 of spend
+    # needs thirty days at the ₹116.67 daily cap, and every tenant's month rolls over on the
+    # same clock. Simulating it was the first version of this check and it failed for that
+    # reason. So the ORDERING is tested directly instead, on a ledger seeded at the global
+    # cap -- which is the behaviour that matters: the global cap is reported first, because a
+    # tenant told to wait for its own cap when the deployment is out of money is being told
+    # the smaller problem.
+    check("thirty days at the daily cap IS the global monthly cap, so reaching it takes the "
+          "whole month",
+          round(DAILY_CAP_INR * 30, 0), MONTHLY_CAP_INR)
+    store = Mem()
+    store.write({"day": "2026-10-02", "month": "2026-10",
+                 "day_inr": 0.0, "month_inr": MONTHLY_CAP_INR - 0.5, "calls_today": 0})
+    v = BudgetTracker(store=store, today=date(2026, 10, 2)).can_make_call(
+        1.0, tenant_id="firm-6")
+    check("  ...and with the GLOBAL cap exhausted, a fresh tenant is refused by it and not "
+          "by its own empty bucket",
+          v.allowed is False and "monthly cap reached" in v.reason, True)
+
+    # ── the per-user cap is implemented, recorded, and currently SHADOWED ─────
+    check("the per-user daily cap is above the global daily cap, so it cannot bind",
+          USER_DAILY_CAP_INR > DAILY_CAP_INR, True)
+    t = tracker()
+    v = t.can_make_call(USER_DAILY_CAP_INR + 1, user_id="u1")
+    check("  ...and a call that would breach it is refused by the GLOBAL daily cap first",
+          v.allowed is False and "daily cap reached" in v.reason, True)
+    check("  ...which usage() reports rather than leaving a reader to infer",
+          t.usage(user_id="u1")["user"]["cap_binds"], False)
+    check("  ...with a note saying why",
+          "always binds first" in t.usage(user_id="u1")["user"]["note"], True)
+    # The cap itself is still correct arithmetic, shown by driving it directly. If anyone
+    # raises DAILY_CAP_INR past ₹150 the shadowing checks above fail and say so.
+    t = tracker()
+    t.record_call(USER_DAILY_CAP_INR - 0.5, user_id="u1")
+    check("  ...and the cap's own arithmetic is right: at ₹149.50 spent, ₹1 more breaches it",
+          t._state()["user_day_inr"]["u1"] + 1.0 > USER_DAILY_CAP_INR, True)
+
+    # ── spend is attributed, and rolls over on the right clock ───────────────
+    t = tracker()
+    t.record_call(10.0, tenant_id="firm-a", user_id="u1")
+    check("a recorded call moves the tenant's month",
+          t.usage(tenant_id="firm-a")["tenant"]["month_inr"], 10.0)
+    check("  ...and the user's day", t.usage(user_id="u1")["user"]["day_inr"], 10.0)
+    check("  ...and the global counters too", t.usage()["global"]["month_inr"], 10.0)
+
+    store = Mem()
+    BudgetTracker(store=store, today=date(2026, 10, 2)).record_call(
+        10.0, tenant_id="firm-a", user_id="u1")
+    nextday = BudgetTracker(store=store, today=date(2026, 10, 3))
+    check("the next DAY clears the user's bucket",
+          nextday.usage(user_id="u1")["user"]["day_inr"], 0.0)
+    check("  ...and keeps the tenant's, because its cap is monthly",
+          nextday.usage(tenant_id="firm-a")["tenant"]["month_inr"], 10.0)
+    nextmonth = BudgetTracker(store=store, today=date(2026, 11, 1))
+    check("  ...and the next MONTH clears the tenant's",
+          nextmonth.usage(tenant_id="firm-a")["tenant"]["month_inr"], 0.0)
+
+    # ── usage(): None for a scope not named, never 0.0 ──────────────────────
+    u = tracker().usage()
+    check("usage() returns None for a scope the caller did not name",
+          (u["tenant"], u["user"]), (None, None))
+    check("  ...because 'spent nothing' and 'you did not say who' are different answers",
+          tracker().usage(tenant_id="firm-z")["tenant"]["month_inr"], 0.0)
+    check("usage() on a corrupt ledger reports unreadable, not a balance",
+          BudgetTracker(store=type("C", (), {"read": lambda s: {"corrupt": True},
+                                             "write": lambda s, d: None})(),
+                        today=date(2026, 10, 2)).usage()["readable"], False)
+
+    # ── scoped_call binds the gate and the recorder to one pair ──────────────
+    t = tracker()
+    verdict, record = t.scoped_call(tenant_id="firm-a", user_id="u1", estimated_inr=1.0)
+    check("scoped_call gates", verdict.allowed, True)
+    record(5.0)
+    check("  ...and its recorder attributes to the SAME tenant, so the pair cannot drift",
+          t.usage(tenant_id="firm-a")["tenant"]["month_inr"], 5.0)
+    check("  ...and the same user", t.usage(user_id="u1")["user"]["day_inr"], 5.0)
 
     print(f"\n{total - failures}/{total} passed")
     raise SystemExit(1 if failures else 0)

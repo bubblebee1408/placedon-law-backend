@@ -76,6 +76,16 @@ def utc_now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+class SingleTenantOnly(RuntimeError):
+    """A second tenant reached a deployment running on the in-memory store.
+
+    Raised rather than returned, because every route that builds a backend must refuse and a
+    return value is something a caller can forget to check. `create_app` turns it into 503 at
+    both surfaces: the deployment is misconfigured for what was asked of it, which is a server
+    condition and not the caller's fault.
+    """
+
+
 @dataclass(frozen=True)
 class Deployment:
     """What the gateway knows about itself. Injected, never discovered at call time."""
@@ -153,10 +163,38 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
     # For Postgres a backend is built PER REQUEST, bound to the tenant the key resolved
     # to, because app.tenant_id is what the row-level security policies compare against.
     app.state.memory_backend = MemoryBackend()
+    # P2. Which tenant the shared memory backend has served. See backend_for.
+    app.state.memory_tenant = None
 
     def backend_for(tenant_id: str):
+        """The backend for this tenant, or a refusal if memory cannot keep them apart.
+
+        **The memory backend has no tenant isolation, and now says so instead of pretending.**
+        `MemoryBackend` consults `tenant_id` in none of its 21 read methods and its rows do not
+        carry one, so on 02-10-2026 `scripts/concurrency_test.py` found tenant B reading tenant
+        A's matters -- not as a race, but serially, every time. That is consistent with the
+        comment above: a shared in-process backend exists so two requests SEE each other's
+        rows, which is what makes it useful for a single-tenant test and disqualifying for two.
+
+        The fix is to fail CLOSED on the second distinct tenant rather than retrofit filtering
+        into twenty-one methods. Retrofitting would make the memory store look like it enforced
+        isolation, and it would be a dict comprehension standing where Postgres has FORCE ROW
+        LEVEL SECURITY and a policy the database applies to every query -- including the ones
+        nobody remembered to filter. A deployment that needs two tenants needs the database,
+        and this says so by name.
+        """
         if app.state.db_url:
             return PostgresBackend(app.state.db_url, tenant_id=tenant_id)
+        seen = app.state.memory_tenant
+        if seen is not None and seen != tenant_id:
+            raise SingleTenantOnly(
+                f"this deployment has no database configured, so it is running on the "
+                f"in-memory store, which has NO tenant isolation: it consults tenant_id in "
+                f"none of its reads. It has already served tenant {seen}, and serving "
+                f"{tenant_id} as well would let each read the other's rows. Set "
+                f"PLACEDON_DATABASE_URL -- Postgres enforces this with FORCE ROW LEVEL "
+                f"SECURITY, which the memory store cannot imitate")
+        app.state.memory_tenant = tenant_id
         app.state.memory_backend.tenant_id = tenant_id
         return app.state.memory_backend
 
@@ -164,9 +202,42 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
     app.state.run_store = app.state.memory_backend
     app.state.documents = app.state.memory_backend.documents
     app.state.keys = keys if keys is not None else KeyStore()
+    # P2. One limiter for the deployment, shared by /v1 and /v2. Two surfaces read a body,
+    # and a limit wired into one of them is a limit the other does not have.
+    from gateway import limits as limits_mod
+    app.state.limiter = limits_mod.Limiter()
     # The audit chain, in memory with the rest of it. Append-only and hash-chained already
     # (gateway/audit.py); what is missing is Postgres, not the chain.
     app.state.audit = ()
+
+    def _limit_response(refusal) -> Response:
+        """A Refusal as an HTTP response. One shape, so both surfaces answer alike."""
+        headers = ({} if refusal.retry_after is None
+                   else {"Retry-After": str(refusal.retry_after)})
+        return Response(content=dumps({"error": refusal.code.lower(),
+                                       "detail": refusal.detail}),
+                        status_code=refusal.http_status, media_type="application/json",
+                        headers=headers)
+
+    def _too_large(raw: bytes | None, request: Request):
+        """A Refusal if this body is over the cap, else None. Checked on BOTH surfaces."""
+        return limits_mod.check_body_size(
+            raw, content_length=request.headers.get("content-length"))
+
+    def _rate_limited(principal):
+        """A Refusal if this TENANT is over its rate, else None.
+
+        Per tenant, which is what P2 asks for, and which means an UNAUTHENTICATED flood is
+        not limited here -- there is no tenant to attribute it to. That belongs at the
+        reverse proxy, with the body-size limit the server enforces before this process sees
+        a request (H1's deployment scripts). Stated rather than left to be assumed.
+        """
+        return app.state.limiter.check(principal.tenant_id)
+
+    def _single_tenant(exc: SingleTenantOnly) -> Response:
+        """503: the deployment cannot serve this caller safely. Not the caller's fault."""
+        return Response(content=dumps({"error": "no_tenant_isolation", "detail": str(exc)}),
+                        status_code=503, media_type="application/json")
 
     def _unauthorised() -> Response:
         return Response(content=dumps({"error": "unauthorized",
@@ -200,6 +271,10 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
         body = None
         if request.method == "POST":
             raw = await request.body()
+            # Size first: it protects this process's memory and needs no identity.
+            over = _too_large(raw, request)
+            if over:
+                return _limit_response(over)
             if raw:
                 try:
                     body = json.loads(raw)
@@ -216,6 +291,19 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
                 principal = _principal(request)
             except AuthError:
                 return _unauthorised()
+            slow = _rate_limited(principal)
+            if slow:
+                _record(principal, action=audit_mod.READ,
+                        route=f"{request.method} {bare}", resource=bare,
+                        outcome="refused", status=slow.http_status)
+                return _limit_response(slow)
+            # /v1 does not build a backend -- it calls checker.api.handle -- but it must
+            # refuse a second tenant too, or the two surfaces disagree about who may be
+            # served and the narrower one is the only protection.
+            try:
+                app.state.backend_for(principal.tenant_id)
+            except SingleTenantOnly as exc:
+                return _single_tenant(exc)
         path = request.url.path
         if request.url.query:
             path = f"{path}?{request.url.query}"
@@ -250,12 +338,24 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
                 principal = _principal(request)
             except AuthError:
                 return _unauthorised()
-            store = app.state.backend_for(principal.tenant_id)
+            slow = _rate_limited(principal)
+            if slow:
+                _record(principal, action=audit_mod.READ,
+                        route=f"{verb.method} {path}", resource=verb.name,
+                        outcome="refused", status=slow.http_status)
+                return _limit_response(slow)
+            try:
+                store = app.state.backend_for(principal.tenant_id)
+            except SingleTenantOnly as exc:
+                return _single_tenant(exc)
             ctx = Context(tenant=principal.tenant_id, actor=principal.actor,
                           store=store, documents=app.state.documents, clock=now)
             args = dict(request.path_params)
             if verb.method == "POST":
                 raw = await request.body()
+                over = _too_large(raw, request)
+                if over:
+                    return _limit_response(over)
                 if raw:
                     try:
                         body = json.loads(raw)
@@ -347,7 +447,10 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
                 principal = _principal(request)
             except AuthError:
                 return _unauthorised()
-            store = app.state.backend_for(principal.tenant_id)
+            try:
+                store = app.state.backend_for(principal.tenant_id)
+            except SingleTenantOnly as exc:
+                return _single_tenant(exc)
             ctx = Context(tenant=principal.tenant_id, actor=principal.actor,
                           store=store, documents=app.state.documents, clock=now)
             if not may(principal.role, verb_name):
@@ -761,6 +864,130 @@ def _test() -> None:
         "...and the binary route still CALLS may() -- read from the parsed function, "
         "because no role sits below viewer to prove it with a request, and a file route "
         "that skipped the check would be the way around every check above")
+
+    # ── P2: rate and request-size limits, on BOTH surfaces ──────────────────
+    # The property that matters is not that a limit exists, it is that it exists on both.
+    # /v1 and /v2 each read a body, and a guard wired into one of them is a guard the other
+    # does not have -- which is how this kind of thing is usually half-applied.
+    from gateway import limits as _lim
+
+    big = "x" * (_lim.MAX_BODY_BYTES + 1)
+    r = client.post("/v1/ask", content=json.dumps({"question": big}),
+                    headers={"Content-Type": "application/json"})
+    check(r.status_code == 413,
+          f"/v1 refuses an oversized body with 413 ({r.status_code})")
+    check(_lim.TOO_LARGE.lower() in r.json()["error"],
+          f"...naming the reason ({r.json()['error']})")
+
+    r = client.post("/v2/matters/create", content=json.dumps({"name": big}),
+                    headers={"Content-Type": "application/json"})
+    check(r.status_code == 413,
+          f"/v2 refuses it TOO -- the generated routes are the other surface "
+          f"({r.status_code})")
+
+    # A fresh app per rate test, so the bucket is not already spent by the checks above.
+    def _fresh():
+        a = create_app(clock=lambda: GEN, handler=handle, keys=keys, db_url="")
+        return TestClient(a, headers={"Authorization": f"Bearer {KEY}"}), a
+
+    c1, a1 = _fresh()
+    a1.state.limiter = _lim.Limiter(per_minute=60, burst=2)
+    codes = [c1.get(f"/v1/health?x={i}").status_code for i in range(4)]
+    check(codes.count(429) == 0,
+          f"/v1/health is PUBLIC, so it has no tenant to limit and is not rate limited "
+          f"here -- an unauthenticated flood is the reverse proxy's job ({codes})")
+
+    c2, a2 = _fresh()
+    a2.state.limiter = _lim.Limiter(per_minute=60, burst=2)
+    codes = [c2.post("/v1/ask", content=json.dumps({"question": "q"}),
+                     headers={"Content-Type": "application/json"}).status_code
+             for _ in range(4)]
+    check(429 in codes, f"/v1 rate-limits an authenticated tenant past its burst ({codes})")
+    first = c2.post("/v1/ask", content=json.dumps({"question": "q"}),
+                    headers={"Content-Type": "application/json"})
+    check(first.status_code == 429 and first.headers.get("Retry-After"),
+          f"...with a Retry-After header ({first.headers.get('Retry-After')})")
+
+    c3, a3 = _fresh()
+    a3.state.limiter = _lim.Limiter(per_minute=60, burst=2)
+    codes = [c3.post("/v2/matters/create", content=json.dumps({"name": f"m{i}"}),
+                     headers={"Content-Type": "application/json"}).status_code
+             for i in range(4)]
+    check(429 in codes,
+          f"/v2 rate-limits as well, from the SAME limiter on app.state ({codes})")
+
+    # One tenant's limit must not touch another's.
+    c4, a4 = _fresh()
+    a4.state.limiter = _lim.Limiter(per_minute=60, burst=1)
+    other = KeyStore()
+    OTHER_KEY = other.issue(tenant_id=A, actor="other", role="admin") \
+        if hasattr(other, "issue") else None
+    for _ in range(3):
+        c4.post("/v1/ask", content=json.dumps({"question": "q"}),
+                headers={"Content-Type": "application/json"})
+    check(a4.state.limiter.tokens_for(T) < 1.0,
+          "the limiter's bucket is keyed by TENANT, and this firm's is spent")
+    check(a4.state.limiter.tokens_for("some-other-tenant") == 1.0,
+          "...while another tenant's is untouched -- one noisy firm cannot spend another's "
+          "capacity")
+
+    # ── P2: the memory store refuses a SECOND tenant, rather than leaking ────
+    # scripts/concurrency_test.py found tenant B reading tenant A's matters on the memory
+    # backend -- serially, every time, because tenant_id is consulted in none of its 21 read
+    # methods. The fix is to fail closed, so this asserts the refusal at BOTH surfaces.
+    OTHER = "99999999-8888-7777-6666-555555555555"
+    keys2 = KeyStore()
+    K1, _ = keys2.mint(tenant_id=T, actor=A, label="one", role="admin")
+    K2, _ = keys2.mint(tenant_id=OTHER, actor=A, label="two", role="admin")
+
+    app2 = create_app(clock=lambda: GEN, handler=handle, keys=keys2, db_url="")
+    app2.state.limiter = _lim.Limiter(per_minute=10 ** 9, burst=10 ** 9)
+    c_one = TestClient(app2, headers={"Authorization": f"Bearer {K1}"})
+    c_two = TestClient(app2, headers={"Authorization": f"Bearer {K2}"})
+
+    r1 = c_one.post("/v2/matters/create", json={"name": "first-tenant-matter"})
+    check(r1.status_code == 200, f"the FIRST tenant is served on memory ({r1.status_code})")
+    r2 = c_two.post("/v2/matters/list", json={})
+    check(r2.status_code == 503,
+          f"...and the SECOND is refused with 503, not served another firm's rows "
+          f"({r2.status_code})")
+    check("no_tenant_isolation" == r2.json()["error"]
+          and "PLACEDON_DATABASE_URL" in r2.json()["detail"],
+          "...naming the cause and the fix, so an operator is not left guessing")
+    check("FORCE ROW LEVEL SECURITY" in r2.json()["detail"],
+          "...and saying what the database does that the memory store cannot imitate")
+
+    # The leak was reachable from /v1 too, which builds no backend of its own -- so the guard
+    # has to be on both surfaces or the narrower one is the only protection.
+    app3 = create_app(clock=lambda: GEN, handler=handle, keys=keys2, db_url="")
+    app3.state.limiter = _lim.Limiter(per_minute=10 ** 9, burst=10 ** 9)
+    d_one = TestClient(app3, headers={"Authorization": f"Bearer {K1}"})
+    d_two = TestClient(app3, headers={"Authorization": f"Bearer {K2}"})
+    a1 = d_one.post("/v1/ask", content=json.dumps({"question": "q"}),
+                    headers={"Content-Type": "application/json"})
+    a2 = d_two.post("/v1/ask", content=json.dumps({"question": "q"}),
+                    headers={"Content-Type": "application/json"})
+    check(a1.status_code != 503 and a2.status_code == 503,
+          f"/v1 refuses the second tenant as well ({a1.status_code} then {a2.status_code})")
+
+    # The SAME tenant twice is not a second tenant.
+    app4 = create_app(clock=lambda: GEN, handler=handle, keys=keys2, db_url="")
+    app4.state.limiter = _lim.Limiter(per_minute=10 ** 9, burst=10 ** 9)
+    e = TestClient(app4, headers={"Authorization": f"Bearer {K1}"})
+    codes = [e.post("/v2/matters/create", json={"name": f"m{i}"}).status_code
+             for i in range(3)]
+    check(503 not in codes,
+          f"the same tenant may make as many requests as it likes ({codes}) -- the guard is "
+          f"about a SECOND tenant, not a second request")
+
+    # Postgres is unaffected: it builds a backend per request bound to the tenant RLS
+    # compares against, so two tenants are exactly what it is for. Asserted on the selector
+    # rather than a live server, which scripts/rls_integration.py --run covers.
+    pg_app = create_app(clock=lambda: GEN, handler=handle, keys=keys2,
+                        db_url="postgresql://unused/placedon_probe")
+    check(pg_app.state.db_url is not None,
+          "a Postgres deployment takes the other branch of backend_for entirely, so the "
+          "single-tenant guard never applies to it")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:

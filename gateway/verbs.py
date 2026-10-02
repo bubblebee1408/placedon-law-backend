@@ -2422,6 +2422,25 @@ def _matters_list(args: dict, ctx: Context) -> dict:
     return {"matters": ctx.store.list_matters()}
 
 
+def _usage_status(args: dict, ctx: Context) -> dict:
+    """What this firm and this person have spent, and what is left.
+
+    P2. Read-only, and `mcp=False` for two reasons that both hold on their own: a spend
+    figure is the deployment's commercial position and no agent task needs it, and
+    `scripts/themis_mcp.py` pins the MCP tool count -- it is a Themis file, so a new MCP
+    tool cannot be added from this side anyway.
+
+    Identity comes from `ctx`, never from `args`. A caller that could name its own tenant
+    could read another firm's spend, which is the one thing this verb must not allow.
+    """
+    ledger = _ledger()
+    if ledger is None:
+        return _refuse("NO_LEDGER",
+                       "the budget ledger cannot be read, so no figure here would be a "
+                       "balance. This is not a statement that the budget is empty")
+    return ledger.usage(tenant_id=ctx.tenant, user_id=ctx.actor)
+
+
 def _conversation_list(args: dict, ctx: Context) -> dict:
     """The threads, newest first. Tenant-scoped by the store, not by this handler."""
     if ctx.store is None:
@@ -3538,6 +3557,13 @@ VERBS: tuple[Verb, ...] = (
           Field("horizon_days", STRING, False, describes="default 90")),
          "POST", read_only=True, mcp=False, run=_calendar_upcoming),
 
+    Verb("usage.status",
+         "What this firm and this person have spent against the caps, and what is left. "
+         "Identity comes from the authenticated caller, never from an argument, so no "
+         "caller can read another firm's spend.",
+         (),
+         "POST", read_only=True, mcp=False, run=_usage_status),
+
     Verb("matters.create",
          "Open a matter: one piece of work for one client. Work is filed to it, and "
          "conversations are listed one matter at a time.",
@@ -3751,11 +3777,12 @@ def _test() -> None:
                     "review_table.cancel", "draft.create",
                     "draft.revise", "draft.status", "draft.versions", "draft.diff",
                     "draft.export", "matters.create", "matters.list",
-                    "calendar.upcoming"} | {"vault.upload", "vault.status", "vault.find",
+                    "calendar.upcoming", "usage.status"} | {
+                        "vault.upload", "vault.status", "vault.find",
                                             "vault.verify", "vault.summarize",
                                             "vault.research", "vault.compile",
                                             "vault.delete"},
-          f"the forty verbs are declared once ({sorted(names)})")
+          f"the forty-one verbs are declared once ({sorted(names)})")
     # sources.* are READ-ONLY, so they reach MCP. That is the intended shape: an agent may
     # ask what a source permits and search what may be read, and there is no sources verb
     # that fetches, stores or spends. S3's Indian Kanoon connector will spend money, and
@@ -5155,10 +5182,11 @@ def _test() -> None:
           f"MCP exposes every read-only verb THAT OPTS IN, and no other "
           f"({sorted(mcp_names)})")
     _opted = {v.name for v in VERBS if v.read_only and not v.mcp}
-    check(_opted == {"matters.list", "calendar.upcoming", "vault.status", "vault.find",
-                     "vault.verify", "vault.summarize", "vault.research",
+    check(_opted == {"matters.list", "calendar.upcoming", "usage.status", "vault.status",
+                     "vault.find", "vault.verify", "vault.summarize", "vault.research",
                      "vault.compile"},
-          f"...and the verbs that opt out are the ones that should: a client list, and "
+          f"...and the verbs that opt out are the ones that should: a client list, the "
+          f"firm's SPEND, and "
           f"every read of the VAULT -- which is the client's documents themselves. "
           f"calendar.upcoming is the odd one, out on a LIMITATION rather than a "
           f"principle, and its handler says so ({sorted(_opted)})")
@@ -5220,7 +5248,7 @@ def _test() -> None:
           "...while a WRITE verb is kept out of MCP by mcp_tools(), not by the author "
           "remembering to")
     check("widgets.delete" in write_verbs(hypo), "...and is named in write_verbs()")
-    check(len(VERBS) == 40 and "widgets.count" not in rest_spec(),
+    check(len(VERBS) == 41 and "widgets.count" not in rest_spec(),
           "...and the probe changed nothing in this module: the surfaces are generated "
           "from an argument, not from a global the test rebound")
 

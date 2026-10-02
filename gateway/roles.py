@@ -61,6 +61,10 @@ REQUIRED: dict[str, str] = {
     # ── reading ─────────────────────────────────────────────────────────────
     "ask": VIEWER,
     "calendar.upcoming": VIEWER,
+    # P2. LAWYER rather than ADMIN: a person whose next question is about to be refused for
+    # budget needs to be able to find out why. Not VIEWER -- the firm's spend is its
+    # commercial position, and a read-only guest has no business reading it.
+    "usage.status": LAWYER,
     "citation.get": VIEWER,
     "conversation.get": VIEWER,
     "conversation.list": VIEWER,

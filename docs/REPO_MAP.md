@@ -246,6 +246,8 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `gateway/envelope.py` | R2 feeds | One answer envelope, versioned, validated against the schema file beside it. |
 | `gateway/filestore.py` | R2 feeds | Where a vault's bytes live. Local today; S3 is BLOCKED by name, not stubbed. |
 | `gateway/jobs.py` | R2 feeds | The durable job queue. One contract, two backends, one conformance suite. |
+| `gateway/limits.py` | R2 feeds | Per-tenant rate and request-size limits, shared by both HTTP surfaces. |
+| `gateway/logs.py` | R2 feeds | One JSON object per operational event, and document text cannot get into it. |
 | `gateway/models.py` | R2 feeds | Turning a router decision into a callable, or into a NAMED refusal. |
 | `gateway/passwords.py` | R2 feeds | Password hashing with `hashlib.scrypt`. No new dependency, and no plaintext anywhere. |
 | `gateway/roles.py` | R2 feeds | Who may call what. Three roles, one table, and no verb without an entry. |
@@ -303,6 +305,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/cascade_report.py` |  | What the cascade actually cost, from recorded runs. Never from an assumption. |
 | `scripts/check_deps.py` |  | Are the pinned dependencies importable? Exit 0 if yes. |
 | `scripts/check_doc_refs.py` |  | Every path an ACTIVE document cites must exist on disk. |
+| `scripts/concurrency_test.py` |  | Fifty at once: nothing runs twice, no tenant reads another's rows, and p95 is recorded. |
 | `scripts/cross_validate_corpus.py` |  | Compare the two renderings of the Companies Act we already hold. |
 | `scripts/date_properties.py` |  | Thousands of seeded random dates over every DerivedDate rule, checking stated properties. |
 | `scripts/demo.py` |  | One command: walk the whole product on synthetic data, and say pass or fail. |
@@ -310,6 +313,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/failure_report.py` |  | Weekly counts of why runs did not answer. |
 | `scripts/find_commencement.py` |  | Find which notification commenced a given section of an amending Act. |
 | `scripts/gazette_digest.py` |  | Render the Gazette watcher's poll log into a markdown digest a person reads. |
+| `scripts/hardening.py` |  | P2's cross-cutting invariants, asserted structurally rather than by convention. |
 | `scripts/harness_selftest.py` |  | Does the gate prove WHICH suite passed, or only that something exited 0? |
 | `scripts/holdings.py` |  | What we hold, instrument by instrument, read from the engine at run time. |
 | `scripts/index_codebase.py` |  | Build the agent search index over code and memory. |
@@ -361,4 +365,4 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/watch_gazette.py` |  | Run the Gazette watcher once: what did the Gazette publish since we last looked? |
 | `scripts/watch_ofac.py` |  | Poll OFAC's SDN list and report what CHANGED since the last trustworthy poll. |
 
-321 modules listed.
+325 modules listed.

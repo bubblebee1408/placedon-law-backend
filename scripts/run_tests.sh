@@ -321,6 +321,14 @@ extra+=("scripts/date_properties.py --test")
 # P1: the one-command demo. The GATE runs the runner's own logic (stubs, ~1s), not the
 # full product walk -- that would re-run what every suite above already runs.
 extra+=("scripts/demo.py --test")
+# P2: the cross-cutting hardening invariants -- every outbound call timed, no log
+# line carrying document text. Structural, so a future diff cannot forget them.
+extra+=("scripts/hardening.py")
+extra+=("gateway/logs.py --test")
+extra+=("gateway/limits.py")
+# P2: 50 real threads. Nothing runs twice, and the single-tenant guard holds under
+# load -- a guard that held serially and raced open would be worse than none.
+extra+=("scripts/concurrency_test.py --test")
 # The source register (PLAN_24 S0). Nothing is fetched on an unread term, so the register
 # is a test subject: it asserts which sources are closed, and a later edit that quietly
 # opens one has to break a check to do it.
