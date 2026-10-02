@@ -128,7 +128,8 @@ def _test() -> None:
                     "016_critic_enabled.sql",
                     "017_nonconformity.sql",
                     "018_users_roles.sql",
-                    "019_matters.sql"],
+                    "019_matters.sql",
+                    "020_vault.sql"],
           f"every migration exists, in order ({files})")
 
     # 012: H3's drafts. The CHECK that matters is the one the derivation cannot see.
@@ -302,7 +303,10 @@ def _test() -> None:
                      "invites",
                      # 8b. A client list names who a firm acts for -- the most
                      # commercially sensitive thing it has.
-                     "matters"},
+                     "matters",
+                     # V1. The vault IS the client's documents -- the most concentrated
+                     # confidential data the product holds.
+                     "vault_documents", "vault_chunks", "vault_tags"},
           f"every other table is tenant-scoped, DERIVED from having a tenant_id ({sorted(scoped)})")
 
     # ── the check this module exists for ────────────────────────────────────

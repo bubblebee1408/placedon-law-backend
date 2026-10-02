@@ -68,6 +68,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `checker/derivation.py` | R1 bookmark | Every conclusion stores its witnesses, so revocation is re-evaluation not re-query. |
 | `checker/derived_date.py` |  | DerivedDate — the problem PLAN_01_ARCHITECTURE.md §0 identified as the hardest one. |
 | `checker/diligence_pack.py` |  | The pre-diligence evidence pack — the matrix as a dated, cited document. |
+| `checker/doc_classifier.py` |  | What kind of document is this? A fixed list, rules first, and `unknown` is an answer. |
 | `checker/doc_verification.py` |  | Document verification as separate dimensions, never as one verdict. |
 | `checker/document_date.py` |  | The date a document declares on its own face — or nothing, said plainly. |
 | `checker/document_extract.py` |  | Grounding an extractor's proposals in the document it claims to have read. |
@@ -348,4 +349,4 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/watch_gazette.py` |  | Run the Gazette watcher once: what did the Gazette publish since we last looked? |
 | `scripts/watch_ofac.py` |  | Poll OFAC's SDN list and report what CHANGED since the last trustworthy poll. |
 
-308 modules listed.
+309 modules listed.

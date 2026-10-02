@@ -212,7 +212,9 @@ TENANT_TABLES = ("actors", "api_keys", "documents", "audit_log",
                  # which of them was being made an admin.
                  "invites",
                  # 8b: matters. The leak would be another firm's CLIENT LIST.
-                 "matters")
+                 "matters",
+                 # V1: the vault. The leak would be another firm's documents themselves.
+                 "vault_documents", "vault_chunks", "vault_tags")
 
 
 class RlsFailure(AssertionError):
@@ -503,7 +505,8 @@ def run(url: str) -> int:
                   "016_critic_enabled.sql",
                   "017_nonconformity.sql",
                   "018_users_roles.sql",
-                  "019_matters.sql"):
+                  "019_matters.sql",
+                  "020_vault.sql"):
             cur.execute(sql(f))
             print(f"  applied {f}")
         _ensure_app_role(cur)

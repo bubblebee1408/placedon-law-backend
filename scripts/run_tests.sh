@@ -291,6 +291,7 @@ extra+=("scripts/demo_inhouse.py --test")
 # sha256, so dedupe is what the key means rather than a check-then-write race.
 extra+=("checker/archive_guard.py --test")
 extra+=("gateway/filestore.py --test")
+extra+=("checker/doc_classifier.py --test")
 
 
 
