@@ -282,6 +282,10 @@ extra+=("gateway/passwords.py --test")
 # never a guessed date -- and an undatable obligation is never dropped from the view.
 extra+=("checker/compliance_calendar.py --test")
 
+# 8d: the in-house demo, end to end on synthetic data. PASS, BLOCKED and FAIL are three
+# different things, and a step that could not run never prints PASS.
+extra+=("scripts/demo_inhouse.py --test")
+
 
 
 
