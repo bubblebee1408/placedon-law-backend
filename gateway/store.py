@@ -71,7 +71,10 @@ class Backend(Protocol):
     # C2: the chat layer (010_conversations.sql).
     def write_conversation(self, conversation: dict) -> dict: ...
     def read_conversation(self, conversation_id: str) -> dict | None: ...
-    def list_conversations(self, *, limit: int = 50) -> list[dict]: ...
+    def list_conversations(self, *, matter_id: str, limit: int = 50) -> list[dict]: ...
+    # 8b: matters (019_matters.sql).
+    def write_matter(self, matter: dict) -> dict: ...
+    def list_matters(self) -> list[dict]: ...
     def append_message(self, message: dict) -> dict: ...
     def read_messages(self, conversation_id: str) -> list[dict]: ...
     def set_message_envelope(self, message_id: str, envelope: dict) -> bool: ...
@@ -126,7 +129,10 @@ MIN_REASON_CHARS = 10
 # a KeyError on one backend and None on the other.
 MESSAGE_KEYS = ("message_id", "conversation_id", "ordinal", "role", "text", "file_ids",
                 "task", "run_id", "envelope")
-CONVERSATION_KEYS = ("conversation_id", "title", "created_at", "updated_at")
+# 8b: matter_id is part of a conversation row on both backends. Without it in the shaped
+# key set, a dict conversation has no matter and the memory listing matches nothing.
+CONVERSATION_KEYS = ("conversation_id", "title", "created_at", "updated_at",
+                     "matter_id")
 
 # 'system' is not among them, and the database refuses it too (010). A system prompt
 # belongs to the run, not to the conversation.
@@ -245,6 +251,25 @@ def _critic_enabled_now():
         return None
 
 
+def _matter_scope(matter_id) -> str:
+    """The matter a listing is scoped to, or refuse. 8b: NO CROSS-MATTER LISTING.
+
+    Required, with no "all matters" value -- not even None. A listing that can be called
+    without a scope will be called without one, and the result is every client's work in
+    one list, which is the exact shape of the accident this rule exists to prevent.
+
+    Shared by both backends so the refusal is the same sentence and the same type on each.
+    """
+    want = str(matter_id or "").strip()
+    if not want:
+        raise StoreError(
+            "a matter_id is required to list conversations (8b: no cross-matter "
+            "listing). There is deliberately no value meaning 'all matters': a listing "
+            "that can be called without a scope will be, and the result is every "
+            "client's work in one list")
+    return want
+
+
 def failure_tag(status: str, refusal_code, result) -> tuple:
     """(category, reason) for a terminal run, or (None, None) when there is no failure.
 
@@ -310,6 +335,7 @@ class MemoryBackend:
     grid_cells: dict = field(default_factory=dict)     # grid_id -> {(doc, col): row}
     drafts: dict = field(default_factory=dict)
     draft_versions: dict = field(default_factory=dict)  # draft_id -> [row]
+    matters: dict = field(default_factory=dict)         # matter_id -> row
     actors: dict = field(default_factory=dict)          # actor_id -> row
     invites: dict = field(default_factory=dict)         # invite_id -> row
     cache: dict = field(default_factory=dict)           # lookup_key -> row
@@ -492,11 +518,36 @@ class MemoryBackend:
         row = self.conversations.get(conversation_id)
         return dict(row) if row else None
 
-    def list_conversations(self, *, limit: int = 50) -> list[dict]:
-        rows = sorted(self.conversations.values(),
-                      key=lambda r: (r.get("updated_at") or "", r["conversation_id"]),
-                      reverse=True)
+    def list_conversations(self, *, matter_id: str, limit: int = 50) -> list[dict]:
+        """One matter's conversations. `matter_id` is REQUIRED -- see `_matter_scope`."""
+        want = _matter_scope(matter_id)
+        rows = [r for r in self.conversations.values()
+                if str(r.get("matter_id") or "") == want]
+        rows.sort(key=lambda r: (r.get("updated_at") or "", r["conversation_id"]),
+                  reverse=True)
         return [dict(r) for r in rows[:limit]]
+
+    def write_matter(self, matter: dict) -> dict:
+        mid = str(matter.get("matter_id") or "")
+        name = str(matter.get("name") or "").strip()
+        if not mid:
+            raise StoreError("a matter needs a matter_id")
+        if not name:
+            raise StoreError("a matter needs a name (019 matters.name)")
+        for other, row in self.matters.items():
+            if other != mid and str(row.get("name") or "").lower() == name.lower():
+                raise StoreError(
+                    f"{name!r} is already a matter in this tenant (019 "
+                    f"matters_tenant_name_idx)")
+        row = {"matter_id": mid, "name": name,
+               "client_ref": str(matter.get("client_ref") or ""),
+               "closed_at": matter.get("closed_at")}
+        self.matters[mid] = row
+        return dict(row)
+
+    def list_matters(self) -> list[dict]:
+        return [dict(r) for r in sorted(self.matters.values(),
+                                        key=lambda r: r["name"].lower())]
 
     def append_message(self, message: dict) -> dict:
         _check_message(message)
@@ -1102,10 +1153,13 @@ class PostgresBackend:
         try:
             with self._conn() as c:
                 c.execute(
-                    "INSERT INTO conversations (conversation_id, tenant_id, title) "
-                    "VALUES (%s,%s,%s) ON CONFLICT (conversation_id) DO UPDATE SET "
-                    "title = EXCLUDED.title, updated_at = now()",
-                    (cid, self.tenant_id, conversation.get("title") or ""))
+                    "INSERT INTO conversations (conversation_id, tenant_id, title, "
+                    "matter_id) VALUES (%s,%s,%s,%s) "
+                    "ON CONFLICT (conversation_id) DO UPDATE SET "
+                    "title = EXCLUDED.title, matter_id = EXCLUDED.matter_id, "
+                    "updated_at = now()",
+                    (cid, self.tenant_id, conversation.get("title") or "",
+                     (str(conversation.get("matter_id") or "").strip() or None)))
         except psycopg.errors.IntegrityError as exc:
             raise StoreError(f"the database refused this conversation: "
                              f"{type(exc).__name__}") from None
@@ -1115,23 +1169,54 @@ class PostgresBackend:
         if not _UUID.match(conversation_id or ""):
             return None
         with self._conn() as c:
-            r = c.execute("SELECT conversation_id, title, created_at, updated_at FROM "
+            r = c.execute("SELECT conversation_id, title, created_at, updated_at, "
+                          "matter_id FROM "
                           "conversations WHERE conversation_id = %s",
                           (conversation_id,)).fetchone()
         if r is None:
             return None
-        return {"conversation_id": str(r[0]), "title": r[1],
+        return {"matter_id": str(r[4]) if r[4] else None,
+                "conversation_id": str(r[0]), "title": r[1],
                 "created_at": r[2].isoformat() if r[2] else None,
                 "updated_at": r[3].isoformat() if r[3] else None}
 
-    def list_conversations(self, *, limit: int = 50) -> list[dict]:
+    def list_conversations(self, *, matter_id: str, limit: int = 50) -> list[dict]:
+        want = _matter_scope(matter_id)
         with self._conn() as c:
             rows = c.execute("SELECT conversation_id, title, created_at, updated_at FROM "
-                             "conversations ORDER BY updated_at DESC LIMIT %s",
-                             (limit,)).fetchall()
+                             "conversations WHERE matter_id = %s "
+                             "ORDER BY updated_at DESC LIMIT %s",
+                             (want, limit)).fetchall()
         return [{"conversation_id": str(r[0]), "title": r[1],
                  "created_at": r[2].isoformat() if r[2] else None,
                  "updated_at": r[3].isoformat() if r[3] else None} for r in rows]
+
+    def write_matter(self, matter: dict) -> dict:
+        import psycopg
+        try:
+            with self._conn() as c:
+                r = c.execute(
+                    "INSERT INTO matters (matter_id, tenant_id, name, client_ref, "
+                    "closed_at) VALUES (%s,%s,%s,%s,%s) "
+                    "ON CONFLICT (matter_id) DO UPDATE SET name = EXCLUDED.name, "
+                    "client_ref = EXCLUDED.client_ref, closed_at = EXCLUDED.closed_at "
+                    "RETURNING matter_id, name, client_ref, closed_at",
+                    (matter["matter_id"], self.tenant_id,
+                     str(matter.get("name") or "").strip(),
+                     matter.get("client_ref") or "",
+                     matter.get("closed_at"))).fetchone()
+        except psycopg.errors.IntegrityError as exc:
+            raise StoreError(f"the database refused this matter: {type(exc).__name__} "
+                             f"{str(exc).splitlines()[0][:150]}") from None
+        return {"matter_id": str(r[0]), "name": r[1], "client_ref": r[2],
+                "closed_at": r[3].isoformat() if r[3] else None}
+
+    def list_matters(self) -> list[dict]:
+        with self._conn() as c:
+            rows = c.execute("SELECT matter_id, name, client_ref, closed_at FROM matters "
+                             "ORDER BY lower(name)").fetchall()
+        return [{"matter_id": str(r[0]), "name": r[1], "client_ref": r[2],
+                 "closed_at": r[3].isoformat() if r[3] else None} for r in rows]
 
     def append_message(self, message: dict) -> dict:
         """Append one message, translating the database's refusals into StoreError.
@@ -1773,13 +1858,18 @@ def conformance(backend) -> list[tuple[bool, str]]:
     # the two backends refuse the same rows rather than one of them accepting it.
     import uuid as _uuid
     cid = str(_uuid.uuid4())
-    backend.write_conversation({"conversation_id": cid, "title": "board meeting"})
+    # 8b: a conversation is filed to a matter, and the listing is scoped to one.
+    _CONF_MATTER = str(_uuid.uuid4())
+    backend.write_matter({"matter_id": _CONF_MATTER, "name": f"conformance {_CONF_MATTER[:8]}"})
+    backend.write_conversation({"conversation_id": cid, "title": "board meeting",
+                                "matter_id": _CONF_MATTER})
     conv = backend.read_conversation(cid)
     ck(conv is not None and conv["title"] == "board meeting",
        "a conversation is written and read back")
     ck(backend.read_conversation(str(_uuid.uuid4())) is None,
        "...and an unknown conversation reads as None, not an empty one")
-    ck(any(c["conversation_id"] == cid for c in backend.list_conversations()),
+    ck(any(c["conversation_id"] == cid
+           for c in backend.list_conversations(matter_id=_CONF_MATTER)),
        "...and appears in the list")
 
     m0, m1 = str(_uuid.uuid4()), str(_uuid.uuid4())
@@ -2118,6 +2208,52 @@ def conformance(backend) -> list[tuple[bool, str]]:
     ck(not any(r["category"] is not None and r["category"] == "" for r in _counts),
        "...and an untagged run reads as category None, never an empty string")
 
+    # ── 8b: matters, and NO CROSS-MATTER LISTING ────────────────────────────
+    _m1, _m2 = str(_uuid.uuid4()), str(_uuid.uuid4())
+    backend.write_matter({"matter_id": _m1, "name": "Acme acquisition",
+                          "client_ref": "ACM-1"})
+    backend.write_matter({"matter_id": _m2, "name": "Beta dispute"})
+    _names = [m["name"] for m in backend.list_matters()]
+    ck({"Acme acquisition", "Beta dispute"} <= set(_names)
+       and _names == sorted(_names, key=str.lower),
+       f"matters round-trip and list in name order ({_names})")
+    try:
+        backend.write_matter({"matter_id": str(_uuid.uuid4()), "name": "acme ACQUISITION"})
+        ck(False, "a duplicate matter name is refused")
+    except StoreError:
+        ck(True, "a duplicate matter name is refused case-insensitively on both backends")
+    try:
+        backend.write_matter({"matter_id": str(_uuid.uuid4()), "name": "  "})
+        ck(False, "a nameless matter is refused")
+    except StoreError:
+        ck(True, "a matter with no name is refused")
+
+    _ca, _cb = str(_uuid.uuid4()), str(_uuid.uuid4())
+    backend.write_conversation({"conversation_id": _ca, "title": "on Acme",
+                                "matter_id": _m1})
+    backend.write_conversation({"conversation_id": _cb, "title": "on Beta",
+                                "matter_id": _m2})
+    _listed = backend.list_conversations(matter_id=_m1)
+    ck([r["conversation_id"] for r in _listed] == [_ca],
+       f"**listing one matter returns only that matter's conversations** "
+       f"({[r['title'] for r in _listed]})")
+    ck([r["conversation_id"] for r in backend.list_conversations(matter_id=_m2)] == [_cb],
+       "...and the other matter returns only its own")
+    for bad in ("", None, "   "):
+        try:
+            backend.list_conversations(matter_id=bad)
+            ck(False, f"listing with matter_id={bad!r} is refused")
+        except StoreError:
+            ck(True, f"listing with matter_id={bad!r} is REFUSED -- there is deliberately "
+                     f"no value meaning 'all matters', because a listing that can be "
+                     f"called without a scope will be")
+    _unfiled = str(_uuid.uuid4())
+    backend.write_conversation({"conversation_id": _unfiled, "title": "not filed"})
+    ck(_unfiled not in [r["conversation_id"]
+                        for r in backend.list_conversations(matter_id=_m1)],
+       "a conversation with NO matter is not returned by any matter's listing: NULL is "
+       "its own bucket, never 'belongs to whichever matter you asked for'")
+
     # ── 8a: users, roles and invites, on both backends ──────────────────────
     import hashlib as _hl
     _ad = str(_uuid.uuid4())
@@ -2311,7 +2447,7 @@ def _test() -> None:
             "read_draft_versions", "write_cache_entry", "read_cache_entry",
             "bump_cache_stat", "read_cache_stats", "read_failure_counts",
             "read_labels", "write_actor", "read_actor", "create_invite",
-            "accept_invite")
+            "accept_invite", "write_matter", "list_matters")
     for name in need:
         check(hasattr(MemoryBackend(), name)
               and hasattr(PostgresBackend("postgresql://x/y", tenant_id=T), name),

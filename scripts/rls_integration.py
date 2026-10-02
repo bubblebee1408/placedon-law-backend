@@ -178,7 +178,16 @@ LAST_RUN: str | None = (
     "divergence, this time in ITSELF: it wrote a run with status REFUSED and no "
     "refusal_code, which 002's runs_refusal_code_iff_refused forbids. The dict "
     "accepted it and Postgres refused it, so a row that could never exist in "
-    "production passed the gate. MemoryBackend.write_run now restates that CHECK.")
+    "production passed the gate. MemoryBackend.write_run now restates that CHECK. "
+    "2026-10-02, 8a+8b: 001-019 applied TOGETHER to a fresh throwaway database on "
+    "PostgreSQL 18.6, asserted as placedon_app (NOSUPERUSER, NOBYPASSRLS), adding "
+    "018_users_roles and 019_matters: 284 checks, 0 failures. `invites` and `matters` are "
+    "the TWENTIETH and TWENTY-FIRST tenant-scoped tables. An invite names a firm's staff "
+    "and which of them is being made an admin; a matter names WHO THE FIRM ACTS FOR, "
+    "which is the most commercially sensitive row in the schema. Both are proved the way "
+    "the others are. Each was added to the seed only after its isolation checks reported "
+    "0 rows -- a check that measures an empty table proves nothing, which is the same "
+    "fault the cache statistics had.")
 
 TENANT_TABLES = ("actors", "api_keys", "documents", "audit_log",
                  "runs", "run_steps", "propositions", "decisions", "jobs",
@@ -201,7 +210,9 @@ TENANT_TABLES = ("actors", "api_keys", "documents", "audit_log",
                  "answer_cache", "answer_cache_stats",
                  # 8a: invites. The leak would be another firm's staff email addresses and
                  # which of them was being made an admin.
-                 "invites")
+                 "invites",
+                 # 8b: matters. The leak would be another firm's CLIENT LIST.
+                 "matters")
 
 
 class RlsFailure(AssertionError):
@@ -339,6 +350,13 @@ def _seed(cur, tenant, actor, tag: str) -> None:
                  "INR 50,00,000",
                  f"{tag}: aggregate liability shall not exceed INR 50,00,000",
                  0.0412, f"{tag}: one extraction call, priced from reported tokens"))
+
+    # 8b: a matter. The leak would be another firm's CLIENT LIST -- who they act for,
+    # which is the most commercially sensitive thing a firm has.
+    matter = uuid.uuid4()
+    cur.execute("INSERT INTO matters (matter_id, tenant_id, name, client_ref) "
+                "VALUES (%s,%s,%s,%s)",
+                (matter, tenant, f"{tag}: Acme acquisition", f"{tag}-REF-1"))
 
     # 8a: an invite. The leak would be another firm's staff email addresses and which of
     # them was being made an admin.
@@ -484,7 +502,8 @@ def run(url: str) -> int:
                   "015_failure_category.sql",
                   "016_critic_enabled.sql",
                   "017_nonconformity.sql",
-                  "018_users_roles.sql"):
+                  "018_users_roles.sql",
+                  "019_matters.sql"):
             cur.execute(sql(f))
             print(f"  applied {f}")
         _ensure_app_role(cur)
