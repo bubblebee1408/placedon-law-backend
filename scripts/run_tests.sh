@@ -318,6 +318,9 @@ extra+=("scripts/retrieval_bakeoff.py --test")
 extra+=("scripts/verifier_error_rates.py --test")
 extra+=("scripts/retrieval_dev_metrics.py --test")
 extra+=("scripts/date_properties.py --test")
+# P1: the one-command demo. The GATE runs the runner's own logic (stubs, ~1s), not the
+# full product walk -- that would re-run what every suite above already runs.
+extra+=("scripts/demo.py --test")
 # The source register (PLAN_24 S0). Nothing is fetched on an unread term, so the register
 # is a test subject: it asserts which sources are closed, and a later edit that quietly
 # opens one has to break a check to do it.
