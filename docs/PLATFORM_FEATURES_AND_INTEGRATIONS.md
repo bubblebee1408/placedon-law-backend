@@ -22,6 +22,8 @@ Status words used throughout:
 
 ## 1. The feature list for Indian law users
 
+How each feature is built (entry, flow, files, tables, gate, proof): [FEATURE_ARCHITECTURE.md](FEATURE_ARCHITECTURE.md).
+
 Buyers in order: in-house legal teams, then law firms, then individual lawyers. Every feature
 obeys one rule: **a model reads, extracts, labels and phrases; code decides law, dates and
 authority; a lawyer signs off.** Anything not proven is NEEDS_LAWYER or a refusal that names

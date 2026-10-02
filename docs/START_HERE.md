@@ -5,7 +5,7 @@ agents. It says what is being built, how a request travels through the code, whi
 are current, and where each kind of change belongs. Written 2026-10-01 against `main` at
 2e0793c. Where this page and the code disagree, the code wins; fix this page.
 
-**The full architecture — every product, feature, agent, model and source — is [ARCHITECTURE.md](ARCHITECTURE.md).** Features, integrations (government, publishers, MCP, CLI, API) and document verification: [PLATFORM_FEATURES_AND_INTEGRATIONS.md](PLATFORM_FEATURES_AND_INTEGRATIONS.md). The per-file index is [REPO_MAP.md](REPO_MAP.md), generated from each module's own docstring
+**The full architecture — every product, feature, agent, model and source — is [ARCHITECTURE.md](ARCHITECTURE.md).** Features, integrations (government, publishers, MCP, CLI, API) and document verification: [PLATFORM_FEATURES_AND_INTEGRATIONS.md](PLATFORM_FEATURES_AND_INTEGRATIONS.md). How each feature is built, card by card: [FEATURE_ARCHITECTURE.md](FEATURE_ARCHITECTURE.md). The per-file index is [REPO_MAP.md](REPO_MAP.md), generated from each module's own docstring
 (`python3 scripts/repo_map.py`). The rules every change must obey are in
 [../CLAUDE.md](../CLAUDE.md), and they bind whatever this page says.
 
