@@ -69,6 +69,16 @@ class Verb:
     inputs: tuple[Field, ...]
     method: str = "POST"
     read_only: bool = False
+    # Whether this verb is exported as an MCP tool. Read-only verbs are, by default, and
+    # this is how one opts OUT without lying about being a write.
+    #
+    # It exists because the alternative kept being chosen for the wrong reason. Three
+    # times now a read-only verb has been wanted that has no business in an agent's
+    # toolbox -- a cache hit rate, a failure tally, a list of matters -- and each time the
+    # options were to make it a write verb (false), to skip the verb entirely (losing the
+    # API), or to widen the MCP policy allowlist, which lives partly in a Project Themis
+    # file that must not be edited from here. An explicit flag is the honest fourth.
+    mcp: bool = True
     run: Callable[[dict, "Context"], dict] | None = None
 
     @property
@@ -1873,8 +1883,11 @@ def _conversation_send(args: dict, ctx: Context) -> dict:
     # 1. the thread.
     cid = (args.get("conversation_id") or "").strip() or str(uuid.uuid4())
     if store.read_conversation(cid) is None:
-        store.write_conversation({"conversation_id": cid,
-                                  "title": (text.strip()[:60] or "Attachment")})
+        store.write_conversation({
+            "conversation_id": cid, "title": (text.strip()[:60] or "Attachment"),
+            # 8b. Unfiled when absent -- NULL is its own bucket, and no matter's listing
+            # shows it. Guessing a matter would invent a client relationship.
+            "matter_id": (args.get("matter_id") or "").strip() or None})
 
     # 2. the user's message, stored before anything is attempted. A turn that fails must
     #    still show what was asked.
@@ -2054,13 +2067,55 @@ def _task_args(task: str, text: str, file_ids, ctx: Context, args: dict,
     return {"text": doc or text, "name": "conversation upload"}
 
 
+def _matters_create(args: dict, ctx: Context) -> dict:
+    """Open a matter. A WRITE verb, so it is off MCP by that rule already."""
+    import uuid
+    if ctx.store is None:
+        return _refuse("NO_STORE", "a matter is durable; it needs a store")
+    name = (args.get("name") or "").strip()
+    if not name:
+        return _refuse("BAD_REQUEST", "a matter needs a name")
+    try:
+        row = ctx.store.write_matter({
+            "matter_id": (args.get("matter_id") or "").strip() or str(uuid.uuid4()),
+            "name": name, "client_ref": args.get("client_ref") or ""})
+    except Exception as e:                                       # noqa: BLE001
+        return _refuse("BAD_REQUEST", str(e)[:200])
+    return dict(row, note=("Work is filed to a matter. Conversations are listed one "
+                           "matter at a time; there is no 'all matters' listing."))
+
+
+def _matters_list(args: dict, ctx: Context) -> dict:
+    """Every matter in this tenant. Read-only, and deliberately NOT an MCP tool.
+
+    `mcp=False`: a client list is the most commercially sensitive thing a firm has -- it
+    names who they act for -- and there is no agent task that needs it. `read_only` is
+    about whether a call changes anything; this is about whether a tool should be able to
+    ask at all.
+    """
+    if ctx.store is None:
+        return _refuse("NO_STORE", "no store is configured")
+    return {"matters": ctx.store.list_matters()}
+
+
 def _conversation_list(args: dict, ctx: Context) -> dict:
     """The threads, newest first. Tenant-scoped by the store, not by this handler."""
     if ctx.store is None:
         return _refuse("NO_STORE", "no store is configured, so there are no conversations")
     limit = args.get("limit")
     limit = int(limit) if isinstance(limit, (int, float, str)) and str(limit).isdigit() else 50
-    return {"conversations": ctx.store.list_conversations(limit=min(limit, 200))}
+    matter_id = (args.get("matter_id") or "").strip()
+    if not matter_id:
+        # 8b: no cross-matter listing. Refused here AND in the store -- the store because
+        # it is the last place that can refuse, this one because the refusal a user sees
+        # should name the field they left out rather than surface a StoreError.
+        return _refuse("BAD_REQUEST",
+                       "matter_id is required: conversations are listed one matter at a "
+                       "time. There is no 'all matters' listing, because a list of every "
+                       "client's work is the accident this rule exists to prevent")
+    return {"matter_id": matter_id,
+            "conversations": ctx.store.list_conversations(matter_id=matter_id,
+                                                          limit=min(limit, 200))}
 
 
 def _conversation_get(args: dict, ctx: Context) -> dict:
@@ -3079,6 +3134,9 @@ VERBS: tuple[Verb, ...] = (
           Field("test_data", STRING, False,
                 describes="set when a contract is a fixture, not a client document "
                           "(PLAN_22 D3)"),
+          Field("matter_id", STRING, False,
+                describes="file this conversation to a matter. Without one it is not "
+                          "filed, and no matter's listing will show it"),
           Field("prose", ARRAY, False,
                 describes="connecting sentences for a DRAFT, as [{text, citation_ids}]. "
                           "Each is stored as a MODEL_SUGGESTION and blocks approval; one "
@@ -3086,8 +3144,26 @@ VERBS: tuple[Verb, ...] = (
                           "run holds is DROPPED and reported in dropped_claims")),
          "POST", read_only=False, run=_conversation_send),
 
-    Verb("conversation.list", "Every conversation for this tenant, newest first.",
-         (Field("limit", STRING, False, describes="how many, up to 200"),),
+    Verb("matters.create",
+         "Open a matter: one piece of work for one client. Work is filed to it, and "
+         "conversations are listed one matter at a time.",
+         (Field("name", STRING, True, describes="the matter's name, unique in the firm"),
+          Field("client_ref", STRING, False,
+                describes="the firm's own reference for the client"),
+          Field("matter_id", STRING, False, describes="supply one, or get a new uuid")),
+         "POST", read_only=False, run=_matters_create),
+
+    Verb("matters.list",
+         "Every matter in this firm. Read-only, and NOT exposed as an MCP tool: a client "
+         "list names who the firm acts for, and no agent task needs it.",
+         (),
+         "POST", read_only=True, mcp=False, run=_matters_list),
+
+    Verb("conversation.list",
+         "One MATTER's conversations, newest first. There is no 'all matters' listing.",
+         (Field("matter_id", STRING, True,
+                describes="which matter. REQUIRED (8b: no cross-matter listing)"),
+          Field("limit", STRING, False, describes="how many, up to 200")),
          "POST", read_only=True, run=_conversation_list),
 
     Verb("conversation.get", "One conversation and its messages, in order.",
@@ -3224,11 +3300,15 @@ def mcp_tools(verbs: tuple[Verb, ...] | None = None) -> tuple:
     A verb that is not read_only is REFUSED here rather than quietly exported: the MCP
     policy asserts every known tool is read-only, and widening that is a decision, not a
     side effect of adding a verb.
+
+    `mcp=False` opts a read-only verb out. That is a narrower statement than "this is a
+    write": an operator's number -- a hit rate, a failure tally, a list of matters -- is
+    read-only and still has no business in an agent's toolbox.
     """
     from checker.mcp.tools import Tool, _obj
     out = []
     for v in (VERBS if verbs is None else verbs):
-        if not v.read_only:
+        if not v.read_only or not v.mcp:
             continue
         props = {f.name: {"type": f.kind, "description": f.describes} for f in v.inputs}
         required = tuple(f.name for f in v.inputs if f.required)
@@ -3276,8 +3356,8 @@ def _test() -> None:
                     "review_table.status", "review_table.export",
                     "review_table.cancel", "draft.create",
                     "draft.revise", "draft.status", "draft.versions", "draft.diff",
-                    "draft.export"},
-          f"the twenty-nine verbs are declared once ({sorted(names)})")
+                    "draft.export", "matters.create", "matters.list"},
+          f"the thirty-one verbs are declared once ({sorted(names)})")
     # sources.* are READ-ONLY, so they reach MCP. That is the intended shape: an agent may
     # ask what a source permits and search what may be read, and there is no sources verb
     # that fetches, stores or spends. S3's Indian Kanoon connector will spend money, and
@@ -3291,8 +3371,8 @@ def _test() -> None:
     check(set(write_verbs()) == {"documents.upload", "runs.approve", "runs.reject",
                                  "runs.submit", "runs.cancel", "conversation.send",
                                  "review_table.create", "review_table.cancel",
-                                 "draft.create", "draft.revise"},
-          f"...and exactly ten of them write ({sorted(write_verbs())})")
+                                 "draft.create", "draft.revise", "matters.create"},
+          f"...and exactly eleven of them write ({sorted(write_verbs())})")
     check(f"{MCP_NAMESPACE}.conversation.send" not in {t.name for t in mcp},
           "conversation.send WRITES -- it creates a thread, appends messages and may "
           "enqueue work -- so mcp_tools() keeps it off MCP, by rule and not by the author "
@@ -3447,9 +3527,36 @@ def _test() -> None:
     check(all(m["envelope"] is not None for m in _g["messages"]
               if m["role"] == "assistant"),
           "...and every assistant message here does")
+    # 8b: a listing is scoped to ONE matter, so the thread has to be filed to see it.
+    _MT = _V["matters.create"].run({"name": "conformance matter"}, _cctx)["matter_id"]
+    _cctx.store.write_conversation({"conversation_id": _cid, "title": "t",
+                                    "matter_id": _MT})
     check(any(c["conversation_id"] == _cid
-              for c in _V["conversation.list"].run({}, _cctx)["conversations"]),
-          "conversation.list shows the thread")
+              for c in _V["conversation.list"].run({"matter_id": _MT},
+                                                   _cctx)["conversations"]),
+          "conversation.list shows the thread filed to that matter")
+    check(_V["conversation.list"].run({}, _cctx)["code"] == "BAD_REQUEST",
+          "**listing with NO matter_id is REFUSED** -- there is no 'all matters' listing, "
+          "because a list of every client's work is the accident 8b exists to prevent")
+    _MT2 = _V["matters.create"].run({"name": "another matter"}, _cctx)["matter_id"]
+    check(not _V["conversation.list"].run({"matter_id": _MT2},
+                                          _cctx)["conversations"],
+          "...and a DIFFERENT matter does not show it: no cross-matter listing")
+    check(_V["matters.create"].run({"name": "conformance matter"},
+                                   _cctx)["status"] == "REFUSED",
+          "a duplicate matter name is refused")
+    check(_V["matters.create"].run({"name": "  "}, _cctx)["status"] == "REFUSED",
+          "a matter with no name is refused")
+    check({m["name"] for m in _V["matters.list"].run({}, _cctx)["matters"]}
+          >= {"conformance matter", "another matter"},
+          "matters.list shows the firm's matters")
+    check(not by_name()["matters.list"].mcp and by_name()["matters.list"].read_only,
+          "**matters.list is read-only and NOT an MCP tool**: a client list names who the "
+          "firm acts for, and no agent task needs it. read_only is about whether a call "
+          "changes anything; mcp is about whether a tool may ask at all")
+    check("matters.list" not in {t.name.split(".", 1)[-1] for t in mcp_tools()}
+          and len(mcp_tools()) == 19,
+          f"...and it really is absent from the generated tool list ({len(mcp_tools())})")
     check(_V["conversation.get"].run({"conversation_id": "nope"}, _cctx)["status"]
           == "REFUSED", "an unknown conversation is REFUSED, not an empty thread")
     check(_V["conversation.send"].run({}, _cctx)["status"] == "REFUSED",
@@ -4640,10 +4747,20 @@ def _test() -> None:
           f"REST and CLI expose every verb (rest {sorted(set(rest) ^ names)}, "
           f"cli {sorted(set(cli) ^ names)})")
     mcp_names = {t.name for t in mcp}
-    expected_mcp = {mcp_name(v) for v in VERBS if v.read_only}
+    # Read-only AND opted in. `mcp=False` is the narrower statement the verb table gained
+    # in 8b: an operator's number or a client list is read-only and still has no business
+    # in an agent's toolbox. Before it, the only ways to keep such a verb off MCP were to
+    # call it a write (false) or not to have the verb at all.
+    expected_mcp = {mcp_name(v) for v in VERBS if v.read_only and v.mcp}
     check(mcp_names == expected_mcp,
-          f"MCP exposes every READ-ONLY verb and no other ({sorted(mcp_names)})")
-    check({n.split(".", 1)[1] for n in mcp_names} == names - set(write_verbs()),
+          f"MCP exposes every read-only verb THAT OPTS IN, and no other "
+          f"({sorted(mcp_names)})")
+    check({v.name for v in VERBS if v.read_only and not v.mcp} == {"matters.list"},
+          f"...and exactly one verb opts out today: a client list names who the firm acts "
+          f"for ({sorted(v.name for v in VERBS if v.read_only and not v.mcp)})")
+    _opted_out = {v.name for v in VERBS if v.read_only and not v.mcp}
+    check({n.split(".", 1)[1] for n in mcp_names}
+          == names - set(write_verbs()) - _opted_out,
           "...and the gap between MCP and the others is EXACTLY the write verbs, which is "
           "checker/mcp/policy.py's rule and not an oversight")
 
@@ -4653,7 +4770,8 @@ def _test() -> None:
     # not whether this module produced it.
     from checker.mcp.tools import TOOLS as LIVE_TOOLS
     live = {t.name for t in LIVE_TOOLS}
-    absent = [mcp_name(v) for v in VERBS if v.read_only and mcp_name(v) not in live]
+    absent = [mcp_name(v) for v in VERBS
+              if v.read_only and v.mcp and mcp_name(v) not in live]
     check(not absent, f"every read-only verb has a tool on the live MCP surface ({absent})")
     check(mcp_name(by_name()["ask"]) in live,
           "...themis.ask among them, served by the tool that already existed rather than "
@@ -4695,7 +4813,7 @@ def _test() -> None:
           "...while a WRITE verb is kept out of MCP by mcp_tools(), not by the author "
           "remembering to")
     check("widgets.delete" in write_verbs(hypo), "...and is named in write_verbs()")
-    check(len(VERBS) == 29 and "widgets.count" not in rest_spec(),
+    check(len(VERBS) == 31 and "widgets.count" not in rest_spec(),
           "...and the probe changed nothing in this module: the surfaces are generated "
           "from an argument, not from a global the test rebound")
 

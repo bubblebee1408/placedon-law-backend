@@ -127,7 +127,8 @@ def _test() -> None:
                     "015_failure_category.sql",
                     "016_critic_enabled.sql",
                     "017_nonconformity.sql",
-                    "018_users_roles.sql"],
+                    "018_users_roles.sql",
+                    "019_matters.sql"],
           f"every migration exists, in order ({files})")
 
     # 012: H3's drafts. The CHECK that matters is the one the derivation cannot see.
@@ -298,7 +299,10 @@ def _test() -> None:
                      "answer_cache", "answer_cache_stats",
                      # 8a. An invite names an email and a role inside one firm; it is as
                      # tenant-private as the people it invites.
-                     "invites"},
+                     "invites",
+                     # 8b. A client list names who a firm acts for -- the most
+                     # commercially sensitive thing it has.
+                     "matters"},
           f"every other table is tenant-scoped, DERIVED from having a tenant_id ({sorted(scoped)})")
 
     # ── the check this module exists for ────────────────────────────────────

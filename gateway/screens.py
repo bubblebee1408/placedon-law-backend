@@ -63,8 +63,11 @@ ANSWER_FIELDS = ("envelope.status", "envelope.task", "envelope.as_of",
 
 SCREENS = (
     Screen("home", "Start a thread, or pick one up.", (
-        Call("conversation.list", ("limit",), ("result.conversations",),
-             "newest first; the list is tenant-scoped by the store, not by this screen"),
+        Call("matters.list", (), ("result.matters",),
+             "pick a matter first: there is no 'all matters' view"),
+        Call("conversation.list", ("matter_id", "limit"),
+             ("result.conversations", "result.matter_id"),
+             "ONE matter's threads. matter_id is required (8b: no cross-matter listing)"),
         Call("sources.list", (),
              ("result.tiers", "result.fetchable", "result.cacheable", "result.external"),
              "what is held, current-only and declared -- shown so a user learns the "
@@ -72,7 +75,7 @@ SCREENS = (
     )),
     Screen("conversation", "Ask, and see what the answer rests on.", (
         Call("conversation.send", ("conversation_id", "text", "file_ids", "as_of",
-                                   "sources", "task_override"),
+                                   "sources", "task_override", "matter_id"),
              ANSWER_FIELDS + ("result.run_id", "result.classification"),
              "`envelope: null` with a run_id means QUEUED, not an empty answer"),
         Call("conversation.get", ("conversation_id",),
@@ -254,7 +257,13 @@ def _test() -> int:
         "review_table.export": table["review_table.export"].run(
             {"grid_id": grid["grid_id"]}, ctx),
         "sources.list": table["sources.list"].run({}, ctx),
-        "conversation.list": table["conversation.list"].run({}, ctx),
+        # 8b: a listing needs a matter, so the fixture opens one. That the call REFUSES
+        # without it is asserted in gateway/verbs.py; here the point is that the fields
+        # this screen shows are really returned when it is called properly.
+        "matters.list": table["matters.list"].run({}, ctx),
+        "conversation.list": table["conversation.list"].run(
+            {"matter_id": table["matters.create"].run(
+                {"name": "screens fixture"}, ctx)["matter_id"]}, ctx),
     }
     for s in built:
         for c in s.calls:

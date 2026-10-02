@@ -74,6 +74,7 @@ REQUIRED: dict[str, str] = {
     "review_table.status": VIEWER,
     "runs.get": VIEWER,
     "runs.trace": VIEWER,
+    "matters.list": VIEWER,
     "sources.list": VIEWER,
     "sources.search": VIEWER,
 
@@ -87,6 +88,7 @@ REQUIRED: dict[str, str] = {
     "draft.revise": LAWYER,
     "review_contract": LAWYER,
     "review_table.cancel": LAWYER,
+    "matters.create": LAWYER,
     "review_table.create": LAWYER,
     "runs.cancel": LAWYER,
     "runs.submit": LAWYER,
