@@ -54,7 +54,7 @@ Status words: **BUILT** · **PARTIAL** · **TODO** · **NEEDS PERMISSION** · **
 
 ### F3 Central/State resolver — TODO
 - **Entry:** internal step after intake; no verb of its own.
-- **Flow:** subject → `checker/jurisdiction.py` (new) table lookup → CENTRAL / STATE / CONCURRENT;
+- **Flow:** subject → new module `checker.jurisdiction` table lookup → CENTRAL / STATE / CONCURRENT;
   STATE without State or date → `NEED_FACT`.
 - **Data:** the table is a reviewed file (like `events.py`); every row cites the Seventh-Schedule
   entry it rests on, acquired as held text first.
@@ -70,9 +70,9 @@ Status words: **BUILT** · **PARTIAL** · **TODO** · **NEEDS PERMISSION** · **
 
 ### F5 Case law — NEEDS PERMISSION
 - **Entry:** `case_law` worker inside F2; `sources.search` with tier LICENSED.
-- **Flow:** `checker/sources/indiankanoon.py` (new) → search → fetch judgment → store hashed →
+- **Flow:** new module `checker.sources.indiankanoon` → search → fetch judgment → store hashed →
   quote must byte-match stored text → Evidence row, tier LICENSED.
-- **Gate:** LICENSED can support, never make VERIFIED (`sources/tiers.py`); terms record in `terms.py` or the connector refuses to load.
+- **Gate:** LICENSED can support, never make VERIFIED (`checker/sources/tiers.py`); terms record in `terms.py` or the connector refuses to load.
 - **Next:** owner's Indian Kanoon key; read API terms.
 
 ### F6 Event map — BUILT (not lawyer-reviewed)
@@ -107,7 +107,7 @@ Status words: **BUILT** · **PARTIAL** · **TODO** · **NEEDS PERMISSION** · **
 ### F9 Document validity and action — TODO (T3)
 - **Entry:** `document.verify`.
 - **Flow:** F8 dimensions + extracted dates (`document_date.py`, `derived_date.py`) +
-  company policy (renewal window per tenant) → `checker/doc_validity.py` (new) →
+  company policy (renewal window per tenant) → new module `checker.doc_validity` →
   status CURRENT / EXPIRES_ON / EXPIRED / SUPERSEDED / REVOKED / NOT_DETERMINED →
   action KEEP / RENEW_BY / REPLACE / REMOVE / NEEDS_LAWYER, each with its reason.
 - **Data:** `document_checks` (new migration, FORCE RLS); RENEW_BY rows feed F20 calendar.
@@ -190,7 +190,7 @@ Status words: **BUILT** · **PARTIAL** · **TODO** · **NEEDS PERMISSION** · **
 
 ### F21 Company facts — BUILT (upload) / live NEEDS PERMISSION
 - **Entry:** `company_facts.extract`.
-- **Flow:** user uploads MCA master-data PDF → `sources/mca_master_data.py` parses → facts with
+- **Flow:** user uploads MCA master-data PDF → `checker/sources/mca_master_data.py` parses → facts with
   character spans, status UNCONFIRMED until the user confirms → `company_profile.py`.
 - **Gate:** never scrapes MCA; OGD dataset (data.gov.in key) as the second route.
 
@@ -213,7 +213,7 @@ Status words: **BUILT** · **PARTIAL** · **TODO** · **NEEDS PERMISSION** · **
 - **Flow:** supervisor proposes a plan from the **agent registry** → plan validator (code): registry
   agents only, ≤ 8, depth 1, budget and time cap, data class per model → `runs.preview` shows the
   plan and estimated cost → lawyer approves → jobs fan out → blackboard → critic → synthesis.
-- **Saved workflow:** a stored, validated plan template (`agents/workflows.py`, new) that can only reference registered intents.
+- **Saved workflow:** a stored, validated plan template (new module `agents.workflows`) that can only reference registered intents.
 - **Gate:** stop conditions — PAUSED_BUDGET, time cap, two verifier rejections → that branch NEEDS_LAWYER.
 
 ### F25 Schedules — TODO (T6)
