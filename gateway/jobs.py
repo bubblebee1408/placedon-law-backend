@@ -493,9 +493,27 @@ class PostgresQueue:
 
 # ── the shared contract ──────────────────────────────────────────────────────
 
-def conformance(queue) -> list[tuple[bool, str]]:
+def _mem_clear_backoff(queue):
+    """A `clear_backoff` for MemoryQueue. Named so the gate's call site reads plainly."""
+    def clear(job_id: str) -> None:
+        queue.jobs[job_id]["not_before"] = None
+    return clear
+
+
+def conformance(queue, *, clear_backoff=None) -> list[tuple[bool, str]]:
     """Every assertion both queues must satisfy. Run by this module's gate on the dict and
-    by scripts/rls_integration.py on PostgreSQL."""
+    by scripts/rls_integration.py on PostgreSQL.
+
+    `clear_backoff(job_id)` makes a job whose retry backoff has not elapsed claimable now.
+    It is the CALLER's, because only the caller knows how: the dict sets a field, Postgres
+    runs an UPDATE, and the queue may be wrapped by a test harness that exposes neither.
+    The first version of the retry-ladder check reached for `queue._conn()` and broke the
+    moment rls_integration passed its own wrapper -- reaching into a backend's internals
+    from a list that is supposed to be backend-agnostic.
+
+    Omitting it does NOT skip the ladder: those checks report FALSE with the reason, because
+    a skipped test reads as a passing one.
+    """
     out: list[tuple[bool, str]] = []
 
     def ck(cond, label):
@@ -627,16 +645,16 @@ def conformance(queue) -> list[tuple[bool, str]]:
            "the retry ladder claims the job under test, so attempts actually advances")
         got = queue.fail(jr.job_id, "model timeout")
         seen.append((got.status, got.attempts))
-        # The backoff puts not_before in the future, so the next claim would see nothing on a
-        # real clock. The ladder is about attempts, not about waiting, so the wait is skipped
-        # by clearing it -- which only this module can do, and which is why the backoff
-        # itself is asserted separately below rather than here.
-        if hasattr(queue, "jobs"):
-            queue.jobs[jr.job_id]["not_before"] = None
-        else:
-            with queue._conn() as _c:          # noqa: SLF001  -- the backend's own test
-                _c.execute("UPDATE jobs SET not_before = NULL WHERE job_id = %s",
-                           (jr.job_id,))
+        # The backoff puts not_before in the future, so the next claim would see nothing on
+        # a real clock. The ladder is about attempts, not about waiting, so the wait is
+        # cleared -- by the caller, who is the only one that knows how. The backoff itself is
+        # asserted separately below.
+        if clear_backoff is None:
+            ck(False, "the retry ladder needs a clear_backoff callback and none was given, "
+                      "so it did NOT run -- reported false rather than skipped, because a "
+                      "skipped test reads as a passing one")
+            break
+        clear_backoff(jr.job_id)
     ck(seen[-1][0] == DEAD,
        f"a job that fails {MAX_ATTEMPTS} times becomes DEAD, not retried forever ({seen})")
     ck(all(st == QUEUED for st, _ in seen[:-1]),
@@ -696,7 +714,8 @@ def _test() -> None:
             fail += 1
             print(f"  [FAIL] {label}")
 
-    for cond, label in conformance(MemoryQueue()):
+    _cq = MemoryQueue()
+    for cond, label in conformance(_cq, clear_backoff=_mem_clear_backoff(_cq)):
         check(cond, f"[memory] {label}")
 
     # ── the lease, which is the whole crash story ───────────────────────────

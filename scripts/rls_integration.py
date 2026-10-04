@@ -195,7 +195,25 @@ LAST_RUN: str | None = (
     "they hold the client's DOCUMENTS THEMSELVES -- the most concentrated "
     "confidential data the product keeps. All three proved the way the rest are: A "
     "sees its own and none of B's, the policy dropped fails CLOSED, RLS disabled "
-    "leaks B's rows, restoring returns to isolation.")
+    "leaks B's rows, restoring returns to isolation. "
+    "2026-10-04, A1: 001-021 applied TOGETHER to a fresh throwaway database on "
+    "PostgreSQL 18.6 (Postgres.app, local socket), asserted as placedon_app "
+    "(NOSUPERUSER, NOBYPASSRLS), adding 021_job_lanes: 336 checks, 0 failures. No new "
+    "table -- three columns, two widened CHECKs and two partial indexes on `jobs` -- so "
+    "the isolation proof is unchanged; what 021 adds is priority lanes, a retry backoff "
+    "and a DEAD state. Running it live found THREE things the dict could not. 021 was "
+    "missing from this script's own apply list. `_SeededQueue.enqueue` spelled out "
+    "(run_id, intent, args) and so silently DROPPED the new `lane` argument, which meant "
+    "the conformance list would have run against a queue that never saw a lane -- green "
+    "on the dict, wrong on the backend that ships, which is the fourth time this file has "
+    "caught that shape of divergence. And `_real()` returned an unseeded run_id once its "
+    "six fixtures ran out, so running out of fixtures surfaced as a foreign-key violation "
+    "from deep inside the conformance list rather than as \"this harness needs more "
+    "runs\"; it now raises and seeds 32. The conformance list also stopped reaching into "
+    "the backend: its retry-ladder check called `queue._conn()`, which broke the moment "
+    "this script passed its own wrapper, so clearing a backoff is now a callback the "
+    "CALLER supplies -- and omitting it reports FALSE rather than skipping, because a "
+    "skipped test reads as a passing one.")
 
 TENANT_TABLES = ("actors", "api_keys", "documents", "audit_log",
                  "runs", "run_steps", "propositions", "decisions", "jobs",
@@ -457,8 +475,22 @@ class _SeededQueue:
         self._map: dict[str, str] = {}
 
     def _real(self, run_id: str) -> str:
+        """The seeded run this fake id stands for. Raises when the fixtures run out.
+
+        This returned `run_id` unchanged once `_ids` was empty, and an unseeded run_id
+        violates jobs_run_id_fkey -- so running out of fixtures surfaced as a confusing
+        foreign-key error from deep inside the conformance list rather than as "this harness
+        needs more runs". Seen 04-10-2026 when the list grew past six enqueues.
+        """
+        from gateway.jobs import QueueError as _QE
         if run_id not in self._map:
-            self._map[run_id] = self._ids.pop(0) if self._ids else run_id
+            if not self._ids:
+                raise _QE(
+                    f"the queue conformance harness has run out of seeded runs. It needs "
+                    f"one real `runs` row per distinct run_id the list enqueues; add more "
+                    f"in rls_integration.run() rather than letting an unseeded id reach the "
+                    f"foreign key")
+            self._map[run_id] = self._ids.pop(0)
         return self._map[run_id]
 
     def _fake(self, job):
@@ -473,14 +505,23 @@ class _SeededQueue:
                 return dataclasses.replace(job, run_id=fake)
         return job
 
-    def enqueue(self, *, run_id, intent, args):
-        return self._inner.enqueue(run_id=self._real(run_id), intent=intent, args=args)
+    def enqueue(self, *, run_id, intent, args, **kw):
+        # **kw, not a fixed list. This wrapper spelled out (run_id, intent, args) and
+        # silently dropped `lane` when the queue gained it, so the conformance list ran
+        # against a queue that never saw a lane -- green on the dict, wrong on the server.
+        return self._inner.enqueue(run_id=self._real(run_id), intent=intent, args=args, **kw)
 
     def claim(self, **kw):
         return self._fake(self._inner.claim(**kw))
 
     def finish(self, job_id, status):
         return self._inner.finish(job_id, status)
+
+    def fail(self, job_id, reason, **kw):
+        return self._fake(self._inner.fail(job_id, reason, **kw))
+
+    def dead(self, limit=100):
+        return [self._fake(j) for j in self._inner.dead(limit)]
 
     def request_cancel(self, run_id):
         return self._inner.request_cancel(self._real(run_id))
@@ -529,7 +570,8 @@ def run(url: str) -> int:
                   "017_nonconformity.sql",
                   "018_users_roles.sql",
                   "019_matters.sql",
-                  "020_vault.sql"):
+                  "020_vault.sql",
+                  "021_job_lanes.sql"):
             cur.execute(sql(f))
             print(f"  applied {f}")
         _ensure_app_role(cur)
@@ -811,12 +853,25 @@ def run(url: str) -> int:
     with _connect(url) as _c:
         _c.execute("SELECT set_config('app.tenant_id', %s, false)", (str(a),))
         _queue_runs = []
-        for _ in range(6):
+        # One per distinct run_id the conformance list enqueues. A1 grew that list (lanes,
+        # the default, the refused lane, the retry ladder, the backoff), so six is no longer
+        # enough -- and _real now RAISES when it runs out instead of handing the foreign key
+        # an id nobody seeded.
+        for _ in range(32):
             _r = _u.uuid4()
             _c.execute("INSERT INTO runs (run_id, tenant_id, actor_id, intent, status) "
                        "VALUES (%s,%s,%s,'review_document','PLANNED')", (_r, a, actor_a))
             _queue_runs.append(str(_r))
-    for ok_, label in queue_conformance(_SeededQueue(pq, _queue_runs)):
+    def _pg_clear_backoff(job_id):
+        """Make a backed-off job claimable now, on the server. The conformance list asks the
+        CALLER for this because only the caller knows how -- and because the queue it is
+        handed here is a wrapper that exposes no connection at all."""
+        with _connect(url) as _cc:
+            _cc.execute("SELECT set_config('app.tenant_id', %s, false)", (str(a),))
+            _cc.execute("UPDATE jobs SET not_before = NULL WHERE job_id = %s", (job_id,))
+
+    for ok_, label in queue_conformance(_SeededQueue(pq, _queue_runs),
+                                        clear_backoff=_pg_clear_backoff):
         note(ok_, f"[postgres queue] {label}")
 
     # Two workers, one queue: the assertion SKIP LOCKED exists for. Without it the second
