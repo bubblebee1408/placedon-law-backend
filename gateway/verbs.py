@@ -2428,6 +2428,28 @@ def _matters_list(args: dict, ctx: Context) -> dict:
     return {"matters": ctx.store.list_matters()}
 
 
+def _jobs_dead(args: dict, ctx: Context) -> dict:
+    """Jobs that stopped trying, newest first, with the reason each stopped.
+
+    A1. DEAD is not FAILED: FAILED is one attempt that did not work and may be retried, DEAD
+    is that we gave up. Without somewhere to read them, a dead job is work that silently
+    never happened -- which is the failure mode a dead-letter state exists to remove.
+
+    `mcp=False`: a dead-job list names the runs of one firm and the errors its documents
+    provoked, and no agent task needs it. Tenant-scoped by the queue's own policy, not here.
+    """
+    if ctx.queue is None:
+        return _refuse("NO_QUEUE",
+                       "no queue is configured on this deployment, so there is no "
+                       "dead-letter list. That is not the same as an empty one")
+    try:
+        limit = max(1, min(500, int(str(args.get("limit") or 100))))
+    except (TypeError, ValueError):
+        return _refuse("BAD_REQUEST", "limit must be a number")
+    jobs = ctx.queue.dead(limit)
+    return {"dead": [j.to_dict() for j in jobs], "count": len(jobs)}
+
+
 def _usage_status(args: dict, ctx: Context) -> dict:
     """What this firm and this person have spent, and what is left.
 
@@ -3563,6 +3585,13 @@ VERBS: tuple[Verb, ...] = (
           Field("horizon_days", STRING, False, describes="default 90")),
          "POST", read_only=True, mcp=False, run=_calendar_upcoming),
 
+    Verb("jobs.dead",
+         "Jobs that stopped trying, newest first, each with the reason it stopped and how "
+         "many attempts were spent. DEAD is not FAILED: a FAILED attempt may be retried, a "
+         "DEAD job will not be.",
+         (Field("limit", STRING, False, describes="how many, up to 500, default 100"),),
+         "POST", read_only=True, mcp=False, run=_jobs_dead),
+
     Verb("usage.status",
          "What this firm and this person have spent against the caps, and what is left. "
          "Identity comes from the authenticated caller, never from an argument, so no "
@@ -3783,12 +3812,12 @@ def _test() -> None:
                     "review_table.cancel", "draft.create",
                     "draft.revise", "draft.status", "draft.versions", "draft.diff",
                     "draft.export", "matters.create", "matters.list",
-                    "calendar.upcoming", "usage.status"} | {
+                    "calendar.upcoming", "usage.status", "jobs.dead"} | {
                         "vault.upload", "vault.status", "vault.find",
                                             "vault.verify", "vault.summarize",
                                             "vault.research", "vault.compile",
                                             "vault.delete"},
-          f"the forty-one verbs are declared once ({sorted(names)})")
+          f"the forty-two verbs are declared once ({sorted(names)})")
     # sources.* are READ-ONLY, so they reach MCP. That is the intended shape: an agent may
     # ask what a source permits and search what may be read, and there is no sources verb
     # that fetches, stores or spends. S3's Indian Kanoon connector will spend money, and
@@ -5188,7 +5217,8 @@ def _test() -> None:
           f"MCP exposes every read-only verb THAT OPTS IN, and no other "
           f"({sorted(mcp_names)})")
     _opted = {v.name for v in VERBS if v.read_only and not v.mcp}
-    check(_opted == {"matters.list", "calendar.upcoming", "usage.status", "vault.status",
+    check(_opted == {"matters.list", "calendar.upcoming", "usage.status", "jobs.dead",
+                     "vault.status",
                      "vault.find", "vault.verify", "vault.summarize", "vault.research",
                      "vault.compile"},
           f"...and the verbs that opt out are the ones that should: a client list, the "
@@ -5254,7 +5284,7 @@ def _test() -> None:
           "...while a WRITE verb is kept out of MCP by mcp_tools(), not by the author "
           "remembering to")
     check("widgets.delete" in write_verbs(hypo), "...and is named in write_verbs()")
-    check(len(VERBS) == 41 and "widgets.count" not in rest_spec(),
+    check(len(VERBS) == 42 and "widgets.count" not in rest_spec(),
           "...and the probe changed nothing in this module: the surfaces are generated "
           "from an argument, not from a global the test rebound")
 

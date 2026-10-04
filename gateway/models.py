@@ -38,14 +38,19 @@ import time
 from dataclasses import dataclass, field
 from typing import Callable
 
-from backend.azure_pricing import check_recordable, price_inr
+from backend.azure_pricing import (TABLE, Priced, Unpriced, check_recordable,
+                                   price_inr)
 from checker import azure_model, router
+from gateway import circuit as circuit_mod
 
 # Where the `placedon-law-eval` deployments live. Recorded per step, not per deployment.
 REGION = "UAE North"
 
 NO_MODEL = "NO_MODEL"
 NO_BUDGET = "NO_BUDGET"
+# A1. The per-provider circuit breaker refused. A TRANSPORT failure -- no call was made, so
+# nothing was looked at -- and never a finding. gateway/circuit.py says why at length.
+NO_PROVIDER = circuit_mod.CIRCUIT_OPEN
 
 
 class NotServed(RuntimeError):
@@ -111,7 +116,7 @@ def available_providers(credit_exhausted=None) -> tuple[str, ...]:
 
 def serve(origins, *, name: str, purpose: str, consequence: str = router.LOW,
           budget=None, available: tuple[str, ...] | None = None,
-          sleep=None, transport=None) -> Served:
+          sleep=None, transport=None, breaker=None) -> Served:
     """The route for this task, as a callable. Raises NotServed with a code, never None.
 
     `origins` is the public_only clearance the model call will be made under; it is bound
@@ -131,6 +136,14 @@ def serve(origins, *, name: str, purpose: str, consequence: str = router.LOW,
     except router.NoRoute as e:
         raise NotServed(NO_MODEL, f"{e}") from None
 
+    # A1. The breaker is consulted AFTER routing, because it is per PROVIDER and the
+    # provider is not known until the route is chosen -- and BEFORE the budget, because a
+    # provider we have stopped asking costs nothing and should not be priced.
+    if breaker is not None:
+        refusal = breaker.check(route.provider)
+        if refusal is not None:
+            raise NotServed(NO_PROVIDER, refusal.detail)
+
     if budget is not None:
         verdict = budget.can_make_call(0.0, model=route.model)
         if not verdict.allowed:
@@ -148,7 +161,23 @@ def serve(origins, *, name: str, purpose: str, consequence: str = router.LOW,
     inner = (transport if transport is not None
              else azure_model.as_text_model(origin=origins, model=route.model,
                                             budget=budget, on_usage=usage.append))
-    return Served(call=azure_model.with_backoff(inner, sleep=sleep or time.sleep),
+    call = azure_model.with_backoff(inner, sleep=sleep or time.sleep)
+
+    if breaker is not None:
+        # The breaker only learns anything if someone tells it the outcome, and the only
+        # place that sees every outcome is the call itself. Wrapping it here means no caller
+        # has to remember -- the failure mode a breaker wired by convention always has.
+        def _watched(prompt, _call=call, _p=route.provider):
+            try:
+                out = _call(prompt)
+            except Exception:
+                breaker.record_failure(_p)
+                raise
+            breaker.record_success(_p)
+            return out
+        call = _watched
+
+    return Served(call=call,
                   provider=route.provider, model=route.model, region=REGION,
                   degraded=route.degraded, requires_review=route.requires_review,
                   est_cost_inr=route.est_cost_inr, usage=usage)
@@ -216,14 +245,42 @@ def _test() -> None:
         check(True, "...and a literal 0.0 from a billed provider is REFUSED before it can "
                     "reach a run step or a database")
 
-    # after a real call, the cost is priced from the tokens reported
-    s.usage.append({"deployment": "llama-3-3-70b", "tokens_in": 1200, "tokens_out": 300})
+    # after a real call, the cost comes from the tokens reported -- priced where a price is
+    # on record, UNPRICED with a reason where none is.
+    #
+    # This asserted that llama-3-3-70b was UNPRICED "today". That was true until commit
+    # 6d3ac4a added a VERIFIED Azure price for it, which made the assertion false and the
+    # test wrong -- and nobody saw it, because gateway/models.py was not in
+    # scripts/run_tests.sh and its twenty-five checks had never run in the gate. Both are
+    # fixed: the suite is registered, and the assertion is about the BEHAVIOUR rather than
+    # which models happen to be priced, so adding or removing a price cannot make it stale
+    # again. CLAUDE.md records this lesson twice already about counts in prose.
+    priced_model = next(k for k, v in sorted(TABLE.items()) if isinstance(v, Priced))
+    s.usage.append({"deployment": priced_model, "tokens_in": 1200, "tokens_out": 300})
     c, note = s.cost()
-    check(c is None and note.startswith("UNPRICED:"),
-          f"today llama-3-3-70b has no price on record, so a real call is UNPRICED with "
-          f"the reason ({note[:48]}…)")
-    check("price" in note.lower(),
-          "...and the reason points at the price table, which is where the fix goes")
+    check(c is not None and c > 0 and not note.startswith("UNPRICED:"),
+          f"a model WITH a price on record is priced from its tokens ({priced_model}: "
+          f"{c} INR)")
+    check("http" in note,
+          f"...and the note carries the SOURCE of that price, so a rupee figure in a run "
+          f"step can be checked against the vendor ({note[:60]}…)")
+
+    unpriced_model = next((k for k, v in sorted(TABLE.items()) if isinstance(v, Unpriced)),
+                          None)
+    check(unpriced_model is not None,
+          "the price table still holds at least one deliberately UNPRICED model, so the "
+          "other branch is reachable")
+    if unpriced_model is not None:
+        s2 = Served(call=lambda p: "", provider="azure", model=unpriced_model, region=REGION,
+                    degraded=False, requires_review=False, est_cost_inr=0.0,
+                    usage=[{"deployment": unpriced_model, "tokens_in": 1200,
+                            "tokens_out": 300}])
+        c2, note2 = s2.cost()
+        check(c2 is None and note2.startswith("UNPRICED:"),
+              f"...while a model with NO price is UNPRICED rather than 0.0 -- a zero would "
+              f"be a claim that the call was free ({unpriced_model}: {note2[:40]}…)")
+        check("price" in note2.lower(),
+              "...and its reason points at the price table, which is where the fix goes")
 
     # ── the two refusals, each with its own code ────────────────────────────
     try:

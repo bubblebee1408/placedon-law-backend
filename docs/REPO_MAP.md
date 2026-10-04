@@ -242,6 +242,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `gateway/app.py` | R2 feeds | The HTTP gateway. /v1 is the engine, forwarded and not reinterpreted. |
 | `gateway/audit.py` | R2 feeds | Append-only audit, hash-chained. Metadata only — never document or prompt text. |
 | `gateway/auth.py` | R2 feeds | API keys, stored hashed, resolving to (tenant, actor). |
+| `gateway/circuit.py` | R2 feeds | A per-provider circuit breaker. An open breaker is a TRANSPORT failure, never a finding. |
 | `gateway/cli.py` | R2 feeds | `placedon` -- the third surface, generated from the same verb table as the other two. |
 | `gateway/envelope.py` | R2 feeds | One answer envelope, versioned, validated against the schema file beside it. |
 | `gateway/filestore.py` | R2 feeds | Where a vault's bytes live. Local today; S3 is BLOCKED by name, not stubbed. |
@@ -365,4 +366,4 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/watch_gazette.py` |  | Run the Gazette watcher once: what did the Gazette publish since we last looked? |
 | `scripts/watch_ofac.py` |  | Poll OFAC's SDN list and report what CHANGED since the last trustworthy poll. |
 
-325 modules listed.
+326 modules listed.
