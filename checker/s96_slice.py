@@ -299,7 +299,7 @@ class EvidenceCard:
         return json.dumps(d, indent=1, default=str)
 
 
-# Recorded, not decided. See docs/COMPLIANCE_MECHANICS.md §4.
+# Recorded, not decided. See docs/architecture/COMPLIANCE_MECHANICS.md §4.
 UNRESOLVED_NOTES = (
     "Whether a Registrar's extension under the third proviso to s.96(1) also "
     "displaces the fifteen-month limb, or only the six-month limb, is not stated "

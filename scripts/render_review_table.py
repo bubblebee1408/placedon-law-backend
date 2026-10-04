@@ -7,7 +7,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from checker.review_table import build
 
-OUT = Path("docs/FIXTURE_REVIEW.md")
+OUT = Path("docs/evidence/FIXTURE_REVIEW.md")
 
 
 def render() -> str:

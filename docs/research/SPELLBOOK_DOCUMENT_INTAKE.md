@@ -1,7 +1,7 @@
 # R2 — Spellbook: how documents enter, how they are analysed, how outputs are checked
 
-Track R, task R2 of `docs/PLAN_11_NEXT_MOVE.md`. Extends `docs/SPELLBOOK_INFERRED_ARCHITECTURE.md`
-and `docs/SPELLBOOK.md`; does not replace them.
+Track R, task R2 of `docs/plans/PLAN_11_NEXT_MOVE.md`. Extends `docs/market/SPELLBOOK_INFERRED_ARCHITECTURE.md`
+and `docs/market/SPELLBOOK.md`; does not replace them.
 
 **Read on 2026-09-14.** Public pages only. No account, no trial, no login wall, no authenticated
 area (`associate.spellbook.legal` returns 200 but is the product itself and was not entered).
@@ -399,7 +399,7 @@ All of this section is INFERRED design reasoning built on the SOURCED rows cited
 1. **Adversarial source check** (required by PLAN_11 before commit): a second reader opens every
    URL above and confirms the exact-string rows (B1, B3, B4, B5, B7, B8, C1, C2, C16, C17, D1, E6,
    E15) against the live page, noting the relative "Updated" label on each help article.
-2. **Update `docs/VENDOR_QUESTIONS.md`** (a separate task; this file does not edit it): mark Q1 as
+2. **Update `docs/market/VENDOR_QUESTIONS.md`** (a separate task; this file does not edit it): mark Q1 as
    partly answered from public docs (D1), keep Q2/Q7/Q10 open, and add: (a) behaviour on upload of a
    scanned PDF with no text layer; (b) do Review Table / Tabular Report cells cite page or passage;
    (c) what is in the Market pool besides "Give to Get" contributions; (d) retention of Library and

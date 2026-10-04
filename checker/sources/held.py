@@ -9,7 +9,7 @@ two code paths and only one of them is guarded.
 
 527 ingested sections of the Companies Act 2013, hash-stamped, cross-rendered against
 India Code's JSON and its PDF (median record coverage 1.0000, 456/464 >= 0.99) with **two
-confirmed source defects** in `docs/SOURCE_DEFECTS.md` and a corpus status of
+confirmed source defects** in `docs/evidence/SOURCE_DEFECTS.md` and a corpus status of
 NOT_FULLY_VERIFIED. Independent-publisher verification is PENDING: both renderings are
 India Code, so a defect in their own source is invisible to the check.
 
@@ -71,7 +71,7 @@ class HeldCorpus:
         if as_of:
             raise AsOfUnsupported(
                 f"as_of={as_of!r}: point-in-time reconstruction is UNVERIFIED against any "
-                f"external source (CLAUDE.md, docs/RETRACTIONS.md). HELD serves current "
+                f"external source (CLAUDE.md, docs/evidence/RETRACTIONS.md). HELD serves current "
                 f"text only, and returning it for a past date is the exact mistake that "
                 f"was retracted")
         if not (query or "").strip():

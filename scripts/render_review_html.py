@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from checker.review_table import build, ACCEPT, MISSING, PRESERVED, NOT_APPLICABLE
 
-OUT = Path("docs/fixture_review.html")
+OUT = Path("docs/evidence/fixture_review.html")
 
 CSS = """
 :root {

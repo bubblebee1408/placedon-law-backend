@@ -29,7 +29,7 @@ REQUIRED = [
 OPTIONAL = [
     ("corpus/sources/companies_meetings_board_powers_rules_2014.pdf",
      "the Board Powers Rules gazette",
-     "see docs/ACQUISITION_HANDOFF_board_rules_2014.md — a human must download it"),
+     "see docs/guides/ACQUISITION_HANDOFF_board_rules_2014.md — a human must download it"),
     ("corpus/rules/board_powers_2014.json",
      "the parsed Rules",
      "python3 scripts/parse_board_rules.py (needs the gazette above)"),

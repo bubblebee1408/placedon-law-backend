@@ -11,7 +11,7 @@ been wrong on the day it was given. (Until 2026-08-16 this said "anxious HR mana
 Indian company". That user is gone.)
 
 ## Read first
-`docs/PERSONAS.md`, `docs/PLAN_20_INHOUSE_CORPORATE.md` (what this buyer needs, in rank order),
+`docs/product/PERSONAS.md`, `docs/plans/PLAN_20_INHOUSE_CORPORATE.md` (what this buyer needs, in rank order),
 and `CLAUDE.md`'s status vocabulary — every one of those six states needs a visual treatment, and
 the grey abstain state is the one that earns trust.
 

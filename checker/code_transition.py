@@ -1,6 +1,6 @@
 """Which code governs — and why a flat `ipc_bns_map` table is the wrong shape.
 
-The adoption plan (docs/PLAN_10_ADOPTION_REVIEW.md) proposes a `data/ipc_bns_map/`
+The adoption plan (docs/plans/PLAN_10_ADOPTION_REVIEW.md) proposes a `data/ipc_bns_map/`
 table so that "new-code queries also reach old-code precedent". The retrieval goal is
 right. The data structure is not, and the failure it produces is the exact one this
 repository exists to prevent, running backwards.

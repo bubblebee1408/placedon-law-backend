@@ -1,6 +1,6 @@
 """The seam where live corporate data enters — L1 of the Bloomberg-for-India design.
 
-docs/BLOOMBERG_FOR_INDIA_ANALYSIS.md §4 puts everything on the entity graph. The
+docs/market/BLOOMBERG_FOR_INDIA_ANALYSIS.md §4 puts everything on the entity graph. The
 one genuinely-new engineering piece is feeding that graph from LIVE corporate data
 (CIN, DIN, directors, cross-holdings, charges) instead of hand entry. This module
 is that seam: a typed record, a provider contract, and a deterministic mapping into
@@ -91,7 +91,7 @@ class LicensedAggregatorProvider:
         raise NotImplementedError(
             "live corporate data requires a contracted, MCA-sanctioned aggregator "
             "(e.g. an authorised MCA21 API provider). Do not scrape MCA21 — see "
-            "CLAUDE.md and docs/BLOOMBERG_FOR_INDIA_ANALYSIS.md §3.1. Wire the "
+            "CLAUDE.md and docs/market/BLOOMBERG_FOR_INDIA_ANALYSIS.md §3.1. Wire the "
             "licensed provider's SDK here once an agreement is in place.")
 
 

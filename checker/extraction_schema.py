@@ -9,7 +9,7 @@ does. Nothing here calls a model. Nothing here trusts one.
 ## Why this exists
 
 The external advice that prompted it recommended fine-tuning an 8B model and serving
-it behind vLLM guided decoding. Fine-tuning is a recorded non-goal (`docs/NON_GOALS.md`:
+it behind vLLM guided decoding. Fine-tuning is a recorded non-goal (`docs/policy/NON_GOALS.md`:
 "no data rights, no budget, and not the moat") and is not adopted. But the *principle*
 underneath guided decoding is sound and was missing here: a field should be rejected at
 parse time when it cannot possibly be valid, rather than travelling downstream to be
@@ -18,7 +18,7 @@ a grammar and a checker, which is what this is.
 
 ## The discipline, unchanged from the rest of the system
 
-- **A malformed field is never repaired.** `docs/SOURCE_DEFECTS.md` records four
+- **A malformed field is never repaired.** `docs/evidence/SOURCE_DEFECTS.md` records four
   transcription defects in the official text preserved verbatim; the same rule holds
   for a proposed value. We reject and say why. Silent repair is how a wrong CIN becomes
   a confident wrong answer about a different company.

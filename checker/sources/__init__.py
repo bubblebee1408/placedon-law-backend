@@ -1,13 +1,13 @@
 """Every source behind one interface, and every result carrying the tier that limits it.
 
-S1 of `docs/PLAN_26_INDIAN_SOURCES.md` (H1 of `.claude/loops/DECISION_harvey_parity.md`).
+S1 of `docs/plans/PLAN_26_INDIAN_SOURCES.md` (H1 of `.claude/loops/DECISION_harvey_parity.md`).
 This package is the contract; `terms.py` is what the sources permit; `held.py` and
 `client.py` are the only two adapters that exist yet.
 
 ## The one rule
 
 **Only HELD can make an answer VERIFIED.** HELD is our own hash-stamped corpus, checked
-against India Code and carrying known defects in `docs/SOURCE_DEFECTS.md`. A judgment found
+against India Code and carrying known defects in `docs/evidence/SOURCE_DEFECTS.md`. A judgment found
 on Indian Kanoon, a circular read off sebi.gov.in this morning, a company's own disclosure
 and the client's own contract are all real evidence about the world and none of them is law
 we have verified. The tier is set by the connector's code and never by a model (PLAN_26 §2).

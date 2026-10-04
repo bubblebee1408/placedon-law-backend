@@ -288,7 +288,7 @@ record(
         "do I know you get it right? Who checked it?",
         EVIDENCE, PARTIAL,
         our_answer="Boundary behaviour is proved on s.177, s.447 and s.35 -- 6/6 "
-                   "boundaries, docs/TEMPORAL_PROOF.md. And 24 amended spans are "
+                   "boundaries, docs/evidence/TEMPORAL_PROOF.md. And 24 amended spans are "
                    "corroborated against the amending Acts on Indian Kanoon with 0 "
                    "conflicts. But section-level reconstruction of SUBSTITUTED "
                    "spans is UNVERIFIED and CLAUDE.md says so.",

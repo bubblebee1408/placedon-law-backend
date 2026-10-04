@@ -109,7 +109,7 @@ WITHHELD_RULE_ID = "RULE:COMPANIES_MEETINGS_BOARD_POWERS_2014:R15"
 # SD-002: the corpus text of s.16 is pre-amendment ("fine of one thousand rupees for every day",
 # decriminalised by the Companies (Amendment) Act 2020). A model that reproduced this would be
 # stating repealed law with a real citation attached -- the most dangerous shape of error here,
-# because everything about it looks correct. docs/SOURCE_DEFECTS.md#sd-002.
+# because everything about it looks correct. docs/evidence/SOURCE_DEFECTS.md#sd-002.
 SUSPENDED_SECTION_QUERY = "s.16"
 SUSPENDED_WORDING = "fine of one thousand rupees for every day"
 

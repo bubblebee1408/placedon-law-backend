@@ -8,7 +8,7 @@ contract that is the evidence for it.
 ## Where it comes from, and why not from where it says
 
 The dataset's own loader names `github.com/TheAtticusProject/cuad/raw/main/data.zip`.
-**github.com's robots.txt disallows `/raw/`**, and docs/ACQUISITION_POLICY.md is explicit
+**github.com's robots.txt disallows `/raw/`**, and docs/policy/ACQUISITION_POLICY.md is explicit
 that a robots refusal is BLOCKED and never retried: "the server answered, and the answer
 was no". So that URL is not used. `raw.githubusercontent.com` is a different host with its
 own robots.txt, it is GitHub's documented content host for exactly this file, and it
@@ -83,7 +83,7 @@ def fetch(url: str = URL, *, rules_fetch=None, opener=None) -> bytes:
     if not allowed(url, rules):
         raise NotPermitted(
             f"robots.txt at {PERMITTED_HOST} does not permit {url}. Not retried: "
-            f"docs/ACQUISITION_POLICY.md treats a robots refusal as BLOCKED, never "
+            f"docs/policy/ACQUISITION_POLICY.md treats a robots refusal as BLOCKED, never "
             f"UNREACHABLE.")
     if opener is not None:
         return opener(url)

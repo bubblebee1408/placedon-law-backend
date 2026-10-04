@@ -33,21 +33,23 @@ Before proposing anything, check it is not already answered:
 python3 scripts/search_memory.py --memory "<the thing you are about to build>"
 ```
 
-`RESEARCH_LOG.md` has 12 findings and `DECISIONS.md` 8 decisions with reversal conditions.
+Decisions with reversal conditions live in `docs/plans/PLAN_22_MODEL_AND_PLATFORM_DECISIONS.md`
+and `.claude/DECISIONS.md`; withdrawn claims in `docs/evidence/RETRACTIONS.md`.
 Rebuilding something already decided against is worse than building nothing.
 
-## 4. The two questions that outrank everything
+## 4. The questions that outrank everything
 
 Before proposing any build, check these:
 
 ```bash
-python3 -c "import json;p=json.load(open('corpus/provisions/posh_act_2013.json'))['provisions'];print('verified:',sum(1 for x in p if x['verified_by']),'/',len(p))"
+grep -nE "\*\*founder\*\* \| \*\*(open|ready|blocked)" research/TASKS.md   # human-only blockers
+PYTHONPATH=. python3 checker/scope.py | tail -5                                   # what is held
 ```
 
-- **0 / 30 verified** → the Q&A product cannot answer anything. H-2 is one evening and outranks
-  every feature. Say so.
-- **0 customer conversations** → H-1 decides whether the buyer is HR or the company secretary,
-  which changes the product. Say so.
+- **No practising lawyer or Company Secretary has reviewed any output** (H-001) → no accuracy
+  claim is possible, whatever is built. If H-001 is still open, say so.
+- **One body of law of eleven is held** → a feature that needs an unheld body will refuse
+  until it is acquired. Say so before building it.
 
-If a proposed build does not survive being compared to those two, say that plainly rather than
+If a proposed build does not survive being compared to those, say that plainly rather than
 building it anyway.

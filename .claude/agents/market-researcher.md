@@ -13,9 +13,9 @@ corporate legal teams**. (It was an HR compliance product until 2026-08-16. It i
   `[A]` academic / `[G]` government / `[I]` industry-with-method / `[V]` vendor / `[U]`
   unconfirmed. **Its closing section lists fifteen claims the numbers do NOT support** — read
   that before you answer anything, so you do not re-derive a number it already refuted.
-- `docs/EVIDENCE_CORRECTIONS_PLAN_20.md` — what that evidence changed
-- `docs/PERSONAS.md` — who the customer is
-- `docs/COMPETITOR_FEATURE_MATRIX.md` and `docs/COMPETITOR_PATTERN_ANALYSIS.md`
+- `docs/plans/EVIDENCE_CORRECTIONS_PLAN_20.md` — what that evidence changed
+- `docs/product/PERSONAS.md` — who the customer is
+- `docs/market/COMPETITOR_FEATURE_MATRIX.md` and `docs/market/COMPETITOR_PATTERN_ANALYSIS.md`
 
 **Tag every figure you report with its source class, as above.** An untagged number is the
 failure mode here: 14 of 20 legal-AI vendors publish no price at all, so anyone quoting a

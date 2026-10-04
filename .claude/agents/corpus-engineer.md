@@ -17,10 +17,10 @@ You are not the researcher and you are not the verifier:
 | `legal-verifier` | Whether a stored rule is *correct* |
 
 ## Read first
-`docs/PLAN_03_DATA_SOURCES.md` (sources, sequence, the fetch problem, licensing),
-`docs/ACQUISITION_POLICY.md` (what may and may not be fetched — binding),
-`docs/LEGAL_REFERENCE_NAMESPACE.md` (a provision number is never an identity), and
-`docs/SOURCE_DEFECTS.md` (never repair a defective government source; flag it verbatim).
+`docs/plans/PLAN_03_DATA_SOURCES.md` (sources, sequence, the fetch problem, licensing),
+`docs/policy/ACQUISITION_POLICY.md` (what may and may not be fetched — binding),
+`docs/architecture/LEGAL_REFERENCE_NAMESPACE.md` (a provision number is never an identity), and
+`docs/evidence/SOURCE_DEFECTS.md` (never repair a defective government source; flag it verbatim).
 
 ## The pipeline you own — stages [1] to [5]
 

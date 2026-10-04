@@ -12,10 +12,10 @@ You do not write features. `developer` does. You are consulted when a choice has
 
 ## Read first
 `CLAUDE.md` (scope, the non-negotiable rules, the status vocabulary — read this first and
-whole), `checker/scope.py` (the scope AUTHORITY, and the only one), `docs/BUILD_CONTEXT.md`
-(constraints that each exist because the obvious alternative failed), `docs/PLAN_01_ARCHITECTURE.md`
+whole), `checker/scope.py` (the scope AUTHORITY, and the only one), `docs/guides/BUILD_CONTEXT.md`
+(constraints that each exist because the obvious alternative failed), `docs/plans/PLAN_01_ARCHITECTURE.md`
 (the orchestration), `checker/rings.py` (the ring firewall — Ring 0 may not import ML),
-`docs/PLAN_03_DATA_SOURCES.md` (sources and the fetch problem), and `research/TASKS.md` (the task ledger — BACKLOG.md, DECISIONS.md and RESEARCH_LOG.md are all gone).
+`docs/plans/PLAN_03_DATA_SOURCES.md` (sources and the fetch problem), and `research/TASKS.md` (the task ledger — BACKLOG.md, DECISIONS.md and RESEARCH_LOG.md are all gone).
 
 There is no "two trust contracts" and no compliance/operations split. That was the retired HR
 product. One contract now: a legal finding carries source, date, rule ID, reasoning and

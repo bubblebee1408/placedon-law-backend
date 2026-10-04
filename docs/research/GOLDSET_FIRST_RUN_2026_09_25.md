@@ -215,7 +215,7 @@ properly.
 
 - **Point-in-time questions are neither answered nor refused.** "What was the limit
   in March 2019?" returned current-consolidation text with no statement that the
-  period asked about cannot be served. `docs/RETRACTIONS.md` records this exact class
+  period asked about cannot be served. `docs/evidence/RETRACTIONS.md` records this exact class
   of mistake. *"What will the threshold be in 2027?"* — a future date — returned an
   empty pack rather than a refusal.
 - **False premises are not corrected.** "Our company holds 2 board meetings a year

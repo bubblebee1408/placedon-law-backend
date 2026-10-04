@@ -20,7 +20,7 @@ identical digests. A test enforces the absence.
 
 The terminal state that matters most is HUMAN_RETRIEVAL_REQUIRED. It is a SUCCESS: it means the
 automation established that no permitted automated route exists and stopped instead of grinding
-against a WAF. See docs/ACQUISITION_POLICY.md.
+against a WAF. See docs/policy/ACQUISITION_POLICY.md.
 
 Run:  python3 checker/acquisition_log.py
 Emit: python3 checker/acquisition_log.py --emit
@@ -360,7 +360,7 @@ BOARD_RULES_2014 = AcquisitionLog(
         "is down, and the only route that could discover the file's static address is behind a "
         "WAF that has refused us and must not be re-probed. A browser session is not subject to "
         "that block, so this is a five-minute human task -- see "
-        "docs/ACQUISITION_HANDOFF_board_rules_2014.md, then run scripts/acquire_rules.py on the "
+        "docs/guides/ACQUISITION_HANDOFF_board_rules_2014.md, then run scripts/acquire_rules.py on the "
         "downloaded PDF. Third-party sources give a notification number and date for these Rules; "
         "those are LEADS for finding the file and must be read off the acquired document before "
         "they are recorded anywhere (see PRINCIPAL_RULES_LEAD in checker/provenance.py). "

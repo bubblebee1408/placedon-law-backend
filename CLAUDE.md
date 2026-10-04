@@ -18,10 +18,10 @@ to acquire. Never with silence, because silence would read as "no obligation fou
 **The invariant, tested:** no obligation may exist in the register for a body that is not held.
 That is what stops the widened scope from producing answers decided against law nobody acquired.
 
-Model and platform decisions: `docs/PLAN_22_MODEL_AND_PLATFORM_DECISIONS.md` — read before any
+Model and platform decisions: `docs/plans/PLAN_22_MODEL_AND_PLATFORM_DECISIONS.md` — read before any
 model, retrieval, OCR, API or MCP work.
 
-Orchestration design: `docs/PLAN_23_ORCHESTRATION.md`, read before touching `agents/` or `gateway/`.
+Orchestration design: `docs/plans/PLAN_23_ORCHESTRATION.md`, read before touching `agents/` or `gateway/`.
 
 ## The wedge
 Given a corporate document, determine whether it is:
@@ -45,7 +45,7 @@ defect is only detectable at the output. That is where an audit layer sits.
 Indian Kanoon) was proposed and declined: the currency engine is worth most here and
 least there, and "3-5 on-point judgments with pinpoint cites" is a commodity three
 incumbents already sell. Reasoning and the five lessons adopted from that plan are in
-[docs/PLAN_10_ADOPTION_REVIEW.md](docs/PLAN_10_ADOPTION_REVIEW.md). `checker/scope.py`
+[docs/plans/PLAN_10_ADOPTION_REVIEW.md](docs/plans/PLAN_10_ADOPTION_REVIEW.md). `checker/scope.py`
 is unchanged and remains the authority.
 
 `checker/code_transition.py` is kept as machinery only. It serves no obligation, is
@@ -54,7 +54,7 @@ wired to nothing, and every verdict it returns is INSTRUMENT_NOT_HELD.
 ## Non-negotiable rules
 - Never claim legal accuracy without an independent benchmark.
 - **Never use a current consolidated Act as pre-amendment ground truth.** This exact mistake was
-  made and retracted — see `docs/RETRACTIONS.md`.
+  made and retracted — see `docs/evidence/RETRACTIONS.md`.
 - Never call a finding a defect when the rule is inapplicable to the document type. Minutes checks
   must not fire on notices.
 - Every legal finding carries source, date, rule ID, reasoning, and confidence.
@@ -130,13 +130,13 @@ Files changed · Tests added or updated · Commands run · Results · Known limi
 | `corpus/testdocs/` | Real + ICSI-specimen documents for scanner validation |
 | `corpus/reference/` | SS-1 and SS-2 full text |
 | `scripts/` | Ingestion and verification harnesses |
-| `docs/` | Architecture, technical plans, retractions |
+| `docs/` | Every document, filed by kind: architecture/, guides/, policy/, plans/, evidence/, reports/, product/, market/, research/. Index: `docs/README.md` |
 | `research/TASKS.md` | The task ledger — single source of truth for what is open |
 
 ## Verification status
 - Corpus cross-render check: **PASS_WITH_DEFECTS**. India Code JSON vs India Code PDF agree
   (median record coverage 1.0000, 456/464 >= 0.99) but **two confirmed defects** — see
-  `docs/SOURCE_DEFECTS.md`. Corpus status is NOT_FULLY_VERIFIED.
+  `docs/evidence/SOURCE_DEFECTS.md`. Corpus status is NOT_FULLY_VERIFIED.
 - Independent-publisher verification: **PENDING**. Both renderings are India Code; a defect in
   their own source is invisible to this check.
 - Section index: **474/517 entries mapped, 0 live sections unresolved.** The remaining 43 are
@@ -149,7 +149,7 @@ Files changed · Tests added or updated · Commands run · Results · Known limi
   - **474/517 = 91.7%** of index *entries* carry an id. The 43 without are the omitted ones.
   - **474/474 = 100%** of *live* provisions carry an id. This is the number that matters, and
     it is what makes "0 live sections unresolved" true.
-  - **464/474 = 97.9%** is what `docs/CLAIMS_LEDGER.md` records, and that entry is **correct and
+  - **464/474 = 97.9%** is what `docs/evidence/CLAIMS_LEDGER.md` records, and that entry is **correct and
     must stay**: it is dated 2026-08-21, it was true then, and it says in terms that its
     denominator "must not be quietly restated later". What was wrong was *this* file citing it as
     a present-tense capability after `resolve_missing_sections.py` closed the last 10. The ledger
@@ -175,7 +175,7 @@ Files changed · Tests added or updated · Commands run · Results · Known limi
   a 200 of HTML where a PDF was expected is the silent failure this repository exists to refuse.
 - Point-in-time reconstruction: **boundary behaviour proved** on s.177, s.447 and s.35 —
   6/6 boundaries, text changes across each, effective dates inclusive
-  (`scripts/prove_temporal.py`, `docs/TEMPORAL_PROOF.md`). EXACT there rests on 5 insertions
+  (`scripts/prove_temporal.py`, `docs/evidence/TEMPORAL_PROOF.md`). EXACT there rests on 5 insertions
   (recoverable by deletion, no witness needed) and 3 substitutions (single-sourced footnotes).
 - **SD-003 CORRECTED**: 42 of the 121 "unbalanced spans" were our own regex, not a source
   defect. Fixing it recovered 41 spans; sections EXACT on both sides went 45 -> 83. Genuine
@@ -185,7 +185,7 @@ Files changed · Tests added or updated · Commands run · Results · Known limi
 - Section-level reconstruction of **substituted** spans still UNVERIFIED.
   But prior wording is now independently corroborated for the first time: 24 amended
   spans matched against the amending Acts themselves on Indian Kanoon, **0 conflicts**;
-  21/24 where the instrument is held. See `docs/CORROBORATION.md`. This corroborates
+  21/24 where the instrument is held. See `docs/evidence/CORROBORATION.md`. This corroborates
   individual spans, not whole sections — the distinction the retracted claims missed.
 - Indian Kanoon does not host The Companies (Amendment) Act, 2019, so claims resting
   on Act 22 of 2019 have no witness on that source (9 of 16 unresolved cases).

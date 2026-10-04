@@ -64,7 +64,7 @@ Inputs: `docs/research/ux/FRONTEND_ALIGNMENT_2026_09_17.md` §E (E6, E7, E9, E12
     `(^|[^a-z])mcp([^a-z]|$)|model context protocol|modelcontextprotocol|fastmcp`
     (case-insensitive) in `*.py *.js *.json *.toml *.txt *.sh *.html *.cfg *.yml *.yaml`: no hits.
     A working-tree `grep -r` excluding `.git`, `.env*` and `__pycache__` hits only
-    `docs/TOOLING.md` (MCP servers for developer tooling), the loop runbook and
+    `docs/guides/TOOLING.md` (MCP servers for developer tooling), the loop runbook and
     `research/TASKS.md`.
   - **S10**, deploy config in the tracked tree: `vercel.json|Dockerfile|Procfile|render.yaml|
     fly.toml|app.yaml|serverless|netlify.toml|azure-pipelines|.github/workflows`: no hits.

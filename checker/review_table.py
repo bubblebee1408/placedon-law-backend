@@ -59,7 +59,7 @@ _NOT_PRESERVING = ("at least", "a minimum of", "no fewer than", "or more")
 
 _COMPANY_TYPES = ("private company", "public company")
 
-# Transcription defects in the served text — see docs/SOURCE_DEFECTS.md SD-004.
+# Transcription defects in the served text — see docs/evidence/SOURCE_DEFECTS.md SD-004.
 # Recorded, never repaired.
 _TRANSCRIPTION: tuple[tuple[str, str, str], ...] = (
     ("hall be", "s.174(1) reads 'of a company hall be one-third'; apparent intent "

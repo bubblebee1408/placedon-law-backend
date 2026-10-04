@@ -7,8 +7,8 @@ solo student in Bengaluru with near-zero capital. Be concrete and honest about e
 
 ## Sequence
 
-1. **Read context**: `docs/PLAN_20_INHOUSE_CORPORATE.md`,
-   `docs/EVIDENCE_CORRECTIONS_PLAN_20.md`, and `research/TASKS.md`.
+1. **Read context**: `docs/plans/PLAN_20_INHOUSE_CORPORATE.md`,
+   `docs/plans/EVIDENCE_CORRECTIONS_PLAN_20.md`, and `research/TASKS.md`.
 
 2. **Invoke `market-researcher`** on these three questions, in order:
    a. What are Indian SME HR managers currently complaining about re: compliance? (forums,

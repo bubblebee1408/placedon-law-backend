@@ -20,7 +20,7 @@ SEBI publishes a CONSOLIDATION: one document headed "Amended up to July 14,
 it was on any earlier date. Reconstructing a past date needs every amending
 notification acquired separately.
 
-`docs/RETRACTIONS.md` records this exact mistake being made and retracted here
+`docs/evidence/RETRACTIONS.md` records this exact mistake being made and retracted here
 once already -- "Never use a current consolidated Act as pre-amendment ground
 truth." So this module registers the text as CURRENT_ONLY and refuses to let it
 answer a dated question.
@@ -176,7 +176,7 @@ def register(src: Path) -> str:
     print(f"status         : {PENDING_HUMAN_REVIEW}")
     print("\nThis is SEBI's CONSOLIDATION, not an as-enacted instrument.")
     print("Once attested it answers questions about the law NOW. Dated questions")
-    print("stay refused: one snapshot is not a history, and docs/RETRACTIONS.md")
+    print("stay refused: one snapshot is not a history, and docs/evidence/RETRACTIONS.md")
     print("records this exact mistake being made and retracted here once already.")
     print("\n  python3 scripts/register_sebi_lodr.py --attest <reviewer-id>")
     return outcome

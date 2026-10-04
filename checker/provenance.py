@@ -42,7 +42,7 @@ SERVABLE = (CORROBORATED, VERIFIED)  # what may reach a user as a legal statemen
 
 # How the SOURCE behaved when we asked for it. A separate axis from the evidence states above:
 # those grade an artifact we hold, these grade an attempt to obtain one. Conflating the two is the
-# mistake that put a retry schedule against a WAF -- see docs/ACQUISITION_POLICY.md.
+# mistake that put a retry schedule against a WAF -- see docs/policy/ACQUISITION_POLICY.md.
 ACCESSIBLE = "ACCESSIBLE"
 BLOCKED = "BLOCKED"          # 403 / WAF. Not bypassed -- see CLAUDE.md.
 UNREACHABLE = "UNREACHABLE"  # timeout / DNS failure / connection refused: the host never answered.

@@ -4,8 +4,8 @@ Styled on the **finalized frontend** (`placedon-claude-legal-3300`, the site pla
 web is the site's dark ink shell, each answer is a sheet of Compliance Note paper, Brass Gold is the one
 accent, Cool Grey marks abstention only. The Word pane (≤400px) is the light cream variant.
 
-Design: [`docs/PLAN_13_ASSISTANT_UX.md`](../../docs/PLAN_13_ASSISTANT_UX.md) ·
-Plan: [`docs/ASSISTANT_UX_PLAN.md`](../../docs/ASSISTANT_UX_PLAN.md) ·
+Design: [`docs/plans/PLAN_13_ASSISTANT_UX.md`](../../docs/plans/PLAN_13_ASSISTANT_UX.md) ·
+Plan: [`docs/plans/ASSISTANT_UX_PLAN.md`](../../docs/plans/ASSISTANT_UX_PLAN.md) ·
 Contract: [`contract.md`](contract.md)
 
 **This is a prototype, not a product surface.** `POST /v1/ask` exists (ASK-1, `checker/ask.py` +

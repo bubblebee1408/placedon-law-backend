@@ -71,7 +71,7 @@ violation as a `500` (§6 D18). Fixture builder and the validator's tests:
 >   `partial`. A missed refusal is the safe direction, and the terms of art are the register's to
 >   extend.
 
-Plan: [`docs/ASSISTANT_UX_PLAN.md`](../../docs/ASSISTANT_UX_PLAN.md). Evidence:
+Plan: [`docs/plans/ASSISTANT_UX_PLAN.md`](../../docs/plans/ASSISTANT_UX_PLAN.md). Evidence:
 [`docs/research/ux/INTERNAL_ASK_AUDIT.md`](../../docs/research/ux/INTERNAL_ASK_AUDIT.md) (§R2 is the
 draft this corrects).
 
@@ -120,7 +120,7 @@ threshold. A model-composed statement cannot reach it: `claim_verifier` never re
 | `figures[]` `{key, amount, rupees, instrument, effective_from, effective_to, evidence_state, source_url}` | `prescribed_thresholds.lookup` |
 | `citations[]` `{ref, cite, title, evidence_state, usable_for_answering, unusable_reason, defects, retrieved_on[], source_url}` | `evidence_pack` provision `to_dict` (`sources[].retrieved_on` — K10) |
 | `law_version` `{basis, point_in_time_verified, corpus_fetched, statement}` | `evidence_pack.AsOf.to_dict` |
-| `evidence_pack` `{retrieval_query, route, usable_keys, unusable_keys, missing, insufficient_evidence, abstain_reason}` | `retrieve.retrieve` + pack `to_dict` (`query` — K10). **`abstain_reason` added 2026-09-26, additively** (PLAN_17 M7 rule 1): one of `HELD_NOT_ADMITTED` / `CITATION_UNRESOLVED` / `NOTHING_RETRIEVED`, and `""` whenever the route did not abstain — never `null`, so the type never varies. `route` itself could not carry it: `scripts/assistant_contract.py` pins `route == "abstain"` on a fixture, so its values are contract. **There is deliberately no code for "the question was not about law"** — an off-topic question and held law the retriever missed are the same fact about this engine, and separating them would need a model deciding scope, which `scope.py` alone decides. See `docs/plan19/decisions/M1_ABSTAIN_REASON.md`. |
+| `evidence_pack` `{retrieval_query, route, usable_keys, unusable_keys, missing, insufficient_evidence, abstain_reason}` | `retrieve.retrieve` + pack `to_dict` (`query` — K10). **`abstain_reason` added 2026-09-26, additively** (PLAN_17 M7 rule 1): one of `HELD_NOT_ADMITTED` / `CITATION_UNRESOLVED` / `NOTHING_RETRIEVED`, and `""` whenever the route did not abstain — never `null`, so the type never varies. `route` itself could not carry it: `scripts/assistant_contract.py` pins `route == "abstain"` on a fixture, so its values are contract. **There is deliberately no code for "the question was not about law"** — an off-topic question and held law the retriever missed are the same fact about this engine, and separating them would need a model deciding scope, which `scope.py` alone decides. See `docs/plans/plan19/decisions/M1_ABSTAIN_REASON.md`. |
 | `what_it_is_not[]` | `api.compliance_pack` |
 
 Subsection text (e.g. the words of s.2(85)(i)) is **NEW**: retrieval resolves a subsection to its

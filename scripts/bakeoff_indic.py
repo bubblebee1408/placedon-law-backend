@@ -22,7 +22,7 @@ UNVERIFIED: which 300 crops were sampled, and the paper's exact scorer settings
 beyond "word order 2". Both should be read from that repository. The pages are NOT
 in this repo, and this loop may download only from official Indian government
 hosts, so obtaining them is a founder step (see "Switching it on" in
-docs/MODEL_PLAN.md).
+docs/architecture/MODEL_PLAN.md).
 
 ## Why the incumbent is RE-RUN rather than quoted
 

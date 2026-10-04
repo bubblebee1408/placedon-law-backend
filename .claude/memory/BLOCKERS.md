@@ -1,13 +1,15 @@
 # Blockers
 
-Nothing here can be unblocked by writing code.
+Nothing here can be unblocked by writing code. **`research/TASKS.md` is the authority**: any
+row whose owner is **founder** and whose status is open, ready or blocked. This file lists the
+ones that outrank features, as of 2026-10-04. Re-read the ledger before trusting this list.
 
-| # | Blocker | Unblocks | Notes |
-|---|---|---|---|
-| **H-1** | 10 customer conversations | Which track leads the Health Scan (`DECISIONS.md` D-5) | The checker is live — send the link. Lead with the s.4 finding, not with "try my tool". |
-| **H-2** | An employment lawyer | **Every compliance answer.** `verified_by IS NULL` → invisible | First question: does the s.4 duty attach below ten workers? Then: do contract workers count? Then: may we reproduce statutory text verbatim in a commercial database (Crown copyright / GODL-India)? |
-| **H-3** | Karnataka's PoSH annual-return deadline | The obligation calendar (C-4) | Bengaluru Urban District Officer. The checker currently abstains — correctly. |
-| **O-2** | A legitimate source of Indian HR templates | The offer-letter, JD, and policy generators | The plan's named sources (Zerodha/Zomato/Razorpay handbooks) **do not exist**. Alumni network is the realistic path. |
+| # | Blocker | Unblocks |
+|---|---|---|
+| **H-001** | One practising Company Secretary reviews the matrix (`docs/product/H001_OUTREACH.md`, `docs/product/validation_kit.html`, `scripts/record_interview.py`) | Every accuracy CLAIM, and the 16 HUMAN_REVIEW_PENDING Board Rules targets. It gates claims, not development |
+| **G0.3** | Acquire the primary text of the unheld bodies, or amend the step | The scope-gate lexicon for the seven declared-but-unheld bodies |
+| **H-002** | Indian Kanoon access tier | Case-law and amending-Act corroboration at volume |
+| **R-013** | A founder call on adding a `SERVER_ERROR` access state | Correct retry behaviour for a broken robots.txt |
 
-**The honest ranking:** the build is ahead of the evidence. A live URL, a corpus, and a real
-finding — and zero conversations.
+The PoSH-era blockers that stood here (H-1 to H-3, O-2) belong to a retired product; see
+`docs/product/RETIRED_POSH.md`.

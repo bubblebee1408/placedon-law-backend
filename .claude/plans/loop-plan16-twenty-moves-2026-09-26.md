@@ -1,7 +1,7 @@
 # Twenty moves — the PLAN 16 build, run as a loop
 
 Opened 26-09-2026 ~04:30, founder asleep. Supersedes `loop-next10-2026-09-17.md`, which is complete.
-Source of truth for WHAT: `docs/PLAN_16_BACKEND_ARCHITECTURE.md` (Parts I–III).
+Source of truth for WHAT: `docs/plans/PLAN_16_BACKEND_ARCHITECTURE.md` (Parts I–III).
 
 ## Iteration protocol
 1. Read this file; `git log --oneline -5`; `git status --short`.
@@ -75,7 +75,7 @@ printed. The Anthropic account had **no credit** at 25-09 — any move needing a
 | 20 | D4-2 | Wire the lawyer summary into the server and page. **BLOCKED** on Anthropic credit — no Opus call has ever run through the tracer, and its thresholds are unvalidated against real prose. Do not wire an unproven live call. (M) | credit | blocked | | | |
 
 ## Log
-- 26-09 04:30 opened. Predecessor loop complete and reported in `docs/NEXT10_REPORT_2026_09_17.md`.
+- 26-09 04:30 opened. Predecessor loop complete and reported in `docs/reports/NEXT10_REPORT_2026_09_17.md`.
 - 26-09 04:40 **loop started, founder asleep.** Two implementers on disjoint paths: **BUD-1…4**
   (`a2ad2c389a8b5bb9d`, `backend/budget.py` only) and **FETCH-1** (`ac3998707ad496e80`, the fetchers).
   Both told: tests RED first, no network in tests, no `git add -A`, no push, and hand back rather
@@ -130,7 +130,7 @@ printed. The Anthropic account had **no credit** at 25-09 — any move needing a
 - 27-09 **A correction to FETCH-1's git lesson, which is wrong in a way that matters.** Its report
   says *"'stage by name' is not sufficient in this repo... `git commit --only <paths>` is the form
   that is actually safe."* The hazard it describes is real — it caught a peer staging
-  `docs/plan19/decisions/M13_DERIVATION.md` into the shared index while its own commit sat inside the
+  `docs/plans/plan19/decisions/M13_DERIVATION.md` into the shared index while its own commit sat inside the
   multi-minute pre-commit hook, and a **bare** `git commit` would have swallowed it. But the remedy is
   misstated. `git commit --help`: *"-o, --only ... **This is the default mode of operation of git
   commit if any paths are given on the command line**, in which case this option can be omitted."*

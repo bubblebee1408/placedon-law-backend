@@ -34,7 +34,7 @@ document **today** on each of these?
 
 Is there any independent benchmark on real scanned Indian documents?
 
-Also re-verify two claims in `docs/PLAN_03_DATA_SOURCES.md` §OCR: "Textract does not support
+Also re-verify two claims in `docs/plans/PLAN_03_DATA_SOURCES.md` §OCR: "Textract does not support
 Devanagari" and the "76-point real-scan spread".
 
 ## Short answer
@@ -120,7 +120,7 @@ Devanagari" and the "76-point real-scan spread".
 - https://arxiv.org/abs/2512.18004 and https://arxiv.org/html/2512.18004v1 (handwritten Marathi legal documents)
 - https://arxiv.org/abs/2604.12978 (GlotOCR Bench)
 
-**Held evidence read first:** `docs/PLAN_03_DATA_SOURCES.md` §"OCR — the gate on bulk document
+**Held evidence read first:** `docs/plans/PLAN_03_DATA_SOURCES.md` §"OCR — the gate on bulk document
 review" (carries no URLs) and `docs/research/SARVAM_DOCUMENT_AI.md` (its §J comparator rows were
 re-opened, not copied).
 
@@ -355,7 +355,7 @@ PLAN_03 re-verification:
 3. **Correct PLAN_03 §OCR.** This file does not edit it. Replace the Azure on-prem sentence (H3),
    qualify the benchmark sentence (I4–I6), and mark the "best of the big three" sentence
    UNVERIFIED (I13). Add URLs from this file.
-4. **Vendor questions** to add to `docs/VENDOR_QUESTIONS.md` (not edited by this task):
+4. **Vendor questions** to add to `docs/market/VENDOR_QUESTIONS.md` (not edited by this task):
    - Microsoft: DI training-use position; South India availability; disconnected eligibility for
      a startup.
    - Google: GA timeline for OCR in `asia-south1`; Layout Parser in India.
