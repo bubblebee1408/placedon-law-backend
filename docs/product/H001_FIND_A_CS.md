@@ -1,5 +1,7 @@
 # Finding one Company Secretary to review — the part before the send
 
+> **SUPERSEDED** 2026-10-04 on who the buyer is, by [PLAN_20_INHOUSE_CORPORATE.md](../plans/PLAN_20_INHOUSE_CORPORATE.md). Kept as history.
+
 `H001_OUTREACH.md` assumes you already have someone to ask. This is the step
 before that: how to find ten candidates and what to say when there is no warm
 introduction. The goal is unchanged — one CS, twenty minutes, a reaction to the

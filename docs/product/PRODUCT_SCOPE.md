@@ -1,5 +1,7 @@
 # Product Scope — locked 20 Aug 2026
 
+> **SUPERSEDED** 2026-10-04 on who the buyer is, by [PLAN_20_INHOUSE_CORPORATE.md](../plans/PLAN_20_INHOUSE_CORPORATE.md). Kept as history.
+
 ## What Placedon is
 
 > **An evidence-grounded AI assistant for corporate lawyers.** It helps lawyers research Indian

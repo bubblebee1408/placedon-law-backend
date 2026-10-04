@@ -1,5 +1,7 @@
 # Personas
 
+> **SUPERSEDED** 2026-10-04 on who the buyer is, by [PLAN_20_INHOUSE_CORPORATE.md](../plans/PLAN_20_INHOUSE_CORPORATE.md). Kept as history.
+
 ## Primary — the customer we build for
 | Persona | Context | What they need from Placedon |
 |---|---|---|
