@@ -306,6 +306,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/cache_report.py` |  | The answer cache's hit rate, and what the number does not include. |
 | `scripts/calibration_report.py` |  | What the lawyer labels can and cannot support, per (task, body of law). |
 | `scripts/cascade_report.py` |  | What the cascade actually cost, from recorded runs. Never from an assumption. |
+| `scripts/chaos_test.py` |  | Break things on purpose, and require every run to end in a NAMED state. |
 | `scripts/check_deps.py` |  | Are the pinned dependencies importable? Exit 0 if yes. |
 | `scripts/check_doc_refs.py` |  | Every path an ACTIVE document cites must exist on disk. |
 | `scripts/concurrency_test.py` |  | Fifty at once: nothing runs twice, no tenant reads another's rows, and p95 is recorded. |
@@ -368,4 +369,4 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/watch_gazette.py` |  | Run the Gazette watcher once: what did the Gazette publish since we last looked? |
 | `scripts/watch_ofac.py` |  | Poll OFAC's SDN list and report what CHANGED since the last trustworthy poll. |
 
-328 modules listed.
+329 modules listed.

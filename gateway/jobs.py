@@ -327,11 +327,17 @@ class PostgresQueue:
 
     @staticmethod
     def _job(r) -> Job:
+        """One row, as `_COLS` selects it. A short row RAISES rather than defaulting.
+
+        This read `r[7] if len(r) > 7 else DEFAULT_LANE`, and that defensive fallback is what
+        hid a real bug: `get()` still selected the old seven columns, so a DEAD job read
+        through it reported no `dead_reason` and the default lane -- quietly, because the
+        fallback supplied both. Found 04-10-2026 by scripts/chaos_test.py against Postgres.
+        A default that stands in for a column the query forgot is a lie with a safety net.
+        """
         return Job(job_id=str(r[0]), run_id=str(r[1]), intent=r[2],
                    args=r[3] or {}, status=r[4], attempts=r[5],
-                   cancel_requested=bool(r[6]),
-                   lane=r[7] if len(r) > 7 else DEFAULT_LANE,
-                   dead_reason=(r[8] if len(r) > 8 else "") or "")
+                   cancel_requested=bool(r[6]), lane=r[7], dead_reason=r[8] or "")
 
     def enqueue(self, *, run_id: str, intent: str, args: dict,
                 lane: str = DEFAULT_LANE) -> Job:
@@ -476,8 +482,7 @@ class PostgresQueue:
             return None
         with self._conn() as c:
             r = c.execute(
-                "SELECT job_id, run_id, intent, args, status, attempts, cancel_requested "
-                "FROM jobs WHERE run_id = %s", (run_id,)).fetchone()
+                f"SELECT {self._COLS} FROM jobs WHERE run_id = %s", (run_id,)).fetchone()
         return None if r is None else self._job(r)
 
     def depth(self) -> int:
@@ -692,6 +697,19 @@ def conformance(queue, *, clear_backoff=None) -> list[tuple[bool, str]]:
     ck(any("model timeout" in d.dead_reason and str(MAX_ATTEMPTS) in d.dead_reason
            for d in dead_now),
        "...naming both the failure and how many attempts were spent")
+
+    # The same job read through get(), not dead(). These are different SELECTs and only one
+    # of them was updated for 021: get() still asked for the old seven columns, so a DEAD
+    # job read this way reported no reason at all. Green on the dict, wrong on the server --
+    # the fifth time this list has caught a "wrote it, did not select it" divergence.
+    via_get = queue.get(rr)
+    ck(via_get is not None and via_get.status == DEAD,
+       f"a dead job read through get() is DEAD ({via_get.status if via_get else None})")
+    ck(via_get is not None and str(via_get.dead_reason or "").strip(),
+       f"...and carries its REASON through get() too, not only through dead() "
+       f"({(via_get.dead_reason if via_get else '')[:40]!r})")
+    ck(via_get is not None and via_get.lane == INTERACTIVE,
+       f"...and its lane survives get() ({via_get.lane if via_get else None})")
 
     try:
         queue.fail(jr.job_id, "   ")

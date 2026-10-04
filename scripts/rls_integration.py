@@ -223,7 +223,16 @@ LAST_RUN: str | None = (
     "and reported a leak; a superuser bypasses RLS entirely, so the pool was blameless and "
     "the TEST was wrong. It asserts as placedon_app now, like every other check here, and "
     "the pool's `peak` is asserted to be 1 so the check cannot pass because each backend "
-    "quietly got its own connection.")
+    "quietly got its own connection. "
+    "2026-10-04, A1 items 7 and 8: 348 checks, 0 failures. The three new ones are the "
+    "optimistic lock -- two writers on the same base version, EXACTLY one wins, arbitrated "
+    "by 012's PRIMARY KEY, which a dict cannot be made to show -- plus the dead-letter "
+    "reason surviving a get(). That last one was a real divergence found by "
+    "scripts/chaos_test.py against this database: PostgresQueue.get() still SELECTed the "
+    "old seven columns after 021 added three, so a DEAD job read through it reported no "
+    "reason and the default lane. `_job` had a `len(r) > 7` fallback that supplied both "
+    "silently, which is what hid it -- a default standing in for a column the query forgot "
+    "is a lie with a safety net. The fallback is gone, so a short row raises.")
 
 TENANT_TABLES = ("actors", "api_keys", "documents", "audit_log",
                  "runs", "run_steps", "propositions", "decisions", "jobs",

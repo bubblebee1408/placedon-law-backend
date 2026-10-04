@@ -330,6 +330,9 @@ extra+=("gateway/limits.py")
 # P2: 50 real threads. Nothing runs twice, and the single-tenant guard holds under
 # load -- a guard that held serially and raced open would be worse than none.
 extra+=("scripts/concurrency_test.py --test")
+# A1 item 8. Five injected failures through the REAL worker loop. --test needs no
+# database, no model and no network; --run adds the Postgres injections.
+extra+=("scripts/chaos_test.py --test")
 # A1. gateway/models.py had 25 self-tests and was in NEITHER list, so none of them
 # ran and one had been failing since a verified price was added for the 70B.
 #
