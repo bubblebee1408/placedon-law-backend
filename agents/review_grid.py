@@ -59,6 +59,13 @@ from checker import review_grid as rg
 
 INTENT = "review_grid_cell"
 
+# A1 item 5. The worst case one cell may cost, used for its reservation. A cell sends one
+# document's relevant text and asks one question, so these are the shape of a cell call and
+# not a guess at an average -- a reservation priced at the average under-reserves half the
+# time, which is the half that matters.
+CELL_INPUT_TOKENS = 4_000
+CELL_MAX_TOKENS = 600
+
 
 class Unreadable(RuntimeError):
     """The model replied and the reply could not be read.
@@ -78,6 +85,22 @@ class Unreadable(RuntimeError):
 
 class RunnerError(RuntimeError):
     """The runner cannot proceed. Never a silent skip."""
+
+
+def reservation_id_for_cell(key: str) -> str:
+    """A stable, unique reservation id for one cell key.
+
+    HASHED, not truncated. The first version was `f"cell-{key}"[:64]`, and a cell key is
+    `grid:document:column` where the document id is a 64-character sha256 -- so the slice cut
+    the column off and two cells of the same document got the SAME id, which `reserve()`
+    correctly refused as already outstanding. Truncating an identifier destroys the one
+    property that makes it an identifier.
+
+    Stable rather than random, so a resumed schedule re-derives the same id for the same cell
+    and cannot leave a second reservation outstanding for work that is already held.
+    """
+    import hashlib
+    return "cell-" + hashlib.sha256(key.encode("utf-8")).hexdigest()[:20]
 
 
 def cell_key(grid_id: str, document_id: str, column_name: str) -> str:
@@ -112,12 +135,25 @@ class Scheduled:
     already_done: tuple = ()
     already_queued: tuple = ()
     cancelled: bool = False
+    # A1 item 5. The budget refused a cell's reservation, so scheduling STOPPED here.
+    paused_budget: bool = False
+    pause_reason: str = ""
+    # The cells that were never dispatched. They are still PENDING, and naming them is what
+    # makes the pause resumable rather than a table that is quietly short of answers.
+    not_scheduled: tuple = ()
+    # One reservation id per dispatched cell, so the worker can settle each and the caller
+    # can prove they balance to zero.
+    reservations: tuple = ()
 
     def to_dict(self) -> dict:
         return {"grid_id": self.grid_id, "enqueued": list(self.enqueued),
                 "already_done": list(self.already_done),
                 "already_queued": list(self.already_queued),
-                "cancelled": self.cancelled}
+                "cancelled": self.cancelled,
+                "paused_budget": self.paused_budget,
+                "pause_reason": self.pause_reason,
+                "not_scheduled": list(self.not_scheduled),
+                "reservations": list(self.reservations)}
 
 
 def plan_cells(table: rg.Table) -> list:
@@ -135,12 +171,33 @@ def plan_cells(table: rg.Table) -> list:
     return out
 
 
-def schedule(table: rg.Table, *, queue, cancelled: bool = False) -> Scheduled:
-    """Enqueue one job per PENDING cell, each as its own run.
+def schedule(table: rg.Table, *, queue, cancelled: bool = False, budget=None,
+             max_tokens: int = CELL_MAX_TOKENS,
+             input_tokens: int = CELL_INPUT_TOKENS) -> Scheduled:
+    """Enqueue one job per PENDING cell, each as its own run, each cost RESERVED first.
 
     Three outcomes per cell, all reported: enqueued, already answered, or already queued.
     A cell the queue already holds is NOT an error here -- it is the second exactly-once
     guard firing, and swallowing it would hide that the guard did anything.
+
+    ## A1 item 5: the reservation, and why it has to be here
+
+    `budget.reserve()` holds each cell's WORST-CASE cost before the cell is dispatched. Until
+    this, nothing in the repository called `reserve()` at all: the two gates called
+    `can_make_call(0.0, ...)`, which asks "has the cap been reached" and not "can this call
+    fit". A four-hundred-cell table therefore passed that gate four hundred times on a budget
+    covering three, and `can_make_call`'s own arithmetic -- "outstanding reservations are
+    committed money ... counting only what has been spent is what lets a hundred concurrent
+    calls all pass a gate that has seen none of them" -- was describing a reservation nobody
+    took.
+
+    Scheduling STOPS at the first refusal rather than skipping that cell and trying the next.
+    Skipping would dispatch the cheap cells and leave an arbitrary subset undone, and the
+    order cells were answered in would depend on their cost -- which makes a resumed table
+    unreplayable. `plan_cells` documents why the order has to be stable.
+
+    `budget=None` reserves nothing and behaves exactly as before, so a caller that has not
+    wired a budget is not silently changed.
     """
     from gateway.jobs import QueueError
 
@@ -149,12 +206,31 @@ def schedule(table: rg.Table, *, queue, cancelled: bool = False) -> Scheduled:
         # compensation: stop scheduling. What ran, ran.
         return Scheduled(table.table_id, cancelled=True)
     enqueued, done, queued = [], [], []
+    reservations: list = []
+    not_scheduled: list = []
+    paused = False
+    pause_reason = ""
     for d in table.document_ids:
         for col in table.columns:
             key = cell_key(table.table_id, d, col.name)
             if table.cell(d, col.name).state != rg.PENDING:
                 done.append(key)
                 continue
+            if paused:
+                # Everything after the refusal is left PENDING and named, not attempted.
+                not_scheduled.append(key)
+                continue
+            reservation_id = None
+            if budget is not None:
+                res = budget.reserve(input_tokens=input_tokens, max_tokens=max_tokens,
+                                     reservation_id=reservation_id_for_cell(key))
+                if res.id is None:
+                    paused = True
+                    pause_reason = res.verdict.reason
+                    not_scheduled.append(key)
+                    continue
+                reservation_id = res.id
+                reservations.append(res.id)
             try:
                 # A1. REVIEW_CELL: wanted soon, but nobody is blocked on one cell.
                 from gateway.jobs import REVIEW_CELL as _LANE_CELL
@@ -162,12 +238,25 @@ def schedule(table: rg.Table, *, queue, cancelled: bool = False) -> Scheduled:
                     run_id=run_id_for_cell(table.table_id, d, col.name), intent=INTENT,
                     args={"grid_id": table.table_id, "document_id": d,
                           "column": col.name, "kind": col.kind,
-                          "question": col.question, "idempotency_key": key})
+                          "question": col.question, "idempotency_key": key,
+                          # Carried so the worker settles the exact reservation this cell
+                          # holds. A settled-by-guess reservation is a leak that only shows
+                          # up as a budget that never recovers.
+                          "reservation_id": reservation_id})
             except QueueError:
                 queued.append(key)
+                # The queue already holds this cell, so the reservation this call just took
+                # is for work nobody will do. Released immediately rather than left
+                # outstanding, which would shrink the cap until the day rolled over.
+                if reservation_id is not None and budget is not None:
+                    budget.settle(reservation_id, 0.0)
+                    reservations.remove(reservation_id)
                 continue
             enqueued.append(key)
-    return Scheduled(table.table_id, tuple(enqueued), tuple(done), tuple(queued))
+    return Scheduled(table.table_id, tuple(enqueued), tuple(done), tuple(queued),
+                     paused_budget=paused, pause_reason=pause_reason,
+                     not_scheduled=tuple(not_scheduled),
+                     reservations=tuple(reservations))
 
 
 def run_cell(args: dict, *, documents: dict, answer) -> rg.Cell:
@@ -462,6 +551,102 @@ def _test() -> int:
     check("say nothing about the document" in sm["note"], "...and the note says why")
 
     check(INTENT == "review_grid_cell", f"the queue intent is named ({INTENT})")
+
+    # ── A1 item 5: PAUSED_BUDGET when a cap runs out mid-table ──────────────
+    # The defect this closes: NOTHING in the repository called budget.reserve(). Both gates
+    # called can_make_call(0.0), gating on a zero estimate -- so a 400-cell table passed the
+    # gate 400 times on a budget covering three, and can_make_call's own reservation
+    # arithmetic ("outstanding reservations are committed money") was dead code.
+    from datetime import date as _date
+
+    from backend.budget import BudgetTracker, TENANT_MONTHLY_CAP_INR
+
+    class _Mem:
+        def __init__(self):
+            self.d = {}
+
+        def read(self):
+            return dict(self.d)
+
+        def write(self, data):
+            self.d = dict(data)
+
+    # A cap that affords SOME cells and not all four. Set by spending the day down to a
+    # sliver, so the refusal happens mid-table rather than on the first cell -- the hard
+    # case, which a cap of zero would never exercise.
+    def _tracker(headroom_inr):
+        from backend.budget import DAILY_CAP_INR
+        tr = BudgetTracker(store=_Mem(), today=_date(2026, 10, 4))
+        tr.record_call(max(0.0, DAILY_CAP_INR - headroom_inr))
+        return tr
+
+    t_pause = rg.Table("gp", "paused", COLS, (D1, D2))
+    qp = MemoryQueue()
+    # Priced the way reserve() prices: the WORST case for a cell, not the typical call.
+    # Using typical_call_inr() here afforded all four cells and the pause never happened --
+    # the check reported "4 of 4" and was right to.
+    from backend.budget import DEFAULT_MODEL, cost_inr
+    per_cell = cost_inr(DEFAULT_MODEL, CELL_INPUT_TOKENS, CELL_MAX_TOKENS)
+    budget = _tracker(per_cell * 2.5)
+    sched_p = schedule(t_pause, queue=qp, budget=budget)
+
+    check(sched_p.paused_budget is True,
+          f"a cap that runs out mid-table PAUSES the table ({sched_p.paused_budget})")
+    check(0 < len(sched_p.enqueued) < 4,
+          f"...after scheduling SOME cells, not none and not all "
+          f"({len(sched_p.enqueued)} of 4) -- the hard case a zero cap would never reach")
+    check(len(sched_p.not_scheduled) == 4 - len(sched_p.enqueued),
+          f"...and every cell it did not schedule is named ({len(sched_p.not_scheduled)})")
+    check(bool(sched_p.pause_reason) and "cap" in sched_p.pause_reason.lower(),
+          f"...with the reason the reservation was refused ({sched_p.pause_reason[:60]})")
+    check(rg.PAUSED_BUDGET == "PAUSED_BUDGET",
+          "PAUSED_BUDGET is a STATE in checker/review_grid, not an error string")
+    check(rg.table_status(t_pause, paused_budget=True) == rg.PAUSED_BUDGET,
+          "...and a paused table reports it as its status")
+
+    # Unstarted cells stay PENDING. Nothing was charged for the refused reservation.
+    for key in sched_p.not_scheduled:
+        _, _d, _c = key.split(":", 2)
+        check(t_pause.cell(_d, _c).state == rg.PENDING,
+              f"an unscheduled cell stays PENDING, not FAILED ({_c})")
+        break
+    spent_at_pause = budget.usage()["global"]["day_inr"]
+
+    # Reservations are outstanding for the cells that WERE scheduled, and nothing more.
+    outstanding = len(sched_p.reservations)
+    check(outstanding == len(sched_p.enqueued),
+          f"one reservation per scheduled cell, and none for the refused one "
+          f"({outstanding} vs {len(sched_p.enqueued)})")
+
+    # ── resuming after the cap is raised runs ONLY the unstarted cells ──────
+    done_keys = set(sched_p.enqueued)
+    # Settle what was scheduled, as the worker would, so the reservations balance.
+    for rid in sched_p.reservations:
+        budget.settle(rid, 0.01)
+    check(not budget._state()["reservations"],
+          f"after settling, NO reservation is outstanding -- they balance to zero "
+          f"({budget._state()['reservations']})")
+
+    # Mark the scheduled cells answered, raise the cap, resume.
+    answered = tuple(rg.Cell(document_id=d, column=c.name, state=rg.FOUND,
+                             value="India" if c is LAW else "2029-03-31",
+                             quote=("governed by the laws of India" if c is LAW
+                                    else "expire on 2029-03-31"))
+                     for d in (D1, D2) for c in COLS
+                     if cell_key("gp", d, c.name) in done_keys)
+    t_resumed = rg.Table("gp", "paused", COLS, (D1, D2), answered)
+    big = _tracker(TENANT_MONTHLY_CAP_INR)
+    qr = MemoryQueue()
+    sched_r = schedule(t_resumed, queue=qr, budget=big)
+    check(sched_r.paused_budget is False,
+          "with the cap raised the table is no longer paused")
+    check(len(sched_r.enqueued) == 4 - len(done_keys),
+          f"...and resuming schedules ONLY the unstarted cells "
+          f"({len(sched_r.enqueued)}, not 4)")
+    check(not (set(sched_r.enqueued) & done_keys),
+          f"...never the same cell twice ({sorted(set(sched_r.enqueued) & done_keys)})")
+    check(sorted(sched_r.already_done) == sorted(done_keys),
+          "...and the cells already answered are reported as already done")
 
     print(f"\n{ok}/{ok + fail} passed")
     return 1 if fail else 0

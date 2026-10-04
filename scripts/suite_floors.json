@@ -6,7 +6,7 @@
     "agents/research_question.py": 32,
     "agents/review_contract.py": 36,
     "agents/review_document.py": 23,
-    "agents/review_grid.py": 43,
+    "agents/review_grid.py": 56,
     "agents/runtime.py": 20,
     "agents/state.py": 14,
     "agents/vault_ingest.py": 20,

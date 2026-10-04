@@ -71,6 +71,16 @@ CLAUSE = "clause"
 KINDS = (TEXT, DATE, AMOUNT, YES_NO, CLAUSE)
 
 # ── cell states ──────────────────────────────────────────────────────────────
+# A1 item 5. A TABLE status, not a cell state. The budget ran out part-way: cells already
+# answered stay answered, unstarted cells stay PENDING, and nothing was charged for the
+# reservation that was refused. It is a STATE and not an error -- the table is resumable the
+# moment the cap is raised, and calling it FAILED would put transport language on a
+# deployment's spending decision.
+PAUSED_BUDGET = "PAUSED_BUDGET"
+RUNNING = "RUNNING"
+COMPLETE = "COMPLETE"
+TABLE_STATUSES = (RUNNING, COMPLETE, PAUSED_BUDGET)
+
 FOUND = "FOUND"
 NOT_FOUND = "NOT_FOUND"
 NEEDS_LAWYER = "NEEDS_LAWYER"
@@ -639,3 +649,19 @@ if __name__ == "__main__":
     if "--test" in sys.argv:
         raise SystemExit(_test())
     print(__doc__)
+
+
+def table_status(table, *, paused_budget: bool = False) -> str:
+    """RUNNING, COMPLETE or PAUSED_BUDGET. Derived from the cells, never stored.
+
+    `paused_budget` is the scheduler's finding -- it is the one thing the cells cannot say,
+    because a cell nobody tried to run looks exactly like a cell waiting its turn. PAUSED
+    wins over COMPLETE only when something is still PENDING; a table whose last cell was
+    answered just as the cap ran out is COMPLETE, and reporting it paused would ask a person
+    to raise a cap for no remaining work.
+    """
+    pending = [c for d in table.document_ids for col in table.columns
+               if (c := table.cell(d, col.name)).state == PENDING]
+    if not pending:
+        return COMPLETE
+    return PAUSED_BUDGET if paused_budget else RUNNING
