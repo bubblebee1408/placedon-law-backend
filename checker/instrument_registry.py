@@ -1,7 +1,7 @@
 """Which instruments are on record at all, and which of them a person has read.
 
 Ring 0. PLAN_19 G0.1, built to the decision in
-`docs/plan19/decisions/G0_1_INSTRUMENT_REGISTRY.md`.
+`docs/plans/plan19/decisions/G0_1_INSTRUMENT_REGISTRY.md`.
 
 ## The question this answers, and the one it refuses to answer
 

@@ -150,7 +150,7 @@ class Extraction:
     error: str = ""
     # What the model said BEFORE any gate touched it. Kept because a refusal that
     # cannot be replayed cannot be judged -- the R03 lesson from
-    # docs/OVERNIGHT_REPORT_2026_09_14.md §3.
+    # docs/reports/OVERNIGHT_REPORT_2026_09_14.md §3.
     proposed: dict = field(default_factory=dict)
 
 
@@ -665,7 +665,7 @@ def render_markdown(result: dict) -> str:
     w("Anchors are `file:line` in the corpus text file, reproducible with "
       "`sed -n '<line>p' <file>`. **No page numbers**: the repository's own page "
       "reader agrees with an independent reader on 0 of 14 corpus PDFs "
-      "(`docs/OVERNIGHT_REPORT_2026_09_14.md` §4), so a page number here would "
+      "(`docs/reports/OVERNIGHT_REPORT_2026_09_14.md` §4), so a page number here would "
       "look checkable and not be.")
     w("")
 
@@ -752,7 +752,7 @@ def render_markdown(result: dict) -> str:
       "*another declaration of the same thing*; a date or a rupee figure repeating in a "
       "notice is ordinary. The rule is `checker/document_date.py`'s, generalised: every "
       "declaration the reader can read must agree, or the document does not declare one. "
-      "Nothing is repaired and nothing is chosen — see `docs/SOURCE_DEFECTS.md` SD-006 "
+      "Nothing is repaired and nothing is chosen — see `docs/evidence/SOURCE_DEFECTS.md` SD-006 "
       "for the filing that made this necessary.")
     w("")
     if result["agreements"]:

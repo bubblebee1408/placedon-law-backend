@@ -53,7 +53,7 @@ lost to a section about auditors, purely for being long. Measured, then removed.
 Re-tested 2026-09-30 on a different eval set and the finding HELD: at b=0.25, 0.50 and 0.75 the
 length prior broke both s.173 dev rows, every time. It did improve precision -- refusal leaks
 3/17 -> 1/17 -- and that trade was refused, because a rule fixed before the run said breaking a
-passing answer row disqualifies. `docs/RETRIEVAL_BAKEOFF_2026-09-30.md` has the table.
+passing answer row disqualifies. `docs/evidence/RETRIEVAL_BAKEOFF_2026-09-30.md` has the table.
 
 Silence
 -------
@@ -62,7 +62,7 @@ IDF mass -- see the constant for the share and why it is what it is) and `SCORE_
 no section, because the wrong one gets quoted. CLAUDE.md: "If evidence is incomplete, write OPEN
 or UNVERIFIED. Do not guess."
 
-Defective records are flagged, never hidden. `docs/SOURCE_DEFECTS.md` records SD-001 (editorial
+Defective records are flagged, never hidden. `docs/evidence/SOURCE_DEFECTS.md` records SD-001 (editorial
 matter inside s.1) and SD-002 (pre-amendment JSON for s.16, s.124, s.76A, s.329). Those rows carry
 a non-empty `defects` tuple. They are still returned -- suppressing them would be a silent repair,
 which CLAUDE.md forbids -- and presentation is someone else's job.
@@ -82,7 +82,7 @@ CORPUS = Path(__file__).resolve().parent.parent / "corpus/companies_act"
 INDEX = CORPUS / "_index.json"
 
 # --------------------------------------------------------------------------------------------
-# Source defects. docs/SOURCE_DEFECTS.md is the authority; this is its machine-readable echo.
+# Source defects. docs/evidence/SOURCE_DEFECTS.md is the authority; this is its machine-readable echo.
 # Flagged, not filtered: CLAUDE.md forbids repairing a defective government source.
 # --------------------------------------------------------------------------------------------
 DEFECTS: dict[str, tuple[str, ...]] = {
@@ -441,7 +441,7 @@ def search(query: str, *, top_k: int = 5) -> list[dict]:
     route, a body substring for a body route, and both joined by " | " for "title+body". It is
     never paraphrased and never synthesised.
     `defects` is always present, empty for a clean record. Non-empty values are IDs from
-    docs/SOURCE_DEFECTS.md and mean the underlying source text is known-bad.
+    docs/evidence/SOURCE_DEFECTS.md and mean the underlying source text is known-bad.
 
     Returns [] rather than a weak guess. Silence is a valid answer in this product.
     """
@@ -612,7 +612,7 @@ def _test() -> None:
           "s.1 carries SD-001 (editorial matter left in the source)")
     check(rpt[0]["defects"] == (), "a clean record carries an empty tuple, not a missing key")
     check(set(DEFECTS) == {"1", "16", "124", "76A", "329"},
-          "the defect table matches docs/SOURCE_DEFECTS.md")
+          "the defect table matches docs/evidence/SOURCE_DEFECTS.md")
 
     # 10. Only confirmed mappings are searchable.
     nums = [r["section_number"] for r in _records()]

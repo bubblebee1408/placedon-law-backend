@@ -13,7 +13,7 @@ Three properties are load-bearing, in this order:
    `checker/provenance.py`), and the honest answer to a question about a text we do not hold is
    silence, not the nearest text we do hold.
 
-2. Defects travel with the text. `docs/SOURCE_DEFECTS.md` records two confirmed source defects.
+2. Defects travel with the text. `docs/evidence/SOURCE_DEFECTS.md` records two confirmed source defects.
    A caller that never reads that file must still be unable to serve s.16 without knowing the
    corpus wording there is pre-amendment. Attaching the defect id to the Hit is the only way that
    holds; a note in prose does not survive a function boundary.
@@ -53,7 +53,7 @@ COMPANIES_ACT_2013 = "COMPANIES_ACT_2013"
 # nothing, however well-formed the citation.
 CORPUS_INSTRUMENTS = frozenset({COMPANIES_ACT_2013})
 
-# docs/SOURCE_DEFECTS.md, both entries. Keyed by section number because that is what a citation
+# docs/evidence/SOURCE_DEFECTS.md, both entries. Keyed by section number because that is what a citation
 # carries; the corpus record id is an India Code internal that no user ever types.
 #   SD-001  corpus record 184 (s.1) ends with the editorial instruction "To be deleted", which is
 #           not statutory text. The section is otherwise sound.
@@ -410,7 +410,7 @@ def _test() -> None:
     check([h.ref.number for h in resolve("ss. 173, 174 and 175")] == ["173", "174", "175"],
           "genuine enumeration survives the quantity rule")
 
-    # --- DEFECTS: docs/SOURCE_DEFECTS.md must reach the caller ---
+    # --- DEFECTS: docs/evidence/SOURCE_DEFECTS.md must reach the caller ---
     check(resolve("s.1")[0].defects == ("SD-001",), "s.1 carries SD-001 (editorial 'To be deleted')")
     for num in ("16", "124", "76A", "329"):
         hits = resolve(f"s.{num}")

@@ -75,7 +75,7 @@ class BudgetExceededError(RuntimeError):
 
 # The identity and the reader were still the PoSH-era ones until 2026-09-23: "an HR
 # compliance assistant for Indian SMEs", writing for "an HR manager, not a lawyer".
-# That product was retired (docs/RETIRED_POSH.md) and the wedge is corporate
+# That product was retired (docs/product/RETIRED_POSH.md) and the wedge is corporate
 # compliance (CLAUDE.md). A narrator told it is explaining HR rules to an HR manager,
 # handed a section of the Companies Act, is being invited to translate a statute into
 # the register of a different domain — and the one thing this layer must never do is

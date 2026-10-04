@@ -2,7 +2,7 @@
 
 ## The architecture this enforces
 
-`docs/PLAN_08_BOOKMARK_AND_GODSEYE.md` §2 declares four rings:
+`docs/plans/PLAN_08_BOOKMARK_AND_GODSEYE.md` §2 declares four rings:
 
     RING 0  LEGAL CORE      statute, obligations, deciders, currency, entailment
     RING 1  BOOKMARK        entity graph (CIN/DIN), public registers, event log
@@ -54,7 +54,7 @@ A guard that has never been shown to fail is not evidence that it works — it
 is evidence that nobody has tried. This repository has already lost real time
 to exactly that shape of mistake, twice: `harness_regression.sh` exists
 because a green check once turned out to be a check that could not turn red,
-and `docs/D002_CLOSURE_REPORT_2026_09_17.md` §2.1 records that
+and `docs/reports/D002_CLOSURE_REPORT_2026_09_17.md` §2.1 records that
 `pdf_text.py`'s only wired-in test fixture was the one corpus document
 structurally immune to the bug it was meant to catch — "a green check that
 cannot fail... a test whose fixture cannot exhibit the defect is not
@@ -510,7 +510,7 @@ def _test() -> None:
 
     # ---- NEGATIVE CONTROL: prove the guard can actually fail ---------------------
     # A guard never observed to catch anything is not evidence it works — this
-    # repo already paid for that mistake once (docs/D002_CLOSURE_REPORT_2026_09_17.md
+    # repo already paid for that mistake once (docs/reports/D002_CLOSURE_REPORT_2026_09_17.md
     # §2.1: a test fixture structurally immune to the bug it guarded). Register a
     # throwaway Ring 2 module, hide the import inside a function exactly the way a
     # real leak would be hidden, and assert the scan finds it.

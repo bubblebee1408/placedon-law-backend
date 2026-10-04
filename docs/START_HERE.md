@@ -5,7 +5,7 @@ agents. It says what is being built, how a request travels through the code, whi
 are current, and where each kind of change belongs. Written 2026-10-01 against `main` at
 2e0793c. Where this page and the code disagree, the code wins; fix this page.
 
-**The full architecture — every product, feature, agent, model and source — is [ARCHITECTURE.md](ARCHITECTURE.md).** Features, integrations (government, publishers, MCP, CLI, API) and document verification: [PLATFORM_FEATURES_AND_INTEGRATIONS.md](PLATFORM_FEATURES_AND_INTEGRATIONS.md). How each feature is built, card by card: [FEATURE_ARCHITECTURE.md](FEATURE_ARCHITECTURE.md). The per-file index is [REPO_MAP.md](REPO_MAP.md), generated from each module's own docstring
+**The full architecture — every product, feature, agent, model and source — is [ARCHITECTURE.md](architecture/ARCHITECTURE.md).** Features, integrations (government, publishers, MCP, CLI, API) and document verification: [PLATFORM_FEATURES_AND_INTEGRATIONS.md](architecture/PLATFORM_FEATURES_AND_INTEGRATIONS.md). How each feature is built, card by card: [FEATURE_ARCHITECTURE.md](architecture/FEATURE_ARCHITECTURE.md). The per-file index is [REPO_MAP.md](REPO_MAP.md), generated from each module's own docstring
 (`python3 scripts/repo_map.py`). The rules every change must obey are in
 [../CLAUDE.md](../CLAUDE.md), and they bind whatever this page says.
 
@@ -70,18 +70,18 @@ Read these; treat every other document as dated history unless one of these poin
 | Document | Why it matters |
 |---|---|
 | [../CLAUDE.md](../CLAUDE.md) | The non-negotiable rules and the verification status |
-| [PLAN_20_INHOUSE_CORPORATE.md](PLAN_20_INHOUSE_CORPORATE.md) | Who the customer is (read [EVIDENCE_CORRECTIONS_PLAN_20.md](EVIDENCE_CORRECTIONS_PLAN_20.md) with it) |
-| [PLAN_22_MODEL_AND_PLATFORM_DECISIONS.md](PLAN_22_MODEL_AND_PLATFORM_DECISIONS.md) | Models, platform, database: decisions D1–D8, each with a reversal condition |
-| [PLAN_23_ORCHESTRATION.md](PLAN_23_ORCHESTRATION.md) | How work is planned and run: layers, research basis, steps O0–O9 |
-| [PLAN_26_INDIAN_SOURCES.md](PLAN_26_INDIAN_SOURCES.md) | Indian sources, their tiers and terms, build order S0–S5 |
+| [PLAN_20_INHOUSE_CORPORATE.md](plans/PLAN_20_INHOUSE_CORPORATE.md) | Who the customer is (read [EVIDENCE_CORRECTIONS_PLAN_20.md](plans/EVIDENCE_CORRECTIONS_PLAN_20.md) with it) |
+| [PLAN_22_MODEL_AND_PLATFORM_DECISIONS.md](plans/PLAN_22_MODEL_AND_PLATFORM_DECISIONS.md) | Models, platform, database: decisions D1–D8, each with a reversal condition |
+| [PLAN_23_ORCHESTRATION.md](plans/PLAN_23_ORCHESTRATION.md) | How work is planned and run: layers, research basis, steps O0–O9 |
+| [PLAN_26_INDIAN_SOURCES.md](plans/PLAN_26_INDIAN_SOURCES.md) | Indian sources, their tiers and terms, build order S0–S5 |
 | [../.claude/loops/DECISION_harvey_parity.md](../.claude/loops/DECISION_harvey_parity.md) | The feature sequence H0–H6 (refusals, sources, web, drafts, review tables, Word) |
-| [RETRIEVAL_BAKEOFF_2026-09-30.md](RETRIEVAL_BAKEOFF_2026-09-30.md) | Why the ranker is what it is |
-| [RETRACTIONS.md](RETRACTIONS.md) and [CLAIMS_LEDGER.md](CLAIMS_LEDGER.md) | What was claimed, what was withdrawn, and why |
-| [PLAN_00_INDEX.md](PLAN_00_INDEX.md) | The index of every numbered plan, with the status of each |
+| [RETRIEVAL_BAKEOFF_2026-09-30.md](evidence/RETRIEVAL_BAKEOFF_2026-09-30.md) | Why the ranker is what it is |
+| [RETRACTIONS.md](evidence/RETRACTIONS.md) and [CLAIMS_LEDGER.md](evidence/CLAIMS_LEDGER.md) | What was claimed, what was withdrawn, and why |
+| [PLAN_00_INDEX.md](plans/PLAN_00_INDEX.md) | The index of every numbered plan, with the status of each |
 
 Two numbered folders are **Project Themis**, developed on its own branch:
-[plan24/](plan24/00_INDEX.md) and [plan25/](plan25/00_INDEX.md), with `checker/forecast/`.
-`docs/plan24/` is unrelated to `PLAN_26_INDIAN_SOURCES.md`, which was renamed from
+[plan24/](plans/plan24/00_INDEX.md) and [plan25/](plans/plan25/00_INDEX.md), with `checker/forecast/`.
+`docs/plans/plan24/` is unrelated to `PLAN_26_INDIAN_SOURCES.md`, which was renamed from
 PLAN_24 to end that collision.
 
 ## 5. Where each kind of change belongs

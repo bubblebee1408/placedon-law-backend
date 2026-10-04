@@ -7,7 +7,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-echo "placedon-hr setup"
+echo "placedon-law-backend setup"
 echo
 
 python3 - <<'PY'
@@ -35,19 +35,11 @@ mkdir -p .claude/{today,memory,loops,commands}
 ## Goal
 (one sentence — run /start to set it)
 
-## The two things that outrank every feature
-- [ ] H-2 — lawyer verifies 12 sections. One evening. Unlocks all 12 core questions.
-- [ ] H-1 — ten customer conversations. Decides whether the buyer is HR or the CS/CA.
-
-## Notes
+Status lives in research/TASKS.md and the HARNESS_RESULT line, not here.
 MD
 
-if [ -d frontend/node_modules ]; then
-  echo "  frontend deps present"
-else
-  echo "  installing frontend deps (npm ci)"
-  (cd frontend && npm ci --silent) || (cd frontend && npm install --silent)
-fi
+# The web app is a separate repository (placedon-claude-legal-3300); there is no frontend/
+# here. The old block below tried `cd frontend` and failed on every run.
 
 echo
 python3 scripts/index_codebase.py | head -3
@@ -58,8 +50,9 @@ cat <<'MD'
 
 Ready.
 
-  python3 -m uvicorn checker.app:app --reload --port 8000     # backend
-  (cd frontend && npm run dev)                                # frontend :3000
+  python3 scripts/serve_api.py                    # /v1 engine on :8020
+  python3 scripts/serve_matrix.py                 # compliance matrix on :8014
+  PYTHONPATH=. python3 gateway/cli.py --help      # /v2 verbs as a CLI
 
   /start              open a session
   /build <feature>    full R-D-B-V-L loop

@@ -1,6 +1,6 @@
 """What each Indian source actually permits — read from the source, never from memory.
 
-S0 of `docs/PLAN_26_INDIAN_SOURCES.md` §5. One
+S0 of `docs/plans/PLAN_26_INDIAN_SOURCES.md` §5. One
 record per source: the terms URL, the date it was read, the exact clauses that govern
 caching, attribution, commercial use and rate limits, and the robots.txt result for every
 path a connector intends to fetch.
@@ -12,7 +12,7 @@ not what the plan document wrote down before anyone fetched anything. A clause i
 only when this repository fetched the page and the words below are that page's words. Every
 quote here was extracted from a saved response body by a script, not typed from memory.
 
-That rule cost the plan its own numbers. `docs/PLAN_26_INDIAN_SOURCES.md` §3 recorded
+That rule cost the plan its own numbers. `docs/plans/PLAN_26_INDIAN_SOURCES.md` §3 recorded
 Indian Kanoon at "search ~ ₹5 per 100 results; full text +₹0.20 per record" and GODL as
 "commercial and non-commercial use permitted with attribution", both from search-result
 summaries. The pricing page says ₹0.50 per search (see `_IK_PRICING`), and the GODL page

@@ -1,6 +1,6 @@
 """Independent corroboration of prior wording, using the amending Act as witness.
 
-The problem this solves is recorded in `docs/RETRACTIONS.md`. We once reported
+The problem this solves is recorded in `docs/evidence/RETRACTIONS.md`. We once reported
 "119/119 EXACT" for point-in-time reconstruction against what turned out to be the
 current consolidation, and later "43/43 prior wordings found in the PDF" — which was
 circular, because the footnotes quoting those wordings are *in that same PDF*. Both

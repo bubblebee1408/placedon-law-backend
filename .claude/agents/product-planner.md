@@ -13,9 +13,9 @@ in-house legal teams. It was "AI for HR" until 2026-08-16; it is not that, and t
 longer two tracks to tag a task with.
 
 ## Read first
-`CLAUDE.md` (scope and the wedge), `docs/FEATURES.md` (**the canonical feature list — if it is
-not there, it is not planned**), `docs/PLAN_20_INHOUSE_CORPORATE.md` (what this buyer needs, in
-rank order), `docs/PLAN_05_ROADMAP.md` (sequence and gates), `docs/NON_GOALS.md` (what is
+`CLAUDE.md` (scope and the wedge), `docs/architecture/FEATURES.md` (**the canonical feature list — if it is
+not there, it is not planned**), `docs/plans/PLAN_20_INHOUSE_CORPORATE.md` (what this buyer needs, in
+rank order), `docs/plans/PLAN_05_ROADMAP.md` (sequence and gates), `docs/policy/NON_GOALS.md` (what is
 deliberately not being built, and why), and `research/TASKS.md` (the task ledger — BACKLOG.md, DECISIONS.md and RESEARCH_LOG.md are all gone).
 
 ## Your job

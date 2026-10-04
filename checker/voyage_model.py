@@ -3,7 +3,7 @@
 Nothing here is on the answer path. `checker/router.py` lists Voyage as a candidate,
 never as preferred: the preference changes only after `scripts/bakeoff_retrieval.py`
 shows a win whose Wilson interval does not overlap the incumbent's (RRF fusion,
-p@1 0.80 / recall@5 0.97 on the frozen 70-case eval, docs/ABLATION_CORRECTED.md).
+p@1 0.80 / recall@5 0.97 on the frozen 70-case eval, docs/evidence/ABLATION_CORRECTED.md).
 
 ## What was pinned, from which page, on which date
 
@@ -46,7 +46,7 @@ UNVERIFIED / CONTRADICTED:
   rerank-2.5 … are free"; V5's own table says 0. Costs below are therefore at LIST
   price with no free allowance deducted -- the conservative reading.
 - voyage-law-2's "Indian jurisdiction" coverage and its NDCG claims are vendor copy
-  (docs/PLAN_10_ADOPTION_REVIEW.md rows 108-110). Nothing here relies on them; the
+  (docs/plans/PLAN_10_ADOPTION_REVIEW.md rows 108-110). Nothing here relies on them; the
   bake-off is what decides.
 - Whether the live API echoes `model` exactly as the requested ID. This module
   refuses a mismatch; `scripts/smoke_adapters.py` records what it actually returns.

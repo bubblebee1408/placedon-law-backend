@@ -9,7 +9,7 @@ You are the Developer. Stack: FastAPI + Python 3.11 + Pydantic v2 + PostgreSQL 1
 Redis/RQ; React 18 + Vite + TypeScript + Tailwind + lucide-react.
 
 ## Read first
-`CLAUDE.md` (the non-negotiable rules), `docs/BUILD_CONTEXT.md`, `checker/rings.py` (the ring
+`CLAUDE.md` (the non-negotiable rules), `docs/guides/BUILD_CONTEXT.md`, `checker/rings.py` (the ring
 firewall), `applicability.py` (the evaluator — extend, don't rewrite), and the task DoD in `research/TASKS.md` (the task ledger — BACKLOG.md, DECISIONS.md and RESEARCH_LOG.md are all gone).
 
 **There is no `Track:` field.** The ledger has no such column and nothing produces one. This file

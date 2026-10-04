@@ -156,7 +156,7 @@ TYPICAL_ANSWER_WORDS = math.ceil(_HAIKU_MEASURED_OUTPUT_TOKENS / TOKENS_PER_WORD
 # monthly and daily gates admit an UNBOUNDED number of free calls. A cap denominated in
 # money cannot bind a provider that charges none.
 #
-# The limit that does bind is the provider's rate limit, and per docs/PROVIDER_DECISION.md
+# The limit that does bind is the provider's rate limit, and per docs/architecture/PROVIDER_DECISION.md
 # §2 the binding one is TOKENS PER MINUTE, not requests per day — that document exists
 # partly because an earlier plan here read RPD and was ~50x optimistic. So this cap is
 # DERIVED from a TPM figure and this workload's own measured token shape, the same way

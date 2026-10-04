@@ -1,6 +1,6 @@
 """Append-only, bitemporal store for `ontology.Observed`. Nothing is ever rewritten.
 
-Ring 1. PLAN_19 G1.2, built to `docs/plan19/decisions/M11_OBSERVATION_STORE.md`.
+Ring 1. PLAN_19 G1.2, built to `docs/plans/plan19/decisions/M11_OBSERVATION_STORE.md`.
 
 ## The property this exists to provide
 

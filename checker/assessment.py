@@ -178,7 +178,7 @@ _UNASSESSABLE_REASON: dict[str, str] = {
         "review. Whether it applies is unknown to us, not answered in the negative.",
     SUSPENDED:
         "the provision was admitted and then suspended after a defect was found in its text "
-        "(see docs/SOURCE_DEFECTS.md). Superseded wording cannot settle a question either way.",
+        "(see docs/evidence/SOURCE_DEFECTS.md). Superseded wording cannot settle a question either way.",
     REJECTED:
         "the provision was refused admission, so no statement may be built on it. Refusing the "
         "source is not a finding about the law it carries.",

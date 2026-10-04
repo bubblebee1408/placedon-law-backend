@@ -30,7 +30,7 @@ What cannot be built honestly today:
 - **Code:** appendix D.
   - F1: `worker.py:146-147` maps anything but REFUSED to ANSWERED.
   - F2: `verbs.py:215-216` reads `s.citation`, but the field is `citations`. **Both re-checked by the main session.**
-- **Maths:** `checker/forecast/*` tests, seeded. Measured numbers are in `docs/plan25/03_PREDICTION_ENGINE.md`.
+- **Maths:** `checker/forecast/*` tests, seeded. Measured numbers are in `docs/plans/plan25/03_PREDICTION_ENGINE.md`.
 - **Literature:** appendix C, with 60+ sources.
 - **Free models:** appendix A.
 - **Harvey and the funnel:** appendix B.

@@ -1,6 +1,6 @@
 """Every conclusion stores its witnesses, so revocation is re-evaluation not re-query.
 
-Ring 1, pure. PLAN_19 G2.1, built to `docs/plan19/decisions/M13_DERIVATION.md`.
+Ring 1, pure. PLAN_19 G2.1, built to `docs/plans/plan19/decisions/M13_DERIVATION.md`.
 
 ## What this buys
 

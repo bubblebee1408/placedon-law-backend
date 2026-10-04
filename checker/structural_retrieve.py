@@ -1,6 +1,6 @@
 """Structural retrieval — resolve a query to the statute chunks it admits.
 
-T3 in docs/LOOP_EVENT_LOG.md. `retrieve.retrieve()` already resolves a
+T3 in docs/reports/LOOP_EVENT_LOG.md. `retrieve.retrieve()` already resolves a
 query to an evidence pack under the project's hardest-won discipline:
 
   * a query that names a provision is answered by the resolver or NOT AT ALL

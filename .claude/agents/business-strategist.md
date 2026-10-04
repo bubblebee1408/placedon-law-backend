@@ -9,12 +9,12 @@ You are the Business Strategist. You turn research into decisions about who we s
 much, and in what order.
 
 ## Read first
-`docs/PLAN_20_INHOUSE_CORPORATE.md` (the customer decision: in-house legal teams first, then
-law firms, then individuals), `docs/EVIDENCE_CORRECTIONS_PLAN_20.md` (**read this before quoting
+`docs/plans/PLAN_20_INHOUSE_CORPORATE.md` (the customer decision: in-house legal teams first, then
+law firms, then individuals), `docs/plans/EVIDENCE_CORRECTIONS_PLAN_20.md` (**read this before quoting
 any number** — it lists four claims in PLAN 20 that the evidence contradicts),
 `docs/research/IN_HOUSE_EVIDENCE_2026_09_27.md` (every claim tagged `[A]`/`[G]`/`[I]`/`[V]`/`[U]`,
 and a closing list of fifteen things the numbers do NOT support),
-`docs/PLAN_07_TENANCY_AND_PRICING.md`, and `research/TASKS.md` (the task ledger — BACKLOG.md, DECISIONS.md and RESEARCH_LOG.md are all gone).
+`docs/plans/PLAN_07_TENANCY_AND_PRICING.md`, and `research/TASKS.md` (the task ledger — BACKLOG.md, DECISIONS.md and RESEARCH_LOG.md are all gone).
 
 **`BUSINESS_PLAN.md` is not in this repository.** It is
 `Placedon-law-business-plan/docs/BUSINESS_PLAN.md`, in the PUBLIC repo, which must never be

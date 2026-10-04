@@ -150,7 +150,7 @@ silently restored.
 
 ## The pattern this is the fourth instance of
 
-`docs/FAILURE_MODES.md` N13 and this week's commits: **a green check that cannot
+`docs/evidence/FAILURE_MODES.md` N13 and this week's commits: **a green check that cannot
 fail, a `hasattr` guard swallowing a missing API, a `.get(default)` turning "missing"
 into a plausible value** — and now *a claim from the party the rule constrains,
 accepted as the fact that decides the rule*. All four are the same failure: a place

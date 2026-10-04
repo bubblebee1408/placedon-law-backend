@@ -123,7 +123,7 @@ def _sha(b: bytes) -> str:
     return "sha256:" + hashlib.sha256(b).hexdigest()
 
 
-def table_hash(path: Path = Path("docs/FIXTURE_REVIEW.md")) -> str:
+def table_hash(path: Path = Path("docs/evidence/FIXTURE_REVIEW.md")) -> str:
     if not path.exists():
         raise ReviewError(f"the review table is missing: {path}")
     return _sha(path.read_bytes())

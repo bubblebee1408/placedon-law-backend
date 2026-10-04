@@ -33,7 +33,7 @@ produces a well-formed proposal is a legitimate choice.
 goes through `urllib` from the standard library. That also means no SDK version
 can break it.
 
-## Free-tier reality, from docs/PROVIDER_DECISION.md
+## Free-tier reality, from docs/architecture/PROVIDER_DECISION.md
 
 The free tier is **Flash and Flash-Lite only**; Pro-series lost its free tier in
 April 2026. Rate limits bind on tokens per minute, not requests per day -- an

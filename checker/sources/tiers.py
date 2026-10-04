@@ -8,7 +8,7 @@ holds no logic a caller can talk round: a predicate, a label table, and two clos
 
 `HELD` is `corpus/companies_act/`: 527 hash-stamped sections, cross-rendered against India
 Code's own PDF and API, with two confirmed source defects recorded in
-`docs/SOURCE_DEFECTS.md` and a corpus status of NOT_FULLY_VERIFIED. That is a low bar in
+`docs/evidence/SOURCE_DEFECTS.md` and a corpus status of NOT_FULLY_VERIFIED. That is a low bar in
 absolute terms and it is still the only tier that has one at all.
 
 Everything else is evidence about the world rather than law we have checked:

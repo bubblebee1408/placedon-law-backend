@@ -13,29 +13,29 @@ repository's Markdown. The worst of them were not merely stale, they were instru
     `scripts/verify.py` with its story in `because=`". There is no such file and
     `because=` appears in **zero** `.py` files here, so an agent obeying that had to
     INVENT a central check file and a parameter convention to comply.
-  * `docs/BUILD_CONTEXT.md` -- which opens "Constraints an agent must load before
+  * `docs/guides/BUILD_CONTEXT.md` -- which opens "Constraints an agent must load before
     touching this repository" -- described a rule "enforced in three places", two of
     which were gone.
   * `.claude/agents/developer.md` told the agent to stop if a task had no `Track:`
     field. Nothing has ever produced that field, so it refused every real task.
 
 A document listing those findings would rot the same way. **This is the invariant
-version.** `docs/DOC_DEBT_2026_09_27.md` is its narrative; this file is what holds.
+version.** `docs/reports/DOC_DEBT_2026_09_27.md` is its narrative; this file is what holds.
 
 ## Three tenses, and only one of them is checkable
 
-  * **Past** -- `docs/RETIRED_POSH.md` cites the script it retired. Correct.
-  * **Future** -- `docs/PLAN_18_TECHNICAL_DESIGN.md` cites `checker/conformal.py`, which is what
+  * **Past** -- `docs/product/RETIRED_POSH.md` cites the script it retired. Correct.
+  * **Future** -- `docs/plans/PLAN_18_TECHNICAL_DESIGN.md` cites `checker/conformal.py`, which is what
     it is specifying. A design document that could only name files already built would be a
     description, not a plan.
-  * **Present** -- `CLAUDE.md`, `docs/BUILD_CONTEXT.md`, a slash command, `.claude/memory/*`.
+  * **Present** -- `CLAUDE.md`, `docs/guides/BUILD_CONTEXT.md`, a slash command, `.claude/memory/*`.
     These tell a reader what IS. **Only these are checked**, and they are the ones that mislead:
     an agent does not execute PLAN_18, it executes `/build`.
 
 ## The distinction that makes this checkable
 
-Not every missing path is a defect. `docs/RETIRED_POSH.md` cites the script it retired.
-`docs/RETRACTIONS.md` cites a withdrawn plan. `docs/CLAIMS_LEDGER.md` records what was
+Not every missing path is a defect. `docs/product/RETIRED_POSH.md` cites the script it retired.
+`docs/evidence/RETRACTIONS.md` cites a withdrawn plan. `docs/evidence/CLAIMS_LEDGER.md` records what was
 true on its own date and says in terms that its denominator "must not be quietly restated
 later". **Those references are correct, and editing them would destroy this repository's
 memory of its own corrections** -- a find-and-replace across `*.md` is the failure mode,
@@ -87,12 +87,12 @@ NOT_OURS = (
 
 # Documents that speak in the PAST tense. A missing path here is the record working.
 HISTORY_FILES = (
-    "docs/RETIRED_POSH.md",        # names what it retired
-    "docs/RETRACTIONS.md",         # names what was withdrawn
-    "docs/CLAIMS_LEDGER.md",       # dated entries; its denominators are fixed
-    "docs/SOURCE_DEFECTS.md",      # defects as found
-    "docs/DOC_DEBT_2026_09_27.md", # the narrative this file replaces; cites the misses
-    "docs/REPO_AUDIT_2026_09_27.md",
+    "docs/product/RETIRED_POSH.md",        # names what it retired
+    "docs/evidence/RETRACTIONS.md",         # names what was withdrawn
+    "docs/evidence/CLAIMS_LEDGER.md",       # dated entries; its denominators are fixed
+    "docs/evidence/SOURCE_DEFECTS.md",      # defects as found
+    "docs/reports/DOC_DEBT_2026_09_27.md", # the narrative this file replaces; cites the misses
+    "docs/reports/REPO_AUDIT_2026_09_27.md",
     ".claude/memory/LESSONS.md",   # cites the file each incident happened in
     ".claude/memory/SPEC_ERRATA.md",
     "research/TASKS.md",           # closed rows name what they touched
@@ -107,27 +107,29 @@ HISTORY_FILES = (
 # DATED rule below missed them, and the last of those failed this check the moment
 # scripts/ingest_companies_act.py was deleted -- for correctly reporting, in the past tense, a
 # red-team finding in a file that no longer exists.
-HISTORY_PREFIXES = ("docs/research/", ".claude/plans/", ".claude/loops/", "docs/LOOP_")
+# 04-10-2026: docs/ was filed into folders; `docs/LOOP_` became `docs/reports/LOOP_` with no change
+# in which documents it covers.
+HISTORY_PREFIXES = ("docs/research/", ".claude/plans/", ".claude/loops/", "docs/reports/LOOP_")
 
 # Documents written in the FUTURE tense: they specify artifacts to be built, so naming one that
 # does not exist yet is the document doing its job. Added 27-09-2026 when merging origin/main
-# brought PLAN_17, PLAN_18 and docs/plan19/, and 24 of their 26 "dangling" references turned out
+# brought PLAN_17, PLAN_18 and docs/plans/plan19/, and 24 of their 26 "dangling" references turned out
 # to be specifications -- `checker/conformal.py`, `gateway/worker.py`, `docs/RUNBOOK_BETA.md`.
 # Treating a spec as a defect would have taught everyone to ignore this check, which is worse
 # than not having it.
-DESIGN_PREFIXES = ("docs/PLAN_", "docs/plan19/")
+DESIGN_PREFIXES = ("docs/plans/PLAN_", "docs/plans/plan19/")
 
 # ...except an INDEX, which is present tense by definition: it says what exists, and its whole
 # job is that every link in it resolves. Found 27-09-2026 while rebuilding PLAN_00_INDEX -- the
 # prefix rule above had quietly exempted the one PLAN_ document that most needs checking.
-DESIGN_EXCEPTIONS = ("docs/PLAN_00_INDEX.md", "docs/plan19/00_INDEX.md")
+DESIGN_EXCEPTIONS = ("docs/plans/PLAN_00_INDEX.md", "docs/plans/plan19/00_INDEX.md")
 
 # A filename carrying a date is a dated artifact wherever it lives.
 DATED = re.compile(r"20\d\d[-_]\d\d[-_]\d\d")
 
 KNOWN_DEBT = {
     # Known debt, 27-09-2026. **This list may only shrink.** Twelve entries were removed the
-    # day it was written, because writing the check found and fixed them -- docs/BUILD_CONTEXT.md
+    # day it was written, because writing the check found and fixed them -- docs/guides/BUILD_CONTEXT.md
     # went from six to zero. Each entry below is a real defect in a present-tense document,
     # left because fixing it means REWRITING the document rather than swapping a path, and a
     # rewrite is a judgement someone has to make.
@@ -143,13 +145,8 @@ KNOWN_DEBT = {
     (".claude/memory/ARCHITECTURE.md", "scripts/ingest_posh.py"),
     (".claude/memory/ARCHITECTURE.md", "corpus/provisions/posh_act_2013.json"),
 
-    # A stale daily note presenting itself as today -- the highest confusion-per-line in the
-    # repository. Either regenerate it or delete it; there is nothing to repoint.
-    (".claude/today/TODAY.md", "docs/PLAN.md"),
-    (".claude/today/TODAY.md", "docs/LAWYER_BRIEF.md"),
-    (".claude/today/TODAY.md", "docs/WHERE_WE_ARE.md"),
-    (".claude/today/TODAY.md", "scripts/check_transcription.py"),
-    (".claude/today/TODAY.md", "scripts/verify.py"),
+    # (The five .claude/today/TODAY.md entries were removed 04-10-2026: the note was rewritten
+    # as a pointer to research/TASKS.md and the gate, and cites nothing that does not exist.)
 
     # Prose describing the retired verification ratchet, and a budget file, as current.
     (".claude/memory/FEATURES.md", "scripts/verify.py"),
@@ -158,18 +155,18 @@ KNOWN_DEBT = {
     (".claude/memory/API_BUDGET.md", "backend/.budget.json"),
     (".claude/INDEX.md", "checker/ratelimit.py"),
     (".claude/memory/CODING_CONVENTIONS.md", "checker/rules.py"),
-    ("docs/FAILURE_MODES.md", "api/index.py"),
-    ("docs/FAILURE_MODES.md", "scripts/retry_blocked_sources.py"),
-    ("docs/FAILURE_MODES.md", "corpus/.budget.json"),
+    ("docs/evidence/FAILURE_MODES.md", "api/index.py"),
+    ("docs/evidence/FAILURE_MODES.md", "scripts/retry_blocked_sources.py"),
+    ("docs/evidence/FAILURE_MODES.md", "corpus/.budget.json"),
 
     # Modules built under other names. checker/retrieval.py became checker/text_search.py and
     # checker/dense_index.py.
-    ("docs/COMPETITOR_PATTERN_ANALYSIS.md", "checker/retrieval.py"),
-    ("docs/COMPETITOR_PATTERN_ANALYSIS.md", "docs/CLAUDE.md"),
+    ("docs/market/COMPETITOR_PATTERN_ANALYSIS.md", "checker/retrieval.py"),
+    ("docs/market/COMPETITOR_PATTERN_ANALYSIS.md", "docs/CLAUDE.md"),
 
 
     # (The PLAN_12/19/20 entries that stood here were removed 27-09-2026: PLAN_* and plan19/ are
-    # DESIGN documents, and one of them -- docs/plan19/04_MATHS_AND_ALGORITHMS.md -- simply arrived
+    # DESIGN documents, and one of them -- docs/plans/plan19/04_MATHS_AND_ALGORITHMS.md -- simply arrived
     # with the origin/main merge.)
 }
 
@@ -217,7 +214,7 @@ def link_targets(text: str, doc: str) -> set[str]:
     """Repo-relative targets of every Markdown link, resolved against the citing document.
 
     Separate from `references()` because a link is relative to the file it lives in --
-    `[PLAN_01](PLAN_01_ARCHITECTURE.md)` inside `docs/` means `docs/PLAN_01_ARCHITECTURE.md` --
+    `[PLAN_01](PLAN_01_ARCHITECTURE.md)` inside `docs/` means `docs/plans/PLAN_01_ARCHITECTURE.md` --
     while a backticked path is always repo-relative. Conflating the two would report every
     same-directory link as missing.
     """
@@ -370,32 +367,32 @@ def _test() -> None:
           "checker/ paths are in scope")
 
     # ── Markdown links, which are relative to the file they live in ──────────
-    check(link_targets("[a](PLAN_01.md)", "docs/PLAN_00_INDEX.md") == {"docs/PLAN_01.md"},
+    check(link_targets("[a](PLAN_01.md)", "docs/plans/PLAN_00_INDEX.md") == {"docs/plans/PLAN_01.md"},
           "a same-directory link resolves against the citing document, not the repo root")
-    check(link_targets("[a](plan19/00_INDEX.md)", "docs/PLAN_00_INDEX.md")
-          == {"docs/plan19/00_INDEX.md"}, "...and so does a subdirectory link")
+    check(link_targets("[a](plan19/00_INDEX.md)", "docs/plans/PLAN_00_INDEX.md")
+          == {"docs/plans/plan19/00_INDEX.md"}, "...and so does a subdirectory link")
     check(link_targets("[a](../web/x.md)", "docs/A.md") == {"web/x.md"},
           "...and one that climbs out of docs/")
     check(link_targets("[a](https://x.com/y.md) [b](#anchor)", "docs/A.md") == set(),
           "an external URL and a bare anchor are not repo paths")
-    check(link_targets("[a](PLAN_01.md#section-3)", "docs/PLAN_00_INDEX.md")
-          == {"docs/PLAN_01.md"}, "an anchor suffix is stripped before resolving")
+    check(link_targets("[a](PLAN_01.md#section-3)", "docs/plans/PLAN_00_INDEX.md")
+          == {"docs/plans/PLAN_01.md"}, "an anchor suffix is stripped before resolving")
     check(link_targets("[a](../../outside.md)", "docs/A.md") == set(),
           "a link that escapes the repository is not ours to resolve")
     check(link_targets("[a](Placedon-law-business-plan/docs/X.md)", "docs/A.md") == set(),
           "...nor is another repository's tree")
 
     # ── the active / history distinction ─────────────────────────────────────
-    check(is_history("docs/RETIRED_POSH.md"), "an explicit history file is history")
+    check(is_history("docs/product/RETIRED_POSH.md"), "an explicit history file is history")
     check(is_history("docs/research/ANYTHING.md"), "a dated research tree is history")
-    check(is_history("docs/LOOP_THEMIS_20_MOVES_2026_09_17.md"),
+    check(is_history("docs/reports/LOOP_THEMIS_20_MOVES_2026_09_17.md"),
           "a dated filename is history wherever it lives")
-    check(is_history("docs/LOOP_THEMIS_20_MOVES_REPORT.md"),
+    check(is_history("docs/reports/LOOP_THEMIS_20_MOVES_REPORT.md"),
           "a loop REPORT is history even with no date in its filename")
-    check(is_history("docs/LOOP_BOOKMARK_V0.md"), "...and so is a loop runbook under docs/")
-    check(not is_history("docs/PLAN_05_ROADMAP.md"),
+    check(is_history("docs/reports/LOOP_BOOKMARK_V0.md"), "...and so is a loop runbook under docs/")
+    check(not is_history("docs/plans/PLAN_05_ROADMAP.md"),
           "but a PLAN is not history -- it is design, and checked as such")
-    check(not is_history("docs/BUILD_CONTEXT.md"),
+    check(not is_history("docs/guides/BUILD_CONTEXT.md"),
           "a constraints file is ACTIVE -- it is read as a guarantee")
     check(not is_history(".claude/commands/build.md"),
           "a slash command is ACTIVE -- an agent executes it")
@@ -403,36 +400,36 @@ def _test() -> None:
           "a stale daily note is ACTIVE, not history: it presents itself as today")
 
     # ── the future tense ─────────────────────────────────────────────────────
-    check(is_design("docs/PLAN_18_TECHNICAL_DESIGN.md"),
+    check(is_design("docs/plans/PLAN_18_TECHNICAL_DESIGN.md"),
           "a PLAN_ document is DESIGN -- it names what is to be built")
-    check(not is_design("docs/PLAN_00_INDEX.md") and is_checked("docs/PLAN_00_INDEX.md"),
+    check(not is_design("docs/plans/PLAN_00_INDEX.md") and is_checked("docs/plans/PLAN_00_INDEX.md"),
           "...but an INDEX is present tense and IS checked -- every link in it must resolve")
-    check(is_design("docs/plan19/03_ARCHITECTURE.md"), "so is the plan19 tree")
+    check(is_design("docs/plans/plan19/03_ARCHITECTURE.md"), "so is the plan19 tree")
     check(not is_design("CLAUDE.md") and not is_design(".claude/commands/build.md"),
           "CLAUDE.md and a slash command are NOT design: an agent executes them")
-    check(not is_checked("docs/PLAN_18_TECHNICAL_DESIGN.md")
-          and not is_checked("docs/RETIRED_POSH.md")
-          and is_checked("docs/BUILD_CONTEXT.md"),
+    check(not is_checked("docs/plans/PLAN_18_TECHNICAL_DESIGN.md")
+          and not is_checked("docs/product/RETIRED_POSH.md")
+          and is_checked("docs/guides/BUILD_CONTEXT.md"),
           "only present-tense documents are checked -- past and future are skipped")
 
     # ── the scan itself, on a synthetic tree ─────────────────────────────────
     # A real dangling reference must be FOUND, and the same reference inside a history
     # document must NOT be. Both halves, because either alone passes a broken scanner.
     with tempfile.TemporaryDirectory() as tmp:
-        os.makedirs(os.path.join(tmp, "docs"))
+        os.makedirs(os.path.join(tmp, "docs/product"))
         os.makedirs(os.path.join(tmp, "scripts"))
         with open(os.path.join(tmp, "scripts/real.py"), "w") as fh:
             fh.write("# exists\n")
         with open(os.path.join(tmp, "docs/ACTIVE.md"), "w") as fh:
             fh.write("run `scripts/real.py` and `scripts/ghost.py`\n")
-        with open(os.path.join(tmp, "docs/RETIRED_POSH.md"), "w") as fh:
+        with open(os.path.join(tmp, "docs/product/RETIRED_POSH.md"), "w") as fh:
             fh.write("we deleted `scripts/ghost.py`\n")
         found = dangling(tmp)
         check(("docs/ACTIVE.md", "scripts/ghost.py") in found,
               "a dangling reference in an ACTIVE document is caught")
         check(("docs/ACTIVE.md", "scripts/real.py") not in found,
               "...and a path that exists is not reported")
-        check(("docs/RETIRED_POSH.md", "scripts/ghost.py") not in found,
+        check(("docs/product/RETIRED_POSH.md", "scripts/ghost.py") not in found,
               "...while the SAME path in a history document is left alone")
         check(len(found) == 1, "nothing else is invented")
 

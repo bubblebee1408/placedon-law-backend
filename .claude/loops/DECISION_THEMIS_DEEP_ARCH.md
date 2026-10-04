@@ -28,7 +28,7 @@
 | `checker/forecast/scoring.py` | Brier; Murphy decomposition; log-odds pooling |
 | `checker/rings.py` | `checker.forecast` registered as RING_3 by package. Test written first and seen red (3 FAIL), then green |
 | `scripts/run_tests.sh` | 7 new suites |
-| `docs/plan25/*` | The architecture, for the founder to study |
+| `docs/plans/plan25/*` | The architecture, for the founder to study |
 
 ## Tests written before the code
 

@@ -224,7 +224,7 @@ def answer_status(body_ids) -> str:
     Deliberately not "PARTIAL only when a DECLARED body appears": CURRENT_ONLY is held text
     with no history, so an answer resting on one is also less than fully supported. Calling
     it ANSWERED would put a consolidation where point-in-time evidence belongs, which is the
-    retracted mistake in docs/RETRACTIONS.md.
+    retracted mistake in docs/evidence/RETRACTIONS.md.
     """
     w = weakest(body_ids)
     if w is None:

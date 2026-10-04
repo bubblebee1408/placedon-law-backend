@@ -228,7 +228,7 @@ def extract_pages(path: str | Path) -> list[str]:
         "returned wrong pages for PDF 1.5+ files (compressed object streams) and "
         "lost text when /Contents preceded /Type/Page. "
         "Use checker.pdf_pages.extract_pages instead. "
-        "See docs/D002_CLOSURE_REPORT_2026_09_17.md."
+        "See docs/reports/D002_CLOSURE_REPORT_2026_09_17.md."
     )
 
 

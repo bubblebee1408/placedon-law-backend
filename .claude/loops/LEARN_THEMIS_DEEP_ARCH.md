@@ -14,7 +14,7 @@
 
 The self-tests were green throughout. **The review found what the author's tests could not, because the author chose both the code and the checks.**
 
-This is recorded in `docs/plan25/03` §2.7, not as a new lesson. L-13 and L-14 (vacuous checks, and guards tested only against the author's own strings) already say it. This loop is another instance, and the fix was the same: an independent pass, then failing tests first.
+This is recorded in `docs/plans/plan25/03` §2.7, not as a new lesson. L-13 and L-14 (vacuous checks, and guards tested only against the author's own strings) already say it. This loop is another instance, and the fix was the same: an independent pass, then failing tests first.
 
 ## Tech debt taken knowingly
 
@@ -22,7 +22,7 @@ This is recorded in `docs/plan25/03` §2.7, not as a new lesson. L-13 and L-14 (
 
 ## State of the ledger this loop touched
 
-- **New open items for the founder** (docs/plan25/08):
+- **New open items for the founder** (docs/plans/plan25/08):
   - the D3 amendment;
   - the NCLT and SEBI terms;
   - the counsel questions;

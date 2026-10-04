@@ -114,7 +114,7 @@ DEFECTS: dict[str, Defect] = {
                 "same section. It is preserved verbatim in raw_text and removed only in "
                 "reading_text.",
         blocks_answering=False,
-        doc_ref="docs/SOURCE_DEFECTS.md#sd-001",
+        doc_ref="docs/evidence/SOURCE_DEFECTS.md#sd-001",
     ),
     SD_002: Defect(
         code=SD_002,
@@ -125,7 +125,7 @@ DEFECTS: dict[str, Defect] = {
                 "and for s.329 text the PDF no longer carries). Which rendering is authoritative "
                 "for a given date is unresolved until an independent publisher settles it.",
         blocks_answering=True,
-        doc_ref="docs/SOURCE_DEFECTS.md#sd-002",
+        doc_ref="docs/evidence/SOURCE_DEFECTS.md#sd-002",
     ),
     SD_002_OPEN: Defect(
         code=SD_002_OPEN,
@@ -135,7 +135,7 @@ DEFECTS: dict[str, Defect] = {
                 "cannot say the two renderings agree, so the provision is not servable. Inspect it "
                 "before relying on it.",
         blocks_answering=False,
-        doc_ref="docs/SOURCE_DEFECTS.md#open-not-cleared",
+        doc_ref="docs/evidence/SOURCE_DEFECTS.md#open-not-cleared",
     ),
     EP_RECORD_MISSING: Defect(
         code=EP_RECORD_MISSING,
@@ -156,10 +156,10 @@ DEFECTS: dict[str, Defect] = {
 }
 
 # SD-002, confirmed: the JSON corpus carries pre-amendment wording for exactly these four.
-# docs/SOURCE_DEFECTS.md gives the diverging wording for each.
+# docs/evidence/SOURCE_DEFECTS.md gives the diverging wording for each.
 SD_002_SECTIONS = ("16", "124", "76A", "329")
 
-# "Open, not cleared" in docs/SOURCE_DEFECTS.md: long unexplained cross-render runs that were never
+# "Open, not cleared" in docs/evidence/SOURCE_DEFECTS.md: long unexplained cross-render runs that were never
 # individually inspected. s.329 is omitted because it is already SD-002 above; s.67, s.378ZR, s.22,
 # s.139 and s.186 are omitted because they WERE inspected and explained (PDF headings and
 # structural matter). Withholding these five is a policy choice — the honest reading of "open, not
@@ -267,7 +267,7 @@ def _corpus_source(record_id: str, fetched_at: str | None, source_url: str | Non
 # compared every corpus record against INDIACODE_CA2013_PDF -- a hashed, human-reviewed, in-repo
 # artifact -- and found median coverage 1.0000 with 456/464 at or above 0.99. That is a second
 # accessible rendering agreeing, which is exactly CORROBORATED. It is NOT verification, and the
-# reason is stated in docs/SOURCE_DEFECTS.md: both renderings are India Code, so a defect in their
+# reason is stated in docs/evidence/SOURCE_DEFECTS.md: both renderings are India Code, so a defect in their
 # own source appears identically in both and is invisible to the check.
 _CORROBORATION_NOTE = (
     "The corpus rendering of this provision agrees with India Code's own full-Act PDF "
@@ -478,7 +478,7 @@ class EvidencePack:
     # It exists because one `abstain` covered three provable situations and a lawyer
     # could not tell them apart: a citation whose rows were all withheld by admission,
     # a citation that could not be resolved, and a search that found nothing. See
-    # docs/plan19/decisions/M1_ABSTAIN_REASON.md and
+    # docs/plans/plan19/decisions/M1_ABSTAIN_REASON.md and
     # docs/research/EMPTY_PACK_2026_09_25.md.
     abstain_reason: str = ""
     # Abbreviations expanded before retrieval ran, as (abbrev, expansion) pairs.

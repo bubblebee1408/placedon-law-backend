@@ -1,6 +1,6 @@
 """Typed objects where every property carries where it came from and when it was true.
 
-Ring 1. PLAN_19 G1.1, built to `docs/plan19/decisions/M10_ONTOLOGY.md` and **not** to
+Ring 1. PLAN_19 G1.1, built to `docs/plans/plan19/decisions/M10_ONTOLOGY.md` and **not** to
 PLAN_19 `03_ARCHITECTURE.md` §2 — the doubt pass found §2 naming four types that do not
 exist. That is recorded in the decision; the short version:
 
@@ -118,7 +118,7 @@ class Validity:
     The semantics are `prescribed_thresholds.Threshold`'s, deliberately and exactly:
     inclusive at both ends. A test asserts the two agree across a grid of dates, because
     two containment rules differing by one day at a boundary is how a point-in-time
-    answer goes quietly wrong -- and `docs/TEMPORAL_PROOF.md` exists because this
+    answer goes quietly wrong -- and `docs/evidence/TEMPORAL_PROOF.md` exists because this
     repository has already paid for boundary behaviour once.
 
     This type is NOT in `checker/interval.py`. That module is statistics; putting a date

@@ -60,7 +60,7 @@ PAUSE = 0.4                      # be a polite client
 #   www.indiacode.nic.in/handle/123456789/2114   HTTP 000 -- no answer. DNS resolves
 #                                               (184.84.232.9), so this is a connection
 #                                               or TLS failure: UNREACHABLE in
-#                                               docs/ACQUISITION_POLICY.md's taxonomy,
+#                                               docs/policy/ACQUISITION_POLICY.md's taxonomy,
 #                                               which is the one retryable class.
 #   indiacode.gov.in/handle/123456789/2114       HTTP 200, text/html, 6,762 bytes, and
 #                                               ZERO sectionId= matches -- the DSpace

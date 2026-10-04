@@ -2,7 +2,7 @@
 
 Legora ships this as "Monitors", Harvey as "Horizon Scanning": both of the
 best-funded players in this lane sell "the law changed" as a headline product
-(sourced in docs/TECHNICAL_PLAN_EVIDENCED_2026_09.md §1). This module is that
+(sourced in docs/plans/TECHNICAL_PLAN_EVIDENCED_2026_09.md §1). This module is that
 primitive at our scale and under our discipline.
 
 It fetches nothing and invents no amount. It maps each obligation to the dated

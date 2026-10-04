@@ -25,7 +25,7 @@ remove a refusal or an explanation.** The distinction:
 
 | Keep | Why |
 |---|---|
-| `docs/RETIRED_POSH.md` | The record of *why* the product was retired. Deleting it makes the decision unexplainable |
+| `docs/product/RETIRED_POSH.md` | The record of *why* the product was retired. Deleting it makes the decision unexplainable |
 | `checker/scope.py` POSH entry | An **active, tested refusal** — `refusal_for("POSH")` returns "outside this product's scope". Remove it and a PoSH question gets silence, which reads as "no obligation found". That is the exact failure `scope.py` exists to prevent |
 | `checker/ask_scope.py` POSH acronym | Routes a PoSH question to `out_of_scope` instead of a wrong answer |
 | Docstring history in `assessment.py`, `matrix_view.py`, `text_search.py` | Recorded reasoning for why things are shaped as they are. Prose, not code |

@@ -29,7 +29,7 @@ Markers: **SOURCED** (file:line read) · **MEASURED** (ran the code on 2026-09-1
 `checker/session.py` · `checker/api.py`. Also read to settle field shapes: `checker/reasoning.py`
 (Refusal/Review), `checker/retrieve.py` (routes), `checker/coverage.py` (frame JSON),
 `checker/currency.py` (Finding), `checker/prescribed_thresholds.py` (Threshold), `checker/obligations.py`
-(Row, states, duties), `checker/claim_schema.py`, `checker/ground_span.py`, `docs/FEATURES.md` F9.
+(Row, states, duties), `checker/claim_schema.py`, `checker/ground_span.py`, `docs/architecture/FEATURES.md` F9.
 
 Searches run: `grep -rn 'v1/ask'` over checker/ scripts/ addin/ web/ docs/ → only PLAN_13 and FEATURES.md
 mention it; `grep` for `"answered"|"partial"|"out_of_scope"` in checker/ scripts/ → only scope-status
@@ -44,7 +44,7 @@ MEASURED probe (read-only, `PYTHONPATH=. python3 -c …`): `prescribed_threshold
 
 | id | claim | marker | location |
 |---|---|---|---|
-| E1 | No `/v1/ask` route exists. Routes are health, compliance-pack, document-check, mca-strip, company events, instrument affected. | SOURCED | `checker/api.py:560-567`; `docs/FEATURES.md:120` |
+| E1 | No `/v1/ask` route exists. Routes are health, compliance-pack, document-check, mca-strip, company events, instrument affected. | SOURCED | `checker/api.py:560-567`; `docs/architecture/FEATURES.md:120` |
 | E2 | No module emits `answered`/`partial`/`out_of_scope`. The only `OUT_OF_SCOPE` constant is a *scope status of a body of law*, not an answer state. | SOURCED + grep | `checker/scope.py:38-41` |
 | E3 | Orchestrator outcomes are `SERVED`, `SERVED_AFTER_CORRECTION`, `ABSTAINED`, `REFUSED_BEFORE_CALL`, plus the refusal code `DOCUMENT_DATE_CONFLICT`. | SOURCED | `checker/orchestrator.py:65-73` |
 | E4 | `Outcome` carries `verdict`, `review`, `steps`, `corrections_used`, `abstained_on`; each `Step` is `{n, what, detail}`; `what` ∈ capability, date, model, review, correction, abstain. | SOURCED | `checker/orchestrator.py:80-101, 208-258` |
@@ -77,7 +77,7 @@ MEASURED probe (read-only, `PYTHONPATH=. python3 -c …`): `prescribed_threshold
 | E31 | The obligation register holds 15 obligation ids, all CA2013. Row states: APPLIES_SATISFIED, APPLIES_NOT_SATISFIED, APPLIES_UNDETERMINED, DOES_NOT_APPLY, CANNOT_DETERMINE. | SOURCED | `checker/scope.py:160-169`; `checker/obligations.py:47-57, 119-128` |
 | E32 | Session: client text stays in memory. `releasable()` refuses a record that carries a verbatim ≥40-char fragment. It does not catch paraphrase, and "a narration layer will need its own control". | SOURCED | `checker/session.py:37-40, 50-53, 112-128` |
 | E33 | Two model contracts exist and are not joined. The orchestrator drives `reasoning.Proposal` (document facts with spans); the model adapter drives `Claim`s with evidence_ids. | SOURCED | `checker/orchestrator.py:57-58, 186-189`; `checker/model_adapter.py:274-275` |
-| E34 | No conversation state exists anywhere. | SOURCED | `docs/FEATURES.md:120` |
+| E34 | No conversation state exists anywhere. | SOURCED | `docs/architecture/FEATURES.md:120` |
 
 ---
 

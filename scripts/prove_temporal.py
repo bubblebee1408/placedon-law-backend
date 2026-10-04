@@ -24,7 +24,7 @@ any date except the boundary itself.
 
 That the reconstructed text is what the Act actually said. The prior wording
 comes from India Code's own footnotes, and 24 of those have been corroborated
-against the amending Acts (`docs/CORROBORATION.md`) — but corroborating a span
+against the amending Acts (`docs/evidence/CORROBORATION.md`) — but corroborating a span
 is not the same as verifying a whole section. Sections reconstruct EXACT here
 when every span in force is recoverable *from the source we hold*, which is a
 statement about recoverability, not about truth.

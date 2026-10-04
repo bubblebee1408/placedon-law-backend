@@ -12,7 +12,7 @@ real (small) money, so it runs only with --run.
 `checker/cross_section_eval.CASES` -- the frozen 70 plain-English questions, each
 labelled with the section that governs it. The incumbent is `checker/fusion.search`
 (Reciprocal Rank Fusion of BM25 and MiniLM dense), recorded at p@1 0.80 / recall@5
-0.97 in docs/ABLATION_CORRECTED.md. It is RE-MEASURED here in the same run rather
+0.97 in docs/evidence/ABLATION_CORRECTED.md. It is RE-MEASURED here in the same run rather
 than quoted, so all three arms are scored on one day's corpus.
 
 ## The three arms

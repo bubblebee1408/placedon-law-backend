@@ -1,6 +1,6 @@
 # R3 — Sarvam AI: what document / vision / OCR capability actually exists
 
-Research date: **2026-09-14**. Track R, task R3 of `docs/PLAN_11_NEXT_MOVE.md`.
+Research date: **2026-09-14**. Track R, task R3 of `docs/plans/PLAN_11_NEXT_MOVE.md`.
 Every row below carries a marker. **SOURCED** = stated on the URL given, which was opened
 on 2026-09-14. **INFERRED** = my reasoning from sourced facts, stated as such.
 **UNVERIFIED** = asked and not answered by any page I could open. No login walls were
@@ -80,7 +80,7 @@ Comparators:
 - https://docs.cloud.google.com/document-ai/docs/data-usage (last updated 2026-09-03)
 - https://cloud.google.com/products/document-ai/pricing
 
-Held evidence read first: `docs/PLAN_03_DATA_SOURCES.md` §"OCR — the gate on bulk document review".
+Held evidence read first: `docs/plans/PLAN_03_DATA_SOURCES.md` §"OCR — the gate on bulk document review".
 **That section carries no URLs** for any of its figures (the 76-point Devanagari spread,
 the Marathi legal-scan study, Textract/Azure claims). This file neither confirms nor
 refutes them; it cites none of them as sourced.
@@ -305,7 +305,7 @@ document". It is not proven better than anything on our kind of paper.
 2. **Send the eleven unresolved issues to Sarvam in one email** (support@sarvam.ai per the
    docs FAQ), asking specifically for the DPA the Trust Center lists and a written
    answer on training default and Doc AI 0-day retention. Suggest adding them to
-   `docs/VENDOR_QUESTIONS.md` (not edited by this task).
+   `docs/market/VENDOR_QUESTIONS.md` (not edited by this task).
 3. **Run a bounded bake-off inside R4, public documents only**: take the ₹100 free-credit
    key, set the workspace to shortest retention and opt out of training *before* the
    first upload, and send the same page set — public ICSI specimens and scanned annexures

@@ -69,7 +69,7 @@ class Body:
         Only IN_CORPUS can. CURRENT_ONLY holds a regulator's consolidation -- one
         snapshot, authoritative for today and silent on every earlier date. The
         distinction exists because collapsing it is the retracted mistake in
-        docs/RETRACTIONS.md: using a current consolidated text as pre-amendment
+        docs/evidence/RETRACTIONS.md: using a current consolidated text as pre-amendment
         ground truth.
         """
         return self.status == IN_CORPUS
@@ -173,7 +173,7 @@ BODIES: tuple[Body, ...] = (
          "Prohibition and Redressal) Act, 2013", "—",
          "internal committee, complaint handling",
          OUT_OF_SCOPE,
-         "Retired product direction, not a gap. See docs/RETIRED_POSH.md.",
+         "Retired product direction, not a gap. See docs/product/RETIRED_POSH.md.",
          abbreviations=("POSH",)),
 
     Body("AI_LAW", "AI regulation", "—", "—", OUT_OF_SCOPE,

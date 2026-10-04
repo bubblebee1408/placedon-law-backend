@@ -16,7 +16,7 @@ Two jobs, both narrow:
 
 ## Why there are no page numbers
 
-`docs/OVERNIGHT_REPORT_2026_09_14.md` §4: the repository's own page reader agrees
+`docs/reports/OVERNIGHT_REPORT_2026_09_14.md` §4: the repository's own page reader agrees
 with an independent reader on **0 of 14** corpus PDFs -- 1 page returned for a
 169-page file, 0 for a 179-page file. A page number taken from it would be a
 number that looks checkable and is not. The anchor is therefore the corpus text

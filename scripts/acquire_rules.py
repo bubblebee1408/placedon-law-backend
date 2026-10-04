@@ -103,7 +103,7 @@ AMENDING_LANGUAGE = (
 
 # A consolidated "as amended up to <date>" reprint is a DIFFERENT ARTIFACT from the principal
 # notification as published: useful for reading the current rule, useless as the historical
-# instrument, and the exact substitution already retracted once (docs/RETRACTIONS.md). Phrases are
+# instrument, and the exact substitution already retracted once (docs/evidence/RETRACTIONS.md). Phrases are
 # kept narrow on purpose -- a bare "consolidated" would fire on "consolidated financial statement",
 # which is ordinary Board-powers subject matter.
 CONSOLIDATION_MARKERS = (
@@ -270,12 +270,12 @@ def acquire(src: Path) -> str:
             print("An amendment is still evidence: it is one of the instruments that changed the")
             print("principal Rules, and its hash above identifies exactly the copy you hold. If you")
             print("want to keep it, file it deliberately under its own SourceRecord -- amendments")
-            print("are modelled separately (see docs/PLAN_03_DATA_SOURCES.md). Do not let this")
+            print("are modelled separately (see docs/plans/PLAN_03_DATA_SOURCES.md). Do not let this")
             print("script decide that for you.")
         elif classification == UNCONFIRMED_DOCUMENT:
             print("Identity is not established. Read the file and decide; the hash above pins the")
             print("copy you looked at. Never substitute a consolidated text for the principal")
-            print("instrument -- that mistake was made once and retracted (docs/RETRACTIONS.md).")
+            print("instrument -- that mistake was made once and retracted (docs/evidence/RETRACTIONS.md).")
         else:
             print("Nothing about this file could be checked. Re-export or re-download it; an")
             print("image-only scan needs OCR before its identity can be confirmed at all.")

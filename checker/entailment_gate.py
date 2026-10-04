@@ -29,7 +29,7 @@ Three conditions, all required:
 
 ## No LLM is a judge here
 
-`docs/MODEL_PLAN.md`'s rule, and the reason the cascade is four deterministic modules rather
+`docs/architecture/MODEL_PLAN.md`'s rule, and the reason the cascade is four deterministic modules rather
 than a prompt: a model asked "does this text entail this claim?" produces a fluent answer with
 no way to check it, and the whole product is the checking. Nothing in this module or anything
 it calls touches a network.
@@ -56,7 +56,7 @@ measured over 400 real held provisions by `scripts/verifier_error_rates.py`:
 That is the trade this gate exists to make, and it is recorded here rather than in a
 commit message because the number above is what a future reader will check against.
 
-So it ships ENABLED. `docs/METRIC_POLICY.md` requires shipping disabled if the bar is not met,
+So it ships ENABLED. `docs/policy/METRIC_POLICY.md` requires shipping disabled if the bar is not met,
 and `_test()` re-measures on every run: if the gate ever stops passing, the suite goes red
 rather than quietly promoting claims on a verifier that no longer earns it.
 
@@ -233,7 +233,7 @@ def _test() -> int:
           f"abstention {res.abstention:.2f} | buckets {len(res.buckets)}\n")
 
     check(res.passed,
-          f"the shipped cascade PASSES docs/METRIC_POLICY.md's four conditions "
+          f"the shipped cascade PASSES docs/policy/METRIC_POLICY.md's four conditions "
           f"({res.failures})")
     check(ENABLED is res.passed,
           "ENABLED tracks the measurement: METRIC_POLICY requires shipping DISABLED if the "

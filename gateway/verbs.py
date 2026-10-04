@@ -1863,7 +1863,7 @@ def _conversation_send(args: dict, ctx: Context) -> dict:
         # reads it as at a past date: the ask verb takes no as_of, and
         # `checker/sources/held.py` raises on one because point-in-time reconstruction of
         # substituted spans is UNVERIFIED against any external source (CLAUDE.md,
-        # docs/RETRACTIONS.md). Stamping 2017-04-01 on today's consolidated text is the
+        # docs/evidence/RETRACTIONS.md). Stamping 2017-04-01 on today's consolidated text is the
         # retracted mistake with a field name on it, so it is refused rather than served.
         return _refuse("AS_OF_UNSUPPORTED",
                        f"as_of={as_of} is in the past, and this engine reads the law as it "

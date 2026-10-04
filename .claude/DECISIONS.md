@@ -4,7 +4,7 @@ Each entry: what was decided, what it rests on, and the condition that would rev
 
 `.claude/INDEX.md` describes this file as holding "8 decisions". It has never existed in this
 repository's history — the row was aspirational. It starts here, with one. The eight
-model-and-platform decisions D1–D8 live in `docs/PLAN_22_MODEL_AND_PLATFORM_DECISIONS.md` and
+model-and-platform decisions D1–D8 live in `docs/plans/PLAN_22_MODEL_AND_PLATFORM_DECISIONS.md` and
 are not duplicated here; this file is for decisions taken in the build loop.
 
 ---
