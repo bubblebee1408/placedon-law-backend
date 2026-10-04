@@ -2188,8 +2188,27 @@ def _vault_find(args: dict, ctx: Context) -> dict:
     return res
 
 
+# The checks `vault.verify` runs, in order. Named because they FAIL differently and the
+# remedies differ: a deleted document is intended, a missing object is a file store that
+# lost something, and a hash mismatch is bytes that changed under us. One boolean over the
+# three makes "the bytes are gone" and "the bytes changed" the same answer.
+VERIFY_NOT_DELETED = "the document is not deleted"
+VERIFY_BYTES_PRESENT = "the file store holds its bytes"
+VERIFY_HASH_MATCHES = "the bytes hash to the key they are stored under"
+VERIFY_PASS, VERIFY_FAIL, VERIFY_NOT_RUN = "PASS", "FAIL", "NOT RUN"
+
+
 def _vault_verify(args: dict, ctx: Context) -> dict:
-    """Do the stored bytes still hash to the key they were stored under? Read-only."""
+    """Do the stored bytes still hash to the key they were stored under? Read-only.
+
+    Returns a line PER CHECK. It used to return one `verified` boolean with a `detail`
+    string, and the three branches that produced it were already three different findings
+    -- deleted, absent, mismatched -- flattened into true/false on the way out. A caller
+    could not tell them apart without parsing English, and a UI showing one real/fake badge
+    was the shape that boolean invited.
+
+    `verified` is kept, as the AND of the checks, so an existing caller is not broken.
+    """
     refusal = _vault_ready(ctx)
     if refusal:
         return refusal
@@ -2197,21 +2216,55 @@ def _vault_verify(args: dict, ctx: Context) -> dict:
     row = ctx.store.read_vault_document(did) if did else None
     if row is None:
         return _refuse("NOT_FOUND", f"no vault document {did!r} for this tenant")
+
+    def answer(checks: list[dict], note: str) -> dict:
+        return {"document_id": did, "checks": checks,
+                "verified": all(c["result"] == VERIFY_PASS for c in checks),
+                # The one-line summary, kept for a caller that only wants a sentence.
+                "detail": note, "note": note}
+
     if row.get("deleted_at"):
-        return {"document_id": did, "verified": False,
-                "detail": "this document was deleted; its bytes are gone, and that is the "
-                          "intended state rather than a corruption"}
+        return answer(
+            [{"name": VERIFY_NOT_DELETED, "result": VERIFY_FAIL,
+              "detail": "deleted on " + str(row.get("deleted_at"))},
+             {"name": VERIFY_BYTES_PRESENT, "result": VERIFY_NOT_RUN,
+              "detail": "not run: a deleted document's bytes are destroyed on purpose"},
+             {"name": VERIFY_HASH_MATCHES, "result": VERIFY_NOT_RUN,
+              "detail": "not run: there were no bytes to hash"}],
+            "this document was deleted; its bytes are gone, and that is the intended state "
+            "rather than a corruption")
+
+    not_deleted = {"name": VERIFY_NOT_DELETED, "result": VERIFY_PASS,
+                   "detail": "the record is live"}
     try:
         data = ctx.files.get(row["sha256"])
     except Exception as e:                                       # noqa: BLE001
-        return {"document_id": did, "verified": False,
-                "detail": f"{type(e).__name__}: {str(e)[:160]}"}
+        return answer(
+            [not_deleted,
+             {"name": VERIFY_BYTES_PRESENT, "result": VERIFY_FAIL,
+              "detail": f"{type(e).__name__}: {str(e)[:160]}"},
+             {"name": VERIFY_HASH_MATCHES, "result": VERIFY_NOT_RUN,
+              "detail": "not run: the bytes could not be read"}],
+            f"the file store could not return the bytes: {type(e).__name__}")
     if data is None:
-        return {"document_id": did, "verified": False,
-                "detail": "the row names bytes the file store does not hold"}
-    return {"document_id": did, "verified": True,
-            "detail": f"re-read {len(data)} bytes and they hash to the key they were "
-                      f"stored under"}
+        return answer(
+            [not_deleted,
+             {"name": VERIFY_BYTES_PRESENT, "result": VERIFY_FAIL,
+              "detail": "the file store has no object under this key"},
+             {"name": VERIFY_HASH_MATCHES, "result": VERIFY_NOT_RUN,
+              "detail": "not run: there were no bytes to hash"}],
+            "the row names bytes the file store does not hold")
+
+    # `files.get` is keyed BY the hash and verifies it on read, so reaching here is the
+    # hash check passing. Stated rather than assumed, because a reader of this list is
+    # entitled to know which code actually did the comparing.
+    return answer(
+        [not_deleted,
+         {"name": VERIFY_BYTES_PRESENT, "result": VERIFY_PASS,
+          "detail": f"the file store returned {len(data)} bytes"},
+         {"name": VERIFY_HASH_MATCHES, "result": VERIFY_PASS,
+          "detail": "the file store is keyed by the hash and checks it on read"}],
+        f"re-read {len(data)} bytes and they hash to the key they were stored under")
 
 
 def _vault_summarize(args: dict, ctx: Context) -> dict:
