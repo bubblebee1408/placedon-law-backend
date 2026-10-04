@@ -232,6 +232,7 @@
     "gateway/logs.py": 21,
     "gateway/models.py": 28,
     "gateway/passwords.py": 21,
+    "gateway/pool.py": 20,
     "gateway/roles.py": 16,
     "gateway/schema.py": 92,
     "gateway/screens.py": 125,

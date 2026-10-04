@@ -251,6 +251,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `gateway/logs.py` | R2 feeds | One JSON object per operational event, and document text cannot get into it. |
 | `gateway/models.py` | R2 feeds | Turning a router decision into a callable, or into a NAMED refusal. |
 | `gateway/passwords.py` | R2 feeds | Password hashing with `hashlib.scrypt`. No new dependency, and no plaintext anywhere. |
+| `gateway/pool.py` | R2 feeds | A bounded Postgres connection pool. Every checkout sets the tenant, with no exception. |
 | `gateway/roles.py` | R2 feeds | Who may call what. Three roles, one table, and no verb without an entry. |
 | `gateway/schema.py` | R2 feeds | The migrations, checked statically, because the live check cannot be in the gate. |
 | `gateway/screens.py` | R2 feeds | Which verb each screen calls, and which fields it shows. Checked, not described. |
@@ -366,4 +367,4 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/watch_gazette.py` |  | Run the Gazette watcher once: what did the Gazette publish since we last looked? |
 | `scripts/watch_ofac.py` |  | Poll OFAC's SDN list and report what CHANGED since the last trustworthy poll. |
 
-326 modules listed.
+327 modules listed.

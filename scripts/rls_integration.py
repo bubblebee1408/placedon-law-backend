@@ -213,7 +213,17 @@ LAST_RUN: str | None = (
     "the backend: its retry-ladder check called `queue._conn()`, which broke the moment "
     "this script passed its own wrapper, so clearing a backoff is now a callback the "
     "CALLER supplies -- and omitting it reports FALSE rather than skipping, because a "
-    "skipped test reads as a passing one.")
+    "skipped test reads as a passing one. "
+    "Re-run the same day with gateway/pool.py wired into PostgresBackend: 340 checks, 0 "
+    "failures. The four new ones are the pool's tenant contract proved against real "
+    "row-level security rather than a fake connection -- ONE connection, max_size=1, so it "
+    "MUST be reused, and tenant B does not see A's run on it. That is the property a pool "
+    "can silently break, because set_config('app.tenant_id', ..., false) is session-scoped "
+    "and survives a checkout. The first version of that check connected as the ADMIN role "
+    "and reported a leak; a superuser bypasses RLS entirely, so the pool was blameless and "
+    "the TEST was wrong. It asserts as placedon_app now, like every other check here, and "
+    "the pool's `peak` is asserted to be 1 so the check cannot pass because each backend "
+    "quietly got its own connection.")
 
 TENANT_TABLES = ("actors", "api_keys", "documents", "audit_log",
                  "runs", "run_steps", "propositions", "decisions", "jobs",
@@ -869,6 +879,49 @@ def run(url: str) -> int:
         with _connect(url) as _cc:
             _cc.execute("SELECT set_config('app.tenant_id', %s, false)", (str(a),))
             _cc.execute("UPDATE jobs SET not_before = NULL WHERE job_id = %s", (job_id,))
+
+    # ── A1: the POOLED path, against real row-level security ────────────────
+    # gateway/pool.py's tenant contract is tested against a fake connection in its own suite.
+    # The property it protects is a database one: `set_config('app.tenant_id', ..., false)` is
+    # session-scoped, so a REUSED connection carries the previous tenant's id and every policy
+    # compares against exactly that. Only a live server can show that the reset holds.
+    from gateway.pool import Pool as _Pool
+    from gateway.store import PostgresBackend as _PB
+
+    # As placedon_app (NOSUPERUSER, NOBYPASSRLS), not as the admin that applied the
+    # migrations. The first version of this check used the ADMIN url and reported a leak: a
+    # superuser bypasses row-level security entirely, so tenant B saw A's run and the pool was
+    # blameless. A tenant-isolation test connected as a superuser proves nothing in either
+    # direction, which is why every other check in this file asserts as the app role.
+    _app = _app_url(url)
+    _pool = _Pool(_app, max_size=1, name="probe")      # ONE connection, so it MUST be reused
+    try:
+        _ba = _PB(_app, tenant_id=str(a), actor_id=str(actor_a), pool=_pool)
+        _bb = _PB(_app, tenant_id=str(b), actor_id=str(actor_b), pool=_pool)
+        _rid = str(_u.uuid4())
+        with _connect(url) as _c0:
+            _c0.execute("SELECT set_config('app.tenant_id', %s, false)", (str(a),))
+            _c0.execute("INSERT INTO runs (run_id, tenant_id, actor_id, intent, status) "
+                        "VALUES (%s,%s,%s,'review_document','PLANNED')", (_rid, a, actor_a))
+
+        _seen_a = _ba.read_run(_rid)
+        note(_seen_a is not None,
+             "[pool] tenant A reads its own run through the pool")
+        _seen_b = _bb.read_run(_rid)
+        note(_seen_b is None,
+             f"[pool] tenant B does NOT see it on the SAME REUSED connection -- the one "
+             f"property a pool can silently break, because the tenant setting is "
+             f"session-scoped and survives a checkout ({_seen_b})")
+        _again = _ba.read_run(_rid)
+        note(_again is not None,
+             "[pool] ...and A still sees it afterwards, so the reset is not simply blanking "
+             "the setting for everyone")
+        _st = _pool.stats()
+        note(_st["peak"] == 1,
+             f"[pool] all of that ran on ONE connection, so the reuse really happened and "
+             f"the check is not passing because each backend got its own ({_st})")
+    finally:
+        _pool.close()
 
     for ok_, label in queue_conformance(_SeededQueue(pq, _queue_runs),
                                         clear_backoff=_pg_clear_backoff):

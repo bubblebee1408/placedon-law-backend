@@ -342,6 +342,7 @@ extra+=("scripts/concurrency_test.py --test")
 # check green while registering nothing.
 extra+=("gateway/models.py")
 extra+=("gateway/circuit.py")
+extra+=("gateway/pool.py")
 # The source register (PLAN_24 S0). Nothing is fetched on an unread term, so the register
 # is a test subject: it asserts which sources are closed, and a later edit that quietly
 # opens one has to break a check to do it.
