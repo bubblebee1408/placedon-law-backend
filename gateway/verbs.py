@@ -2749,11 +2749,21 @@ def _draft_history(ctx: Context, draft_id: str):
 
 
 def _save_version(ctx: Context, draft_id: str, *, title: str, body: str, slots: tuple,
-                  citations: tuple, approved_by: str = "", approved_at: str = "") -> int:
-    """Persist one version, with blocking_count from the same call that gates approval."""
+                  citations: tuple, approved_by: str = "", approved_at: str = "",
+                  version: int | None = None) -> int:
+    """Persist one version, with blocking_count from the same call that gates approval.
+
+    A1. `version` is passed EXPLICITLY by `_draft_revise` -- `base_version + 1` -- so
+    012_drafts.sql's PRIMARY KEY (draft_id, version) is what arbitrates two concurrent
+    saves. Leaving it None computes `len(rows) + 1` at write time, which is what let two
+    writers who both read v1 produce v2 and v3 and both succeed: a lost update with no
+    conflict. A read-then-check in the handler alone cannot fix that, because the check and
+    the write are not one step; the unique key is.
+    """
     from checker.provenance_slots import blocking_slots
     return ctx.store.append_draft_version({
         "draft_id": draft_id, "title": title, "body": body,
+        **({} if version is None else {"version": int(version)}),
         "slots": [s.to_dict() for s in slots], "citations": list(citations),
         # From blocking_slots(), the function Version.approve() gates on -- so the
         # denormalised count in 012 cannot drift from the rule it enforces.
@@ -2800,6 +2810,36 @@ def _draft_revise(args: dict, ctx: Context) -> dict:
     if history is None:
         return _refuse("NOT_FOUND", f"no draft {draft_id!r} for this tenant")
     latest = history.latest
+
+    # A1. The optimistic lock. `base_version` is REQUIRED: a revise that does not say what
+    # it was based on cannot be checked, and defaulting it to "the latest" is the lost
+    # update with extra steps.
+    raw_base = args.get("base_version")
+    if raw_base is None or str(raw_base).strip() == "":
+        return _refuse("BAD_REQUEST",
+                       "base_version is required: it is the version this revision was "
+                       "based on, and without it a concurrent save would overwrite a "
+                       "colleague's work instead of being told about it")
+    try:
+        base_version = int(str(raw_base).strip())
+    except (TypeError, ValueError):
+        return _refuse("BAD_REQUEST", f"base_version must be a number, got {raw_base!r}")
+
+    latest_version = latest.version if latest else 0
+    if base_version != latest_version:
+        return {
+            "status": "REFUSED", "code": "CONFLICT",
+            "detail": (f"this revision was based on version {base_version}, but the draft "
+                       f"is now at version {latest_version}. Another save got there first. "
+                       f"Re-read version {latest_version} and revise from it -- nothing has "
+                       f"been overwritten and nothing has been merged"),
+            # Typed, not only in the prose: a client that has to re-read needs the number
+            # without parsing an English sentence.
+            "draft_id": draft_id,
+            "base_version": base_version,
+            "latest_version": latest_version,
+        }
+
     try:
         slots = (_slots_from(args["slots"]) if "slots" in args
                  else tuple(latest.slots if latest else ()))
@@ -2827,9 +2867,20 @@ def _draft_revise(args: dict, ctx: Context) -> dict:
     try:
         n = _save_version(ctx, draft_id, title=title, body=body, slots=slots,
                           citations=citations, approved_by=reviewer,
-                          approved_at=approved_at)
+                          approved_at=approved_at, version=base_version + 1)
     except Exception as e:                                      # noqa: BLE001
-        return _refuse("CONFLICT", str(e))
+        # The race the check above cannot close: two writers both passed it and both tried
+        # to write base_version + 1. The PRIMARY KEY refused the second, and it gets the
+        # same typed CONFLICT -- a loser must not be able to tell which of the two paths
+        # refused it, because the remedy is identical.
+        current = _draft_history(ctx, draft_id)[0]
+        now_at = current.latest.version if (current and current.latest) else latest_version
+        return {"status": "REFUSED", "code": "CONFLICT",
+                "detail": (f"another save wrote version {base_version + 1} first "
+                           f"({e}). The draft is at version {now_at}; re-read it and "
+                           f"revise from there"),
+                "draft_id": draft_id, "base_version": base_version,
+                "latest_version": now_at}
     return _draft_status(ctx, draft_id, version=n,
                          note=("Saved as a new version." + (" Approved." if reviewer
                                                             else "")))
@@ -3678,6 +3729,10 @@ VERBS: tuple[Verb, ...] = (
          "Save a NEW version of a draft; never edits one. Pass approved_by to approve, "
          "which is refused while any slot is unsupported.",
          (Field("draft_id", STRING, True, describes="the draft"),
+          Field("base_version", STRING, True,
+                describes="the version this revision was based on. REQUIRED: if it is not "
+                          "the latest, the save is refused with CONFLICT naming both "
+                          "versions rather than overwriting a colleague's work"),
           Field("title", STRING, False, describes="a new title; absent keeps the last"),
           Field("body", STRING, False, describes="new text; absent keeps the last"),
           Field("slots", ARRAY, False, describes="new slots; absent keeps the last"),
@@ -5729,6 +5784,58 @@ def _test() -> None:
     finally:
         if held is not None:
             _os.environ[ACCEPT_REGION_ENV] = held
+
+    # ── A1 item 7: the optimistic lock on draft.revise ──────────────────────
+    # 012_drafts.sql says "(draft_id, version) is the primary key ... two concurrent saves
+    # cannot both become version 3. One conflicts, and draft.revise reports it rather than
+    # silently overwriting a colleague's revision." That guarantee was NOT delivered:
+    # _save_version never passed `version`, so append_draft_version computed
+    # len(rows) + 1 at WRITE time. Two writers who both read v1 therefore produced v2 and
+    # v3 and BOTH succeeded -- a lost update with no conflict anywhere.
+    _lk = Context(store=MemoryBackend(), clock=lambda: "2026-10-04T00:00:00Z")
+    _made = _draft_create({"title": "Board resolution", "body": "v1 text"}, _lk)
+    _did = _made["draft_id"]
+    _base = _made.get("version") or 1
+
+    # Two writers, same base version. Exactly one may win.
+    _w1 = _draft_revise({"draft_id": _did, "base_version": _base, "body": "writer one"}, _lk)
+    _w2 = _draft_revise({"draft_id": _did, "base_version": _base, "body": "writer two"}, _lk)
+    _wins = [r for r in (_w1, _w2) if r.get("status") != "REFUSED"]
+    _loses = [r for r in (_w1, _w2) if r.get("status") == "REFUSED"]
+    check(len(_wins) == 1 and len(_loses) == 1,
+          f"two writers on the SAME base version: exactly one succeeds "
+          f"({[r.get('code') or 'OK' for r in (_w1, _w2)]})")
+    check(_loses and _loses[0].get("code") == "CONFLICT",
+          f"...and the loser gets a typed CONFLICT ({_loses[0].get('code') if _loses else None})")
+    check(_loses and _loses[0].get("base_version") == _base
+          and _loses[0].get("latest_version") == _base + 1,
+          f"...naming BOTH versions: the base it was given and the one that beat it "
+          f"({_loses[0].get('base_version') if _loses else None} vs "
+          f"{_loses[0].get('latest_version') if _loses else None})")
+
+    _hist = ctx_versions = _draft_versions({"draft_id": _did}, _lk)
+    check(len(_hist.get("versions") or []) == 2,
+          f"...and only ONE new version exists, so nothing was merged silently "
+          f"({len(_hist.get('versions') or [])})")
+
+    # base_version is required: a revise that does not say what it was based on cannot be
+    # checked, and defaulting it to "latest" is the lost update with extra steps.
+    _nb = _draft_revise({"draft_id": _did, "body": "no base"}, _lk)
+    check(_nb.get("code") == "BAD_REQUEST" and "base_version" in _nb.get("detail", ""),
+          f"a revise with NO base_version is refused rather than assuming the latest "
+          f"({_nb.get('code')})")
+
+    # A stale base from further back is also a conflict, not an overwrite.
+    _stale = _draft_revise({"draft_id": _did, "base_version": _base, "body": "stale"}, _lk)
+    check(_stale.get("code") == "CONFLICT",
+          f"a base version two behind is still a CONFLICT ({_stale.get('code')})")
+
+    # And the happy path still works, from the CURRENT latest.
+    _cur = (_draft_status(_lk, _did) or {}).get("version")
+    _good = _draft_revise({"draft_id": _did, "base_version": _cur, "body": "onward"}, _lk)
+    check(_good.get("status") != "REFUSED" and _good.get("version") == _cur + 1,
+          f"revising from the CURRENT latest succeeds and lands at version {_cur + 1} "
+          f"({_good.get('version')})")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:

@@ -880,6 +880,54 @@ def run(url: str) -> int:
             _cc.execute("SELECT set_config('app.tenant_id', %s, false)", (str(a),))
             _cc.execute("UPDATE jobs SET not_before = NULL WHERE job_id = %s", (job_id,))
 
+    # ── A1 item 7: the optimistic lock, arbitrated by the PRIMARY KEY ───────
+    # The handler's read-then-check cannot close the race on its own: the check and the write
+    # are not one step. What makes exactly one writer win is 012's PRIMARY KEY
+    # (draft_id, version), and a primary key can only be SHOWN to refuse on a live server.
+    # As placedon_app, never as the admin that applied the migrations -- same lesson as the
+    # pool, where asserting as a superuser reported a leak that did not exist.
+    from gateway.store import PostgresBackend as _PBlock
+    _lock_app = _app_url(url)
+    _lb = _PBlock(_lock_app, tenant_id=str(a), actor_id=str(actor_a))
+    _ldid = str(_u.uuid4())
+    _lb.write_draft({"draft_id": _ldid, "title": "Board resolution", "kind": "resolution"})
+    _v1 = _lb.append_draft_version({"draft_id": _ldid, "title": "Board resolution",
+                                    "body": "v1", "slots": [], "citations": [],
+                                    "blocking_count": 0, "version": 1})
+    note(_v1 == 1, f"[lock] a draft starts at version 1 on Postgres ({_v1})")
+
+    # Two writers, both based on v1, both writing version 2. One must lose.
+    _lock_outcomes = []
+    for _who in ("writer-one", "writer-two"):
+        try:
+            _lock_outcomes.append(("OK", _lb.append_draft_version(
+                {"draft_id": _ldid, "title": "Board resolution", "body": _who,
+                 "slots": [], "citations": [], "blocking_count": 0, "version": 2})))
+        except Exception as _e:                                 # noqa: BLE001
+            _lock_outcomes.append(("REFUSED", type(_e).__name__))
+    _won = [o for o in _lock_outcomes if o[0] == "OK"]
+    _lost = [o for o in _lock_outcomes if o[0] == "REFUSED"]
+    note(len(_won) == 1 and len(_lost) == 1,
+         f"[lock] two writers on the same base version: EXACTLY one wins on the server "
+         f"({_lock_outcomes})")
+    note(len(_lb.read_draft_versions(_ldid)) == 2,
+         f"[lock] ...and only one new version exists, so the loser overwrote nothing "
+         f"({len(_lb.read_draft_versions(_ldid))} versions)")
+
+    # The handler turns that refusal into a typed CONFLICT naming both versions.
+    from gateway.verbs import Context as _LCtx, _draft_revise as _lrev
+    _lres = _lrev({"draft_id": _ldid, "base_version": 1, "body": "stale"},
+                  _LCtx(store=_lb, clock=lambda: "2026-10-04T00:00:00Z"))
+    note(_lres.get("code") == "CONFLICT" and _lres.get("base_version") == 1
+         and _lres.get("latest_version") == 2,
+         f"[lock] a stale revise through the verb is a typed CONFLICT naming BOTH versions "
+         f"({_lres.get('code')}: base={_lres.get('base_version')} "
+         f"latest={_lres.get('latest_version')})")
+    _lres2 = _lrev({"draft_id": _ldid, "base_version": 2, "body": "onward"},
+                   _LCtx(store=_lb, clock=lambda: "2026-10-04T00:00:00Z"))
+    note(_lres2.get("status") != "REFUSED" and _lres2.get("version") == 3,
+         f"[lock] ...while revising from the CURRENT latest succeeds ({_lres2.get('version')})")
+
     # ── A1: the POOLED path, against real row-level security ────────────────
     # gateway/pool.py's tenant contract is tested against a fake connection in its own suite.
     # The property it protects is a database one: `set_config('app.tenant_id', ..., false)` is

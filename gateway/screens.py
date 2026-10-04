@@ -103,7 +103,9 @@ SCREENS = (
         Call("draft.create", ("title", "body", "slots", "kind"),
              ("result.draft_id", "result.version", "result.blocking",
               "result.ready_for_approval")),
-        Call("draft.revise", ("draft_id", "title", "body", "slots"),
+        # A1: base_version is REQUIRED now. The screen must send the version it rendered,
+        # or every save from a stale tab silently overwrites a colleague's revision.
+        Call("draft.revise", ("draft_id", "base_version", "title", "body", "slots"),
              ("result.version", "result.blocking")),
         Call("draft.versions", ("draft_id",), ("result.versions",)),
         Call("draft.diff", ("draft_id", "from_version", "to_version"),
