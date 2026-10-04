@@ -125,6 +125,7 @@ suites=(
   checker/entail_qualifier.py
   checker/entail_substitution.py
   checker/retrieval_metrics.py
+  checker/page_stream.py
   checker/quote_mutations.py
   checker/cascade.py
   checker/entailment_gate.py
@@ -329,6 +330,23 @@ extra+=("gateway/limits.py")
 # P2: 50 real threads. Nothing runs twice, and the single-tenant guard holds under
 # load -- a guard that held serially and raced open would be worse than none.
 extra+=("scripts/concurrency_test.py --test")
+# A1 item 8. Five injected failures through the REAL worker loop. --test needs no
+# database, no model and no network; --run adds the Postgres injections.
+extra+=("scripts/chaos_test.py --test")
+# A1. gateway/models.py had 25 self-tests and was in NEITHER list, so none of them
+# ran and one had been failing since a verified price was added for the 70B.
+#
+# Every other self-testing module is now registered. The one that is deliberately NOT
+# is the live row-level-security proof, which needs a throwaway database and is run by
+# hand -- gateway/schema.py asserts its absence here, because a suite that needs a
+# server would be SKIPPED and a skipped security test reads as a passing one. Its
+# filename is left unwritten in this file on purpose: both that assertion and the sweep
+# that found this gap match on the text of this script, so naming it in a comment reads
+# as a registration. That is exactly how it was named here first, and it turned the
+# check green while registering nothing.
+extra+=("gateway/models.py")
+extra+=("gateway/circuit.py")
+extra+=("gateway/pool.py")
 # The source register (PLAN_24 S0). Nothing is fetched on an unread term, so the register
 # is a test subject: it asserts which sources are closed, and a later edit that quietly
 # opens one has to break a check to do it.

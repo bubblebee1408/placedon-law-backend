@@ -61,16 +61,29 @@ class Outcome:
     text_chars: int | None = None
     ocr_state: str = "NOT_NEEDED"
     reason: str = ""
+    # A1 item 6. Page numbers that could not be read. A document with any of these is
+    # PARTIAL, never INGESTED -- it is stored and searchable, and the reader is told which
+    # pages are missing rather than being handed a blank where page 7 should be.
+    failed_pages: tuple = ()
 
     def to_dict(self) -> dict:
         return {"document_id": self.document_id, "state": self.state,
                 "doc_class": self.doc_class, "chunks": self.chunks, "tags": self.tags,
                 "text_chars": self.text_chars, "ocr_state": self.ocr_state,
-                "reason": self.reason}
+                "reason": self.reason, "failed_pages": list(self.failed_pages)}
 
 
-def ingest(args: dict, *, files, store, extract) -> Outcome:
-    """One file. `extract(data, name) -> str` is injected and may return "" for a scan."""
+def ingest(args: dict, *, files, store, extract, pages=None) -> Outcome:
+    """One file. `extract(data, name) -> str` is injected and may return "" for a scan.
+
+    A1 item 6. `pages(data, name) -> Extraction` is the optional page-by-page path. When
+    supplied it replaces `extract` for paged documents: the caps in `checker/page_stream` are
+    checked BEFORE anything is read, pages are streamed one at a time so peak memory is one
+    page, and a page that fails makes the document PARTIAL with that page NAMED.
+
+    Without it the behaviour is unchanged -- `extract` returns one string and a document is
+    INGESTED or CANNOT_READ, which is what every current caller does.
+    """
     from checker import archive_guard as ag
     from checker import clause_tags, doc_classifier
     from checker.vault_search import chunk
@@ -99,7 +112,22 @@ def ingest(args: dict, *, files, store, extract) -> Outcome:
             "ocr_state": "NOT_NEEDED"})
         return Outcome(did, "CANNOT_READ", reason=reason)
 
-    text = str(extract(data, name) or "")
+    failed_pages: tuple = ()
+    if pages is not None:
+        from checker.page_stream import PARTIAL as _PARTIAL
+        from checker.page_stream import Refusal as _Refusal
+        paged = pages(data, name)
+        if isinstance(paged, _Refusal):
+            # The cap, refused up front with its limit named. Nothing was read.
+            store.write_vault_document({
+                "document_id": did, "matter_id": args.get("matter_id"), "sha256": sha,
+                "name": name, "byte_count": len(data), "state": "CANNOT_READ",
+                "ocr_state": "NOT_NEEDED"})
+            return Outcome(did, "CANNOT_READ", reason=paged.detail)
+        failed_pages = tuple(paged.failed_pages)
+        text = "\n".join(paged.pages[k] for k in sorted(paged.pages))
+    else:
+        text = str(extract(data, name) or "")
     if not text.strip():
         store.write_vault_document({
             "document_id": did, "matter_id": args.get("matter_id"), "sha256": sha,
@@ -111,15 +139,23 @@ def ingest(args: dict, *, files, store, extract) -> Outcome:
     doc_class, why = doc_classifier.classify(text, name=name)
     chunks = chunk(text)
     tags = [t.to_dict() for t in clause_tags.tag(text)]
+    # PARTIAL, not INGESTED, when any page failed. The chunks and tags from the pages that
+    # DID read are still written -- they are correct and useful -- but the document must not
+    # report itself complete, because a search that misses a clause on page 7 and a search
+    # that found nothing look identical to the person reading it.
+    state = "PARTIAL" if failed_pages else "INGESTED"
+    note = why if not failed_pages else (
+        f"{why}. PARTIAL: page(s) {', '.join(str(n) for n in failed_pages)} could not be "
+        f"read and are NOT in this document's text or index")
     store.write_vault_document({
         "document_id": did, "matter_id": args.get("matter_id"), "sha256": sha,
-        "name": name, "byte_count": len(data), "state": "INGESTED",
-        "doc_class": doc_class, "class_reason": why, "text_chars": len(text),
+        "name": name, "byte_count": len(data), "state": state,
+        "doc_class": doc_class, "class_reason": note, "text_chars": len(text),
         "ocr_state": "NOT_NEEDED"})
     store.write_vault_chunks(did, chunks)
     store.write_vault_tags(did, tags)
-    return Outcome(did, "INGESTED", doc_class, len(chunks), len(tags), len(text),
-                   reason=why)
+    return Outcome(did, state, doc_class, len(chunks), len(tags), len(text),
+                   reason=note, failed_pages=failed_pages)
 
 
 def handler(*, files, store, extract):
@@ -264,6 +300,97 @@ def _test() -> int:
         bad_steps, bad_result = run({"document_id": "x", "sha256": "e" * 64, "name": "n"})
         check(bad_result["status"] == "FAILED" and bad_steps[0]["status"] == "FAILED",
               "...and a job fault comes back FAILED rather than raising into the worker")
+
+    # ── A1 item 6: the paged path reaches the DOCUMENT ──────────────────────
+    from checker import page_stream as ps
+
+    class _PagedStore:
+        def __init__(self):
+            self.docs = {}
+            self.chunks = {}
+            self.tags = {}
+
+        def write_vault_document(self, row):
+            self.docs[row["document_id"]] = dict(row)
+
+        def write_vault_chunks(self, did, chunks):
+            self.chunks[did] = list(chunks)
+
+        def write_vault_tags(self, did, tags):
+            self.tags[did] = list(tags)
+
+    class _Doc:
+        """Five pages of real contract text; page `boom` raises."""
+        n = 5
+
+        def __init__(self, boom=None):
+            self.boom = boom
+
+        def page_text(self, i):
+            if i == self.boom:
+                raise OSError("no readable content stream")
+            return (f"Clause {i}. This Agreement shall be governed by the laws of India "
+                    f"and the term of confidentiality shall expire on 2029-03-31.")
+
+    _sha = "d" * 64
+    _files = {_sha: b"%PDF-1.4 fake"}
+
+    def _pages_for(doc):
+        def pages(data, name):
+            ref = ps.check_file(name, page_count=doc.n, size_bytes=len(data))
+            return ref if ref is not None else ps.extract_streaming(
+                name, reader=lambda _p: doc)
+        return pages
+
+    # A page that fails -> PARTIAL, naming the page, with every other page present.
+    st = _PagedStore()
+    out = ingest({"document_id": "docP", "sha256": _sha, "name": "five.pdf"},
+                 files=_files, store=st, extract=lambda d, n: "unused",
+                 pages=_pages_for(_Doc(boom=3)))
+    check(out.state == "PARTIAL",
+          f"a document whose page 3 failed is PARTIAL, never INGESTED ({out.state})")
+    check(list(out.failed_pages) == [3],
+          f"...and NAMES the page ({out.failed_pages})")
+    check("page(s) 3" in out.reason and "NOT in this document" in out.reason,
+          f"...and says the page is absent from the text AND the index, which is what a "
+          f"reader needs to know ({out.reason[-60:]})")
+    check(st.docs["docP"]["state"] == "PARTIAL",
+          f"...and the stored document says PARTIAL too, not just the return value "
+          f"({st.docs['docP']['state']})")
+    for n in (1, 2, 4, 5):
+        check(f"Clause {n}." in "\n".join(c if isinstance(c, str) else c.get("text", "")
+                                          for c in st.chunks["docP"]),
+              f"...while page {n}'s text IS indexed")
+    check("Clause 3." not in "\n".join(c if isinstance(c, str) else c.get("text", "")
+                                        for c in st.chunks["docP"]),
+          "...and the failed page's text is absent rather than blank-but-present")
+
+    # No page fails -> INGESTED.
+    st2 = _PagedStore()
+    good = ingest({"document_id": "docG", "sha256": _sha, "name": "five.pdf"},
+                  files=_files, store=st2, extract=lambda d, n: "unused",
+                  pages=_pages_for(_Doc()))
+    check(good.state == "INGESTED" and not good.failed_pages,
+          f"a document with no failed page is INGESTED ({good.state})")
+    check(good.state != out.state,
+          "INGESTED and PARTIAL are both reachable, so neither check passes by default")
+
+    # Over the cap -> refused up front, with the cap named, nothing read.
+    class _Huge:
+        n = ps.MAX_PAGES + 1
+
+        def page_text(self, i):
+            raise AssertionError("a file over the cap must not be read at all")
+
+    st3 = _PagedStore()
+    big = ingest({"document_id": "docH", "sha256": _sha, "name": "huge.pdf"},
+                 files=_files, store=st3, extract=lambda d, n: "unused",
+                 pages=_pages_for(_Huge()))
+    check(big.state == "CANNOT_READ",
+          f"a file over the page cap is CANNOT_READ ({big.state})")
+    check(str(ps.MAX_PAGES) in big.reason and "Nothing was read" in big.reason,
+          f"...naming the cap, and saying nothing was read -- the fixture's page_text "
+          f"raises AssertionError if it is touched ({big.reason[:70]})")
 
     print(f"\n{ok}/{ok + fail} passed")
     return 1 if fail else 0

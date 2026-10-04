@@ -195,7 +195,44 @@ LAST_RUN: str | None = (
     "they hold the client's DOCUMENTS THEMSELVES -- the most concentrated "
     "confidential data the product keeps. All three proved the way the rest are: A "
     "sees its own and none of B's, the policy dropped fails CLOSED, RLS disabled "
-    "leaks B's rows, restoring returns to isolation.")
+    "leaks B's rows, restoring returns to isolation. "
+    "2026-10-04, A1: 001-021 applied TOGETHER to a fresh throwaway database on "
+    "PostgreSQL 18.6 (Postgres.app, local socket), asserted as placedon_app "
+    "(NOSUPERUSER, NOBYPASSRLS), adding 021_job_lanes: 336 checks, 0 failures. No new "
+    "table -- three columns, two widened CHECKs and two partial indexes on `jobs` -- so "
+    "the isolation proof is unchanged; what 021 adds is priority lanes, a retry backoff "
+    "and a DEAD state. Running it live found THREE things the dict could not. 021 was "
+    "missing from this script's own apply list. `_SeededQueue.enqueue` spelled out "
+    "(run_id, intent, args) and so silently DROPPED the new `lane` argument, which meant "
+    "the conformance list would have run against a queue that never saw a lane -- green "
+    "on the dict, wrong on the backend that ships, which is the fourth time this file has "
+    "caught that shape of divergence. And `_real()` returned an unseeded run_id once its "
+    "six fixtures ran out, so running out of fixtures surfaced as a foreign-key violation "
+    "from deep inside the conformance list rather than as \"this harness needs more "
+    "runs\"; it now raises and seeds 32. The conformance list also stopped reaching into "
+    "the backend: its retry-ladder check called `queue._conn()`, which broke the moment "
+    "this script passed its own wrapper, so clearing a backoff is now a callback the "
+    "CALLER supplies -- and omitting it reports FALSE rather than skipping, because a "
+    "skipped test reads as a passing one. "
+    "Re-run the same day with gateway/pool.py wired into PostgresBackend: 340 checks, 0 "
+    "failures. The four new ones are the pool's tenant contract proved against real "
+    "row-level security rather than a fake connection -- ONE connection, max_size=1, so it "
+    "MUST be reused, and tenant B does not see A's run on it. That is the property a pool "
+    "can silently break, because set_config('app.tenant_id', ..., false) is session-scoped "
+    "and survives a checkout. The first version of that check connected as the ADMIN role "
+    "and reported a leak; a superuser bypasses RLS entirely, so the pool was blameless and "
+    "the TEST was wrong. It asserts as placedon_app now, like every other check here, and "
+    "the pool's `peak` is asserted to be 1 so the check cannot pass because each backend "
+    "quietly got its own connection. "
+    "2026-10-04, A1 items 7 and 8: 348 checks, 0 failures. The three new ones are the "
+    "optimistic lock -- two writers on the same base version, EXACTLY one wins, arbitrated "
+    "by 012's PRIMARY KEY, which a dict cannot be made to show -- plus the dead-letter "
+    "reason surviving a get(). That last one was a real divergence found by "
+    "scripts/chaos_test.py against this database: PostgresQueue.get() still SELECTed the "
+    "old seven columns after 021 added three, so a DEAD job read through it reported no "
+    "reason and the default lane. `_job` had a `len(r) > 7` fallback that supplied both "
+    "silently, which is what hid it -- a default standing in for a column the query forgot "
+    "is a lie with a safety net. The fallback is gone, so a short row raises.")
 
 TENANT_TABLES = ("actors", "api_keys", "documents", "audit_log",
                  "runs", "run_steps", "propositions", "decisions", "jobs",
@@ -457,8 +494,22 @@ class _SeededQueue:
         self._map: dict[str, str] = {}
 
     def _real(self, run_id: str) -> str:
+        """The seeded run this fake id stands for. Raises when the fixtures run out.
+
+        This returned `run_id` unchanged once `_ids` was empty, and an unseeded run_id
+        violates jobs_run_id_fkey -- so running out of fixtures surfaced as a confusing
+        foreign-key error from deep inside the conformance list rather than as "this harness
+        needs more runs". Seen 04-10-2026 when the list grew past six enqueues.
+        """
+        from gateway.jobs import QueueError as _QE
         if run_id not in self._map:
-            self._map[run_id] = self._ids.pop(0) if self._ids else run_id
+            if not self._ids:
+                raise _QE(
+                    f"the queue conformance harness has run out of seeded runs. It needs "
+                    f"one real `runs` row per distinct run_id the list enqueues; add more "
+                    f"in rls_integration.run() rather than letting an unseeded id reach the "
+                    f"foreign key")
+            self._map[run_id] = self._ids.pop(0)
         return self._map[run_id]
 
     def _fake(self, job):
@@ -473,14 +524,23 @@ class _SeededQueue:
                 return dataclasses.replace(job, run_id=fake)
         return job
 
-    def enqueue(self, *, run_id, intent, args):
-        return self._inner.enqueue(run_id=self._real(run_id), intent=intent, args=args)
+    def enqueue(self, *, run_id, intent, args, **kw):
+        # **kw, not a fixed list. This wrapper spelled out (run_id, intent, args) and
+        # silently dropped `lane` when the queue gained it, so the conformance list ran
+        # against a queue that never saw a lane -- green on the dict, wrong on the server.
+        return self._inner.enqueue(run_id=self._real(run_id), intent=intent, args=args, **kw)
 
     def claim(self, **kw):
         return self._fake(self._inner.claim(**kw))
 
     def finish(self, job_id, status):
         return self._inner.finish(job_id, status)
+
+    def fail(self, job_id, reason, **kw):
+        return self._fake(self._inner.fail(job_id, reason, **kw))
+
+    def dead(self, limit=100):
+        return [self._fake(j) for j in self._inner.dead(limit)]
 
     def request_cancel(self, run_id):
         return self._inner.request_cancel(self._real(run_id))
@@ -529,7 +589,8 @@ def run(url: str) -> int:
                   "017_nonconformity.sql",
                   "018_users_roles.sql",
                   "019_matters.sql",
-                  "020_vault.sql"):
+                  "020_vault.sql",
+                  "021_job_lanes.sql"):
             cur.execute(sql(f))
             print(f"  applied {f}")
         _ensure_app_role(cur)
@@ -811,12 +872,116 @@ def run(url: str) -> int:
     with _connect(url) as _c:
         _c.execute("SELECT set_config('app.tenant_id', %s, false)", (str(a),))
         _queue_runs = []
-        for _ in range(6):
+        # One per distinct run_id the conformance list enqueues. A1 grew that list (lanes,
+        # the default, the refused lane, the retry ladder, the backoff), so six is no longer
+        # enough -- and _real now RAISES when it runs out instead of handing the foreign key
+        # an id nobody seeded.
+        for _ in range(32):
             _r = _u.uuid4()
             _c.execute("INSERT INTO runs (run_id, tenant_id, actor_id, intent, status) "
                        "VALUES (%s,%s,%s,'review_document','PLANNED')", (_r, a, actor_a))
             _queue_runs.append(str(_r))
-    for ok_, label in queue_conformance(_SeededQueue(pq, _queue_runs)):
+    def _pg_clear_backoff(job_id):
+        """Make a backed-off job claimable now, on the server. The conformance list asks the
+        CALLER for this because only the caller knows how -- and because the queue it is
+        handed here is a wrapper that exposes no connection at all."""
+        with _connect(url) as _cc:
+            _cc.execute("SELECT set_config('app.tenant_id', %s, false)", (str(a),))
+            _cc.execute("UPDATE jobs SET not_before = NULL WHERE job_id = %s", (job_id,))
+
+    # ── A1 item 7: the optimistic lock, arbitrated by the PRIMARY KEY ───────
+    # The handler's read-then-check cannot close the race on its own: the check and the write
+    # are not one step. What makes exactly one writer win is 012's PRIMARY KEY
+    # (draft_id, version), and a primary key can only be SHOWN to refuse on a live server.
+    # As placedon_app, never as the admin that applied the migrations -- same lesson as the
+    # pool, where asserting as a superuser reported a leak that did not exist.
+    from gateway.store import PostgresBackend as _PBlock
+    _lock_app = _app_url(url)
+    _lb = _PBlock(_lock_app, tenant_id=str(a), actor_id=str(actor_a))
+    _ldid = str(_u.uuid4())
+    _lb.write_draft({"draft_id": _ldid, "title": "Board resolution", "kind": "resolution"})
+    _v1 = _lb.append_draft_version({"draft_id": _ldid, "title": "Board resolution",
+                                    "body": "v1", "slots": [], "citations": [],
+                                    "blocking_count": 0, "version": 1})
+    note(_v1 == 1, f"[lock] a draft starts at version 1 on Postgres ({_v1})")
+
+    # Two writers, both based on v1, both writing version 2. One must lose.
+    _lock_outcomes = []
+    for _who in ("writer-one", "writer-two"):
+        try:
+            _lock_outcomes.append(("OK", _lb.append_draft_version(
+                {"draft_id": _ldid, "title": "Board resolution", "body": _who,
+                 "slots": [], "citations": [], "blocking_count": 0, "version": 2})))
+        except Exception as _e:                                 # noqa: BLE001
+            _lock_outcomes.append(("REFUSED", type(_e).__name__))
+    _won = [o for o in _lock_outcomes if o[0] == "OK"]
+    _lost = [o for o in _lock_outcomes if o[0] == "REFUSED"]
+    note(len(_won) == 1 and len(_lost) == 1,
+         f"[lock] two writers on the same base version: EXACTLY one wins on the server "
+         f"({_lock_outcomes})")
+    note(len(_lb.read_draft_versions(_ldid)) == 2,
+         f"[lock] ...and only one new version exists, so the loser overwrote nothing "
+         f"({len(_lb.read_draft_versions(_ldid))} versions)")
+
+    # The handler turns that refusal into a typed CONFLICT naming both versions.
+    from gateway.verbs import Context as _LCtx, _draft_revise as _lrev
+    _lres = _lrev({"draft_id": _ldid, "base_version": 1, "body": "stale"},
+                  _LCtx(store=_lb, clock=lambda: "2026-10-04T00:00:00Z"))
+    note(_lres.get("code") == "CONFLICT" and _lres.get("base_version") == 1
+         and _lres.get("latest_version") == 2,
+         f"[lock] a stale revise through the verb is a typed CONFLICT naming BOTH versions "
+         f"({_lres.get('code')}: base={_lres.get('base_version')} "
+         f"latest={_lres.get('latest_version')})")
+    _lres2 = _lrev({"draft_id": _ldid, "base_version": 2, "body": "onward"},
+                   _LCtx(store=_lb, clock=lambda: "2026-10-04T00:00:00Z"))
+    note(_lres2.get("status") != "REFUSED" and _lres2.get("version") == 3,
+         f"[lock] ...while revising from the CURRENT latest succeeds ({_lres2.get('version')})")
+
+    # ── A1: the POOLED path, against real row-level security ────────────────
+    # gateway/pool.py's tenant contract is tested against a fake connection in its own suite.
+    # The property it protects is a database one: `set_config('app.tenant_id', ..., false)` is
+    # session-scoped, so a REUSED connection carries the previous tenant's id and every policy
+    # compares against exactly that. Only a live server can show that the reset holds.
+    from gateway.pool import Pool as _Pool
+    from gateway.store import PostgresBackend as _PB
+
+    # As placedon_app (NOSUPERUSER, NOBYPASSRLS), not as the admin that applied the
+    # migrations. The first version of this check used the ADMIN url and reported a leak: a
+    # superuser bypasses row-level security entirely, so tenant B saw A's run and the pool was
+    # blameless. A tenant-isolation test connected as a superuser proves nothing in either
+    # direction, which is why every other check in this file asserts as the app role.
+    _app = _app_url(url)
+    _pool = _Pool(_app, max_size=1, name="probe")      # ONE connection, so it MUST be reused
+    try:
+        _ba = _PB(_app, tenant_id=str(a), actor_id=str(actor_a), pool=_pool)
+        _bb = _PB(_app, tenant_id=str(b), actor_id=str(actor_b), pool=_pool)
+        _rid = str(_u.uuid4())
+        with _connect(url) as _c0:
+            _c0.execute("SELECT set_config('app.tenant_id', %s, false)", (str(a),))
+            _c0.execute("INSERT INTO runs (run_id, tenant_id, actor_id, intent, status) "
+                        "VALUES (%s,%s,%s,'review_document','PLANNED')", (_rid, a, actor_a))
+
+        _seen_a = _ba.read_run(_rid)
+        note(_seen_a is not None,
+             "[pool] tenant A reads its own run through the pool")
+        _seen_b = _bb.read_run(_rid)
+        note(_seen_b is None,
+             f"[pool] tenant B does NOT see it on the SAME REUSED connection -- the one "
+             f"property a pool can silently break, because the tenant setting is "
+             f"session-scoped and survives a checkout ({_seen_b})")
+        _again = _ba.read_run(_rid)
+        note(_again is not None,
+             "[pool] ...and A still sees it afterwards, so the reset is not simply blanking "
+             "the setting for everyone")
+        _st = _pool.stats()
+        note(_st["peak"] == 1,
+             f"[pool] all of that ran on ONE connection, so the reuse really happened and "
+             f"the check is not passing because each backend got its own ({_st})")
+    finally:
+        _pool.close()
+
+    for ok_, label in queue_conformance(_SeededQueue(pq, _queue_runs),
+                                        clear_backoff=_pg_clear_backoff):
         note(ok_, f"[postgres queue] {label}")
 
     # Two workers, one queue: the assertion SKIP LOCKED exists for. Without it the second

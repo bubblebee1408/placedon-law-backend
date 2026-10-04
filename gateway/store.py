@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import os
 import re
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Protocol
 
@@ -977,7 +978,7 @@ class PostgresBackend:
 
     kind = POSTGRES
 
-    def __init__(self, url: str, *, tenant_id: str, actor_id: str | None = None) -> None:
+    def __init__(self, url: str, *, tenant_id: str, actor_id: str | None = None, pool=None) -> None:
         if not _UUID.match(tenant_id or ""):
             raise StoreError(
                 f"tenant_id must be a UUID, got {tenant_id!r}. The row-level security "
@@ -986,15 +987,36 @@ class PostgresBackend:
         self._url = url
         self.tenant_id = tenant_id
         self.actor_id = actor_id or tenant_id
+        # A1. Optional: None means open-per-operation, which is the previous behaviour.
+        self._pool = pool
 
+    @contextmanager
     def _conn(self):
+        """A connection with this backend's tenant set, from the pool when one is supplied.
+
+        A1. A context manager rather than a bare connection, so all forty-seven
+        `with self._conn() as c:` call sites pool without one of them changing. The semantics
+        are the same because every connection here is autocommit: psycopg's own `with` would
+        close the connection on exit, and this returns it to the pool instead.
+
+        Without a pool it opens and closes one per operation, exactly as before -- so a
+        deployment that has not wired a pool is not silently changed.
+        """
+        if self._pool is not None:
+            with self._pool.connection(tenant_id=self.tenant_id) as conn:
+                yield conn
+            return
         import psycopg
         conn = psycopg.connect(self._url, autocommit=True)
-        # Before anything else. A statement issued ahead of this one is a statement the
-        # policy evaluates with no tenant set, which returns nothing and looks like data loss.
-        conn.execute("SELECT set_config('app.tenant_id', %s, false)",
-                     (self.tenant_id,))
-        return conn
+        try:
+            # Before anything else. A statement issued ahead of this one is a statement the
+            # policy evaluates with no tenant set, which returns nothing and looks like data
+            # loss.
+            conn.execute("SELECT set_config('app.tenant_id', %s, false)",
+                         (self.tenant_id,))
+            yield conn
+        finally:
+            conn.close()
 
     def write_run(self, run: dict) -> None:
         rid = run["id"]

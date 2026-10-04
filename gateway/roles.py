@@ -65,6 +65,10 @@ REQUIRED: dict[str, str] = {
     # budget needs to be able to find out why. Not VIEWER -- the firm's spend is its
     # commercial position, and a read-only guest has no business reading it.
     "usage.status": LAWYER,
+    # A1. LAWYER: a dead job is work that did not happen, and the person who asked for it
+    # needs to be able to find that out. Not VIEWER -- the reasons name what a firm's own
+    # documents did to the engine.
+    "jobs.dead": LAWYER,
     "citation.get": VIEWER,
     "conversation.get": VIEWER,
     "conversation.list": VIEWER,
