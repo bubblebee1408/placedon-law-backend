@@ -146,6 +146,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `checker/operation_store.py` | R2 feeds | Persisting the Operation Model, and the one path that may close its work. |
 | `checker/operations.py` | R2 feeds | The Operation Model — turning an observation into work, never into an answer. |
 | `checker/orchestrator.py` |  | The loop. Every gate in this repository existed; nothing drove them in order. |
+| `checker/page_stream.py` |  | Pages one at a time, with per-file caps, and a failed page that is NAMED not skipped. |
 | `checker/paraphrase_negatives.py` |  | Negative paraphrase candidates. Proposed for review; none is promoted. |
 | `checker/party_resolution.py` |  | Which company is the bar about? A CIN is never a party -- a role is. |
 | `checker/pdf_pages.py` |  | Text per page, for OFFLINE ingestion only. The reader that actually reads. |
@@ -367,4 +368,4 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/watch_gazette.py` |  | Run the Gazette watcher once: what did the Gazette publish since we last looked? |
 | `scripts/watch_ofac.py` |  | Poll OFAC's SDN list and report what CHANGED since the last trustworthy poll. |
 
-327 modules listed.
+328 modules listed.

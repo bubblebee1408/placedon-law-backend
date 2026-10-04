@@ -125,6 +125,7 @@ suites=(
   checker/entail_qualifier.py
   checker/entail_substitution.py
   checker/retrieval_metrics.py
+  checker/page_stream.py
   checker/quote_mutations.py
   checker/cascade.py
   checker/entailment_gate.py
