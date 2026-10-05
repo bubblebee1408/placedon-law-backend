@@ -172,6 +172,7 @@ def plan_cells(table: rg.Table) -> list:
 
 
 def schedule(table: rg.Table, *, queue, cancelled: bool = False, budget=None,
+             ensure_run=None,
              max_tokens: int = CELL_MAX_TOKENS,
              input_tokens: int = CELL_INPUT_TOKENS) -> Scheduled:
     """Enqueue one job per PENDING cell, each as its own run, each cost RESERVED first.
@@ -198,6 +199,14 @@ def schedule(table: rg.Table, *, queue, cancelled: bool = False, budget=None,
 
     `budget=None` reserves nothing and behaves exactly as before, so a caller that has not
     wired a budget is not silently changed.
+
+    `ensure_run(run_id)` is called immediately BEFORE each enqueue, and is how the run row
+    the job points at comes to exist. `jobs.run_id` references `runs(run_id)`, so without it
+    a Postgres deployment raises ForeignKeyViolation on every cell and nothing is ever
+    dispatched -- which is what `docs/guides/RUN_LOCALLY.md` hit on a real database.
+    Injected rather than taken as a store, because this is an agent: it is handed what it
+    needs and reaches for nothing. `None` writes no rows, which is right for MemoryBackend
+    tests that only count enqueues.
     """
     from gateway.jobs import QueueError
 
@@ -231,11 +240,16 @@ def schedule(table: rg.Table, *, queue, cancelled: bool = False, budget=None,
                     continue
                 reservation_id = res.id
                 reservations.append(res.id)
+            cell_run_id = run_id_for_cell(table.table_id, d, col.name)
             try:
+                # The run row FIRST, for the reason `_runs_submit` gives: a job pointing at
+                # a run that does not exist is a foreign-key error on Postgres.
+                if ensure_run is not None:
+                    ensure_run(cell_run_id)
                 # A1. REVIEW_CELL: wanted soon, but nobody is blocked on one cell.
                 from gateway.jobs import REVIEW_CELL as _LANE_CELL
-                queue.enqueue(lane=_LANE_CELL, 
-                    run_id=run_id_for_cell(table.table_id, d, col.name), intent=INTENT,
+                queue.enqueue(lane=_LANE_CELL,
+                    run_id=cell_run_id, intent=INTENT,
                     args={"grid_id": table.table_id, "document_id": d,
                           "column": col.name, "kind": col.kind,
                           "question": col.question, "idempotency_key": key,

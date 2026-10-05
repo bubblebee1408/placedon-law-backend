@@ -590,7 +590,8 @@ def run(url: str) -> int:
                   "018_users_roles.sql",
                   "019_matters.sql",
                   "020_vault.sql",
-                  "021_job_lanes.sql"):
+                  "021_job_lanes.sql",
+                  "022_grid_budget_state.sql"):
             cur.execute(sql(f))
             print(f"  applied {f}")
         _ensure_app_role(cur)

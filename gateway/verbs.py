@@ -944,11 +944,16 @@ QUEUED_INTENTS: dict[str, str] = {
     # cell is the product, not a run record -- so `queue_handlers` hands it the real
     # context. See the comment there.
     "review_grid_cell": "_review_grid_cell",
+    # V1: ingest one uploaded vault document. `vault.upload` has always enqueued this and
+    # nothing could run it -- the worker found no handler, dead-lettered the job as not
+    # retryable, and the document stayed PENDING having been "queued for ingestion".
+    # Writes, like a grid cell: an ingested document is the product, not a run record.
+    "vault_ingest": "_vault_ingest_job",
 }
 
 # Intents whose handler needs the STORE, because what they produce is not a run record.
 # Everything else runs store-less so it cannot write a second run.
-STORE_WRITING_INTENTS = frozenset({"review_grid_cell"})
+STORE_WRITING_INTENTS = frozenset({"review_grid_cell", "vault_ingest"})
 
 
 def queue_handlers(ctx: "Context") -> dict:
@@ -980,7 +985,8 @@ def queue_handlers(ctx: "Context") -> dict:
     by_name = {"_review_document": _review_document,
                "_review_contract": _review_contract,
                "_ask": _ask,
-               "_review_grid_cell": _review_grid_cell}
+               "_review_grid_cell": _review_grid_cell,
+               "_vault_ingest_job": _vault_ingest_job}
     return {intent: wrap(by_name[fn], keep_store=(intent in STORE_WRITING_INTENTS))
             for intent, fn in QUEUED_INTENTS.items()}
 
@@ -2066,7 +2072,8 @@ def _task_args(task: str, text: str, file_ids, ctx: Context, args: dict,
                            "note": ("nothing has been drafted yet: this engine does not "
                                     "write legal prose unprompted, and an UNKNOWN slot "
                                     "blocks approval until a person fills it")}],
-                "kind": args.get("kind") or "agm_notice"}
+                # Not a guessed statutory type: see DRAFT_KIND_UNKNOWN.
+                "kind": args.get("kind") or DRAFT_KIND_UNKNOWN}
     if task == "REVIEW_CONTRACT":
         return {"text": doc or text, "name": "conversation upload",
                 "test_data": args.get("test_data") or "unspecified"}
@@ -2123,9 +2130,18 @@ def _vault_upload(args: dict, ctx: Context) -> dict:
         # Dedupe fires here: the same bytes twice is one document, and saying so is more
         # useful than a second row that would never be searched separately.
         return _refuse("CONFLICT", str(e)[:200])
-    queued = None
+    queued, queue_error = None, ""
     if ctx.queue is not None:
         from agents.vault_ingest import INTENT
+        # The run row FIRST. `_runs_submit` says why and this verb did not listen: `jobs.run_id`
+        # references `runs(run_id)`, so on Postgres the enqueue below raised
+        # ForeignKeyViolation, the bare `except` turned it into `queued = None`, and the note
+        # then told the operator "No queue is configured" when one was configured and working.
+        # Nothing could be ingested on a real database. Found by running
+        # docs/guides/RUN_LOCALLY.md, not by a test -- every test used MemoryBackend, which
+        # has no foreign keys.
+        ctx.store.write({"id": did, "intent": INTENT, "status": "PLANNED",
+                         "refusal_code": None, "steps": [], "propositions": []})
         try:
             # A1. BULK: vault ingest and OCR are wanted eventually, and must never take a
             # slot reserved for someone waiting.
@@ -2134,14 +2150,45 @@ def _vault_upload(args: dict, ctx: Context) -> dict:
                                        args={"document_id": did, "sha256": sha,
                                              "name": name,
                                              "matter_id": args.get("matter_id")}).job_id
-        except Exception:                                        # noqa: BLE001
-            queued = None
+        except Exception as e:                                   # noqa: BLE001
+            queued, queue_error = None, f"{type(e).__name__}: {str(e)[:140]}"
+    if queued:
+        note = ("stored and queued for ingestion. PENDING is not INGESTED: nothing "
+                "is searchable until a worker has read it.")
+    elif queue_error:
+        # A queue that answered with an error is not an absent queue, and the operator needs
+        # the difference: one is a deployment that was never wired, the other is a bug.
+        note = (f"stored, but the ingest job could NOT be queued ({queue_error}). It will "
+                f"stay PENDING until the queue accepts it. This is a failure, not a "
+                f"deployment without a queue.")
+    else:
+        note = ("stored. No queue is configured, so nothing will ingest it and it "
+                "will stay PENDING -- said plainly rather than left to look done.")
     return {"document_id": did, "sha256": sha, "state": "PENDING", "job_id": queued,
-            "note": ("stored and queued for ingestion. PENDING is not INGESTED: nothing "
-                     "is searchable until a worker has read it."
-                     if queued else
-                     "stored. No queue is configured, so nothing will ingest it and it "
-                     "will stay PENDING -- said plainly rather than left to look done.")}
+            "queue_error": queue_error or None, "note": note}
+
+
+def _vault_ingest_job(args: dict, ctx: Context) -> dict:
+    """Run one queued ingest. Verb-shaped, so `queue_handlers` can wrap it like the rest.
+
+    `agents/vault_ingest.ingest` takes `files`, `store` and an `extract` callable rather
+    than a Context, because it is an agent and agents are injected. This adapts the two
+    shapes in ONE place: a worker that built the arguments itself would be a second
+    definition of what ingestion needs.
+
+    The extractor decodes UTF-8, because `vault.upload` takes TEXT -- its own refusal says
+    binary upload is a route and not a verb. When that route exists this is where the
+    page-by-page path (`checker/page_stream`) is wired in, and a document whose page fails
+    becomes PARTIAL rather than silently short of a page.
+    """
+    refusal = _vault_ready(ctx)
+    if refusal:
+        return refusal
+    from agents.vault_ingest import ingest
+
+    outcome = ingest(args, files=ctx.files, store=ctx.store,
+                     extract=lambda data, name: data.decode("utf-8", "replace"))
+    return outcome.to_dict()
 
 
 def _vault_status(args: dict, ctx: Context) -> dict:
@@ -2188,8 +2235,27 @@ def _vault_find(args: dict, ctx: Context) -> dict:
     return res
 
 
+# The checks `vault.verify` runs, in order. Named because they FAIL differently and the
+# remedies differ: a deleted document is intended, a missing object is a file store that
+# lost something, and a hash mismatch is bytes that changed under us. One boolean over the
+# three makes "the bytes are gone" and "the bytes changed" the same answer.
+VERIFY_NOT_DELETED = "the document is not deleted"
+VERIFY_BYTES_PRESENT = "the file store holds its bytes"
+VERIFY_HASH_MATCHES = "the bytes hash to the key they are stored under"
+VERIFY_PASS, VERIFY_FAIL, VERIFY_NOT_RUN = "PASS", "FAIL", "NOT RUN"
+
+
 def _vault_verify(args: dict, ctx: Context) -> dict:
-    """Do the stored bytes still hash to the key they were stored under? Read-only."""
+    """Do the stored bytes still hash to the key they were stored under? Read-only.
+
+    Returns a line PER CHECK. It used to return one `verified` boolean with a `detail`
+    string, and the three branches that produced it were already three different findings
+    -- deleted, absent, mismatched -- flattened into true/false on the way out. A caller
+    could not tell them apart without parsing English, and a UI showing one real/fake badge
+    was the shape that boolean invited.
+
+    `verified` is kept, as the AND of the checks, so an existing caller is not broken.
+    """
     refusal = _vault_ready(ctx)
     if refusal:
         return refusal
@@ -2197,21 +2263,55 @@ def _vault_verify(args: dict, ctx: Context) -> dict:
     row = ctx.store.read_vault_document(did) if did else None
     if row is None:
         return _refuse("NOT_FOUND", f"no vault document {did!r} for this tenant")
+
+    def answer(checks: list[dict], note: str) -> dict:
+        return {"document_id": did, "checks": checks,
+                "verified": all(c["result"] == VERIFY_PASS for c in checks),
+                # The one-line summary, kept for a caller that only wants a sentence.
+                "detail": note, "note": note}
+
     if row.get("deleted_at"):
-        return {"document_id": did, "verified": False,
-                "detail": "this document was deleted; its bytes are gone, and that is the "
-                          "intended state rather than a corruption"}
+        return answer(
+            [{"name": VERIFY_NOT_DELETED, "result": VERIFY_FAIL,
+              "detail": "deleted on " + str(row.get("deleted_at"))},
+             {"name": VERIFY_BYTES_PRESENT, "result": VERIFY_NOT_RUN,
+              "detail": "not run: a deleted document's bytes are destroyed on purpose"},
+             {"name": VERIFY_HASH_MATCHES, "result": VERIFY_NOT_RUN,
+              "detail": "not run: there were no bytes to hash"}],
+            "this document was deleted; its bytes are gone, and that is the intended state "
+            "rather than a corruption")
+
+    not_deleted = {"name": VERIFY_NOT_DELETED, "result": VERIFY_PASS,
+                   "detail": "the record is live"}
     try:
         data = ctx.files.get(row["sha256"])
     except Exception as e:                                       # noqa: BLE001
-        return {"document_id": did, "verified": False,
-                "detail": f"{type(e).__name__}: {str(e)[:160]}"}
+        return answer(
+            [not_deleted,
+             {"name": VERIFY_BYTES_PRESENT, "result": VERIFY_FAIL,
+              "detail": f"{type(e).__name__}: {str(e)[:160]}"},
+             {"name": VERIFY_HASH_MATCHES, "result": VERIFY_NOT_RUN,
+              "detail": "not run: the bytes could not be read"}],
+            f"the file store could not return the bytes: {type(e).__name__}")
     if data is None:
-        return {"document_id": did, "verified": False,
-                "detail": "the row names bytes the file store does not hold"}
-    return {"document_id": did, "verified": True,
-            "detail": f"re-read {len(data)} bytes and they hash to the key they were "
-                      f"stored under"}
+        return answer(
+            [not_deleted,
+             {"name": VERIFY_BYTES_PRESENT, "result": VERIFY_FAIL,
+              "detail": "the file store has no object under this key"},
+             {"name": VERIFY_HASH_MATCHES, "result": VERIFY_NOT_RUN,
+              "detail": "not run: there were no bytes to hash"}],
+            "the row names bytes the file store does not hold")
+
+    # `files.get` is keyed BY the hash and verifies it on read, so reaching here is the
+    # hash check passing. Stated rather than assumed, because a reader of this list is
+    # entitled to know which code actually did the comparing.
+    return answer(
+        [not_deleted,
+         {"name": VERIFY_BYTES_PRESENT, "result": VERIFY_PASS,
+          "detail": f"the file store returned {len(data)} bytes"},
+         {"name": VERIFY_HASH_MATCHES, "result": VERIFY_PASS,
+          "detail": "the file store is keyed by the hash and checks it on read"}],
+        f"re-read {len(data)} bytes and they hash to the key they were stored under")
 
 
 def _vault_summarize(args: dict, ctx: Context) -> dict:
@@ -2546,6 +2646,9 @@ def _citation_get(args: dict, ctx: Context) -> dict:
 MAX_GRID_CELLS = 500
 
 
+_CONTENT_HASH = __import__("re").compile(r"[0-9a-f]{64}")
+
+
 def _review_table_create(args: dict, ctx: Context) -> dict:
     """Define a grid and enqueue one job per cell. Refuses above the cell cap.
 
@@ -2566,6 +2669,20 @@ def _review_table_create(args: dict, ctx: Context) -> dict:
         return _refuse("BAD_REQUEST", "columns must be a list of objects")
     if not raw_docs:
         return _refuse("BAD_REQUEST", "a review table needs at least one document")
+    # `review_grid_cells.document_id` is CHECKed against `^[0-9a-f]{64}$` (011): a grid
+    # addresses documents by CONTENT HASH, so the same bytes are the same row and a table is
+    # replayable. A vault `document_id` is a uuid, and passing one used to reach the database
+    # and come back as a 500 -- a well-formed request answered with a stack trace. The vault
+    # reports each document's `sha256` in `vault.status`, which is the value to pass.
+    bad = [d for d in raw_docs if not _CONTENT_HASH.fullmatch(d.strip())]
+    if bad:
+        return _refuse("BAD_REQUEST",
+                       f"a review table addresses documents by CONTENT HASH -- a 64-character "
+                       f"sha256, so that the same bytes are always the same row and the table "
+                       f"can be replayed. {len(bad)} of {len(raw_docs)} id(s) are not one "
+                       f"(first: {bad[0][:24]!r}). A vault document's hash is the `sha256` "
+                       f"field of `vault.status`; its `document_id` is a uuid and names the "
+                       f"vault record, not the bytes.")
     if not raw_cols:
         return _refuse("BAD_REQUEST",
                        "a review table with no columns asks nothing of its documents")
@@ -2612,7 +2729,24 @@ def _review_table_create(args: dict, ctx: Context) -> dict:
 
     sched = rgr.Scheduled(grid_id)
     if ctx.queue is not None:
-        sched = rgr.schedule(table, queue=ctx.queue)
+        # The budget is PASSED, so each cell's worst case is reserved before it is
+        # dispatched. It was not, until move 2: `schedule()` reserves only when a budget is
+        # supplied and this call supplied none, so A1's per-cell reservation was wired and
+        # unreachable -- the same shape as the vault's file store in move 1.
+        sched = rgr.schedule(
+            table, queue=ctx.queue, budget=ledger,
+            # Same reason as the vault upload above: the cell's run row has to exist before
+            # its job can reference it.
+            ensure_run=lambda rid: ctx.store.write(
+                {"id": rid, "intent": rgr.INTENT, "status": "PLANNED",
+                 "refusal_code": None, "steps": [], "propositions": []}))
+        if sched.paused_budget:
+            # Persisted, because `create` returns this ONCE. A caller that did not keep the
+            # response -- a reloaded page, the CLI, an MCP tool -- has no other way to learn
+            # it, and the cells cannot say: a cell never dispatched and a cell waiting its
+            # turn are both PENDING. 022, and DECISION_grid_budget_state.md.
+            store.pause_grid(grid_id, reason=sched.pause_reason,
+                             not_dispatched=len(sched.not_scheduled))
     out = {"grid_id": grid_id, "name": name, "cells": cells,
            "documents": len(raw_docs), "columns": len(columns),
            "scheduled": sched.to_dict(),
@@ -2642,6 +2776,68 @@ def _review_table_status(args: dict, ctx: Context) -> dict:
     if table is None:
         return _refuse("NOT_FOUND", f"no review table {grid_id!r} for this tenant")
     out = rgr.status(table, cancelled=cancelled)
+    # 022: the budget state, from the row rather than from the cells. `table_state` sits
+    # beside complete/cancelled because PAUSED_BUDGET is a STATE -- the table is resumable
+    # the moment the cap is raised, and calling it an error would put transport language on
+    # a deployment's spending decision.
+    grid_row = ctx.store.read_grid(grid_id) or {}
+    paused = bool(grid_row.get("paused_budget"))
+    not_dispatched = int(grid_row.get("cells_not_dispatched") or 0)
+    out["paused_budget"] = paused
+    out["pause_reason"] = grid_row.get("pause_reason") or ""
+    out["cells_not_dispatched"] = not_dispatched
+    out["cells_dispatched"] = max(0, int(out.get("cells") or 0) - not_dispatched)
+    out["table_state"] = ("CANCELLED" if cancelled else
+                          "PAUSED_BUDGET" if paused else
+                          "COMPLETE" if out.get("complete") else "RUNNING")
+    # ── move 3: a PENDING cell says WHY it is pending ────────────────────────
+    # "Not dispatched because nothing is running" and "dispatched, waiting its turn" are
+    # both PENDING on the cell, and the difference is the whole of whether anything will
+    # ever happen. A silent PENDING is a table that looks busy and is not.
+    pending_cells = [c for c in ctx.store.read_grid_cells(grid_id)
+                     if (c.get("state") or "") == "PENDING"]
+    if ctx.queue is None:
+        out["dispatch"] = {
+            "queue_configured": False,
+            "never_dispatched": int(out.get("cells") or 0),
+            "awaiting_worker": 0, "claimed": 0,
+            "note": ("not dispatched: no queue is configured on this deployment, so "
+                     "nothing will run these cells. They are PENDING because nothing has "
+                     "been asked to answer them, not because they are waiting their turn")}
+    else:
+        from agents.review_grid import run_id_for_cell
+        runs = [run_id_for_cell(grid_id, c["document_id"], c["column_name"])
+                for c in pending_cells]
+        counts = ctx.queue.claim_counts(runs)
+        never, waiting = counts["missing"], counts["unclaimed"]
+        if never and not waiting and not counts["claimed"]:
+            note = (f"not dispatched: {never} cell(s) have no job in the queue at all. "
+                    f"Nothing will answer them until they are scheduled again")
+        elif waiting and not counts["claimed"]:
+            note = (f"not dispatched: no worker. {waiting} cell(s) are queued and nothing "
+                    f"has claimed one. Run `python3 -m gateway.worker` against this "
+                    f"deployment, or they stay PENDING indefinitely")
+        elif waiting:
+            note = (f"{counts['claimed']} cell(s) in flight, {waiting} queued and not yet "
+                    f"claimed")
+        else:
+            note = (f"{counts['claimed']} cell(s) in flight; nothing is waiting unclaimed"
+                    if counts["claimed"] else "no cell is pending")
+        if never and (waiting or counts["claimed"]):
+            note += f". {never} cell(s) have no job in the queue"
+        out["dispatch"] = {
+            "queue_configured": True,
+            "never_dispatched": never,
+            "awaiting_worker": waiting,
+            "claimed": counts["claimed"],
+            "note": note}
+
+    if paused:
+        out["pause_note"] = (
+            f"{out['cells_dispatched']} cell(s) were dispatched and {not_dispatched} were "
+            f"not. The undispatched cells stay PENDING -- they are not failures, and "
+            f"nothing was charged for the reservation that was refused. Raise the cap and "
+            f"create the table again: only the cells that have not run are dispatched.")
     # The running total, from the cells this verb already read -- not from 240 extra reads
     # of each cell's run steps, which is why 013 put the debit on the cell.
     out["spend"] = _grid_spend(ctx.store.read_grid_cells(grid_id))
@@ -2771,6 +2967,13 @@ def _save_version(ctx: Context, draft_id: str, *, title: str, body: str, slots: 
         "approved_by": approved_by or None, "approved_at": approved_at or None})
 
 
+# A draft nobody typed. NOT a statutory document type: `draft.create` defaulted to
+# "agm_notice", which is an instrument carrying s.96 and s.101 obligations, for any caller
+# who did not say otherwise. A title is not a type declaration, and `doc_classifier` already
+# states the rule this broke -- "a guess here misfiles a document a lawyer then cannot find".
+DRAFT_KIND_UNKNOWN = "unknown"
+
+
 def _draft_create(args: dict, ctx: Context) -> dict:
     """Start a draft at version 1. A WRITE verb, so it is off MCP."""
     import uuid
@@ -2788,7 +2991,8 @@ def _draft_create(args: dict, ctx: Context) -> dict:
         return _refuse("BAD_REQUEST", "body must be a string")
     draft_id = (args.get("draft_id") or "").strip() or str(uuid.uuid4())
     ctx.store.write_draft({"draft_id": draft_id,
-                           "kind": (args.get("kind") or "agm_notice"), "title": title})
+                           "kind": (args.get("kind") or DRAFT_KIND_UNKNOWN),
+                           "title": title})
     try:
         n = _save_version(ctx, draft_id, title=title, body=body, slots=slots,
                           citations=tuple(args.get("citations") or ()))
@@ -3170,32 +3374,78 @@ def _review_grid_cell(args: dict, ctx: Context) -> dict:
     debits: list = []
     if answer is None:
         answer = _cell_answerer(ctx, debits)
+    # `ctx.documents` is an injected dict, and on a WORKER it is empty: the gate filled it
+    # and no running process ever did, so every cell dispatched by `review_table.create`
+    # died on RunnerError("no such document") -- the table was wired to a fixture. A grid's
+    # document_id IS the content hash, and the file store is content-addressed, so the bytes
+    # are one `get` away. Read-only, and only for the cell in hand.
+    documents = ctx.documents
+    did = str(args.get("document_id") or "")
+    if did not in documents and ctx.files is not None:
+        try:
+            documents = {**documents,
+                         did: {"text": ctx.files.get(did).decode("utf-8", "replace")}}
+        except Exception:                                        # noqa: BLE001
+            # Left absent on purpose. `run_cell` raises RunnerError for a document it cannot
+            # see, which becomes a FAILED cell naming the document -- the right answer, and
+            # one a fabricated empty string would have hidden behind NOT_FOUND.
+            pass
+    # The reservation this cell holds, released no matter how this function leaves.
+    # `schedule()` reserves each cell's WORST CASE before dispatch and passes the id here
+    # for the worker to settle; nothing settled it, so a cell that ran held its worst case
+    # until the day rolled over. In a `finally` rather than on the happy path, because a
+    # write that raises leaks the money as surely as one that returns.
+    settled = {"done": False}
+
+    def _settle(actual_inr: float) -> None:
+        rid = (args.get("reservation_id") or "").strip() if args.get("reservation_id") else ""
+        if not rid or settled["done"]:
+            return
+        ledger = _ledger()
+        if ledger is None:
+            return
+        ledger.settle(rid, actual_inr)
+        settled["done"] = True
+
     try:
-        cell = rgr.run_cell(args, documents=ctx.documents, answer=answer)
-    except rgr.RunnerError as e:
-        return {"status": "FAILED", "error": str(e)}
-    debit = _cell_debit(debits, stubbed=stubbed)
-    wrote = ctx.store.write_grid_cell(
-        {"grid_id": args["grid_id"], "document_id": cell.document_id,
-         "column_name": cell.column, "state": cell.state, "value": cell.value,
-         "quote": cell.quote, "reason": cell.reason,
-         "provider": debit["provider"], "cost_inr": debit["cost_inr"],
-         "cost_note": debit["cost_note"]})
-    # The ledger `run_steps` has been since 003, with the same numbers. A cell is a run, so
-    # this is one step per cell and the two records cannot disagree: they are built from
-    # one `Served.step_fields()`.
-    ctx.last_steps.append({
-        "capability": "review_grid.cell",
-        "status": "FAILED" if cell.state == "FAILED" else "ANSWERED",
-        **debit})
-    return {"status": "ANSWERED" if wrote else "ANSWERED",
-            "grid_id": args["grid_id"], "document_id": cell.document_id,
-            "column": cell.column, "cell_state": cell.state,
-            "written": wrote, "cost_inr": debit["cost_inr"],
-            "cost_note": debit["cost_note"],
-            "note": (None if wrote else
-                     "this cell was already answered; the earlier answer was kept. A "
-                     "worker handed the same cell twice does not overwrite it.")}
+        try:
+            cell = rgr.run_cell(args, documents=documents, answer=answer)
+        except rgr.RunnerError as e:
+            return {"status": "FAILED", "error": str(e),
+                    "reservation_settled": bool((args.get("reservation_id") or ""))}
+        debit = _cell_debit(debits, stubbed=stubbed)
+        # Settled at what it ACTUALLY cost. An unpriced call settles at 0.0 only because a
+        # cell that never reached a provider never billed -- `budget.settle` documents the
+        # other case ("a call that may have billed but whose usage never came back should
+        # settle at the reserved amount"), and `_cell_debit` distinguishes the two by
+        # whether a debit was recorded at all.
+        _settle(float(debit.get("cost_inr") or 0.0))
+        wrote = ctx.store.write_grid_cell(
+            {"grid_id": args["grid_id"], "document_id": cell.document_id,
+             "column_name": cell.column, "state": cell.state, "value": cell.value,
+             "quote": cell.quote, "reason": cell.reason,
+             "provider": debit["provider"], "cost_inr": debit["cost_inr"],
+             "cost_note": debit["cost_note"]})
+        # The ledger `run_steps` has been since 003, with the same numbers. A cell is a run,
+        # so this is one step per cell and the two records cannot disagree: they are built
+        # from one `Served.step_fields()`.
+        ctx.last_steps.append({
+            "capability": "review_grid.cell",
+            "status": "FAILED" if cell.state == "FAILED" else "ANSWERED",
+            **debit})
+        return {"status": "ANSWERED" if wrote else "ANSWERED",
+                "grid_id": args["grid_id"], "document_id": cell.document_id,
+                "column": cell.column, "cell_state": cell.state,
+                "written": wrote, "cost_inr": debit["cost_inr"],
+                "cost_note": debit["cost_note"],
+                "reservation_settled": settled["done"],
+                "note": (None if wrote else
+                         "this cell was already answered; the earlier answer was kept. A "
+                         "worker handed the same cell twice does not overwrite it.")}
+    finally:
+        # 0.0: if we are leaving by an exception the cell did not finish, so it did not
+        # bill. Holding the worst case for work that is over is the leak.
+        _settle(0.0)
 
 
 def _review_table_cancel(args: dict, ctx: Context) -> dict:
@@ -3843,6 +4093,48 @@ def write_verbs(verbs: tuple[Verb, ...] | None = None) -> tuple[str, ...]:
 
 
 def _test() -> None:
+    # ── this suite never touches the deployment's real budget ────────────────
+    # `_review_table_create` reserves each cell's worst case through `_ledger()`, which is
+    # backed by a FILE at corpus/.budget.json. With no worker running in a test, nothing
+    # settles those reservations, so every create here held real budget until the day rolled
+    # over -- 58 of them, ₹115.99 against a ₹116.67 cap, which starved an unrelated
+    # `conversation.send` check and surfaced as a KeyError about FEMA1999.
+    #
+    # Redirected ONCE, for the whole suite, rather than per call site: the leak came from
+    # pre-existing create tests that had no reason to know the verb had started reserving,
+    # and a guard that every future test must remember is a guard that fails.
+    import atexit as _atexit
+    import os as _os_tmp
+    import tempfile as _tempfile
+
+    from backend.budget import BudgetTracker as _TestBT
+    from backend.budget import FileStore as _TestFS
+
+    _ledger_tmp = _tempfile.TemporaryDirectory()
+    _atexit.register(_ledger_tmp.cleanup)
+    _real_ledger_fn = _ledger
+    _ledger_calls = [0]
+
+    def _test_ledger():
+        """A FRESH tracker per call, each on its own file.
+
+        One shared temporary tracker was tried first and ran out: every `create` reserves
+        two cells' worst case and nothing settles them, so after about thirty creates the
+        suite's own budget was exhausted and later creates refused NO_BUDGET -- which
+        surfaced as "create with no store is refused" failing, because the budget guard
+        runs before the store check.
+
+        That is not only a test artefact. **An abandoned table holds its reservations until
+        the day rolls over**, because only a worker settles a cell. research/TASKS.md A-016
+        records it; one tracker per call is the right thing HERE because each check is a
+        separate notional deployment-day, not thirty calls from one lawyer.
+        """
+        _ledger_calls[0] += 1
+        return _TestBT(store=_TestFS(
+            _os_tmp.path.join(_ledger_tmp.name, f"budget-{_ledger_calls[0]}.json")))
+
+    globals()["_ledger"] = _test_ledger
+
     ok = fail = 0
 
     def check(cond: bool, label: str) -> None:
@@ -5836,6 +6128,365 @@ def _test() -> None:
     check(_good.get("status") != "REFUSED" and _good.get("version") == _cur + 1,
           f"revising from the CURRENT latest succeeds and lands at version {_cur + 1} "
           f"({_good.get('version')})")
+
+    # ── move 2: review_table.status carries the budget state ────────────────
+    # PR #3 found this live: no key in the status response mentions the budget, so a table
+    # that paused part-way reads as a table whose cells are PENDING -- and PENDING already
+    # means "not attempted yet". A state a caller can learn only once, from a response it
+    # may not have kept, is not a state. See .claude/loops/DECISION_grid_budget_state.md.
+    from datetime import date as _mdate
+
+    from backend.budget import DEFAULT_MODEL as _MDM
+    from backend.budget import DAILY_CAP_INR as _MDAILY
+    from backend.budget import BudgetTracker as _MBT
+    from backend.budget import cost_inr as _mcost
+    from agents.review_grid import CELL_INPUT_TOKENS as _MIN_T
+    from agents.review_grid import CELL_MAX_TOKENS as _MMAX_T
+
+    class _MMem:
+        def __init__(self):
+            self.d = {}
+
+        def read(self):
+            return dict(self.d)
+
+        def write(self, data):
+            self.d = dict(data)
+
+    _mper = _mcost(_MDM, _MIN_T, _MMAX_T)
+    _mtracker = _MBT(store=_MMem(), today=_mdate(2026, 10, 5))
+    # Headroom for two cells of six, so the cap runs out MID-table. A cap of zero would
+    # pause on the first cell and prove nothing about the dispatched count.
+    _mtracker.record_call(max(0.0, _MDAILY - _mper * 2.5))
+
+    from gateway.jobs import MemoryQueue as _MQ2
+    _mctx = Context(store=MemoryBackend(), queue=_MQ2(),
+                    clock=lambda: "2026-10-05T00:00:00Z")
+    # `_review_table_create` reads the ledger through `_ledger()`, not from ctx, so the
+    # tracker is injected there. Patched rather than mocked away: the verb must use a REAL
+    # BudgetTracker, because the pause comes from `reserve()` refusing and nothing else.
+    #
+    # Patched on `globals()`, NOT via `import gateway.verbs as _mv`. Run as
+    # `python3 gateway/verbs.py` this module is `__main__`, so that import binds a SECOND
+    # copy and the patch lands on an object the verb never reads -- six cells reserved and
+    # no pause, which is what it did. A1's chaos test made the identical mistake with
+    # `TIMEOUT` and its commit says so; I made it again here.
+    _mreal_ledger = globals()["_ledger"]
+    globals()["_ledger"] = lambda: _mtracker
+    try:
+        _mcreate = _review_table_create(
+        {"name": "paused mid-table",
+         "document_ids": ["a" * 64, "b" * 64, "c" * 64],
+             "columns": [{"name": "governing law", "kind": "text",
+                          "question": "Which law?"},
+                         {"name": "term end", "kind": "date",
+                          "question": "When does it end?"}]},
+            _mctx)
+        _mstatus = _review_table_status({"grid_id": _mcreate.get("grid_id", "")}, _mctx)
+    finally:
+        globals()["_ledger"] = _mreal_ledger
+    check(_mcreate.get("status") != "REFUSED",
+          f"a six-cell table is created ({str(_mcreate)[:70]})")
+    check(_mcreate["scheduled"].get("paused_budget") is True,
+          f"...and PAUSES at create, which is the hard case ({_mcreate['scheduled']})")
+
+    check(_mstatus.get("paused_budget") is True,
+          f"**status reports PAUSED_BUDGET**, so a caller that did not keep the create "
+          f"response can still learn it ({_mstatus.get('paused_budget')})")
+    check(str(_mstatus.get("pause_reason") or "").strip(),
+          f"...with the reason the reservation was refused "
+          f"({str(_mstatus.get('pause_reason'))[:50]})")
+    check("cap" in str(_mstatus.get("pause_reason") or "").lower(),
+          "...naming the cap, not merely that something stopped")
+    check(isinstance(_mstatus.get("cells_dispatched"), int)
+          and _mstatus["cells_dispatched"] > 0,
+          f"...and how many cells WERE dispatched ({_mstatus.get('cells_dispatched')})")
+    check(isinstance(_mstatus.get("cells_not_dispatched"), int)
+          and _mstatus["cells_not_dispatched"] > 0,
+          f"...and how many were refused ({_mstatus.get('cells_not_dispatched')})")
+    check(_mstatus["cells_dispatched"] + _mstatus["cells_not_dispatched"]
+          == _mstatus["cells"],
+          f"...and the two account for every cell "
+          f"({_mstatus.get('cells_dispatched')} + "
+          f"{_mstatus.get('cells_not_dispatched')} = {_mstatus.get('cells')})")
+    check(_mstatus.get("table_state") == "PAUSED_BUDGET",
+          f"...reported as a STATE, beside complete/cancelled rather than as an error "
+          f"({_mstatus.get('table_state')})")
+
+    # A table that did NOT pause says so, so the field is not simply always true.
+    _mctx2 = Context(store=MemoryBackend(), queue=_MQ2(),
+                     clock=lambda: "2026-10-05T00:00:00Z")
+    _mfresh = _MBT(store=_MMem(), today=_mdate(2026, 10, 5))
+    globals()["_ledger"] = lambda: _mfresh
+    try:
+        _msmall = _review_table_create(
+            {"name": "not paused", "document_ids": ["d" * 64],
+             "columns": [{"name": "governing law", "kind": "text",
+                          "question": "Which law?"}]},
+            _mctx2)
+        _mstatus2 = _review_table_status({"grid_id": _msmall.get("grid_id", "")}, _mctx2)
+    finally:
+        globals()["_ledger"] = _mreal_ledger
+    check(_mstatus2.get("paused_budget") is False
+          and _mstatus2.get("table_state") != "PAUSED_BUDGET",
+          f"a table that did not pause reports false, so the field is measured rather than "
+          f"constant ({_mstatus2.get('table_state')})")
+    check(_mstatus2.get("cells_not_dispatched") == 0,
+          f"...with nothing refused ({_mstatus2.get('cells_not_dispatched')})")
+
+    # ── and this suite leaves the REAL ledger alone ─────────────────────────
+    # `_review_table_create` reserves through `_ledger()`, which is a FILE at
+    # corpus/.budget.json. The first version of the checks above ran before the seam was
+    # patched and leaked 58 reservations worth ₹115.99 against a ₹116.67 daily cap -- which
+    # starved an unrelated `conversation.send` test until the day rolled over. Nothing was
+    # spent; the cap was simply held by work that would never settle because no worker runs
+    # in a test.
+    #
+    # A1 guarded the same shape for a patched module ("a self-test that leaves the module
+    # patched poisons every suite that runs after it"). This is that lesson about a file.
+    import json as _mjson
+    import pathlib as _mpath
+    _mledger_file = _mpath.Path("corpus/.budget.json")
+    _mleft = {}
+    if _mledger_file.exists():
+        try:
+            _mleft = {k: v for k, v
+                      in (_mjson.loads(_mledger_file.read_text()).get("reservations") or {}
+                          ).items() if k.startswith("cell-")}
+        except ValueError:
+            _mleft = {}
+    check(not _mleft,
+          f"this suite leaves NO cell reservation in the real ledger -- a test that holds "
+          f"the deployment's cap starves every test after it, and the failure surfaces "
+          f"somewhere unrelated ({len(_mleft)} left, ₹{sum(_mleft.values()):.2f})")
+    # ── move 5: an untyped draft is `unknown`, never a statutory document ───
+    # `draft.create {"title": "Board resolution"}` came back `kind: "agm_notice"`, and
+    # docs/app-screens/README.md recorded it as "the classifier disagreeing with the obvious
+    # reading of the title". There is NO classifier on this path. The line read
+    # `args.get("kind") or "agm_notice"` -- a hardcoded default, in five places counting both
+    # store backends and the column default in 012.
+    #
+    # That is worse than a wrong classification, because it is a constant wearing the clothes
+    # of a judgement. An AGM notice is a statutory instrument carrying s.96 and s.101
+    # obligations; a board resolution is not one, and a draft nobody typed is not either. A
+    # title is not a type declaration, so `unknown` is the answer -- the same rule
+    # `doc_classifier` already states: "a guess here misfiles a document a lawyer then
+    # cannot find".
+    _d6_ctx = Context(store=MemoryBackend(), clock=lambda: "2026-10-05T00:00:00Z")
+    _d6 = _draft_create({"title": "Board resolution"}, _d6_ctx)
+    # Compared against the LITERAL, not against DRAFT_KIND_UNKNOWN. The first draft of this
+    # check asserted `kind == DRAFT_KIND_UNKNOWN`, which is true whatever that constant
+    # holds -- so setting it back to "agm_notice" kept the suite green. A check that cannot
+    # turn red proves nothing, and this file has caught that twice before.
+    check(_d6.get("kind") == "unknown" and _d6.get("kind") != "agm_notice",
+          f"a draft created with no stated kind is 'unknown', not a statutory document "
+          f"type nobody asked for ({_d6.get('kind')!r})")
+    _d6_said = _draft_create({"title": "Notice of AGM", "kind": "agm_notice"}, _d6_ctx)
+    check(_d6_said.get("kind") == "agm_notice",
+          f"...while a kind the CALLER stated is kept exactly as stated "
+          f"({_d6_said.get('kind')!r})")
+    import inspect as _d6_inspect
+    check('"agm_notice"' not in _d6_inspect.getsource(_draft_create)
+          and '"agm_notice"' not in _d6_inspect.getsource(_task_args),
+          "neither draft path carries a hardcoded statutory kind any more -- the string, "
+          "not just its effect, so a second default cannot be added back quietly")
+
+    # ── move 3: a dispatched cell SETTLES its reservation ───────────────────
+    # `agents/review_grid.schedule` passes `reservation_id` into every cell's job args and
+    # says why: "Carried so the worker settles the exact reservation this cell holds. A
+    # settled-by-guess reservation is a leak that only shows up as a budget that never
+    # recovers." Nothing consumed it. `reservation_id` appeared NOWHERE in this file, so
+    # every cell that ran held its WORST-CASE price until the day rolled over -- a 400-cell
+    # table ate a whole day's cap and answered nothing further. Found by running one cell
+    # live against local Postgres and reading `corpus/.budget.json` afterwards: ₹2.00
+    # outstanding for a cell that had already finished.
+    _d5_fresh = _MBT(store=_MMem(), today=_mdate(2026, 10, 5))
+    _d5_res = _d5_fresh.reserve(input_tokens=4000, max_tokens=600,
+                               reservation_id="cell-settle-check")
+    def _d5_held() -> float:
+        return sum((_d5_fresh._state().get("reservations") or {}).values())
+    _d5_before = _d5_held()
+    _d5_store = MemoryBackend()
+    _d5_store.write_grid({"grid_id": "grid-settle", "name": "settle",
+                          "columns": [{"name": "governing law", "kind": "text",
+                                       "question": "Which law?"}],
+                          "document_ids": ["b2" * 32]})
+    _mreal5 = globals()["_ledger"]
+    globals()["_ledger"] = lambda: _d5_fresh
+    try:
+        _d5_out = _review_grid_cell(
+            {"grid_id": "grid-settle", "document_id": "b2" * 32,
+             "column": "governing law", "kind": "text", "question": "Which law?",
+             "idempotency_key": "grid-settle:b2:governing law",
+             "reservation_id": _d5_res.id},
+            Context(store=_d5_store, clock=lambda: "2026-10-05T00:00:00Z"))
+    finally:
+        globals()["_ledger"] = _mreal5
+    check(_d5_before > 0.0 and _d5_held() == 0.0,
+          f"a cell that FAILED still settles its reservation: the money it did not spend "
+          f"goes back to the cap (₹{_d5_before:.2f} held -> ₹{_d5_held():.2f} after, "
+          f"cell {_d5_out.get('cell_state')})")
+    check(_d5_out.get("reservation_settled") is True,
+          f"...and the response SAYS it settled, so a leak is visible in the record rather "
+          f"than only in a budget that quietly shrinks "
+          f"({_d5_out.get('reservation_settled')})")
+
+    # ── move 3: a PENDING cell says WHY it is pending ───────────────────────
+    # "Not dispatched because there is no worker" and "dispatched, waiting its turn" are
+    # both PENDING, and the difference is the whole of whether anything will ever happen.
+    # A silent PENDING is a table that looks busy and is not.
+    _d3_nq = Context(store=MemoryBackend(), clock=lambda: "2026-10-05T00:00:00Z")
+    _d3_fresh = _MBT(store=_MMem(), today=_mdate(2026, 10, 5))
+    _mreal2 = globals()["_ledger"]
+    globals()["_ledger"] = lambda: _d3_fresh
+    try:
+        _d3_made = _review_table_create(
+            {"name": "no queue", "document_ids": ["e" * 64],
+             "columns": [{"name": "governing law", "kind": "text",
+                          "question": "Which law?"}]},
+            _d3_nq)
+        _d3_st = _review_table_status({"grid_id": _d3_made.get("grid_id", "")}, _d3_nq)
+    finally:
+        globals()["_ledger"] = _mreal2
+
+    check(isinstance(_d3_st.get("dispatch"), dict),
+          f"status carries a `dispatch` object, so a PENDING cell can say why "
+          f"({_d3_st.get('dispatch')})")
+    _d3 = _d3_st.get("dispatch") or {}
+    check(_d3.get("queue_configured") is False,
+          f"...reporting that no queue is configured ({_d3.get('queue_configured')})")
+    check("not dispatched" in str(_d3.get("note") or "").lower(),
+          f"...and saying 'not dispatched' in words ({str(_d3.get('note'))[:70]})")
+    check(_d3.get("never_dispatched") == _d3_st.get("cells"),
+          f"...with every cell counted as never dispatched "
+          f"({_d3.get('never_dispatched')} of {_d3_st.get('cells')})")
+
+    # With a queue and no worker: dispatched, and nothing has claimed them.
+    _d3_q = _MQ2()
+    _d3_wq = Context(store=MemoryBackend(), queue=_d3_q,
+                     clock=lambda: "2026-10-05T00:00:00Z")
+    _d3_fresh2 = _MBT(store=_MMem(), today=_mdate(2026, 10, 5))
+    globals()["_ledger"] = lambda: _d3_fresh2
+    try:
+        _d3_made2 = _review_table_create(
+            {"name": "queued, no worker", "document_ids": ["f" * 64],
+             "columns": [{"name": "governing law", "kind": "text",
+                          "question": "Which law?"}]},
+            _d3_wq)
+        _d3_st2 = _review_table_status({"grid_id": _d3_made2.get("grid_id", "")}, _d3_wq)
+    finally:
+        globals()["_ledger"] = _mreal2
+    _d3b = _d3_st2.get("dispatch") or {}
+    check(_d3b.get("queue_configured") is True,
+          f"with a queue, status says so ({_d3b.get('queue_configured')})")
+    check(_d3b.get("awaiting_worker") == _d3_st2.get("cells"),
+          f"...and counts the cells no worker has claimed "
+          f"({_d3b.get('awaiting_worker')} of {_d3_st2.get('cells')})")
+    check("no worker" in str(_d3b.get("note") or "").lower(),
+          f"...saying 'no worker' rather than leaving PENDING to be read as progress "
+          f"({str(_d3b.get('note'))[:70]})")
+    check(_d3b.get("never_dispatched") == 0,
+          f"...and nothing is 'never dispatched', because the jobs exist "
+          f"({_d3b.get('never_dispatched')})")
+
+    # Once a worker claims one, the note stops saying no worker. The complement, so the
+    # message is measured rather than constant.
+    _d3_claimed = _d3_q.claim(worker="w1")
+    check(_d3_claimed is not None, "a worker claims the queued cell")
+    _d3_st3 = _review_table_status({"grid_id": _d3_made2.get("grid_id", "")}, _d3_wq)
+    _d3c = _d3_st3.get("dispatch") or {}
+    check(_d3c.get("awaiting_worker") == 0 and "no worker" not in
+          str(_d3c.get("note") or "").lower(),
+          f"...and once claimed, the note no longer says no worker "
+          f"({_d3c.get('awaiting_worker')}: {str(_d3c.get('note'))[:50]})")
+
+    # ── move 3: the worker can actually run what upload queues ──────────────
+    # `vault.upload` enqueues `vault_ingest`. If that intent is not in QUEUED_INTENTS the
+    # worker finds no handler, dead-letters the job as not retryable, and the document sits
+    # at PENDING for ever -- having been "queued for ingestion". Move 1's HTTP test passed
+    # only because it called the ingest handler directly.
+    check("vault_ingest" in QUEUED_INTENTS,
+          f"vault_ingest is an intent the WORKER can run, not only one upload can enqueue "
+          f"({sorted(QUEUED_INTENTS)})")
+    check("vault_ingest" in STORE_WRITING_INTENTS,
+          "...and it keeps the store, because an ingested document is the product rather "
+          "than a run record")
+    import tempfile as _d3tmp
+
+    from gateway.filestore import LocalFileStore as _D3LFS
+    with _d3tmp.TemporaryDirectory() as _d3dir:
+        _d3_files = _D3LFS(_d3dir)
+        _d3_store = MemoryBackend()
+        _d3_ctx = Context(store=_d3_store, queue=_MQ2(), files=_d3_files,
+                          clock=lambda: "2026-10-05T00:00:00Z")
+        _d3_up = _vault_upload({"name": "nda.txt",
+                                "text": "This Agreement is governed by the laws of India."},
+                               _d3_ctx)
+        check(_d3_up.get("status") != "REFUSED",
+              f"an upload with a file store is accepted ({str(_d3_up)[:60]})")
+        _d3_handlers = queue_handlers(_d3_ctx)
+        check("vault_ingest" in _d3_handlers,
+              f"queue_handlers offers a vault_ingest handler ({sorted(_d3_handlers)})")
+        from gateway.worker import run_one as _d3_run
+        _d3_out = _d3_run(queue=_d3_ctx.queue, store=_d3_store, handlers=_d3_handlers)
+        check(_d3_out is not None and _d3_out.status != "FAILED",
+              f"...and the worker runs it to a named state rather than dead-lettering it "
+              f"({_d3_out.status if _d3_out else None}: "
+              f"{str(_d3_out.error)[:60] if _d3_out else ''})")
+        _d3_row = _d3_store.read_vault_document(_d3_up["document_id"])
+        check((_d3_row or {}).get("state") == "INGESTED",
+              f"...and the document reaches INGESTED through the WORKER "
+              f"({(_d3_row or {}).get('state')})")
+
+    # ── move 3: a queued job must point at a run that EXISTS ────────────────
+    # `jobs.run_id` references `runs(run_id)`. `_runs_submit` writes the run row first and
+    # its comment says why: "a job pointing at a run that does not exist is a foreign-key
+    # error on Postgres". Neither `vault.upload` nor `review_table.create` did -- so on a
+    # real database the enqueue raised ForeignKeyViolation, upload swallowed it into
+    # `queued = None` and told the operator "No queue is configured", which was false.
+    # Found by following docs/guides/RUN_LOCALLY.md against live Postgres.
+    _d4_store = MemoryBackend()
+    with _d3tmp.TemporaryDirectory() as _d4dir:
+        _d4_ctx = Context(store=_d4_store, queue=_MQ2(), files=_D3LFS(_d4dir),
+                          clock=lambda: "2026-10-05T00:00:00Z")
+        _d4_up = _vault_upload({"name": "a.txt", "text": "Governed by the laws of India."},
+                               _d4_ctx)
+        check(_d4_up.get("job_id"),
+              f"a vault upload returns a job id, so something was really queued "
+              f"({_d4_up.get('job_id')})")
+        check(_d4_store.read_run(_d4_up["document_id"]) is not None,
+              f"...and the RUN ROW the job points at exists, or Postgres refuses the "
+              f"insert on its foreign key "
+              f"({_d4_store.read_run(_d4_up['document_id']) is not None})")
+        check("No queue is configured" not in str(_d4_up.get("note") or ""),
+              f"...and the note does not say 'no queue' when one answered "
+              f"({str(_d4_up.get('note'))[:60]})")
+
+    _d4_fresh = _MBT(store=_MMem(), today=_mdate(2026, 10, 5))
+    _d4_gctx = Context(store=MemoryBackend(), queue=_MQ2(),
+                       clock=lambda: "2026-10-05T00:00:00Z")
+    _mreal3 = globals()["_ledger"]
+    globals()["_ledger"] = lambda: _d4_fresh
+    try:
+        _d4_grid = _review_table_create(
+            {"name": "runs exist", "document_ids": ["a1" * 32],
+             "columns": [{"name": "governing law", "kind": "text",
+                          "question": "Which law?"}]},
+            _d4_gctx)
+    finally:
+        globals()["_ledger"] = _mreal3
+    check(len(_d4_grid["scheduled"]["enqueued"]) == 1,
+          f"a review table enqueues its cell ({_d4_grid['scheduled']['enqueued']})")
+    from agents.review_grid import run_id_for_cell as _d4_rid
+    _d4_cell_run = _d4_rid(_d4_grid["grid_id"], "a1" * 32, "governing law")
+    check(_d4_gctx.store.read_run(_d4_cell_run) is not None,
+          f"...and a RUN ROW exists for that cell, so the job's foreign key holds "
+          f"({_d4_gctx.store.read_run(_d4_cell_run) is not None})")
+
+    globals()["_ledger"] = _real_ledger_fn
+    check(_ledger is _real_ledger_fn,
+          "...and the real ledger function is restored, so a suite running after this one "
+          "prices against the deployment's own ledger and not a temporary file")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:
