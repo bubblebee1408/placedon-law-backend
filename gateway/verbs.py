@@ -2072,7 +2072,8 @@ def _task_args(task: str, text: str, file_ids, ctx: Context, args: dict,
                            "note": ("nothing has been drafted yet: this engine does not "
                                     "write legal prose unprompted, and an UNKNOWN slot "
                                     "blocks approval until a person fills it")}],
-                "kind": args.get("kind") or "agm_notice"}
+                # Not a guessed statutory type: see DRAFT_KIND_UNKNOWN.
+                "kind": args.get("kind") or DRAFT_KIND_UNKNOWN}
     if task == "REVIEW_CONTRACT":
         return {"text": doc or text, "name": "conversation upload",
                 "test_data": args.get("test_data") or "unspecified"}
@@ -2966,6 +2967,13 @@ def _save_version(ctx: Context, draft_id: str, *, title: str, body: str, slots: 
         "approved_by": approved_by or None, "approved_at": approved_at or None})
 
 
+# A draft nobody typed. NOT a statutory document type: `draft.create` defaulted to
+# "agm_notice", which is an instrument carrying s.96 and s.101 obligations, for any caller
+# who did not say otherwise. A title is not a type declaration, and `doc_classifier` already
+# states the rule this broke -- "a guess here misfiles a document a lawyer then cannot find".
+DRAFT_KIND_UNKNOWN = "unknown"
+
+
 def _draft_create(args: dict, ctx: Context) -> dict:
     """Start a draft at version 1. A WRITE verb, so it is off MCP."""
     import uuid
@@ -2983,7 +2991,8 @@ def _draft_create(args: dict, ctx: Context) -> dict:
         return _refuse("BAD_REQUEST", "body must be a string")
     draft_id = (args.get("draft_id") or "").strip() or str(uuid.uuid4())
     ctx.store.write_draft({"draft_id": draft_id,
-                           "kind": (args.get("kind") or "agm_notice"), "title": title})
+                           "kind": (args.get("kind") or DRAFT_KIND_UNKNOWN),
+                           "title": title})
     try:
         n = _save_version(ctx, draft_id, title=title, body=body, slots=slots,
                           citations=tuple(args.get("citations") or ()))
@@ -6250,6 +6259,38 @@ def _test() -> None:
           f"this suite leaves NO cell reservation in the real ledger -- a test that holds "
           f"the deployment's cap starves every test after it, and the failure surfaces "
           f"somewhere unrelated ({len(_mleft)} left, ₹{sum(_mleft.values()):.2f})")
+    # ── move 5: an untyped draft is `unknown`, never a statutory document ───
+    # `draft.create {"title": "Board resolution"}` came back `kind: "agm_notice"`, and
+    # docs/app-screens/README.md recorded it as "the classifier disagreeing with the obvious
+    # reading of the title". There is NO classifier on this path. The line read
+    # `args.get("kind") or "agm_notice"` -- a hardcoded default, in five places counting both
+    # store backends and the column default in 012.
+    #
+    # That is worse than a wrong classification, because it is a constant wearing the clothes
+    # of a judgement. An AGM notice is a statutory instrument carrying s.96 and s.101
+    # obligations; a board resolution is not one, and a draft nobody typed is not either. A
+    # title is not a type declaration, so `unknown` is the answer -- the same rule
+    # `doc_classifier` already states: "a guess here misfiles a document a lawyer then
+    # cannot find".
+    _d6_ctx = Context(store=MemoryBackend(), clock=lambda: "2026-10-05T00:00:00Z")
+    _d6 = _draft_create({"title": "Board resolution"}, _d6_ctx)
+    # Compared against the LITERAL, not against DRAFT_KIND_UNKNOWN. The first draft of this
+    # check asserted `kind == DRAFT_KIND_UNKNOWN`, which is true whatever that constant
+    # holds -- so setting it back to "agm_notice" kept the suite green. A check that cannot
+    # turn red proves nothing, and this file has caught that twice before.
+    check(_d6.get("kind") == "unknown" and _d6.get("kind") != "agm_notice",
+          f"a draft created with no stated kind is 'unknown', not a statutory document "
+          f"type nobody asked for ({_d6.get('kind')!r})")
+    _d6_said = _draft_create({"title": "Notice of AGM", "kind": "agm_notice"}, _d6_ctx)
+    check(_d6_said.get("kind") == "agm_notice",
+          f"...while a kind the CALLER stated is kept exactly as stated "
+          f"({_d6_said.get('kind')!r})")
+    import inspect as _d6_inspect
+    check('"agm_notice"' not in _d6_inspect.getsource(_draft_create)
+          and '"agm_notice"' not in _d6_inspect.getsource(_task_args),
+          "neither draft path carries a hardcoded statutory kind any more -- the string, "
+          "not just its effect, so a second default cannot be added back quietly")
+
     # ── move 3: a dispatched cell SETTLES its reservation ───────────────────
     # `agents/review_grid.schedule` passes `reservation_id` into every cell's job args and
     # says why: "Carried so the worker settles the exact reservation this cell holds. A

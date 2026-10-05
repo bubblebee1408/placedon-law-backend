@@ -385,7 +385,7 @@ class MemoryBackend:
     # ── H3: drafts ───────────────────────────────────────────────────────────
     def write_draft(self, draft: dict) -> dict:
         did = draft["draft_id"]
-        self.drafts[did] = {"draft_id": did, "kind": draft.get("kind") or "agm_notice",
+        self.drafts[did] = {"draft_id": did, "kind": draft.get("kind") or "unknown",
                             "title": draft.get("title") or ""}
         self.draft_versions.setdefault(did, [])
         return dict(self.drafts[did])
@@ -1828,7 +1828,7 @@ class PostgresBackend:
                 c.execute("INSERT INTO drafts (draft_id, tenant_id, kind, title) "
                           "VALUES (%s,%s,%s,%s) ON CONFLICT (draft_id) DO UPDATE SET "
                           "title = EXCLUDED.title, updated_at = now()",
-                          (did, self.tenant_id, draft.get("kind") or "agm_notice",
+                          (did, self.tenant_id, draft.get("kind") or "unknown",
                            draft.get("title") or ""))
         except psycopg.errors.IntegrityError as exc:
             raise StoreError(f"the database refused this draft: {type(exc).__name__}") from None
