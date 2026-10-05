@@ -84,6 +84,11 @@ REQUIRED: dict[str, str] = {
     "runs.get": VIEWER,
     "runs.trace": VIEWER,
     "matters.list": VIEWER,
+    # move 8 (T3). VIEWER, like every other read of the vault: verification reads bytes
+    # already in the firm's possession and decides nothing. It is NOT the signing-off act
+    # that `runs.approve` is -- it reports what the signature says, and a person still has
+    # to act on it.
+    "document.verify": VIEWER,
     "vault.compile": VIEWER,
     "vault.find": VIEWER,
     "vault.research": VIEWER,
