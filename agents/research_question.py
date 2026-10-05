@@ -55,6 +55,7 @@ from backend.budget import FREE_TIER_RPD_PER_MODEL
 from checker.gemini_model import ModelBusy, ModelRateLimited
 from checker.ollama_runner import ModelUnavailable as OllamaUnavailable
 from checker.ollama_runner import OllamaRunner
+from checker.tier_rules import HELD
 from checker.lawyer_summary import STATUTE, Call, Source, Summary, check_blocks
 from checker.retrieve import ROUTE_ABSTAIN
 from checker.sarvam_model import html_to_text
@@ -144,7 +145,11 @@ def evidence(question: str) -> tuple[tuple[Source, public_only.Origin], ...]:
             # The section text does not match the committed corpus file. That is a
             # corpus problem, not something to route around by sending it anyway.
             continue
-        out.append((Source(f"Companies Act 2013, s.{c.section}", STATUTE, text), origin))
+        # HELD. This is `corpus/companies_act/` read through `structural_retrieve` -- the one
+        # tier that may make a claim VERIFIED. Stated rather than defaulted: move 7 made
+        # `Source.tier` required precisely so a future connector cannot inherit this.
+        out.append((Source(f"Companies Act 2013, s.{c.section}", STATUTE, text, HELD),
+                    origin))
     return tuple(out)
 
 

@@ -215,6 +215,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `checker/structural_retrieve.py` |  | Structural retrieval — resolve a query to the statute chunks it admits. |
 | `checker/sweep.py` |  | Run an instrument backwards across a folder — the query a practitioner has. |
 | `checker/text_search.py` |  | Title + body search over the Companies Act 2013 corpus, for users who do not know the number. |
+| `checker/tier_rules.py` | R0 legal core | The five tiers and the one that can verify. RING 0 — the rule, not the connectors. |
 | `checker/timeline.py` |  | Amendment timeline for a Companies Act section. |
 | `checker/trust.py` |  | X.509 chain validation against the Indian government's own root certificates. |
 | `checker/vault_search.py` |  | BM25 over a vault's chunks, per tenant, with each chunk told where it came from. |
@@ -370,4 +371,4 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/watch_gazette.py` |  | Run the Gazette watcher once: what did the Gazette publish since we last looked? |
 | `scripts/watch_ofac.py` |  | Poll OFAC's SDN list and report what CHANGED since the last trustworthy poll. |
 
-330 modules listed.
+331 modules listed.
