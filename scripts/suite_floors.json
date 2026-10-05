@@ -39,7 +39,11 @@
     "checker/calibration.py": 41,
     "checker/calibration_contract.py": 17,
     "checker/cascade.py": 16,
-    "checker/chunk_fusion.py": 29,
+    "checker/chunk_fusion.py": {
+      "floor": 29,
+      "requires": "sentence_transformers",
+      "unavailable_floor": 16
+    },
     "checker/chunk_retrieval.py": 9,
     "checker/claim_bodies.py": 30,
     "checker/claim_schema.py": 11,
@@ -60,7 +64,11 @@
     "checker/cross_section_eval.py": 4,
     "checker/currency.py": 42,
     "checker/decompose.py": 30,
-    "checker/dense_index.py": 8,
+    "checker/dense_index.py": {
+      "floor": 8,
+      "requires": "sentence_transformers",
+      "unavailable_floor": 1
+    },
     "checker/derivation.py": 16,
     "checker/derived_date.py": 19,
     "checker/diligence_pack.py": 22,
@@ -106,7 +114,11 @@
     "checker/forecast/rates.py": 19,
     "checker/forecast/scoring.py": 12,
     "checker/forecast/survival.py": 8,
-    "checker/fusion.py": 19,
+    "checker/fusion.py": {
+      "floor": 19,
+      "requires": "sentence_transformers",
+      "unavailable_floor": 12
+    },
     "checker/gemini_model.py": 53,
     "checker/ground_span.py": 13,
     "checker/grounding_policy.py": 13,
@@ -160,7 +172,11 @@
     "checker/redteam.py": 85,
     "checker/release.py": 15,
     "checker/release_record.py": 19,
-    "checker/reranker.py": 23,
+    "checker/reranker.py": {
+      "floor": 23,
+      "requires": "sentence_transformers",
+      "unavailable_floor": 3
+    },
     "checker/resubmission.py": 13,
     "checker/retrieval_eval.py": 11,
     "checker/retrieval_metrics.py": 25,
