@@ -238,6 +238,41 @@ def listen_waiter(url: str, channel: str | None = None):
     return wait
 
 
+TENANT_ENV = "PLACEDON_WORKER_TENANT_ID"
+
+
+def worker_tenant_id(url: str | None = None) -> str | None:
+    """Which tenant this worker drains for. `None` only when there is no database.
+
+    **One worker, one tenant.** `PostgresQueue` has always taken a single `tenant_id` and
+    every row it touches is behind `FORCE ROW LEVEL SECURITY` on `app.tenant_id`, so a
+    worker cannot claim another tenant's job even by accident -- the policy would hide the
+    row. Draining several tenants would mean re-setting `app.tenant_id` per claim, which is
+    a ring-level change and wants an architect record; running one worker per tenant needs
+    none. Recorded in `research/TASKS.md`.
+
+    Raises rather than inventing a default. `store.select()` refuses a Postgres backend with
+    no tenant, and `main` used to call it bare: the worker died on `StoreError` before its
+    first claim, and the only symptom anywhere was a document that stayed PENDING. An error
+    that names the variable to set is the difference between a two-minute fix and an hour.
+    """
+    import os
+    from gateway.store import database_url
+    tenant = (os.environ.get(TENANT_ENV) or "").strip()
+    if tenant:
+        return tenant
+    # `url` is injected for the check below. `database_url()` reads `.env` as well as the
+    # environment, so a test cannot turn it off by popping a variable -- and a test that
+    # silently read the developer's own `.env` would pass or fail by accident.
+    if not (database_url() if url is None else url):
+        return None
+    raise RuntimeError(
+        f"{TENANT_ENV} is not set, but PLACEDON_DATABASE_URL is. A worker drains ONE "
+        f"tenant's jobs, and every row it reads is behind row-level security on that "
+        f"tenant -- so there is no safe default. Set {TENANT_ENV} to the tenant whose "
+        f"queue this worker serves; scripts/local-gateway.py prints the local one.")
+
+
 def main(argv=None) -> int:
     """The process. Signals here, never in `serve`.
 
@@ -265,7 +300,7 @@ def main(argv=None) -> int:
         signal.signal(sig, _signal)
 
     url = database_url()
-    store = select()
+    store = select(tenant_id=worker_tenant_id())
     if url:
         queue = PostgresQueue(url, tenant_id=store.tenant_id)
         wait = listen_waiter(url)
@@ -587,6 +622,43 @@ def _test() -> None:
               _inspect.getsource(main))) if isinstance(n, _ast.Import) for a in n.names},
           "...while main() DOES import signal: the process handles signals, the loop does "
           "not")
+
+    # ── a Postgres worker needs a tenant, and must SAY which env var ────────────
+    # `store.select()` refuses a Postgres backend without a tenant, and `main` called it
+    # with none -- so following docs/guides/RUN_LOCALLY.md against a real database killed
+    # the worker on StoreError before it claimed a single job. Every vault upload then sat
+    # PENDING for ever with nothing at the console to say why.
+    import os as _os
+    _saved = {k: _os.environ.get(k) for k in (TENANT_ENV, "PLACEDON_DATABASE_URL")}
+    try:
+        _os.environ["PLACEDON_DATABASE_URL"] = "postgresql:///placedon_nonexistent_worker_check"
+        _os.environ.pop(TENANT_ENV, None)
+        _err = ""
+        try:
+            worker_tenant_id()
+        except Exception as e:                                   # noqa: BLE001
+            _err = str(e)
+        check(TENANT_ENV in _err,
+              f"with a database URL and no tenant, the worker refuses and NAMES the env "
+              f"var to set ({_err[:70]!r})")
+        _os.environ[TENANT_ENV] = "00000000-0000-0000-0000-000000000001"
+        check(worker_tenant_id() == "00000000-0000-0000-0000-000000000001",
+              f"...and with it set, that tenant is what the store is built for "
+              f"({worker_tenant_id()})")
+        _os.environ.pop(TENANT_ENV, None)
+        check(worker_tenant_id(url="") is None,
+              f"with no database URL, no tenant is required: an in-memory worker makes its "
+              f"own ({worker_tenant_id(url='')})")
+    finally:
+        for k, v in _saved.items():
+            if v is None:
+                _os.environ.pop(k, None)
+            else:
+                _os.environ[k] = v
+    _mainsrc = _inspect.getsource(main)
+    check("worker_tenant_id()" in _mainsrc,
+          "main() builds its store through worker_tenant_id(), so the refusal above is the "
+          "one a real operator meets")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:
