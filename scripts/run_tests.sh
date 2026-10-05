@@ -71,6 +71,7 @@ suites=(
   backend/budget.py
   backend/azure_pricing.py
   checker/claim_schema.py
+  checker/law_versions.py
   checker/legal_ref.py
   checker/admission.py
   checker/review_queue.py

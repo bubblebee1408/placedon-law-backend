@@ -113,6 +113,7 @@
     "checker/instrument_registry.py": 15,
     "checker/interval.py": 18,
     "checker/lattice.py": 15,
+    "checker/law_versions.py": 24,
     "checker/lawyer_summary.py": 92,
     "checker/legal_ref.py": 12,
     "checker/legal_retrieval.py": 62,

@@ -75,7 +75,72 @@ window.PLACEDON_ASK_FIXTURES = {
    "corpus_fetched": [
     "2026-08-18"
    ],
+   "corpus_hash": "sha256:88f4aeb6650f",
+   "instruments": [
+    {
+     "instrument": "Act 1 of 2018",
+     "sections": [
+      "2"
+     ]
+    },
+    {
+     "instrument": "Act 21 of 2015",
+     "sections": [
+      "2"
+     ]
+    },
+    {
+     "instrument": "Act 22 of 2019",
+     "sections": [
+      "2"
+     ]
+    },
+    {
+     "instrument": "Act 29 of 2020",
+     "sections": [
+      "2"
+     ]
+    },
+    {
+     "instrument": "Act 31 of 2016",
+     "sections": [
+      "2"
+     ]
+    },
+    {
+     "instrument": "Act 8 of 1961",
+     "sections": [
+      "2"
+     ]
+    },
+    {
+     "instrument": "S.O. 1820 (E)",
+     "sections": [
+      "2"
+     ]
+    },
+    {
+     "instrument": "S.O. 1894 (E)",
+     "sections": [
+      "2"
+     ]
+    },
+    {
+     "instrument": "S.O. 3912(E)",
+     "sections": [
+      "2"
+     ]
+    },
+    {
+     "instrument": "S.O. 504(E)",
+     "sections": [
+      "2"
+     ]
+    }
+   ],
+   "note": "the corpus hash identifies the law that answered, by content. `instruments` lists only what the answering provisions' own records name -- a provision with none is not a provision that was never amended, and this repository does not hold a complete amendment history",
    "point_in_time_verified": false,
+   "record_count": 529,
    "statement": "This pack carries the CURRENT CONSOLIDATION of the Companies Act 2013 as India Code rendered it when the corpus was ingested (2026-08-18). It is NOT a point-in-time version of the law and carries no verified commencement or amendment date. The amendment vintage of individual provisions is not uniform and not fully known: SD-002 confirms that some records carry pre-amendment wording while the same publisher's PDF carries later wording. Those provisions are marked unusable in this pack. Point-in-time reconstruction exists in this system but is UNVERIFIED against any external source, so no statement here is a statement about the law as it stood on any past date."
   },
   "question": "Is this company a small company?",
@@ -206,8 +271,102 @@ window.PLACEDON_ASK_FIXTURES = {
    "corpus_fetched": [
     "2026-08-18"
    ],
+   "corpus_hash": "sha256:88f4aeb6650f",
+   "instruments": [
+    {
+     "instrument": "Act 1 of 2018",
+     "sections": [
+      "2",
+      "92",
+      "96",
+      "135",
+      "137",
+      "149",
+      "173",
+      "177",
+      "180",
+      "184",
+      "186",
+      "188"
+     ]
+    },
+    {
+     "instrument": "Act 21 of 2015",
+     "sections": [
+      "2",
+      "177",
+      "188"
+     ]
+    },
+    {
+     "instrument": "Act 22 of 2019",
+     "sections": [
+      "2",
+      "92",
+      "135",
+      "137",
+      "203"
+     ]
+    },
+    {
+     "instrument": "Act 29 of 2020",
+     "sections": [
+      "2",
+      "92",
+      "135",
+      "137",
+      "149",
+      "184",
+      "188"
+     ]
+    },
+    {
+     "instrument": "Act 31 of 2016",
+     "sections": [
+      "2"
+     ]
+    },
+    {
+     "instrument": "Act 8 of 1961",
+     "sections": [
+      "2"
+     ]
+    },
+    {
+     "instrument": "S.O. 1177 (E)",
+     "sections": [
+      "92"
+     ]
+    },
+    {
+     "instrument": "S.O. 1820 (E)",
+     "sections": [
+      "2"
+     ]
+    },
+    {
+     "instrument": "S.O. 1894 (E)",
+     "sections": [
+      "2"
+     ]
+    },
+    {
+     "instrument": "S.O. 3912(E)",
+     "sections": [
+      "2"
+     ]
+    },
+    {
+     "instrument": "S.O. 504(E)",
+     "sections": [
+      "2"
+     ]
+    }
+   ],
+   "note": "the corpus hash identifies the law that answered, by content. `instruments` lists only what the answering provisions' own records name -- a provision with none is not a provision that was never amended, and this repository does not hold a complete amendment history",
    "point_in_time_requested": "2024-06-01",
    "point_in_time_verified": false,
+   "record_count": 529,
    "statement": "This pack carries the CURRENT CONSOLIDATION of the Companies Act 2013 as India Code rendered it when the corpus was ingested (2026-08-18). It is NOT a point-in-time version of the law and carries no verified commencement or amendment date. The amendment vintage of individual provisions is not uniform and not fully known: SD-002 confirms that some records carry pre-amendment wording while the same publisher's PDF carries later wording. Those provisions are marked unusable in this pack. Point-in-time reconstruction exists in this system but is UNVERIFIED against any external source, so no statement here is a statement about the law as it stood on any past date. A point-in-time answer was requested for 2024-06-01. This pack CANNOT supply one. Do not treat any text below as the law as it stood on 2024-06-01."
   },
   "not_confirmed": [
@@ -368,7 +527,72 @@ window.PLACEDON_ASK_FIXTURES = {
    "corpus_fetched": [
     "2026-08-18"
    ],
+   "corpus_hash": "sha256:88f4aeb6650f",
+   "instruments": [
+    {
+     "instrument": "Act 1 of 2018",
+     "sections": [
+      "2"
+     ]
+    },
+    {
+     "instrument": "Act 21 of 2015",
+     "sections": [
+      "2"
+     ]
+    },
+    {
+     "instrument": "Act 22 of 2019",
+     "sections": [
+      "2"
+     ]
+    },
+    {
+     "instrument": "Act 29 of 2020",
+     "sections": [
+      "2"
+     ]
+    },
+    {
+     "instrument": "Act 31 of 2016",
+     "sections": [
+      "2"
+     ]
+    },
+    {
+     "instrument": "Act 8 of 1961",
+     "sections": [
+      "2"
+     ]
+    },
+    {
+     "instrument": "S.O. 1820 (E)",
+     "sections": [
+      "2"
+     ]
+    },
+    {
+     "instrument": "S.O. 1894 (E)",
+     "sections": [
+      "2"
+     ]
+    },
+    {
+     "instrument": "S.O. 3912(E)",
+     "sections": [
+      "2"
+     ]
+    },
+    {
+     "instrument": "S.O. 504(E)",
+     "sections": [
+      "2"
+     ]
+    }
+   ],
+   "note": "the corpus hash identifies the law that answered, by content. `instruments` lists only what the answering provisions' own records name -- a provision with none is not a provision that was never amended, and this repository does not hold a complete amendment history",
    "point_in_time_verified": false,
+   "record_count": 529,
    "statement": "This pack carries the CURRENT CONSOLIDATION of the Companies Act 2013 as India Code rendered it when the corpus was ingested (2026-08-18). It is NOT a point-in-time version of the law and carries no verified commencement or amendment date. The amendment vintage of individual provisions is not uniform and not fully known: SD-002 confirms that some records carry pre-amendment wording while the same publisher's PDF carries later wording. Those provisions are marked unusable in this pack. Point-in-time reconstruction exists in this system but is UNVERIFIED against any external source, so no statement here is a statement about the law as it stood on any past date."
   },
   "parent_turn_id": "t_20ccadb72b4b",
@@ -438,7 +662,11 @@ window.PLACEDON_ASK_FIXTURES = {
   "law_version": {
    "basis": "CURRENT_CONSOLIDATION_AS_INGESTED",
    "corpus_fetched": [],
+   "corpus_hash": "sha256:88f4aeb6650f",
+   "instruments": [],
+   "note": "the corpus hash identifies the law that answered, by content. `instruments` lists only what the answering provisions' own records name -- a provision with none is not a provision that was never amended, and this repository does not hold a complete amendment history",
    "point_in_time_verified": false,
+   "record_count": 529,
    "statement": "This pack carries the CURRENT CONSOLIDATION of the Companies Act 2013 as India Code rendered it when the corpus was ingested (an unrecorded date). It is NOT a point-in-time version of the law and carries no verified commencement or amendment date. The amendment vintage of individual provisions is not uniform and not fully known: SD-002 confirms that some records carry pre-amendment wording while the same publisher's PDF carries later wording. Those provisions are marked unusable in this pack. Point-in-time reconstruction exists in this system but is UNVERIFIED against any external source, so no statement here is a statement about the law as it stood on any past date."
   },
   "not_confirmed": [
@@ -514,7 +742,18 @@ window.PLACEDON_ASK_FIXTURES = {
    "corpus_fetched": [
     "2026-08-18"
    ],
+   "corpus_hash": "sha256:88f4aeb6650f",
+   "instruments": [
+    {
+     "instrument": "Act 1 of 2018",
+     "sections": [
+      "173"
+     ]
+    }
+   ],
+   "note": "the corpus hash identifies the law that answered, by content. `instruments` lists only what the answering provisions' own records name -- a provision with none is not a provision that was never amended, and this repository does not hold a complete amendment history",
    "point_in_time_verified": false,
+   "record_count": 529,
    "statement": "This pack carries the CURRENT CONSOLIDATION of the Companies Act 2013 as India Code rendered it when the corpus was ingested (2026-08-18). It is NOT a point-in-time version of the law and carries no verified commencement or amendment date. The amendment vintage of individual provisions is not uniform and not fully known: SD-002 confirms that some records carry pre-amendment wording while the same publisher's PDF carries later wording. Those provisions are marked unusable in this pack. Point-in-time reconstruction exists in this system but is UNVERIFIED against any external source, so no statement here is a statement about the law as it stood on any past date."
   },
   "not_confirmed": [

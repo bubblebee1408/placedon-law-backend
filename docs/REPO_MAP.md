@@ -118,6 +118,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `checker/instrument_registry.py` | R0 legal core | Which instruments are on record at all, and which of them a person has read. |
 | `checker/interval.py` |  | Honest error bars, in the standard library. |
 | `checker/lattice.py` |  | Ordinal state algebra — one implementation of "the worst thing wins". |
+| `checker/law_versions.py` |  | Which law answered: the corpus by content, and the instruments that amended it. |
 | `checker/lawyer_summary.py` |  | The lawyer summary: a sentence is traced to a span, or it is refused and shown as refused. |
 | `checker/legal_ref.py` |  | Instrument-qualified references for Indian legal provisions. |
 | `checker/legal_retrieval.py` |  | Exact/structural retrieval: turn what a lawyer typed into the provisions they named. |
@@ -369,4 +370,4 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/watch_gazette.py` |  | Run the Gazette watcher once: what did the Gazette publish since we last looked? |
 | `scripts/watch_ofac.py` |  | Poll OFAC's SDN list and report what CHANGED since the last trustworthy poll. |
 
-329 modules listed.
+330 modules listed.

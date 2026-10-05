@@ -39,9 +39,23 @@ def _citation(p: dict) -> dict:
 
 
 def _law_version(d: dict) -> dict:
+    """What law answered: when it was fetched, and -- T1 -- WHICH corpus by content.
+
+    `as_of` said when the corpus was fetched. It could not say which one: two deployments
+    that fetched on the same day, one re-ingested after a correction, produced identical
+    blocks and different answers, and nothing in a trace told them apart. The hash is the
+    only part of this that a reader of a six-month-old answer can actually check.
+
+    Merged into the existing block rather than nested beside it, because `ask_contract`
+    requires `law_version` on any turn that renders legal text and a reader should not have
+    to know there are two places to look.
+    """
+    from checker import law_versions as lv
     a = d["as_of"]
-    return {k: a[k] for k in ("basis", "point_in_time_verified", "corpus_fetched",
-                              "statement")}
+    out = {k: a[k] for k in ("basis", "point_in_time_verified", "corpus_fetched",
+                             "statement")}
+    out.update(lv.law_versions(d.get("usable_keys") or ()))
+    return out
 
 
 def _law_version_at(provisions: list[str], requested: str) -> dict:
@@ -56,8 +70,13 @@ def _law_version_at(provisions: list[str], requested: str) -> dict:
     pack, _ = _pack(" and ".join(f"s.{n}" for n in sections))
     fetched = tuple(pack["as_of"]["corpus_fetched"])
     a = evidence_pack._build_as_of(fetched, date.fromisoformat(requested)).to_dict()
-    return {k: a[k] for k in ("basis", "point_in_time_verified", "point_in_time_requested",
-                              "corpus_fetched", "statement")}
+    from checker import law_versions as lv
+    out = {k: a[k] for k in ("basis", "point_in_time_verified", "point_in_time_requested",
+                             "corpus_fetched", "statement")}
+    # The same corpus identity on the point-in-time path. A past-date answer is exactly the
+    # answer most likely to be read long after the corpus moved on.
+    out.update(lv.law_versions(provisions))
+    return out
 
 
 def _pack_summary(d: dict, route: str) -> dict:
