@@ -218,6 +218,108 @@ def decide(text: str, *, as_of: date, rule: Rule | None = None,
         f"quote of {rule.citation} rather than stored as a bare number"), detail=detail)
 
 
+# ── move 10: the ACTION ──────────────────────────────────────────────────────
+KEEP = "KEEP"
+RENEW_BY = "RENEW_BY"
+REPLACE = "REPLACE"
+REMOVE = "REMOVE"
+NEEDS_LAWYER = "NEEDS_LAWYER"
+
+ACTIONS = (KEEP, RENEW_BY, REPLACE, REMOVE, NEEDS_LAWYER)
+
+# How long before an expiry a renewal is worth raising. Named, because a magic 90 buried in a
+# branch is a policy nobody can find. Ninety days is `calendar.upcoming`'s own horizon, so a
+# RENEW_BY this module raises is one that window can actually show.
+RENEW_WINDOW_DAYS = 90
+
+
+@dataclass(frozen=True)
+class Action:
+    action: str
+    reason: str
+    renew_by: date | None = None
+
+    def to_dict(self) -> dict:
+        return {"action": self.action, "reason": self.reason,
+                "renew_by": self.renew_by.isoformat() if self.renew_by else None}
+
+
+def act(validity: Validity, *, verification_status: str = "",
+        not_checked: tuple[str, ...] = (), renewable: bool = False) -> Action:
+    """What a lawyer should DO, with the reason. Decided by code, never by a model.
+
+    The order is the whole of it, and it runs worst-first:
+
+      1. a FAILED verification -- the bytes were altered after signing -- is NEEDS_LAWYER
+         before anything else. A tampered document is a legal problem, not a filing one, and
+         an action like REPLACE would quietly turn a possible fraud into an errand.
+      2. REVOKED is REPLACE: the authority is gone and a renewal cannot bring it back.
+      3. SUPERSEDED is REMOVE -- from the LIVE set, not from the archive. See the constant's
+         own words below.
+      4. EXPIRED is RENEW_BY when the caller says the class is renewable, REPLACE when not.
+      5. NOT_DETERMINED is NEEDS_LAWYER: we could not say, so a person must.
+      6. ANY check that was NOT RUN blocks KEEP, even on a document that looks perfect. This
+         is the done-when and it is the point of the whole feature: KEEP asserts we looked
+         and found nothing wrong, and "we did not look" cannot support that.
+      7. Only then: in force, everything established -> KEEP.
+    """
+    from checker import doc_verification as dv
+
+    if verification_status == dv.FAILED:
+        return Action(NEEDS_LAWYER, (
+            "the signed bytes do not match the signature, so this document was altered "
+            "after signing. A person has to look at this before anything else happens to "
+            "it -- an action like REPLACE would turn a possible fraud into an errand"))
+
+    if validity.status == REVOKED:
+        return Action(REPLACE, (
+            f"the document was revoked, so its authority is gone and renewing it cannot "
+            f"bring it back. {validity.reason}"))
+
+    if validity.status == SUPERSEDED:
+        return Action(REMOVE, (
+            f"a later instrument replaced this one, so it should come out of the LIVE set. "
+            f"REMOVE is about which document answers a question today -- it is not an "
+            f"instruction to destroy anything, and retention obligations are untouched by "
+            f"it. {validity.reason}"))
+
+    if validity.status == EXPIRED:
+        if renewable:
+            # No renew_by date: the period has already run out, so there is no future
+            # deadline to put in a calendar -- the deadline is now. A date here would be a
+            # fabricated grace period.
+            return Action(RENEW_BY, (
+                f"the validity period has already run out, so the renewal is due now rather "
+                f"than on a future date. {validity.reason}"), renew_by=validity.as_of)
+        return Action(REPLACE, (
+            f"the validity period has run out and nobody has said this class can be "
+            f"renewed, so a fresh document is needed. {validity.reason}"))
+
+    if validity.status == NOT_DETERMINED:
+        return Action(NEEDS_LAWYER, (
+            f"the status could not be determined, so no action follows from it and a person "
+            f"has to decide. {validity.reason}"))
+
+    # In force from here. The NOT_CHECKED gate comes BEFORE KEEP, deliberately.
+    if not_checked:
+        return Action(NEEDS_LAWYER, (
+            f"the document is in force and {len(not_checked)} check(s) were NOT RUN: "
+            f"{', '.join(not_checked)}. KEEP would assert we looked and found nothing "
+            f"wrong, and we did not look. This is not a finding against the document"))
+
+    if validity.status == EXPIRES_ON and validity.expires_on is not None:
+        days = (validity.expires_on - validity.as_of).days
+        if days <= RENEW_WINDOW_DAYS:
+            return Action(RENEW_BY, (
+                f"in force, and the period ends on {validity.expires_on.isoformat()} -- "
+                f"{days} day(s) away, inside the {RENEW_WINDOW_DAYS}-day window the calendar "
+                f"shows. {validity.reason}"), renew_by=validity.expires_on)
+
+    return Action(KEEP, (
+        f"in force, every required check established, and no renewal falls inside the next "
+        f"{RENEW_WINDOW_DAYS} days. {validity.reason}"))
+
+
 def _test() -> int:
     ok = fail = 0
 
@@ -399,6 +501,105 @@ def _test() -> int:
         check(len(got.reason) > 40 and got.to_dict()["status"] in STATUSES,
               f"{got.status} carries a reason a reader can act on "
               f"({got.reason[:50]}…)")
+
+    # ── move 10: the ACTION ─────────────────────────────────────────────────
+    from checker import doc_verification as _dv
+    COMPLETE, INCOMPLETE, VFAILED = _dv.COMPLETE, _dv.INCOMPLETE, _dv.FAILED
+
+    expired = decide(DATED, as_of=AS_OF, rule=SIX_MONTHS)
+    current = decide(DATED, as_of=AS_OF, rule=forever)
+    # 1 Sep 2025 + fifteen months = 1 Dec 2026, which is 57 days after AS_OF -- inside the
+    # 90-day window. My first fixture used 1 Jan 2026, whose expiry is 540 days out, so it
+    # was KEEP and the check was testing nothing about the window.
+    soon = decide("X\nDate: 1 September 2025\n", as_of=AS_OF, rule=FIFTEEN_MONTHS)
+    far = decide(recent, as_of=AS_OF, rule=FIFTEEN_MONTHS)
+    nd2 = decide(UNDATED, as_of=AS_OF, rule=SIX_MONTHS)
+
+    # ── an EXPIRED document never returns KEEP (the done-when) ──────────────
+    for renewable in (True, False):
+        a = act(expired, verification_status=COMPLETE, renewable=renewable)
+        check(a.action != KEEP,
+              f"an EXPIRED document is never KEEP (renewable={renewable}: {a.action})")
+    check(act(expired, verification_status=COMPLETE, renewable=True).action == RENEW_BY,
+          "an expired RENEWABLE document is RENEW_BY")
+    check(act(expired, verification_status=COMPLETE, renewable=True).renew_by == AS_OF,
+          f"...dated NOW rather than a future date, because the period has already run out "
+          f"and a future date would be a fabricated grace period "
+          f"({act(expired, verification_status=COMPLETE, renewable=True).renew_by})")
+    check(act(expired, verification_status=COMPLETE, renewable=False).action == REPLACE,
+          "an expired document nobody said is renewable is REPLACE")
+
+    # Not one example: no non-force status may ever produce KEEP, under any verification
+    # status. The database restates this as a CHECK; this is the Python half.
+    for v in (expired,
+              decide(recent, as_of=AS_OF, rule=FIFTEEN_MONTHS, revoked_on=date(2026, 1, 1)),
+              decide(recent, as_of=AS_OF, rule=FIFTEEN_MONTHS, superseded_by="BR/2"),
+              nd2):
+        for vs in (COMPLETE, INCOMPLETE, VFAILED):
+            for r in (True, False):
+                got = act(v, verification_status=vs, renewable=r)
+                check(got.action != KEEP,
+                      f"{v.status} + {vs} + renewable={r} is never KEEP ({got.action})")
+
+    # ── any NOT_CHECKED check blocks KEEP (the done-when) ───────────────────
+    blocked = act(current, verification_status=INCOMPLETE,
+                  not_checked=("the issuer matches the official record",))
+    check(blocked.action == NEEDS_LAWYER,
+          f"a document IN FORCE with one unrun check is NEEDS_LAWYER, not KEEP "
+          f"({blocked.action})")
+    check("we did not look" in blocked.reason,
+          f"...because KEEP asserts we looked and found nothing wrong ({blocked.reason[:70]}…)")
+    check("not a finding against the document" in blocked.reason,
+          "...and the reason says so, so an unrun check is not read as a fault")
+    check(act(current, verification_status=COMPLETE, not_checked=()).action == KEEP,
+          "...while the same document with every check established is KEEP")
+
+    # ── a FAILED verification outranks everything ───────────────────────────
+    for v in (current, far, expired, nd2):
+        got = act(v, verification_status=VFAILED, renewable=True)
+        check(got.action == NEEDS_LAWYER,
+              f"a document whose signature verification FAILED is NEEDS_LAWYER whatever its "
+              f"validity says ({v.status} -> {got.action})")
+    check("possible fraud into an errand" in act(current, verification_status=VFAILED).reason,
+          "...and the reason says why an action like REPLACE would be wrong here")
+
+    # ── the renewal window ──────────────────────────────────────────────────
+    s_act = act(soon, verification_status=COMPLETE)
+    check(s_act.action == RENEW_BY and s_act.renew_by == soon.expires_on,
+          f"an expiry inside the {RENEW_WINDOW_DAYS}-day window is RENEW_BY, dated to the "
+          f"expiry so the calendar can show it ({s_act.action}, {s_act.renew_by})")
+    f_act = act(far, verification_status=COMPLETE)
+    check(f_act.action == KEEP and f_act.renew_by is None,
+          f"an expiry beyond the window is KEEP with no date ({f_act.action}, "
+          f"{f_act.renew_by})")
+    check(RENEW_WINDOW_DAYS == 90,
+          "the window is 90 days, matching `calendar.upcoming`'s own horizon -- a RENEW_BY "
+          "outside what the calendar shows would be a deadline nobody sees")
+
+    # ── the vocabulary, and every action reachable ──────────────────────────
+    check(len(ACTIONS) == 5 and len(set(ACTIONS)) == 5, f"five actions ({ACTIONS})")
+    reachable = {
+        act(current, verification_status=COMPLETE).action,
+        act(soon, verification_status=COMPLETE).action,
+        act(expired, verification_status=COMPLETE, renewable=False).action,
+        act(decide(recent, as_of=AS_OF, rule=FIFTEEN_MONTHS,
+                   superseded_by="BR/2026/14"), verification_status=COMPLETE).action,
+        act(nd2, verification_status=INCOMPLETE).action,
+    }
+    check(reachable == set(ACTIONS),
+          f"every one of the five actions is REACHABLE from a real Validity -- an action "
+          f"nothing returns is an action that does not exist ({sorted(reachable)})")
+    check(all(len(act(v, verification_status=vs).reason) >= 20
+              for v in (current, expired, nd2, soon)
+              for vs in (COMPLETE, INCOMPLETE, VFAILED)),
+          "every action carries a reason of at least 20 characters, which is what 023's "
+          "`action_reason` CHECK requires -- so Python cannot build a row the database "
+          "would refuse")
+    check("not an instruction to destroy anything"
+          in act(decide(recent, as_of=AS_OF, rule=FIFTEEN_MONTHS,
+                        superseded_by="BR/2026/14"), verification_status=COMPLETE).reason,
+          "REMOVE says in words that it means 'out of the live set', not 'destroy' -- "
+          "retention obligations are untouched by it")
 
     print(f"\n{ok}/{ok + fail} passed")
     return 1 if fail else 0

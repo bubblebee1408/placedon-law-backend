@@ -130,7 +130,9 @@ def _test() -> None:
                     "018_users_roles.sql",
                     "019_matters.sql",
                     "020_vault.sql",
-                    "021_job_lanes.sql"],
+                    "021_job_lanes.sql",
+                    # T3 move 10. 022 belongs to the open PR #67; see 023's header.
+                    "023_document_checks.sql"],
           f"every migration exists, in order ({files})")
 
     # 012: H3's drafts. The CHECK that matters is the one the derivation cannot see.
@@ -307,7 +309,10 @@ def _test() -> None:
                      "matters",
                      # V1. The vault IS the client's documents -- the most concentrated
                      # confidential data the product holds.
-                     "vault_documents", "vault_chunks", "vault_tags"},
+                     "vault_documents", "vault_chunks", "vault_tags",
+                     # T3 move 10: the Document Check record -- our JUDGEMENT on another
+                     # firm's documents, which is advice rather than fact.
+                     "document_checks"},
           f"every other table is tenant-scoped, DERIVED from having a tenant_id ({sorted(scoped)})")
 
     # ── the check this module exists for ────────────────────────────────────

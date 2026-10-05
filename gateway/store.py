@@ -85,6 +85,11 @@ class Backend(Protocol):
     def read_vault_tags(self, document_id: str) -> list[dict]: ...
     def delete_vault_document(self, document_id: str, *, now: str) -> bool: ...
     def vault_counts(self) -> dict: ...
+    # T3 move 10 (023_document_checks.sql). APPEND-ONLY: one row per CHECK, never updated.
+    def write_document_check(self, check: dict) -> dict: ...
+    def read_document_checks(self, *, document_id: str = "",
+                             limit: int = 100) -> list[dict]: ...
+    def read_renewals(self, *, on_or_before: str = "") -> list[dict]: ...
     def list_matters(self) -> list[dict]: ...
     def append_message(self, message: dict) -> dict: ...
     def read_messages(self, conversation_id: str) -> list[dict]: ...
@@ -328,6 +333,40 @@ def _shaped(row: dict, keys: tuple[str, ...]) -> dict:
     return out
 
 
+# T3 move 10. Named explicitly and SELECTed by name, never `SELECT *`: `read_grid` was
+# changed to do the same after a column added by a later migration arrived in a position the
+# row unpacking did not expect.
+_DOC_CHECK_COLS = ("check_id", "document_id", "checked_at", "as_of",
+                   "verification_status", "validity_status", "action", "action_reason",
+                   "expires_on", "renew_by", "law_versions")
+
+
+def _doc_check_row(row) -> dict:
+    """One document_checks row as a dict, with dates as ISO strings.
+
+    ISO strings and not `date` objects, because MemoryBackend stores what the caller passed
+    and the caller passes strings -- and `store.conformance` compares the two backends field
+    by field. A type that differs between them is a divergence the conformance list exists
+    to catch.
+    """
+    if row is None:
+        return {}
+    out = dict(zip(_DOC_CHECK_COLS, row))
+    for k in ("checked_at", "as_of", "expires_on", "renew_by"):
+        if out.get(k) is not None:
+            out[k] = out[k].isoformat()
+    # uuid columns come back as `uuid.UUID`, and MemoryBackend stores the `str` the caller
+    # passed. `read_renewals()` returned the right ROW and `r["document_id"] == did` was
+    # False, so the conformance check reported an empty result against a table that held it
+    # -- and the check before it passed VACUOUSLY, for the same reason. Caught by
+    # `store.conformance` running against both backends, which is the sixth divergence of
+    # this shape it has found.
+    for k in ("check_id", "document_id"):
+        if out.get(k) is not None:
+            out[k] = str(out[k])
+    return out
+
+
 @dataclass
 class MemoryBackend:
     """A dict, with the same decomposition discipline as Postgres so the tests can be one.
@@ -351,6 +390,10 @@ class MemoryBackend:
     drafts: dict = field(default_factory=dict)
     draft_versions: dict = field(default_factory=dict)  # draft_id -> [row]
     vault_docs: dict = field(default_factory=dict)      # document_id -> row
+    # T3 move 10. A LIST, not a dict keyed on document_id: 023 stores one row per CHECK and
+    # a dict would be the overwrite the architect record rejected -- "a certificate valid in
+    # March is expired in October, and the same bytes produce a different action".
+    document_checks: list = field(default_factory=list)
     vault_chunks: dict = field(default_factory=dict)    # document_id -> [row]
     vault_tags: dict = field(default_factory=dict)      # document_id -> [row]
     matters: dict = field(default_factory=dict)         # matter_id -> row
@@ -684,6 +727,70 @@ class MemoryBackend:
         self.vault_chunks.pop(str(document_id), None)
         self.vault_tags.pop(str(document_id), None)
         return True
+
+    # ── T3 move 10: document_checks (023) ───────────────────────────────────
+    # 023's CHECKs restated, so the dict refuses exactly what Postgres refuses. The gate runs
+    # against MemoryBackend far more often than against a database, and a rule only Postgres
+    # enforces is a rule the gate never runs -- `write_run`'s own lesson, learned when a
+    # REFUSED row with no code passed the gate and failed on the live server.
+    def write_document_check(self, check: dict) -> dict:
+        from checker import doc_validity as _dval
+        from checker import doc_verification as _dver
+        vs = str(check.get("verification_status") or "")
+        st = str(check.get("validity_status") or "")
+        action = str(check.get("action") or "")
+        reason = str(check.get("action_reason") or "")
+        if vs not in (_dver.COMPLETE, _dver.INCOMPLETE, _dver.FAILED):
+            raise StoreError(f"{vs!r} is not a verification status (023 CHECK)")
+        if st not in _dval.STATUSES:
+            raise StoreError(f"{st!r} is not a validity status (023 CHECK)")
+        if action not in _dval.ACTIONS:
+            raise StoreError(f"{action!r} is not an action (023 CHECK)")
+        if len(reason.strip()) < 20:
+            raise StoreError(
+                "an action needs a reason of at least 20 characters (023 "
+                "action_reason): an action with no reason is a verdict nobody can check, "
+                "and this row is read months later by someone who was not here")
+        if (action == _dval.RENEW_BY) != bool(check.get("renew_by")):
+            raise StoreError(
+                f"renew_by is present exactly when the action is RENEW_BY (023 "
+                f"document_checks_renew_by_iff_renew): action={action!r}, "
+                f"renew_by={check.get('renew_by')!r}. A RENEW_BY with no date is a deadline "
+                f"the calendar cannot show; a date on a KEEP is one that would appear for a "
+                f"document needing nothing")
+        if action == _dval.KEEP and (st not in _dval.IN_FORCE or vs == _dver.FAILED):
+            raise StoreError(
+                f"KEEP requires a document in force whose verification did not fail (023 "
+                f"document_checks_keep_requires_force): validity={st!r}, "
+                f"verification={vs!r}")
+        row = dict(check)
+        row["law_versions"] = _copied(check.get("law_versions"))
+        self.document_checks.append(row)
+        return dict(row)
+
+    def read_document_checks(self, *, document_id: str = "",
+                             limit: int = 100) -> list[dict]:
+        rows = [dict(r) for r in self.document_checks
+                if not document_id or r.get("document_id") == document_id]
+        rows.sort(key=lambda r: str(r.get("checked_at") or ""), reverse=True)
+        return rows[:limit]
+
+    def read_renewals(self, *, on_or_before: str = "") -> list[dict]:
+        """Outstanding RENEW_BY rows, soonest first. The calendar's input.
+
+        Only the LATEST check per document counts. A document checked in March (RENEW_BY) and
+        again in April (KEEP, because it was renewed) must not still show a deadline. That is
+        the cost of the append-only shape, and the reason this is not a bare
+        `WHERE renew_by IS NOT NULL`.
+        """
+        latest: dict = {}
+        for r in sorted(self.document_checks,
+                        key=lambda x: str(x.get("checked_at") or "")):
+            latest[r.get("document_id")] = r
+        out = [dict(r) for r in latest.values() if r.get("renew_by")
+               and (not on_or_before or str(r["renew_by"]) <= on_or_before)]
+        out.sort(key=lambda r: str(r.get("renew_by")))
+        return out
 
     def vault_counts(self) -> dict:
         live = [r for r in self.vault_docs.values() if not r.get("deleted_at")]
@@ -1502,6 +1609,59 @@ class PostgresBackend:
                 c.execute("DELETE FROM vault_tags WHERE document_id = %s",
                           (document_id,))
         return bool(n)
+
+    # ── T3 move 10: document_checks (023) ───────────────────────────────────
+    def write_document_check(self, check: dict) -> dict:
+        """One row per check. No ON CONFLICT clause, deliberately: there is nothing to
+        update, and an UPSERT here would be the overwrite 023's architect record rejected."""
+        import uuid as _uuid
+        cid = str(check.get("check_id") or _uuid.uuid4())
+        with self._conn() as c:
+            c.execute(
+                "INSERT INTO document_checks (check_id, tenant_id, document_id, as_of, "
+                "verification_status, validity_status, action, action_reason, expires_on, "
+                "renew_by, law_versions) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+                (cid, self.tenant_id, check["document_id"], check["as_of"],
+                 check["verification_status"], check["validity_status"], check["action"],
+                 check["action_reason"], check.get("expires_on"), check.get("renew_by"),
+                 _json(check.get("law_versions"))))
+            row = c.execute(
+                "SELECT " + ", ".join(_DOC_CHECK_COLS) + " FROM document_checks "
+                "WHERE check_id = %s", (cid,)).fetchone()
+        return _doc_check_row(row)
+
+    def read_document_checks(self, *, document_id: str = "",
+                             limit: int = 100) -> list[dict]:
+        sql = ("SELECT " + ", ".join(_DOC_CHECK_COLS) + " FROM document_checks ")
+        args: tuple = ()
+        if document_id:
+            sql += "WHERE document_id = %s "
+            args = (document_id,)
+        sql += "ORDER BY checked_at DESC LIMIT %s"
+        with self._conn() as c:
+            rows = c.execute(sql, args + (int(limit),)).fetchall()
+        return [_doc_check_row(r) for r in rows]
+
+    def read_renewals(self, *, on_or_before: str = "") -> list[dict]:
+        """Outstanding RENEW_BY rows, soonest first, LATEST CHECK PER DOCUMENT only.
+
+        `DISTINCT ON (document_id) ... ORDER BY document_id, checked_at DESC` is the whole
+        point: a document checked in March (RENEW_BY) and again in April (KEEP, because it
+        was renewed) must not still show a deadline. A bare `WHERE renew_by IS NOT NULL`
+        would show every renewal ever raised, which is the cost of the append-only shape.
+        """
+        sql = ("SELECT " + ", ".join(_DOC_CHECK_COLS) + " FROM ("
+               "SELECT DISTINCT ON (document_id) " + ", ".join(_DOC_CHECK_COLS) + " "
+               "FROM document_checks ORDER BY document_id, checked_at DESC) latest "
+               "WHERE renew_by IS NOT NULL ")
+        args: tuple = ()
+        if on_or_before:
+            sql += "AND renew_by <= %s "
+            args = (on_or_before,)
+        sql += "ORDER BY renew_by"
+        with self._conn() as c:
+            rows = c.execute(sql, args).fetchall()
+        return [_doc_check_row(r) for r in rows]
 
     def vault_counts(self) -> dict:
         with self._conn() as c:
@@ -2782,6 +2942,114 @@ def conformance(backend) -> list[tuple[bool, str]]:
     except StoreError:
         ck(True, "an unknown statistic name is refused -- the name reaches a column, and a "
                  "fixed tuple is what keeps that safe")
+
+
+    # ── T3 move 10: document_checks (023), against BOTH backends ────────────
+    # This list has caught five "wrote it, didn't select it" divergences. The append-only
+    # shape and the latest-per-document renewal filter are exactly the kind of thing that
+    # works in a dict and not in SQL, so they are asserted here rather than in either
+    # backend's own suite.
+    from checker import doc_validity as _dval
+    from checker import doc_verification as _dver
+
+    _dc_doc = str(_uuid.uuid4())
+    backend.write_vault_document({"document_id": _dc_doc, "matter_id": None,
+                                  "sha256": _uuid.uuid4().hex + _uuid.uuid4().hex,
+                                  "name": "cert.pdf", "byte_count": 10,
+                                  "state": "INGESTED"})
+    _dc_first = backend.write_document_check({
+        "check_id": str(_uuid.uuid4()), "document_id": _dc_doc, "as_of": "2026-03-01",
+        "checked_at": "2026-03-01T00:00:00Z",
+        "verification_status": _dver.INCOMPLETE, "validity_status": _dval.EXPIRES_ON,
+        "action": _dval.RENEW_BY, "renew_by": "2026-05-01",
+        "action_reason": "in force and the period ends inside the window the calendar shows",
+        "expires_on": "2026-05-01",
+        "law_versions": {"corpus/companies_act/1283.json": "a" * 40}})
+    ck(_dc_first.get("action") == _dval.RENEW_BY
+       and _dc_first.get("renew_by") == "2026-05-01",
+       f"a document check is written and READ BACK with its action and renewal date "
+       f"({_dc_first.get('action')}, {_dc_first.get('renew_by')})")
+    ck(_dc_first.get("law_versions") == {"corpus/companies_act/1283.json": "a" * 40},
+       f"...and the law_versions map survives the round trip, in the same identity `runs` "
+       f"uses ({_dc_first.get('law_versions')})")
+
+    _dc_rows = backend.read_document_checks(document_id=_dc_doc)
+    ck(len(_dc_rows) == 1, f"one check, one row ({len(_dc_rows)})")
+
+    # APPEND, never overwrite. The architect record's first reason: "a certificate valid in
+    # March is expired in October, and the same bytes produce a different action".
+    backend.write_document_check({
+        "check_id": str(_uuid.uuid4()), "document_id": _dc_doc, "as_of": "2026-10-05",
+        "checked_at": "2026-10-05T00:00:00Z",
+        "verification_status": _dver.INCOMPLETE, "validity_status": _dval.EXPIRED,
+        "action": _dval.REPLACE,
+        "action_reason": "the validity period ran out and nobody said this class renews"})
+    _dc_rows = backend.read_document_checks(document_id=_dc_doc)
+    ck(len(_dc_rows) == 2,
+       f"a second check on the SAME document ADDS a row rather than replacing one -- 'what "
+       f"did we tell them in March' is the question that matters when a client asks why "
+       f"they were not warned ({len(_dc_rows)})")
+    ck(_dc_rows[0]["action"] == _dval.REPLACE,
+       f"...and the newest is first, so 'what is it now' needs no sorting by the caller "
+       f"({_dc_rows[0]['action']})")
+
+    # The renewal feed: the LATEST check decides. A renewal raised in March must not still
+    # show after April's check said REPLACE.
+    _ren = [r for r in backend.read_renewals() if r["document_id"] == _dc_doc]
+    ck(not _ren,
+       f"the March renewal no longer appears, because the latest check on that document is "
+       f"REPLACE -- a bare `WHERE renew_by IS NOT NULL` would have shown every renewal ever "
+       f"raised ({_ren})")
+
+    _dc_live = str(_uuid.uuid4())
+    backend.write_vault_document({"document_id": _dc_live, "matter_id": None,
+                                  "sha256": _uuid.uuid4().hex + _uuid.uuid4().hex,
+                                  "name": "live.pdf", "byte_count": 10,
+                                  "state": "INGESTED"})
+    backend.write_document_check({
+        "check_id": str(_uuid.uuid4()), "document_id": _dc_live, "as_of": "2026-10-05",
+        "checked_at": "2026-10-05T00:00:00Z",
+        "verification_status": _dver.INCOMPLETE, "validity_status": _dval.EXPIRES_ON,
+        "action": _dval.RENEW_BY, "renew_by": "2026-12-01", "expires_on": "2026-12-01",
+        "action_reason": "in force and the renewal falls inside the ninety-day window"})
+    _ren2 = [r for r in backend.read_renewals() if r["document_id"] == _dc_live]
+    ck(len(_ren2) == 1 and _ren2[0]["renew_by"] == "2026-12-01",
+       f"an outstanding renewal IS returned, so the filter above is not simply hiding "
+       f"everything ({_ren2})")
+    ck(not [r for r in backend.read_renewals(on_or_before="2026-11-01")
+            if r["document_id"] == _dc_live],
+       "...and `on_or_before` narrows it, which is how calendar.upcoming asks for a horizon")
+
+    # 023's CHECKs, restated in both backends. A rule only Postgres enforces is a rule the
+    # gate never runs.
+    for _bad, _why in (
+        ({"action": _dval.KEEP, "validity_status": _dval.EXPIRED,
+          "verification_status": _dver.INCOMPLETE,
+          "action_reason": "this should never be storable at all, not once"},
+         "KEEP on an EXPIRED document"),
+        ({"action": _dval.KEEP, "validity_status": _dval.CURRENT,
+          "verification_status": _dver.FAILED,
+          "action_reason": "this should never be storable at all, not once"},
+         "KEEP when verification FAILED"),
+        ({"action": _dval.RENEW_BY, "validity_status": _dval.EXPIRES_ON,
+          "verification_status": _dver.INCOMPLETE,
+          "action_reason": "a renewal with no date the calendar could ever show"},
+         "RENEW_BY with no renew_by date"),
+        ({"action": _dval.KEEP, "validity_status": _dval.CURRENT,
+          "verification_status": _dver.INCOMPLETE, "renew_by": "2026-12-01",
+          "action_reason": "a date on a KEEP, which would appear for a document fine as is"},
+         "a renew_by date on a KEEP"),
+        ({"action": _dval.KEEP, "validity_status": _dval.CURRENT,
+          "verification_status": _dver.INCOMPLETE, "action_reason": "too short"},
+         "an action_reason under twenty characters"),
+    ):
+        _row = {"check_id": str(_uuid.uuid4()), "document_id": _dc_live,
+                "as_of": "2026-10-05", "checked_at": "2026-10-05T00:00:00Z", **_bad}
+        try:
+            backend.write_document_check(_row)
+            ck(False, f"{_why} must be REFUSED by the store, and was written")
+        except Exception as _e:                                  # noqa: BLE001
+            ck(True, f"{_why} is refused by the store ({type(_e).__name__})")
 
     return out
 

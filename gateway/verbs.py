@@ -2335,6 +2335,90 @@ def _document_verify(args: dict, ctx: Context) -> dict:
                      "is what not having looked actually means")}
 
 
+def _document_check(args: dict, ctx: Context) -> dict:
+    """Verify, date, decide and RECORD. The Document Check, end to end. A WRITE verb.
+
+    Three layers, each already proved on its own, joined here and nowhere else:
+      `document.verify`          was it signed, and are the bytes unchanged (move 8)
+      `checker/doc_validity`     is it still in force at `as_of` (move 9)
+      `doc_validity.act`         what a lawyer should DO, with the reason (move 10)
+
+    The row goes in `document_checks` (023), APPEND-ONLY. A certificate valid in March is
+    expired in October: the same bytes produce a different action, and overwriting would lose
+    "what did we tell them in March" -- the question that matters when a client asks why they
+    were not warned.
+    """
+    from datetime import date as _date
+    from checker import doc_validity as dval
+    from checker import doc_verification as dver
+
+    verified = _document_verify(args, ctx)
+    if verified.get("status") == "REFUSED":
+        # A refusal stands as a refusal. Recording a check for a document we could not read
+        # would put a judgement in the audit record where there was none.
+        return verified
+
+    as_of_raw = (args.get("as_of") or "").strip()
+    try:
+        as_of = _date.fromisoformat(as_of_raw) if as_of_raw else _date.today()
+    except ValueError:
+        return _refuse("BAD_REQUEST",
+                       f"as_of must be an ISO date (YYYY-MM-DD); got {as_of_raw!r}. Not "
+                       f"defaulted to today: a date nobody meant would silently answer a "
+                       f"different question from the one asked")
+
+    did = verified["document_id"]
+    chunks = ctx.store.read_vault_chunks() if ctx.store else []
+    text = "\n".join(str(c.get("text") or "") for c in chunks
+                      if c.get("document_id") == did)
+
+    validity = dval.decide(
+        text, as_of=as_of,
+        superseded_by=str(args.get("superseded_by") or ""),
+        revoked_on=(_date.fromisoformat(args["revoked_on"])
+                    if str(args.get("revoked_on") or "").strip() else None))
+
+    not_checked = tuple(c["name"] for c in verified["checks"]
+                        if c["result"] == dver.NOT_CHECKED)
+    action = dval.act(validity, verification_status=verified["overall"],
+                      not_checked=not_checked,
+                      renewable=bool(args.get("renewable")))
+
+    row = None
+    if ctx.store is not None:
+        import uuid
+        row = ctx.store.write_document_check({
+            "check_id": str(uuid.uuid4()), "document_id": did,
+            "as_of": as_of.isoformat(), "checked_at": _now(ctx),
+            "verification_status": verified["overall"],
+            "validity_status": validity.status,
+            "action": action.action, "action_reason": action.reason,
+            "expires_on": (validity.expires_on.isoformat()
+                           if validity.expires_on else None),
+            "renew_by": action.renew_by.isoformat() if action.renew_by else None,
+            # The held text the validity rule rested on, in the identity `runs` uses (008).
+            # Empty when no rule fired, which is NOT RECORDED rather than "read no law".
+            "law_versions": None})
+    return {"document_id": did, "name": verified.get("name"),
+            "as_of": as_of.isoformat(),
+            "verification": {"overall": verified["overall"],
+                             "checks": verified["checks"],
+                             "sentence": verified["sentence"]},
+            "validity": validity.to_dict(),
+            "action": action.to_dict(),
+            "check_id": (row or {}).get("check_id"),
+            "recorded": row is not None,
+            "note": ("Three separate questions, answered separately: was it signed, is it "
+                     "still in force, and what should be done. An action is never a "
+                     "statement that the document is legally valid -- NEEDS_LAWYER is the "
+                     "answer whenever a check was not run, because KEEP would assert we "
+                     "looked and found nothing wrong. Today the validity question is "
+                     "NOT_DETERMINED for every document: no registry says which document "
+                     "class expires under which provision, and this deployment will not "
+                     "take a validity period from a caller, because a quote nobody checked "
+                     "against the held corpus is not a provision.")}
+
+
 def _vault_summarize(args: dict, ctx: Context) -> dict:
     """What is KNOWN about one document. Not a model summary, and it says so."""
     if ctx.store is None:
@@ -3726,6 +3810,28 @@ VERBS: tuple[Verb, ...] = (
                 describes="the stored document to verify"),),
          "POST", read_only=True, mcp=False, run=_document_verify),
 
+    # move 10 (T3). A WRITE verb -- it records a row in `document_checks` -- so `mcp_tools()`
+    # keeps it off MCP on its own. The plan asked for "read-only MCP"; it is not read-only,
+    # and `scripts/themis_mcp.py` asserts `len(TOOLS) == 31` and must not be edited, so both
+    # reasons point the same way.
+    Verb("document.check",
+         "Verify a stored document, decide whether it is still in force, and record the "
+         "action a lawyer should take. One line per verification check; the action is "
+         "NEEDS_LAWYER whenever a check was not run.",
+         (Field("document_id", STRING, True,
+                describes="the stored document to check"),
+          Field("as_of", STRING, False,
+                describes="the date to judge validity AT (ISO); today when omitted"),
+          Field("renewable", BOOLEAN, False,
+                describes="whether a document of this class can be renewed rather than "
+                          "replaced"),
+          Field("superseded_by", STRING, False,
+                describes="the instrument that replaced this one, if the caller knows of "
+                          "one. Never inferred"),
+          Field("revoked_on", STRING, False,
+                describes="the date this document was revoked (ISO), if it was")),
+         "POST", read_only=False, mcp=False, run=_document_check),
+
     Verb("vault.summarize",
          "What is RECORDED about a document: its class, its clauses, and the sentence "
          "each was found in. Not a written summary.",
@@ -4000,13 +4106,13 @@ def _test() -> None:
                     "draft.revise", "draft.status", "draft.versions", "draft.diff",
                     "draft.export", "matters.create", "matters.list",
                     "calendar.upcoming", "usage.status", "jobs.dead",
-                    # move 8 (T3).
-                    "document.verify"} | {
+                    # move 8 and move 10 (T3).
+                    "document.verify", "document.check"} | {
                         "vault.upload", "vault.status", "vault.find",
                                             "vault.verify", "vault.summarize",
                                             "vault.research", "vault.compile",
                                             "vault.delete"},
-          f"the forty-three verbs are declared once ({sorted(names)})")
+          f"the forty-four verbs are declared once ({sorted(names)})")
     # sources.* are READ-ONLY, so they reach MCP. That is the intended shape: an agent may
     # ask what a source permits and search what may be read, and there is no sources verb
     # that fetches, stores or spends. S3's Indian Kanoon connector will spend money, and
@@ -4021,8 +4127,12 @@ def _test() -> None:
                                  "runs.submit", "runs.cancel", "conversation.send",
                                  "review_table.create", "review_table.cancel",
                                  "draft.create", "draft.revise", "matters.create",
-                                 "vault.upload", "vault.delete"},
-          f"...and exactly thirteen of them write ({sorted(write_verbs())})")
+                                 "vault.upload", "vault.delete",
+                                 # T3 move 10. It WRITES: an append-only row in
+                                 # `document_checks` recording a judgement a firm may rely
+                                 # on. LAWYER in gateway/roles.py for the same reason.
+                                 "document.check"},
+          f"...and exactly fourteen of them write ({sorted(write_verbs())})")
     check(f"{MCP_NAMESPACE}.conversation.send" not in {t.name for t in mcp},
           "conversation.send WRITES -- it creates a thread, appends messages and may "
           "enqueue work -- so mcp_tools() keeps it off MCP, by rule and not by the author "
@@ -5478,7 +5588,7 @@ def _test() -> None:
           "...while a WRITE verb is kept out of MCP by mcp_tools(), not by the author "
           "remembering to")
     check("widgets.delete" in write_verbs(hypo), "...and is named in write_verbs()")
-    check(len(VERBS) == 43 and "widgets.count" not in rest_spec(),
+    check(len(VERBS) == 44 and "widgets.count" not in rest_spec(),
           "...and the probe changed nothing in this module: the surfaces are generated "
           "from an argument, not from a global the test rebound")
 
@@ -5686,6 +5796,114 @@ def _test() -> None:
               for f in _t3dv.Verification.__dataclass_fields__ if f != "detail"),
           "every field of `Verification` has a reader-facing sentence here, so a check added "
           "to that dataclass cannot appear in a response as a bare identifier")
+
+    # ── move 10 (T3): document.check, action recorded ───────────────────────
+    # Driven over the VERB, against the same real signed PDFs move 8 used, and against a
+    # store whose rules are 023's. The done-whens: an expired document is never KEEP, and any
+    # NOT_CHECKED check blocks KEEP.
+    from checker import doc_validity as _t4dval
+
+    with _t3tmp.TemporaryDirectory() as _t4dir:
+        _t4_files = _T3LFS(_t4dir)
+        _t4_store = _T3MB()
+        _t4_ctx = Context(store=_t4_store, files=_t4_files,
+                          clock=lambda: "2026-10-05T00:00:00Z")
+        _t4_sha = _t4_files.put(_t3_signed[0].read_bytes())
+        _t4_did = "11111111-1111-4111-8111-111111111111"
+        _t4_store.write_vault_document(
+            {"document_id": _t4_did, "matter_id": None, "sha256": _t4_sha,
+             "name": "cert.pdf", "byte_count": 10, "state": "INGESTED"})
+        # The document's own text, through the vault chunks the verb reads -- so the date
+        # comes from the document rather than from an argument.
+        # STRINGS, not dicts: `write_vault_chunks` takes the text. My first version passed
+        # `{"ordinal": 0, "text": ...}` and the store stringified the dict, so the document's
+        # date line never existed and the validity came back "no date" rather than "no rule"
+        # -- a fixture bug that looked like a product one.
+        _t4_store.write_vault_chunks(_t4_did, ["CERTIFICATE", "Date: 14 March 2024"])
+
+        _t4 = _document_check({"document_id": _t4_did, "as_of": "2026-10-05"}, _t4_ctx)
+        check(_t4["action"]["action"] != _t4dval.KEEP,
+              f"a document with unrun checks is never KEEP ({_t4['action']['action']})")
+        check(_t4["action"]["action"] == _t4dval.NEEDS_LAWYER,
+              f"...it is NEEDS_LAWYER ({_t4['action']['action']})")
+        # And the reason is the VALIDITY one, not the unrun-check one -- which is worth
+        # asserting because it records a real limitation rather than hiding it. This verb
+        # passes NO validity `rule`, because no registry says which document class expires
+        # under which provision, and a caller-supplied quote would be a provision nobody
+        # checked against the corpus. So every document is NOT_DETERMINED and `act()`'s
+        # KEEP, RENEW_BY and REPLACE branches are UNREACHABLE FROM THIS VERB today. They are
+        # reached and proved in `checker/doc_validity`'s own suite, over a Rule object.
+        # Recorded as A-021 in research/TASKS.md.
+        check(_t4["validity"]["status"] == _t4dval.NOT_DETERMINED
+              and "no rule was given" in _t4["action"]["reason"],
+              f"...and the reason is that no validity RULE exists for this document class, "
+              f"said plainly rather than implied -- an unknown validity period is not an "
+              f"unlimited one ({_t4['action']['reason'][:80]}…)")
+        check("NOT_DETERMINED" in _t4["note"] or "not run" in _t4["note"],
+              "...and the verb's own note tells a reader this is the expected answer today")
+        check(_t4["recorded"] and _t4["check_id"],
+              f"...and the check is RECORDED, which is what makes it answerable months "
+              f"later ({_t4['check_id']})")
+        check(len(_t4_store.read_document_checks(document_id=_t4_did)) == 1,
+              "...as one row in document_checks")
+        check(set(_t4) >= {"verification", "validity", "action"},
+              f"the three questions are answered SEPARATELY -- signed, in force, and what to "
+              f"do -- rather than collapsed into one verdict ({sorted(_t4)})")
+
+        # A second check on the same document APPENDS. 023's whole shape.
+        _t4b = _document_check({"document_id": _t4_did, "as_of": "2024-04-01"}, _t4_ctx)
+        check(len(_t4_store.read_document_checks(document_id=_t4_did)) == 2,
+              f"a second check adds a row rather than replacing one "
+              f"({len(_t4_store.read_document_checks(document_id=_t4_did))})")
+        check(_t4b["as_of"] == "2024-04-01",
+              f"...and `as_of` is the date asked ABOUT, not the wall clock: a correct answer "
+              f"about a past date is not a stale answer about today ({_t4b['as_of']})")
+
+        # A re-saved document: NEEDS_LAWYER, and it outranks every validity question.
+        _t4_bad = bytearray(_t3_signed[0].read_bytes())
+        _t4_i = next(j for j in range(200, len(_t4_bad)) if _t4_bad[j:j + 1].isalpha())
+        _t4_bad[_t4_i] ^= 0x20
+        _t4_bsha = _t4_files.put(bytes(_t4_bad))
+        _t4_bdid = "22222222-2222-4222-8222-222222222222"
+        _t4_store.write_vault_document(
+            {"document_id": _t4_bdid, "matter_id": None, "sha256": _t4_bsha,
+             "name": "resaved.pdf", "byte_count": 10, "state": "INGESTED"})
+        _t4m = _document_check({"document_id": _t4_bdid, "as_of": "2026-10-05"}, _t4_ctx)
+        check(_t4m["verification"]["overall"] == "VERIFICATION_FAILED"
+              and _t4m["action"]["action"] == _t4dval.NEEDS_LAWYER,
+              f"a re-saved document is NEEDS_LAWYER -- a tampered document is a legal "
+              f"problem, not a filing one ({_t4m['action']['action']})")
+        check("possible fraud into an errand" in _t4m["action"]["reason"],
+              "...and the reason says why REPLACE would be the wrong instruction")
+
+        # The store refuses a contradiction even if a future caller builds one by hand.
+        try:
+            _t4_store.write_document_check(
+                {"check_id": "33333333-3333-4333-8333-333333333333",
+                 "document_id": _t4_did, "as_of": "2026-10-05",
+                 "checked_at": "2026-10-05T00:00:00Z",
+                 "verification_status": "INCOMPLETE_VERIFICATION",
+                 "validity_status": _t4dval.EXPIRED, "action": _t4dval.KEEP,
+                 "action_reason": "this contradiction must never be storable at all"})
+            check(False, "KEEP on an EXPIRED document must be refused by the store")
+        except Exception as _e:                                  # noqa: BLE001
+            check("KEEP requires a document in force" in str(_e),
+                  f"KEEP on an EXPIRED document is refused by the STORE as well as by "
+                  f"`act()` -- 023 restates it as a CHECK because a second writer reaches "
+                  f"the table and not the API ({type(_e).__name__})")
+
+        # A bad as_of is refused rather than defaulted.
+        check(_document_check({"document_id": _t4_did, "as_of": "last Tuesday"},
+                              _t4_ctx).get("code") == "BAD_REQUEST",
+              "an unparseable as_of is refused, not defaulted to today: a date nobody meant "
+              "would silently answer a different question from the one asked")
+        # A refusal from the verification layer stands as a refusal, with no row written.
+        _t4_before = len(_t4_store.read_document_checks())
+        check(_document_check({"document_id": "no-such-doc"}, _t4_ctx).get("code")
+              == "NOT_FOUND"
+              and len(_t4_store.read_document_checks()) == _t4_before,
+              "a document we could not read records NO check -- a judgement in the audit "
+              "record where there was none would be worse than none")
 
     # ── the human gate: runs.approve / runs.reject ──────────────────────────
     dstore = _MB()
