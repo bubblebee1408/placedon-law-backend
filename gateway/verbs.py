@@ -2214,6 +2214,76 @@ def _vault_verify(args: dict, ctx: Context) -> dict:
                       f"stored under"}
 
 
+def _runs_preview(args: dict, ctx: Context) -> dict:
+    """T4: what a fan-out WOULD do, and what it would cost, before anything runs. Read-only.
+
+    The lawyer sees the plan, its agents, and a real price -- not an estimate. The price is
+    real because it is produced by actually calling `budget.reserve` for every worker, which
+    is the same arithmetic the runner will do, rather than by multiplying a per-call figure
+    somebody wrote down. A quote computed a second way is a quote that can disagree with the
+    bill.
+
+    ## It reserves, and then RELEASES
+
+    Immediately, before returning. A preview that held its reservations would leak the firm's
+    cap every time somebody looked at a plan and thought better of it -- which is A-016
+    exactly, measured at 58 leaked reservations worth ₹115.99 against a ₹116.67 cap. So the
+    figure is a QUOTE and the response says so in those words: nothing is held, and the
+    runner reserves again when it starts.
+
+    The cost of that choice is honest and stated: between the preview and the start, another
+    run may take the headroom, and the start can then be refused NO_BUDGET for a plan the
+    preview priced. That is better than a preview that quietly spends the cap.
+    """
+    from agents import multi_plan as mp
+
+    goal = (args.get("goal") or "").strip()
+    raw = args.get("workers") or []
+    if not isinstance(raw, list):
+        return _refuse("BAD_REQUEST", "workers must be a list of {agent, task} objects")
+    try:
+        workers = tuple(mp.Task(str(w.get("agent") or ""), str(w.get("task") or ""))
+                        for w in raw if isinstance(w, dict))
+    except Exception as e:                                       # noqa: BLE001
+        return _refuse("BAD_REQUEST", f"workers: {e}")
+    if len(workers) != len(raw):
+        return _refuse("BAD_REQUEST", "every worker must be an object with agent and task")
+
+    plan = mp.MultiPlan(goal, workers)
+    ledger = _ledger()
+    verdict = mp.validate(plan, budget=ledger)
+
+    quoted = 0.0
+    if verdict.ok and verdict.reservations:
+        quoted = verdict.reserved_inr
+        # RELEASED at once. See the docstring: a preview that held would be A-016.
+        for rid in verdict.reservations:
+            ledger.settle(rid, 0.0)
+
+    body = {"plan": plan.to_dict(),
+            "agents": sorted({w.agent for w in workers}),
+            "registered_agents": list(mp.WORKER_AGENTS),
+            "max_workers": mp.MAX_WORKERS,
+            "would_run": verdict.ok,
+            "quoted_inr": (quoted if verdict.ok and quoted else None),
+            "held_inr": 0.0,
+            "reason": verdict.reason,
+            "note": ("A QUOTE, not a hold. Nothing is reserved by a preview: a preview that "
+                     "held its reservations would leak the firm's daily cap every time "
+                     "somebody looked at a plan and thought better of it. The runner "
+                     "reserves again when it starts, so between this and that another run "
+                     "may take the headroom and the start can be refused NO_BUDGET for a "
+                     "plan priced here.")}
+    if not verdict.ok:
+        # A refusal is a PRODUCT state here, not an error: "this plan would not run, and
+        # here is why" is the whole purpose of a preview. So it comes back 200 with
+        # `would_run: false` rather than as a 4xx a caller has to catch.
+        body["refusal_code"] = verdict.code
+        body["detail"] = verdict.detail
+        body["quoted_inr"] = None
+    return body
+
+
 def _vault_summarize(args: dict, ctx: Context) -> dict:
     """What is KNOWN about one document. Not a model summary, and it says so."""
     if ctx.store is None:
@@ -3594,6 +3664,18 @@ VERBS: tuple[Verb, ...] = (
          (Field("document_id", STRING, True, describes="the document to re-read"),),
          "POST", read_only=True, mcp=False, run=_vault_verify),
 
+    # move 16 (T4). READ-ONLY: it reserves and releases within the call, so it changes no
+    # durable state and a caller may ask as often as they like. mcp=False because
+    # `scripts/themis_mcp.py` asserts len(TOOLS) == 31 and must not be edited.
+    Verb("runs.preview",
+         "What a multi-agent fan-out would do and what it would cost, before anything runs. "
+         "A quote, not a hold: nothing is reserved by a preview.",
+         (Field("goal", STRING, True,
+                describes="what the fan-out is for, in the lawyer's own words"),
+          Field("workers", ARRAY, True,
+                describes="the proposed workers, each {agent, task}")),
+         "POST", read_only=True, mcp=False, run=_runs_preview),
+
     Verb("vault.summarize",
          "What is RECORDED about a document: its class, its clauses, and the sentence "
          "each was found in. Not a written summary.",
@@ -3867,12 +3949,14 @@ def _test() -> None:
                     "review_table.cancel", "draft.create",
                     "draft.revise", "draft.status", "draft.versions", "draft.diff",
                     "draft.export", "matters.create", "matters.list",
-                    "calendar.upcoming", "usage.status", "jobs.dead"} | {
+                    "calendar.upcoming", "usage.status", "jobs.dead",
+                    # move 16 (T4).
+                    "runs.preview"} | {
                         "vault.upload", "vault.status", "vault.find",
                                             "vault.verify", "vault.summarize",
                                             "vault.research", "vault.compile",
                                             "vault.delete"},
-          f"the forty-two verbs are declared once ({sorted(names)})")
+          f"the forty-three verbs are declared once ({sorted(names)})")
     # sources.* are READ-ONLY, so they reach MCP. That is the intended shape: an agent may
     # ask what a source permits and search what may be read, and there is no sources verb
     # that fetches, stores or spends. S3's Indian Kanoon connector will spend money, and
@@ -5275,7 +5359,10 @@ def _test() -> None:
     check(_opted == {"matters.list", "calendar.upcoming", "usage.status", "jobs.dead",
                      "vault.status",
                      "vault.find", "vault.verify", "vault.summarize", "vault.research",
-                     "vault.compile"},
+                     "vault.compile",
+                     # move 16 (T4). Off MCP: it prices the firm's own SPEND, and the
+                     # Themis tool count is fixed at 31.
+                     "runs.preview"},
           f"...and the verbs that opt out are the ones that should: a client list, the "
           f"firm's SPEND, and "
           f"every read of the VAULT -- which is the client's documents themselves. "
@@ -5339,7 +5426,7 @@ def _test() -> None:
           "...while a WRITE verb is kept out of MCP by mcp_tools(), not by the author "
           "remembering to")
     check("widgets.delete" in write_verbs(hypo), "...and is named in write_verbs()")
-    check(len(VERBS) == 42 and "widgets.count" not in rest_spec(),
+    check(len(VERBS) == 43 and "widgets.count" not in rest_spec(),
           "...and the probe changed nothing in this module: the surfaces are generated "
           "from an argument, not from a global the test rebound")
 
@@ -5433,6 +5520,104 @@ def _test() -> None:
     check(_review_document({"text": _ss.CLEAN, "meeting_date": "1 April 2026"},
                            Context())["code"] == "BAD_REQUEST",
           "...and an unreadable date is refused rather than silently treated as absent")
+
+    # ── move 16 (T4): runs.preview, and the money balancing to zero ─────────
+    # The done-when: "Preview -> start -> result, with the reservation balancing to zero."
+    # Measured against a REAL ledger on a temp file, and the balance is read out of the
+    # ledger at each stage rather than inferred from what the verbs reported.
+    import tempfile as _t5tmp
+    from datetime import date as _t5date
+    from agents import multi_plan as _t5mp
+    from agents import multi_runner as _t5mr
+    from backend.budget import BudgetTracker as _T5BT, FileStore as _T5FS
+
+    with _t5tmp.TemporaryDirectory() as _t5dir:
+        import pathlib as _t5pl
+        _t5ledger = _T5BT(_T5FS(_t5pl.Path(_t5dir) / "budget.json"),
+                          today=_t5date(2026, 10, 5))
+
+        def _t5_held() -> dict:
+            return {k: v for k, v in (_t5ledger._state().get("reservations") or {}).items()
+                    if k.startswith("ma1-")}
+
+        _t5_real = globals()["_ledger"]
+        globals()["_ledger"] = lambda: _t5ledger
+        try:
+            _t5_workers = [{"agent": "research_question", "task": f"sub-question {i}"}
+                           for i in range(3)]
+            # 1. PREVIEW
+            _pv = _runs_preview({"goal": "answer in three parts",
+                                 "workers": _t5_workers}, Context())
+            check(_pv["would_run"] is True,
+                  f"a preview of a sound plan says it would run ({_pv['would_run']})")
+            check(_pv["agents"] == ["research_question"]
+                  and _pv["plan"]["worker_count"] == 3,
+                  f"...naming the agents and the worker count, which is what a lawyer is "
+                  f"being asked to approve ({_pv['agents']}, "
+                  f"{_pv['plan']['worker_count']})")
+            check(isinstance(_pv["quoted_inr"], float) and _pv["quoted_inr"] > 0,
+                  f"...with a real price, produced by actually reserving rather than by "
+                  f"multiplying a figure somebody wrote down (₹{_pv['quoted_inr']})")
+            check(_pv["held_inr"] == 0.0 and not _t5_held(),
+                  f"...and HOLDING NOTHING afterwards. A preview that held would leak the "
+                  f"cap every time somebody looked at a plan and thought better of it -- "
+                  f"which is A-016, measured at 58 reservations worth ₹115.99 against a "
+                  f"₹116.67 cap ({_t5_held()})")
+            check("A QUOTE, not a hold" in _pv["note"],
+                  "...and the note says so in those words, so a reader is not told the "
+                  "money is set aside")
+            check(_pv["max_workers"] == _t5mp.MAX_WORKERS
+                  and _pv["registered_agents"] == list(_t5mp.WORKER_AGENTS),
+                  "...and it discloses the cap and the registry, so a refused plan can be "
+                  "narrowed without guessing what is allowed")
+
+            # 2. START, with the runner reserving for itself
+            _plan = _t5mp.MultiPlan("answer in three parts",
+                                    tuple(_t5mp.Task(w["agent"], w["task"])
+                                          for w in _t5_workers))
+            _v = _t5mp.validate(_plan, budget=_t5ledger)
+            check(_v.ok and len(_t5_held()) == 3,
+                  f"the START reserves for itself -- three reservations now outstanding, "
+                  f"because the preview released its own ({len(_t5_held())})")
+            check(abs(_v.reserved_inr - _pv["quoted_inr"]) < 1e-9,
+                  f"...for the SAME amount the preview quoted, because both go through "
+                  f"`budget.reserve` rather than through two pieces of arithmetic "
+                  f"(₹{_v.reserved_inr} vs ₹{_pv['quoted_inr']})")
+
+            # 3. RESULT
+            _out = _t5mr.run(_plan, call=lambda t: f"answer to {t.task}",
+                             verify=lambda text, t: text,
+                             merge=lambda rs: " | ".join(r.text for r in rs),
+                             budget=_t5ledger, reservations=_v.reservations)
+            check(_out.status == _t5mr.ANSWERED and _out.complete,
+                  f"the run completes ({_out.status})")
+            check(not _t5_held(),
+                  f"...and the reservations BALANCE TO ZERO: nothing is outstanding after "
+                  f"preview -> start -> result ({_t5_held()})")
+        finally:
+            globals()["_ledger"] = _t5_real
+        check(_ledger is _t5_real,
+              "the ledger is restored -- a self-test that leaves `_ledger` patched starves "
+              "every check after it, which this file has been bitten by twice")
+
+    # ── a preview REFUSES as a product state, not as an error ───────────────
+    _pv_bad = _runs_preview({"goal": "too many", "workers":
+                             [{"agent": "research_question", "task": f"q{i}"}
+                              for i in range(_t5mp.MAX_WORKERS + 1)]}, Context())
+    check(_pv_bad["would_run"] is False
+          and _pv_bad["refusal_code"] == _t5mp.TOO_MANY_WORKERS,
+          f"a plan over the cap previews as `would_run: false` with the code, NOT as a 4xx "
+          f"-- 'this would not run, and here is why' is the whole purpose of a preview "
+          f"({_pv_bad['refusal_code']})")
+    check(_pv_bad["quoted_inr"] is None,
+          f"...and quotes NO price, because a price for work that will not happen is a "
+          f"number with no referent ({_pv_bad['quoted_inr']})")
+    check(_runs_preview({"goal": "x", "workers": [{"agent": "nope", "task": "t"}]},
+                        Context())["refusal_code"] == _t5mp.UNKNOWN_AGENT,
+          "an unregistered agent previews as UNKNOWN_AGENT")
+    check(_runs_preview({"goal": "x", "workers": "not a list"},
+                        Context()).get("code") == "BAD_REQUEST",
+          "a malformed `workers` is a BAD_REQUEST refusal, since there is no plan to preview")
 
     # ── the human gate: runs.approve / runs.reject ──────────────────────────
     dstore = _MB()

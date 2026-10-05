@@ -116,7 +116,15 @@ def run(plan, *, call, verify, merge, budget=None, max_attempts: int = 3,
     `reservations` are the ids `validate` took. Each is settled as its worker finishes --
     including a dead one, which settles at 0.0 because it never billed.
     """
-    verdict = mp.validate(plan, budget=budget)
+    # Validated WITHOUT the budget when the caller already reserved. `_reservation_id` is
+    # stable per (goal, index, agent) -- deliberately, so a resumed plan cannot double-hold
+    # -- which means re-reserving ids the caller is still holding raises "already
+    # outstanding". Found by `runs.preview`'s own test: preview -> start -> result went
+    # through validate twice and the second call collided with the first's reservations.
+    #
+    # The structural checks still run either way. What is skipped is only the reservation,
+    # because the money is already held and taking it twice is the bug, not the check.
+    verdict = mp.validate(plan, budget=(None if reservations else budget))
     if not verdict.ok:
         return RunOutcome(REFUSED, note=verdict.reason,
                           detail={"code": verdict.code, **verdict.detail})
@@ -360,6 +368,31 @@ def _test() -> int:
           f"...and leaves NOTHING reserved -- including for the worker that DIED, which "
           f"never billed. Holding money for finished work is the leak move 3 measured at "
           f"₹2.00 a cell ({outstanding(t)})")
+
+    # ── a caller that already reserved is not charged twice ────────────────
+    # `_reservation_id` is stable per (goal, index, agent), so re-reserving ids the caller
+    # still holds raises "already outstanding". `run` therefore validates WITHOUT the budget
+    # when `reservations` are supplied. Found by runs.preview's own test, not by reading.
+    t5 = BudgetTracker(_Mem(), today=_date(2026, 10, 5))
+    v5 = mp.validate(plan_of(3), budget=t5)
+    check(v5.ok and len(outstanding(t5)) == 3,
+          f"the caller reserves three ({len(outstanding(t5))})")
+    out5 = run(plan_of(3), call=lambda t: "a", verify=lambda x, t: x, merge=merge,
+               budget=t5, reservations=v5.reservations)
+    check(out5.status == ANSWERED,
+          f"...and the run accepts them rather than reserving again ({out5.status})")
+    check(not outstanding(t5),
+          f"...settling exactly those, so the ledger balances to zero "
+          f"({outstanding(t5)})")
+    # And the structural checks still run on that path: a bad plan with reservations
+    # supplied is still refused.
+    _bad_with_res = run(mp.MultiPlan("g", (mp.Task("nope", "x"),)), call=lambda t: "a",
+                        verify=lambda x, t: x, merge=merge, budget=t5,
+                        reservations=("ma1-whatever",))
+    check(_bad_with_res.status == REFUSED
+          and _bad_with_res.detail.get("code") == mp.UNKNOWN_AGENT,
+          "...while the structural checks still run on that path: what is skipped is the "
+          "reservation, not the validation")
 
     # ── the vocabulary ──────────────────────────────────────────────────────
     check(len(set(OUTCOMES)) == 4 and len(set(WORKER_STATES)) == 3,
