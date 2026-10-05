@@ -2129,9 +2129,18 @@ def _vault_upload(args: dict, ctx: Context) -> dict:
         # Dedupe fires here: the same bytes twice is one document, and saying so is more
         # useful than a second row that would never be searched separately.
         return _refuse("CONFLICT", str(e)[:200])
-    queued = None
+    queued, queue_error = None, ""
     if ctx.queue is not None:
         from agents.vault_ingest import INTENT
+        # The run row FIRST. `_runs_submit` says why and this verb did not listen: `jobs.run_id`
+        # references `runs(run_id)`, so on Postgres the enqueue below raised
+        # ForeignKeyViolation, the bare `except` turned it into `queued = None`, and the note
+        # then told the operator "No queue is configured" when one was configured and working.
+        # Nothing could be ingested on a real database. Found by running
+        # docs/guides/RUN_LOCALLY.md, not by a test -- every test used MemoryBackend, which
+        # has no foreign keys.
+        ctx.store.write({"id": did, "intent": INTENT, "status": "PLANNED",
+                         "refusal_code": None, "steps": [], "propositions": []})
         try:
             # A1. BULK: vault ingest and OCR are wanted eventually, and must never take a
             # slot reserved for someone waiting.
@@ -2140,14 +2149,22 @@ def _vault_upload(args: dict, ctx: Context) -> dict:
                                        args={"document_id": did, "sha256": sha,
                                              "name": name,
                                              "matter_id": args.get("matter_id")}).job_id
-        except Exception:                                        # noqa: BLE001
-            queued = None
+        except Exception as e:                                   # noqa: BLE001
+            queued, queue_error = None, f"{type(e).__name__}: {str(e)[:140]}"
+    if queued:
+        note = ("stored and queued for ingestion. PENDING is not INGESTED: nothing "
+                "is searchable until a worker has read it.")
+    elif queue_error:
+        # A queue that answered with an error is not an absent queue, and the operator needs
+        # the difference: one is a deployment that was never wired, the other is a bug.
+        note = (f"stored, but the ingest job could NOT be queued ({queue_error}). It will "
+                f"stay PENDING until the queue accepts it. This is a failure, not a "
+                f"deployment without a queue.")
+    else:
+        note = ("stored. No queue is configured, so nothing will ingest it and it "
+                "will stay PENDING -- said plainly rather than left to look done.")
     return {"document_id": did, "sha256": sha, "state": "PENDING", "job_id": queued,
-            "note": ("stored and queued for ingestion. PENDING is not INGESTED: nothing "
-                     "is searchable until a worker has read it."
-                     if queued else
-                     "stored. No queue is configured, so nothing will ingest it and it "
-                     "will stay PENDING -- said plainly rather than left to look done.")}
+            "queue_error": queue_error or None, "note": note}
 
 
 def _vault_ingest_job(args: dict, ctx: Context) -> dict:
@@ -2628,6 +2645,9 @@ def _citation_get(args: dict, ctx: Context) -> dict:
 MAX_GRID_CELLS = 500
 
 
+_CONTENT_HASH = __import__("re").compile(r"[0-9a-f]{64}")
+
+
 def _review_table_create(args: dict, ctx: Context) -> dict:
     """Define a grid and enqueue one job per cell. Refuses above the cell cap.
 
@@ -2648,6 +2668,20 @@ def _review_table_create(args: dict, ctx: Context) -> dict:
         return _refuse("BAD_REQUEST", "columns must be a list of objects")
     if not raw_docs:
         return _refuse("BAD_REQUEST", "a review table needs at least one document")
+    # `review_grid_cells.document_id` is CHECKed against `^[0-9a-f]{64}$` (011): a grid
+    # addresses documents by CONTENT HASH, so the same bytes are the same row and a table is
+    # replayable. A vault `document_id` is a uuid, and passing one used to reach the database
+    # and come back as a 500 -- a well-formed request answered with a stack trace. The vault
+    # reports each document's `sha256` in `vault.status`, which is the value to pass.
+    bad = [d for d in raw_docs if not _CONTENT_HASH.fullmatch(d.strip())]
+    if bad:
+        return _refuse("BAD_REQUEST",
+                       f"a review table addresses documents by CONTENT HASH -- a 64-character "
+                       f"sha256, so that the same bytes are always the same row and the table "
+                       f"can be replayed. {len(bad)} of {len(raw_docs)} id(s) are not one "
+                       f"(first: {bad[0][:24]!r}). A vault document's hash is the `sha256` "
+                       f"field of `vault.status`; its `document_id` is a uuid and names the "
+                       f"vault record, not the bytes.")
     if not raw_cols:
         return _refuse("BAD_REQUEST",
                        "a review table with no columns asks nothing of its documents")
@@ -2698,7 +2732,13 @@ def _review_table_create(args: dict, ctx: Context) -> dict:
         # dispatched. It was not, until move 2: `schedule()` reserves only when a budget is
         # supplied and this call supplied none, so A1's per-cell reservation was wired and
         # unreachable -- the same shape as the vault's file store in move 1.
-        sched = rgr.schedule(table, queue=ctx.queue, budget=ledger)
+        sched = rgr.schedule(
+            table, queue=ctx.queue, budget=ledger,
+            # Same reason as the vault upload above: the cell's run row has to exist before
+            # its job can reference it.
+            ensure_run=lambda rid: ctx.store.write(
+                {"id": rid, "intent": rgr.INTENT, "status": "PLANNED",
+                 "refusal_code": None, "steps": [], "propositions": []}))
         if sched.paused_budget:
             # Persisted, because `create` returns this ONCE. A caller that did not keep the
             # response -- a reloaded page, the CLI, an MCP tool -- has no other way to learn
@@ -3325,32 +3365,78 @@ def _review_grid_cell(args: dict, ctx: Context) -> dict:
     debits: list = []
     if answer is None:
         answer = _cell_answerer(ctx, debits)
+    # `ctx.documents` is an injected dict, and on a WORKER it is empty: the gate filled it
+    # and no running process ever did, so every cell dispatched by `review_table.create`
+    # died on RunnerError("no such document") -- the table was wired to a fixture. A grid's
+    # document_id IS the content hash, and the file store is content-addressed, so the bytes
+    # are one `get` away. Read-only, and only for the cell in hand.
+    documents = ctx.documents
+    did = str(args.get("document_id") or "")
+    if did not in documents and ctx.files is not None:
+        try:
+            documents = {**documents,
+                         did: {"text": ctx.files.get(did).decode("utf-8", "replace")}}
+        except Exception:                                        # noqa: BLE001
+            # Left absent on purpose. `run_cell` raises RunnerError for a document it cannot
+            # see, which becomes a FAILED cell naming the document -- the right answer, and
+            # one a fabricated empty string would have hidden behind NOT_FOUND.
+            pass
+    # The reservation this cell holds, released no matter how this function leaves.
+    # `schedule()` reserves each cell's WORST CASE before dispatch and passes the id here
+    # for the worker to settle; nothing settled it, so a cell that ran held its worst case
+    # until the day rolled over. In a `finally` rather than on the happy path, because a
+    # write that raises leaks the money as surely as one that returns.
+    settled = {"done": False}
+
+    def _settle(actual_inr: float) -> None:
+        rid = (args.get("reservation_id") or "").strip() if args.get("reservation_id") else ""
+        if not rid or settled["done"]:
+            return
+        ledger = _ledger()
+        if ledger is None:
+            return
+        ledger.settle(rid, actual_inr)
+        settled["done"] = True
+
     try:
-        cell = rgr.run_cell(args, documents=ctx.documents, answer=answer)
-    except rgr.RunnerError as e:
-        return {"status": "FAILED", "error": str(e)}
-    debit = _cell_debit(debits, stubbed=stubbed)
-    wrote = ctx.store.write_grid_cell(
-        {"grid_id": args["grid_id"], "document_id": cell.document_id,
-         "column_name": cell.column, "state": cell.state, "value": cell.value,
-         "quote": cell.quote, "reason": cell.reason,
-         "provider": debit["provider"], "cost_inr": debit["cost_inr"],
-         "cost_note": debit["cost_note"]})
-    # The ledger `run_steps` has been since 003, with the same numbers. A cell is a run, so
-    # this is one step per cell and the two records cannot disagree: they are built from
-    # one `Served.step_fields()`.
-    ctx.last_steps.append({
-        "capability": "review_grid.cell",
-        "status": "FAILED" if cell.state == "FAILED" else "ANSWERED",
-        **debit})
-    return {"status": "ANSWERED" if wrote else "ANSWERED",
-            "grid_id": args["grid_id"], "document_id": cell.document_id,
-            "column": cell.column, "cell_state": cell.state,
-            "written": wrote, "cost_inr": debit["cost_inr"],
-            "cost_note": debit["cost_note"],
-            "note": (None if wrote else
-                     "this cell was already answered; the earlier answer was kept. A "
-                     "worker handed the same cell twice does not overwrite it.")}
+        try:
+            cell = rgr.run_cell(args, documents=documents, answer=answer)
+        except rgr.RunnerError as e:
+            return {"status": "FAILED", "error": str(e),
+                    "reservation_settled": bool((args.get("reservation_id") or ""))}
+        debit = _cell_debit(debits, stubbed=stubbed)
+        # Settled at what it ACTUALLY cost. An unpriced call settles at 0.0 only because a
+        # cell that never reached a provider never billed -- `budget.settle` documents the
+        # other case ("a call that may have billed but whose usage never came back should
+        # settle at the reserved amount"), and `_cell_debit` distinguishes the two by
+        # whether a debit was recorded at all.
+        _settle(float(debit.get("cost_inr") or 0.0))
+        wrote = ctx.store.write_grid_cell(
+            {"grid_id": args["grid_id"], "document_id": cell.document_id,
+             "column_name": cell.column, "state": cell.state, "value": cell.value,
+             "quote": cell.quote, "reason": cell.reason,
+             "provider": debit["provider"], "cost_inr": debit["cost_inr"],
+             "cost_note": debit["cost_note"]})
+        # The ledger `run_steps` has been since 003, with the same numbers. A cell is a run,
+        # so this is one step per cell and the two records cannot disagree: they are built
+        # from one `Served.step_fields()`.
+        ctx.last_steps.append({
+            "capability": "review_grid.cell",
+            "status": "FAILED" if cell.state == "FAILED" else "ANSWERED",
+            **debit})
+        return {"status": "ANSWERED" if wrote else "ANSWERED",
+                "grid_id": args["grid_id"], "document_id": cell.document_id,
+                "column": cell.column, "cell_state": cell.state,
+                "written": wrote, "cost_inr": debit["cost_inr"],
+                "cost_note": debit["cost_note"],
+                "reservation_settled": settled["done"],
+                "note": (None if wrote else
+                         "this cell was already answered; the earlier answer was kept. A "
+                         "worker handed the same cell twice does not overwrite it.")}
+    finally:
+        # 0.0: if we are leaving by an exception the cell did not finish, so it did not
+        # bill. Holding the worst case for work that is over is the leak.
+        _settle(0.0)
 
 
 def _review_table_cancel(args: dict, ctx: Context) -> dict:
@@ -6164,6 +6250,46 @@ def _test() -> None:
           f"this suite leaves NO cell reservation in the real ledger -- a test that holds "
           f"the deployment's cap starves every test after it, and the failure surfaces "
           f"somewhere unrelated ({len(_mleft)} left, ₹{sum(_mleft.values()):.2f})")
+    # ── move 3: a dispatched cell SETTLES its reservation ───────────────────
+    # `agents/review_grid.schedule` passes `reservation_id` into every cell's job args and
+    # says why: "Carried so the worker settles the exact reservation this cell holds. A
+    # settled-by-guess reservation is a leak that only shows up as a budget that never
+    # recovers." Nothing consumed it. `reservation_id` appeared NOWHERE in this file, so
+    # every cell that ran held its WORST-CASE price until the day rolled over -- a 400-cell
+    # table ate a whole day's cap and answered nothing further. Found by running one cell
+    # live against local Postgres and reading `corpus/.budget.json` afterwards: ₹2.00
+    # outstanding for a cell that had already finished.
+    _d5_fresh = _MBT(store=_MMem(), today=_mdate(2026, 10, 5))
+    _d5_res = _d5_fresh.reserve(input_tokens=4000, max_tokens=600,
+                               reservation_id="cell-settle-check")
+    def _d5_held() -> float:
+        return sum((_d5_fresh._state().get("reservations") or {}).values())
+    _d5_before = _d5_held()
+    _d5_store = MemoryBackend()
+    _d5_store.write_grid({"grid_id": "grid-settle", "name": "settle",
+                          "columns": [{"name": "governing law", "kind": "text",
+                                       "question": "Which law?"}],
+                          "document_ids": ["b2" * 32]})
+    _mreal5 = globals()["_ledger"]
+    globals()["_ledger"] = lambda: _d5_fresh
+    try:
+        _d5_out = _review_grid_cell(
+            {"grid_id": "grid-settle", "document_id": "b2" * 32,
+             "column": "governing law", "kind": "text", "question": "Which law?",
+             "idempotency_key": "grid-settle:b2:governing law",
+             "reservation_id": _d5_res.id},
+            Context(store=_d5_store, clock=lambda: "2026-10-05T00:00:00Z"))
+    finally:
+        globals()["_ledger"] = _mreal5
+    check(_d5_before > 0.0 and _d5_held() == 0.0,
+          f"a cell that FAILED still settles its reservation: the money it did not spend "
+          f"goes back to the cap (₹{_d5_before:.2f} held -> ₹{_d5_held():.2f} after, "
+          f"cell {_d5_out.get('cell_state')})")
+    check(_d5_out.get("reservation_settled") is True,
+          f"...and the response SAYS it settled, so a leak is visible in the record rather "
+          f"than only in a budget that quietly shrinks "
+          f"({_d5_out.get('reservation_settled')})")
+
     # ── move 3: a PENDING cell says WHY it is pending ───────────────────────
     # "Not dispatched because there is no worker" and "dispatched, waiting its turn" are
     # both PENDING, and the difference is the whole of whether anything will ever happen.
@@ -6270,6 +6396,51 @@ def _test() -> None:
         check((_d3_row or {}).get("state") == "INGESTED",
               f"...and the document reaches INGESTED through the WORKER "
               f"({(_d3_row or {}).get('state')})")
+
+    # ── move 3: a queued job must point at a run that EXISTS ────────────────
+    # `jobs.run_id` references `runs(run_id)`. `_runs_submit` writes the run row first and
+    # its comment says why: "a job pointing at a run that does not exist is a foreign-key
+    # error on Postgres". Neither `vault.upload` nor `review_table.create` did -- so on a
+    # real database the enqueue raised ForeignKeyViolation, upload swallowed it into
+    # `queued = None` and told the operator "No queue is configured", which was false.
+    # Found by following docs/guides/RUN_LOCALLY.md against live Postgres.
+    _d4_store = MemoryBackend()
+    with _d3tmp.TemporaryDirectory() as _d4dir:
+        _d4_ctx = Context(store=_d4_store, queue=_MQ2(), files=_D3LFS(_d4dir),
+                          clock=lambda: "2026-10-05T00:00:00Z")
+        _d4_up = _vault_upload({"name": "a.txt", "text": "Governed by the laws of India."},
+                               _d4_ctx)
+        check(_d4_up.get("job_id"),
+              f"a vault upload returns a job id, so something was really queued "
+              f"({_d4_up.get('job_id')})")
+        check(_d4_store.read_run(_d4_up["document_id"]) is not None,
+              f"...and the RUN ROW the job points at exists, or Postgres refuses the "
+              f"insert on its foreign key "
+              f"({_d4_store.read_run(_d4_up['document_id']) is not None})")
+        check("No queue is configured" not in str(_d4_up.get("note") or ""),
+              f"...and the note does not say 'no queue' when one answered "
+              f"({str(_d4_up.get('note'))[:60]})")
+
+    _d4_fresh = _MBT(store=_MMem(), today=_mdate(2026, 10, 5))
+    _d4_gctx = Context(store=MemoryBackend(), queue=_MQ2(),
+                       clock=lambda: "2026-10-05T00:00:00Z")
+    _mreal3 = globals()["_ledger"]
+    globals()["_ledger"] = lambda: _d4_fresh
+    try:
+        _d4_grid = _review_table_create(
+            {"name": "runs exist", "document_ids": ["a1" * 32],
+             "columns": [{"name": "governing law", "kind": "text",
+                          "question": "Which law?"}]},
+            _d4_gctx)
+    finally:
+        globals()["_ledger"] = _mreal3
+    check(len(_d4_grid["scheduled"]["enqueued"]) == 1,
+          f"a review table enqueues its cell ({_d4_grid['scheduled']['enqueued']})")
+    from agents.review_grid import run_id_for_cell as _d4_rid
+    _d4_cell_run = _d4_rid(_d4_grid["grid_id"], "a1" * 32, "governing law")
+    check(_d4_gctx.store.read_run(_d4_cell_run) is not None,
+          f"...and a RUN ROW exists for that cell, so the job's foreign key holds "
+          f"({_d4_gctx.store.read_run(_d4_cell_run) is not None})")
 
     globals()["_ledger"] = _real_ledger_fn
     check(_ledger is _real_ledger_fn,
