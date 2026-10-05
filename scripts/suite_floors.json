@@ -2,6 +2,7 @@
   "note": "Each suite's passed-check count, as a floor. A suite reporting fewer is a FAILURE. Floors rise automatically on a green run; LOWERING one means editing this file in a commit that says why.",
   "floors": {
     "agents/intake.py": 137,
+    "agents/multi_plan.py": 40,
     "agents/plans.py": 24,
     "agents/research_question.py": 32,
     "agents/review_contract.py": 36,
