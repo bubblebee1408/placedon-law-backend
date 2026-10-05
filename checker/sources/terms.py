@@ -43,8 +43,14 @@ every policy page, so its terms are unread. e-Gazette publishes no robots.txt (a
 so allowed) but 500s on its policy pages. Only **Indian Kanoon** and **SEBI** have terms that
 were actually read — and neither of them says anything at all about caching.
 
-Consequently `may_cache()` is False for all seven sources today. That is not a bug in this
-file; it is the answer.
+Consequently `may_cache()` is False for all seven of those scraped web sources. That is not a
+bug in this file; it is the answer.
+
+Two further sources were added 2026-10-05: the AWS Open Data eCourts judgment datasets
+(Supreme Court and High Court), owner-approved, managed by Dattam Labs, licensed CC-BY-4.0.
+Their terms are a standard open-data LICENCE rather than a scraped policy page, so for them
+`may_cache()` is True — CC-BY grants redistribution. They are the two exceptions to the
+paragraph above, and the only cacheable sources in the file.
 
 Run: PYTHONPATH=. python3 checker/sources/terms.py --test
 """
@@ -238,6 +244,34 @@ _RBI_418 = (
 )
 
 READ_ON = "2026-09-30"          # every fetch in this file, one session, IST evening
+READ_AWS = "2026-10-05"         # the AWS Open Data judgment datasets, a later session
+
+# CC-BY-4.0, from the licence deed at https://creativecommons.org/licenses/by/4.0/ (fetched
+# 2026-10-05). The deed's words, not the 7391-word legal code: these are what the deed shows
+# a reuser, and they are the same for every CC-BY-4.0 work. The party to credit for THESE
+# datasets (Dattam Labs, from eCourts) comes from the AWS Open Data Registry YAML, recorded in
+# each record's note -- the licence states the REQUIREMENT, the registry states the PARTY.
+_CCBY_ATTRIBUTION = (
+    "You must give appropriate credit, provide a link to the license, and indicate if "
+    "changes were made. You may do so in any reasonable manner, but not in any way that "
+    "suggests the licensor endorses you or your use."
+)
+_CCBY_SHARE = (
+    "Share — copy and redistribute the material in any medium or format"
+)
+_CCBY_COMMERCIAL = (
+    "Adapt — remix, transform, and build upon the material for any purpose, even "
+    "commercially."
+)
+# The bucket's own virtual host answers /robots.txt with S3's NoSuchKey, a genuine 404 that
+# RFC 9309 and checker/robots.py read as allowance. NOT Amazon's shared s3.ap-south-1 service
+# root, which 403s a keyless request generically for every bucket -- that 403 is not a crawl
+# directive about THIS dataset, and recording it would falsely mark an owner-approved,
+# CC-BY-4.0, registry-published open dataset as refused.
+_S3_NOSUCHKEY = (
+    "<?xml version=\"1.0\"?><Error><Code>NoSuchKey</Code><Message>The specified key does "
+    "not exist.</Message><Key>robots.txt</Key></Error> (S3 REST, application/xml, HTTP 404)"
+)
 
 # ── the register ─────────────────────────────────────────────────────────────
 
@@ -249,7 +283,7 @@ RECORDS: tuple[TermsRecord, ...] = (
         date_read=READ_ON,
         clauses=(
             Clause(ATTRIBUTION, READ, _IK_ATTRIBUTION,
-                   "The strictest attribution clause of the seven, and it names our exact "
+                   "The strictest attribution clause of the nine, and it names our exact "
                    "use: RAG context counts, not only display. It requires the LOGO, not "
                    "the words -- PLAN_26 §2 says the label is 'Powered by IKanoon', which "
                    "is the text and not what this clause asks for. A text-only credit does "
@@ -343,8 +377,9 @@ RECORDS: tuple[TermsRecord, ...] = (
         date_read=READ_ON,
         clauses=(
             Clause(CACHING, PROHIBITED, _RBI_CACHING,
-                   "The only source of the seven that addresses caching, and it forbids "
-                   "it. Nothing from rbi.org.in may enter source_documents."),
+                   "The only one of the seven scraped web sources that addresses caching, "
+                   "and it forbids it. Nothing from rbi.org.in may enter source_documents. "
+                   "(The two CC-BY-4.0 datasets added later permit caching by licence.)"),
             Clause(COMMERCIAL_USE, PERMISSION_REQUIRED, _RBI_DEEP_LINK,
                    "Even LINKING to an internal page needs written permission, which is a "
                    "stricter gate than reproduction on most sites."),
@@ -499,6 +534,85 @@ RECORDS: tuple[TermsRecord, ...] = (
              "without the other. It is NOT recorded as BLOCKED -- nothing refused us, we "
              "were dropped -- and the terms are unread either way, so no connector loads.",
     ),
+    # ── AWS Open Data: eCourts judgments, CC-BY-4.0, managed by Dattam Labs ──────
+    # Owner-approved. Added 2026-10-05 from the AWS Open Data Registry YAML and the CC-BY-4.0
+    # deed, both fetched that day. These are the first two sources in this file whose terms
+    # are a standard open-data LICENCE rather than a scraped website policy -- so caching is
+    # permitted (CC-BY grants redistribution), which the self-test's headline finding now
+    # reflects. Tier LICENSED: a judgment may support an answer, never make one VERIFIED.
+    TermsRecord(
+        source_id="aws_sc_judgments",
+        name="Indian Supreme Court Judgments (AWS Open Data, Dattam Labs)",
+        terms_url="https://registry.opendata.aws/indian-supreme-court-judgments/",
+        date_read=READ_AWS,
+        clauses=(
+            Clause(CACHING, READ, quote=_CCBY_SHARE,
+                   note="CC-BY-4.0 grants redistribution, so storing the metadata and the "
+                        "judgment PDFs (with sha256) is permitted -- unlike every scraped "
+                        "source in this file."),
+            Clause(ATTRIBUTION, READ, quote=_CCBY_ATTRIBUTION,
+                   note="Credit: Dattam Labs (https://dattam.in), from the eCourts website; "
+                        "licence https://creativecommons.org/licenses/by/4.0/. Party from "
+                        "the registry YAML; requirement from the CC-BY-4.0 deed."),
+            Clause(COMMERCIAL_USE, READ, quote=_CCBY_COMMERCIAL),
+            Clause(RATE_LIMIT, OPEN,
+                   note="No published rate limit for anonymous S3 reads; our 2s courtesy "
+                        "floor governs. UpdateFrequency per the registry: Bi-monthly."),
+        ),
+        robots=(
+            RobotsResult(
+                origin="https://indian-supreme-court-judgments.s3.ap-south-1.amazonaws.com",
+                state=NOT_FOUND, http=404, loaded=True, verbatim=_S3_NOSUCHKEY,
+                disallow_count=0, crawl_delay=None, effective_delay=2.0,
+                paths={"https://indian-supreme-court-judgments.s3.ap-south-1.amazonaws.com"
+                       "/metadata/parquet/year=1950/metadata.parquet": True,
+                       "https://indian-supreme-court-judgments.s3.ap-south-1.amazonaws.com"
+                       "/data/pdf/year=1950/english/1950_1_15_25_EN.pdf": True}),
+        ),
+        note="AWS Open Data Registry dataset (arn:aws:s3:::indian-supreme-court-judgments, "
+             "ap-south-1), ManagedBy Dattam Labs, License CC-BY-4.0, UpdateFrequency "
+             "Bi-monthly, collected from the eCourts website; contact contact@dattam.in. "
+             "Verified live 2026-10-05: the bucket reads anonymously (no credentials), "
+             "metadata/parquet/year=YYYY/ and data/pdf/year=YYYY/english/<path>_EN.pdf, and "
+             "a fetched PDF opened with the %PDF-1.7 magic bytes. The GOVERNING robots "
+             "surface is the bucket's own virtual host, which answers /robots.txt with a 404 "
+             "NoSuchKey (RFC 9309 allowance); Amazon's shared s3.ap-south-1 service root 403s "
+             "a keyless request generically and is NOT this dataset's crawl directive. Tier "
+             "LICENSED -- it may support an answer and never make one VERIFIED.",
+    ),
+    TermsRecord(
+        source_id="aws_hc_judgments",
+        name="Indian High Court Judgments (AWS Open Data, Dattam Labs)",
+        terms_url="https://registry.opendata.aws/indian-high-court-judgments/",
+        date_read=READ_AWS,
+        clauses=(
+            Clause(CACHING, READ, quote=_CCBY_SHARE,
+                   note="CC-BY-4.0 grants redistribution; storing metadata and PDFs with "
+                        "sha256 is permitted."),
+            Clause(ATTRIBUTION, READ, quote=_CCBY_ATTRIBUTION,
+                   note="Credit: Dattam Labs (https://dattam.in), from the eCourts website; "
+                        "licence https://creativecommons.org/licenses/by/4.0/."),
+            Clause(COMMERCIAL_USE, READ, quote=_CCBY_COMMERCIAL),
+            Clause(RATE_LIMIT, OPEN,
+                   note="No published rate limit for anonymous S3 reads; our 2s courtesy "
+                        "floor governs. UpdateFrequency per the registry: Quarterly -- not "
+                        "Bi-monthly like the Supreme Court set, which is why each is read "
+                        "rather than assumed."),
+        ),
+        robots=(
+            RobotsResult(
+                origin="https://indian-high-court-judgments.s3.ap-south-1.amazonaws.com",
+                state=NOT_FOUND, http=404, loaded=True, verbatim=_S3_NOSUCHKEY,
+                disallow_count=0, crawl_delay=None, effective_delay=2.0,
+                paths={"https://indian-high-court-judgments.s3.ap-south-1.amazonaws.com"
+                       "/metadata/parquet/": True}),
+        ),
+        note="AWS Open Data Registry dataset (arn:aws:s3:::indian-high-court-judgments, "
+             "ap-south-1), ManagedBy Dattam Labs, License CC-BY-4.0, UpdateFrequency "
+             "Quarterly, collected from the eCourts website. Same governing-robots reasoning "
+             "as the Supreme Court record above: the bucket virtual host 404s /robots.txt. "
+             "Tier LICENSED.",
+    ),
 )
 
 _BY_ID = {r.source_id: r for r in RECORDS}
@@ -541,8 +655,10 @@ def may_cache(source_id: str) -> tuple[bool, str]:
     Stricter than may_fetch, and separately asked, because the two are different
     permissions: RBI lets a browser read a page and forbids caching it in terms.
 
-    Today this returns False for all seven sources. Two prohibit or gate it and five never
-    address it, and an unread term is OPEN. That is the finding, not a placeholder.
+    Today this returns False for all seven scraped web sources: two prohibit or gate it and
+    five never address it, and an unread term is OPEN. It returns True for the two CC-BY-4.0
+    judgment datasets, whose licence grants redistribution. That is the finding, not a
+    placeholder.
     """
     rec = record_for(source_id)
     ok, why = may_fetch(source_id)
@@ -670,11 +786,16 @@ def _test() -> int:
           "...quoted verbatim, not summarised")
     check(not may_cache("rbi")[0], "...so may_cache says no")
 
-    # The headline finding, asserted rather than described.
-    check(not any(may_cache(s)[0] for s in SOURCE_IDS),
-          "NOTHING may be cached today: 0 of 7 sources permit it")
-    check(sum(may_fetch(s)[0] for s in SOURCE_IDS) == 2,
-          "exactly 2 of 7 sources are fetchable (indiankanoon, sebi)")
+    # The headline finding, asserted rather than described. Updated 2026-10-05 when the two
+    # CC-BY-4.0 judgment datasets were added: an open-data LICENCE grants caching, which no
+    # scraped website policy in this file does. Not a weakened test -- a new true state.
+    check({s for s in SOURCE_IDS if may_cache(s)[0]} == {"aws_sc_judgments",
+                                                         "aws_hc_judgments"},
+          "only the two CC-BY-4.0 judgment datasets may be cached; none of the seven "
+          "scraped web sources may")
+    check(sum(may_fetch(s)[0] for s in SOURCE_IDS) == 4,
+          "exactly 4 sources are fetchable (indiankanoon, sebi, and the two AWS judgment "
+          "datasets)")
 
     # Attribution: the clause's own words, and IK's names RAG.
     a = attribution_for("indiankanoon")

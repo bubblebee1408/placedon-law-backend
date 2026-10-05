@@ -196,7 +196,7 @@
     "checker/sources/held.py": 18,
     "checker/sources/mca_fixture.py": 16,
     "checker/sources/mca_master_data.py": 55,
-    "checker/sources/terms.py": 54,
+    "checker/sources/terms.py": 60,
     "checker/sources/tiers.py": 19,
     "checker/span_inventory.py": 16,
     "checker/ss/defects.py": 26,
