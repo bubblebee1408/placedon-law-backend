@@ -202,6 +202,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `checker/sources/contract.py` | R2 feeds | The five rules `checker/sources/` must obey, tested as one suite. |
 | `checker/sources/evidence.py` | R2 feeds | One result from one source, with everything needed to distrust it correctly. |
 | `checker/sources/held.py` | R2 feeds | HELD: our own hash-stamped corpus. The only tier that can make an answer VERIFIED. |
+| `checker/sources/judgments_open.py` | R2 feeds | eCourts judgments from the AWS Open Data buckets. Keyless, LICENSED, never VERIFIED. |
 | `checker/sources/mca_fixture.py` | R2 feeds | A synthetic MCA "Company Master Data" PDF, written by hand, for testing the parser. |
 | `checker/sources/mca_master_data.py` | R2 feeds | Read an MCA "Company Master Data" page the USER downloaded and uploaded to us. |
 | `checker/sources/terms.py` | R2 feeds | What each Indian source actually permits — read from the source, never from memory. |
@@ -369,4 +370,4 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/watch_gazette.py` |  | Run the Gazette watcher once: what did the Gazette publish since we last looked? |
 | `scripts/watch_ofac.py` |  | Poll OFAC's SDN list and report what CHANGED since the last trustworthy poll. |
 
-329 modules listed.
+330 modules listed.

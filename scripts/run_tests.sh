@@ -361,6 +361,10 @@ extra+=("checker/sources/tiers.py --test" "checker/sources/evidence.py --test"
 # Company facts without data.gov.in (PLAN_26 S2-alt). The fixture suite writes a PDF by
 # hand and reads it back through checker/pdf_pages, so it also proves the scanned-page case
 # the parser must call "cannot read" rather than "no facts".
+# STEP 3a: the AWS Open Data eCourts judgment connector. Fixture-driven -- the transport and
+# the parquet reader are injected, so the gate opens no socket and needs no parquet engine.
+# The --live smoke test (one real anonymous read) is deliberately NOT here.
+extra+=("checker/sources/judgments_open.py --test")
 extra+=("checker/sources/company_facts.py --test"
         "checker/sources/mca_fixture.py --test"
         "checker/sources/mca_master_data.py --test")
