@@ -6,6 +6,21 @@ verified. It could not say WHICH corpus. Two deployments that fetched on the sam
 of them re-ingested after a correction, produced identical `law_version` blocks and
 different answers -- and nothing in a trace distinguished them.
 
+## ONE identity, and it is not mine
+
+Every hash here is a **git blob id** -- `sha1("blob <len>\0" + bytes)` -- because
+`008_decision_evidence.sql` already established that identity for `runs.law_versions`:
+
+  > The same identity `public_only.Origin.blob` carries, so O7 (recall) and the O9 (answer
+  > cache) compare one thing.
+
+My first version used an independent sha256 of the bytes. That would have been a SECOND
+identity for the same fact, which is the thing 008 spent a paragraph preventing, and the
+failure is quiet: the cache keys on one, a dispute is argued on the other, and they agree
+until the day they do not. `corpus_hash` is therefore a hash OF the blob ids, never of the
+bytes directly, so the whole-corpus marker and the per-record map cannot disagree by
+construction. `.claude/loops/DECISION_law_versions_on_runs.md` has the whole of it.
+
 ## Why a hash and not a version number
 
 A version number is a promise someone has to keep. Nobody increments it on a re-ingest, a
@@ -58,6 +73,31 @@ def _records(corpus_dir: Path) -> list[Path]:
     return sorted(p for p in corpus_dir.glob("*.json") if p.is_file())
 
 
+def blob_id(data: bytes) -> str:
+    """Git's own blob id for these bytes. THE identity for held text in this repository.
+
+    `008_decision_evidence.sql` fixed this formula for `runs.law_versions` and
+    `public_only.Origin.blob` carries the same one, so recall (O7) and the answer cache (O9)
+    compare one thing. Anything that hashes held text differently is a second identity for
+    one fact.
+    """
+    return hashlib.sha1(b"blob %d\0" % len(data) + data).hexdigest()
+
+
+def blob_ids(paths, root: Path | None = None) -> dict:
+    """{repo-relative path: git blob id} for the held text a run READ.
+
+    The shape `runs.law_versions` takes. A path that cannot be read RAISES: a missing version
+    is not an empty one, and 008 says NULL means "not recorded" while `{}` would claim the run
+    read no law.
+    """
+    base = Path(root or ROOT)
+    out = {}
+    for rel in paths:
+        out[str(rel)] = blob_id((base / str(rel)).read_bytes())
+    return out
+
+
 def corpus_hash(corpus_dir: Path | None = None) -> str:
     """`sha256:<12 hex>` over the corpus content, or NO_CORPUS.
 
@@ -96,11 +136,12 @@ def _digest_cached(corpus_dir: str, _fp: tuple) -> str:
         return NO_CORPUS
     h = hashlib.sha256()
     for p in files:
-        # The PATH goes in as well as the bytes, so adding or removing a record changes the
-        # hash even when no remaining record changed.
+        # The PATH goes in as well as the blob id, so adding or removing a record changes the
+        # hash even when no remaining record changed. The per-file identity is the GIT BLOB
+        # ID, not a second hash of the bytes -- see the module docstring.
         h.update(p.relative_to(d).as_posix().encode("utf-8"))
         h.update(b"\0")
-        h.update(hashlib.sha256(p.read_bytes()).hexdigest().encode("ascii"))
+        h.update(blob_id(p.read_bytes()).encode("ascii"))
         h.update(b"\n")
     return h.hexdigest()
 
@@ -226,6 +267,27 @@ def _instruments_in(data) -> list[str]:
     return out
 
 
+def records_read(provisions, corpus_dir: Path | None = None) -> dict:
+    """{repo-relative path: git blob id} for the records these provisions were read from.
+
+    What goes in `runs.law_versions` for an ask, in the shape 008 defined. Only the records
+    actually resolved: a map covering the whole corpus would claim the run read 527 records.
+    """
+    d = Path(corpus_dir or CORPUS_DIR)
+    if not d.is_dir():
+        return {}
+    by_number = _section_files(d)
+    paths = sorted({by_number[n] for n in _sections_in(provisions)
+                    if n in by_number and by_number[n].is_file()})
+    try:
+        rel = [p.relative_to(ROOT).as_posix() for p in paths]
+    except ValueError:
+        # A corpus outside the repository (a fixture in /tmp): key on the name, since a
+        # repo-relative path does not exist. Never silently empty.
+        return {p.name: blob_id(p.read_bytes()) for p in paths}
+    return blob_ids(rel)
+
+
 def law_versions(provisions=(), corpus_dir: Path | None = None) -> dict:
     """The block that goes in an envelope and on a run row."""
     return {"corpus_hash": corpus_hash(corpus_dir),
@@ -347,6 +409,35 @@ def _test() -> int:
           f"matched rather than clever ({_sections_in(['ss.92 and 96'])})")
     check(instruments_for(["ACT:COMPANIES_ACT_2013:S92"]) == instruments_for(["s.92"]),
           "both shapes give the same answer, so the envelope and a hand query agree")
+
+    # ── ONE identity: the gateway and this module must not differ ───────────
+    # `008_decision_evidence.sql` fixed the identity for `runs.law_versions` -- "the same
+    # identity `public_only.Origin.blob` carries, so O7 (recall) and the O9 (answer cache)
+    # compare one thing" -- and move 6's first draft added a second sha256 of the same bytes.
+    # Two identities for one fact agree until the day they do not.
+    # The check that the GATEWAY agrees with this module lives in `gateway/verbs.py`, not
+    # here: `checker/rings.py` refuses a Ring 0 module that reaches Ring 2, and it caught
+    # this import even inside `_test()`. Ring 2 may import Ring 0, so the check belongs on
+    # that side. The firewall working is worth more than the convenience of one import.
+    _sample = ["corpus/reference/SS-1.txt"]
+    _mine = blob_ids(_sample)[_sample[0]]
+    check(len(_mine) == 40 and all(c in "0123456789abcdef" for c in _mine),
+          f"...and it is a git blob id -- 40 hex, the shape `runs.law_versions` already "
+          f"stores and `public_only.Origin.blob` already carries ({_mine[:12]}…)")
+    _read = records_read(["ACT:COMPANIES_ACT_2013:S92"])
+    check(len(_read) == 1 and all(len(v) == 40 for v in _read.values())
+          and all(k.startswith("corpus/companies_act/") for k in _read),
+          f"a run's `law_versions` covers the records it READ, keyed on the repo-relative "
+          f"path -- not all 527, which would claim it read the whole Act ({_read})")
+    check(records_read([]) == {},
+          "no provisions means an empty map, which the caller turns into NULL: 008 says "
+          "NULL is 'not recorded' and `{}` would claim the run read no law")
+    # And the corpus hash is a hash OF those blob ids, so it cannot drift from them.
+    import inspect as _lv_inspect
+    _src = _lv_inspect.getsource(_digest_cached)
+    check("blob_id(" in _src and "sha256(p.read_bytes())" not in _src,
+          "the corpus hash is built from the blob ids, never from a second hash of the "
+          "bytes -- the two cannot disagree by construction rather than by agreement")
 
     # ── the envelope block ──────────────────────────────────────────────────
     blk = law_versions(["s.96(1)"])

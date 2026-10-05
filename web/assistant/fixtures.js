@@ -75,7 +75,7 @@ window.PLACEDON_ASK_FIXTURES = {
    "corpus_fetched": [
     "2026-08-18"
    ],
-   "corpus_hash": "sha256:88f4aeb6650f",
+   "corpus_hash": "sha256:1d6285304cee",
    "instruments": [
     {
      "instrument": "Act 1 of 2018",
@@ -271,7 +271,7 @@ window.PLACEDON_ASK_FIXTURES = {
    "corpus_fetched": [
     "2026-08-18"
    ],
-   "corpus_hash": "sha256:88f4aeb6650f",
+   "corpus_hash": "sha256:1d6285304cee",
    "instruments": [
     {
      "instrument": "Act 1 of 2018",
@@ -527,7 +527,7 @@ window.PLACEDON_ASK_FIXTURES = {
    "corpus_fetched": [
     "2026-08-18"
    ],
-   "corpus_hash": "sha256:88f4aeb6650f",
+   "corpus_hash": "sha256:1d6285304cee",
    "instruments": [
     {
      "instrument": "Act 1 of 2018",
@@ -662,7 +662,7 @@ window.PLACEDON_ASK_FIXTURES = {
   "law_version": {
    "basis": "CURRENT_CONSOLIDATION_AS_INGESTED",
    "corpus_fetched": [],
-   "corpus_hash": "sha256:88f4aeb6650f",
+   "corpus_hash": "sha256:1d6285304cee",
    "instruments": [],
    "note": "the corpus hash identifies the law that answered, by content. `instruments` lists only what the answering provisions' own records name -- a provision with none is not a provision that was never amended, and this repository does not hold a complete amendment history",
    "point_in_time_verified": false,
@@ -742,7 +742,7 @@ window.PLACEDON_ASK_FIXTURES = {
    "corpus_fetched": [
     "2026-08-18"
    ],
-   "corpus_hash": "sha256:88f4aeb6650f",
+   "corpus_hash": "sha256:1d6285304cee",
    "instruments": [
     {
      "instrument": "Act 1 of 2018",
