@@ -307,7 +307,7 @@
     "scripts/slice_s173.py": 12,
     "scripts/slice_s96.py": 14,
     "scripts/smoke_adapters.py": 8,
-    "scripts/suite_floors.py": 16,
+    "scripts/suite_floors.py": 29,
     "scripts/sweep_folder.py": 6,
     "scripts/text_layer_census.py": 24,
     "scripts/themis_mcp.py": 7,
