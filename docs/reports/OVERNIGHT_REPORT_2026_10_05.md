@@ -1,6 +1,7 @@
 # Overnight report — 5 October 2026
 
-Execution of `.claude/plans/loop-overnight-twenty-moves-2026-10-05.md`, moves 1–10.
+Execution of `.claude/plans/loop-overnight-twenty-moves-2026-10-05.md`, **all twenty
+moves**.
 Baseline on `main` at `f4c7b5e`: `HARNESS_RESULT suites=303 failed=0 nocount=0
 floor_breach=0 status=GREEN`.
 
@@ -22,13 +23,27 @@ floor_breach=0 status=GREEN`.
 | 9 | `checker/doc_validity` — status decided by code | **DONE** | PR #69 `190f1b7` |
 | 10 | Action + `document_checks` + RLS | **DONE** | PR #69 `4c6d788` |
 | 11 | Frontend: render `document.verify` | **BLOCKED** | needs #69 on main |
-| 12–20 | SSE streaming, MA1, G1, `.env.example`, jobs pooling, `demo_e2e` | **NOT STARTED** | — |
+| 12 | R0: SSE on `ask` | **DONE** | PR #71 `6cbb8a2` |
+| 13 | Frontend: stream rendering | **BLOCKED** | needs #71 on main |
+| 14 | MA1: plan schema + code validation | **DONE** | PR #71 `41eb667` |
+| 15 | MA1: fan-out runner + chaos injection | **DONE** | PR #71 `6998173` |
+| 16 | `runs.preview` (T4) | **DONE** | PR #71 `1243282` |
+| 17 | G1 connector skeletons | **DONE** | PR #72 `37d8afe` |
+| 18 | `.env.example` + integrations checklist | **DONE** | PR #72 `ceb649d` |
+| 19 | Decide `gateway/jobs.py` pooling | **DONE** (decision) | PR #72 `8d22778` |
+| 20 | `scripts/demo_e2e.py` | **DONE** | PR #72 `8d22778` |
 
-Three draft PRs, each cut from `origin/main` and targeting `main`:
+**18 of 20 done. 2 blocked, both frontend, both on the never-stack rule rather than on a
+defect** — move 11 needs #69 on `main` and move 13 needs #71.
+
+Five draft PRs plus this report, each cut from `origin/main` and targeting `main`:
 
 - **#67** `claude/overnight-a` — Phase A, moves 1–5
 - **#68** `claude/overnight-b` — Phase B, moves 6–7
 - **#69** `claude/overnight-c` — Phase C, moves 8–10
+- **#71** `claude/overnight-d` — Phases D+E, moves 12 and 14–16
+- **#72** `claude/overnight-f` — Phase F, moves 17–20
+- **#70** `claude/overnight-report` — this document
 
 ### Why the branches are not stacked
 
@@ -105,7 +120,7 @@ a wrong classification, because it cannot be argued with.
 
 **"Wired and unreachable"** is now the most common defect class in this codebase: a mechanism
 built, a caller never connected, and a test that injected what production never supplies. It
-appeared **seven times** in ten moves:
+appeared **eight times** across the twenty moves:
 
 1. `vault_ingest` enqueued by a verb and absent from `QUEUED_INTENTS`
 2. per-cell reservations wired into `schedule()` with no caller passing a budget
@@ -116,8 +131,73 @@ appeared **seven times** in ten moves:
 6. `VERIFYING_TIERS` correct and never consulted
 7. `document.check` passing no validity rule, so three of five actions are unreachable
    through the verb — in code I had just written, found before committing it
+8. `VERIFYING_TIERS = (HELD,)` correct since it was written, and consulted by nothing on the
+   path that assigns VERIFIED
 
 The cheapest detector is the same every time: **run it against the real thing and count.**
+
+## What the second half found
+
+### A measurement that said the opposite of the truth
+
+Move 12's done-when said the first-event latency must be **measured**, not asserted. Timing
+`client.post` measures the answer. `client.stream` looks correct and is not: **Starlette's
+ASGI transport collects the whole response before `iter_lines` yields**, so every frame
+arrived at one instant and the first reported **100% of total** — a number that says "this
+route does not stream" about a route that streams fine.
+
+Over a real loopback socket: **first frame 1.3 ms, answer 3860 ms.** Had the done-when said
+"assert", the route would have shipped with me believing a false thing about my own test.
+
+### Three identities for one fact, nearly four
+
+`008_decision_evidence.sql` fixed the identity for `runs.law_versions` and said why: *"the
+same identity `public_only.Origin.blob` carries, so O7 (recall) and the O9 (answer cache)
+compare one thing."* `law_versions_of` was carrying its own copy of git's blob formula, and
+move 6 was about to add a third under a different name. Now one implementation, with a check
+that `sha1` no longer appears in the gateway's copy.
+
+### A test that passed vacuously next to one that failed
+
+`store.conformance`'s sixth uuid-vs-str divergence: Postgres returns a uuid column as
+`uuid.UUID`, MemoryBackend stores the `str` the caller passed. `read_renewals()` returned the
+right row and `row["document_id"] == did` was False — so one check reported an empty result
+against a table that held it, **and the check before it passed vacuously for the same
+reason.** The failing one is why the passing one got looked at.
+
+### A bug found by writing a test for something else
+
+Move 16's done-when — preview → start → result balancing to zero — found that move 15's
+runner called `validate` **again**, so a caller that had already reserved collided with its
+own still-held ids. `_reservation_id` is stable per (goal, index, agent) deliberately, and
+that property is what made the double call fail loudly instead of silently charging twice.
+
+### Three times a branch's reality corrected a demo
+
+Move 20's `demo_e2e` asserted features that live on other branches, and each fix was to
+**assert less rather than assume more**: `vault_ingest` is not a queue handler on `main`, so
+it calls the agent and prints which path ran; `vault.verify`'s per-check lines are PR #67's,
+so they are asserted when present and named when absent; and `calendar.upcoming` **refused my
+company profile** because I sent `{"type", "listed"}` where the fields are `company_class`
+and `is_listed` — its refusal says *"a caller who sent one believes it was taken into
+account"*, and it was right.
+
+## Two things deliberately not built
+
+Both are recorded decisions rather than omissions.
+
+**A migration for `runs.law_versions`** (move 6). Written, with CHECKs, a partial index and
+an architect record — then deleted, because the column has existed since 008 and `ask`
+already populates it. `.claude/loops/DECISION_law_versions_on_runs.md` records the decision
+not to migrate.
+
+**Pooling `claim()`** (move 19). `gateway/pool.py` creates connections `autocommit=True` and
+`claim()` needs `autocommit=False` — a pooled connection would release the `FOR UPDATE SKIP
+LOCKED` lock *before* the UPDATE it protects. The fix is a second entry point,
+`pool.transaction(tenant_id=…)`, not a flag, because a flag makes the caller responsible for
+a commit the pool depends on. The autocommit half is safe and worth having alone; the risky
+half wants a live proof and an unhurried session.
+`.claude/loops/DECISION_jobs_pooling.md`.
 
 ## Things that caught me, and were right to
 
@@ -193,7 +273,16 @@ is forbidden by standing rule 7.
   `board_minutes`, `board_notice` and `shareholder_resolution`. **A legal-taxonomy decision.**
 - **A-021** no validity-rule registry, so `document.check` is NOT_DETERMINED for every
   document. **Needs counsel**, not code: a per-document-class rule table citing HELD
-  provisions.
+  provisions. Deliberately not solved by taking a rule from the caller — nothing checks a
+  caller's quote against the held corpus.
+- **A-022** SSE `step` events are emitted on completion, not live. `_persist_run` rebinds the
+  step list at the end rather than appending, so there is nothing to observe mid-flight; each
+  event carries `live: false` and says so. Making them incremental touches every handler.
+- **A-023** MA1's fan-out is sequential. Stated in the module's own docstring, not discovered
+  later. What is missing is not a thread pool but a decision about how many model calls may
+  be in flight against the provider's rate limit.
+- **A-015** is now a *decision* rather than a deferral — see "Two things deliberately not
+  built".
 
 ### Three pre-existing unfalsifiable checks
 
@@ -229,23 +318,33 @@ Against the real corpus: `s.92` → Act 1 of 2018, Act 22 of 2019, Act 29 of 202
 
 | | baseline | now |
 |---|---|---|
-| suites | 303 | 304 (Phase C) / 305 (Phase B) |
+| suites | 303 | **307** (Phase F) |
 | `gateway/verbs.py` checks | 451 | 480 |
 | `checker/lawyer_summary.py` checks | 92 | 100 |
 | live RLS checks | 348 | **365** |
 | new Ring 0 modules | — | `law_versions`, `tier_rules`, `doc_validity` |
-| VERBS | 42 | **44** |
+| new Ring 2/3 modules | — | `connector_base`, `indiankanoon`, `data_gov_in`, `multi_plan`, `multi_runner` |
+| chaos injections | 5 | **6** |
+| VERBS | 42 | **45** across the branches (44 on #69, 43 on #71) |
+| architect records | — | 4 written, 1 of them a decision NOT to migrate |
 
 ## Next, in order
 
-1. **Merge #67, #68, #69.** Move 11 is blocked only by #69 not being on main.
-2. Move 11: render `document.verify` in `/app/vault`, one line per check, live capture.
-3. Moves 12–13: SSE on `ask`, with the first-event latency **measured** rather than asserted.
-4. Moves 14–16: MA1 against stub models at ₹0.
-5. Moves 17–18: G1 connector skeletons failing closed with `KEY_MISSING`, then
-   `.env.example` and `INTEGRATIONS_CHECKLIST.md` — which is the agenda for the keys session.
-6. Move 19: decide `gateway/jobs.py` pooling (A-015) with an architect record first.
-7. Move 20: `scripts/demo_e2e.py` from a clean database.
+1. **Merge #67, #68, #69, #71, #72.** All five are independent and all target `main`. Merging
+   #69 unblocks move 11; merging #71 unblocks move 13. One thing to know:
+   `022_grid_budget_state` is on #67 and `023_document_checks` is on #69 — they do not
+   collide, and the gap in #69's sequence is deliberate and documented in its header.
+2. **Moves 11 and 13**, the two frontend renders, in `placedon-claude-legal-3300` on
+   `claude/overnight-ui`: `document.verify` as one line per check in `/app/vault`, and stream
+   rendering on Ask including a killed server mid-stream.
+3. **`docs/guides/INTEGRATIONS_CHECKLIST.md` is the keys session, in order.** Start with
+   Bedrock, and request model access before anything else — a fresh account can call no model
+   family until each is requested, and the request is not instant.
+4. The **autocommit half** of the jobs pooling, which is safe today and strictly better than
+   now. `claim()` after that, with `pool.transaction()` and a live proof.
+5. The five recorded decisions, two of which are not coding tasks: which identifier a review
+   table speaks (**A-018**), and the per-document-class validity rules (**A-021**, needs
+   counsel).
 
 **No accuracy claim is made anywhere in this work, and nothing in it asserts legal
 correctness.** Every status this night added — NOT_CHECKED, NOT_DETERMINED, UNVERIFIED,
