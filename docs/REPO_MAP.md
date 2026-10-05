@@ -227,6 +227,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `agents/__init__.py` | R3 inference | The agent runtime: typed plans, persisted steps, bounded correction. |
 | `agents/intake.py` | R3 inference | Layer 1: which of six fixed tasks a request is, decided in code wherever code can. |
 | `agents/multi_plan.py` | R3 inference | MA1: what a supervisor may propose, and the four reasons code refuses it. |
+| `agents/multi_runner.py` | R3 inference | MA1: run a validated plan. Read-only workers fan out; ONE writer merges. |
 | `agents/plans.py` | R3 inference | Intent -> a fixed step list, written in code. A model may pick, never invent. |
 | `agents/research_question.py` | R3 inference | research_question, end to end: a question about the Companies Act, answered or refused. |
 | `agents/review_contract.py` | R3 inference | review_contract, end to end: a contract against a company playbook, and what it will not say. |
@@ -370,4 +371,4 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/watch_gazette.py` |  | Run the Gazette watcher once: what did the Gazette publish since we last looked? |
 | `scripts/watch_ofac.py` |  | Poll OFAC's SDN list and report what CHANGED since the last trustworthy poll. |
 
-330 modules listed.
+331 modules listed.
