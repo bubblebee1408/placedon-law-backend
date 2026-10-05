@@ -38,6 +38,17 @@ MSG
   exit 5
 fi
 
+# ── --live: the gateway conversation.send checks against the REAL provider ─────
+# STEP 4a. The gate ALWAYS uses deterministic model stand-ins for those five checks, so it is
+# the same on every machine and makes no paid call. `--live` runs the SAME queries against a
+# real provider as an opt-in proof that the live path still yields the same statuses. It is
+# NOT part of the gate: it touches no floors, and when no key is configured it BLOCKS (prints
+# the reason, exits 0) rather than failing. Documented in CONTRIBUTING.md.
+if [ "${1:-}" = "--live" ]; then
+  echo "run_tests.sh --live -- real provider, opt-in, NOT counted in floors"
+  exec python3 gateway/verbs.py --live
+fi
+
 suites=(
   checker/acquisition_log.py
   checker/amendment.py
