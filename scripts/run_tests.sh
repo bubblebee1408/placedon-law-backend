@@ -365,6 +365,7 @@ extra+=("checker/sources/tiers.py --test" "checker/sources/evidence.py --test"
 # the parquet reader are injected, so the gate opens no socket and needs no parquet engine.
 # The --live smoke test (one real anonymous read) is deliberately NOT here.
 extra+=("checker/sources/judgments_open.py --test")
+extra+=("checker/sources/case_law.py --test")
 extra+=("checker/sources/company_facts.py --test"
         "checker/sources/mca_fixture.py --test"
         "checker/sources/mca_master_data.py --test")

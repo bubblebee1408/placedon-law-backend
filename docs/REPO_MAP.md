@@ -197,6 +197,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `checker/shadow.py` |  | Shadow mode: measure a model's proposals without any of them reaching a user. |
 | `checker/sources/__init__.py` | R2 feeds | Every source behind one interface, and every result carrying the tier that limits it. |
 | `checker/sources/base.py` | R2 feeds | The Source interface, the terms gate a connector loads through, and the payload check. |
+| `checker/sources/case_law.py` | R2 feeds | Case-law search over the open eCourts judgment metadata. LICENSED, and kept apart. |
 | `checker/sources/client.py` | R2 feeds | CLIENT: the tenant's own uploads. The document under review, never an authority. |
 | `checker/sources/company_facts.py` | R2 feeds | Company facts with the basis they rest on, and a confirmation before anything uses them. |
 | `checker/sources/contract.py` | R2 feeds | The five rules `checker/sources/` must obey, tested as one suite. |
@@ -370,4 +371,4 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/watch_gazette.py` |  | Run the Gazette watcher once: what did the Gazette publish since we last looked? |
 | `scripts/watch_ofac.py` |  | Poll OFAC's SDN list and report what CHANGED since the last trustworthy poll. |
 
-330 modules listed.
+331 modules listed.
