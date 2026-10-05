@@ -944,11 +944,16 @@ QUEUED_INTENTS: dict[str, str] = {
     # cell is the product, not a run record -- so `queue_handlers` hands it the real
     # context. See the comment there.
     "review_grid_cell": "_review_grid_cell",
+    # V1: ingest one uploaded vault document. `vault.upload` has always enqueued this and
+    # nothing could run it -- the worker found no handler, dead-lettered the job as not
+    # retryable, and the document stayed PENDING having been "queued for ingestion".
+    # Writes, like a grid cell: an ingested document is the product, not a run record.
+    "vault_ingest": "_vault_ingest_job",
 }
 
 # Intents whose handler needs the STORE, because what they produce is not a run record.
 # Everything else runs store-less so it cannot write a second run.
-STORE_WRITING_INTENTS = frozenset({"review_grid_cell"})
+STORE_WRITING_INTENTS = frozenset({"review_grid_cell", "vault_ingest"})
 
 
 def queue_handlers(ctx: "Context") -> dict:
@@ -980,7 +985,8 @@ def queue_handlers(ctx: "Context") -> dict:
     by_name = {"_review_document": _review_document,
                "_review_contract": _review_contract,
                "_ask": _ask,
-               "_review_grid_cell": _review_grid_cell}
+               "_review_grid_cell": _review_grid_cell,
+               "_vault_ingest_job": _vault_ingest_job}
     return {intent: wrap(by_name[fn], keep_store=(intent in STORE_WRITING_INTENTS))
             for intent, fn in QUEUED_INTENTS.items()}
 
@@ -2144,6 +2150,29 @@ def _vault_upload(args: dict, ctx: Context) -> dict:
                      "will stay PENDING -- said plainly rather than left to look done.")}
 
 
+def _vault_ingest_job(args: dict, ctx: Context) -> dict:
+    """Run one queued ingest. Verb-shaped, so `queue_handlers` can wrap it like the rest.
+
+    `agents/vault_ingest.ingest` takes `files`, `store` and an `extract` callable rather
+    than a Context, because it is an agent and agents are injected. This adapts the two
+    shapes in ONE place: a worker that built the arguments itself would be a second
+    definition of what ingestion needs.
+
+    The extractor decodes UTF-8, because `vault.upload` takes TEXT -- its own refusal says
+    binary upload is a route and not a verb. When that route exists this is where the
+    page-by-page path (`checker/page_stream`) is wired in, and a document whose page fails
+    becomes PARTIAL rather than silently short of a page.
+    """
+    refusal = _vault_ready(ctx)
+    if refusal:
+        return refusal
+    from agents.vault_ingest import ingest
+
+    outcome = ingest(args, files=ctx.files, store=ctx.store,
+                     extract=lambda data, name: data.decode("utf-8", "replace"))
+    return outcome.to_dict()
+
+
 def _vault_status(args: dict, ctx: Context) -> dict:
     """One document, or the whole vault's counts. Read-only, off MCP."""
     if ctx.store is None:
@@ -2720,6 +2749,48 @@ def _review_table_status(args: dict, ctx: Context) -> dict:
     out["table_state"] = ("CANCELLED" if cancelled else
                           "PAUSED_BUDGET" if paused else
                           "COMPLETE" if out.get("complete") else "RUNNING")
+    # ── move 3: a PENDING cell says WHY it is pending ────────────────────────
+    # "Not dispatched because nothing is running" and "dispatched, waiting its turn" are
+    # both PENDING on the cell, and the difference is the whole of whether anything will
+    # ever happen. A silent PENDING is a table that looks busy and is not.
+    pending_cells = [c for c in ctx.store.read_grid_cells(grid_id)
+                     if (c.get("state") or "") == "PENDING"]
+    if ctx.queue is None:
+        out["dispatch"] = {
+            "queue_configured": False,
+            "never_dispatched": int(out.get("cells") or 0),
+            "awaiting_worker": 0, "claimed": 0,
+            "note": ("not dispatched: no queue is configured on this deployment, so "
+                     "nothing will run these cells. They are PENDING because nothing has "
+                     "been asked to answer them, not because they are waiting their turn")}
+    else:
+        from agents.review_grid import run_id_for_cell
+        runs = [run_id_for_cell(grid_id, c["document_id"], c["column_name"])
+                for c in pending_cells]
+        counts = ctx.queue.claim_counts(runs)
+        never, waiting = counts["missing"], counts["unclaimed"]
+        if never and not waiting and not counts["claimed"]:
+            note = (f"not dispatched: {never} cell(s) have no job in the queue at all. "
+                    f"Nothing will answer them until they are scheduled again")
+        elif waiting and not counts["claimed"]:
+            note = (f"not dispatched: no worker. {waiting} cell(s) are queued and nothing "
+                    f"has claimed one. Run `python3 -m gateway.worker` against this "
+                    f"deployment, or they stay PENDING indefinitely")
+        elif waiting:
+            note = (f"{counts['claimed']} cell(s) in flight, {waiting} queued and not yet "
+                    f"claimed")
+        else:
+            note = (f"{counts['claimed']} cell(s) in flight; nothing is waiting unclaimed"
+                    if counts["claimed"] else "no cell is pending")
+        if never and (waiting or counts["claimed"]):
+            note += f". {never} cell(s) have no job in the queue"
+        out["dispatch"] = {
+            "queue_configured": True,
+            "never_dispatched": never,
+            "awaiting_worker": waiting,
+            "claimed": counts["claimed"],
+            "note": note}
+
     if paused:
         out["pause_note"] = (
             f"{out['cells_dispatched']} cell(s) were dispatched and {not_dispatched} were "
@@ -6093,6 +6164,113 @@ def _test() -> None:
           f"this suite leaves NO cell reservation in the real ledger -- a test that holds "
           f"the deployment's cap starves every test after it, and the failure surfaces "
           f"somewhere unrelated ({len(_mleft)} left, ₹{sum(_mleft.values()):.2f})")
+    # ── move 3: a PENDING cell says WHY it is pending ───────────────────────
+    # "Not dispatched because there is no worker" and "dispatched, waiting its turn" are
+    # both PENDING, and the difference is the whole of whether anything will ever happen.
+    # A silent PENDING is a table that looks busy and is not.
+    _d3_nq = Context(store=MemoryBackend(), clock=lambda: "2026-10-05T00:00:00Z")
+    _d3_fresh = _MBT(store=_MMem(), today=_mdate(2026, 10, 5))
+    _mreal2 = globals()["_ledger"]
+    globals()["_ledger"] = lambda: _d3_fresh
+    try:
+        _d3_made = _review_table_create(
+            {"name": "no queue", "document_ids": ["e" * 64],
+             "columns": [{"name": "governing law", "kind": "text",
+                          "question": "Which law?"}]},
+            _d3_nq)
+        _d3_st = _review_table_status({"grid_id": _d3_made.get("grid_id", "")}, _d3_nq)
+    finally:
+        globals()["_ledger"] = _mreal2
+
+    check(isinstance(_d3_st.get("dispatch"), dict),
+          f"status carries a `dispatch` object, so a PENDING cell can say why "
+          f"({_d3_st.get('dispatch')})")
+    _d3 = _d3_st.get("dispatch") or {}
+    check(_d3.get("queue_configured") is False,
+          f"...reporting that no queue is configured ({_d3.get('queue_configured')})")
+    check("not dispatched" in str(_d3.get("note") or "").lower(),
+          f"...and saying 'not dispatched' in words ({str(_d3.get('note'))[:70]})")
+    check(_d3.get("never_dispatched") == _d3_st.get("cells"),
+          f"...with every cell counted as never dispatched "
+          f"({_d3.get('never_dispatched')} of {_d3_st.get('cells')})")
+
+    # With a queue and no worker: dispatched, and nothing has claimed them.
+    _d3_q = _MQ2()
+    _d3_wq = Context(store=MemoryBackend(), queue=_d3_q,
+                     clock=lambda: "2026-10-05T00:00:00Z")
+    _d3_fresh2 = _MBT(store=_MMem(), today=_mdate(2026, 10, 5))
+    globals()["_ledger"] = lambda: _d3_fresh2
+    try:
+        _d3_made2 = _review_table_create(
+            {"name": "queued, no worker", "document_ids": ["f" * 64],
+             "columns": [{"name": "governing law", "kind": "text",
+                          "question": "Which law?"}]},
+            _d3_wq)
+        _d3_st2 = _review_table_status({"grid_id": _d3_made2.get("grid_id", "")}, _d3_wq)
+    finally:
+        globals()["_ledger"] = _mreal2
+    _d3b = _d3_st2.get("dispatch") or {}
+    check(_d3b.get("queue_configured") is True,
+          f"with a queue, status says so ({_d3b.get('queue_configured')})")
+    check(_d3b.get("awaiting_worker") == _d3_st2.get("cells"),
+          f"...and counts the cells no worker has claimed "
+          f"({_d3b.get('awaiting_worker')} of {_d3_st2.get('cells')})")
+    check("no worker" in str(_d3b.get("note") or "").lower(),
+          f"...saying 'no worker' rather than leaving PENDING to be read as progress "
+          f"({str(_d3b.get('note'))[:70]})")
+    check(_d3b.get("never_dispatched") == 0,
+          f"...and nothing is 'never dispatched', because the jobs exist "
+          f"({_d3b.get('never_dispatched')})")
+
+    # Once a worker claims one, the note stops saying no worker. The complement, so the
+    # message is measured rather than constant.
+    _d3_claimed = _d3_q.claim(worker="w1")
+    check(_d3_claimed is not None, "a worker claims the queued cell")
+    _d3_st3 = _review_table_status({"grid_id": _d3_made2.get("grid_id", "")}, _d3_wq)
+    _d3c = _d3_st3.get("dispatch") or {}
+    check(_d3c.get("awaiting_worker") == 0 and "no worker" not in
+          str(_d3c.get("note") or "").lower(),
+          f"...and once claimed, the note no longer says no worker "
+          f"({_d3c.get('awaiting_worker')}: {str(_d3c.get('note'))[:50]})")
+
+    # ── move 3: the worker can actually run what upload queues ──────────────
+    # `vault.upload` enqueues `vault_ingest`. If that intent is not in QUEUED_INTENTS the
+    # worker finds no handler, dead-letters the job as not retryable, and the document sits
+    # at PENDING for ever -- having been "queued for ingestion". Move 1's HTTP test passed
+    # only because it called the ingest handler directly.
+    check("vault_ingest" in QUEUED_INTENTS,
+          f"vault_ingest is an intent the WORKER can run, not only one upload can enqueue "
+          f"({sorted(QUEUED_INTENTS)})")
+    check("vault_ingest" in STORE_WRITING_INTENTS,
+          "...and it keeps the store, because an ingested document is the product rather "
+          "than a run record")
+    import tempfile as _d3tmp
+
+    from gateway.filestore import LocalFileStore as _D3LFS
+    with _d3tmp.TemporaryDirectory() as _d3dir:
+        _d3_files = _D3LFS(_d3dir)
+        _d3_store = MemoryBackend()
+        _d3_ctx = Context(store=_d3_store, queue=_MQ2(), files=_d3_files,
+                          clock=lambda: "2026-10-05T00:00:00Z")
+        _d3_up = _vault_upload({"name": "nda.txt",
+                                "text": "This Agreement is governed by the laws of India."},
+                               _d3_ctx)
+        check(_d3_up.get("status") != "REFUSED",
+              f"an upload with a file store is accepted ({str(_d3_up)[:60]})")
+        _d3_handlers = queue_handlers(_d3_ctx)
+        check("vault_ingest" in _d3_handlers,
+              f"queue_handlers offers a vault_ingest handler ({sorted(_d3_handlers)})")
+        from gateway.worker import run_one as _d3_run
+        _d3_out = _d3_run(queue=_d3_ctx.queue, store=_d3_store, handlers=_d3_handlers)
+        check(_d3_out is not None and _d3_out.status != "FAILED",
+              f"...and the worker runs it to a named state rather than dead-lettering it "
+              f"({_d3_out.status if _d3_out else None}: "
+              f"{str(_d3_out.error)[:60] if _d3_out else ''})")
+        _d3_row = _d3_store.read_vault_document(_d3_up["document_id"])
+        check((_d3_row or {}).get("state") == "INGESTED",
+              f"...and the document reaches INGESTED through the WORKER "
+              f"({(_d3_row or {}).get('state')})")
+
     globals()["_ledger"] = _real_ledger_fn
     check(_ledger is _real_ledger_fn,
           "...and the real ledger function is restored, so a suite running after this one "

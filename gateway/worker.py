@@ -276,7 +276,12 @@ def main(argv=None) -> int:
         print("worker: no PLACEDON_DATABASE_URL — running against an in-memory queue, "
               "which keeps nothing across a restart", flush=True)
         queue, wait = MemoryQueue(), None
-    ctx = Context(store=store, queue=queue)
+    # `files` too, or the worker finds the vault_ingest handler and refuses NO_VAULT on
+    # every document -- which is PENDING with a different reason, not progress. Defaulted
+    # from PLACEDON_FILES_DIR by the same function the gateway uses, so a worker and a
+    # gateway started from the same environment read the same directory rather than two.
+    from gateway.app import default_file_store
+    ctx = Context(store=store, queue=queue, files=default_file_store())
     report = serve(queue=queue, store=store, handlers=queue_handlers(ctx),
                    worker=f"launchd-{__import__('os').getpid()}",
                    should_stop=lambda: stopping["now"], wait=wait)
