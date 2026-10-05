@@ -65,6 +65,7 @@
     "checker/derived_date.py": 19,
     "checker/diligence_pack.py": 22,
     "checker/doc_classifier.py": 28,
+    "checker/doc_validity.py": 45,
     "checker/doc_verification.py": 25,
     "checker/document_date.py": 28,
     "checker/document_extract.py": 39,
