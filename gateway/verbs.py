@@ -4484,12 +4484,50 @@ def _test() -> None:
     def _send(**kw):
         return _gV["conversation.send"].run({"conversation_id": "c-gap", **kw}, _gctx)
 
+    # ── STEP 4a: deterministic model STAND-INS, always, in the gate ──────────
+    # These checks exercise conversation.send end to end, and that path needs a model to
+    # turn a retrieval into a cited answer. A real model made the gate depend on a live key:
+    # keyed it passed, keyless (a fresh clone) it ABSTAINED. The fix is a stand-in that
+    # replaces ONLY the model -- retrieval, quote byte-matching, the critic and the envelope
+    # all run for real -- so the SAME test runs on every machine and the gate makes no paid
+    # call. The real provider is exercised by `scripts/run_tests.sh --live`, off the floors.
+    #
+    # Each stand-in quotes REAL text and never invents: the research one quotes the sections
+    # retrieval actually returned (`research_question.quoting_model`); the contract one
+    # extracts nothing (an honest empty review), and NEEDS_LAWYER follows from the DRAFT
+    # playbook, not from anything the model said -- which is why no invented clause is needed.
+    from agents import research_question as _rq_stub
+
+    def _send_research(**kw):
+        """conversation.send with a research stand-in that quotes the query's real evidence.
+
+        With no retrievable held law the evidence is empty and no stand-in is supplied, so the
+        path ABSTAINS exactly as it should -- the stand-in can only ever quote what retrieval
+        truly found."""
+        srcs = tuple(s for s, _o in _rq_stub.evidence(kw.get("text", "")))
+        ctx = Context(store=_MB(), clock=lambda: "2026-10-01T00:00:00+00:00",
+                      model_for=((lambda _o: _rq_stub.quoting_model(srcs)) if srcs else None))
+        return _gV["conversation.send"].run({"conversation_id": "c-gap", **kw}, ctx)
+
+    def _send_contract(**kw):
+        """conversation.send with a contract stand-in that extracts nothing -- it invents no
+        clause. NEEDS_LAWYER comes from the DRAFT playbook, as review_contract's own suite
+        shows (`review(..., model=lambda p: "{}")`).
+
+        Reuses `_gctx`'s store AND its `documents` map, because the contract being reviewed
+        was uploaded into them (`documents.upload` writes to `ctx.documents`): a fresh context
+        would not hold the file_id and the turn would ask for clarification instead."""
+        ctx = Context(store=_gctx.store, documents=_gctx.documents,
+                      clock=lambda: "2026-10-01T00:00:00+00:00",
+                      model_for=lambda _o: (lambda _prompt: "{}"))
+        return _gV["conversation.send"].run({"conversation_id": "c-gap", **kw}, ctx)
+
     # ── the spec's named case: CA2013 + FEMA -> PARTIAL, FEMA NOT_HELD ──────
     # PARTIAL means part was ANSWERED and part was not held, so the question has to be one
     # the Act really answers part of. This one is: the quorum is s.174, and FEMA is named
     # alongside it.
-    _mx = _send(text="What is the quorum for a meeting of the Board under the Companies "
-                     "Act, and does FEMA affect it?")["envelope"]
+    _mx = _send_research(text="What is the quorum for a meeting of the Board under the "
+                              "Companies Act, and does FEMA affect it?")["envelope"]
     _mb = {b["body_id"]: b for b in _mx["bodies"]}
     check(_mx["status"] == "PARTIAL",
           f"a CA2013 + FEMA question is PARTIAL end to end, through conversation.send "
@@ -4531,8 +4569,8 @@ def _test() -> None:
     _up = _gV["documents.upload"].run(
         {"text": "1. The Receiving Party shall keep Confidential Information secret.",
          "name": "mutual-nda.docx"}, _gctx)
-    _rc = _send(text="Please review this NDA against our playbook.",
-                file_ids=[_up["document_id"]], test_data="fixture")["envelope"]
+    _rc = _send_contract(text="Please review this NDA against our playbook.",
+                         file_ids=[_up["document_id"]], test_data="fixture")["envelope"]
     _rcb = {b["body_id"]: b for b in _rc["bodies"]}
     check("CONTRACT1872" in _rcb and _rcb["CONTRACT1872"]["status"] == "NOT_HELD",
           f"REVIEW_CONTRACT names the Contract Act as NOT_HELD -- a playbook finding is a "
@@ -4564,7 +4602,7 @@ def _test() -> None:
          "file_ids": [_gV["documents.upload"].run(
              {"text": "MINUTES OF THE BOARD MEETING.",
               "name": "board-minutes.pdf"}, _gctx)["document_id"]]}, _gctx)
-    _plain = _send(text="What is the quorum for a meeting of the Board?")["envelope"]
+    _plain = _send_research(text="What is the quorum for a meeting of the Board?")["envelope"]
     check(_plain["status"] == _ev.ANSWERED,
           f"a question wholly within held law is ANSWERED ({_plain['status']})")
     _seen = {_mx["status"], _ibc["status"], _rdoc["status"], _rc["status"],
@@ -6493,5 +6531,68 @@ def _test() -> None:
         raise SystemExit(1)
 
 
+def _live_smoke() -> int:
+    """STEP 4a: the gated conversation.send checks, but against the REAL provider.
+
+    The gate always uses deterministic stand-ins (`_send_research`/`_send_contract`), so it is
+    the same on every machine and makes no paid call. This runs the SAME queries with NO
+    stand-in (`model_for` unset), so a real model answers -- the opt-in proof that the live
+    path still yields the statuses the stand-ins stand for. It is off the floors and never part
+    of the gate.
+
+    When no provider is configured it BLOCKS (prints the reason, exits 0) rather than failing:
+    "no key" is not a test failure, it is a run that could not happen.
+    """
+    from gateway.models import available_providers
+    from gateway.store import MemoryBackend
+
+    providers = available_providers()
+    if not providers:
+        print("gateway/verbs --live: BLOCKED -- no model provider is configured "
+              "(set a key in .env). Nothing was run; this is not a failure.")
+        return 0
+    print(f"gateway/verbs --live: real provider(s) {sorted(providers)}")
+
+    ok = fail = 0
+
+    def check(cond, label):
+        nonlocal ok, fail
+        print(f"  {'[PASS]' if cond else '[FAIL]'} {label}")
+        if not cond:
+            fail += 1
+        else:
+            ok += 1
+
+    v = by_name()
+    from gateway import envelope as ev
+
+    def send(ctx, **kw):
+        return v["conversation.send"].run({"conversation_id": "live", **kw}, ctx)
+
+    # research: wholly-held -> ANSWERED; held+unheld -> PARTIAL. model_for unset = real model.
+    ctx = Context(store=MemoryBackend(), clock=lambda: "2026-10-01T00:00:00+00:00")
+    a = send(ctx, text="What is the quorum for a meeting of the Board?")["envelope"]
+    check(a["status"] == ev.ANSWERED, f"held-law question is ANSWERED live ({a['status']})")
+    p = send(ctx, text="What is the quorum for a meeting of the Board under the Companies "
+                       "Act, and does FEMA affect it?")["envelope"]
+    check(p["status"] == "PARTIAL", f"held+unheld question is PARTIAL live ({p['status']})")
+
+    # contract review -> NEEDS_LAWYER (DRAFT playbook), with a real model reading the clauses.
+    cctx = Context(store=MemoryBackend(), clock=lambda: "2026-10-01T00:00:00+00:00")
+    up = v["documents.upload"].run(
+        {"text": "1. The Receiving Party shall keep Confidential Information secret.",
+         "name": "nda.docx"}, cctx)
+    rc = send(cctx, text="Please review this NDA against our playbook.",
+              file_ids=[up["document_id"]], test_data="fixture")["envelope"]
+    check(rc["status"] == ev.NEEDS_LAWYER,
+          f"contract review NEEDS_LAWYER live ({rc['status']})")
+
+    print(f"\n{ok}/{ok + fail} passed (live, not counted in floors)")
+    return 1 if fail else 0
+
+
 if __name__ == "__main__":
+    import sys
+    if "--live" in sys.argv:
+        raise SystemExit(_live_smoke())
     _test()
