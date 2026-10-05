@@ -2665,7 +2665,18 @@ def _review_table_create(args: dict, ctx: Context) -> dict:
 
     sched = rgr.Scheduled(grid_id)
     if ctx.queue is not None:
-        sched = rgr.schedule(table, queue=ctx.queue)
+        # The budget is PASSED, so each cell's worst case is reserved before it is
+        # dispatched. It was not, until move 2: `schedule()` reserves only when a budget is
+        # supplied and this call supplied none, so A1's per-cell reservation was wired and
+        # unreachable -- the same shape as the vault's file store in move 1.
+        sched = rgr.schedule(table, queue=ctx.queue, budget=ledger)
+        if sched.paused_budget:
+            # Persisted, because `create` returns this ONCE. A caller that did not keep the
+            # response -- a reloaded page, the CLI, an MCP tool -- has no other way to learn
+            # it, and the cells cannot say: a cell never dispatched and a cell waiting its
+            # turn are both PENDING. 022, and DECISION_grid_budget_state.md.
+            store.pause_grid(grid_id, reason=sched.pause_reason,
+                             not_dispatched=len(sched.not_scheduled))
     out = {"grid_id": grid_id, "name": name, "cells": cells,
            "documents": len(raw_docs), "columns": len(columns),
            "scheduled": sched.to_dict(),
@@ -2695,6 +2706,26 @@ def _review_table_status(args: dict, ctx: Context) -> dict:
     if table is None:
         return _refuse("NOT_FOUND", f"no review table {grid_id!r} for this tenant")
     out = rgr.status(table, cancelled=cancelled)
+    # 022: the budget state, from the row rather than from the cells. `table_state` sits
+    # beside complete/cancelled because PAUSED_BUDGET is a STATE -- the table is resumable
+    # the moment the cap is raised, and calling it an error would put transport language on
+    # a deployment's spending decision.
+    grid_row = ctx.store.read_grid(grid_id) or {}
+    paused = bool(grid_row.get("paused_budget"))
+    not_dispatched = int(grid_row.get("cells_not_dispatched") or 0)
+    out["paused_budget"] = paused
+    out["pause_reason"] = grid_row.get("pause_reason") or ""
+    out["cells_not_dispatched"] = not_dispatched
+    out["cells_dispatched"] = max(0, int(out.get("cells") or 0) - not_dispatched)
+    out["table_state"] = ("CANCELLED" if cancelled else
+                          "PAUSED_BUDGET" if paused else
+                          "COMPLETE" if out.get("complete") else "RUNNING")
+    if paused:
+        out["pause_note"] = (
+            f"{out['cells_dispatched']} cell(s) were dispatched and {not_dispatched} were "
+            f"not. The undispatched cells stay PENDING -- they are not failures, and "
+            f"nothing was charged for the reservation that was refused. Raise the cap and "
+            f"create the table again: only the cells that have not run are dispatched.")
     # The running total, from the cells this verb already read -- not from 240 extra reads
     # of each cell's run steps, which is why 013 put the debit on the cell.
     out["spend"] = _grid_spend(ctx.store.read_grid_cells(grid_id))
@@ -3896,6 +3927,48 @@ def write_verbs(verbs: tuple[Verb, ...] | None = None) -> tuple[str, ...]:
 
 
 def _test() -> None:
+    # ── this suite never touches the deployment's real budget ────────────────
+    # `_review_table_create` reserves each cell's worst case through `_ledger()`, which is
+    # backed by a FILE at corpus/.budget.json. With no worker running in a test, nothing
+    # settles those reservations, so every create here held real budget until the day rolled
+    # over -- 58 of them, ₹115.99 against a ₹116.67 cap, which starved an unrelated
+    # `conversation.send` check and surfaced as a KeyError about FEMA1999.
+    #
+    # Redirected ONCE, for the whole suite, rather than per call site: the leak came from
+    # pre-existing create tests that had no reason to know the verb had started reserving,
+    # and a guard that every future test must remember is a guard that fails.
+    import atexit as _atexit
+    import os as _os_tmp
+    import tempfile as _tempfile
+
+    from backend.budget import BudgetTracker as _TestBT
+    from backend.budget import FileStore as _TestFS
+
+    _ledger_tmp = _tempfile.TemporaryDirectory()
+    _atexit.register(_ledger_tmp.cleanup)
+    _real_ledger_fn = _ledger
+    _ledger_calls = [0]
+
+    def _test_ledger():
+        """A FRESH tracker per call, each on its own file.
+
+        One shared temporary tracker was tried first and ran out: every `create` reserves
+        two cells' worst case and nothing settles them, so after about thirty creates the
+        suite's own budget was exhausted and later creates refused NO_BUDGET -- which
+        surfaced as "create with no store is refused" failing, because the budget guard
+        runs before the store check.
+
+        That is not only a test artefact. **An abandoned table holds its reservations until
+        the day rolls over**, because only a worker settles a cell. research/TASKS.md A-016
+        records it; one tracker per call is the right thing HERE because each check is a
+        separate notional deployment-day, not thirty calls from one lawyer.
+        """
+        _ledger_calls[0] += 1
+        return _TestBT(store=_TestFS(
+            _os_tmp.path.join(_ledger_tmp.name, f"budget-{_ledger_calls[0]}.json")))
+
+    globals()["_ledger"] = _test_ledger
+
     ok = fail = 0
 
     def check(cond: bool, label: str) -> None:
@@ -5889,6 +5962,141 @@ def _test() -> None:
     check(_good.get("status") != "REFUSED" and _good.get("version") == _cur + 1,
           f"revising from the CURRENT latest succeeds and lands at version {_cur + 1} "
           f"({_good.get('version')})")
+
+    # ── move 2: review_table.status carries the budget state ────────────────
+    # PR #3 found this live: no key in the status response mentions the budget, so a table
+    # that paused part-way reads as a table whose cells are PENDING -- and PENDING already
+    # means "not attempted yet". A state a caller can learn only once, from a response it
+    # may not have kept, is not a state. See .claude/loops/DECISION_grid_budget_state.md.
+    from datetime import date as _mdate
+
+    from backend.budget import DEFAULT_MODEL as _MDM
+    from backend.budget import DAILY_CAP_INR as _MDAILY
+    from backend.budget import BudgetTracker as _MBT
+    from backend.budget import cost_inr as _mcost
+    from agents.review_grid import CELL_INPUT_TOKENS as _MIN_T
+    from agents.review_grid import CELL_MAX_TOKENS as _MMAX_T
+
+    class _MMem:
+        def __init__(self):
+            self.d = {}
+
+        def read(self):
+            return dict(self.d)
+
+        def write(self, data):
+            self.d = dict(data)
+
+    _mper = _mcost(_MDM, _MIN_T, _MMAX_T)
+    _mtracker = _MBT(store=_MMem(), today=_mdate(2026, 10, 5))
+    # Headroom for two cells of six, so the cap runs out MID-table. A cap of zero would
+    # pause on the first cell and prove nothing about the dispatched count.
+    _mtracker.record_call(max(0.0, _MDAILY - _mper * 2.5))
+
+    from gateway.jobs import MemoryQueue as _MQ2
+    _mctx = Context(store=MemoryBackend(), queue=_MQ2(),
+                    clock=lambda: "2026-10-05T00:00:00Z")
+    # `_review_table_create` reads the ledger through `_ledger()`, not from ctx, so the
+    # tracker is injected there. Patched rather than mocked away: the verb must use a REAL
+    # BudgetTracker, because the pause comes from `reserve()` refusing and nothing else.
+    #
+    # Patched on `globals()`, NOT via `import gateway.verbs as _mv`. Run as
+    # `python3 gateway/verbs.py` this module is `__main__`, so that import binds a SECOND
+    # copy and the patch lands on an object the verb never reads -- six cells reserved and
+    # no pause, which is what it did. A1's chaos test made the identical mistake with
+    # `TIMEOUT` and its commit says so; I made it again here.
+    _mreal_ledger = globals()["_ledger"]
+    globals()["_ledger"] = lambda: _mtracker
+    try:
+        _mcreate = _review_table_create(
+        {"name": "paused mid-table",
+         "document_ids": ["a" * 64, "b" * 64, "c" * 64],
+             "columns": [{"name": "governing law", "kind": "text",
+                          "question": "Which law?"},
+                         {"name": "term end", "kind": "date",
+                          "question": "When does it end?"}]},
+            _mctx)
+        _mstatus = _review_table_status({"grid_id": _mcreate.get("grid_id", "")}, _mctx)
+    finally:
+        globals()["_ledger"] = _mreal_ledger
+    check(_mcreate.get("status") != "REFUSED",
+          f"a six-cell table is created ({str(_mcreate)[:70]})")
+    check(_mcreate["scheduled"].get("paused_budget") is True,
+          f"...and PAUSES at create, which is the hard case ({_mcreate['scheduled']})")
+
+    check(_mstatus.get("paused_budget") is True,
+          f"**status reports PAUSED_BUDGET**, so a caller that did not keep the create "
+          f"response can still learn it ({_mstatus.get('paused_budget')})")
+    check(str(_mstatus.get("pause_reason") or "").strip(),
+          f"...with the reason the reservation was refused "
+          f"({str(_mstatus.get('pause_reason'))[:50]})")
+    check("cap" in str(_mstatus.get("pause_reason") or "").lower(),
+          "...naming the cap, not merely that something stopped")
+    check(isinstance(_mstatus.get("cells_dispatched"), int)
+          and _mstatus["cells_dispatched"] > 0,
+          f"...and how many cells WERE dispatched ({_mstatus.get('cells_dispatched')})")
+    check(isinstance(_mstatus.get("cells_not_dispatched"), int)
+          and _mstatus["cells_not_dispatched"] > 0,
+          f"...and how many were refused ({_mstatus.get('cells_not_dispatched')})")
+    check(_mstatus["cells_dispatched"] + _mstatus["cells_not_dispatched"]
+          == _mstatus["cells"],
+          f"...and the two account for every cell "
+          f"({_mstatus.get('cells_dispatched')} + "
+          f"{_mstatus.get('cells_not_dispatched')} = {_mstatus.get('cells')})")
+    check(_mstatus.get("table_state") == "PAUSED_BUDGET",
+          f"...reported as a STATE, beside complete/cancelled rather than as an error "
+          f"({_mstatus.get('table_state')})")
+
+    # A table that did NOT pause says so, so the field is not simply always true.
+    _mctx2 = Context(store=MemoryBackend(), queue=_MQ2(),
+                     clock=lambda: "2026-10-05T00:00:00Z")
+    _mfresh = _MBT(store=_MMem(), today=_mdate(2026, 10, 5))
+    globals()["_ledger"] = lambda: _mfresh
+    try:
+        _msmall = _review_table_create(
+            {"name": "not paused", "document_ids": ["d" * 64],
+             "columns": [{"name": "governing law", "kind": "text",
+                          "question": "Which law?"}]},
+            _mctx2)
+        _mstatus2 = _review_table_status({"grid_id": _msmall.get("grid_id", "")}, _mctx2)
+    finally:
+        globals()["_ledger"] = _mreal_ledger
+    check(_mstatus2.get("paused_budget") is False
+          and _mstatus2.get("table_state") != "PAUSED_BUDGET",
+          f"a table that did not pause reports false, so the field is measured rather than "
+          f"constant ({_mstatus2.get('table_state')})")
+    check(_mstatus2.get("cells_not_dispatched") == 0,
+          f"...with nothing refused ({_mstatus2.get('cells_not_dispatched')})")
+
+    # ── and this suite leaves the REAL ledger alone ─────────────────────────
+    # `_review_table_create` reserves through `_ledger()`, which is a FILE at
+    # corpus/.budget.json. The first version of the checks above ran before the seam was
+    # patched and leaked 58 reservations worth ₹115.99 against a ₹116.67 daily cap -- which
+    # starved an unrelated `conversation.send` test until the day rolled over. Nothing was
+    # spent; the cap was simply held by work that would never settle because no worker runs
+    # in a test.
+    #
+    # A1 guarded the same shape for a patched module ("a self-test that leaves the module
+    # patched poisons every suite that runs after it"). This is that lesson about a file.
+    import json as _mjson
+    import pathlib as _mpath
+    _mledger_file = _mpath.Path("corpus/.budget.json")
+    _mleft = {}
+    if _mledger_file.exists():
+        try:
+            _mleft = {k: v for k, v
+                      in (_mjson.loads(_mledger_file.read_text()).get("reservations") or {}
+                          ).items() if k.startswith("cell-")}
+        except ValueError:
+            _mleft = {}
+    check(not _mleft,
+          f"this suite leaves NO cell reservation in the real ledger -- a test that holds "
+          f"the deployment's cap starves every test after it, and the failure surfaces "
+          f"somewhere unrelated ({len(_mleft)} left, ₹{sum(_mleft.values()):.2f})")
+    globals()["_ledger"] = _real_ledger_fn
+    check(_ledger is _real_ledger_fn,
+          "...and the real ledger function is restored, so a suite running after this one "
+          "prices against the deployment's own ledger and not a temporary file")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:
