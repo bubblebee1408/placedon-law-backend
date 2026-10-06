@@ -334,6 +334,9 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/index_codebase.py` |  | Build the agent search index over code and memory. |
 | `scripts/ingest_act.py` |  | Ingest one Central Act from India Code, for any Act in the register below. |
 | `scripts/ingest_companies_act.py` |  | Ingest the Companies Act 2013. Thin wrapper over `scripts/ingest_act.py`. |
+| `scripts/merge_repo_map.py` |  | Git merge driver for docs/REPO_MAP.md: regenerate, never hand-merge. |
+| `scripts/merge_suite_floors.py` |  | Git merge driver for scripts/suite_floors.json: the MAX floor per suite, never a lower. |
+| `scripts/merge_tasks.py` |  | Git merge driver for research/TASKS.md: a three-way merge, with conflicts unioned by row. |
 | `scripts/parse_board_rules.py` |  | Parse the Companies (Meetings of Board and its Powers) Rules, 2014 into addressable records. |
 | `scripts/preflight.py` |  | Check whether this checkout can actually run, and say what to do if not. |
 | `scripts/prove_temporal.py` |  | Prove the temporal engine on three sections, at every boundary date. |
@@ -380,4 +383,4 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/watch_gazette.py` |  | Run the Gazette watcher once: what did the Gazette publish since we last looked? |
 | `scripts/watch_ofac.py` |  | Poll OFAC's SDN list and report what CHANGED since the last trustworthy poll. |
 
-340 modules listed.
+343 modules listed.

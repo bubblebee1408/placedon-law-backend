@@ -258,6 +258,8 @@ extra+=("checker/span_inventory.py --test")
 # The harness's own reproduction of the 2026-09-30 incident.
 extra+=("scripts/harness_selftest.py --test")
 extra+=("scripts/suite_floors.py --test")
+# The git merge drivers that resolve the three files two branches always churn on.
+extra+=("scripts/merge_suite_floors.py --test" "scripts/merge_tasks.py --test" "scripts/merge_repo_map.py --test")
 # H4 (review grids). The core rules: a FOUND cell cannot exist without a quote that
 # byte-matches its document, and no exported cell is ever empty.
 extra+=("checker/review_grid.py --test")

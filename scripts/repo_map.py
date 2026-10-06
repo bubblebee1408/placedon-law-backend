@@ -37,7 +37,10 @@ RING_LABEL = {0: "R0 legal core", 1: "R1 bookmark", 2: "R2 feeds", 3: "R3 infere
 
 def tracked_python() -> list[str]:
     out = subprocess.check_output(["git", "ls-files", "*.py"], cwd=ROOT, text=True)
-    return sorted(p for p in out.split("\n") if p)
+    # `set`, not just `sorted`: during a merge `git ls-files` prints a conflicted path
+    # once per stage (1, 2, 3), so an unmerged module would otherwise be listed three
+    # times and counted three times. Dedup makes the map deterministic mid-merge.
+    return sorted({p for p in out.split("\n") if p})
 
 
 def first_line(path: Path) -> str:
@@ -123,6 +126,9 @@ def _test() -> None:
     files = tracked_python()
     text = render(files)
     check(len(files) > 100, f"the walk finds the codebase ({len(files)} files)")
+    check(len(files) == len(set(files)),
+          "the module list has no duplicates -- git ls-files prints a conflicted path "
+          "once per stage, and the map must not list or count it three times")
     check("`checker/scope.py`" in text, "the scope register is listed")
     check("`gateway/verbs.py`" in text, "the verb table is listed")
     check("R0 legal core" in text, "ring labels come from checker/rings.py")
