@@ -201,9 +201,12 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `checker/sources/case_law.py` | R2 feeds | Case-law search over the open eCourts judgment metadata. LICENSED, and kept apart. |
 | `checker/sources/client.py` | R2 feeds | CLIENT: the tenant's own uploads. The document under review, never an authority. |
 | `checker/sources/company_facts.py` | R2 feeds | Company facts with the basis they rest on, and a confirmation before anything uses them. |
+| `checker/sources/connector_base.py` | R2 feeds | G1: what every keyed connector shares, and why a missing key RAISES. |
 | `checker/sources/contract.py` | R2 feeds | The five rules `checker/sources/` must obey, tested as one suite. |
+| `checker/sources/data_gov_in.py` | R2 feeds | data.gov.in (OGD): a skeleton waiting for its key. OFFICIAL_LIVE — read today, not dated. |
 | `checker/sources/evidence.py` | R2 feeds | One result from one source, with everything needed to distrust it correctly. |
 | `checker/sources/held.py` | R2 feeds | HELD: our own hash-stamped corpus. The only tier that can make an answer VERIFIED. |
+| `checker/sources/indiankanoon.py` | R2 feeds | Indian Kanoon: a skeleton waiting for its key. LICENSED tier — it can never VERIFY. |
 | `checker/sources/judgments_open.py` | R2 feeds | eCourts judgments from the AWS Open Data buckets. Keyless, LICENSED, never VERIFIED. |
 | `checker/sources/mca_fixture.py` | R2 feeds | A synthetic MCA "Company Master Data" PDF, written by hand, for testing the parser. |
 | `checker/sources/mca_master_data.py` | R2 feeds | Read an MCA "Company Master Data" page the USER downloaded and uploaded to us. |
@@ -317,6 +320,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/cross_validate_corpus.py` |  | Compare the two renderings of the Companies Act we already hold. |
 | `scripts/date_properties.py` |  | Thousands of seeded random dates over every DerivedDate rule, checking stated properties. |
 | `scripts/demo.py` |  | One command: walk the whole product on synthetic data, and say pass or fail. |
+| `scripts/demo_e2e.py` |  | The whole product, end to end, against the real gateway. PASS / BLOCKED / FAIL. |
 | `scripts/demo_inhouse.py` |  | The in-house lawyer's day, end to end, on synthetic data. |
 | `scripts/failure_report.py` |  | Weekly counts of why runs did not answer. |
 | `scripts/find_commencement.py` |  | Find which notification commenced a given section of an amending Act. |
@@ -373,4 +377,4 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/watch_gazette.py` |  | Run the Gazette watcher once: what did the Gazette publish since we last looked? |
 | `scripts/watch_ofac.py` |  | Poll OFAC's SDN list and report what CHANGED since the last trustworthy poll. |
 
-333 modules listed.
+337 modules listed.
