@@ -226,6 +226,7 @@ suites=(
   checker/release_record.py
   checker/paraphrase_negatives.py
   checker/revocation.py
+  checker/doc_validity.py
   checker/doc_verification.py
   checker/provenance_slots.py
   checker/drafting.py
