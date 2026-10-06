@@ -87,6 +87,11 @@ REQUIRED: dict[str, str] = {
     "runs.get": VIEWER,
     "runs.trace": VIEWER,
     "matters.list": VIEWER,
+    # move 8 (T3). VIEWER, like every other read of the vault: verification reads bytes
+    # already in the firm's possession and decides nothing. It is NOT the signing-off act
+    # that `runs.approve` is -- it reports what the signature says, and a person still has
+    # to act on it.
+    "document.verify": VIEWER,
     "vault.compile": VIEWER,
     "vault.find": VIEWER,
     "vault.research": VIEWER,
@@ -112,6 +117,12 @@ REQUIRED: dict[str, str] = {
     "runs.submit": LAWYER,
     # Putting a document in and destroying one are both a lawyer's acts. A
     # viewer may read the vault and may not change what is in it.
+    # T3 move 10. LAWYER, not VIEWER, and the line is the same one `runs.approve` sits on:
+    # `document.verify` REPORTS what a signature says, and this RECORDS a judgement -- an
+    # action a firm may rely on, written into an append-only audit table with the firm's name
+    # on it. A viewer who could write one would put advice in the record with no lawyer
+    # involved.
+    "document.check": LAWYER,
     "vault.upload": LAWYER,
     "vault.delete": LAWYER,
 

@@ -232,7 +232,7 @@ LAST_RUN: str | None = (
     "old seven columns after 021 added three, so a DEAD job read through it reported no "
     "reason and the default lane. `_job` had a `len(r) > 7` fallback that supplied both "
     "silently, which is what hid it -- a default standing in for a column the query forgot "
-    "is a lie with a safety net. The fallback is gone, so a short row raises.")
+    "is a lie with a safety net. The fallback is gone, so a short row raises. 2026-10-05, T3 move 10: 001-021 plus 023_document_checks applied TOGETHER to a fresh throwaway database on PostgreSQL 18.6 (Postgres.app, local socket), asserted as placedon_app (NOSUPERUSER, NOBYPASSRLS): 365 checks, 0 failures. `document_checks` is the TWENTY-FIFTH tenant-scoped table and the leak would be our JUDGEMENT on another firm's documents -- which of them we told that firm were expired, forged or needed a lawyer. Worse than the documents in one respect: a document is a fact, and this is advice. Proved the way the other twenty-four are -- A sees its own row and none of B's, the policy dropped fails CLOSED, RLS disabled makes B's row APPEAR where 0 were visible, restoring returns to isolation. Its isolation checks reported 0 rows on the first run, exactly as `invites` and `matters` did, and the seed was added only after that: a check measuring an empty table proves nothing. The conformance list then found the SIXTH divergence of its favourite shape -- Postgres returns a uuid column as `uuid.UUID` while MemoryBackend stores the `str` the caller passed, so `read_renewals()` returned the right ROW and `row['document_id'] == did` was False. One check reported an empty result against a table that held it, and the check before it passed VACUOUSLY for the same reason. `_doc_check_row` now stringifies uuid columns. 022_grid_budget_state is NOT in this list: it belongs to the still-open PR #67 and branches are never stacked, so 023 sits on top of 021 here. 2026-10-06, merge of PR #69 into main: #67 is now MERGED, so 022_grid_budget_state applies AHEAD of 023 and the list reads 001-023 with no gap -- the '022 is NOT in this list' sentence above is a dated record superseded by this merge, not edited. 001-023 applied TOGETHER to a fresh throwaway database on PostgreSQL 18.6 (Postgres.app, local socket), asserted as placedon_app (NOSUPERUSER, NOBYPASSRLS): 368 checks, 0 failures. The live --run also caught a wired-and-unreachable gap the gate could not: gateway/jobs.conformance gained queue.claim_counts but _SeededQueue never delegated it, so the proof crashed where _test() stayed green -- the wrapper now forwards it, translating only the input ids since the {missing,unclaimed,claimed} aggregate carries no run id.")
 
 TENANT_TABLES = ("actors", "api_keys", "documents", "audit_log",
                  "runs", "run_steps", "propositions", "decisions", "jobs",
@@ -259,7 +259,12 @@ TENANT_TABLES = ("actors", "api_keys", "documents", "audit_log",
                  # 8b: matters. The leak would be another firm's CLIENT LIST.
                  "matters",
                  # V1: the vault. The leak would be another firm's documents themselves.
-                 "vault_documents", "vault_chunks", "vault_tags")
+                 "vault_documents", "vault_chunks", "vault_tags",
+                 # T3 move 10: the Document Check record. The leak would be another firm's
+                 # judgement on their own documents -- which of them we told that firm were
+                 # expired, forged or needed a lawyer. Worse than the documents in one
+                 # respect: a document is a fact, and this is advice.
+                 "document_checks")
 
 
 class RlsFailure(AssertionError):
@@ -413,6 +418,24 @@ def _seed(cur, tenant, actor, tag: str) -> None:
                 "VALUES (%s,%s,'Term',%s)",
                 (vdoc, tenant, f"{tag}: the term is five years"))
 
+    # T3 move 10: a Document Check on that vault document. The leak would be another firm's
+    # JUDGEMENT on their own documents -- which of them we told that firm were expired,
+    # forged, or needed a lawyer. Worse than the documents in one respect: a document is a
+    # fact, and this is advice.
+    #
+    # RENEW_BY with a date, because 023's `document_checks_renew_by_iff_renew` requires the
+    # two to agree -- so a seed row that got this wrong would fail at the INSERT and look
+    # like an RLS problem.
+    cur.execute("INSERT INTO document_checks (check_id, tenant_id, document_id, as_of, "
+                "verification_status, validity_status, action, action_reason, expires_on, "
+                "renew_by, law_versions) "
+                "VALUES (%s,%s,%s,'2026-10-05','INCOMPLETE_VERIFICATION','EXPIRES_ON',"
+                "'RENEW_BY',%s,'2026-12-01','2026-12-01',%s)",
+                (uuid.uuid4(), tenant, vdoc,
+                 f"{tag}: in force and the renewal falls inside the ninety-day window",
+                 json.dumps({"corpus/companies_act/1283.json": ("a" if tag.startswith("A")
+                                                               else "b") * 40})))
+
     # 8b: a matter. The leak would be another firm's CLIENT LIST -- who they act for,
     # which is the most commercially sensitive thing a firm has.
     matter = uuid.uuid4()
@@ -533,6 +556,13 @@ class _SeededQueue:
     def claim(self, **kw):
         return self._fake(self._inner.claim(**kw))
 
+    def claim_counts(self, run_ids):
+        # conformance() gained this on the queue protocol; the wrapper lacked it, so
+        # the live --run proof crashed where the gate (which runs _test(), not --run)
+        # stayed green. Only the INPUT ids need the fake->real swap -- what comes back
+        # is the {missing,unclaimed,claimed} aggregate, which carries no run id.
+        return self._inner.claim_counts([self._real(r) for r in run_ids])
+
     def finish(self, job_id, status):
         return self._inner.finish(job_id, status)
 
@@ -591,7 +621,8 @@ def run(url: str) -> int:
                   "019_matters.sql",
                   "020_vault.sql",
                   "021_job_lanes.sql",
-                  "022_grid_budget_state.sql"):
+                  "022_grid_budget_state.sql",
+                  "023_document_checks.sql"):
             cur.execute(sql(f))
             print(f"  applied {f}")
         _ensure_app_role(cur)

@@ -82,6 +82,8 @@ suites=(
   backend/budget.py
   backend/azure_pricing.py
   checker/claim_schema.py
+  checker/law_versions.py
+  checker/tier_rules.py
   checker/legal_ref.py
   checker/admission.py
   checker/review_queue.py
@@ -224,6 +226,7 @@ suites=(
   checker/release_record.py
   checker/paraphrase_negatives.py
   checker/revocation.py
+  checker/doc_validity.py
   checker/doc_verification.py
   checker/provenance_slots.py
   checker/drafting.py
@@ -343,7 +346,7 @@ extra+=("gateway/limits.py")
 extra+=("scripts/concurrency_test.py --test")
 # A1 item 8. Five injected failures through the REAL worker loop. --test needs no
 # database, no model and no network; --run adds the Postgres injections.
-extra+=("scripts/chaos_test.py --test")
+extra+=("scripts/chaos_test.py --test" "scripts/demo_e2e.py --test")
 # A1. gateway/models.py had 25 self-tests and was in NEITHER list, so none of them
 # ran and one had been failing since a verified price was added for the 70B.
 #
@@ -372,6 +375,13 @@ extra+=("checker/sources/tiers.py --test" "checker/sources/evidence.py --test"
 # Company facts without data.gov.in (PLAN_26 S2-alt). The fixture suite writes a PDF by
 # hand and reads it back through checker/pdf_pages, so it also proves the scanned-page case
 # the parser must call "cannot read" rather than "no facts".
+# G1 move 17: the keyed connector skeletons. Listed because the property that matters is
+# NEGATIVE -- with no key they RAISE rather than returning an empty result, and neither
+# module imports an HTTP client at all, which each asserts by AST. A connector that quietly
+# started building its own client would have to break a check to do it.
+extra+=("checker/sources/connector_base.py --test"
+        "checker/sources/indiankanoon.py --test"
+        "checker/sources/data_gov_in.py --test")
 # STEP 3a: the AWS Open Data eCourts judgment connector. Fixture-driven -- the transport and
 # the parquet reader are injected, so the gate opens no socket and needs no parquet engine.
 # The --live smoke test (one real anonymous read) is deliberately NOT here.

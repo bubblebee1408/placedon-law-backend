@@ -1090,8 +1090,11 @@ def _test() -> None:
                                  "runs.submit", "runs.cancel", "conversation.send",
                                  "review_table.create", "review_table.cancel",
                                  "draft.create", "draft.revise", "matters.create",
-                                 "vault.upload", "vault.delete"},
-          f"thirteen write verbs today, and each is named ({sorted(write_verbs())})")
+                                 "vault.upload", "vault.delete",
+                                 # T3 move 10: it records a judgement in an append-only
+                                 # audit table, which is a write and is LAWYER-only.
+                                 "document.check"},
+          f"fourteen write verbs today, and each is named ({sorted(write_verbs())})")
 
     # ── auth: a key is required everywhere except liveness ──────────────────
     check(anon.get(HEALTH_PATH).status_code == 200,

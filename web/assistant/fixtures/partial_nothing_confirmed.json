@@ -22,7 +22,11 @@
  "law_version": {
   "basis": "CURRENT_CONSOLIDATION_AS_INGESTED",
   "corpus_fetched": [],
+  "corpus_hash": "sha256:1d6285304cee",
+  "instruments": [],
+  "note": "the corpus hash identifies the law that answered, by content. `instruments` lists only what the answering provisions' own records name -- a provision with none is not a provision that was never amended, and this repository does not hold a complete amendment history",
   "point_in_time_verified": false,
+  "record_count": 529,
   "statement": "This pack carries the CURRENT CONSOLIDATION of the Companies Act 2013 as India Code rendered it when the corpus was ingested (an unrecorded date). It is NOT a point-in-time version of the law and carries no verified commencement or amendment date. The amendment vintage of individual provisions is not uniform and not fully known: SD-002 confirms that some records carry pre-amendment wording while the same publisher's PDF carries later wording. Those provisions are marked unusable in this pack. Point-in-time reconstruction exists in this system but is UNVERIFIED against any external source, so no statement here is a statement about the law as it stood on any past date."
  },
  "not_confirmed": [
