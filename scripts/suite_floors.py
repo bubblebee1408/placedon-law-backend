@@ -36,11 +36,46 @@ FLOORS = ROOT / "scripts" / "suite_floors.json"
 
 
 def load(path: Path | None = None) -> dict:
+    """{suite: spec}, where a spec is an int floor OR a dict with a capability gate.
+
+    A dict spec is `{"floor": N, "requires": "<import>", "unavailable_floor": M}`: the full
+    floor N applies only when `<import>` is importable; when it is not, the suite legitimately
+    reports fewer checks (the feature is absent), and the smaller `unavailable_floor` M is
+    enforced instead -- so the suite must still RUN and print its unavailability line rather
+    than crash or silently drop to zero. See `_resolve`.
+    """
     p = path or FLOORS
     if not p.is_file():
         return {}
     raw = json.loads(p.read_text(encoding="utf-8"))
-    return {k: int(v) for k, v in raw.get("floors", {}).items()}
+    return dict(raw.get("floors", {}))
+
+
+def _available(requires: str | None) -> bool:
+    """Is `requires` importable here? No import side effects -- `find_spec` only.
+
+    `sentence_transformers` is installed globally on some laptops and in NO requirements
+    file (torch is deliberately not a dependency), so a suite that needs it reports fewer
+    checks on a clean machine. That is correct behaviour, not a regression -- which is the
+    whole reason a floor may be gated on the import.
+    """
+    if not requires:
+        return True
+    try:
+        import importlib.util
+        return importlib.util.find_spec(requires) is not None
+    except (ImportError, ValueError, ModuleNotFoundError):
+        return False
+
+
+def _resolve(spec) -> tuple[int, bool, int]:
+    """(effective_floor, capability_available, recorded_floor) for an int or dict spec."""
+    if isinstance(spec, dict):
+        recorded = int(spec["floor"])
+        avail = _available(spec.get("requires"))
+        eff = recorded if avail else int(spec.get("unavailable_floor", 1))
+        return eff, avail, recorded
+    return int(spec), True, int(spec)
 
 
 def save(floors: dict, path: Path | None = None) -> None:
@@ -63,15 +98,21 @@ def compare(floors: dict, counts: dict) -> tuple[list, list, dict]:
     regressions, risen = [], []
     new = dict(floors)
     for suite, count in counts.items():
-        floor = floors.get(suite)
-        if floor is None:
+        spec = floors.get(suite)
+        if spec is None:
             new[suite] = count
             continue
-        if count < floor:
-            regressions.append((suite, floor, count))
-        elif count > floor:
-            risen.append((suite, floor, count))
-            new[suite] = count
+        eff, avail, recorded = _resolve(spec)
+        if count < eff:
+            # The breach is reported against the EFFECTIVE floor -- the full floor when the
+            # capability is present, the unavailable floor when it is not. Either way, a drop
+            # below what the suite should report is caught.
+            regressions.append((suite, eff, count))
+        elif avail and count > recorded:
+            # Only a run WITH the capability may raise the recorded floor. An unavailable run
+            # reports fewer checks and must never ratchet the real floor down (or up).
+            risen.append((suite, recorded, count))
+            new[suite] = {**spec, "floor": count} if isinstance(spec, dict) else count
     return regressions, risen, new
 
 
@@ -203,11 +244,45 @@ def _test() -> int:
               f"self-test runs fixtures out of /tmp, and the first version of this file "
               f"recorded them as permanent suites")
 
+    # ── capability-gated floors (`requires`) ────────────────────────────────
+    # A floor may be gated on an import. `json` is always importable; a nonsense name never
+    # is -- so these two exercise both sides deterministically, on any machine.
+    gated = {"s.py": {"floor": 8, "requires": "json", "unavailable_floor": 3}}
+    reg, ris, _n = compare(gated, {"s.py": 8})
+    check(not reg and not ris, "a requires-floor with the import PRESENT applies the full floor")
+    reg, _r, _n = compare(gated, {"s.py": 5})
+    check(reg == [("s.py", 8, 5)],
+          f"...and a drop below the full floor is a regression when the import is present {reg}")
+
+    missing = {"s.py": {"floor": 8, "requires": "no_such_module_xyz",
+                        "unavailable_floor": 3}}
+    reg, ris, new = compare(missing, {"s.py": 3})
+    check(not reg and not ris,
+          "with the import ABSENT, the full floor is suspended and the unavailable floor "
+          "(the count the suite reports when it prints its unavailability line) is what holds")
+    reg, _r, _n = compare(missing, {"s.py": 2})
+    check(reg == [("s.py", 3, 2)],
+          f"...but the unavailable floor is still ENFORCED -- a suite that dropped below even "
+          f"that (a crash, a silent skip) is caught {reg}")
+    _reg, ris, new = compare(missing, {"s.py": 99})
+    check(not ris and new["s.py"]["floor"] == 8,
+          "...and a run without the capability NEVER raises or lowers the recorded floor "
+          f"({new['s.py']})")
+
     # ── the real file ───────────────────────────────────────────────────────
     real = load()
     check(real, f"the committed floors file holds {len(real)} suite(s)")
-    check(all(isinstance(v, int) and v > 0 for v in real.values()),
+
+    def _floor_of(v):
+        return int(v["floor"]) if isinstance(v, dict) else int(v)
+    check(all(_floor_of(v) > 0 for v in real.values()),
           "...every floor a positive integer")
+    for suite, v in real.items():
+        if isinstance(v, dict):
+            check("requires" in v and v.get("floor") and "unavailable_floor" in v,
+                  f"...a gated floor names its import and both floors ({suite}: {v})")
+            check(_floor_of(v) >= int(v["unavailable_floor"]),
+                  f"...and the available floor is >= the unavailable one ({suite})")
     check(FLOORS.is_file() and "floors" in json.loads(
               FLOORS.read_text(encoding="utf-8")),
           "...and the file is committed, not generated at run time")

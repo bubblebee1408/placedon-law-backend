@@ -100,7 +100,8 @@ class Deployment:
         return self.store != POSTGRES_STORE
 
 
-def health_body(engine_body: dict, deployment: Deployment, queue=None) -> dict:
+def health_body(engine_body: dict, deployment: Deployment, queue=None,
+                files=None) -> dict:
     """The engine's health, plus the two things only the gateway knows.
 
     `queue`, when given, adds the pair an operator actually watches: how many jobs are
@@ -114,7 +115,11 @@ def health_body(engine_body: dict, deployment: Deployment, queue=None) -> dict:
     """
     body = dict(engine_body) | {"store": {"kind": deployment.store,
                                           "degraded": deployment.degraded,
-                                          "note": deployment.note}}
+                                          "note": deployment.note},
+                                # Reported ALWAYS, present or absent, exactly as `store`
+                                # is: a key that appears only when a vault exists is a key
+                                # an operator cannot alert on.
+                                "files": file_store_health(files)}
     if queue is not None:
         try:
             depth = queue.depth()
@@ -141,8 +146,49 @@ def health_body(engine_body: dict, deployment: Deployment, queue=None) -> dict:
 PUBLIC_ROUTES = frozenset({HEALTH_PATH})
 
 
+FILES_DIR_ENV = "PLACEDON_FILES_DIR"
+
+
+def default_file_store():
+    """A `LocalFileStore` under `PLACEDON_FILES_DIR`, or None when it is unset.
+
+    None is not a failure: a deployment with no vault is a real deployment, and the vault
+    verbs refuse `NO_VAULT` by name on it. What is NOT acceptable is the previous
+    behaviour, where the only way to configure one was to set `ctx.files` by hand -- which
+    `gateway/screens.py` does in its own test, and no HTTP caller could do at all. So the
+    verbs were proved and unreachable at once.
+
+    `S3FileStore` stays BLOCKED until AWS exists (H1); this reads a directory because a
+    directory is what a laptop and a Lightsail box both have.
+    """
+    import os
+
+    root = (os.environ.get(FILES_DIR_ENV) or "").strip()
+    if not root:
+        return None
+    from gateway.filestore import LocalFileStore
+    return LocalFileStore(root)
+
+
+def file_store_health(files) -> dict:
+    """The file store, reported the way `store` is. Absence is a FACT, not a silence.
+
+    An operator reading /v1/health must be able to see that the vault cannot accept an
+    upload, rather than discovering it from a refusal after someone tries.
+    """
+    if files is None:
+        return {"configured": False, "kind": None,
+                "note": (f"no file store: {FILES_DIR_ENV} is unset. The vault verbs refuse "
+                         f"NO_VAULT by name, so an upload is declined rather than written "
+                         f"nowhere")}
+    kind = getattr(files, "kind", type(files).__name__)
+    return {"configured": True, "kind": kind,
+            "note": f"a {kind} file store is configured; the vault can accept an upload"}
+
+
 def create_app(*, deployment: Deployment | None = None, clock=None, handler=None,
-               keys: KeyStore | None = None, db_url: str | None = None, queue=None):
+               keys: KeyStore | None = None, db_url: str | None = None, queue=None,
+               files=None):
     """The FastAPI app. Every dependency injected so the test reaches no network or clock."""
     # The store is SELECTED, and /v1/health reports what was selected rather than what
     # was hoped for. `db_url=""` forces memory, which is what the gate uses so a developer
@@ -202,6 +248,10 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
     app.state.run_store = app.state.memory_backend
     app.state.documents = app.state.memory_backend.documents
     app.state.keys = keys if keys is not None else KeyStore()
+    # Injected, or read from the environment. Never discovered inside a handler: a verb
+    # that reached for its own file store would be a second place the vault's location
+    # lives, and the two would disagree the first time either moved.
+    app.state.files = files if files is not None else default_file_store()
     # P2. One limiter for the deployment, shared by /v1 and /v2. Two surfaces read a body,
     # and a limit wired into one of them is a limit the other does not have.
     from gateway import limits as limits_mod
@@ -316,7 +366,7 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
             # the injected queue was built for, which is the right scope for a
             # single-tenant deployment and the wrong one for a shared gateway; wiring it
             # on a shared gateway is a decision, not a default.
-            payload = health_body(payload, dep, queue=queue)
+            payload = health_body(payload, dep, queue=queue, files=app.state.files)
         if principal is not None:
             _record(principal, action=audit_mod.READ, route=f"{request.method} {bare}",
                     resource=bare, outcome="served" if status < 400 else "refused",
@@ -349,7 +399,8 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
             except SingleTenantOnly as exc:
                 return _single_tenant(exc)
             ctx = Context(tenant=principal.tenant_id, actor=principal.actor,
-                          store=store, documents=app.state.documents, clock=now)
+                          store=store, documents=app.state.documents, clock=now,
+                          files=app.state.files, queue=queue)
             args = dict(request.path_params)
             if verb.method == "POST":
                 raw = await request.body()
@@ -585,7 +636,8 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
             except SingleTenantOnly as exc:
                 return _single_tenant(exc)
             ctx = Context(tenant=principal.tenant_id, actor=principal.actor,
-                          store=store, documents=app.state.documents, clock=now)
+                          store=store, documents=app.state.documents, clock=now,
+                          files=app.state.files, queue=queue)
             if not may(principal.role, verb_name):
                 _record(principal, action=audit_mod.READ, route=f"GET {path}",
                         resource=verb_name, outcome="refused", status=403)
@@ -726,8 +778,10 @@ def _test() -> None:
     r = client.get(HEALTH_PATH)
     got = json.loads(r.content)
     check(r.status_code == want_status, "health carries the engine's status")
-    check(set(got) - set(engine_health) == {"store"},
-          f"health adds EXACTLY one key ({sorted(set(got) - set(engine_health))})")
+    check(set(got) - set(engine_health) == {"store", "files"},
+          f"health adds EXACTLY the two keys only the gateway knows -- which store is "
+          f"behind it, and whether a vault can accept an upload "
+          f"({sorted(set(got) - set(engine_health))})")
     check(not (set(engine_health) - set(got)), "...and drops none")
     check(all(got[k] == v for k, v in engine_health.items()),
           "...and changes no value the engine set, so the addition is additive in fact "
@@ -1333,6 +1387,82 @@ def _test() -> None:
     check(pg_app.state.db_url is not None,
           "a Postgres deployment takes the other branch of backend_for entirely, so the "
           "single-tenant guard never applies to it")
+
+    # ── gap 1: the vault, reachable over HTTP ───────────────────────────────
+    # Driven through TestClient, NOT by building a Context and calling the verb. The verb
+    # was already proved that way -- `gateway/screens.py` sets `ctx.files` itself -- and
+    # that is exactly how a verb nobody can reach came to have a passing test. If it does
+    # not work over HTTP it does not work.
+    import tempfile as _tempfile
+
+    from gateway.filestore import LocalFileStore as _LFS
+    from gateway.jobs import MemoryQueue as _MQ
+
+    with _tempfile.TemporaryDirectory() as _vault_dir:
+        _vq = _MQ()
+        _vapp = create_app(clock=lambda: GEN, handler=handle, keys=keys, db_url="",
+                           files=_LFS(_vault_dir), queue=_vq)
+        _vc = TestClient(_vapp, headers={"Authorization": f"Bearer {KEY}"})
+
+        NDA = ("MUTUAL NON-DISCLOSURE AGREEMENT\n"
+               "3. This Agreement shall be governed by the laws of India.\n"
+               "4. The term of confidentiality shall expire on 2029-03-31.\n")
+        _up = _vc.post("/v2/vault/upload", json={"name": "nda.txt", "text": NDA})
+        check(_up.status_code == 200 and _up.json().get("status") != "REFUSED",
+              f"a vault upload over HTTP is ACCEPTED when a file store is configured "
+              f"({_up.status_code}: {str(_up.json())[:70]})")
+        _doc = _up.json()
+        check(_doc.get("state") == "PENDING",
+              f"...and is PENDING, because nothing is searchable until a worker reads it "
+              f"({_doc.get('state')})")
+        check(_doc.get("job_id"),
+              f"...with an ingest job queued, so something WILL read it ({_doc.get('job_id')})")
+
+        # The real worker, on the real queue. Not a direct call to the ingest function.
+        from agents.vault_ingest import INTENT as _VINTENT
+        from agents.vault_ingest import handler as _vhandler
+        from gateway.worker import run_one as _run_one
+        _store = _vapp.state.backend_for(T)
+        _outcome = _run_one(queue=_vq, store=_store,
+                            handlers={_VINTENT: _vhandler(
+                                files=_LFS(_vault_dir), store=_store,
+                                extract=lambda data, name: data.decode("utf-8", "replace"))})
+        check(_outcome is not None and _outcome.status != "FAILED",
+              f"the worker ingests the queued document ({_outcome.status if _outcome else None})")
+
+        _st = _vc.post("/v2/vault/status", json={"document_id": _doc["document_id"]})
+        check(_st.status_code == 200 and _st.json().get("state") == "INGESTED",
+              f"...and the document reads INGESTED over HTTP ({_st.json().get('state')})")
+
+        _ver = _vc.post("/v2/vault/verify", json={"document_id": _doc["document_id"]})
+        check(_ver.status_code == 200 and _ver.json().get("status") != "REFUSED",
+              f"vault.verify answers over HTTP rather than refusing NO_VAULT "
+              f"({str(_ver.json())[:70]})")
+        _checks = _ver.json().get("checks") or []
+        check(len(_checks) >= 2,
+              f"...with a line per CHECK, not one verdict ({len(_checks)} checks)")
+        check(all(c.get("result") for c in _checks),
+              "...and every check carries a result")
+
+        # /v1/health reports the file store the same way it reports the store.
+        _h = _vc.get(HEALTH_PATH).json()
+        check(isinstance(_h.get("files"), dict),
+              f"/v1/health reports the file store as its own object, like `store` ({_h.get('files')})")
+        check(_h["files"].get("kind") == "local" and _h["files"].get("configured") is True,
+              f"...naming its kind and that it is configured ({_h.get('files')})")
+
+    # With NO file store the refusal is KEPT, and health says so rather than being silent.
+    _noapp = create_app(clock=lambda: GEN, handler=handle, keys=keys, db_url="")
+    _nc = TestClient(_noapp, headers={"Authorization": f"Bearer {KEY}"})
+    _nu = _nc.post("/v2/vault/upload", json={"name": "x.txt", "text": "some clause"})
+    check(_nu.json().get("code") == "NO_VAULT",
+          f"with no file store the upload still refuses NO_VAULT by name ({_nu.json().get('code')})")
+    _nh = _nc.get(HEALTH_PATH).json()
+    check(_nh["files"].get("configured") is False,
+          f"...and /v1/health says the file store is not configured ({_nh.get('files')})")
+    check(_nh["files"].get("note"),
+          "...with a note, so an operator reading health knows the vault cannot accept "
+          "an upload rather than discovering it from a refusal")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:
