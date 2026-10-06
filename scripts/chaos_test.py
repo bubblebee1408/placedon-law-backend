@@ -385,9 +385,80 @@ def worker_killed_mid_step() -> Injection:
     inj.ck(_tenant_b_rows(store) == before, "no other tenant's rows changed")
     return inj
 
+def multi_agent_half_dead() -> Injection:
+    """MA1: one worker dies, one is refused twice, the rest answer. PARTIAL or NEEDS_LAWYER
+    -- never a quiet ANSWERED, and never a merge that saw an unverified result.
+
+    Move 15's injection. The failure this guards against is the one that looks like success:
+    a fan-out where two of six branches went wrong, the other four merged cleanly, and the
+    answer came back whole. A lawyer reading it would have no way to know two questions were
+    never answered.
+    """
+    from agents import multi_plan as mp
+    from agents import multi_runner as mr
+
+    inj = Injection("a multi-agent fan-out with a dead worker and a refused branch")
+    store, _queue = _store_and_queue()
+    before = _tenant_b_rows(store)
+
+    plan = mp.MultiPlan("six sub-questions",
+                        tuple(mp.Task("research_question", f"sub-question {i}")
+                              for i in range(6)))
+    inj.ck(mp.validate(plan).ok, "the plan validates: six workers, all registered")
+
+    seen_by_merger: list = []
+
+    def call(task):
+        if "2" in task.task:
+            raise ConnectionError("the model host closed the connection")
+        return f"answer to {task.task}"
+
+    def verify(text, task):
+        if "4" in task.task:
+            raise mr.Rejected("the quoted span is not in the evidence")
+        return text
+
+    def merge(results):
+        seen_by_merger.append(tuple(r.index for r in results))
+        return " | ".join(r.text for r in results)
+
+    out = mr.run(plan, call=call, verify=verify, merge=merge)
+
+    inj.ck(out.status != mr.ANSWERED,
+           f"the run is NOT reported as fully answered when two branches failed -- a whole "
+           f"answer with two silent gaps is the failure this injection exists for "
+           f"({out.status})")
+    inj.ck(out.status == mr.NEEDS_LAWYER,
+           f"...it is NEEDS_LAWYER, because a branch the verifier refused twice needs a "
+           f"person and outranks a merely PARTIAL result ({out.status})")
+    inj.ck(not out.complete, "...and it is not complete")
+
+    dead = [r for r in out.results if r.state == mr.W_DEAD]
+    refused = [r for r in out.results if r.state == mr.W_NEEDS_LAWYER]
+    inj.ck(len(dead) == 1 and dead[0].attempts == 3,
+           f"the unreachable worker is DEAD after three attempts "
+           f"({[(r.index, r.attempts) for r in dead]})")
+    inj.ck(len(refused) == 1 and refused[0].attempts == mr.VERIFY_STRIKES,
+           f"the unverifiable worker stopped after {mr.VERIFY_STRIKES} strikes rather than "
+           f"spending a third call ({[(r.index, r.attempts) for r in refused]})")
+    inj.ck(len(out.gaps) == 2 and all(g.startswith("worker ") for g in out.gaps),
+           f"BOTH gaps are named, so a reader knows which questions were not answered "
+           f"({len(out.gaps)})")
+
+    inj.ck(seen_by_merger and set(seen_by_merger[-1]) == {0, 1, 3, 5},
+           f"the merger saw ONLY the four verified results -- never the dead worker's "
+           f"absence of one, and never the refused worker's unverified text, which is the "
+           f"rule the whole design exists for ({seen_by_merger[-1]})")
+    inj.ck(out.merged and "sub-question 2" not in out.merged
+           and "sub-question 4" not in out.merged,
+           "...and neither failed branch appears in the merged answer")
+    inj.ck(_tenant_b_rows(store) == before, "no other tenant's rows changed")
+    return inj
+
 
 INJECTIONS = (provider_outage, poison_job, pool_exhaustion, budget_out_mid_table,
-              worker_killed_mid_step)
+              worker_killed_mid_step, multi_agent_half_dead)
+
 
 
 # ── the same two injections, against real PostgreSQL ────────────────────────
@@ -575,7 +646,7 @@ def _test() -> int:
 
     print("chaos_test")
     results = run()
-    check(len(results) == 5, f"all five injections run ({len(results)})")
+    check(len(results) == 6, f"all six injections run ({len(results)})")
     for r in results:
         check(r.state == PASS, f"{r.name}: contained ({r.failed[:1]})")
         check(len(r.checks) >= 4,

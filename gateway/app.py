@@ -43,7 +43,7 @@ from datetime import datetime, timezone
 # a QUERY field -- every route then answers 422 "query.request: Field required". Measured
 # 29-09-2026, and it looks exactly like a routing bug.
 from fastapi import FastAPI, Request                         # noqa: E402
-from fastapi.responses import Response                       # noqa: E402
+from fastapi.responses import Response, StreamingResponse     # noqa: E402
 
 from gateway import audit as audit_mod                       # noqa: E402
 from gateway.auth import AuthError, KeyStore, bearer          # noqa: E402
@@ -466,6 +466,139 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
     for _v in VERBS:
         _mount(_v)
 
+    # ── R0 move 12: ask over Server-Sent Events ─────────────────────────────
+    #
+    # `POST /v2/ask/stream`. The non-streaming `/v2/ask` is UNTOUCHED: a caller that wants
+    # one JSON object still gets one, and this route is additive. Same auth, same rate
+    # limit, same body cap, same audit row -- reusing the closures above rather than a
+    # second copy of the gate, because a streaming route that forgot the rate limiter would
+    # be a way around it.
+    #
+    # NO NEW DEPENDENCY: `StreamingResponse` is FastAPI's own, and the event framing is four
+    # lines of text. An SSE library would be a dependency for `data: ...\n\n`.
+    #
+    # ## What is honestly streamed, and what is not
+    #
+    # `accepted` goes out IMMEDIATELY, before any work -- that is the sub-second first event
+    # the move asks for, and it is measured rather than asserted.
+    #
+    # The `step` events are real steps with real outcomes, and they are emitted **when the
+    # work completes**, not as each step finishes. `_persist_run` REBINDS `ctx.last_steps`
+    # to a fresh list at the end rather than appending as it goes, so there is nothing to
+    # observe mid-flight; making them incremental means changing how every handler records a
+    # step, which is a change to the non-streaming path the move says to leave alone. Each
+    # event carries `live: false` so a reader is not told these arrived as they happened,
+    # and the limitation is recorded as A-022.
+    #
+    # ## A transport failure is its OWN event
+    #
+    # `event: error`, never an `answer` whose envelope says abstained. An abstention is a
+    # verified product state -- we read the law and could not answer -- and a dropped
+    # connection or a raised handler is not one. The frontend's own rule says the same thing
+    # ("a transport failure must NEVER render as an abstention"), and the only way to honour
+    # it over a stream is to make the two distinguishable in the protocol.
+    SSE_PATH = "/v2/ask/stream"
+
+    def _sse(event: str, payload: dict) -> bytes:
+        """One SSE frame. `event:` then `data:` then a blank line, which ends the frame."""
+        return (f"event: {event}\n".encode()
+                + b"data: " + dumps(payload) + b"\n\n")
+
+    async def _ask_stream(request: Request) -> Response:
+        import asyncio
+        import time
+
+        try:
+            principal = _principal(request)
+        except AuthError:
+            return _unauthorised()
+        slow = _rate_limited(principal)
+        if slow:
+            _record(principal, action=audit_mod.READ, route=f"POST {SSE_PATH}",
+                    resource="ask.stream", outcome="refused", status=slow.http_status)
+            return _limit_response(slow)
+        try:
+            store = app.state.backend_for(principal.tenant_id)
+        except SingleTenantOnly as exc:
+            return _single_tenant(exc)
+        raw = await request.body()
+        over = _too_large(raw, request)
+        if over:
+            return _limit_response(over)
+        try:
+            args = json.loads(raw) if raw else {}
+            if not isinstance(args, dict):
+                raise ValueError("body must be a JSON object")
+        except Exception as exc:                                 # noqa: BLE001
+            _record(principal, action=audit_mod.READ, route=f"POST {SSE_PATH}",
+                    resource="ask.stream", outcome="refused", status=400)
+            return Response(content=dumps({"status": "REFUSED", "code": "BAD_REQUEST",
+                                           "detail": str(exc)[:200]}),
+                            status_code=400, media_type="application/json")
+
+        ask_verb = next(v for v in VERBS if v.name == "ask")
+        ctx = Context(tenant=principal.tenant_id, actor=principal.actor,
+                      store=store, documents=app.state.documents, clock=now)
+
+        async def frames():
+            t0 = time.monotonic()
+            # FIRST, and before any work. A stream whose first byte waits for the answer is
+            # not a stream, and `first_event_ms` is reported so the caller can MEASURE the
+            # latency rather than take this comment's word for it.
+            yield _sse("accepted", {
+                "verb": "ask", "first_event_ms": round((time.monotonic() - t0) * 1000, 3),
+                "note": "accepted and started. Steps follow, then one answer event"})
+            try:
+                out = await asyncio.to_thread(ask_verb.run, args, ctx)
+            except Exception as exc:                             # noqa: BLE001
+                # A DISTINCT event. Never an answer whose envelope says abstained: an
+                # abstention means we read the law and could not answer, and this means we
+                # did not get that far.
+                _record(principal, action=audit_mod.READ, route=f"POST {SSE_PATH}",
+                        resource="ask.stream", outcome="refused", status=500)
+                yield _sse("error", {
+                    "code": "TRANSPORT_FAILED",
+                    "detail": f"{type(exc).__name__}: {str(exc)[:200]}",
+                    "is_abstention": False,
+                    "note": ("this is a FAILURE, not an abstention. Nothing was read and "
+                             "nothing follows about the law. An abstention arrives as an "
+                             "answer event whose envelope says so")})
+                return
+            for i, step in enumerate(ctx.last_steps or ()):
+                yield _sse("step", {
+                    "ordinal": i, "capability": step.get("capability"),
+                    "status": step.get("status"),
+                    "engine_capability": step.get("engine_capability"),
+                    "model": step.get("model"), "degraded": step.get("degraded"),
+                    "cost_inr": step.get("cost_inr"), "cost_note": step.get("cost_note"),
+                    # Said in the data, not only in a comment: these are real steps with
+                    # real outcomes, emitted on completion rather than as each finished.
+                    "live": False,
+                    "note": ("recorded step, emitted when the run completed. "
+                             "`_persist_run` rebinds the step list at the end, so there is "
+                             "nothing to observe mid-flight yet (A-022)")})
+            code = 200 if not (isinstance(out, dict)
+                               and out.get("status") == "REFUSED") else 400
+            _record(principal, action=audit_mod.READ, route=f"POST {SSE_PATH}",
+                    resource=str((out or {}).get("run_id") or "ask.stream"),
+                    outcome="served" if code < 400 else "refused", status=code)
+            yield _sse("answer", {
+                "status_code": code, "envelope": out,
+                "total_ms": round((time.monotonic() - t0) * 1000, 3)})
+
+        return StreamingResponse(frames(), media_type="text/event-stream",
+                                 headers={"cache-control": "no-store",
+                                          # Named because a proxy that buffers turns a
+                                          # stream back into one slow response.
+                                          "x-accel-buffering": "no"})
+
+    # `stream:` and not `v2:`, following the `download:` routes above. The `v2:` prefix is
+    # how the suite counts verbs -- "every verb is mounted (N of N)" -- and this is not a
+    # verb: it is a second transport for one. A route that inflated that count would make
+    # the assertion stop meaning what it says.
+    app.add_api_route(SSE_PATH, _ask_stream, methods=["POST"], name="stream:ask",
+                      summary="ask, streamed as Server-Sent Events")
+
     # ── binary downloads ────────────────────────────────────────────────────
     #
     # The verbs already produce these bytes, and they hand them back as base64 inside a
@@ -688,6 +821,218 @@ def _test() -> None:
     check(json.loads(bad.content) != engine_none,
           "...and NOT forwarded as None, which the engine would answer as 'no body given' "
           "-- a different and misleading refusal")
+
+    # ── R0 move 12: ask over SSE ────────────────────────────────────────────
+    # The done-when: "a test reads the event sequence. The first event arrives in under 1 s
+    # locally, and that time is MEASURED, not asserted." So the latency is taken with a
+    # clock and printed; the assertion is on the measurement, not instead of one.
+    import time as _sse_time
+
+    def _parse_sse(text: str) -> list:
+        """(event, data) per frame. A frame ends at a blank line."""
+        import json as _j
+        out = []
+        for raw in text.split("\n\n"):
+            if not raw.strip():
+                continue
+            name, data = "", ""
+            for line in raw.splitlines():
+                if line.startswith("event: "):
+                    name = line[len("event: "):].strip()
+                elif line.startswith("data: "):
+                    data = line[len("data: "):]
+            if name:
+                try:
+                    out.append((name, _j.loads(data)))
+                except ValueError:
+                    out.append((name, {"unparsed": data[:120]}))
+        return out
+
+    # ## The latency CANNOT be measured through TestClient, and finding that out was the
+    # ## whole value of insisting on a measurement
+    #
+    # `client.post` buffers, so it times the ANSWER. `client.stream` looks like it should
+    # work and does not: Starlette's ASGI transport collects the whole response before
+    # `iter_lines` yields anything, so every frame arrives at the same instant and the first
+    # one reports **100% of total**. I had that number on screen and it says "this route
+    # does not stream".
+    #
+    # It does. Against a REAL uvicorn on a loopback port, the first frame arrives in single
+    # -digit milliseconds and the answer four seconds later. So the sequence checks below use
+    # TestClient (which is fine for ordering and content) and the LATENCY is measured against
+    # a real server, because that is the only place the question has an answer.
+    #
+    # The precedent is `scripts/serve_ask.py --test`, which binds a fixed loopback port in
+    # the gate for the same reason: some properties only exist over a socket.
+    import json as _sse_json
+    import socket as _sse_socket
+    import threading as _sse_threading
+
+    _SSE_Q = "What is the time limit for filing the annual return under section 92?"
+    _SSE_PORT = 8033
+    _sse_first_ms = _sse_answer_ms = None
+    _sse_server = None
+    try:
+        import uvicorn as _uvicorn
+        _sse_cfg = _uvicorn.Config(app, host="127.0.0.1", port=_SSE_PORT,
+                                   log_level="error")
+        _sse_server = _uvicorn.Server(_sse_cfg)
+        _sse_thread = _sse_threading.Thread(target=_sse_server.run, daemon=True)
+        _sse_thread.start()
+        for _ in range(100):                    # up to 5 s for the port to open
+            try:
+                _sse_socket.create_connection(("127.0.0.1", _SSE_PORT), timeout=0.2).close()
+                break
+            except OSError:
+                _sse_time.sleep(0.05)
+        _sse_body = _sse_json.dumps({"question": _SSE_Q}).encode()
+        _sse_req = (b"POST /v2/ask/stream HTTP/1.1\r\nHost: 127.0.0.1\r\n"
+                    b"Authorization: Bearer " + KEY.encode() + b"\r\n"
+                    b"Content-Type: application/json\r\n"
+                    b"Content-Length: " + str(len(_sse_body)).encode()
+                    + b"\r\nConnection: close\r\n\r\n" + _sse_body)
+        _sock = _sse_socket.create_connection(("127.0.0.1", _SSE_PORT), timeout=60)
+        _t0 = _sse_time.monotonic()
+        _sock.sendall(_sse_req)
+        while True:
+            _chunk = _sock.recv(8192)
+            if not _chunk:
+                break
+            for _line in _chunk.split(b"\n"):
+                if _line.startswith(b"event:") and _sse_first_ms is None:
+                    _sse_first_ms = (_sse_time.monotonic() - _t0) * 1000
+                if _line.startswith(b"event: answer"):
+                    _sse_answer_ms = (_sse_time.monotonic() - _t0) * 1000
+        _sock.close()
+    finally:
+        if _sse_server is not None:
+            _sse_server.should_exit = True
+
+    if _sse_first_ms is None:
+        check(False, "the SSE latency could not be measured: no event frame arrived over a "
+                     "real socket. Reported rather than skipped -- a skipped measurement "
+                     "reads as a passing one")
+    else:
+        print(f"    MEASURED over a real socket: first frame {_sse_first_ms:.1f} ms, "
+              f"answer {_sse_answer_ms:.1f} ms "
+              f"({_sse_first_ms / _sse_answer_ms:.2%} of the way through)")
+        check(_sse_first_ms < 1000.0,
+              f"the first event reaches a client in under 1 s -- MEASURED at "
+              f"{_sse_first_ms:.1f} ms over a loopback socket, not asserted")
+        check(_sse_first_ms < _sse_answer_ms / 4,
+              f"...and it arrives long before the answer, which is the only thing that "
+              f"makes this a stream rather than a slow response "
+              f"({_sse_first_ms:.1f} ms of {_sse_answer_ms:.1f} ms)")
+
+    # The SEQUENCE and the content, through TestClient -- which buffers, and for ordering
+    # that does not matter.
+    # A DIFFERENT question from the socket run. The first version reused `_SSE_Q`, which the
+    # O9 answer cache had just stored, so the run recorded no steps and the sequence came
+    # back ['accepted', 'answer'] -- a cache hit looking like a missing feature.
+    _sse_r = client.post("/v2/ask/stream",
+                         json={"question": "Which section requires an annual general "
+                                           "meeting to be held each year?"})
+    check(_sse_r.status_code == 200,
+          f"the stream route answers 200 ({_sse_r.status_code})")
+    check("text/event-stream" in _sse_r.headers.get("content-type", ""),
+          f"...as text/event-stream ({_sse_r.headers.get('content-type')})")
+    check(_sse_r.headers.get("x-accel-buffering") == "no",
+          "...and asks proxies not to buffer, because a buffered stream is one slow response")
+
+    _frames = _parse_sse(_sse_r.text)
+    _names = [n for n, _ in _frames]
+    check(_names and _names[0] == "accepted",
+          f"the FIRST event is `accepted`, before any work ({_names[:4]})")
+    check(_names[-1] == "answer",
+          f"...and the LAST is `answer` ({_names[-3:]})")
+    check(all(n == "step" for n in _names[1:-1]),
+          f"...with nothing between them but step events ({_names})")
+    check("step" in _names,
+          f"...and a run that did work emits at least one ({_names})")
+
+    # A CACHED answer is a legitimate sequence with no steps: nothing ran, so there is
+    # nothing to report, and `accepted` -> `answer` is the honest shape. Asserted rather
+    # than left as an accident, because it is what a second identical question produces.
+    _cached = client.post("/v2/ask/stream", json={"question": _SSE_Q})
+    _cached_names = [n for n, _ in _parse_sse(_cached.text)]
+    check(_cached_names[0] == "accepted" and _cached_names[-1] == "answer",
+          f"a cached answer still opens with `accepted` and closes with `answer`, with no "
+          f"steps because nothing ran ({_cached_names})")
+    check("error" not in _names,
+          "a successful ask emits NO error event")
+
+    # MEASURED. The number is printed so a reader sees the actual latency rather than a
+    # claim about it, and the whole request is measured end to end -- `first_event_ms` is
+    # taken inside the generator, and this is the time a CLIENT waited.
+    _accepted = next(d for n, d in _frames if n == "accepted")
+    _answer = next(d for n, d in _frames if n == "answer")
+    check(isinstance(_answer.get("total_ms"), (int, float)),
+          f"...and the answer event reports the total, so a caller can see where the time "
+          f"went ({_answer.get('total_ms')} ms)")
+    check(_answer["envelope"].get("run_id") or _answer["envelope"].get("question"),
+          "the answer event carries the SAME envelope the non-streaming route returns")
+
+    # Each step event says it is not live. Honesty about the limitation, in the data.
+    for _n, _d in _frames:
+        if _n == "step":
+            check(_d.get("live") is False and "nothing to observe mid-flight" in _d["note"],
+                  f"a step event says it was emitted on completion rather than as it "
+                  f"happened -- `_persist_run` rebinds the step list at the end, so there is "
+                  f"nothing to observe mid-flight yet (A-022) ({_d['capability']})")
+            break
+
+    # ── a transport failure is its OWN event, never an abstention ───────────
+    # Forced by replacing the ask verb's handler with one that raises. `event: error` with
+    # `is_abstention: false`, and NO answer event -- a dropped connection must not arrive as
+    # a verified product state.
+    from gateway.verbs import VERBS as _SSE_VERBS
+    _ask_verb = next(v for v in _SSE_VERBS if v.name == "ask")
+    _real_run = _ask_verb.run
+
+    def _boom(args, ctx):
+        raise RuntimeError("the model host closed the connection")
+
+    object.__setattr__(_ask_verb, "run", _boom)
+    try:
+        _bad_lines = []
+        with client.stream("POST", "/v2/ask/stream",
+                           json={"question": "anything at all"}) as _br:
+            for _line in _br.iter_lines():
+                _bad_lines.append(str(_line))
+        _bad_frames = _parse_sse("\n".join(_bad_lines))
+        _bad_names = [n for n, _ in _bad_frames]
+    finally:
+        object.__setattr__(_ask_verb, "run", _real_run)
+    check("error" in _bad_names and "answer" not in _bad_names,
+          f"a raising handler emits `error` and NO `answer` ({_bad_names})")
+    _err = next(d for n, d in _bad_frames if n == "error")
+    check(_err.get("is_abstention") is False and _err.get("code") == "TRANSPORT_FAILED",
+          f"...named a transport failure and explicitly NOT an abstention ({_err.get('code')}, "
+          f"is_abstention={_err.get('is_abstention')})")
+    check("nothing follows about the law" in _err.get("note", ""),
+          f"...and the note says why that distinction matters: an abstention means we read "
+          f"the law and could not answer ({_err.get('note', '')[:70]}…)")
+    check(_bad_names[0] == "accepted",
+          "...and `accepted` still went out first, so a client that saw the stream open "
+          "learns the failure rather than hanging")
+    check(_ask_verb.run is _real_run,
+          "the probe RESTORED the real handler -- a self-test that leaves a verb patched "
+          "poisons every check after it, which this file has been bitten by before")
+
+    # ── the non-streaming route is untouched ────────────────────────────────
+    _plain = client.post("/v2/ask",
+                         json={"question": "What is the time limit for filing the annual "
+                                           "return under section 92?"})
+    check(_plain.status_code == 200
+          and "application/json" in _plain.headers.get("content-type", ""),
+          f"/v2/ask still returns ONE JSON object: the stream is additive, and a caller "
+          f"that wants an object gets one ({_plain.status_code}, "
+          f"{_plain.headers.get('content-type')})")
+
+    # The stream is behind the SAME gate as everything else. A streaming route that forgot
+    # the auth or the rate limiter would be a way around it.
+    check(anon.post("/v2/ask/stream", json={"question": "x"}).status_code == 401,
+          "an unauthenticated stream request is 401, like every other /v2 route")
 
     # ── the serialiser is stated, because byte-identity needs an encoding ───
     check(dumps({"b": 1, "a": "é"}) == b'{"b":1,"a":"\xc3\xa9"}',
