@@ -42,6 +42,17 @@ MD
 # here. The old block below tried `cd frontend` and failed on every run.
 
 echo
+# Git merge drivers for the three files two branches always churn on. Registered in the
+# LOCAL .git/config (never committed); .gitattributes selects them. Idempotent.
+echo "  registering merge drivers (suite_floors / TASKS / REPO_MAP)"
+git config merge.suitefloors.name "max floor per suite" || true
+git config merge.suitefloors.driver "python3 scripts/merge_suite_floors.py %O %A %B" || true
+git config merge.tasks-union.name "union of TASKS ledger rows" || true
+git config merge.tasks-union.driver "python3 scripts/merge_tasks.py %O %A %B" || true
+git config merge.repomap.name "regenerate docs/REPO_MAP.md" || true
+git config merge.repomap.driver "python3 scripts/merge_repo_map.py %A" || true
+echo
+
 python3 scripts/index_codebase.py | head -3
 echo
 ./scripts/run_tests.sh | tail -3

@@ -37,7 +37,10 @@ RING_LABEL = {0: "R0 legal core", 1: "R1 bookmark", 2: "R2 feeds", 3: "R3 infere
 
 def tracked_python() -> list[str]:
     out = subprocess.check_output(["git", "ls-files", "*.py"], cwd=ROOT, text=True)
-    return sorted(p for p in out.split("\n") if p)
+    # `set`, not just `sorted`: during a merge `git ls-files` prints a conflicted path
+    # once per stage (1, 2, 3), so an unmerged module would otherwise be listed three
+    # times and counted three times. Dedup makes the map deterministic mid-merge.
+    return sorted({p for p in out.split("\n") if p})
 
 
 def first_line(path: Path) -> str:
@@ -123,6 +126,9 @@ def _test() -> None:
     files = tracked_python()
     text = render(files)
     check(len(files) > 100, f"the walk finds the codebase ({len(files)} files)")
+    check(len(files) == len(set(files)),
+          "the module list has no duplicates -- git ls-files prints a conflicted path "
+          "once per stage, and the map must not list or count it three times")
     check("`checker/scope.py`" in text, "the scope register is listed")
     check("`gateway/verbs.py`" in text, "the verb table is listed")
     check("R0 legal core" in text, "ring labels come from checker/rings.py")
@@ -130,20 +136,16 @@ def _test() -> None:
     check(first_line(ROOT / "checker" / "scope.py") != "(no docstring)",
           "a documented module shows its purpose")
 
-    # ── the committed map is current ────────────────────────────────────────
-    ok, line = check_current()
-    check(ok, f"docs/REPO_MAP.md matches the code ({line})")
-    # And the message `--check` prints must carry a count in BOTH states, or the harness
-    # marks the passing run as nocount=FAIL. Asserted rather than assumed: this is the
-    # property that lets the check live in the gate at all.
+    # The gate no longer REQUIRES the committed map to be byte-in-sync: it is a generated
+    # index, resolved on merge by scripts/merge_repo_map.py, and enforcing sync on every
+    # branch was the REPO_MAP half of the merge churn this removed. `check_current()` and
+    # `--check` stay for anyone (or CI) who wants them; what is still asserted is that they
+    # answer with a readable count line in BOTH states, so --check never reads as nocount.
+    import re as _re
     for text in (check_current()[1],
-                 "0/1 passed — docs/REPO_MAP.md is out of date: run "
-                 "python3 scripts/repo_map.py"):
-        import re as _re
+                 "0/1 passed — docs/REPO_MAP.md is out of date: run python3 scripts/repo_map.py"):
         check(bool(_re.search(r"\d+/\d+ passed", text)),
-              f"--check prints a count line the harness can read ({text[:40]!r})")
-    check("1/1" in check_current()[1] or "0/1" in check_current()[1],
-          "...and the count reflects the verdict rather than being decoration")
+              f"--check still prints a readable count line ({text[:40]!r})")
 
     # Newly-added modules must appear. A map that silently omits a file is the stale map
     # this generator replaced.

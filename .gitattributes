@@ -1,0 +1,11 @@
+# Generated / ratcheted files whose merge conflicts are mechanical. A git merge driver
+# resolves each one the single correct way, so two branches no longer churn on them.
+# The drivers are registered in .git/config by setup.sh (and are a no-op clone-side until
+# then: git falls back to an ordinary conflict, which is safe, just manual).
+#
+#   suitefloors  — max floor per suite, keeping capability gates   (scripts/merge_suite_floors.py)
+#   tasks-union  — union of ledger rows                            (scripts/merge_tasks.py)
+#   repomap      — regenerate from the tree                        (scripts/merge_repo_map.py)
+scripts/suite_floors.json merge=suitefloors
+research/TASKS.md         merge=tasks-union
+docs/REPO_MAP.md          merge=repomap

@@ -59,8 +59,9 @@ To add a new suite:
 2. Add its path to the `suites=(...)` list in `scripts/run_tests.sh`.
 3. If it needs a minimum check count, add a floor to `scripts/suite_floors.json`. The harness
    fails a suite that prints fewer checks than its floor, so a test cannot quietly shrink.
-4. Run `python3 scripts/repo_map.py` to regenerate [docs/REPO_MAP.md](docs/REPO_MAP.md). The
-   gate fails when the map is stale.
+4. Run `python3 scripts/repo_map.py` to regenerate [docs/REPO_MAP.md](docs/REPO_MAP.md) so the
+   index names your module. This is no longer gate-enforced — the map is a generated index,
+   regenerated on merge by a driver (see below) — but a current map is still courteous.
 
 ## Before you push
 
@@ -126,6 +127,23 @@ A Docker `python:3.11` container with the same steps works too. A suite that pas
 laptop and fails here is reading something the clone lacks — fix it (commit the file if its
 licence allows, have `setup.sh` fetch it, or report BLOCKED with the reason), never lower a
 floor to hide it.
+
+## Three files resolve their own merge conflicts
+
+Two branches both ratchet floors, append task rows and regenerate the repo map, so a merge
+used to conflict on these three files every time — and each had exactly one correct
+resolution. That resolution is now a git merge driver, selected by `.gitattributes`:
+
+| File | Driver | Resolution |
+|---|---|---|
+| `scripts/suite_floors.json` | `scripts/merge_suite_floors.py` | the **max** floor per suite, keeping capability gates |
+| `research/TASKS.md` | `scripts/merge_tasks.py` | a three-way merge, conflicts **unioned** by ledger-row id (ours wins a clash) |
+| `docs/REPO_MAP.md` | `scripts/merge_repo_map.py` | both sides discarded, **regenerated** from the tree |
+
+The drivers live in your **local** `.git/config` and `setup.sh` registers them — they are
+never committed, so a clone that has not run `setup.sh` simply falls back to an ordinary
+conflict (safe, just manual). Run `setup.sh` once after cloning. Each driver has a self-test
+in the gate (`scripts/merge_*.py --test`).
 
 ## Documents
 
