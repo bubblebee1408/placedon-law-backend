@@ -95,3 +95,6 @@ corpus/.observations/
 corpus/benchmark/cuad/CUADv1.json
 corpus/benchmark/cuad/train_separate_questions.json
 corpus/benchmark/cuad/data.zip
+
+# runtime single-gate lock (scripts/gate_lock.py)
+.gate.lock

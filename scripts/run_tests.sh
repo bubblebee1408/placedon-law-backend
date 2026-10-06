@@ -8,6 +8,31 @@ set -uo pipefail
 cd "$(dirname "$0")/.."
 export PYTHONPATH="$PWD"
 
+# ── one gate at a time, enforced by a lock (not by a fixed port) ──────────────
+# The test servers bind port 0 now, so the old fixed-port collision no longer serialises
+# gates. This does, explicitly: an exclusive flock on .gate.lock, held via fd 9 for the whole
+# run and released automatically on exit. A second, overlapping gate is told so and exits
+# WITHOUT running -- never a spurious FAIL, and never two gates clobbering one Postgres or
+# one another's state.
+# Guarded on the helper existing: scripts/harness_selftest.py copies THIS script to a temp
+# dir and runs it from another cwd to prove the gate names which suite failed, and there
+# `scripts/gate_lock.py` does not resolve. A copy that cannot find the helper simply runs
+# without the lock -- the lock serialises real gates, it is not a correctness check.
+# `PLACEDON_GATE_LOCKED` marks a run that already holds the lock, so a NESTED gate does not
+# contend with its parent: scripts/harness_selftest.py runs a copy of this script (cwd=ROOT)
+# to prove suite reporting, and that copy would otherwise collide on the one .gate.lock the
+# outer gate holds and refuse to start. A genuinely separate second gate runs in a fresh
+# shell without the variable, so it still contends -- which is the point.
+if [ -f scripts/gate_lock.py ] && [ -z "${PLACEDON_GATE_LOCKED:-}" ]; then
+    exec 9>".gate.lock"
+    if ! python3 scripts/gate_lock.py 9; then
+        echo "another gate is running -- this gate did not start (one gate at a time)."
+        echo "Re-run it once the other finishes; nothing ran, so this is not a result."
+        exit 0
+    fi
+    export PLACEDON_GATE_LOCKED=1
+fi
+
 # ── Dependencies first, because a missing one is not a failing test ───────────
 # Reported 2026-09-27 from an environment without pypdf: the sweep said
 # "checker/sarvam_model.py FAIL" with NO result line, because sarvam_selftest reached an
@@ -257,6 +282,7 @@ extra+=("scripts/serve_ask.py --test")
 extra+=("checker/span_inventory.py --test")
 # The harness's own reproduction of the 2026-09-30 incident.
 extra+=("scripts/harness_selftest.py --test")
+extra+=("scripts/gate_lock.py --test")
 extra+=("scripts/suite_floors.py --test")
 # The git merge drivers that resolve the three files two branches always churn on.
 extra+=("scripts/merge_suite_floors.py --test" "scripts/merge_tasks.py --test" "scripts/merge_repo_map.py --test")
