@@ -4555,10 +4555,25 @@ def _test() -> None:
     _st = _MB()
     _cctx = Context(store=_st, clock=lambda: "2026-10-01T00:00:00+00:00")
     _V = by_name()
+    from agents import research_question as _rq_c2
+
+    def _csend(args: dict) -> dict:
+        """conversation.send with the deterministic research stand-in, on the SHARED store.
+
+        A RESEARCH_QUESTION calls a model. With no stand-in the gate made a REAL, load
+        -sensitive call that raised under load and returned FAILED with empty bodies -- the
+        flake. The stand-in quotes the question's REAL retrieved sources, so retrieval, scope
+        and the envelope all still run; only the model is deterministic, exactly as the other
+        gate checks do via `_send_research`. No `text` (or no retrievable law) -> no stand-in,
+        so non-research turns and abstentions are unchanged.
+        """
+        _srcs = tuple(s for s, _o in _rq_c2.evidence(args.get("text", "")))
+        _ctx = Context(store=_st, clock=lambda: "2026-10-01T00:00:00+00:00",
+                       model_for=((lambda _o: _rq_c2.quoting_model(_srcs)) if _srcs else None))
+        return _V["conversation.send"].run(args, _ctx)
 
     # The envelope validates for every task conversation.send can produce.
-    _r = _V["conversation.send"].run(
-        {"text": "What is the quorum for a meeting of the Board?"}, _cctx)
+    _r = _csend({"text": "What is the quorum for a meeting of the Board?"})
     _cid = _r["conversation_id"]
     _e = _r["envelope"]
     check(_ev.errors(_e) == [], f"conversation.send returns a VALID envelope ({_ev.errors(_e)})")
@@ -4573,7 +4588,7 @@ def _test() -> None:
                                         "event": "share_allotment"}),
                       ("COMPANY_STANDING", {"text": "Are we compliant with our filings?"}),
                       ("LAW_CHANGES", {"text": "What changed in the Act since April 2024?"})]:
-        _o = _V["conversation.send"].run({**_args, "conversation_id": _cid}, _cctx)
+        _o = _csend({**_args, "conversation_id": _cid})
         check(_ev.errors(_o["envelope"]) == [],
               f"the envelope validates for {_t} ({_ev.errors(_o['envelope'])[:1]})")
         check(_o["envelope"]["task"] == _t, f"...and its task is {_t}")
