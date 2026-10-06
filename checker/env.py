@@ -26,6 +26,19 @@ ROOT = Path(__file__).resolve().parent.parent
 DEFAULT = ROOT / ".env"
 
 
+# The gate runs keyless on purpose (scripts/run_tests.sh sets PLACEDON_GATE_NO_KEYS): a suite
+# that secretly needs a model/provider key must fail on a dev laptop, not only on a fresh
+# clone with no .env. When the flag is set, .env never supplies one of these -- live, keyed
+# runs go through `--live`, which does not set the flag.
+_KEYLESS_PREFIXES = ("ANTHROPIC_", "AZURE_AI_", "GEMINI_", "GOOGLE_", "SARVAM_", "VOYAGE_", "AWS_")
+_KEYLESS_NAMES = ("PLACEDON_INDIANKANOON_KEY", "PLACEDON_DATA_GOV_IN_KEY")
+
+
+def _is_provider_key(name: str) -> bool:
+    """A model/provider key the keyless gate refuses to load from .env."""
+    return name.startswith(_KEYLESS_PREFIXES) or name in _KEYLESS_NAMES
+
+
 def load(path: Path | None = None, *, override: bool = False) -> tuple[str, ...]:
     """Load KEY=VALUE lines. Returns the names set, never the values."""
     p = path or DEFAULT
@@ -39,6 +52,10 @@ def load(path: Path | None = None, *, override: bool = False) -> tuple[str, ...]
         key, _, value = line.partition("=")
         key, value = key.strip(), value.strip().strip('"').strip("'")
         if not key or (key in os.environ and not override):
+            continue
+        if os.environ.get("PLACEDON_GATE_NO_KEYS") and _is_provider_key(key):
+            # Keyless gate: do not supply a provider key from .env, so a suite that needs
+            # one fails here rather than only on a keyless fresh clone.
             continue
         os.environ[key] = value
         out.append(key)
@@ -91,6 +108,34 @@ def _test() -> None:
         check("abc123" not in r and "set (6 chars" in r,
               f"report names the key and its length, never its value: {r.strip()}")
         for k in ("FOO_TEST_KEY", "BAR_TEST"):
+            os.environ.pop(k, None)
+
+    # The keyless gate: with PLACEDON_GATE_NO_KEYS set, .env must NOT supply a provider key,
+    # so a suite that secretly needs one fails on the laptop, not only on a fresh clone.
+    with tempfile.TemporaryDirectory() as td:
+        p = Path(td) / ".env"
+        p.write_text("ANTHROPIC_API_KEY=secret\nAWS_SECRET_ACCESS_KEY=s\n"
+                     "PLACEDON_INDIANKANOON_KEY=ik\nPLACEDON_DATABASE_URL=postgresql:///x\n")
+        for k in ("ANTHROPIC_API_KEY", "AWS_SECRET_ACCESS_KEY",
+                  "PLACEDON_INDIANKANOON_KEY", "PLACEDON_DATABASE_URL"):
+            os.environ.pop(k, None)
+        os.environ["PLACEDON_GATE_NO_KEYS"] = "1"
+        try:
+            loaded = set(load(p))
+        finally:
+            os.environ.pop("PLACEDON_GATE_NO_KEYS", None)
+        check(_is_provider_key("ANTHROPIC_API_KEY") and _is_provider_key("AWS_SECRET_ACCESS_KEY")
+              and _is_provider_key("PLACEDON_INDIANKANOON_KEY")
+              and not _is_provider_key("PLACEDON_DATABASE_URL"),
+              "provider keys are recognised by prefix/name; a DB url is not one")
+        check("ANTHROPIC_API_KEY" not in loaded and "AWS_SECRET_ACCESS_KEY" not in loaded
+              and "PLACEDON_INDIANKANOON_KEY" not in loaded,
+              f"keyless gate drops every provider key from .env ({sorted(loaded)})")
+        check("PLACEDON_DATABASE_URL" in loaded,
+              "...but a non-key .env value (the DB url) still loads, so the gate keeps its "
+              "non-secret configuration")
+        for k in ("ANTHROPIC_API_KEY", "AWS_SECRET_ACCESS_KEY",
+                  "PLACEDON_INDIANKANOON_KEY", "PLACEDON_DATABASE_URL"):
             os.environ.pop(k, None)
 
     check(load(Path("/nonexistent/.env")) == (),

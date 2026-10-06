@@ -6452,23 +6452,40 @@ def _test() -> None:
     # id changes when a byte changes. So the run rows of two deployments on different corpora
     # cannot be equal. What is checked here is the join: that a run's stored versions really
     # are those blob ids, for the records it really read.
+    # The gate runs with NO model key (STEP 4a: deterministic stand-ins everywhere), so these
+    # asks use the research stand-in. Without it they refuse NO_MODEL *before* retrieval records
+    # law_versions, and a fresh clone with no .env goes RED where a dev laptop with a key is
+    # green -- which is exactly the fresh-clone promise this restores.
+    from agents import research_question as _t1_rq
+
+    def _t1_context(_q, _store):
+        _srcs = tuple(s for s, _o in _t1_rq.evidence(_q))
+        return Context(store=_store,
+                       model_for=((lambda _o: _t1_rq.quoting_model(_srcs)) if _srcs else None))
+
+    _t1_q = ("What is the time limit for filing the annual return under section 92?")
     _t1_store = _MB()
-    _t1_ask = _ask({"question": "What is the time limit for filing the annual return "
-                                "under section 92?"},
-                   Context(store=_t1_store))
+    _t1_ask = _ask({"question": _t1_q}, _t1_context(_t1_q, _t1_store))
     _t1_run = _t1_store.read_run(_t1_ask.get("run_id")) or {}
     _t1_lv = _t1_run.get("law_versions") or {}
     check(_t1_lv and all(k.startswith("corpus/") for k in _t1_lv),
           f"an `ask` run records WHICH held records it read, by repo-relative path "
           f"({sorted(_t1_lv)[:2]})")
+    _t1_first = (list(_t1_lv.values()) or ["(none)"])[0]
     check(_t1_lv == _lv_blob_ids(sorted(_t1_lv)),
           f"...and every recorded version IS that file's blob id today -- so a corpus whose "
           f"bytes change necessarily gives a different run row, which is the whole of "
           f"'two runs on different corpora are distinguishable' "
-          f"({list(_t1_lv.values())[0][:12]}…)")
+          f"({_t1_first[:12]}…)")
+    _t1_llp = "What does the LLP Act 2008 say about designated partners?"
     _t1_refused = _MB()
-    _t1_out = _ask({"question": "What does the LLP Act 2008 say about designated partners?"},
-                   Context(store=_t1_refused))
+    # A DECLINING stand-in, not the quoting one: the real model refused this out-of-held-scope
+    # question, whereas a quoting stand-in would answer from a near-miss record. The decline
+    # drives REFUSED while retrieval still records law_versions -- "read the law, found no
+    # answer", which is exactly what the next check asserts.
+    _t1_decline = Context(store=_t1_refused,
+                          model_for=lambda _o: (lambda _p: "No held provision answers this."))
+    _t1_out = _ask({"question": _t1_llp}, _t1_decline)
     _t1_rrun = _t1_refused.read_run(_t1_out.get("run_id")) or {}
     check(_t1_rrun.get("status") == "REFUSED" and (_t1_rrun.get("law_versions") or {}),
           f"a REFUSED run records them too: an abstention rests on having read the law and "
