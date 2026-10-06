@@ -74,6 +74,17 @@ if [ "${1:-}" = "--live" ]; then
   exec python3 gateway/verbs.py --live
 fi
 
+# ── keyless by construction ───────────────────────────────────────────────────
+# The gate must NEVER depend on a model/provider key: a suite that secretly needs one has to
+# fail HERE, on a dev laptop, not only on a fresh clone with no .env. Before any suite runs,
+# unset every provider key from the shell AND tell checker/env.py not to supply one from .env
+# (PLACEDON_GATE_NO_KEYS). The `--live` path above exec'd already and keeps its keys.
+for _name in $(env | sed -nE 's/^(ANTHROPIC_[A-Za-z0-9_]*|AZURE_AI_[A-Za-z0-9_]*|GEMINI_[A-Za-z0-9_]*|GOOGLE_[A-Za-z0-9_]*|SARVAM_[A-Za-z0-9_]*|VOYAGE_[A-Za-z0-9_]*|AWS_[A-Za-z0-9_]*)=.*/\1/p'); do
+  unset "$_name" 2>/dev/null || true
+done
+unset PLACEDON_INDIANKANOON_KEY PLACEDON_DATA_GOV_IN_KEY 2>/dev/null || true
+export PLACEDON_GATE_NO_KEYS=1
+
 suites=(
   checker/acquisition_log.py
   checker/amendment.py

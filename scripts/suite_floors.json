@@ -93,7 +93,7 @@
     "checker/entail_substitution.py": 17,
     "checker/entailment_gate.py": 12,
     "checker/entity_graph.py": 23,
-    "checker/env.py": 7,
+    "checker/env.py": 10,
     "checker/eval_taxonomy.py": 14,
     "checker/event_log.py": 50,
     "checker/events.py": 35,
