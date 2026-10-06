@@ -340,9 +340,13 @@ def _test() -> None:
     from checker.lawyer_summary import Source
     from checker.quoted_span import QUOTE_TAG, SENTENCE_TAG, blocks
 
+    # HELD: `corpus/companies_act/` text, the one tier that may verify a statement of law.
+    # move 7 made `Source.tier` required rather than defaulted, so this had to be stated --
+    # which is the point: a default would have handed the verifying tier to whoever forgot.
+    from checker.tier_rules import HELD
     SRC = (Source("ca2013-s96", "STATUTE",
                   "Every company shall in each year hold in addition to any other "
-                  "meetings a general meeting as its annual general meeting."),)
+                  "meetings a general meeting as its annual general meeting.", HELD),)
 
     def pair(sentence: str, quote: str) -> str:
         return f"{SENTENCE_TAG} {sentence}\n{QUOTE_TAG} {quote}"

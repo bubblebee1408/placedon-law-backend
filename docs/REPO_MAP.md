@@ -119,6 +119,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `checker/instrument_registry.py` | R0 legal core | Which instruments are on record at all, and which of them a person has read. |
 | `checker/interval.py` |  | Honest error bars, in the standard library. |
 | `checker/lattice.py` |  | Ordinal state algebra — one implementation of "the worst thing wins". |
+| `checker/law_versions.py` |  | Which law answered: the corpus by content, and the instruments that amended it. |
 | `checker/lawyer_summary.py` |  | The lawyer summary: a sentence is traced to a span, or it is refused and shown as refused. |
 | `checker/legal_ref.py` |  | Instrument-qualified references for Indian legal provisions. |
 | `checker/legal_retrieval.py` |  | Exact/structural retrieval: turn what a lawyer typed into the provisions they named. |
@@ -201,9 +202,12 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `checker/sources/case_law.py` | R2 feeds | Case-law search over the open eCourts judgment metadata. LICENSED, and kept apart. |
 | `checker/sources/client.py` | R2 feeds | CLIENT: the tenant's own uploads. The document under review, never an authority. |
 | `checker/sources/company_facts.py` | R2 feeds | Company facts with the basis they rest on, and a confirmation before anything uses them. |
+| `checker/sources/connector_base.py` | R2 feeds | G1: what every keyed connector shares, and why a missing key RAISES. |
 | `checker/sources/contract.py` | R2 feeds | The five rules `checker/sources/` must obey, tested as one suite. |
+| `checker/sources/data_gov_in.py` | R2 feeds | data.gov.in (OGD): a skeleton waiting for its key. OFFICIAL_LIVE — read today, not dated. |
 | `checker/sources/evidence.py` | R2 feeds | One result from one source, with everything needed to distrust it correctly. |
 | `checker/sources/held.py` | R2 feeds | HELD: our own hash-stamped corpus. The only tier that can make an answer VERIFIED. |
+| `checker/sources/indiankanoon.py` | R2 feeds | Indian Kanoon: a skeleton waiting for its key. LICENSED tier — it can never VERIFY. |
 | `checker/sources/judgments_open.py` | R2 feeds | eCourts judgments from the AWS Open Data buckets. Keyless, LICENSED, never VERIFIED. |
 | `checker/sources/mca_fixture.py` | R2 feeds | A synthetic MCA "Company Master Data" PDF, written by hand, for testing the parser. |
 | `checker/sources/mca_master_data.py` | R2 feeds | Read an MCA "Company Master Data" page the USER downloaded and uploaded to us. |
@@ -217,6 +221,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `checker/structural_retrieve.py` |  | Structural retrieval — resolve a query to the statute chunks it admits. |
 | `checker/sweep.py` |  | Run an instrument backwards across a folder — the query a practitioner has. |
 | `checker/text_search.py` |  | Title + body search over the Companies Act 2013 corpus, for users who do not know the number. |
+| `checker/tier_rules.py` | R0 legal core | The five tiers and the one that can verify. RING 0 — the rule, not the connectors. |
 | `checker/timeline.py` |  | Amendment timeline for a Companies Act section. |
 | `checker/trust.py` |  | X.509 chain validation against the Indian government's own root certificates. |
 | `checker/vault_search.py` |  | BM25 over a vault's chunks, per tenant, with each chunk told where it came from. |
@@ -316,6 +321,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/cross_validate_corpus.py` |  | Compare the two renderings of the Companies Act we already hold. |
 | `scripts/date_properties.py` |  | Thousands of seeded random dates over every DerivedDate rule, checking stated properties. |
 | `scripts/demo.py` |  | One command: walk the whole product on synthetic data, and say pass or fail. |
+| `scripts/demo_e2e.py` |  | The whole product, end to end, against the real gateway. PASS / BLOCKED / FAIL. |
 | `scripts/demo_inhouse.py` |  | The in-house lawyer's day, end to end, on synthetic data. |
 | `scripts/failure_report.py` |  | Weekly counts of why runs did not answer. |
 | `scripts/find_commencement.py` |  | Find which notification commenced a given section of an amending Act. |
@@ -372,4 +378,4 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/watch_gazette.py` |  | Run the Gazette watcher once: what did the Gazette publish since we last looked? |
 | `scripts/watch_ofac.py` |  | Poll OFAC's SDN list and report what CHANGED since the last trustworthy poll. |
 
-332 modules listed.
+338 modules listed.

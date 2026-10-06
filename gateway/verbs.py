@@ -602,14 +602,11 @@ def law_versions_of(paths) -> dict[str, str]:
     bytes on disk (git's own blob formula), not from HEAD: it records what was read.
     A path that cannot be read raises -- a missing version is not an empty one.
     """
-    import hashlib
-    from pathlib import Path
-    root = Path(__file__).resolve().parent.parent
-    out = {}
-    for rel in paths:
-        data = (root / rel).read_bytes()
-        out[rel] = hashlib.sha1(b"blob %d\0" % len(data) + data).hexdigest()
-    return out
+    # DELEGATED to checker/law_versions, which is where the formula now lives once -- Ring 0
+    # may not import Ring 2, so this is the legal direction. It used to be a second copy of
+    # git's blob formula, and move 6 was about to add a THIRD under a different name.
+    from checker.law_versions import blob_ids
+    return blob_ids(paths)
 
 
 # What review_document applies. The checks are CODE (checker/ss/defects.py) and that is a
@@ -6234,6 +6231,54 @@ def _test() -> None:
               and len(_t4_store.read_document_checks()) == _t4_before,
               "a document we could not read records NO check -- a judgement in the audit "
               "record where there was none would be worse than none")
+    # ── move 6: ONE identity for held text, and it is the checker's ─────────
+    # `008_decision_evidence.sql` fixed the identity for `runs.law_versions`: "the same
+    # identity `public_only.Origin.blob` carries, so O7 (recall) and the O9 (answer cache)
+    # compare one thing." `law_versions_of` used to carry its own copy of git's blob formula,
+    # and move 6 was about to add a THIRD under a different name. It now delegates to
+    # `checker/law_versions`. This check is HERE rather than there because `checker/rings.py`
+    # refuses a Ring 0 module that reaches Ring 2 -- and caught the import even inside a test.
+    from checker.law_versions import blob_ids as _lv_blob_ids
+    check(law_versions_of(SS_TEXTS) == _lv_blob_ids(SS_TEXTS),
+          f"`law_versions_of` and checker/law_versions agree EXACTLY, because there is one "
+          f"implementation and this is the delegation "
+          f"({list(law_versions_of(SS_TEXTS).values())[0][:12]}…)")
+    check(all(len(v) == 40 for v in law_versions_of(SS_TEXTS).values()),
+          "...and it is still a 40-hex git blob id, the shape 008's column stores")
+    import inspect as _t1_inspect
+    check("sha1" not in _t1_inspect.getsource(law_versions_of),
+          "...and the formula is not duplicated here any more -- a second copy is a second "
+          "identity waiting to drift")
+
+    # move 6's done-when: "two runs on different corpus hashes are distinguishable". Proved
+    # by composition rather than by mutating the real corpus, which a test must never do.
+    # A run records the BLOB ID of each record it read; `checker/law_versions` proves a blob
+    # id changes when a byte changes. So the run rows of two deployments on different corpora
+    # cannot be equal. What is checked here is the join: that a run's stored versions really
+    # are those blob ids, for the records it really read.
+    _t1_store = _MB()
+    _t1_ask = _ask({"question": "What is the time limit for filing the annual return "
+                                "under section 92?"},
+                   Context(store=_t1_store))
+    _t1_run = _t1_store.read_run(_t1_ask.get("run_id")) or {}
+    _t1_lv = _t1_run.get("law_versions") or {}
+    check(_t1_lv and all(k.startswith("corpus/") for k in _t1_lv),
+          f"an `ask` run records WHICH held records it read, by repo-relative path "
+          f"({sorted(_t1_lv)[:2]})")
+    check(_t1_lv == _lv_blob_ids(sorted(_t1_lv)),
+          f"...and every recorded version IS that file's blob id today -- so a corpus whose "
+          f"bytes change necessarily gives a different run row, which is the whole of "
+          f"'two runs on different corpora are distinguishable' "
+          f"({list(_t1_lv.values())[0][:12]}…)")
+    _t1_refused = _MB()
+    _t1_out = _ask({"question": "What does the LLP Act 2008 say about designated partners?"},
+                   Context(store=_t1_refused))
+    _t1_rrun = _t1_refused.read_run(_t1_out.get("run_id")) or {}
+    check(_t1_rrun.get("status") == "REFUSED" and (_t1_rrun.get("law_versions") or {}),
+          f"a REFUSED run records them too: an abstention rests on having read the law and "
+          f"not found the answer, and a reader six months later needs to know which text "
+          f"that was ({_t1_rrun.get('status')}, "
+          f"{len(_t1_rrun.get('law_versions') or {})} record(s))")
 
     # ── the human gate: runs.approve / runs.reject ──────────────────────────
     dstore = _MB()

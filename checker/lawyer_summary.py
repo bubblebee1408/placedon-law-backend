@@ -170,6 +170,10 @@ CITATION_NOT_IN_EVIDENCE = "CITATION_NOT_IN_EVIDENCE"
 SPAN_OUT_OF_RANGE = "SPAN_OUT_OF_RANGE"
 SPAN_MISQUOTED = "SPAN_MISQUOTED"
 SPAN_VACUOUS = "SPAN_VACUOUS"
+# move 7 (T2). The span is real, the quote matches, and the source is not primary law we
+# hold. A REFUSAL and not a downgrade: the sentence may be perfectly true and well quoted,
+# and the only false thing is the claim that WE have verified it.
+TIER_CANNOT_VERIFY = "TIER_CANNOT_VERIFY"
 TERMS_NOT_IN_SPAN = "TERMS_NOT_IN_SPAN"
 LAW_FROM_DOCUMENT = "LAW_FROM_DOCUMENT"
 SPAN_OVERBROAD = "SPAN_OVERBROAD"
@@ -180,7 +184,8 @@ UNDETERMINED_AS_ESTABLISHED = "UNDETERMINED_AS_ESTABLISHED"
 # and the only thing this module changes is WHAT counts as verified material: here it is the
 # span this sentence cited, which is a far narrower bar than the whole document. A second
 # vocabulary for one failure is how two names for one thing start disagreeing.
-VERDICTS = (TRACED, ENTAILED, NO_CITATION, CITATION_NOT_IN_EVIDENCE, SPAN_OUT_OF_RANGE,
+VERDICTS = (TRACED, ENTAILED, TIER_CANNOT_VERIFY,
+            NO_CITATION, CITATION_NOT_IN_EVIDENCE, SPAN_OUT_OF_RANGE,
             SPAN_MISQUOTED, SPAN_VACUOUS, SPAN_OVERBROAD, TERMS_NOT_IN_SPAN,
             UNDETERMINED_AS_ESTABLISHED,
             LAW_FROM_DOCUMENT,
@@ -292,14 +297,38 @@ class Source:
     source_id: str
     kind: str
     text: str
+    # move 7 (T2). WHICH TIER of evidence this is -- `checker/tier_rules.TIERS`. Only HELD
+    # may make a claim VERIFIED.
+    #
+    # REQUIRED, with no default, and that is the whole design. A `HELD` default hands the
+    # verifying tier to the next person who forgets the argument, which is exactly the person
+    # this guard exists to protect -- and move 17 is about to add two connectors. A
+    # least-privileged default would be safe and SILENT: existing statute sources would stop
+    # verifying and the gate would report it somewhere unrelated. Required means every
+    # construction site states what kind of evidence it is holding, and nothing new can be
+    # built without answering the question.
+    tier: str
     undetermined: tuple[tuple[int, int], ...] = ()
 
     def overlaps_undetermined(self, start: int, end: int) -> bool:
         return any(start < hi and lo < end for lo, hi in self.undetermined)
 
+    @property
+    def can_verify(self) -> bool:
+        """May a claim resting on this source be called VERIFIED? Delegated, never decided."""
+        from checker.tier_rules import can_verify
+        return can_verify(self.tier)
+
     def __post_init__(self) -> None:
         if self.kind not in KINDS:
             raise ValueError(f"{self.kind!r} is not an evidence kind; one of {KINDS}")
+        # Raises on an unknown tier rather than defaulting. `tier_rules.can_verify` explains
+        # why: returning False for a typo would be the safe direction AND would swallow
+        # `tier="Held"`, a caller right by accident while its tier string is wrong everywhere
+        # else it is used.
+        from checker.tier_rules import TIERS
+        if self.tier not in TIERS:
+            raise ValueError(f"{self.tier!r} is not a tier; one of {TIERS}")
 
 
 @dataclass(frozen=True)
@@ -409,8 +438,13 @@ class Summary:
 
 
 def document_source(doc_id: str, text: str) -> Source:
-    """The checked document, exactly as it will be sent. Never wrapped, never trimmed."""
-    return Source(doc_id, DOCUMENT, text)
+    """The checked document, exactly as it will be sent. Never wrapped, never trimmed.
+
+    CLIENT tier: "It is the question, not the answer" (`checker/tier_rules`). A duty read out
+    of the client's own recital is the client's recital, however well quoted.
+    """
+    from checker.tier_rules import CLIENT
+    return Source(doc_id, DOCUMENT, text, CLIENT)
 
 
 def engine_source(turn: dict) -> Source:
@@ -466,7 +500,12 @@ def engine_source(turn: dict) -> Source:
     # which run. A digest of the rendered text is stable, reproducible and unambiguous.
     ident = turn.get("turn_id") or ("sha256:" + hashlib.sha256(
         text.encode("utf-8")).hexdigest()[:12])
-    return Source(f"engine:{ident}", ENGINE, text, tuple(undetermined))
+    # HELD: an engine turn is this repository's own rendering of the held Act -- the rows and
+    # provision text that `evidence_pack` admitted, which is the one tier that may verify. The
+    # `undetermined` ranges inside it are what stops a NOT DETERMINED row being quoted as an
+    # obligation; the tier is about where the text came from, not about what it establishes.
+    from checker.tier_rules import HELD
+    return Source(f"engine:{ident}", ENGINE, text, HELD, tuple(undetermined))
 
 
 def sentences_of(text: str) -> tuple[str, ...]:
@@ -580,6 +619,28 @@ def verify_sentence(text: str, citations, sources, *, shares_citation: bool = Fa
     # stale recital. So a law assertion is now checked against the ENGINE spans ALONE. A
     # document span sitting next to one lends it nothing.
     if _LAW_ASSERTION.search(text) and not _REPORTING.search(text):
+        # move 7 (T2). The tier rule belongs HERE and not on every citation, and getting
+        # that wrong first is instructive: a blanket refusal broke document tracing, where
+        # TRACED means "this sentence accurately quotes the document" and asserts nothing
+        # about law. 25 checks in this file went red and every one of them was right.
+        #
+        # This branch is the one that already knows the sentence states what the law
+        # REQUIRES -- rule 8's question, "is this source primary law, or is it somebody's
+        # recital of it?" T2 asks the next question of the same source: is it primary law we
+        # have CHECKED? A LICENSED judgment is law-bearing in kind and unverified in tier,
+        # and before this nothing looked.
+        law_spans = [(s, a) for s, a in spans if s.kind in LAW_BEARING]
+        unverifiable = [s for s, _ in law_spans if not s.can_verify]
+        if law_spans and unverifiable:
+            return no(TIER_CANNOT_VERIFY,
+                      f"this states what the law requires, and the law-bearing source(s) it "
+                      f"cites are "
+                      f"{', '.join(sorted({f'{s.source_id} ({s.tier})' for s in unverifiable}))}"
+                      f" -- not primary law we hold. The span is real and the quote matches; "
+                      f"only HELD may make a statement of law VERIFIED. Refused rather than "
+                      f"downgraded, because the sentence may be perfectly true and what "
+                      f"would be false is the claim that we verified it",
+                      anchors=tuple(anchors))
         engine_spans = [a for s, a in spans if s.kind in LAW_BEARING]
         if not engine_spans:
             return no(LAW_FROM_DOCUMENT,
@@ -1358,8 +1419,9 @@ def _test() -> None:
     _body = ("96. Annual general meeting.\n" + _law + "\nThe meeting shall be held "
              "during business hours, between 9 a.m. and 6 p.m., on a day that is not a "
              "National Holiday, at the registered office of the company.")
-    _stat = Source("Companies Act 2013, s.96", STATUTE, _body)
-    _doc = Source("notice.pdf", DOCUMENT, _body)
+    from checker.tier_rules import CLIENT as _T_CLIENT, HELD as _T_HELD
+    _stat = Source("Companies Act 2013, s.96", STATUTE, _body, _T_HELD)
+    _doc = Source("notice.pdf", DOCUMENT, _body, _T_CLIENT)
     _at = _body.index(_law)
 
     def _cit(src):
@@ -1374,6 +1436,87 @@ def _test() -> None:
           f"({_via_doc.verdict})")
     check(STATUTE in KINDS and set(LAW_BEARING) == {ENGINE, STATUTE},
           "LAW_BEARING names exactly the two kinds that carry primary law")
+
+    # ── move 7 (T2): a LICENSED-only answer cannot reach VERIFIED ───────────
+    # The done-when, built as a SYNTHETIC answer because no connector exists yet -- and that
+    # is why now is the right time. Move 17 adds the Indian Kanoon and data.gov.in
+    # skeletons; a connector landing against an unguarded verifier is how this becomes a
+    # defect nobody notices, and "it cannot happen yet" is not a guard.
+    from checker.tier_rules import CLIENT as _TC, HELD as _TH, LICENSED as _TL
+    _jud = ("In Tata Consultancy Services v. Cyrus Investments the Court observed that a "
+            "company must hold an annual general meeting every year without exception.")
+    _lic = Source("indiankanoon:12345", STATUTE, _jud, _TL)
+    # Long enough that one cited sentence is a small fraction of it: SPAN_OVERBROAD refuses
+    # a citation covering most of a source ("citing most of a source is gesturing at it"),
+    # and a two-line fixture would have failed that check for a reason unrelated to tiers.
+    _held = Source("Companies Act 2013, s.96", STATUTE,
+                   "96. Annual general meeting.\n"
+                   "(1) Every company other than a One Person Company shall in each year "
+                   "hold a general meeting as its annual general meeting and shall specify "
+                   "the meeting as such in the notices calling it, and not more than "
+                   "fifteen months shall elapse between the date of one annual general "
+                   "meeting of a company and that of the next.\n"
+                   "(2) Every annual general meeting shall be called during business hours, "
+                   "that is, between 9 a.m. and 6 p.m. on any day that is not a National "
+                   "Holiday and shall be held either at the registered office of the "
+                   "company or at some other place within the city, town or village in "
+                   "which the registered office of the company is situate.\n", _TH)
+    _claim = "A company must hold an annual general meeting every year without exception."
+    _q = "a company must hold an annual general meeting every year without exception"
+    _at = _jud.index(_q)
+    _v_lic = verify_sentence(_claim, [Citation(0, _at, _at + len(_q), _q)], [_lic])
+    check(_v_lic.verdict == TIER_CANNOT_VERIFY and not _v_lic.traced,
+          f"a statement of law quoting a real, byte-matched span of a LICENSED judgment is "
+          f"{TIER_CANNOT_VERIFY}, NOT traced -- so it can never become VERIFIED "
+          f"({_v_lic.verdict})")
+    check("span is real and the quote matches" in " ".join(_v_lic.reasons),
+          f"...and the refusal says the citation was GOOD and the tier was not, which is "
+          f"the honest finding rather than an implied misquote ({_v_lic.reasons[0][:80]}…)")
+    check(_lic.tier in str(_v_lic.reasons) and "indiankanoon:12345" in str(_v_lic.reasons),
+          "...naming the source and its tier, so a reader can see what was relied on")
+
+    # The same sentence, same words, cited to HELD text: TRACED. The guard is about the
+    # tier and nothing else -- a check that only ever refuses proves nothing.
+    _hq = "not more than fifteen months shall elapse between the date of one annual general meeting"
+    _hat = _held.text.index(_hq)
+    _v_held = verify_sentence("Not more than fifteen months shall elapse between the date "
+                              "of one annual general meeting and that of the next.",
+                              [Citation(0, _hat, _hat + len(_hq), _hq)], [_held])
+    check(_v_held.verdict == TRACED,
+          f"...while the SAME kind of claim cited to HELD text is TRACED, so the guard "
+          f"turns on the tier and not on the sentence ({_v_held.verdict})")
+
+    # A document quote is NOT a statement of law and must still trace. This is the check my
+    # first version broke: a blanket tier refusal on every citation turned 25 of this file's
+    # own checks red, and each was right -- tracing a sentence to the client's document means
+    # "this accurately quotes the document" and asserts nothing about law.
+    _dq = "without exception"
+    _dsrc = Source("notice.pdf", DOCUMENT, _jud, _TC)
+    _dat = _jud.index(_dq)
+    _v_doc = verify_sentence("The notice says the obligation applies without exception.",
+                             [Citation(0, _dat, _dat + len(_dq), _dq)], [_dsrc])
+    check(_v_doc.verdict != TIER_CANNOT_VERIFY,
+          f"a sentence DESCRIBING the client's document is not refused on tier: CLIENT "
+          f"cannot verify law, and quoting a document is not a claim about law "
+          f"({_v_doc.verdict})")
+
+    # Mixed sources: one HELD, one LICENSED. Refused, because an answer is not verified
+    # when part of what it rests on is unverifiable.
+    _v_mix = verify_sentence(_claim, [Citation(1, _at, _at + len(_q), _q)], [_held, _lic])
+    check(_v_mix.verdict == TIER_CANNOT_VERIFY,
+          f"a law claim resting on BOTH held text and a judgment is still refused -- an "
+          f"answer is not verified because some of its support was ({_v_mix.verdict})")
+
+    check(TIER_CANNOT_VERIFY in VERDICTS,
+          "the verdict is in the closed VERDICTS tuple, so no reader meets a state the "
+          "vocabulary does not list")
+    try:
+        Source("x", STATUTE, "t", "Held")
+        check(False, "an unknown tier must raise")
+    except ValueError as e:
+        check("is not a tier" in str(e),
+              f"a near-miss tier string raises rather than defaulting -- `tier=\"Held\"` "
+              f"would otherwise be a caller right by accident ({str(e)[:50]}…)")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:
