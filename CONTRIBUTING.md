@@ -76,6 +76,57 @@ python3 scripts/repo_map.py        # if you added, removed or renamed a module
 - Compare the result with `main`'s. A failure that is red on `main` too is not yours, but say
   so in the PR.
 
+### The gate is deterministic: no keys, no paid calls, no network
+
+The gate uses deterministic model stand-ins everywhere, so it gives the **same result on
+every machine** — a laptop with keys in `.env`, a fresh clone with none, or CI. The stand-ins
+replace only the model; retrieval, quote byte-matching, the critic and the envelope all run
+for real. So a green gate never depended on a key and never made a paid call.
+
+```bash
+./scripts/run_tests.sh --live      # opt-in: the gateway conversation.send checks against the
+                                   # REAL provider. NOT part of the gate — it touches no floors
+                                   # and makes paid calls. Needs a model key in .env; with none
+                                   # it prints BLOCKED and exits 0 (not a failure).
+```
+
+Run `--live` when you change the model path and want to confirm the live provider still yields
+the statuses the stand-ins stand for (ANSWERED, PARTIAL, NEEDS_LAWYER). It is never required
+for a green gate.
+
+### A floor may be gated on a capability
+
+`scripts/suite_floors.json` entries are usually a number. A suite whose check count depends on
+an optional import (e.g. `sentence_transformers`, which is in no requirements file) uses a
+gated floor instead:
+
+```json
+"checker/dense_index.py": {"floor": 8, "requires": "sentence_transformers",
+                           "unavailable_floor": 1}
+```
+
+The full `floor` applies only when the import is present; otherwise the suite reports its
+unavailability line and the smaller `unavailable_floor` is enforced — so the gate is honest on
+a machine that lacks the optional package, without that package becoming a dependency.
+
+### Proving a fresh clone is green
+
+The gate must pass on a genuinely clean machine, not just a dev laptop that has stray caches,
+globally-installed extras or a `.env`:
+
+```bash
+python3 -m venv /tmp/cleanenv
+/tmp/cleanenv/bin/pip install -r requirements.txt -r requirements-dev.txt
+# then, from a fresh clone, with an empty HOME and no .env:
+env -i HOME=/tmp/emptyhome PATH=/tmp/cleanenv/bin:/usr/bin:/bin PYTHONPATH="$PWD" \
+    bash scripts/run_tests.sh      # must be GREEN
+```
+
+A Docker `python:3.11` container with the same steps works too. A suite that passes on the
+laptop and fails here is reading something the clone lacks — fix it (commit the file if its
+licence allows, have `setup.sh` fetch it, or report BLOCKED with the reason), never lower a
+floor to hide it.
+
 ## Documents
 
 Documents live under [docs/](docs/README.md), filed by kind. Before adding or editing one,

@@ -47,4 +47,22 @@ __all__ = ["HELD", "OFFICIAL_LIVE", "LICENSED", "COMPANY_FACT", "CLIENT", "TIERS
            "VERIFYING_TIERS", "ATTRIBUTION_REQUIRED", "can_verify", "label_for",
            "Evidence", "EvidenceError", "Source", "SourceError", "FetchError", "load",
            "check_payload", "needs_terms", "NoTermsRecord", "record_for", "may_fetch",
-           "may_cache", "attribution_for"]
+           "may_cache", "attribution_for", "search"]
+
+
+def search(query, *, case_law=None, limit: int = 5):
+    """Search the outside sources. Today the only one wired is `case_law`.
+
+    `case_law` is a `checker.sources.case_law.CaseLawIndex` (the eCourts judgments from the
+    AWS Open Data buckets, tier LICENSED). It is passed in rather than discovered, because
+    building it needs judgment metadata the deployment supplies -- a parquet read, which needs
+    an engine this environment does not have. With no index, this returns [] : no source, no
+    result, never a guess.
+
+    Every row it returns carries its tier (LICENSED here) and the CC-BY attribution, so a
+    caller can never mistake a judgment for law we verified. HELD statutory retrieval stays in
+    `checker/text_search.py`; the two are deliberately not merged (see `case_law.py`).
+    """
+    if case_law is None:
+        return []
+    return case_law.search(query, limit=limit)
