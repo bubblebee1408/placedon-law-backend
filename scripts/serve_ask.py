@@ -488,7 +488,12 @@ def _test() -> int:
     def raw(port: int, method: str, target: str, body: bytes | None = None,
             headers: dict | None = None) -> tuple[int, dict, bytes]:
         """One request with the target sent byte-for-byte: no client-side normalisation."""
-        conn = http.client.HTTPConnection(HOST, port, timeout=30)
+        # A GENEROUS deadline, not a latency assertion: /v1/ask runs the real engine
+        # (retrieval, and a model under load), which can take over a minute on a loaded
+        # machine. 30 s tripped under load and the client raised, crashing the suite with no
+        # count -- a spurious FAIL about a correct-but-slow answer. The fast requests here
+        # (health, refusals, path traversal) return in milliseconds regardless of the ceiling.
+        conn = http.client.HTTPConnection(HOST, port, timeout=300)
         try:
             conn.putrequest(method, target, skip_host=True, skip_accept_encoding=True)
             hdrs = {"Host": f"{HOST}:{port}", **(headers or {})}
