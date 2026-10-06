@@ -111,6 +111,11 @@ REGISTRY: dict[str, int] = {
     "checker.s188": RING_0,
     "checker.s188_threshold": RING_0,
     "checker.currency": RING_0,
+    # move 7 (T2). The tier VOCABULARY, not the connectors: "only primary law we hold may
+    # make a statement of law VERIFIED" is legal epistemics, the same family as entailment
+    # and the deciders. `checker.sources` stays RING 2 and re-exports this.
+    # .claude/loops/DECISION_tier_vocabulary_to_ring0.md
+    "checker.tier_rules": RING_0,
     "checker.cascade": RING_0,
     # The MODEL cascade (deterministic -> small -> large), not the entailment one above.
     # Ring 0 because it decides whether a claim is verified and which body statuses bind

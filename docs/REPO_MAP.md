@@ -118,6 +118,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `checker/instrument_registry.py` | R0 legal core | Which instruments are on record at all, and which of them a person has read. |
 | `checker/interval.py` |  | Honest error bars, in the standard library. |
 | `checker/lattice.py` |  | Ordinal state algebra — one implementation of "the worst thing wins". |
+| `checker/law_versions.py` |  | Which law answered: the corpus by content, and the instruments that amended it. |
 | `checker/lawyer_summary.py` |  | The lawyer summary: a sentence is traced to a span, or it is refused and shown as refused. |
 | `checker/legal_ref.py` |  | Instrument-qualified references for Indian legal provisions. |
 | `checker/legal_retrieval.py` |  | Exact/structural retrieval: turn what a lawyer typed into the provisions they named. |
@@ -219,6 +220,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `checker/structural_retrieve.py` |  | Structural retrieval — resolve a query to the statute chunks it admits. |
 | `checker/sweep.py` |  | Run an instrument backwards across a folder — the query a practitioner has. |
 | `checker/text_search.py` |  | Title + body search over the Companies Act 2013 corpus, for users who do not know the number. |
+| `checker/tier_rules.py` | R0 legal core | The five tiers and the one that can verify. RING 0 — the rule, not the connectors. |
 | `checker/timeline.py` |  | Amendment timeline for a Companies Act section. |
 | `checker/trust.py` |  | X.509 chain validation against the Indian government's own root certificates. |
 | `checker/vault_search.py` |  | BM25 over a vault's chunks, per tenant, with each chunk told where it came from. |
@@ -375,4 +377,4 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/watch_gazette.py` |  | Run the Gazette watcher once: what did the Gazette publish since we last looked? |
 | `scripts/watch_ofac.py` |  | Poll OFAC's SDN list and report what CHANGED since the last trustworthy poll. |
 
-335 modules listed.
+337 modules listed.
