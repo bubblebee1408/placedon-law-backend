@@ -135,6 +135,7 @@ class Queue(Protocol):
     def finish(self, job_id: str, status: str) -> None: ...
     def fail(self, job_id: str, reason: str, *, retryable: bool = True) -> Job: ...
     def dead(self, limit: int = 100) -> list[Job]: ...
+    def claim_counts(self, run_ids) -> dict: ...
     def request_cancel(self, run_id: str) -> bool: ...
     def get(self, run_id: str) -> Job | None: ...
     def depth(self) -> int: ...
@@ -263,6 +264,27 @@ class MemoryQueue:
             row["not_before"] = self._now() + timedelta(
                 seconds=backoff_for(row["attempts"]))
         return self._job(row)
+
+    def claim_counts(self, run_ids) -> dict:
+        """`{missing, unclaimed, claimed}` over `run_ids`. One pass, not one read per id.
+
+        `unclaimed` is a job no worker has ever picked up (`attempts == 0`). That is the
+        number that distinguishes "dispatched, waiting its turn" from "nothing is running",
+        and both of those are PENDING on the cell. A review table that cannot tell them
+        apart looks busy while nothing happens.
+        """
+        wanted = [str(r) for r in run_ids]
+        by_run = {r["run_id"]: r for r in self.jobs.values()}
+        missing = unclaimed = claimed = 0
+        for rid in wanted:
+            row = by_run.get(rid)
+            if row is None:
+                missing += 1
+            elif int(row.get("attempts") or 0) == 0:
+                unclaimed += 1
+            else:
+                claimed += 1
+        return {"missing": missing, "unclaimed": unclaimed, "claimed": claimed}
 
     def dead(self, limit: int = 100) -> list[Job]:
         """Jobs that stopped, newest first. What `jobs.dead` serves."""
@@ -448,6 +470,25 @@ class PostgresQueue:
         if r is None:
             raise QueueError(f"no job {job_id!r}")
         return self._job(r)
+
+    def claim_counts(self, run_ids) -> dict:
+        """`{missing, unclaimed, claimed}` over `run_ids`, in ONE statement.
+
+        A read per cell would be five hundred queries on a five-hundred-cell table, which
+        is a status endpoint that costs more than the work it reports on.
+        """
+        wanted = [str(r) for r in run_ids if _UUID.match(str(r) or "")]
+        if not wanted:
+            return {"missing": len(list(run_ids)), "unclaimed": 0, "claimed": 0}
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT run_id, attempts FROM jobs WHERE run_id = ANY(%s)",
+                (wanted,)).fetchall()
+        seen = {str(r[0]): int(r[1] or 0) for r in rows}
+        unclaimed = sum(1 for v in seen.values() if v == 0)
+        return {"missing": len(wanted) - len(seen),
+                "unclaimed": unclaimed,
+                "claimed": len(seen) - unclaimed}
 
     def dead(self, limit: int = 100) -> list[Job]:
         """Jobs that stopped, newest first. Tenant-scoped by the policy, not by this query."""
@@ -667,6 +708,34 @@ def conformance(queue, *, clear_backoff=None) -> list[tuple[bool, str]]:
     ck(DEAD in TERMINAL and FAILED in TERMINAL,
        "DEAD and FAILED are BOTH terminal, and both exist: FAILED is one attempt that did "
        "not work, DEAD is that we stopped trying")
+
+    # claim_counts, on both backends. `unclaimed` is what lets a review table say "no
+    # worker" instead of a silent PENDING, so the two implementations -- a dict pass and a
+    # `run_id = ANY(...)` query -- must agree.
+    cc_a, cc_b = str(uuid.uuid4()), str(uuid.uuid4())
+    jca = queue.enqueue(run_id=cc_a, intent="ask", args={}, lane=INTERACTIVE)
+    queue.enqueue(run_id=cc_b, intent="ask", args={}, lane=INTERACTIVE)
+    counts = queue.claim_counts([cc_a, cc_b, str(uuid.uuid4())])
+    ck(counts == {"missing": 1, "unclaimed": 2, "claimed": 0},
+       f"claim_counts separates missing, unclaimed and claimed ({counts})")
+    while True:
+        got_cc = queue.claim(worker="cc")
+        if got_cc is None or got_cc.job_id == jca.job_id:
+            break
+        queue.finish(got_cc.job_id, DONE)
+    after = queue.claim_counts([cc_a, cc_b])
+    ck(after["claimed"] >= 1 and after["unclaimed"] <= 1,
+       f"...and a claimed job moves from unclaimed to claimed ({after})")
+    ck(queue.claim_counts([])["unclaimed"] == 0,
+       "...and an empty list is not an error")
+
+    # Left as it was found. The first version of this block finished nothing and left a job
+    # LEASED, which broke the backoff checks below -- they need a queue with exactly one
+    # claimable job, and A1's retry ladder learned the same thing one block further down.
+    for _cc_run in (cc_a, cc_b):
+        _cc_job = queue.get(_cc_run)
+        if _cc_job is not None and _cc_job.status not in TERMINAL:
+            queue.finish(_cc_job.job_id, DONE)
 
     # The backoff itself: a failed job is QUEUED but NOT claimable yet. Backend-agnostic,
     # because the shortest wait is 5 seconds and no test here takes that long -- so this holds

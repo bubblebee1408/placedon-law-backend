@@ -98,8 +98,31 @@ class Backend(Protocol):
     def write_grid(self, grid: dict) -> dict: ...
     def read_grid(self, grid_id: str) -> dict | None: ...
     def read_grid_cells(self, grid_id: str) -> list[dict]: ...
+    def pause_grid(self, grid_id: str, *, reason: str, not_dispatched: int) -> bool:
+        """Record that the budget paused this table. False when there is no such grid.
+
+        Restates 022's two CHECKs, so a row that could never exist in Postgres cannot be
+        written here either -- the divergence `conformance()` has caught five times.
+        """
+        if not str(reason or "").strip():
+            raise StoreError(
+                "a paused table needs a reason (022 review_grids_pause_reason_iff_paused): "
+                "a pause with no nameable cause is indistinguishable from a table nobody "
+                "looked at")
+        if int(not_dispatched) < 0:
+            raise StoreError("cells_not_dispatched cannot be negative")
+        row = self.grids.get(grid_id)
+        if row is None:
+            return False
+        row["paused_budget"] = True
+        row["pause_reason"] = str(reason)
+        row["cells_not_dispatched"] = int(not_dispatched)
+        return True
+
     def write_grid_cell(self, cell: dict, *, if_pending: bool = True) -> bool: ...
     def cancel_grid(self, grid_id: str) -> bool: ...
+    # 022: the budget paused this table, and which cells it left undispatched.
+    def pause_grid(self, grid_id: str, *, reason: str, not_dispatched: int) -> bool: ...
     # O9: the answer cache (014_answer_cache.sql).
     def write_cache_entry(self, entry: dict) -> bool: ...
     def read_cache_entry(self, lookup_key: str) -> dict | None: ...
@@ -405,7 +428,7 @@ class MemoryBackend:
     # ── H3: drafts ───────────────────────────────────────────────────────────
     def write_draft(self, draft: dict) -> dict:
         did = draft["draft_id"]
-        self.drafts[did] = {"draft_id": did, "kind": draft.get("kind") or "agm_notice",
+        self.drafts[did] = {"draft_id": did, "kind": draft.get("kind") or "unknown",
                             "title": draft.get("title") or ""}
         self.draft_versions.setdefault(did, [])
         return dict(self.drafts[did])
@@ -444,7 +467,14 @@ class MemoryBackend:
         self.grids[gid] = {"grid_id": gid, "name": grid.get("name") or "",
                            "columns": [dict(c) for c in grid.get("columns") or ()],
                            "document_ids": list(grid.get("document_ids") or ()),
-                           "cancelled_at": self.grids.get(gid, {}).get("cancelled_at")}
+                           "cancelled_at": self.grids.get(gid, {}).get("cancelled_at"),
+                           # 022's three columns, defaulted the way the migration defaults
+                           # them: a grid nobody paused reads "never paused".
+                           "paused_budget": self.grids.get(gid, {}).get(
+                               "paused_budget", False),
+                           "pause_reason": self.grids.get(gid, {}).get("pause_reason", ""),
+                           "cells_not_dispatched": self.grids.get(gid, {}).get(
+                               "cells_not_dispatched", 0)}
         cells = self.grid_cells.setdefault(gid, {})
         # Materialise every cell as PENDING, exactly as the Postgres path does. The shared
         # conformance list caught this on its first run: Postgres inserted the grid's cells
@@ -467,6 +497,27 @@ class MemoryBackend:
 
     def read_grid_cells(self, grid_id: str) -> list[dict]:
         return [dict(r) for r in self.grid_cells.get(grid_id, {}).values()]
+
+    def pause_grid(self, grid_id: str, *, reason: str, not_dispatched: int) -> bool:
+        """Record that the budget paused this table. False when there is no such grid.
+
+        Restates 022's two CHECKs, so a row that could never exist in Postgres cannot be
+        written here either -- the divergence `conformance()` has caught five times.
+        """
+        if not str(reason or "").strip():
+            raise StoreError(
+                "a paused table needs a reason (022 review_grids_pause_reason_iff_paused): "
+                "a pause with no nameable cause is indistinguishable from a table nobody "
+                "looked at")
+        if int(not_dispatched) < 0:
+            raise StoreError("cells_not_dispatched cannot be negative")
+        row = self.grids.get(grid_id)
+        if row is None:
+            return False
+        row["paused_budget"] = True
+        row["pause_reason"] = str(reason)
+        row["cells_not_dispatched"] = int(not_dispatched)
+        return True
 
     def write_grid_cell(self, cell: dict, *, if_pending: bool = True) -> bool:
         """True when written. False when a terminal cell already exists for that key.
@@ -1764,7 +1815,8 @@ class PostgresBackend:
         if not _UUID.match(grid_id or ""):
             return None
         with self._conn() as c:
-            g = c.execute("SELECT grid_id, name, cancelled_at FROM review_grids "
+            g = c.execute("SELECT grid_id, name, cancelled_at, paused_budget, "
+                          "pause_reason, cells_not_dispatched FROM review_grids "
                           "WHERE grid_id = %s", (grid_id,)).fetchone()
             if g is None:
                 return None
@@ -1775,6 +1827,12 @@ class PostgresBackend:
                              (grid_id,)).fetchall()
         return {"grid_id": str(g[0]), "name": g[1],
                 "cancelled_at": g[2].isoformat() if g[2] else None,
+                # 022. Selected explicitly: a default standing in for a column the query
+                # forgot is a lie with a safety net, which is how A1's `jobs.get()` came
+                # to report a DEAD job with no reason.
+                "paused_budget": bool(g[3]),
+                "pause_reason": g[4] or "",
+                "cells_not_dispatched": int(g[5] or 0),
                 "columns": [{"name": r[0], "kind": r[1], "question": r[2]} for r in cols],
                 "document_ids": [r[0] for r in docs]}
 
@@ -1798,6 +1856,31 @@ class PostgresBackend:
                          "cost_inr": float(r[8]) if r[8] is not None else None,
                          "cost_note": r[9]}, GRID_CELL_KEYS)
                 for r in rows]
+
+    def pause_grid(self, grid_id: str, *, reason: str, not_dispatched: int) -> bool:
+        """Record that the budget paused this table. False when there is no such grid.
+
+        022's CHECKs do the refusing on this path; the guards below are the same rules
+        restated so the dict cannot accept a row Postgres would reject.
+        """
+        import psycopg
+        if not str(reason or "").strip():
+            raise StoreError(
+                "a paused table needs a reason (022 review_grids_pause_reason_iff_paused)")
+        if int(not_dispatched) < 0:
+            raise StoreError("cells_not_dispatched cannot be negative")
+        if not _UUID.match(grid_id or ""):
+            return False
+        try:
+            with self._conn() as c:
+                n = c.execute(
+                    "UPDATE review_grids SET paused_budget = true, pause_reason = %s, "
+                    "cells_not_dispatched = %s WHERE grid_id = %s",
+                    (str(reason)[:2000], int(not_dispatched), grid_id)).rowcount
+        except psycopg.errors.IntegrityError as exc:
+            raise StoreError(f"the database refused this pause: {type(exc).__name__} "
+                             f"{str(exc).splitlines()[0][:150]}") from None
+        return bool(n)
 
     def write_grid_cell(self, cell: dict, *, if_pending: bool = True) -> bool:
         import psycopg
@@ -1905,7 +1988,7 @@ class PostgresBackend:
                 c.execute("INSERT INTO drafts (draft_id, tenant_id, kind, title) "
                           "VALUES (%s,%s,%s,%s) ON CONFLICT (draft_id) DO UPDATE SET "
                           "title = EXCLUDED.title, updated_at = now()",
-                          (did, self.tenant_id, draft.get("kind") or "agm_notice",
+                          (did, self.tenant_id, draft.get("kind") or "unknown",
                            draft.get("title") or ""))
         except psycopg.errors.IntegrityError as exc:
             raise StoreError(f"the database refused this draft: {type(exc).__name__}") from None

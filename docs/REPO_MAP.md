@@ -198,11 +198,13 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `checker/shadow.py` |  | Shadow mode: measure a model's proposals without any of them reaching a user. |
 | `checker/sources/__init__.py` | R2 feeds | Every source behind one interface, and every result carrying the tier that limits it. |
 | `checker/sources/base.py` | R2 feeds | The Source interface, the terms gate a connector loads through, and the payload check. |
+| `checker/sources/case_law.py` | R2 feeds | Case-law search over the open eCourts judgment metadata. LICENSED, and kept apart. |
 | `checker/sources/client.py` | R2 feeds | CLIENT: the tenant's own uploads. The document under review, never an authority. |
 | `checker/sources/company_facts.py` | R2 feeds | Company facts with the basis they rest on, and a confirmation before anything uses them. |
 | `checker/sources/contract.py` | R2 feeds | The five rules `checker/sources/` must obey, tested as one suite. |
 | `checker/sources/evidence.py` | R2 feeds | One result from one source, with everything needed to distrust it correctly. |
 | `checker/sources/held.py` | R2 feeds | HELD: our own hash-stamped corpus. The only tier that can make an answer VERIFIED. |
+| `checker/sources/judgments_open.py` | R2 feeds | eCourts judgments from the AWS Open Data buckets. Keyless, LICENSED, never VERIFIED. |
 | `checker/sources/mca_fixture.py` | R2 feeds | A synthetic MCA "Company Master Data" PDF, written by hand, for testing the parser. |
 | `checker/sources/mca_master_data.py` | R2 feeds | Read an MCA "Company Master Data" page the USER downloaded and uploaded to us. |
 | `checker/sources/terms.py` | R2 feeds | What each Indian source actually permits — read from the source, never from memory. |
@@ -370,4 +372,4 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/watch_gazette.py` |  | Run the Gazette watcher once: what did the Gazette publish since we last looked? |
 | `scripts/watch_ofac.py` |  | Poll OFAC's SDN list and report what CHANGED since the last trustworthy poll. |
 
-330 modules listed.
+332 modules listed.

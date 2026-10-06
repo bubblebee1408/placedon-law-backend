@@ -131,7 +131,7 @@ def _test() -> None:
                     "019_matters.sql",
                     "020_vault.sql",
                     "021_job_lanes.sql",
-                    # T3 move 10. 022 belongs to the open PR #67; see 023's header.
+                    "022_grid_budget_state.sql",
                     "023_document_checks.sql"],
           f"every migration exists, in order ({files})")
 
