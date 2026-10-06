@@ -272,7 +272,10 @@ extra=("scripts/acquire_rules.py --test" "scripts/register_gsr700e.py --test" "s
 # module has been added without regenerating docs/REPO_MAP.md, which is the whole
 # reason the map is generated rather than hand-kept. Both print a count line, because
 # rule (a) below marks a suite without one as FAILED.
-extra+=("scripts/repo_map.py --test" "scripts/repo_map.py --check")
+# REPO_MAP is a generated index resolved on merge by scripts/merge_repo_map.py, so the
+# gate no longer REQUIRES it committed in sync (that staleness guard was the REPO_MAP
+# half of the merge churn). --test still checks the generator; --check stays a CLI.
+extra+=("scripts/repo_map.py --test")
 
 # The Ask demo server (D2): 127.0.0.1 only, serves web/assistant, forwards POST /v1/ask.
 extra+=("scripts/serve_ask.py --test")

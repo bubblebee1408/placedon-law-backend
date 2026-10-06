@@ -308,7 +308,7 @@
     "scripts/register_pas_rules.py": 36,
     "scripts/register_s188_rule15.py": 7,
     "scripts/register_sebi_lodr.py": 10,
-    "scripts/repo_map.py": 1,
+    "scripts/repo_map.py": 11,
     "scripts/resolve_missing_sections.py": 9,
     "scripts/retrieval_bakeoff.py": 13,
     "scripts/retrieval_dev_metrics.py": 13,
