@@ -64,7 +64,12 @@ wired to nothing, and every verdict it returns is INSTRUMENT_NOT_HELD.
 - Do not bypass the MCA WAF, robots restrictions, access controls, or source terms.
 - Do not obtain private minutes or confidential company documents.
 - Permitted sources only: official legislation, Gazette, public ICSI specimens, public
-  listed-company disclosures, Indian Kanoon under its attribution terms.
+  listed-company disclosures, Indian Kanoon under its attribution terms, and the AWS Open
+  Data eCourts judgment datasets (`s3://indian-supreme-court-judgments`,
+  `s3://indian-high-court-judgments`, ap-south-1, CC-BY-4.0, managed by Dattam Labs,
+  owner-approved 2026-10-05). Those two are tier LICENSED — a judgment may support an answer,
+  never make one VERIFIED — and their terms record is in `checker/sources/terms.py`
+  (`aws_sc_judgments`, `aws_hc_judgments`). No record, no fetch.
 - No production code changes without tests. One logical change per commit.
 - Inspect the repository and report affected files before proposing edits.
 - No new dependency without a stated reason.
