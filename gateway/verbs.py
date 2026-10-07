@@ -212,7 +212,33 @@ def _ask(args: dict, ctx: Context) -> dict:
     if hit is not None:
         return hit
 
-    ev = rq.evidence(q)
+    # The source picker. Retrieval searches ONLY the picked sources; the default is the held
+    # corpus plus the vault. `ask` retrieves HELD (here) and the vault (in the report below);
+    # an external pick is resolved for its status and named, never silently searched or dropped.
+    from checker import source_picker as _sp
+    _picked = args.get("sources")
+    _resolved = _sp.resolve(_picked)
+    _held_searched = _sp.HELD_ID in _resolved.searchable
+    ev = rq.evidence(q) if _held_searched else ()
+    # The per-source report is built once, from the retrieval that actually ran, and travels
+    # on EVERY return path -- including a NO_MODEL refusal -- so "which sources were searched"
+    # is answered even when no model was available to phrase the answer.
+    _report = _sources_report(_picked, _resolved, ev, q, ctx)
+    # `ask` answers only from the held statute. If the held corpus was not picked, it reads
+    # nothing to answer from and ABSTAINS -- rather than letting the answer path re-retrieve
+    # the held corpus and quietly ignore the caller's pick. The report still records every
+    # picked source's state (the vault was searched; an external pick is named).
+    if not _held_searched:
+        rid = _persist_run(ctx, intent="research_question", status="ABSTAINED",
+                           steps=[{"capability": "intake", "status": "ANSWERED"},
+                                  {"capability": "research", "status": "ABSTAINED"}],
+                           propositions=[])
+        return {"status": "ABSTAINED", "answer": "", "citations": [],
+                "abstained_reason": (
+                    "the held corpus was not among the picked sources, and `ask` reads the "
+                    "held statute, so nothing was read. This is not a finding that no "
+                    "obligation exists. Each picked source's state is in `sources`."),
+                "run_id": rid, "sources": _report}
     origins = tuple(o for _, o in ev)
     served, refusal = (None, None)
     if origins:
@@ -225,6 +251,7 @@ def _ask(args: dict, ctx: Context) -> dict:
                 steps=[{"capability": "intake", "status": "ANSWERED"},
                        {"capability": "research", "status": "REFUSED"}],
                 propositions=[])
+            refusal["sources"] = _report
             return refusal
 
     try:
@@ -237,7 +264,7 @@ def _ask(args: dict, ctx: Context) -> dict:
                            steps=[{"capability": "research", "status": "FAILED"}],
                            propositions=[])
         return {"status": "FAILED", "error": f"{type(e).__name__}: {str(e)[:200]}",
-                "run_id": rid}
+                "run_id": rid, "sources": _report}
 
     d = out.to_dict()
     # The traced spans, as citations. `to_dict()` carries the provision NAMES and not the
@@ -281,8 +308,66 @@ def _ask(args: dict, ctx: Context) -> dict:
         # note records which half is missing -- see `nonconformity_for`.
         traced=len(out.summary.traced) if out.summary else 0,
         sentences=len(out.summary.sentences) if out.summary else 0)
+    d["sources"] = _report
     _cache_store(cache_key, q, "RESEARCH_QUESTION", args.get("sources"), d, ctx)
     return d
+
+
+def _vault_hits(question: str, ctx: Context) -> int:
+    """How many vault/client documents the question matched. 0 when no vault, never an error."""
+    try:
+        from checker.sources.base import load
+        from checker.sources.client import ClientDocuments
+        return len(load(ClientDocuments(ctx.documents or {})).search(question))
+    except Exception:                                            # noqa: BLE001
+        return 0
+
+
+def _sources_report(picked, resolved, ev, question: str, ctx: Context) -> dict:
+    """What each picked source did: SEARCHED_HITS / SEARCHED_EMPTY / NOT_SEARCHED (+ named state).
+
+    `ask` retrieves two sources for real -- the held corpus and the vault -- so only those can
+    report SEARCHED. Every other picked source is NOT_SEARCHED and says why: its availability
+    state (KEY_MISSING / NOT_ACQUIRED / BLOCKED) when it cannot be switched on, or that live
+    retrieval for it is served by sources.search, not ask, when it can. searched-empty (a search
+    ran, nothing matched) is reported apart from not-searched (no search ran) on purpose.
+    """
+    from checker import source_picker as _sp
+    picked_ids = tuple(dict.fromkeys(picked or _sp.DEFAULT))
+    searchable = set(resolved.searchable)
+    unavailable = {u["id"]: u for u in resolved.unavailable}
+
+    def _tier(sid: str) -> str:
+        try:
+            return _sp.source(sid).tier
+        except Exception:                                        # noqa: BLE001
+            return _sp.PUBLIC
+
+    searched, rows = [], []
+    for sid in picked_ids:
+        if sid == _sp.HELD_ID and sid in searchable:
+            searched.append(sid)
+            rows.append({"id": sid, "tier": _sp.HELD, "status": _sp.AVAILABLE,
+                         "outcome": "SEARCHED_HITS" if ev else "SEARCHED_EMPTY",
+                         "hits": len(ev), "reason": ""})
+        elif sid == _sp.VAULT_ID and sid in searchable:
+            hits = _vault_hits(question, ctx)
+            searched.append(sid)
+            rows.append({"id": sid, "tier": _sp.PUBLIC, "status": _sp.AVAILABLE,
+                         "outcome": "SEARCHED_HITS" if hits else "SEARCHED_EMPTY",
+                         "hits": hits, "reason": ""})
+        elif sid in unavailable:
+            u = unavailable[sid]
+            rows.append({"id": sid, "tier": _tier(sid), "status": u["status"],
+                         "outcome": "NOT_SEARCHED", "hits": 0, "reason": u["reason"]})
+        else:
+            rows.append({"id": sid, "tier": _tier(sid), "status": _sp.AVAILABLE,
+                         "outcome": "NOT_SEARCHED", "hits": 0,
+                         "reason": "available, but ask searches the held corpus and your "
+                                   "vault; use sources.search for this source"})
+    return {"picked": list(picked_ids), "searched": searched, "report": rows,
+            "note": ("searched-empty is not not-searched: an empty search ran; a not-searched "
+                     "source did not. Only HELD rows can make an answer VERIFIED.")}
 
 
 # ── F2: research.multi, the multi-body path ───────────────────────────────────
@@ -312,7 +397,14 @@ def _research_multi(args: dict, ctx: Context) -> dict:
     if not question:
         return _refuse("BAD_REQUEST", "question is required")
     as_of = (args.get("as_of") or "").strip() or None
-    outcome = ms.research(question, as_of=as_of, worker=ms._held_researcher(),
+    # Source picker: the held bodies are researched only when the held corpus is picked
+    # (default). Held not picked -> a no-op worker, so those parts come back NEEDS_LAWYER
+    # rather than being answered from a source the caller excluded.
+    from checker import source_picker as _sp
+    _resolved = _sp.resolve(args.get("sources"))
+    _held = _sp.HELD_ID in _resolved.searchable
+    _worker = ms._held_researcher() if _held else (lambda _t: "")
+    outcome = ms.research(question, as_of=as_of, worker=_worker,
                           verify=ms._byte_match_verify, merge=ms._code_merge,
                           budget=_ledger())
     d = outcome.to_dict()
@@ -340,6 +432,8 @@ def _research_multi(args: dict, ctx: Context) -> dict:
         steps.append({"capability": f"research.{s['body']}", "status": s["status"],
                       "cost_note": f"{s.get('name') or s['body']} / "
                                    f"{s.get('state') or 'Central'}"})
+    _held_ans = tuple(s for s in d["sections"] if s.get("status") == ms.ANSWERED) if _held else ()
+    d["sources"] = _sources_report(args.get("sources"), _resolved, _held_ans, question, ctx)
     d["run_id"] = _persist_run(ctx, intent="research_multi", status=d["status"],
                                steps=steps, propositions=[])
     return d
@@ -2098,7 +2192,10 @@ def _task_args(task: str, text: str, file_ids, ctx: Context, args: dict,
             doc = str(d["text"])
             break
     if task == "RESEARCH_QUESTION":
-        return {"question": text}
+        # Thread the picked sources through to `ask`, so a conversation turn honours the
+        # @-sources chip. Omitted when absent so the verb applies its own default.
+        picked = args.get("sources")
+        return {"question": text, **({"sources": picked} if picked else {})}
     if task == "EVENT_ASSESS":
         return {"event": (args.get("event") or "commercial_contract"),
                 "facts": args.get("facts") or {}}
@@ -3885,9 +3982,15 @@ def _sources_list(args: dict, ctx: Context) -> dict:
                 {"source_id": "client", "name": "Your uploaded documents", "tier": CLIENT,
                  "may_fetch": True,
                  "may_fetch_reason": "the tenant's own document, under review"}]
+    from checker import source_picker
     return {"tiers": list(TIERS), "adapters": built_in, "external": out,
             "fetchable": [r["source_id"] for r in out if r["may_fetch"]],
             "cacheable": [r["source_id"] for r in out if r["may_cache"]],
+            # The @-sources picker view: one card per pickable source with its display tier
+            # (HELD / LICENSED / PUBLIC), switchable status (available / KEY_MISSING /
+            # NOT_ACQUIRED / BLOCKED, with the reason), and its terms record. An unavailable
+            # source is listed here too, with switchable=false, so the UI can show it greyed.
+            "picker": source_picker.listing(),
             "note": ("Only HELD can make an answer VERIFIED (PLAN_26 §2). External sources "
                      "are listed with what their own terms permit, read on the date shown; "
                      "an unread term is OPEN, and OPEN is not permission.")}
@@ -3965,7 +4068,12 @@ VERBS: tuple[Verb, ...] = (
                 describes="'true' to split a compound question into at most 4 "
                           "sub-questions (PLAN_23 O5), answer each through the verified "
                           "cascade and join only the parts that came back cited. One "
-                          "unanswered part makes the whole PARTIAL and is named")),
+                          "unanswered part makes the whole PARTIAL and is named"),
+          Field("sources", ARRAY, False,
+                describes="source ids to search, from sources.list (e.g. ['held']). "
+                          "Retrieval searches ONLY these. Default = the held corpus plus "
+                          "your vault. An unavailable pick (KEY_MISSING / NOT_ACQUIRED / "
+                          "BLOCKED) is named, never silently dropped. Only HELD can VERIFY")),
          "POST", read_only=True, run=_ask),
 
     Verb("research.multi",
@@ -3977,7 +4085,11 @@ VERBS: tuple[Verb, ...] = (
           Field("as_of", STRING, False,
                 describes="an ISO date (YYYY-MM-DD). A State topic such as stamp duty needs "
                           "one, since State rates change over time; without it that part is "
-                          "returned NEED_FACT rather than guessed")),
+                          "returned NEED_FACT rather than guessed"),
+          Field("sources", ARRAY, False,
+                describes="source ids to search, from sources.list. Retrieval searches ONLY "
+                          "these; default = the held corpus plus your vault. Held parts need "
+                          "the held corpus picked; an unavailable pick is named, not dropped")),
          "POST", read_only=True, run=_research_multi),
 
     Verb("review_contract",
