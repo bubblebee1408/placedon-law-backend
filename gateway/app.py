@@ -1097,6 +1097,56 @@ def _test() -> None:
     check({"research.CA2013", "research.FEMA1999", "research.STAMP"} <= _caps,
           f"...and runs.trace carries the plan step by step ({sorted(_caps)})")
 
+    # ── source picker: the SAME question over HTTP searches only the picked sources ──────
+    # Proven through /v2/ask (a real request). The report is model-independent, so it holds
+    # in the keyless gate even when the answer itself is a NO_MODEL refusal.
+    _SRC_Q = "What is the quorum for a meeting of the Board?"
+    _held = json.loads(client.post("/v2/ask",
+                                   json={"question": _SRC_Q, "sources": ["held"]}).content)
+    _case = json.loads(client.post("/v2/ask",
+                                   json={"question": _SRC_Q, "sources": ["indiankanoon"]}).content)
+    _hv = json.loads(client.post("/v2/ask",
+                                 json={"question": _SRC_Q, "sources": ["held", "vault"]}).content)
+
+    def _row(doc, sid):
+        return next((r for r in doc.get("sources", {}).get("report", []) if r["id"] == sid), None)
+
+    _hh = _row(_held, "held")
+    check(_hh is not None and _hh["outcome"] == "SEARCHED_HITS" and _hh["hits"] > 0,
+          f"held-only searched the held corpus and found hits ({_hh})")
+    check(_held.get("sources", {}).get("searched") == ["held"],
+          f"...and held is the only source it searched ({_held.get('sources', {}).get('searched')})")
+
+    _ci = _row(_case, "indiankanoon")
+    check(_ci is not None and _ci["status"] == "KEY_MISSING" and _ci["outcome"] == "NOT_SEARCHED",
+          f"case-law-only names indiankanoon KEY_MISSING / NOT_SEARCHED ({_ci})")
+    check(_ci is not None and "not found" not in (_ci["reason"] or "").lower()
+          and "PLACEDON_INDIANKANOON_KEY" in _ci["reason"],
+          "...a KEY_MISSING source is a NAMED STATE that names the key, never 'not found'")
+    check(_case.get("sources", {}).get("searched") == []
+          and _row(_case, "held") is None,
+          "...and case-law-only searched the held corpus NOT at all — different evidence")
+    check(_held.get("sources", {}).get("searched") != _case.get("sources", {}).get("searched"),
+          "the same question gives a different searched set for Central-law-only vs case-law-only")
+
+    # searched-empty is not not-searched: the vault was searched and matched nothing
+    _hv_v = _row(_hv, "vault")
+    check(_hv_v is not None and _hv_v["outcome"] == "SEARCHED_EMPTY",
+          f"a picked-but-empty vault reports SEARCHED_EMPTY, distinct from NOT_SEARCHED ({_hv_v})")
+
+    # sources.list carries the picker view: every card has a tier, status and switchable flag
+    _sl = json.loads(client.post("/v2/sources/list", json={}).content)["picker"]
+    _by = {c["id"]: c for c in _sl}
+    check(_by["held"]["tier"] == "HELD" and _by["held"]["switchable"],
+          "sources.list shows held as HELD and switchable")
+    check(_by["indiankanoon"]["tier"] == "LICENSED"
+          and not _by["indiankanoon"]["switchable"]
+          and _by["indiankanoon"]["status"] == "KEY_MISSING",
+          "...indiankanoon as LICENSED, KEY_MISSING, not switchable")
+    check(all(c["tier"] in ("HELD", "LICENSED", "PUBLIC") for c in _sl)
+          and all(c.get("reason") for c in _sl if not c["switchable"]),
+          "...every card has a HELD/LICENSED/PUBLIC tier and every unavailable one a reason")
+
     # ── the serialiser is stated, because byte-identity needs an encoding ───
     check(dumps({"b": 1, "a": "é"}) == b'{"b":1,"a":"\xc3\xa9"}',
           "the encoding is fixed: key order preserved, no spaces, UTF-8 not escaped")

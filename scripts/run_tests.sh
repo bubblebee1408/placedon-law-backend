@@ -299,6 +299,8 @@ extra+=("scripts/harness_selftest.py --test")
 extra+=("scripts/gate_lock.py --test")
 # F3 + F2: jurisdiction resolver and the multi-body research supervisor.
 extra+=("checker/jurisdiction.py --test" "agents/multi_supervisor.py --test")
+# Source picker: which sources a question searches, and whether each can be switched on.
+extra+=("checker/source_picker.py --test")
 extra+=("scripts/suite_floors.py --test")
 # The git merge drivers that resolve the three files two branches always churn on.
 extra+=("scripts/merge_suite_floors.py --test" "scripts/merge_tasks.py --test" "scripts/merge_repo_map.py --test")
