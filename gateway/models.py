@@ -105,7 +105,7 @@ class Served:
 # PLAN_22 §3 records that the founder has no Anthropic credit. Asking the router for a
 # route among providers we cannot call would produce a correct route we then refuse --
 # which is what happened on 29-09-2026, reported as NO_MODEL while Azure sat available.
-SERVEABLE = frozenset({router.AZURE})
+SERVEABLE = frozenset({router.AZURE, router.BEDROCK})  # B1: Bedrock is the CLIENT-data provider
 
 
 def available_providers(credit_exhausted=None) -> tuple[str, ...]:
@@ -149,19 +149,30 @@ def serve(origins, *, name: str, purpose: str, consequence: str = router.LOW,
         if not verdict.allowed:
             raise NotServed(NO_BUDGET, verdict.reason)
 
-    if route.provider != router.AZURE:
-        # Deliberate: the only adapter wired here is Azure's, and PLAN_22 D3 puts every
-        # model call inside Azure. A Gemini route would need its own callable, and adding
-        # one silently is how a matter document ends up at a free tier.
+    if route.provider not in SERVEABLE:
+        # A route to a provider we have no callable for would be a correct route we then
+        # refuse -- adding one silently is how a matter document ends up at a free tier.
         raise NotServed(NO_MODEL,
                         f"the route chose {route.provider}/{route.model}, and the gateway "
-                        f"only serves Azure routes today (PLAN_22 D3). No call was made.")
+                        f"serves {sorted(SERVEABLE)} today (PLAN_22 D3). No call was made.")
 
     usage: list = []
-    inner = (transport if transport is not None
-             else azure_model.as_text_model(origin=origins, model=route.model,
-                                            budget=budget, on_usage=usage.append))
-    call = azure_model.with_backoff(inner, sleep=sleep or time.sleep)
+    if route.provider == router.BEDROCK:
+        # B1: the CLIENT-data provider, ap-south-1. Its own adapter, its own India region.
+        from checker import bedrock_model
+        region = bedrock_model.REGION
+        inner = (transport if transport is not None
+                 else bedrock_model.as_text_model(origin=origins, model=route.model,
+                                                  budget=budget, on_usage=usage.append))
+        call = bedrock_model.with_backoff(inner, sleep=sleep or time.sleep)
+    else:
+        # Azure UAE: test-only for CLIENT data -- azure_model.refuse_unconfirmed_region blocks
+        # a client document here -- and the public-text fallback when Bedrock is unavailable.
+        region = REGION
+        inner = (transport if transport is not None
+                 else azure_model.as_text_model(origin=origins, model=route.model,
+                                                budget=budget, on_usage=usage.append))
+        call = azure_model.with_backoff(inner, sleep=sleep or time.sleep)
 
     if breaker is not None:
         # The breaker only learns anything if someone tells it the outcome, and the only
@@ -178,7 +189,7 @@ def serve(origins, *, name: str, purpose: str, consequence: str = router.LOW,
         call = _watched
 
     return Served(call=call,
-                  provider=route.provider, model=route.model, region=REGION,
+                  provider=route.provider, model=route.model, region=region,
                   degraded=route.degraded, requires_review=route.requires_review,
                   est_cost_inr=route.est_cost_inr, usage=usage)
 
@@ -294,10 +305,21 @@ def _test() -> None:
         serve(origin, name="ask", purpose=NARR, available=(router.GEMINI,))
         check(False, "a non-Azure route is refused here")
     except NotServed as e:
-        check(e.code == NO_MODEL and "only serves Azure" in e.detail,
+        check(e.code == NO_MODEL and "bedrock" in e.detail and "azure" in e.detail,
               "a route that chose Gemini is refused rather than served by a callable this "
-              "module does not have -- adding one silently is how a matter document "
-              "reaches a free tier")
+              "module does not have -- the refusal names the serveable set (azure, bedrock), "
+              "and adding a provider silently is how a matter document reaches a free tier")
+
+    # ── B1: a Bedrock route is served, with the India region on the step ────────
+    _seen_bd: list = []
+    s_bd = serve(origin, name="ask", purpose=NARR, available=(router.BEDROCK,),
+                 transport=lambda _p: "phrased from the held provision",
+                 sleep=lambda _s: None)
+    check(s_bd.provider == router.BEDROCK and s_bd.region == "ap-south-1",
+          f"a Bedrock route is served, and the step carries the INDIA region "
+          f"({s_bd.provider}/{s_bd.region})")
+    check(s_bd.call("prompt") == "phrased from the held provision",
+          "...and its callable is the Bedrock adapter (here a transport), not Azure's")
 
     class Broke:
         def can_make_call(self, *a, **k):

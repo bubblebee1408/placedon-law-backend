@@ -36,6 +36,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `checker/attribution.py` |  | Attribute a failure to the stage that caused it. |
 | `checker/azure_model.py` |  | Azure AI as a model host: the deployments this laptop cannot hold. |
 | `checker/backtest.py` |  | Backtest: run the register over a real company and compare with what a |
+| `checker/bedrock_model.py` |  | Claude on Amazon Bedrock, in the India region — the CLIENT-data model provider (B1). |
 | `checker/benchmark_freeze.py` |  | The frozen entailment benchmark: load it, or refuse. |
 | `checker/benchmark_v2_freeze.py` |  | Freeze the human-reviewed benchmark, and refuse to freeze anything else. |
 | `checker/benchmark_versions.py` |  | Immutable benchmark versions, and the correction records between them. |
@@ -384,4 +385,4 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/watch_gazette.py` |  | Run the Gazette watcher once: what did the Gazette publish since we last looked? |
 | `scripts/watch_ofac.py` |  | Poll OFAC's SDN list and report what CHANGED since the last trustworthy poll. |
 
-344 modules listed.
+345 modules listed.
