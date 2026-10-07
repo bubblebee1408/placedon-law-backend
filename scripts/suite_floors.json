@@ -249,7 +249,7 @@
     "eval/temporal/harness.py": 20,
     "gateway/app.py": 126,
     "gateway/audit.py": 19,
-    "gateway/auth.py": 25,
+    "gateway/auth.py": 30,
     "gateway/circuit.py": 22,
     "gateway/cli.py": 145,
     "gateway/envelope.py": 65,
