@@ -267,7 +267,7 @@
     "gateway/schema.py": 93,
     "gateway/screens.py": 125,
     "gateway/store.py": 250,
-    "gateway/verbs.py": 543,
+    "gateway/verbs.py": 546,
     "gateway/worker.py": 47,
     "scripts/acquire_cuad.py": 14,
     "scripts/acquire_rules.py": 38,
