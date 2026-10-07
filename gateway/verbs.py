@@ -165,6 +165,13 @@ def _ledger():
         return None
 
 
+def _provider_not_ready():
+    """The typed access-pending exception (B1), imported lazily so verbs.py never pulls
+    bedrock_model -- or boto3 -- in at module load; the keyless gate imports neither."""
+    from checker.bedrock_model import ProviderNotReady
+    return ProviderNotReady
+
+
 def _served_or_refusal(origins, *, name: str, purpose: str, ctx: Context,
                        consequence: str | None = None):
     """(Served|None, refusal dict|None). Never returns neither, never returns both."""
@@ -230,6 +237,17 @@ def _ask(args: dict, ctx: Context) -> dict:
     try:
         out = rq.answer(q, model=served.call if served else None,
                         available=args.get("available") or ("azure",))
+    except _provider_not_ready() as e:                           # B1
+        # PROVIDER_NOT_READY is its OWN typed state: the model provider (Bedrock) is not
+        # ready yet -- the account is being verified, or model access is pending. That is
+        # neither a transport FAILURE (we did not break) nor a NOT_FOUND nor an abstention
+        # (we read the law and did not decline it). No answer was produced, so no run is
+        # recorded -- a judgement in the audit record where there was none would be worse.
+        return {"status": "PROVIDER_NOT_READY", "code": "PROVIDER_NOT_READY",
+                "detail": f"{type(e).__name__}: {str(e)[:200]}",
+                "note": "the India model provider is not ready yet (account verification or "
+                        "model access pending). This is a provider state, not a refusal of "
+                        "the question and not an abstention; retry once it is ready."}
     except Exception as e:                                       # noqa: BLE001
         # FAILED, not REFUSED: we tried and the attempt broke. Only a transport error
         # reaches here -- a decision not to call is handled above.
