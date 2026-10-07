@@ -1609,7 +1609,17 @@ def _split_provision(source_id: str) -> tuple[str, str]:
 
 
 def verify_citation(c: dict) -> tuple[bool, str]:
-    """Re-read the section this citation names and confirm the quote is still in it.
+    """Re-read the section this citation names and confirm the quote is still in it."""
+    ok, why, _text = _reread(c)
+    return ok, why
+
+
+def _reread(c: dict) -> tuple[bool, str, str | None]:
+    """`verify_citation`, plus the readable section text it verified the quote AGAINST.
+
+    The text is returned only when the quote byte-matches it. A section whose file changed,
+    or that no longer holds the quote, returns None: showing today's text beside a quote it
+    does not contain would invite a reader to trust the wrong words.
 
     **A real round-trip, through the same two functions the evidence path used**:
     `section_index.section_by_number` for the record and `html_to_text` for the readable
@@ -1628,22 +1638,22 @@ def verify_citation(c: dict) -> tuple[bool, str]:
 
     number = (c.get("provision") or "").removeprefix("s.").strip()
     if not number:
-        return False, "the citation names no provision, so there is nothing to re-read"
+        return False, "the citation names no provision, so there is nothing to re-read", None
     rec = section_index.section_by_number(number)
     if not rec:
         return False, (f"the corpus no longer holds s.{number}, which this citation "
-                       f"names")
+                       f"names"), None
     if c.get("sha256") and rec.get("sha256") != c.get("sha256"):
         return False, (f"s.{number} has changed since this answer was given: the corpus "
                        f"file now hashes to {str(rec.get('sha256'))[:12]}..., the citation "
                        f"records {str(c.get('sha256'))[:12]}.... The quote is not "
-                       f"re-verified against text we did not read")
+                       f"re-verified against text we did not read"), None
     text = html_to_text(rec.get("content") or "")
     if not (c.get("quote") or "") or c["quote"] not in text:
         return False, (f"the quote is NOT present in s.{number} as the corpus holds it "
-                       f"today, so nothing may rest on it")
+                       f"today, so nothing may rest on it"), None
     return True, (f"re-read from corpus/companies_act/{rec['section_id']}.json and the "
-                  f"quote byte-matches")
+                  f"quote byte-matches"), text
 
 
 def _citations_from_summary(summary, pairs, *, index_out: dict | None = None) -> list:
@@ -2894,9 +2904,17 @@ def _citation_get(args: dict, ctx: Context) -> dict:
         for c in (msg.get("envelope") or {}).get("citations", ()):
             if c.get("id") != cid:
                 continue
-            ok, why = verify_citation(c)
+            ok, why, text = _reread(c)
+            # The whole section, so the panel can show the quote IN its context. Only when
+            # it re-verified: `text` is then the very text the quote was matched against,
+            # and `start`/`end` are the first byte-exact occurrence, found here rather than
+            # carried from answer time.
+            section = None
+            if ok and text is not None:
+                start = text.index(c["quote"])
+                section = {"text": text, "start": start, "end": start + len(c["quote"])}
             return {"citation": c, "message_id": msg["message_id"],
-                    "reverified": ok, "reverified_note": why,
+                    "reverified": ok, "reverified_note": why, "section": section,
                     "note": ("The quote was re-read from the corpus just now, not trusted "
                              "from the stored answer. reverified=false means nothing may "
                              "rest on it, whatever the stored envelope says.")}
@@ -4998,6 +5016,26 @@ def _test() -> None:
         _ok, _why = verify_citation(_c)
         check(_ok, f"{_c['id']}: the quote byte-matches {_c['provision']} on re-read "
                    f"({_why[:54]})")
+
+    # citation.get serves the section the quote was re-read from, so the panel can show
+    # the quote in context -- and the offsets are checked by SLICING, not by trust.
+    _cg = by_name()["citation.get"].run(
+        {"citation_id": _c1["id"], "conversation_id": _cr["conversation_id"]}, _cctx2)
+    _sec = _cg.get("section") or {}
+    check(_cg.get("reverified") is True and isinstance(_sec.get("text"), str)
+          and len(_sec["text"]) > len(_c1["quote"]),
+          f"citation.get serves the whole section beside a re-verified quote "
+          f"({len(_sec.get('text') or '')} chars)")
+    check(_sec.get("text", "")[_sec.get("start", 0):_sec.get("end", 0)] == _c1["quote"],
+          "...and text[start:end] IS the quote, byte for byte")
+    # A citation that fails re-verification gets NO section: today's text beside a quote
+    # it does not contain would invite trust in the wrong words.
+    _gone_ok, _gone_why, _gone_text = _reread(dict(_c1, sha256="0" * 64))
+    check(not _gone_ok and _gone_text is None,
+          f"a citation whose file changed returns no section text ({_gone_why[:40]})")
+    _bent_ok, _, _bent_text = _reread(dict(_c1, quote="words no section contains"))
+    check(not _bent_ok and _bent_text is None,
+          "...nor does one whose quote is not in the section")
 
     # ── a quote that no longer byte-matches is DROPPED, never shown ─────────
     _bent = dict(_c1, id="bent",
