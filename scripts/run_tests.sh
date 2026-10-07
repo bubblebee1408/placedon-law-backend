@@ -297,6 +297,8 @@ extra+=("checker/span_inventory.py --test")
 # The harness's own reproduction of the 2026-09-30 incident.
 extra+=("scripts/harness_selftest.py --test")
 extra+=("scripts/gate_lock.py --test")
+# F3 + F2: jurisdiction resolver and the multi-body research supervisor.
+extra+=("checker/jurisdiction.py --test" "agents/multi_supervisor.py --test")
 extra+=("scripts/suite_floors.py --test")
 # The git merge drivers that resolve the three files two branches always churn on.
 extra+=("scripts/merge_suite_floors.py --test" "scripts/merge_tasks.py --test" "scripts/merge_repo_map.py --test")

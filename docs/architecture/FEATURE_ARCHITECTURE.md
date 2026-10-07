@@ -49,10 +49,16 @@ Status words: **BUILT** · **PARTIAL** · **TODO** · **NEEDS PERMISSION** · **
   with quotes or a named refusal → blackboard → critic → synthesis (code assembles, model phrases).
 - **Data:** a run with N child jobs; blackboard rows in `run_steps` (typed JSON, schema-validated).
 - **Gate:** only HELD bodies can produce statements of law; DECLARED → refusal row, never a guess.
-- **Next:** MA1 (supervisor, registry, plan validator, blackboard).
+- **Next:** expose `research.multi` as a verb, and the live model (B1); both deferred while AWS verifies.
+- **Built (stand-ins):** `agents/multi_supervisor.py` — decompose by (body, State), held-body workers run
+  in parallel (injected executor; the gate's is a thread pool, production rides the job queue), each result
+  verified before the blackboard (`multi_runner`), code synthesis, named refusals for not-held bodies, and
+  case law as LICENSED supporting authority (never VERIFIED). Done-when passes: the Bengaluru/Mumbai lease +
+  Singapore-allotment question returns PARTIAL with the Companies Act answered+quoted and FEMA + each State's
+  stamp duty refused by name. The plan validator is `agents/multi_plan.validate` (code).
 - **Proof:** a question touching a held and a declared body returns PARTIAL with exactly one refusal row naming the declared body.
 
-### F3 Central/State resolver — TODO
+### F3 Central/State resolver — BUILT (triage; Seventh-Schedule basis UNVERIFIED)
 - **Entry:** internal step after intake; no verb of its own.
 - **Flow:** subject → new module `checker.jurisdiction` table lookup → CENTRAL / STATE / CONCURRENT;
   STATE without State or date → `NEED_FACT`.
@@ -60,6 +66,9 @@ Status words: **BUILT** · **PARTIAL** · **TODO** · **NEEDS PERMISSION** · **
   entry it rests on, acquired as held text first.
 - **Gate:** a model may suggest the State from an address; code confirms it against the user's facts; mismatch shown.
 - **Proof:** "stamp duty on a lease" with no State returns NEED_FACT("which State?"), never an answer.
+- **Built:** `checker/jurisdiction.py` (routing only; every row's constitutional basis is UNVERIFIED
+  until the Seventh Schedule is acquired and counsel-reviewed). Bengaluru→Karnataka, Mumbai→Maharashtra;
+  a State topic with no State OR no date → NEED_FACT.
 
 ### F4 Law on a past date — BUILT (Companies Act)
 - **Entry:** any ask with `as_of`.
