@@ -1057,6 +1057,46 @@ def _test() -> None:
     check(anon.post("/v2/ask/stream", json={"question": "x"}).status_code == 401,
           "an unauthenticated stream request is 401, like every other /v2 route")
 
+    # ── F2: a multi-body question is REACHABLE over HTTP, answered body-by-body ──────
+    # Proven through /v2/research/multi (a real request, not a direct ctx call), keyless:
+    # the held worker is the supervisor's deterministic held-corpus stand-in, so this holds
+    # in the keyless gate exactly as it will once a model is served to PHRASE the same quote.
+    # (A dedicated verb, not a branch of /v2/ask: conversation.send derives its bodies from
+    # ask's shape, which is body-level, so the per-State supervisor shape lives on its own.)
+    _MB_Q = ("5-year office leases in Bengaluru and Mumbai, and a share allotment to a "
+             "Singapore investor")
+    _mb = client.post("/v2/research/multi", json={"question": _MB_Q})
+    check(_mb.status_code == 200, f"/v2/research/multi takes a multi-body question ({_mb.status_code})")
+    _mbj = json.loads(_mb.content)
+    check(_mbj.get("status") == "PARTIAL",
+          f"...and answers PARTIAL -- part held, part named, never one national answer "
+          f"({_mbj.get('status')})")
+    _secs = {(s["body"], s.get("state")): s for s in _mbj.get("sections", [])}
+    _ca = next((s for (b, _st), s in _secs.items() if b == "CA2013"), None)
+    check(_ca is not None and _ca["status"] == "ANSWERED" and (_ca.get("text") or "").strip(),
+          "...the Companies Act part is ANSWERED with served text")
+    from checker import quoted_span as _qs
+    check(_ca is not None and bool(_qs.parse(_ca.get("text") or "")),
+          "...and that text quotes the held Act verbatim (a SENTENCE/QUOTE block)")
+    check(any(b == "FEMA1999" and s["status"] == "NOT_HELD"
+              for (b, _st), s in _secs.items()),
+          "...FEMA is refused BY NAME, not answered")
+    _stamp = {st for (b, st), s in _secs.items()
+              if b == "STAMP" and s["status"] in ("NOT_HELD", "NEED_FACT")}
+    check({"Karnataka", "Maharashtra"} <= _stamp,
+          f"...and each State's stamp duty is named (NEED_FACT/NOT_HELD) ({sorted(_stamp)})")
+    _plan = _mbj.get("plan", {})
+    check("CA2013" in _plan.get("bodies", []) and "FEMA1999" in _plan.get("bodies", [])
+          and {"Karnataka", "Maharashtra"} <= set(_plan.get("states", [])),
+          f"...the plan names every body and State ({_plan})")
+    check(any(w["body"] == "CA2013" for w in _plan.get("workers", [])),
+          "...and the Companies Act is the one planned worker")
+    _rid = _mbj.get("run_id")
+    _caps = {s["capability"] for s in
+             json.loads(client.get(f"/v2/runs/{_rid}/trace").content).get("steps", [])}
+    check({"research.CA2013", "research.FEMA1999", "research.STAMP"} <= _caps,
+          f"...and runs.trace carries the plan step by step ({sorted(_caps)})")
+
     # ── the serialiser is stated, because byte-identity needs an encoding ───
     check(dumps({"b": 1, "a": "é"}) == b'{"b":1,"a":"\xc3\xa9"}',
           "the encoding is fixed: key order preserved, no spaces, UTF-8 not escaped")

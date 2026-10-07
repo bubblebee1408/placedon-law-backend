@@ -285,6 +285,66 @@ def _ask(args: dict, ctx: Context) -> dict:
     return d
 
 
+# ── F2: research.multi, the multi-body path ───────────────────────────────────
+#
+# A dedicated verb, NOT a branch inside `ask`: `conversation.send` calls `ask` and derives
+# its body table from `ask`'s shape via `_bodies_from_ask` (which re-reads `ask_scope`, a
+# body-level authority with no per-State notion), so re-shaping `ask` for a compound,
+# per-State question would break that contract. `research.multi` is its own verb on the one
+# table (REST, MCP-read, CLI) and leaves `ask`/`conversation.send` untouched.
+#
+# `agents/multi_supervisor` is the orchestrator. The held worker/verifier are its
+# deterministic held-corpus stand-ins -- no model, no key, a real BYTE-MATCHED quote of the
+# Companies Act. The served model that only PHRASES that quote is wired in B1; until then
+# this serves the verified quote as-is and says so (ponytail: stand-in phrasing until
+# Bedrock lands).
+
+def _research_multi(args: dict, ctx: Context) -> dict:
+    """A compound question answered body-by-body: one section per (body, State), own status.
+
+    The supervisor plans one researcher per held (body, State), refuses the bodies we do not
+    hold BY NAME, resolves a State topic with no date to NEED_FACT, and synthesises the held
+    answers by code. The plan (workers, bodies, States) travels both in the response and, as
+    one step per part, in the persisted run -- so `runs.trace` shows what was planned.
+    """
+    from agents import multi_supervisor as ms
+    question = (args.get("question") or "").strip()
+    if not question:
+        return _refuse("BAD_REQUEST", "question is required")
+    as_of = (args.get("as_of") or "").strip() or None
+    outcome = ms.research(question, as_of=as_of, worker=ms._held_researcher(),
+                          verify=ms._byte_match_verify, merge=ms._code_merge,
+                          budget=_ledger())
+    d = outcome.to_dict()
+
+    # The plan, derived from the sections so the shape has one source of truth: a held worker
+    # section is one the supervisor researched (ANSWERED / NEEDS_LAWYER); the rest are named
+    # refusals (a body not held, or a missing fact).
+    held_statuses = {ms.ANSWERED, "NEEDS_LAWYER"}
+    workers, bodies, states = [], [], []
+    for s in d["sections"]:
+        if s["body"] not in bodies:
+            bodies.append(s["body"])
+        if s.get("state") and s["state"] not in states:
+            states.append(s["state"])
+        if s["status"] in held_statuses:
+            workers.append({"body": s["body"], "state": s.get("state")})
+    d["plan"] = {"workers": workers, "bodies": bodies, "states": states,
+                 "researcher": ms.RESEARCHER}
+
+    # The run that RECORDS the plan: one step per (body, State) so the trace shows what was
+    # planned and what each part returned, not one opaque "research" step.
+    steps = [{"capability": "intake", "status": "ANSWERED",
+              "cost_note": f"multi-body: {len(bodies)} bodies, {len(states)} States"}]
+    for s in d["sections"]:
+        steps.append({"capability": f"research.{s['body']}", "status": s["status"],
+                      "cost_note": f"{s.get('name') or s['body']} / "
+                                   f"{s.get('state') or 'Central'}"})
+    d["run_id"] = _persist_run(ctx, intent="research_multi", status=d["status"],
+                               steps=steps, propositions=[])
+    return d
+
+
 # ── layer 7: the critic ──────────────────────────────────────────────────────
 
 _CRITIC_PROMPT = (
@@ -3908,6 +3968,18 @@ VERBS: tuple[Verb, ...] = (
                           "unanswered part makes the whole PARTIAL and is named")),
          "POST", read_only=True, run=_ask),
 
+    Verb("research.multi",
+         "A compound question split across bodies of law and States, answered body-by-body: "
+         "one section per (body, State) with its own status. The Companies Act parts are "
+         "answered and quoted; a body we do not hold, or a State topic with no date, is "
+         "named -- never squeezed into a single national answer.",
+         (Field("question", STRING, True, describes="the compound question, in plain English"),
+          Field("as_of", STRING, False,
+                describes="an ISO date (YYYY-MM-DD). A State topic such as stamp duty needs "
+                          "one, since State rates change over time; without it that part is "
+                          "returned NEED_FACT rather than guessed")),
+         "POST", read_only=True, run=_research_multi),
+
     Verb("review_contract",
          "A contract against a company playbook. Every finding is a POTENTIAL_ISSUE "
          "against that standard, never a statement of law.",
@@ -4463,7 +4535,8 @@ def _test() -> None:
     rest, cli, mcp = rest_spec(), cli_spec(), mcp_tools()
     names = {v.name for v in VERBS}
 
-    check(names == {"ask", "review_contract", "review_document", "events.assess",
+    check(names == {"ask", "research.multi",
+                    "review_contract", "review_document", "events.assess",
                     "runs.get", "runs.trace", "runs.approve", "runs.reject",
                     "runs.submit", "runs.cancel", "documents.upload",
                     "sources.list", "sources.search", "company_facts.extract",
@@ -4482,7 +4555,7 @@ def _test() -> None:
                                             "vault.verify", "vault.summarize",
                                             "vault.research", "vault.compile",
                                             "vault.delete"},
-          f"the forty-five verbs are declared once ({sorted(names)})")
+          f"the forty-six verbs are declared once ({sorted(names)})")
     # sources.* are READ-ONLY, so they reach MCP. That is the intended shape: an agent may
     # ask what a source permits and search what may be read, and there is no sources verb
     # that fetches, stores or spends. S3's Indian Kanoon connector will spend money, and
@@ -4700,7 +4773,7 @@ def _test() -> None:
           "firm acts for, and no agent task needs it. read_only is about whether a call "
           "changes anything; mcp is about whether a tool may ask at all")
     check("matters.list" not in {t.name.split(".", 1)[-1] for t in mcp_tools()}
-          and len(mcp_tools()) == 19,
+          and len(mcp_tools()) == 20,
           f"...and it really is absent from the generated tool list ({len(mcp_tools())})")
     check(_V["conversation.get"].run({"conversation_id": "nope"}, _cctx)["status"]
           == "REFUSED", "an unknown conversation is REFUSED, not an empty thread")
@@ -6014,7 +6087,7 @@ def _test() -> None:
           "...while a WRITE verb is kept out of MCP by mcp_tools(), not by the author "
           "remembering to")
     check("widgets.delete" in write_verbs(hypo), "...and is named in write_verbs()")
-    check(len(VERBS) == 45 and "widgets.count" not in rest_spec(),
+    check(len(VERBS) == 46 and "widgets.count" not in rest_spec(),
           "...and the probe changed nothing in this module: the surfaces are generated "
           "from an argument, not from a global the test rebound")
 

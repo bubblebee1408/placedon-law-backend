@@ -42,17 +42,24 @@ Status words: **BUILT** · **PARTIAL** · **TODO** · **NEEDS PERMISSION** · **
 - **Next:** `law_versions` on every run (T1).
 - **Proof:** gold set dev split (`eval/goldset/run.py`); refusal rows 16/17.
 
-### F2 Knowledge — multi-domain research — PARTIAL
-- **Entry:** `research.multi` (TODO); today `ask` covers one body.
+### F2 Knowledge — multi-domain research — BUILT (stand-in phrasing until live model, B1)
+- **Entry:** `research.multi` verb — REST `POST /v2/research/multi`, MCP (read-only) and CLI, all from the one verb table; `ask` still covers one body. A dedicated verb, not a branch of `ask`: `conversation.send` derives its body table from `ask`'s body-level shape (`_bodies_from_ask`, which re-reads `ask_scope` and has no per-State notion), so the per-State supervisor shape lives on its own verb and leaves `ask`/`conversation.send` untouched.
 - **Flow:** intake extracts subjects → event/body map (`events.py`, `claim_bodies.py`) → one
   **researcher worker per (body, State)**, in parallel on the queue → each returns provisions
   with quotes or a named refusal → blackboard → critic → synthesis (code assembles, model phrases).
 - **Data:** a run with N child jobs; blackboard rows in `run_steps` (typed JSON, schema-validated).
 - **Gate:** only HELD bodies can produce statements of law; DECLARED → refusal row, never a guess.
-- **Next:** MA1 (supervisor, registry, plan validator, blackboard).
+- **Next:** the live model that only PHRASES the verified quote (B1); the frontend screen for compound answers. The verb is reachable now; what is deferred is swapping the deterministic held-corpus stand-in for a served model.
+- **Built (stand-ins):** `agents/multi_supervisor.py` — decompose by (body, State), held-body workers run
+  in parallel (injected executor; the gate's is a thread pool, production rides the job queue), each result
+  verified before the blackboard (`multi_runner`), code synthesis, named refusals for not-held bodies, and
+  case law as LICENSED supporting authority (never VERIFIED). Done-when passes: the Bengaluru/Mumbai lease +
+  Singapore-allotment question returns PARTIAL with the Companies Act answered+quoted and FEMA + each State's
+  stamp duty refused by name. The plan validator is `agents/multi_plan.validate` (code).
+- **Reachable (07-10-2026):** proven over HTTP, not a direct ctx call — a `TestClient` POST of the done-when question to `/v2/research/multi` returns PARTIAL with the Companies Act part ANSWERED and byte-quoted, FEMA NOT_HELD, Karnataka + Maharashtra stamp duty named (NEED_FACT), one section per (body, State), and the plan (workers, bodies, States) both in the response and, step by step, in `runs.trace`. Held worker/verifier are the deterministic held-corpus stand-ins (no model, no key); the served model that phrases the quote arrives with B1.
 - **Proof:** a question touching a held and a declared body returns PARTIAL with exactly one refusal row naming the declared body.
 
-### F3 Central/State resolver — TODO
+### F3 Central/State resolver — BUILT (triage; Seventh-Schedule basis UNVERIFIED)
 - **Entry:** internal step after intake; no verb of its own.
 - **Flow:** subject → new module `checker.jurisdiction` table lookup → CENTRAL / STATE / CONCURRENT;
   STATE without State or date → `NEED_FACT`.
@@ -60,6 +67,9 @@ Status words: **BUILT** · **PARTIAL** · **TODO** · **NEEDS PERMISSION** · **
   entry it rests on, acquired as held text first.
 - **Gate:** a model may suggest the State from an address; code confirms it against the user's facts; mismatch shown.
 - **Proof:** "stamp duty on a lease" with no State returns NEED_FACT("which State?"), never an answer.
+- **Built:** `checker/jurisdiction.py` (routing only; every row's constitutional basis is UNVERIFIED
+  until the Seventh Schedule is acquired and counsel-reviewed). Bengaluru→Karnataka, Mumbai→Maharashtra;
+  a State topic with no State OR no date → NEED_FACT.
 
 ### F4 Law on a past date — BUILT (Companies Act)
 - **Entry:** any ask with `as_of`.
