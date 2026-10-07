@@ -2166,6 +2166,12 @@ def _conversation_send(args: dict, ctx: Context) -> dict:
     out = {"conversation_id": cid, "message_id": reply_id,
            "classification": classification, "run_id": result.get("run_id"),
            "envelope": env}
+    # The source picker's per-source report rides the conversation RESPONSE, a sibling of
+    # the envelope -- never inside answer_envelope.v1, which is versioned and immutable. It
+    # is retrieval metadata (which sources were searched / searched-empty / not-searched),
+    # not part of the legal answer, and it matches the shape the `ask` verb already returns.
+    if result.get("sources"):
+        out["sources"] = result["sources"]
     if task == "DRAFT" and result.get("draft_id"):
         out["draft_id"] = result["draft_id"]
         out["version"] = result.get("version")
@@ -5062,6 +5068,22 @@ def _test() -> None:
     check(_mb["FEMA1999"]["note"] == _sc.refusal_for("FEMA1999"),
           "...and FEMA's note is the REGISTER'S OWN refusal text, not a sentence composed "
           "here")
+
+    # ── the source picker's report rides the conversation RESPONSE, beside the envelope ──
+    # The console Ask (conversation.send) needs "which sources were searched"; the versioned
+    # answer_envelope.v1 cannot carry it, so it travels as a sibling of the envelope.
+    _src = _send_research(text="What is the quorum for a meeting of the Board?",
+                          sources=["held"])
+    check(_src.get("sources", {}).get("searched") == ["held"],
+          f"a research turn carries the per-source report on the RESPONSE "
+          f"({_src.get('sources', {}).get('searched')})")
+    _hrow = next((r for r in _src.get("sources", {}).get("report", []) if r["id"] == "held"),
+                 None)
+    check(_hrow is not None and _hrow["outcome"] == "SEARCHED_HITS",
+          f"...held reports SEARCHED_HITS through conversation.send ({_hrow})")
+    check("sources" not in _src["envelope"],
+          "...and the versioned envelope is untouched -- the report is a sibling, not in it")
+
     # And the case that must NOT be PARTIAL: a second body is named, but the Act has
     # nothing on point, so nothing was answered. ABSTAINED is the honest outcome and
     # PARTIAL here would be a claim to have answered half of it.
