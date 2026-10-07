@@ -85,6 +85,10 @@ KNOWN_TOOLS: frozenset[str] = frozenset({
     "themis.get_obligations",
     "themis.get_amendments",
     "themis.ask",
+    # F2. Read-only like `ask`: it decomposes a compound question by (body, State), answers
+    # the held parts and NAMES the rest. It writes an audit run (as `ask` does) but spends on
+    # no client data and decides nothing, so mcp_tools() generates it and policy allows it.
+    "themis.research.multi",
     "themis.get_company_events",
     "themis.get_instrument_impact",
     "themis.get_live_events",

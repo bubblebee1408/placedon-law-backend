@@ -74,13 +74,14 @@ class Outcome:
     refusals: tuple[Refusal, ...] = ()       # FEMA, each State's stamp duty, NEED_FACTs
     support: tuple[dict, ...] = ()           # case law, SUPPORTING only — never VERIFIED
     gaps: tuple[str, ...] = ()
+    sections: tuple[dict, ...] = ()          # ONE per (body, State), each with its own status
     detail: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         return {"status": self.status, "answer": self.answer,
                 "refusals": [r.__dict__ for r in self.refusals],
                 "support": list(self.support), "gaps": list(self.gaps),
-                "detail": self.detail}
+                "sections": list(self.sections), "detail": self.detail}
 
 
 def _cities_in(text: str) -> tuple[str, ...]:
@@ -204,9 +205,14 @@ def research(question: str, *, as_of: str | None, worker, verify, merge,
 
     # No held body to research: the whole question is refusals (and/or NEED_FACT). That is a
     # REFUSED outcome that NAMES every body, not an empty answer.
+    def _refusal_sections() -> list:
+        return [{"body": r.body, "name": r.name, "state": r.state,
+                 "status": r.kind, "reason": r.reason} for r in refusals]
+
     if not the_plan.workers:
         status = NEED_FACT if any(r.kind == NEED_FACT for r in refusals) else REFUSED
         return Outcome(status, "", refusals, tuple(support), (),
+                       sections=tuple(_refusal_sections()),
                        detail={"reason": "no held body of law is engaged; every part is "
                                          "named above", "subs": len(subs)})
 
@@ -225,7 +231,22 @@ def research(question: str, *, as_of: str | None, worker, verify, merge,
     else:                                    # NEEDS_LAWYER / REFUSED from the runner
         status = run_out.status
 
+    # One section per (body, State). Held workers map to the held sub-questions in order
+    # (plan() appends a worker per held sub, so worker i IS held_subs[i]); refusals follow.
+    held_subs = [x for x in subs if x.held and not x.need_fact]
+    by_index = {r.index: r for r in run_out.results}
+    sections: list = []
+    for i, sub in enumerate(held_subs):
+        wr = by_index.get(i)
+        answered = wr is not None and wr.state == mr.W_OK
+        sections.append({"body": sub.body, "name": scope.body(sub.body).name,
+                         "state": sub.state, "status": (ANSWERED if answered else "NEEDS_LAWYER"),
+                         "text": (wr.text if answered else ""),
+                         "reason": ("" if answered else (wr.reason if wr else "no result"))})
+    sections.extend(_refusal_sections())
+
     return Outcome(status, run_out.merged, refusals, tuple(support), gaps,
+                   sections=tuple(sections),
                    detail={"held_workers": len(the_plan.workers),
                            "runner_status": run_out.status,
                            "verified": run_out.detail.get("verified")})
