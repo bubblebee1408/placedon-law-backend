@@ -196,6 +196,37 @@ def _ask(args: dict, ctx: Context) -> dict:
     user_facts, refusal = _company_facts(args.get("company_facts"))
     if refusal:
         return refusal
+    # Which bodies this question may be searched against. Unknown ids are refused by name;
+    # none chosen means the default, and the result says it was the default.
+    chosen, defaulted, refusal = resolve_sources(args.get("sources"))
+    if refusal:
+        return refusal
+    # The cache key carries the sources only when they were CHOSEN. The default keeps the
+    # key every answer was stored under before sources existed, so a live cache stays valid.
+    cache_sources = () if defaulted else chosen
+    from checker import scope as _scope
+    held_chosen = [k for k in chosen
+                   if k not in (SOURCE_CLIENT, SOURCE_WEB)
+                   and _scope.body(k).status == _scope.IN_CORPUS]
+    if not held_chosen:
+        # No held body was chosen, so retrieval does not run at all: the held corpus is
+        # never searched, and no Companies Act citation can come back. Refused with the
+        # register's own words for the first body chosen.
+        from agents.state import OUT_OF_SCOPE_LAW
+        bodies = [k for k in chosen if k not in (SOURCE_CLIENT, SOURCE_WEB)]
+        reason = (_scope.refusal_for(bodies[0]) if bodies else
+                  "no body of law was chosen to search. " + "; ".join(
+                      CLIENT_NOT_RESEARCH if k == SOURCE_CLIENT else WEB_UNAVAILABLE
+                      for k in chosen))
+        rid = _persist_run(ctx, intent="research_question", status="REFUSED",
+                           refusal_code=OUT_OF_SCOPE_LAW,
+                           steps=[{"capability": "intake", "status": "ANSWERED"},
+                                  {"capability": "research", "status": "REFUSED"}],
+                           propositions=[])
+        return {"status": "REFUSED", "question": q, "code": OUT_OF_SCOPE_LAW,
+                "reason": reason, "provisions": [], "dropped": 0, "model": None,
+                "degraded": False, "answer": "", "run_id": rid,
+                "sources": list(chosen), "sources_defaulted": defaulted}
 
     # O5. Decompose BEFORE the cache: each sub-question is cached on its own, which is
     # where the reuse actually is -- "what notice is required" recurs across many compound
@@ -208,9 +239,9 @@ def _ask(args: dict, ctx: Context) -> dict:
     # would serve one company's answer to a question asked about another.
     hit, cache_key = (None, None)
     if ctx.store is not None and not user_facts:
-        hit, cache_key = _cache_lookup(q, "RESEARCH_QUESTION", args.get("sources"), ctx)
+        hit, cache_key = _cache_lookup(q, "RESEARCH_QUESTION", cache_sources, ctx)
     if hit is not None:
-        return hit
+        return dict(hit, sources=list(chosen), sources_defaulted=defaulted)
 
     ev = rq.evidence(q)
     origins = tuple(o for _, o in ev)
@@ -281,7 +312,8 @@ def _ask(args: dict, ctx: Context) -> dict:
         # note records which half is missing -- see `nonconformity_for`.
         traced=len(out.summary.traced) if out.summary else 0,
         sentences=len(out.summary.sentences) if out.summary else 0)
-    _cache_store(cache_key, q, "RESEARCH_QUESTION", args.get("sources"), d, ctx)
+    d["sources"], d["sources_defaulted"] = list(chosen), defaulted
+    _cache_store(cache_key, q, "RESEARCH_QUESTION", cache_sources, d, ctx)
     return d
 
 
@@ -1500,6 +1532,28 @@ def _bodies_from_ask(result: dict, question: str = "") -> list:
                            ev.B_CURRENT_ONLY if b.status == scope.CURRENT_ONLY
                            else ev.B_NOT_HELD,
                            scope.refusal_for(b.key)))
+
+    # The sources the caller CHOSE. The held body is reported as not searched when it was
+    # left out (saying "nothing on point was found" would claim we looked), and every
+    # chosen body we do not hold is refused by name with the register's own words.
+    chosen = result.get("sources")
+    if isinstance(chosen, list):
+        if held.key not in chosen:
+            out[0] = ev.body(held.key, held.name, ev.B_NOT_ENGAGED,
+                             "not chosen as a source for this question, so the Companies "
+                             "Act was not searched")
+        listed = {row["body_id"] for row in out}
+        for key in chosen:
+            if key in listed or key in (SOURCE_CLIENT, SOURCE_WEB):
+                continue
+            b = scope.body(key)
+            if b.status == scope.IN_CORPUS:
+                continue
+            out.append(ev.body(b.key, b.name,
+                               ev.B_CURRENT_ONLY if b.status == scope.CURRENT_ONLY
+                               else ev.B_NOT_HELD,
+                               scope.refusal_for(b.key)))
+            listed.add(key)
     return out
 
 
@@ -1653,9 +1707,14 @@ def _envelope_for(task: str, result: dict, *, as_of: str, run_id=None,
         status = ev.ABSTAINED
     else:
         status = ev.ANSWERED
+    searched = None
+    if task == "RESEARCH_QUESTION" and isinstance(result.get("sources"), list):
+        searched = searched_record(result["sources"],
+                                   defaulted=bool(result.get("sources_defaulted")),
+                                   as_of=as_of)
     return ev.build(status=status, task=task, as_of=as_of, text_blocks=blocks,
                     bodies=bodies, citations=citations, files=list(files), run_id=run_id,
-                    trace_url=trace)
+                    trace_url=trace, searched=searched)
 
 
 # ── citations: built from the traced spans, re-verified against the corpus ───
@@ -1934,9 +1993,11 @@ def _conversation_send(args: dict, ctx: Context) -> dict:
                        f"UNVERIFIED against any external source, so an answer stamped with "
                        f"a past date would be today's text wearing one. Ask without as_of, "
                        f"or ask what changed.")
-    sources = args.get("sources")
-    if sources is not None and not isinstance(sources, list):
-        return _refuse("BAD_REQUEST", "sources must be a list of source ids")
+    # The same resolver `ask` uses, so an unknown id is refused HERE, before a thread or a
+    # message is written for a search that would not have run.
+    _chosen, _defaulted, refusal = resolve_sources(args.get("sources"))
+    if refusal:
+        return refusal
     override = (args.get("task_override") or "").strip() or None
     if override is not None and override not in intake.TASKS:
         return _refuse("BAD_REQUEST",
@@ -2098,7 +2159,9 @@ def _task_args(task: str, text: str, file_ids, ctx: Context, args: dict,
             doc = str(d["text"])
             break
     if task == "RESEARCH_QUESTION":
-        return {"question": text}
+        # `sources` travels to `ask`, which restricts retrieval to it. It used to stop at
+        # conversation.send's type check and never reach retrieval at all.
+        return {"question": text, "sources": args.get("sources") or []}
     if task == "EVENT_ASSESS":
         return {"event": (args.get("event") or "commercial_contract"),
                 "facts": args.get("facts") or {}}
@@ -3852,6 +3915,95 @@ def _documents_upload(args: dict, ctx: Context) -> dict:
                      "enforces tenant isolation.")}
 
 
+# ── sources: what a question may be searched against ─────────────────────────
+#
+# Generated from `checker/scope.BODIES` and nothing else: a second hand-kept list of bodies
+# would drift from the register the first time a body changed status, and a picker offering
+# a body the register refuses -- or hiding one it holds -- is the failure scope.py exists to
+# prevent. Two entries are not bodies of law and say so: the tenant's own documents, and the
+# web, which is not available because web text cannot make an answer VERIFIED.
+
+SOURCE_CLIENT = "client_documents"
+SOURCE_WEB = "web"
+WEB_UNAVAILABLE = "web text cannot make an answer VERIFIED"
+CLIENT_NOT_RESEARCH = ("a research question reads held law only; your documents are read by "
+                       "Document Check and review tables, not by this search")
+
+
+def source_bodies() -> list:
+    """sources.list `bodies`: every body in register order, then client documents and web."""
+    from checker import scope
+    from checker.sources.tiers import CLIENT
+    out = []
+    for b in scope.BODIES:
+        held = b.status == scope.IN_CORPUS
+        out.append({
+            "id": b.key, "name": b.name,
+            # The register's own abbreviation where it lists one; otherwise its key. Never
+            # a short name invented here.
+            "short": b.abbreviations[0] if b.abbreviations else b.key,
+            "issuer": b.regulator, "status": b.status, "covers": b.covers,
+            "note": (b.note if held else
+                     f"Choosing it is refused, with the reason: {scope.refusal_for(b.key)}"),
+            "selectable": True, "default_on": held, "available": True,
+        })
+    out.append({"id": SOURCE_CLIENT, "name": "Your documents (Wall System)",
+                "short": "DOCS", "issuer": "your firm", "status": CLIENT,
+                "covers": "documents this firm uploaded to Wall System",
+                "note": CLIENT_NOT_RESEARCH, "selectable": True, "default_on": False,
+                "available": True})
+    out.append({"id": SOURCE_WEB, "name": "The web", "short": "WEB", "issuer": "—",
+                "status": "UNAVAILABLE", "covers": "—", "note": WEB_UNAVAILABLE,
+                "selectable": False, "default_on": False, "available": False,
+                "reason": WEB_UNAVAILABLE})
+    return out
+
+
+def source_defaults() -> tuple:
+    """The sources searched when none are chosen: every held body (today, CA2013)."""
+    return tuple(r["id"] for r in source_bodies() if r["default_on"])
+
+
+def resolve_sources(raw) -> tuple:
+    """(chosen ids in register order, defaulted?, refusal | None).
+
+    An unknown id is BAD_REQUEST naming it -- never silently dropped, because a source the
+    caller believes was searched and was not is an answer about the wrong law. An absent or
+    empty list means the default, and the caller is told it was the default.
+    """
+    if raw is None or raw == []:
+        return source_defaults(), True, None
+    if not isinstance(raw, list) or not all(isinstance(x, str) for x in raw):
+        return (), False, _refuse("BAD_REQUEST", "sources must be a list of source ids")
+    order = [r["id"] for r in source_bodies()]
+    unknown = [x for x in raw if x.strip() not in order]
+    if unknown:
+        return (), False, _refuse(
+            "BAD_REQUEST",
+            f"{', '.join(repr(u) for u in unknown)} is not a source. The ids are listed by "
+            f"sources.list: {', '.join(order)}")
+    wanted = {x.strip() for x in raw}
+    return tuple(i for i in order if i in wanted), False, None
+
+
+def searched_record(chosen, *, defaulted: bool, as_of: str) -> dict:
+    """The envelope's `searched`: each chosen source, its status, and whether it was READ."""
+    from checker import scope
+    rows = []
+    for sid in chosen:
+        if sid == SOURCE_CLIENT:
+            rows.append({"id": sid, "status": "CLIENT", "read": False,
+                         "note": CLIENT_NOT_RESEARCH})
+        elif sid == SOURCE_WEB:
+            rows.append({"id": sid, "status": "UNAVAILABLE", "read": False,
+                         "note": WEB_UNAVAILABLE})
+        else:
+            b = scope.body(sid)
+            rows.append({"id": sid, "status": b.status,
+                         "read": b.status == scope.IN_CORPUS})
+    return {"bodies": rows, "as_of": as_of, "defaulted": bool(defaulted)}
+
+
 def _sources_list(args: dict, ctx: Context) -> dict:
     """Every source, its tier, and whether it may be fetched — with the reason when not.
 
@@ -3886,6 +4038,8 @@ def _sources_list(args: dict, ctx: Context) -> dict:
                  "may_fetch": True,
                  "may_fetch_reason": "the tenant's own document, under review"}]
     return {"tiers": list(TIERS), "adapters": built_in, "external": out,
+            # The bodies a question may be searched against, for the composer's picker.
+            "bodies": source_bodies(),
             "fetchable": [r["source_id"] for r in out if r["may_fetch"]],
             "cacheable": [r["source_id"] for r in out if r["may_cache"]],
             "note": ("Only HELD can make an answer VERIFIED (PLAN_26 §2). External sources "
@@ -3951,6 +4105,11 @@ VERBS: tuple[Verb, ...] = (
     Verb("ask", "One grounded research question against the held statute. Cited spans or "
                 "a named refusal.",
          (Field("question", STRING, True, describes="the question, in plain English"),
+          Field("sources", ARRAY, False,
+                describes="body ids from sources.list `bodies` to search. Retrieval reads "
+                          "only the chosen HELD bodies; a chosen body we do not hold is "
+                          "refused by name. Absent or empty: the default (held bodies), "
+                          "and the result says so"),
           Field("available", ARRAY, False, describes="provider tuple to route over"),
           Field("company_facts", ARRAY, False,
                 describes="company facts you are telling us, e.g. "
@@ -4138,8 +4297,10 @@ VERBS: tuple[Verb, ...] = (
           Field("as_of", STRING, False,
                 describes="YYYY-MM-DD, the date to read the law as at. Defaults to today"),
           Field("sources", ARRAY, False,
-                describes="source ids to consult, from sources.list. Recorded; only HELD "
-                          "and CLIENT are loadable today"),
+                describes="body ids from sources.list `bodies`. A research question "
+                          "searches only the chosen held bodies; a chosen body we do not "
+                          "hold is refused by name in envelope.bodies, and envelope.searched "
+                          "records what was searched. Absent or empty: the default"),
           Field("task_override", STRING, False,
                 describes="name the task yourself instead of letting intake classify it"),
           Field("event", STRING, False,
@@ -5071,6 +5232,79 @@ def _test() -> None:
         _ok, _why = verify_citation(_c)
         check(_ok, f"{_c['id']}: the quote byte-matches {_c['provision']} on re-read "
                    f"({_why[:54]})")
+
+    # ══ sources: what a question is searched against ════════════════════════
+    from checker import scope as _sc
+    from checker import answer_cache as _ac
+    _sb = source_bodies()
+    check([r["id"] for r in _sb] ==
+          [b.key for b in _sc.BODIES] + [SOURCE_CLIENT, SOURCE_WEB],
+          "sources.list bodies are generated from scope.BODIES in register order, then "
+          "client documents and web -- never a second hand-kept list")
+    check(all(r["name"] == _sc.body(r["id"]).name and r["covers"] == _sc.body(r["id"]).covers
+              and r["status"] == _sc.body(r["id"]).status and
+              r["issuer"] == _sc.body(r["id"]).regulator for r in _sb[:-2]),
+          "...every name, coverage line, status and issuer is the register's own")
+    check([r["id"] for r in _sb if r["default_on"]] == ["CA2013"],
+          "...only the held body is on by default")
+    _llp = next(r for r in _sb if r["id"] == "LLP2008")
+    check(_llp["selectable"] and _llp["note"].startswith("Choosing it is refused") and
+          _sc.refusal_for("LLP2008") in _llp["note"],
+          "...a DECLARED body is selectable, and its note says it will be refused and why")
+    _web = _sb[-1]
+    check(_web["id"] == SOURCE_WEB and not _web["available"] and not _web["selectable"]
+          and _web["reason"] == WEB_UNAVAILABLE,
+          "...web is not available, with the reason")
+    check(by_name()["sources.list"].run({}, _cctx2).get("bodies") == _sb,
+          "...and sources.list serves them as `bodies`, beside the existing data feeds")
+
+    _send = by_name()["conversation.send"]
+    _bad = _send.run({"text": _q, "sources": ["CA2013", "NOPE"]}, _cctx2)
+    check(_bad.get("status") == "REFUSED" and _bad.get("code") == "BAD_REQUEST"
+          and "'NOPE'" in _bad.get("detail", ""),
+          f"an unknown source id is BAD_REQUEST naming it ({_bad.get('detail', '')[:40]})")
+
+    _only = _send.run({"text": _q, "sources": ["LLP2008"]}, _cctx2)["envelope"]
+    _ob = {b["body_id"]: b for b in _only["bodies"]}
+    check(_only["citations"] == [],
+          "choosing only LLP2008 never returns a CA2013 citation: retrieval did not run")
+    check(_ob.get("LLP2008", {}).get("status") == "NOT_HELD"
+          and _sc.body("LLP2008").name in _ob["LLP2008"]["name"],
+          "...LLP2008 comes back in bodies refused, by name")
+    check(_ob.get("CA2013", {}).get("status") == "NOT_ENGAGED"
+          and "not searched" in _ob["CA2013"]["note"],
+          "...and the Companies Act is reported as NOT searched, not as 'nothing found'")
+    check(_only.get("searched") == {"bodies": [{"id": "LLP2008", "status": "DECLARED",
+                                                 "read": False}],
+                                     "as_of": _only["as_of"], "defaulted": False},
+          f"...envelope.searched records it ({_only.get('searched')})")
+
+    _both = _send.run({"text": _q, "sources": ["LLP2008", "CA2013"]}, _cctx2)["envelope"]
+    _bb = {b["body_id"]: b for b in _both["bodies"]}
+    check(len(_both["citations"]) >= 1 and
+          all(c["instrument"] == "Companies Act 2013" for c in _both["citations"]),
+          f"choosing CA2013 + LLP2008 answers from CA2013 ({len(_both['citations'])} "
+          f"citation(s))")
+    check(_bb.get("LLP2008", {}).get("status") == "NOT_HELD"
+          and _bb["LLP2008"]["note"] == _sc.refusal_for("LLP2008"),
+          "...and refuses LLP2008 by name, in the register's own words")
+    check(_both["status"] == "PARTIAL",
+          f"...so the envelope is PARTIAL, not ANSWERED ({_both['status']})")
+    check([(r["id"], r["read"]) for r in _both["searched"]["bodies"]] ==
+          [("CA2013", True), ("LLP2008", False)] and _ev.errors(_both) == [],
+          "...searched lists both in register order, only CA2013 READ, and validates")
+
+    _dflt = _send.run({"text": _q, "sources": []}, _cctx2)["envelope"]["searched"]
+    check(_dflt["defaulted"] is True and [r["id"] for r in _dflt["bodies"]] == ["CA2013"],
+          "an empty sources list searches the default (CA2013), and says it was the default")
+
+    _k1 = _ac.lookup_key(question=_q, task="RESEARCH_QUESTION", as_of="2026-10-01",
+                         sources=resolve_sources(["CA2013"])[0])
+    _k2 = _ac.lookup_key(question=_q, task="RESEARCH_QUESTION", as_of="2026-10-01",
+                         sources=resolve_sources(["CA2013", "LLP2008"])[0])
+    check(_k1 != _k2, "cache keys differ by sources")
+    check(resolve_sources(["LLP2008", "CA2013"])[0] == resolve_sources(["CA2013", "LLP2008"])[0],
+          "...and the order a caller lists them in does not split the cache")
 
     # ── a quote that no longer byte-matches is DROPPED, never shown ─────────
     _bent = dict(_c1, id="bent",

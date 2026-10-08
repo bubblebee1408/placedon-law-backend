@@ -244,7 +244,8 @@ def drop_unquoted(citations: list, *, verify) -> tuple[list, list]:
 
 
 def build(*, status: str, task: str, as_of: str, text_blocks=(), bodies=(), citations=(),
-          files=(), run_id: str | None = None, trace_url: str | None = None) -> dict:
+          files=(), run_id: str | None = None, trace_url: str | None = None,
+          searched: dict | None = None) -> dict:
     """One validated envelope. Raises rather than returning something malformed."""
     if status == FAILED:
         raise EnvelopeError(
@@ -268,6 +269,10 @@ def build(*, status: str, task: str, as_of: str, text_blocks=(), bodies=(), cita
            "text_blocks": list(text_blocks), "bodies": list(bodies),
            "citations": list(citations), "files": list(files),
            "run_id": run_id, "trace_url": trace_url}
+    if searched is not None:
+        # Optional, and absent on every envelope written before it existed: an old stored
+        # envelope still validates and still means what it meant.
+        env["searched"] = searched
     return validate(env)
 
 

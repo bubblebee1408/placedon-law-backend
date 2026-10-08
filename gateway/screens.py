@@ -59,7 +59,7 @@ class Screen:
 # quietly stops saying which law was not held.
 ANSWER_FIELDS = ("envelope.status", "envelope.task", "envelope.as_of",
                  "envelope.text_blocks", "envelope.citations", "envelope.bodies",
-                 "envelope.files", "envelope.trace_url")
+                 "envelope.files", "envelope.trace_url", "envelope.searched")
 
 SCREENS = (
     Screen("home", "Start a thread, or pick one up.", (
@@ -69,9 +69,11 @@ SCREENS = (
              ("result.conversations", "result.matter_id"),
              "ONE matter's threads. matter_id is required (8b: no cross-matter listing)"),
         Call("sources.list", (),
-             ("result.tiers", "result.fetchable", "result.cacheable", "result.external"),
+             ("result.tiers", "result.fetchable", "result.cacheable", "result.external",
+              "result.bodies"),
              "what is held, current-only and declared -- shown so a user learns the "
-             "scope before asking rather than from a refusal"),
+             "scope before asking rather than from a refusal. `bodies` feeds the "
+             "composer's source picker"),
     )),
     Screen("conversation", "Ask, and see what the answer rests on.", (
         Call("conversation.send", ("conversation_id", "text", "file_ids", "as_of",
