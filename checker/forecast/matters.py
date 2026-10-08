@@ -198,13 +198,26 @@ def time_to_decision(matters: list[Matter], *, court: str, as_of: str,
                    tuple(ids), label=est.output_class(), reason=base_note)
 
 
-def load_dataset(path: Path = DATASET) -> list[Matter]:
-    """The committed Companies Act matters dataset -> Matters. Empty list if the file is absent."""
+@dataclass(frozen=True)
+class Dataset:
+    """The committed matters, and WHETHER THEY ARE SYNTHETIC. Synthetic data exists to exercise
+    the pipeline and must never produce a user-visible number -- `forecast.summary` abstains on
+    it. Provenance that is not explicitly marked real is treated as synthetic, by design."""
+    matters: list
+    synthetic: bool
+    source: str = ""
+
+
+def load(path: Path = DATASET) -> Dataset:
+    """Load the dataset and its synthetic flag. Absent file, or a file not marked `synthetic`,
+    is treated as synthetic (fail-safe: an unmarked file is not a measurement)."""
     if not path.exists():
-        return []
+        return Dataset([], True, "none (no dataset file)")
     doc = json.loads(path.read_text())
-    rows = doc.get("matters", doc) if isinstance(doc, dict) else doc
-    return matters_from_rows(rows)
+    if not isinstance(doc, dict):
+        return Dataset(matters_from_rows(doc), True, "unlabelled list (no provenance)")
+    return Dataset(matters_from_rows(doc.get("matters", [])),
+                   bool(doc.get("synthetic", False)), str(doc.get("source", "")))
 
 
 def _test() -> None:

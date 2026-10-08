@@ -4071,8 +4071,22 @@ def _forecast_summary(args: dict, ctx: Context) -> dict:
     if not court:
         return _refuse("BAD_REQUEST", "court is required, e.g. 'Bombay High Court'")
     as_of = (args.get("as_of") or "").strip() or _today(ctx)
-    ds = fm.load_dataset()
-    known = {m.court.strip().lower(): m.court for m in ds}
+    not_legal = ("A predictive signal from past matters, not advice and not a statement of "
+                 "law. It cannot decide your matter.")
+    ds = fm.load()
+    # SYNTHETIC data must never feed a user-visible number. Until a real pull writes a
+    # non-synthetic dataset, this abstains by name rather than dress a fixture as a measurement.
+    if ds.synthetic:
+        return {"status": "ABSTAINED", "label": "predictive_signal", "court": court,
+                "estimate": None, "n_total": 0, "n_timeable": 0, "events": 0, "case_ids": [],
+                "as_of": as_of, "synthetic": True,
+                "reason": ("the Companies Act matters dataset is SYNTHETIC (illustrative rows, "
+                           "not the licensed open data), so no estimate is served from it. Pull "
+                           "the real open judgment metadata with "
+                           "scripts/build_companies_act_matters.py --build (needs the pyarrow "
+                           "parquet engine) first."),
+                "not_legal_advice": not_legal}
+    known = {m.court.strip().lower(): m.court for m in ds.matters}
     canonical = known.get(court.lower())
     if canonical is None:
         return {"status": "ABSTAINED", "label": "predictive_signal", "court": court,
@@ -4080,9 +4094,8 @@ def _forecast_summary(args: dict, ctx: Context) -> dict:
                 "as_of": as_of,
                 "reason": (f"no Companies Act matters for {court!r} in the dataset; "
                            f"known forums: {sorted(set(known.values()))}"),
-                "not_legal_advice": ("A predictive signal from past matters, not advice and "
-                                     "not a statement of law.")}
-    out = fm.time_to_decision(ds, court=canonical, as_of=as_of).to_dict()
+                "not_legal_advice": not_legal}
+    out = fm.time_to_decision(ds.matters, court=canonical, as_of=as_of).to_dict()
     out["as_of"] = as_of
     out["not_legal_advice"] = ("A predictive signal from past matters, not advice and not a "
                                "statement of law. It cannot decide your matter.")
@@ -5130,23 +5143,22 @@ def _test() -> None:
     check("sources" not in _src["envelope"],
           "...and the versioned envelope is untouched -- the report is a sibling, not in it")
 
-    # ── Lane B: forecast.summary is a PREDICTIVE_SIGNAL, never a legal decision ──────────
+    # ── Lane B: forecast.summary never serves a number from SYNTHETIC data ──────────────
+    # The committed dataset is synthetic (illustrative, not the licensed open data), so the
+    # verb ABSTAINS -- a provenance gate, not a broken path. The median/interval/n/case-ids
+    # mechanism, and the too-few abstention, are proven on real-shaped data in
+    # checker/forecast/matters.py's own suite.
     _fc = by_name()["forecast.summary"].run(
         {"court": "Bombay High Court", "as_of": "2024-01-01"}, Context(store=None))
-    check(_fc["status"] == "PREDICTIVE_SIGNAL" and _fc["label"] == "predictive_signal"
-          and _fc["estimate"] and _fc["estimate"]["n"] >= 8,
-          f"forecast.summary gives Bombay HC a predictive_signal median, n>=8 ({_fc.get('status')})")
-    check(_fc["estimate"]["low"] <= _fc["estimate"]["value"] <= _fc["estimate"]["high"]
-          and _fc["estimate"]["unit"] == "months",
-          f"...a median in months with its interval ({_fc['estimate']['value']:.1f})")
-    check(_fc["case_ids"] and len(_fc["case_ids"]) == _fc["n_timeable"],
-          f"...the case ids behind it travel with it ({len(_fc['case_ids'])})")
-    check("not a statement of law" in _fc["not_legal_advice"],
-          "...and it says in words it is not a statement of law")
-    _cal = by_name()["forecast.summary"].run(
-        {"court": "Calcutta High Court", "as_of": "2024-01-01"}, Context(store=None))
-    check(_cal["status"] == "ABSTAINED" and _cal["estimate"] is None and _cal["reason"],
-          f"a forum with too few decided matters ABSTAINS by name, no number ({_cal['status']})")
+    check(_fc["status"] == "ABSTAINED" and _fc.get("synthetic") is True and _fc["estimate"] is None,
+          f"forecast.summary serves NO number from the synthetic dataset ({_fc.get('status')})")
+    check("SYNTHETIC" in _fc["reason"] and "pyarrow" in _fc["reason"],
+          "...saying why: synthetic rows, and the real pull needs the parquet engine")
+    check(_fc["label"] == "predictive_signal" and "not a statement of law" in _fc["not_legal_advice"],
+          "...labelled predictive_signal, and in words not a statement of law")
+    from checker.forecast import matters as _fm
+    check(_fm.load().synthetic is True,
+          "...and the committed dataset is marked synthetic, so an unmarked file cannot pass as real")
     from checker import rings as _rings
     check(_rings.ring_of("checker.forecast.matters") == _rings.RING_3,
           "forecast.matters is Ring 3 (INFERENCE): the firewall keeps this signal out of a "

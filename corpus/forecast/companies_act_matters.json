@@ -1,6 +1,15 @@
 {
-  "note": "Companies Act 2013 matters for the gate and the forecast.summary done-when. A COMMITTED SAMPLE, real in shape (fields and source paths), rewritten from the live AWS Open Data judgment metadata by scripts/build_companies_act_matters.py (anonymous S3, CC-BY-4.0, tier LICENSED). Case ids are illustrative until the live build runs. A field the metadata does not state is absent here, which reads as UNKNOWN; a matter with no decision_date is PENDING (censored).",
-  "source": "AWS Open Data: indian-high-court-judgments (CC-BY-4.0, Dattam Labs)",
+  "synthetic": true,
+  "note": "SYNTHETIC. These rows are NOT real judgments and NOT an extract of the licensed data. They are illustrative records authored to exercise the Lane B pipeline (field mapping, censoring, Kaplan-Meier, abstention). Because they are synthetic, forecast.summary ABSTAINS on this dataset and serves NO user-visible number from it. scripts/build_companies_act_matters.py --build rewrites this file from the real metadata (which needs the pyarrow parquet engine); only a non-synthetic dataset produces an estimate. A field the real metadata does not state is absent, which reads as UNKNOWN; a matter with no decision_date is PENDING (censored).",
+  "represents_source": {
+    "dataset": "Indian High Court Judgments — AWS Open Data (eCourts), managed by Dattam Labs",
+    "buckets": ["s3://indian-high-court-judgments", "s3://indian-supreme-court-judgments"],
+    "region": "ap-south-1",
+    "licence": "CC-BY-4.0",
+    "licence_text": "Licensed under the Creative Commons Attribution 4.0 International Licence (https://creativecommons.org/licenses/by/4.0/). Attribution: eCourts, Supreme Court of India / High Courts of India; dataset prepared and hosted by Dattam Labs on the AWS Open Data programme.",
+    "tier": "LICENSED"
+  },
+  "source": "SYNTHETIC illustration of: AWS Open Data indian-high-court-judgments (CC-BY-4.0, eCourts / Dattam Labs)",
   "matters": [
     {"case_id": "BOMHC/CP/011/2018", "court": "Bombay High Court", "registration_date": "2018-01-04", "decision_date": "2018-09-01", "section": "Companies Act, 2013 s.241", "outcome": "dismissed", "source_path": "metadata/parquet/year=2018/court=bombay/bench=principal/metadata.parquet"},
     {"case_id": "BOMHC/CP/027/2018", "court": "Bombay High Court", "registration_date": "2018-02-12", "decision_date": "2018-12-20", "section": "Companies Act, 2013 s.59", "outcome": "allowed", "source_path": "metadata/parquet/year=2018/court=bombay/bench=principal/metadata.parquet"},
