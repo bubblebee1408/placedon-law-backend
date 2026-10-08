@@ -4054,6 +4054,41 @@ def _sources_search(args: dict, ctx: Context) -> dict:
     }
 
 
+# ── Lane B: a predictive signal, never a legal decision ───────────────────────
+
+def _forecast_summary(args: dict, ctx: Context) -> dict:
+    """Time-to-decision for Companies Act matters at a forum, as a PREDICTIVE_SIGNAL.
+
+    Reads the committed Companies Act matters dataset (built from the open judgment metadata),
+    counts the matters still PENDING as censored, and reads a Kaplan-Meier median with its
+    interval and n -- or ABSTAINS, by name, when too few matters have been decided there. No
+    model is called; `checker.forecast` is Ring 3 (INFERENCE) and the rings firewall forbids any
+    Ring 0 decider from receiving this value. The result is labelled predictive_signal and
+    carries the case ids behind it.
+    """
+    from checker.forecast import matters as fm
+    court = (args.get("court") or "").strip()
+    if not court:
+        return _refuse("BAD_REQUEST", "court is required, e.g. 'Bombay High Court'")
+    as_of = (args.get("as_of") or "").strip() or _today(ctx)
+    ds = fm.load_dataset()
+    known = {m.court.strip().lower(): m.court for m in ds}
+    canonical = known.get(court.lower())
+    if canonical is None:
+        return {"status": "ABSTAINED", "label": "predictive_signal", "court": court,
+                "estimate": None, "n_total": 0, "n_timeable": 0, "events": 0, "case_ids": [],
+                "as_of": as_of,
+                "reason": (f"no Companies Act matters for {court!r} in the dataset; "
+                           f"known forums: {sorted(set(known.values()))}"),
+                "not_legal_advice": ("A predictive signal from past matters, not advice and "
+                                     "not a statement of law.")}
+    out = fm.time_to_decision(ds, court=canonical, as_of=as_of).to_dict()
+    out["as_of"] = as_of
+    out["not_legal_advice"] = ("A predictive signal from past matters, not advice and not a "
+                               "statement of law. It cannot decide your matter.")
+    return out
+
+
 # ── the table ────────────────────────────────────────────────────────────────
 
 VERBS: tuple[Verb, ...] = (
@@ -4097,6 +4132,17 @@ VERBS: tuple[Verb, ...] = (
                           "these; default = the held corpus plus your vault. Held parts need "
                           "the held corpus picked; an unavailable pick is named, not dropped")),
          "POST", read_only=True, run=_research_multi),
+
+    Verb("forecast.summary",
+         "A predictive signal: how long Companies Act matters take at a forum, from the open "
+         "judgment metadata. A Kaplan-Meier median with its interval and n, counting matters "
+         "still pending as censored; it ABSTAINS by name when too few have been decided there. "
+         "Labelled predictive_signal -- never a statement of law, never a decision about your "
+         "matter.",
+         (Field("court", STRING, True, describes="the forum, e.g. 'Bombay High Court'"),
+          Field("as_of", STRING, False,
+                describes="ISO date (YYYY-MM-DD) to censor pending matters at; defaults to today")),
+         "POST", read_only=True, run=_forecast_summary),
 
     Verb("review_contract",
          "A contract against a company playbook. Every finding is a POTENTIAL_ISSUE "
@@ -4653,7 +4699,7 @@ def _test() -> None:
     rest, cli, mcp = rest_spec(), cli_spec(), mcp_tools()
     names = {v.name for v in VERBS}
 
-    check(names == {"ask", "research.multi",
+    check(names == {"ask", "research.multi", "forecast.summary",
                     "review_contract", "review_document", "events.assess",
                     "runs.get", "runs.trace", "runs.approve", "runs.reject",
                     "runs.submit", "runs.cancel", "documents.upload",
@@ -4673,7 +4719,7 @@ def _test() -> None:
                                             "vault.verify", "vault.summarize",
                                             "vault.research", "vault.compile",
                                             "vault.delete"},
-          f"the forty-six verbs are declared once ({sorted(names)})")
+          f"the forty-seven verbs are declared once ({sorted(names)})")
     # sources.* are READ-ONLY, so they reach MCP. That is the intended shape: an agent may
     # ask what a source permits and search what may be read, and there is no sources verb
     # that fetches, stores or spends. S3's Indian Kanoon connector will spend money, and
@@ -4891,7 +4937,7 @@ def _test() -> None:
           "firm acts for, and no agent task needs it. read_only is about whether a call "
           "changes anything; mcp is about whether a tool may ask at all")
     check("matters.list" not in {t.name.split(".", 1)[-1] for t in mcp_tools()}
-          and len(mcp_tools()) == 20,
+          and len(mcp_tools()) == 21,
           f"...and it really is absent from the generated tool list ({len(mcp_tools())})")
     check(_V["conversation.get"].run({"conversation_id": "nope"}, _cctx)["status"]
           == "REFUSED", "an unknown conversation is REFUSED, not an empty thread")
@@ -5083,6 +5129,28 @@ def _test() -> None:
           f"...held reports SEARCHED_HITS through conversation.send ({_hrow})")
     check("sources" not in _src["envelope"],
           "...and the versioned envelope is untouched -- the report is a sibling, not in it")
+
+    # ── Lane B: forecast.summary is a PREDICTIVE_SIGNAL, never a legal decision ──────────
+    _fc = by_name()["forecast.summary"].run(
+        {"court": "Bombay High Court", "as_of": "2024-01-01"}, Context(store=None))
+    check(_fc["status"] == "PREDICTIVE_SIGNAL" and _fc["label"] == "predictive_signal"
+          and _fc["estimate"] and _fc["estimate"]["n"] >= 8,
+          f"forecast.summary gives Bombay HC a predictive_signal median, n>=8 ({_fc.get('status')})")
+    check(_fc["estimate"]["low"] <= _fc["estimate"]["value"] <= _fc["estimate"]["high"]
+          and _fc["estimate"]["unit"] == "months",
+          f"...a median in months with its interval ({_fc['estimate']['value']:.1f})")
+    check(_fc["case_ids"] and len(_fc["case_ids"]) == _fc["n_timeable"],
+          f"...the case ids behind it travel with it ({len(_fc['case_ids'])})")
+    check("not a statement of law" in _fc["not_legal_advice"],
+          "...and it says in words it is not a statement of law")
+    _cal = by_name()["forecast.summary"].run(
+        {"court": "Calcutta High Court", "as_of": "2024-01-01"}, Context(store=None))
+    check(_cal["status"] == "ABSTAINED" and _cal["estimate"] is None and _cal["reason"],
+          f"a forum with too few decided matters ABSTAINS by name, no number ({_cal['status']})")
+    from checker import rings as _rings
+    check(_rings.ring_of("checker.forecast.matters") == _rings.RING_3,
+          "forecast.matters is Ring 3 (INFERENCE): the firewall keeps this signal out of a "
+          "Ring 0 legal decision")
 
     # And the case that must NOT be PARTIAL: a second body is named, but the Act has
     # nothing on point, so nothing was answered. ABSTAINED is the honest outcome and
@@ -6221,7 +6289,7 @@ def _test() -> None:
           "...while a WRITE verb is kept out of MCP by mcp_tools(), not by the author "
           "remembering to")
     check("widgets.delete" in write_verbs(hypo), "...and is named in write_verbs()")
-    check(len(VERBS) == 46 and "widgets.count" not in rest_spec(),
+    check(len(VERBS) == 47 and "widgets.count" not in rest_spec(),
           "...and the probe changed nothing in this module: the surfaces are generated "
           "from an argument, not from a global the test rebound")
 
