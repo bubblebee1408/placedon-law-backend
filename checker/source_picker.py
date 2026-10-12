@@ -41,6 +41,7 @@ BLOCKED = "BLOCKED"
 # tenant's own uploaded documents (the UI reaches it by a Files button, but it is a source).
 HELD_ID = "held"
 VAULT_ID = "vault"
+LEXIS_ID = "lexisnexis_india"
 
 # A source that needs an API key to fetch. Unset env var => KEY_MISSING, even when terms permit.
 KEY_ENV: dict[str, str] = {
@@ -102,6 +103,13 @@ def source(source_id: str) -> Source:
     if source_id == VAULT_ID:
         return Source(VAULT_ID, "Your documents (vault)", PUBLIC, AVAILABLE,
                       "the tenant's own uploaded documents, searched as support, never VERIFIED")
+    if source_id == LEXIS_ID:
+        # Product availability in India is not a Placedon content/API licence. Keep the
+        # connector visible for discovery, but refuse search until scope and rights are
+        # configured and verified. Never infer entitlement from a key being present.
+        return Source(LEXIS_ID, "LexisNexis India", LICENSED, NOT_ACQUIRED,
+                      "Not connected: Placedon needs a confirmed India-content API agreement, "
+                      "permitted AI use, citation display and retention terms before searching")
     rec = terms.record_for(source_id)          # raises terms.NoTermsRecord for an unknown id
     state, reason = _external_status(source_id)
     return Source(source_id, rec.name, _tier_of(source_id), state, reason,
@@ -111,7 +119,7 @@ def source(source_id: str) -> Source:
 
 def all_ids() -> tuple[str, ...]:
     """Every pickable id: the two built-ins then the external records, in a stable order."""
-    return (HELD_ID, VAULT_ID) + terms.SOURCE_IDS
+    return (HELD_ID, VAULT_ID, LEXIS_ID) + terms.SOURCE_IDS
 
 
 def listing() -> list[dict]:
@@ -174,6 +182,9 @@ def _test() -> None:
     check(h.tier == HELD and h.status == AVAILABLE and h.switchable,
           f"held is HELD and available ({h.tier}, {h.status})")
     check(source(VAULT_ID).switchable, "the vault is switchable")
+    lexis = source(LEXIS_ID)
+    check(lexis.tier == LICENSED and lexis.status == NOT_ACQUIRED and not lexis.switchable,
+          "Lexis India is visible but cannot be searched without a Placedon licence")
     check([s for s in listing() if s["tier"] == HELD] == [h.to_dict()],
           "exactly one source is displayed as HELD — the held corpus")
 
@@ -209,6 +220,9 @@ def _test() -> None:
     check(r.searchable == DEFAULT and r.unavailable == (),
           f"no pick -> held + vault, nothing external ({r.searchable})")
     check(set(DEFAULT) == {HELD_ID, VAULT_ID}, "the default is exactly held + vault")
+    lexis_pick = resolve([LEXIS_ID])
+    check(lexis_pick.searchable == () and lexis_pick.unavailable[0]["status"] == NOT_ACQUIRED,
+          "a Lexis pick remains not searched until its licence is configured")
 
     # ── resolve: an unavailable pick is preserved as NOT_SEARCHED, not dropped ─
     saved = os.environ.pop("PLACEDON_INDIANKANOON_KEY", None)
