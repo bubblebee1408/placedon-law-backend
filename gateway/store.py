@@ -55,6 +55,10 @@ class TurnConflict(StoreError):
     """An idempotency key or a conversation matter was reused inconsistently."""
 
 
+class DuplicateVaultDocument(StoreError):
+    """The same content already has a tenant-scoped vault record."""
+
+
 class Backend(Protocol):
     kind: str
 
@@ -733,8 +737,8 @@ class MemoryBackend:
                 "vault_documents_deleted_has_no_text)")
         # Dedupe is per tenant: the same bytes twice is one document.
         for other, row in self.vault_docs.items():
-            if other != did and row.get("sha256") == sha and not row.get("deleted_at"):
-                raise StoreError(
+            if other != did and row.get("sha256") == sha:
+                raise DuplicateVaultDocument(
                     f"these bytes are already in this tenant's vault as {other} (020 "
                     f"vault_documents_tenant_sha)")
         row = {"document_id": did, "matter_id": doc.get("matter_id"), "sha256": sha,
@@ -1746,9 +1750,11 @@ class PostgresBackend:
                      doc.get("class_reason"), doc.get("text_chars"),
                      doc.get("ocr_state") or "NOT_NEEDED"))
         except psycopg.errors.IntegrityError as exc:
-            raise StoreError(f"the database refused this vault document: "
-                             f"{type(exc).__name__} "
-                             f"{str(exc).splitlines()[0][:150]}") from None
+            constraint = getattr(getattr(exc, "diag", None), "constraint_name", None)
+            if constraint == "vault_documents_tenant_sha":
+                raise DuplicateVaultDocument(
+                    "these bytes are already in this tenant's vault") from None
+            raise StoreError("the database refused this vault document") from None
         return self.read_vault_document(doc["document_id"]) or {}
 
     def read_vault_document(self, document_id: str) -> dict | None:

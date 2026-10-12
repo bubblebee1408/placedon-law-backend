@@ -2433,6 +2433,7 @@ def _vault_ready(ctx: Context):
 
 def _vault_upload(args: dict, ctx: Context) -> dict:
     """Store the bytes and queue one ingest job. A WRITE verb."""
+    import logging
     import uuid
     refusal = _vault_ready(ctx)
     if refusal:
@@ -2458,17 +2459,37 @@ def _vault_upload(args: dict, ctx: Context) -> dict:
         return _refuse("ARCHIVE_REFUSED", verdict.reason)
     try:
         sha = ctx.files.put(data)
-    except Exception as e:                                       # noqa: BLE001
-        return _refuse("BAD_REQUEST", f"{type(e).__name__}: {str(e)[:140]}")
+    except Exception as exc:                                     # noqa: BLE001
+        # A failed backing-store write is operational, not bad user input. Do not return
+        # SDK exception text: it may carry account/container/request details. The HTTP
+        # layer maps this stable code to 503 with Retry-After.
+        from gateway.filestore import FileStoreUnavailable
+        retryable = not isinstance(exc, FileStoreUnavailable) or exc.retryable
+        logging.getLogger(__name__).warning(
+            "vault_blob_write_failed", extra={"exception_type": type(exc).__name__,
+                                               "retryable": retryable})
+        return _refuse(
+            "STORAGE_UNAVAILABLE" if retryable else "STORAGE_MISCONFIGURED",
+            "Vault storage is temporarily unavailable; retry shortly." if retryable
+            else "Vault storage is not configured for this operation. Contact your administrator.",
+        )
     did = str(uuid.uuid4())
     try:
         ctx.store.write_vault_document({
             "document_id": did, "matter_id": (args.get("matter_id") or "").strip() or None,
             "sha256": sha, "name": name, "byte_count": len(data), "state": "PENDING"})
-    except Exception as e:                                       # noqa: BLE001
-        # Dedupe fires here: the same bytes twice is one document, and saying so is more
-        # useful than a second row that would never be searched separately.
-        return _refuse("CONFLICT", str(e)[:200])
+    except Exception as exc:                                     # noqa: BLE001
+        from gateway.store import DuplicateVaultDocument
+        if isinstance(exc, DuplicateVaultDocument):
+            return _refuse("CONFLICT", "These bytes are already in this workspace's vault.")
+        # Bytes may now exist in Blob without a metadata row. Keep the response generic;
+        # operators can use the exception class and database telemetry to diagnose it.
+        logging.getLogger(__name__).error(
+            "vault_metadata_write_failed", extra={"exception_type": type(exc).__name__})
+        return _refuse(
+            "STORAGE_UNAVAILABLE",
+            "The file could not be registered in the vault. Check the vault before retrying.",
+        )
     queued, queue_error = None, ""
     if ctx.queue is not None:
         from agents.vault_ingest import INTENT
