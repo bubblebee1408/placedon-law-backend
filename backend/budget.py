@@ -67,6 +67,16 @@ PRICING: dict[str, tuple[float, float]] = {
     "claude-opus-5":    (5.00, 25.00),
 }
 
+# B1 — Claude on Amazon Bedrock (ap-south-1). Bedrock bills Claude per token at the SAME
+# USD/1M figures as Anthropic's list above (Haiku 4.5 $1/$5, Sonnet $3/$15), so the table is
+# reused rather than forked — one price path, one place to edit. Source: the AWS Bedrock
+# pricing page, https://aws.amazon.com/bedrock/pricing/ , read 2026-10-07. An ap-south-1
+# regional on-demand figure could not be machine-verified from that page (it is JS-rendered
+# and a fetch returned a stale Claude 3.5 snapshot), so these LIST figures stand as a
+# CEILING — UNVERIFIED for ap-south-1 until confirmed in the console once the account is live,
+# which is safe under the rule above: a budget guard may only ever be wrong in the expensive
+# direction. If Bedrock ap-south-1 ever prices ABOVE the list, this must be raised to match.
+
 # Sonnet 5 carries introductory pricing of $2.00/$10.00 through 2026-08-31 — today it actually
 # costs ₹1.94/answer, not the ₹2.91 this table computes. The list price is kept anyway, on the
 # rule that **a budget guard must only ever be wrong in the expensive direction**. Encoding the

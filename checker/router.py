@@ -117,6 +117,12 @@ OLLAMA = "ollama"
 # because the operator's laptop holds 8.6 GB of unified memory and a 12B model ran Ollama
 # out of GPU memory on 14-09-2026, so "fall back to local" means an 8B or nothing.
 AZURE = "azure"
+
+# B1. Claude on Amazon Bedrock in ap-south-1 (Mumbai), via the in.anthropic.* India
+# inference profile -- the CLIENT-DATA provider. PLAN_22 D3 permits a client document only to
+# a confirmed-India endpoint; this is it, and Azure UAE stays test-only (its
+# refuse_unconfirmed_region blocks a client document). checker/bedrock_model.py is the adapter.
+BEDROCK = "bedrock"
 # The deployment on the `placedon-law-eval` resource. Named here rather than imported so
 # this table reads as a table; checker/azure_model.DEFAULT_DEPLOYMENT is the same string
 # and its own test asserts the default it serves.
@@ -267,6 +273,16 @@ _PREFERENCE = {
     TaskProfile(TEXT, LOW, NARRATION): [
         (ANTHROPIC, NARRATE,
          "cannot introduce a fact -- reasoning.review() drops the whole sentence if it tries"),
+        # B1: the CLIENT-DATA provider, preferred among the ones the gateway can actually
+        # call. Haiku 4.5 primary; Sonnet only when the verifier rejects Haiku's phrasing
+        # (route() re-asks with the first model excluded). Both on the India profile, so a
+        # client document stays in ap-south-1/ap-south-2 -- never UAE.
+        (BEDROCK, "claude-haiku-4-5",
+         "Claude Haiku 4.5 on Bedrock, ap-south-1 (India). The confirmed-India endpoint a "
+         "client document may reach; priced in rupees against the cap"),
+        (BEDROCK, "claude-sonnet-5",
+         "escalation only: Sonnet on the same India profile, for when the verifier rejects "
+         "Haiku and route() re-asks excluding it"),
         # ── with no Anthropic credit, this is the chain, and PLAN_22 §3 fixes its order ──
         # An earlier version of this table put both Gemini rows ABOVE Azure, on the
         # argument that a free tier should be spent before paid credit. That argument reads
@@ -464,6 +480,11 @@ def providers_available(*, credit_exhausted=None) -> tuple[str, ...]:
         out.append(GEMINI)
     if azure_model.available():
         out.append(AZURE)
+    # B1: Bedrock is billed to AWS, NOT the Anthropic credit, so it is not gated by
+    # credit_exhausted(). Its spend is bounded by the rupee caps through budget.reserve.
+    from checker import bedrock_model
+    if bedrock_model.available():
+        out.append(BEDROCK)
     if ollama_runner.available():
         out.append(OLLAMA)
     return tuple(out)
@@ -641,7 +662,9 @@ def _test() -> None:
           "...while Anthropic is still preferred for extraction, so the row is a fallback "
           "and not a promotion")
     _narr = [(p, m) for p, m, _w in _PREFERENCE[TaskProfile(TEXT, LOW, NARRATION)]]
-    check(_narr == [(ANTHROPIC, NARRATE), (AZURE, AZURE_LLAMA_70B),
+    check(_narr == [(ANTHROPIC, NARRATE),
+                    (BEDROCK, "claude-haiku-4-5"), (BEDROCK, "claude-sonnet-5"),
+                    (AZURE, AZURE_LLAMA_70B),
                     (AZURE, AZURE_GPT5_MINI), (GEMINI, FLASH), (GEMINI, FLASH_LITE)],
           f"the narration chain is Anthropic, Azure 70B, Azure gpt-5-mini, then Gemini as "
           f"backup: PLAN_22 §3's 'backup only' made executable ({_narr})")
