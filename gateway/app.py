@@ -226,7 +226,7 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
     # P2. Which tenant the shared memory backend has served. See backend_for.
     app.state.memory_tenant = None
 
-    def backend_for(tenant_id: str):
+    def backend_for(tenant_id: str, actor_id: str | None = None):
         """The backend for this tenant, or a refusal if memory cannot keep them apart.
 
         **The memory backend has no tenant isolation, and now says so instead of pretending.**
@@ -244,7 +244,11 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
         and this says so by name.
         """
         if app.state.db_url:
-            return PostgresBackend(app.state.db_url, tenant_id=tenant_id)
+            # actor_id is threaded, NOT defaulted to tenant_id: conversations.actor_id and
+            # runs.actor_id are FOREIGN KEYS to actors, so writing the tenant there (the
+            # old default `actor_id or tenant_id`) FK-fails against a real actors table and,
+            # when it does not, misattributes every run to the tenant. R-019.
+            return PostgresBackend(app.state.db_url, tenant_id=tenant_id, actor_id=actor_id)
         with memory_lock:
             seen = app.state.memory_tenant
             if seen is not None and seen != tenant_id:
@@ -448,7 +452,7 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
             # refuse a second tenant too, or the two surfaces disagree about who may be
             # served and the narrower one is the only protection.
             try:
-                app.state.backend_for(principal.tenant_id)
+                app.state.backend_for(principal.tenant_id, principal.actor)
             except SingleTenantOnly as exc:
                 return _single_tenant(exc)
         path = request.url.path
@@ -498,7 +502,7 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
                         outcome="refused", status=slow.http_status)
                 return _limit_response(slow)
             try:
-                store = app.state.backend_for(principal.tenant_id)
+                store = app.state.backend_for(principal.tenant_id, principal.actor)
                 tenant_queue = queue_for(principal.tenant_id, principal.actor)
             except SingleTenantOnly as exc:
                 return _single_tenant(exc)
@@ -628,7 +632,7 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
                     resource="ask.stream", outcome="refused", status=slow.http_status)
             return _limit_response(slow)
         try:
-            store = app.state.backend_for(principal.tenant_id)
+            store = app.state.backend_for(principal.tenant_id, principal.actor)
         except SingleTenantOnly as exc:
             return _single_tenant(exc)
         raw, over = await _read_body(request)
@@ -751,7 +755,7 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
             if slow:
                 return _limit_response(slow)
             try:
-                store = app.state.backend_for(principal.tenant_id)
+                store = app.state.backend_for(principal.tenant_id, principal.actor)
                 tenant_queue = queue_for(principal.tenant_id, principal.actor)
             except SingleTenantOnly as exc:
                 return _single_tenant(exc)
