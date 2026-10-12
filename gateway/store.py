@@ -2300,10 +2300,10 @@ class PostgresBackend:
             raise StoreError("a draft cursor has an invalid draft_id")
         with self._conn() as c:
             rows = c.execute(
-                "SELECT d.draft_id, d.kind, d.title, d.updated_at, v.version, "
+                "SELECT d.draft_id, d.kind, v.title, d.updated_at, v.version, "
                 "v.blocking_count, (v.approved_at IS NOT NULL) AS approved "
                 "FROM drafts d JOIN LATERAL ("
-                "  SELECT version, blocking_count, approved_at FROM draft_versions "
+                "  SELECT version, title, blocking_count, approved_at FROM draft_versions "
                 "  WHERE draft_id = d.draft_id ORDER BY version DESC LIMIT 1"
                 ") v ON true "
                 "WHERE (%s::timestamptz IS NULL OR (d.updated_at, d.draft_id) < "
@@ -2961,7 +2961,7 @@ def conformance(backend) -> list[tuple[bool, str]]:
         {"draft_id": did, "title": "Notice of AGM", "body": "Notice is hereby given.",
          "slots": [{"name": "venue", "type": "MODEL_SUGGESTION"}], "blocking_count": 1})
     v2 = backend.append_draft_version(
-        {"draft_id": did, "title": "Notice of AGM",
+        {"draft_id": did, "title": "Updated notice of AGM",
          "body": "Notice is hereby given to the members.",
          "slots": [{"name": "venue", "type": "USER_FACT"}], "blocking_count": 0})
     ck((v1, v2) == (1, 2), f"versions number themselves 1 then 2 ({v1}, {v2})")
@@ -2976,6 +2976,7 @@ def conformance(backend) -> list[tuple[bool, str]]:
     inbox = backend.list_drafts(limit=10)
     ck(len(inbox) == 1 and inbox[0]["draft_id"] == did
        and inbox[0]["version"] == 2 and inbox[0]["blocking_count"] == 0
+       and inbox[0]["title"] == "Updated notice of AGM"
        and "body" not in inbox[0],
        "the draft inbox returns latest metadata only and never returns document text")
     ck(backend.list_drafts(limit=10, before_updated_at=inbox[0]["updated_at"],
