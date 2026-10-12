@@ -33,6 +33,10 @@ Run: PYTHONPATH=. python3 gateway/app.py
 from __future__ import annotations
 
 import json
+import asyncio
+import logging
+import threading
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
@@ -45,6 +49,7 @@ from datetime import datetime, timezone
 from fastapi import FastAPI, Request                         # noqa: E402
 from fastapi.responses import Response, StreamingResponse     # noqa: E402
 
+from gateway.admission import BoundedExecutor, Busy, await_work
 from gateway import audit as audit_mod                       # noqa: E402
 from gateway.auth import AuthError, KeyStore, bearer          # noqa: E402
 from gateway.store import (MEMORY, POSTGRES, MemoryBackend,   # noqa: E402
@@ -188,7 +193,7 @@ def file_store_health(files) -> dict:
 
 def create_app(*, deployment: Deployment | None = None, clock=None, handler=None,
                keys: KeyStore | None = None, db_url: str | None = None, queue=None,
-               files=None):
+               files=None, admission: BoundedExecutor | None = None):
     """The FastAPI app. Every dependency injected so the test reaches no network or clock."""
     # The store is SELECTED, and /v1/health reports what was selected rather than what
     # was hoped for. `db_url=""` forces memory, which is what the gate uses so a developer
@@ -200,7 +205,16 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
     if handle is None:
         from checker.api import handle as handle       # noqa: PLW0127
 
-    app = FastAPI(title="Placedon gateway", docs_url=None, redoc_url=None)
+    executor = admission or BoundedExecutor()
+    @asynccontextmanager
+    async def lifespan(app):
+        try:
+            yield
+        finally:
+            executor.close()
+    app = FastAPI(title="Placedon gateway", docs_url=None, redoc_url=None, lifespan=lifespan)
+    app.state.admission = executor
+    memory_lock = threading.Lock()
     app.state.deployment = dep
     # The in-memory store, named on app.state so a test can reach it and a future
     # Postgres store can replace it without touching a route.
@@ -231,22 +245,45 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
         """
         if app.state.db_url:
             return PostgresBackend(app.state.db_url, tenant_id=tenant_id)
-        seen = app.state.memory_tenant
-        if seen is not None and seen != tenant_id:
-            raise SingleTenantOnly(
-                f"this deployment has no database configured, so it is running on the "
-                f"in-memory store, which has NO tenant isolation: it consults tenant_id in "
-                f"none of its reads. It has already served tenant {seen}, and serving "
-                f"{tenant_id} as well would let each read the other's rows. Set "
-                f"PLACEDON_DATABASE_URL -- Postgres enforces this with FORCE ROW LEVEL "
-                f"SECURITY, which the memory store cannot imitate")
-        app.state.memory_tenant = tenant_id
-        app.state.memory_backend.tenant_id = tenant_id
-        return app.state.memory_backend
+        with memory_lock:
+            seen = app.state.memory_tenant
+            if seen is not None and seen != tenant_id:
+                raise SingleTenantOnly(
+                    f"this deployment has no database configured, so it is running on the "
+                    f"in-memory store, which has NO tenant isolation: it consults tenant_id in "
+                    f"none of its reads. It has already served tenant {seen}, and serving "
+                    f"{tenant_id} as well would let each read the other's rows. Set "
+                    f"PLACEDON_DATABASE_URL -- Postgres enforces this with FORCE ROW LEVEL "
+                    f"SECURITY, which the memory store cannot imitate")
+            app.state.memory_tenant = tenant_id
+            app.state.memory_backend.tenant_id = tenant_id
+            return app.state.memory_backend
 
     app.state.backend_for = backend_for
     app.state.run_store = app.state.memory_backend
-    app.state.documents = app.state.memory_backend.documents
+    from gateway.document_cache import DocumentCache
+    document_cache = DocumentCache()
+    app.state.documents = document_cache.for_tenant("memory")
+    app.state.memory_backend.documents = app.state.documents
+
+    def documents_for(tenant_id):
+        # Legacy uploads have not migrated to durable vault IDs. Keep their process
+        # cache tenant-scoped even when the persistent backend enforces RLS.
+        if not app.state.db_url:
+            return app.state.documents
+        return document_cache.for_tenant(tenant_id)
+
+    def queue_for(tenant_id, actor_id):
+        if queue is not None and getattr(queue, "kind", None) == "memory":
+            if app.state.db_url:
+                raise SingleTenantOnly("An in-memory queue cannot serve a database deployment.")
+            return queue  # backend_for already enforces a single tenant in memory mode.
+        if queue is not None and getattr(queue, "tenant_id", tenant_id) != tenant_id:
+            from gateway.jobs import PostgresQueue
+            if app.state.db_url and isinstance(queue, PostgresQueue):
+                return PostgresQueue(app.state.db_url, tenant_id=tenant_id, actor_id=actor_id, max_pending=queue.max_pending)
+            raise SingleTenantOnly("The configured job queue belongs to a different tenant.")
+        return queue
     app.state.keys = keys if keys is not None else KeyStore()
     # Injected, or read from the environment. Never discovered inside a handler: a verb
     # that reached for its own file store would be a second place the vault's location
@@ -259,6 +296,7 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
     # The audit chain, in memory with the rest of it. Append-only and hash-chained already
     # (gateway/audit.py); what is missing is Postgres, not the chain.
     app.state.audit = ()
+    audit_lock = threading.Lock()
 
     def _limit_response(refusal) -> Response:
         """A Refusal as an HTTP response. One shape, so both surfaces answer alike."""
@@ -273,6 +311,65 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
         """A Refusal if this body is over the cap, else None. Checked on BOTH surfaces."""
         return limits_mod.check_body_size(
             raw, content_length=request.headers.get("content-length"))
+
+    body_lock = threading.Lock()
+    body_counts = {}
+    body_total = 0
+    app.state.body_timeout_seconds = 15
+
+    async def _read_body(request):
+        nonlocal body_total
+        from starlette.requests import ClientDisconnect
+        over = _too_large(None, request)
+        if over:
+            return b"", over
+        try:
+            tenant = _principal(request).tenant_id
+        except AuthError:
+            tenant = "anonymous"
+        with body_lock:
+            if body_total >= 8 or body_counts.get(tenant, 0) >= 2:
+                return b"", limits_mod.Refusal("BUSY", "Upload capacity is in use. Retry shortly; no work was started.", 429, 2)
+            body_total += 1
+            body_counts[tenant] = body_counts.get(tenant, 0) + 1
+        try:
+            chunks, size = [], 0
+            async with asyncio.timeout(app.state.body_timeout_seconds):
+                async for chunk in request.stream():
+                    size += len(chunk)
+                    if size > limits_mod.MAX_BODY_BYTES:
+                        return b"", limits_mod.Refusal(limits_mod.TOO_LARGE, "Request exceeds the upload limit.", 413)
+                    chunks.append(chunk)
+            return b"".join(chunks), None
+        except TimeoutError:
+            return b"", limits_mod.Refusal("REQUEST_TIMEOUT", "The upload timed out. Retry when the connection is ready.", 408, 2)
+        except ClientDisconnect:
+            return b"", limits_mod.Refusal("CONNECTION_LOST", "The upload connection ended before the request arrived.", 400)
+        finally:
+            with body_lock:
+                body_total -= 1
+                body_counts[tenant] -= 1
+                if not body_counts[tenant]:
+                    del body_counts[tenant]
+
+    def _busy_response():
+        return _limit_response(limits_mod.Refusal("BUSY", "All work slots are currently in use. Retry the same request shortly; no new work was started.", 429, 2))
+
+    def _failed_response():
+        # Exception strings can contain SQL, local paths, provider keys or client text.
+        return Response(content=dumps({"error": "temporarily_unavailable", "detail": "The service could not finish this request. Reconnect using the same request ID to check its state."}), status_code=503,
+                        media_type="application/json", headers={"Retry-After": "2"})
+
+    async def _execute(principal, fn, *args, control=False, **kwargs):
+        try:
+            return await executor.run(principal.tenant_id, fn, *args, control=control, **kwargs)
+        except Busy:
+            _record(principal, action=audit_mod.READ, route="admission", resource="capacity", outcome="refused", status=429)
+            return _busy_response()
+        except Exception as exc:
+            logging.getLogger(__name__).error("gateway operation failed: %s", type(exc).__name__)
+            _record(principal, action=audit_mod.READ, route="execution", resource="operation", outcome="refused", status=503)
+            return _failed_response()
 
     def _rate_limited(principal):
         """A Refusal if this TENANT is over its rate, else None.
@@ -310,19 +407,19 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
         place that chooses what goes in.
         """
         import uuid
-        app.state.audit = audit_mod.append(
-            app.state.audit, timestamp=now(), request_id=str(uuid.uuid4()),
-            tenant_id=principal.tenant_id, actor=principal.actor,
-            action=action, route=route, resource=resource,
-            outcome=outcome, http_status=status)
+        with audit_lock:
+            app.state.audit = audit_mod.append(
+                app.state.audit, timestamp=now(), request_id=str(uuid.uuid4()),
+                tenant_id=principal.tenant_id, actor=principal.actor,
+                action=action, route=route, resource=resource,
+                outcome=outcome, http_status=status)
+
 
     @app.api_route("/v1/{rest:path}", methods=["GET", "POST"])
     async def v1(rest: str, request: Request) -> Response:
         body = None
         if request.method == "POST":
-            raw = await request.body()
-            # Size first: it protects this process's memory and needs no identity.
-            over = _too_large(raw, request)
+            raw, over = await _read_body(request)
             if over:
                 return _limit_response(over)
             if raw:
@@ -357,7 +454,13 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
         path = request.url.path
         if request.url.query:
             path = f"{path}?{request.url.query}"
-        status, payload = handle(request.method, path, body, generated_at=now())
+        if principal is None:
+            status, payload = handle(request.method, path, body, generated_at=now())
+        else:
+            result = await _execute(principal, handle, request.method, path, body, generated_at=now())
+            if isinstance(result, Response):
+                return result
+            status, payload = result
         if bare == HEALTH_PATH and status == 200:
             # `queue` is INJECTED and defaults to None, so health keeps its current
             # shape unless an operator wires one in. /v1/health is served without a key,
@@ -396,15 +499,15 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
                 return _limit_response(slow)
             try:
                 store = app.state.backend_for(principal.tenant_id)
+                tenant_queue = queue_for(principal.tenant_id, principal.actor)
             except SingleTenantOnly as exc:
                 return _single_tenant(exc)
             ctx = Context(tenant=principal.tenant_id, actor=principal.actor,
-                          store=store, documents=app.state.documents, clock=now,
-                          files=app.state.files, queue=queue)
+                          store=store, documents=documents_for(principal.tenant_id), clock=now,
+                          files=app.state.files, queue=tenant_queue)
             args = dict(request.path_params)
             if verb.method == "POST":
-                raw = await request.body()
-                over = _too_large(raw, request)
+                raw, over = await _read_body(request)
                 if over:
                     return _limit_response(over)
                 if raw:
@@ -442,12 +545,19 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
                     {"error": "bad_request",
                      "detail": f"missing required input(s): {', '.join(missing)}"}),
                     status_code=400, media_type="application/json")
-            out = verb.run(args, ctx) if verb.run else {"error": "not_implemented"}
+            control = verb.name in {"conversation.get", "conversation.list", "runs.get", "runs.trace", "runs.cancel", "sources.list", "matters.list", "vault.status"}
+            out = await _execute(principal, verb.run, args, ctx, control=control) if verb.run else {"error": "not_implemented"}
+            if isinstance(out, Response):
+                return out
             code = 200
             if isinstance(out, dict) and out.get("code") in ("NOT_FOUND", "NO_STORE"):
                 code = 404 if out["code"] == "NOT_FOUND" else 503
             elif isinstance(out, dict) and out.get("code") == "BAD_REQUEST":
                 code = 400
+            elif isinstance(out, dict) and out.get("code") == "IDEMPOTENCY_CONFLICT":
+                code = 409
+            elif isinstance(out, dict) and out.get("code") == "BUSY":
+                code = 429
             # The resource is an IDENTIFIER, never the input. For documents.upload that
             # is the sha256 the handler returned; for a run verb, the run id; otherwise
             # the verb's own name. The question a caller asked never reaches the chain.
@@ -458,7 +568,7 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
                     route=f"{verb.method} {path}", resource=str(resource),
                     outcome="served" if code < 400 else "refused", status=code)
             return Response(content=dumps(out), status_code=code,
-                            media_type="application/json")
+                            media_type="application/json", headers={"Retry-After": "2"} if code == 429 else None)
 
         app.add_api_route(path, _route, methods=[verb.method],
                           name=f"v2:{verb.name}", summary=verb.summary)
@@ -521,8 +631,7 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
             store = app.state.backend_for(principal.tenant_id)
         except SingleTenantOnly as exc:
             return _single_tenant(exc)
-        raw = await request.body()
-        over = _too_large(raw, request)
+        raw, over = await _read_body(request)
         if over:
             return _limit_response(over)
         try:
@@ -538,7 +647,14 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
 
         ask_verb = next(v for v in VERBS if v.name == "ask")
         ctx = Context(tenant=principal.tenant_id, actor=principal.actor,
-                      store=store, documents=app.state.documents, clock=now)
+                      store=store, documents=documents_for(principal.tenant_id), clock=now)
+
+        if not may(principal.role, "ask"):
+            return Response(content=dumps({"error": "forbidden", "detail": "This role cannot research."}), status_code=403, media_type="application/json")
+        try:
+            work = executor.submit(principal.tenant_id, ask_verb.run, args, ctx)
+        except Busy:
+            return _busy_response()
 
         async def frames():
             t0 = time.monotonic()
@@ -549,7 +665,7 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
                 "verb": "ask", "first_event_ms": round((time.monotonic() - t0) * 1000, 3),
                 "note": "accepted and started. Steps follow, then one answer event"})
             try:
-                out = await asyncio.to_thread(ask_verb.run, args, ctx)
+                out = await await_work(work)
             except Exception as exc:                             # noqa: BLE001
                 # A DISTINCT event. Never an answer whose envelope says abstained: an
                 # abstention means we read the law and could not answer, and this means we
@@ -558,7 +674,7 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
                         resource="ask.stream", outcome="refused", status=500)
                 yield _sse("error", {
                     "code": "TRANSPORT_FAILED",
-                    "detail": f"{type(exc).__name__}: {str(exc)[:200]}",
+                    "detail": "The service could not finish this request. Please retry shortly.",
                     "is_abstention": False,
                     "note": ("this is a FAILURE, not an abstention. Nothing was read and "
                              "nothing follows about the law. An abstention arrives as an "
@@ -631,13 +747,17 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
                 principal = _principal(request)
             except AuthError:
                 return _unauthorised()
+            slow = _rate_limited(principal)
+            if slow:
+                return _limit_response(slow)
             try:
                 store = app.state.backend_for(principal.tenant_id)
+                tenant_queue = queue_for(principal.tenant_id, principal.actor)
             except SingleTenantOnly as exc:
                 return _single_tenant(exc)
             ctx = Context(tenant=principal.tenant_id, actor=principal.actor,
-                          store=store, documents=app.state.documents, clock=now,
-                          files=app.state.files, queue=queue)
+                          store=store, documents=documents_for(principal.tenant_id), clock=now,
+                          files=app.state.files, queue=tenant_queue)
             if not may(principal.role, verb_name):
                 _record(principal, action=audit_mod.READ, route=f"GET {path}",
                         resource=verb_name, outcome="refused", status=403)
@@ -647,7 +767,9 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
                                f"this key has {principal.role}"}),
                     status_code=403, media_type="application/json")
             args = dict(request.path_params) | dict(request.query_params)
-            out = by_name()[verb_name].run(args, ctx)
+            out = await _execute(principal, by_name()[verb_name].run, args, ctx)
+            if isinstance(out, Response):
+                return out
             if isinstance(out, dict) and out.get("status") == "REFUSED":
                 code = {"NOT_FOUND": 404, "NO_STORE": 503}.get(out.get("code"), 400)
                 _record(principal, action=audit_mod.READ,
@@ -886,7 +1008,8 @@ def _test() -> None:
         print("    (SSE socket check skipped: uvicorn is not installed)")
     else:
         _sse_server_ran = True
-        _sse_cfg = _uvicorn.Config(app, host="127.0.0.1", port=0, log_level="error")
+        _socket_app = create_app(clock=lambda: GEN, keys=keys, db_url="")
+        _sse_cfg = _uvicorn.Config(_socket_app, host="127.0.0.1", port=0, log_level="error")
         _sse_server = _uvicorn.Server(_sse_cfg)
         _sse_thread = _sse_threading.Thread(target=_sse_server.run, daemon=True)
         _sse_thread.start()
@@ -1129,10 +1252,10 @@ def _test() -> None:
     check(_held.get("sources", {}).get("searched") != _case.get("sources", {}).get("searched"),
           "the same question gives a different searched set for Central-law-only vs case-law-only")
 
-    # searched-empty is not not-searched: the vault was searched and matched nothing
+    # Selected vault is explicitly unsearched until research actually grounds on it.
     _hv_v = _row(_hv, "vault")
-    check(_hv_v is not None and _hv_v["outcome"] == "SEARCHED_EMPTY",
-          f"a picked-but-empty vault reports SEARCHED_EMPTY, distinct from NOT_SEARCHED ({_hv_v})")
+    check(_hv_v is not None and _hv_v["outcome"] == "NOT_SEARCHED",
+          f"a selected vault reports NOT_SEARCHED until research grounding is connected ({_hv_v})")
 
     # sources.list carries the picker view: every card has a tier, status and switchable flag
     _sl = json.loads(client.post("/v2/sources/list", json={}).content)["picker"]

@@ -103,6 +103,7 @@ REQUIRED: dict[str, str] = {
     "vault.find": VIEWER,
     "vault.research": VIEWER,
     "vault.status": VIEWER,
+    "vault.list": VIEWER,
     "vault.summarize": VIEWER,
     "vault.verify": VIEWER,
     "sources.list": VIEWER,

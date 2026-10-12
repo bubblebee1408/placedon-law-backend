@@ -35,6 +35,8 @@ from __future__ import annotations
 
 import hashlib
 import re
+import os
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -92,9 +94,13 @@ class LocalFileStore:
         if not path.exists():
             # Written to a temporary name and moved, so a reader never sees a half-written
             # file under a key that promises its whole contents.
-            tmp = path.with_suffix(".part")
-            tmp.write_bytes(bytes(data))
-            tmp.replace(path)
+            descriptor, temporary = tempfile.mkstemp(prefix=".upload-", suffix=".part", dir=path.parent)
+            try:
+                with os.fdopen(descriptor, "wb") as stream:
+                    stream.write(bytes(data))
+                os.replace(temporary, path)
+            finally:
+                Path(temporary).unlink(missing_ok=True)
         return key
 
     def get(self, key: str) -> bytes | None:

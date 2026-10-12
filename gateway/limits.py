@@ -38,6 +38,7 @@ Run: PYTHONPATH=. python3 gateway/limits.py --test
 from __future__ import annotations
 
 import time
+import threading
 from dataclasses import dataclass, field
 
 __all__ = ["MAX_BODY_BYTES", "RATE_PER_MINUTE", "BURST", "Refusal", "Limiter",
@@ -100,6 +101,7 @@ class Limiter:
     burst: int = BURST
     clock: object = time.monotonic
     _buckets: dict = field(default_factory=dict)
+    _lock: object = field(default_factory=threading.Lock, repr=False)
 
     def check(self, tenant_id: str, *, cost: int = 1) -> Refusal | None:
         """Spend `cost` tokens for this tenant. None if allowed, a Refusal if not.
@@ -108,22 +110,23 @@ class Limiter:
         recovery time out every time a blocked client retried, which turns a brief limit into
         an indefinite one.
         """
-        now = float(self.clock())
-        rate = self.per_minute / 60.0
-        b = self._buckets.get(tenant_id)
-        if b is None:
-            b = self._buckets[tenant_id] = _Bucket(float(self.burst), now)
-        else:
-            b.tokens = min(float(self.burst), b.tokens + (now - b.updated) * rate)
-            b.updated = now
-        if b.tokens < cost:
-            short = cost - b.tokens
-            return Refusal(RATE_LIMITED,
-                           f"tenant {tenant_id} is over its rate limit of "
-                           f"{self.per_minute} requests/minute (burst {self.burst})",
-                           429, retry_after=max(1, int(short / rate) + 1))
-        b.tokens -= cost
-        return None
+        with self._lock:
+            now = float(self.clock())
+            rate = self.per_minute / 60.0
+            b = self._buckets.get(tenant_id)
+            if b is None:
+                b = self._buckets[tenant_id] = _Bucket(float(self.burst), now)
+            else:
+                b.tokens = min(float(self.burst), b.tokens + (now - b.updated) * rate)
+                b.updated = now
+            if b.tokens < cost:
+                short = cost - b.tokens
+                return Refusal(RATE_LIMITED,
+                               f"tenant {tenant_id} is over its rate limit of "
+                               f"{self.per_minute} requests/minute (burst {self.burst})",
+                               429, retry_after=max(1, int(short / rate) + 1))
+            b.tokens -= cost
+            return None
 
     def tokens_for(self, tenant_id: str) -> float:
         """What this tenant has left RIGHT NOW. A pure read: it refills but does not mutate.
@@ -132,11 +135,12 @@ class Limiter:
         bucket idle for an hour still read as empty. That is wrong for a test and worse for
         usage reporting, which is the other caller. For deciding, use `check`.
         """
-        b = self._buckets.get(tenant_id)
-        if b is None:
-            return float(self.burst)
-        elapsed = float(self.clock()) - b.updated
-        return min(float(self.burst), b.tokens + elapsed * (self.per_minute / 60.0))
+        with self._lock:
+            b = self._buckets.get(tenant_id)
+            if b is None:
+                return float(self.burst)
+            elapsed = float(self.clock()) - b.updated
+            return min(float(self.burst), b.tokens + elapsed * (self.per_minute / 60.0))
 
 
 def _test() -> int:

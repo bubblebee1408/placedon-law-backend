@@ -213,8 +213,8 @@ def _ask(args: dict, ctx: Context) -> dict:
         return hit
 
     # The source picker. Retrieval searches ONLY the picked sources; the default is the held
-    # corpus plus the vault. `ask` retrieves HELD (here) and the vault (in the report below);
-    # an external pick is resolved for its status and named, never silently searched or dropped.
+    # corpus plus the vault. Only HELD is connected to this answer path; the report names
+    # the unavailable vault grounding and external retrieval explicitly.
     from checker import source_picker as _sp
     _picked = args.get("sources")
     _resolved = _sp.resolve(_picked)
@@ -227,7 +227,7 @@ def _ask(args: dict, ctx: Context) -> dict:
     # `ask` answers only from the held statute. If the held corpus was not picked, it reads
     # nothing to answer from and ABSTAINS -- rather than letting the answer path re-retrieve
     # the held corpus and quietly ignore the caller's pick. The report still records every
-    # picked source's state (the vault was searched; an external pick is named).
+    # picked source's state without pretending a selected source was used as evidence.
     if not _held_searched:
         rid = _persist_run(ctx, intent="research_question", status="ABSTAINED",
                            steps=[{"capability": "intake", "status": "ANSWERED"},
@@ -263,7 +263,7 @@ def _ask(args: dict, ctx: Context) -> dict:
         rid = _persist_run(ctx, intent="research_question", status="FAILED",
                            steps=[{"capability": "research", "status": "FAILED"}],
                            propositions=[])
-        return {"status": "FAILED", "error": f"{type(e).__name__}: {str(e)[:200]}",
+        return {"status": "FAILED", "error": f"{type(e).__name__}: the provider request could not finish",
                 "run_id": rid, "sources": _report}
 
     d = out.to_dict()
@@ -326,8 +326,9 @@ def _vault_hits(question: str, ctx: Context) -> int:
 def _sources_report(picked, resolved, ev, question: str, ctx: Context) -> dict:
     """What each picked source did: SEARCHED_HITS / SEARCHED_EMPTY / NOT_SEARCHED (+ named state).
 
-    `ask` retrieves two sources for real -- the held corpus and the vault -- so only those can
-    report SEARCHED. Every other picked source is NOT_SEARCHED and says why: its availability
+    `ask` grounds answers in the held corpus. Vault retrieval is not connected to this
+    answer path, so it must not advertise a search over client documents. Every other
+    picked source is NOT_SEARCHED and says why: its availability
     state (KEY_MISSING / NOT_ACQUIRED / BLOCKED) when it cannot be switched on, or that live
     retrieval for it is served by sources.search, not ask, when it can. searched-empty (a search
     ran, nothing matched) is reported apart from not-searched (no search ran) on purpose.
@@ -351,11 +352,9 @@ def _sources_report(picked, resolved, ev, question: str, ctx: Context) -> dict:
                          "outcome": "SEARCHED_HITS" if ev else "SEARCHED_EMPTY",
                          "hits": len(ev), "reason": ""})
         elif sid == _sp.VAULT_ID and sid in searchable:
-            hits = _vault_hits(question, ctx)
-            searched.append(sid)
             rows.append({"id": sid, "tier": _sp.PUBLIC, "status": _sp.AVAILABLE,
-                         "outcome": "SEARCHED_HITS" if hits else "SEARCHED_EMPTY",
-                         "hits": hits, "reason": ""})
+                         "outcome": "NOT_SEARCHED", "hits": 0,
+                         "reason": "Vault grounding is not connected to legal research. Use document review for an attached file."})
         elif sid in unavailable:
             u = unavailable[sid]
             rows.append({"id": sid, "tier": _tier(sid), "status": u["status"],
@@ -363,8 +362,8 @@ def _sources_report(picked, resolved, ev, question: str, ctx: Context) -> dict:
         else:
             rows.append({"id": sid, "tier": _tier(sid), "status": _sp.AVAILABLE,
                          "outcome": "NOT_SEARCHED", "hits": 0,
-                         "reason": "available, but ask searches the held corpus and your "
-                                   "vault; use sources.search for this source"})
+                         "reason": "available, but ask searches the held corpus; "
+                                   "use sources.search for this source"})
     return {"picked": list(picked_ids), "searched": searched, "report": rows,
             "note": ("searched-empty is not not-searched: an empty search ran; a not-searched "
                      "source did not. Only HELD rows can make an answer VERIFIED.")}
@@ -692,6 +691,17 @@ def _cache_lookup(question: str, task: str, sources, ctx: Context):
         if not ok:
             return None, key
         out = dict(entry.payload)
+        # Older cache rows advertised a vault search that never grounded the answer.
+        # Reuse the reverified statutory answer, never that obsolete retrieval claim.
+        report = out.get("sources")
+        if isinstance(report, dict):
+            report = dict(report, searched=[sid for sid in report.get("searched", []) if sid != "vault"],
+                          report=[dict(row, outcome="NOT_SEARCHED", hits=0,
+                                       reason="Vault grounding is not connected to legal research.")
+                                  if row.get("id") == "vault" else dict(row)
+                                  for row in report.get("report", [])])
+            report["note"] = "Retrieval report from the cached answer; no new search ran. " + str(report.get("note") or "")
+            out["sources"] = report
         out["cached"] = True
         out["cache_note"] = (f"served from the answer cache, stored {entry.created_at}. "
                              f"{why}")
@@ -842,7 +852,8 @@ def _review_contract(args: dict, ctx: Context) -> dict:
     try:
         origin = public_only.clear_matter(
             text, name=name, provider="azure",
-            test_data=bool(args.get("test_data")))
+            test_data=(_affirmed(args.get("test_data")) or
+                       args.get("test_data") in ("fixture", "synthetic")))
     except public_only.NotPublic as e:
         return _refuse("NOT_PERMITTED", str(e))
     # Residency is a decision about the DOCUMENT, so it is taken before a route is sought.
@@ -872,7 +883,7 @@ def _review_contract(args: dict, ctx: Context) -> dict:
         rid = _persist_run(ctx, intent="review_contract", status="FAILED",
                            steps=[{"capability": "document", "status": "FAILED"}],
                            propositions=[])
-        return {"status": "FAILED", "error": f"{type(e).__name__}: {str(e)[:200]}",
+        return {"status": "FAILED", "error": f"{type(e).__name__}: the provider request could not finish",
                 "run_id": rid}
     d = out.to_dict()
 
@@ -1167,7 +1178,7 @@ def _runs_submit(args: dict, ctx: Context) -> dict:
                        "survive the process that accepted it. Use the synchronous verb, or "
                        "configure PLACEDON_DATABASE_URL.")
 
-    from gateway.jobs import QueueError
+    from gateway.jobs import QueueError, QueueFull
     run_id = str(uuid.uuid4())
     # The run row FIRST. A job pointing at a run that does not exist is a foreign-key error
     # on Postgres and a dangling id in memory, and the poller would get NOT_FOUND for work
@@ -1179,7 +1190,11 @@ def _runs_submit(args: dict, ctx: Context) -> dict:
         from gateway.jobs import INTERACTIVE as _LANE_INTERACTIVE
         job = ctx.queue.enqueue(run_id=run_id, intent=intent, args=payload,
                                 lane=_LANE_INTERACTIVE)
+    except QueueFull:
+        ctx.store.set_run(run_id, status="FAILED", result={"error": "Queue capacity reached; no job was added."})
+        return _refuse("BUSY", "The work queue is full. Retry shortly.")
     except QueueError as e:
+        ctx.store.set_run(run_id, status="FAILED", result={"error": "The job could not be queued."})
         return _refuse("BAD_REQUEST", str(e))
     return {"status": "PLANNED", "run_id": run_id, "job_id": job.job_id,
             "intent": intent,
@@ -1686,7 +1701,7 @@ def _envelope_for(task: str, result: dict, *, as_of: str, run_id=None,
     trace = f"{V2}/runs/{run_id}/trace" if run_id else None
     if result.get("status") == "FAILED":
         return ev.failed(task=task, as_of=as_of,
-                         detail=str(result.get("error") or "the step did not complete"),
+                         detail="The request could not finish. Your question is saved; please retry.",
                          run_id=run_id, trace_url=trace)
 
     bodies = _bodies_for(task, result, question)
@@ -1733,14 +1748,20 @@ def _envelope_for(task: str, result: dict, *, as_of: str, run_id=None,
 
     unheld = [b for b in bodies if b["status"] in (ev.B_NOT_HELD, ev.B_CURRENT_ONLY)]
     answered = [b for b in bodies if b["status"] == ev.B_ANSWERED]
-    if result.get("status") == "REFUSED":
+    if result.get("status") in ("REFUSED", ev.ABSTAINED):
         status = ev.ABSTAINED
-    elif result.get("requires_review"):
+    elif result.get("status") == ev.NEEDS_CLARIFICATION:
+        status = ev.NEEDS_CLARIFICATION
+    elif result.get("requires_review") or result.get("status") == ev.NEEDS_LAWYER:
         # A finding a machine cannot close. `review_contract` is the clear case: every
         # finding is a POTENTIAL_ISSUE against the company's own playbook, which is not
         # law, so there is no outcome this system may call compliant. NEEDS_LAWYER was in
         # the enum and nothing produced it, which made the enum a wish.
         status = ev.NEEDS_LAWYER
+    elif result.get("status") == ev.PARTIAL:
+        status = ev.PARTIAL
+    elif dropped:
+        status = ev.PARTIAL if citations else ev.ABSTAINED
     elif unheld and answered:
         status = ev.PARTIAL
     elif unheld and not answered:
@@ -1924,7 +1945,7 @@ def _draft_prose(template: str, source: dict, ctx: Context) -> tuple[list, str]:
                 provider=router.AZURE),)
     except Exception as e:                                       # noqa: BLE001
         return [], (f"{draft_prose.NO_PROSE_PREFIX}these findings could not be cleared to "
-                    f"leave the device ({type(e).__name__}: {str(e)[:140]})")
+                    f"leave the device ({type(e).__name__})")
 
     served, refusal = _served_or_refusal(origins, name="draft_prose",
                                          purpose=router.NARRATION, ctx=ctx,
@@ -1989,89 +2010,230 @@ def _persist_result(ctx: Context, result: dict) -> None:
                       result={k: v for k, v in result.items() if k != "run_id"})
 
 
-def _conversation_send(args: dict, ctx: Context) -> dict:
-    """One turn: classify, dispatch, store, and return the envelope or a run_id.
+MAX_CONVERSATION_CHARS = 8000
+MAX_CONVERSATION_FILES = 20
 
-    A WRITE verb, so it is not on MCP: it creates a conversation, appends messages and may
-    enqueue work. `mcp_tools()` enforces that rather than trusting this docstring.
 
-    Long work goes on the job queue and the reply returns the run_id at once, with the
-    assistant message's envelope NULL until a worker fills it -- which is why
-    `messages.envelope` is nullable and why NULL is not `{}`.
+def _turn_metadata(metadata: dict, result: dict) -> dict:
+    """Retrieval and artifact provenance lives beside the frozen legal envelope."""
+    out = dict(metadata)
+    if isinstance(result.get("sources"), dict):
+        out["sources"] = result["sources"]
+    artifacts = []
+    if result.get("draft_id"):
+        artifacts.append({"type": "draft", "id": result["draft_id"],
+                          "version": result.get("version")})
+    if result.get("grid_id"):
+        artifacts.append({"type": "review_table", "id": result["grid_id"]})
+    out["artifacts"] = artifacts
+    return out
+
+
+def _turn_response(message: dict) -> dict:
+    metadata = message.get("metadata") or {}
+    out = {"conversation_id": message["conversation_id"],
+           "message_id": message["message_id"], "task": message.get("task"),
+           "run_id": message.get("run_id"), "envelope": message.get("envelope"),
+           "classification": metadata.get("classification") or {},
+           "metadata": metadata, "files": metadata.get("files") or []}
+    if metadata.get("sources"):
+        out["sources"] = metadata["sources"]
+    for artifact in metadata.get("artifacts") or []:
+        if artifact.get("type") == "draft":
+            out.update(draft_id=artifact["id"], version=artifact.get("version"))
+        elif artifact.get("type") == "review_table":
+            out["grid_id"] = artifact["id"]
+    return out
+
+
+def _resolve_conversation_documents(file_ids, ctx: Context, matter_id):
+    """Resolve selected vault IDs using tenant rows before touching the byte store.
+
+    Legacy process-local uploads remain readable only in their tenant's Context. Unknown
+    or unreadable files remain explicit CANNOT_READ entries; no task receives the user's
+    instruction as a substitute for a missing document.
     """
+    import hashlib
+    from dataclasses import replace
+    from gateway.filestore import FileStoreError
+    resolved = {}
+    for fid in file_ids:
+        row = ctx.store.read_vault_document(fid)
+        if row is not None:
+            if row.get("matter_id") != matter_id:
+                return None, _refuse("DOCUMENT_SCOPE_MISMATCH",
+                                     "The selected document belongs to a different matter.")
+            doc = {"name": row["name"]}
+            if row.get("deleted_at") or row.get("state") != "INGESTED":
+                doc["cannot_read"] = "This document is not ready to read. Check its upload status."
+            elif ctx.files is None:
+                doc["cannot_read"] = "The document file store is unavailable. Nothing was read."
+            else:
+                try:
+                    data = ctx.files.get(row["sha256"])
+                    if data is None or hashlib.sha256(data).hexdigest() != row["sha256"]:
+                        raise ValueError("document hash mismatch")
+                    doc["text"] = data.decode("utf-8")
+                    if not doc["text"].strip():
+                        raise ValueError("empty document")
+                except (OSError, ValueError, UnicodeError, FileStoreError):
+                    doc["cannot_read"] = "The saved document could not be read or verified."
+            resolved[fid] = doc
+        else:
+            legacy = ctx.documents.get(fid)
+            if legacy and legacy.get("tenant", ctx.tenant) == ctx.tenant:
+                resolved[fid] = dict(legacy)
+                if not legacy.get("text") and not legacy.get("cannot_read"):
+                    resolved[fid]["cannot_read"] = "The document text is unavailable; upload it again."
+            else:
+                resolved[fid] = {"name": "Unavailable document", "cannot_read":
+                                 "This document is unavailable in this workspace. Nothing was read."}
+    return replace(ctx, documents=resolved), None
+
+
+def _conversation_send(args: dict, ctx: Context) -> dict:
+    """Validate, reserve one idempotent message pair, then dispatch bounded work."""
+    import hashlib
+    import json
+    import os
     import uuid
+    from datetime import date
     from agents import intake
     from gateway import envelope as ev
+    from gateway.store import TurnConflict
+    from gateway.jobs import QueueFull, INTERACTIVE
 
     text = args.get("text") or ""
-    if not isinstance(text, str):
-        return _refuse("BAD_REQUEST", f"text must be a string, got {type(text).__name__}")
-    raw_ids = args.get("file_ids")
-    if raw_ids is None:
-        raw_ids = []
-    if not isinstance(raw_ids, list) or not all(isinstance(f, str) for f in raw_ids):
-        return _refuse("BAD_REQUEST", "file_ids must be a list of strings")
+    if not isinstance(text, str) or len(text) > MAX_CONVERSATION_CHARS:
+        return _refuse("BAD_REQUEST", f"text must be a string of at most {MAX_CONVERSATION_CHARS} characters")
+    raw_ids = args.get("file_ids") or []
+    if (not isinstance(raw_ids, list) or len(raw_ids) > MAX_CONVERSATION_FILES
+            or not all(isinstance(f, str) and 0 < len(f) <= 128 for f in raw_ids)):
+        return _refuse("BAD_REQUEST", "file_ids must contain at most 20 document IDs")
+    raw_ids = list(dict.fromkeys(raw_ids))
     if not text.strip() and not raw_ids:
         return _refuse("BAD_REQUEST", "text or at least one file_id is required")
+    for name in ("conversation_id", "request_id", "matter_id", "as_of", "task_override"):
+        if args.get(name) is not None and not isinstance(args[name], str):
+            return _refuse("BAD_REQUEST", f"{name} must be a string")
+    request_id = (args.get("request_id") or "").strip() or str(uuid.uuid4())
+    if not re.fullmatch(r"[A-Za-z0-9_-]{8,128}", request_id):
+        return _refuse("BAD_REQUEST", "request_id must be 8–128 letters, digits, hyphens or underscores")
     as_of = (args.get("as_of") or "").strip() or _today(ctx)
-    today = _today(ctx)
-    if as_of < today:
-        # The envelope's `as_of` is what the law was read AS AT, and nothing on this path
-        # reads it as at a past date: the ask verb takes no as_of, and
-        # `checker/sources/held.py` raises on one because point-in-time reconstruction of
-        # substituted spans is UNVERIFIED against any external source (CLAUDE.md,
-        # docs/evidence/RETRACTIONS.md). Stamping 2017-04-01 on today's consolidated text is the
-        # retracted mistake with a field name on it, so it is refused rather than served.
-        return _refuse("AS_OF_UNSUPPORTED",
-                       f"as_of={as_of} is in the past, and this engine reads the law as it "
-                       f"stands today ({today}). Point-in-time reconstruction is "
-                       f"UNVERIFIED against any external source, so an answer stamped with "
-                       f"a past date would be today's text wearing one. Ask without as_of, "
-                       f"or ask what changed.")
+    try:
+        date.fromisoformat(as_of)
+    except ValueError:
+        return _refuse("BAD_REQUEST", "as_of must be a valid YYYY-MM-DD date")
     sources = args.get("sources")
-    if sources is not None and not isinstance(sources, list):
-        return _refuse("BAD_REQUEST", "sources must be a list of source ids")
+    if sources is not None and (not isinstance(sources, list) or len(sources) > 30
+            or not all(isinstance(x, str) and 0 < len(x) <= 128 for x in sources)):
+        return _refuse("BAD_REQUEST", "sources must be a list of source IDs")
     override = (args.get("task_override") or "").strip() or None
     if override is not None and override not in intake.TASKS:
-        return _refuse("BAD_REQUEST",
-                       f"{override!r} is not a task; one of {list(intake.TASKS)}")
-
+        return _refuse("BAD_REQUEST", f"{override!r} is not a supported task")
+    if ctx.store is None:
+        return _refuse("NO_STORE", "A conversation needs a durable store.")
     store = ctx.store
-    if store is None:
-        return _refuse("NO_STORE",
-                       "a conversation needs a store: it is a durable thread, and "
-                       "returning one that vanishes on restart would be a lie about what "
-                       "was saved")
+    payload = {k: v for k, v in args.items() if k != "request_id" and v is not None}
+    payload.update(text=text, file_ids=raw_ids, actor=ctx.actor)
+    digest = hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    try:
+        prior = store.find_turn(request_id, digest)
+        if prior is not None:
+            return _turn_response(_reconcile_message(prior, ctx))
+    except TurnConflict:
+        return _refuse("IDEMPOTENCY_CONFLICT", "This request ID already belongs to different input.")
 
-    # 1. the thread.
+    if as_of != _today(ctx):
+        return _refuse("AS_OF_UNSUPPORTED", "This conversation reads current law only. Ask without as_of.")
+
     cid = (args.get("conversation_id") or "").strip() or str(uuid.uuid4())
-    if store.read_conversation(cid) is None:
-        store.write_conversation({
-            "conversation_id": cid, "title": (text.strip()[:60] or "Attachment"),
-            # 8b. Unfiled when absent -- NULL is its own bucket, and no matter's listing
-            # shows it. Guessing a matter would invent a client relationship.
-            "matter_id": (args.get("matter_id") or "").strip() or None})
-
-    # 2. the user's message, stored before anything is attempted. A turn that fails must
-    #    still show what was asked.
-    ordinal = store.next_ordinal(cid)
-    store.append_message({"message_id": str(uuid.uuid4()), "conversation_id": cid,
-                          "ordinal": ordinal, "role": "user", "text": text,
-                          "file_ids": list(raw_ids)})
-
-    # 3. the task.
-    if override is not None:
+    conv = store.read_conversation(cid)
+    matter = (args.get("matter_id") or "").strip() or None
+    if conv is not None:
+        if "matter_id" in args and matter != conv.get("matter_id"):
+            return _refuse("MATTER_CONFLICT", "A conversation stays in its original matter. Start a new conversation to change it.")
+        matter = conv.get("matter_id")
+    if matter is not None and not any(m["matter_id"] == matter for m in store.list_matters()):
+        return _refuse("NOT_FOUND", "This matter is unavailable in this workspace.")
+    resolved, refusal = _resolve_conversation_documents(raw_ids, ctx, matter)
+    if refusal:
+        return refusal
+    ctx = resolved
+    if override:
         task, classification = override, {"task": override, "decided_by": "override",
                                           "reason": "the caller named the task"}
     else:
-        named = [{"name": str((ctx.documents.get(f) or {}).get("name") or f), "type": ""}
-                 for f in raw_ids]
+        named = [{"name": ctx.documents[f].get("name") or f, "type": ""} for f in raw_ids]
         got = intake.classify(text, files=named, facts=args.get("facts"))
         task, classification = got.task, got.to_dict()
-
     files = _files_block(raw_ids, ctx)
+    if raw_ids and task == "RESEARCH_QUESTION":
+        task = intake.NEEDS_CLARIFICATION
+        classification = {"task": task, "decided_by": "rules", "reason": "document research is not wired",
+            "question": "These documents are attached, but legal research does not use their contents yet. Choose document review, or ask a standalone legal question without attachments."}
+    elif raw_ids and task in ("REVIEW_DOCUMENT", "REVIEW_CONTRACT") and (
+            len(raw_ids) != 1 or any(f["state"] == ev.CANNOT_READ for f in files)):
+        task = intake.NEEDS_CLARIFICATION
+        classification = {"task": task, "decided_by": "rules", "reason": "document is unavailable or ambiguous",
+            "question": "Select one readable document to review. An unavailable document cannot be replaced by the instruction text."}
+    elif conv and not raw_ids and task == "RESEARCH_QUESTION" and re.match(
+            r"^\s*(?:(?:and|also)\b|what about (?:that|this|it)\b|(?:can|does|is|would|should) (?:it|that|this)\b|(?:explain|expand|summari[sz]e) (?:it|that|this)\b)", text, re.I):
+        task = intake.NEEDS_CLARIFICATION
+        classification = {"task": task, "decided_by": "rules", "reason": "ambiguous follow-up",
+            "question": "Please name the provision, document or issue in this follow-up. Prior assistant answers are not treated as legal evidence."}
+    if TASK_INTENT.get(task) and ctx.queue is not None:
+        try:
+            limit = max(1, int(os.environ.get("PLACEDON_CONVERSATION_QUEUE_LIMIT", "100")))
+        except ValueError:
+            limit = 100
+        if ctx.queue.depth() >= limit:
+            return _refuse("BUSY", "The workspace is busy. Your question has not been submitted; retry shortly.")
+    metadata = {"schema": "conversation_turn.v1", "request_id": request_id,
+                "classification": classification, "artifacts": [], "files": files, "as_of": as_of,
+                "accepted_at": _now(ctx)}
+    queued = None
+    if TASK_INTENT.get(task) and ctx.queue is not None:
+        queued = {"run_id": str(uuid.uuid4()), "intent": TASK_INTENT[task],
+                  "args": _task_args(task, text, raw_ids, ctx, args), "lane": INTERACTIVE}
     reply_id = str(uuid.uuid4())
+    try:
+        message, created = store.reserve_turn(
+            {"conversation_id": cid, "title": text.strip()[:60] or "Attachment", "matter_id": matter},
+            {"message_id": str(uuid.uuid4()), "role": "user", "text": text, "file_ids": raw_ids},
+            {"message_id": reply_id, "role": "assistant", "text": "", "file_ids": [],
+             "task": task, "envelope": None, "metadata": metadata,
+             "run_id": queued["run_id"] if queued else None},
+            request_id=request_id, payload_digest=digest, queue=ctx.queue, queued=queued)
+    except QueueFull:
+        return _refuse("BUSY", "The workspace is busy. Your question has not been submitted; retry shortly.")
+    except TurnConflict:
+        return _refuse("IDEMPOTENCY_CONFLICT", "The request or matter changed while this turn was submitted.")
+    if not created:
+        return _turn_response(_reconcile_message(message, ctx))
+    if queued is not None:
+        response = _turn_response(message)
+        response["files"] = [{k: v for k, v in dict(f, state=ev.READING).items()
+                              if k not in ("reason", "pages")} if f["state"] == ev.READ else f
+                             for f in files]
+        return response
+    try:
+        return _dispatch_conversation(args, ctx, cid=cid, text=text, raw_ids=raw_ids,
+            as_of=as_of, task=task, classification=classification, reply_id=reply_id,
+            metadata=metadata, files=files)
+    except Exception:  # The durable question must have an explicit, sanitized failed reply.
+        env = ev.failed(task=task, as_of=as_of,
+                        detail="This request could not finish. Your question is saved; retry as a new turn.")
+        store.update_message(reply_id, task=task, run_id=None, envelope=env, metadata=metadata)
+        return {"conversation_id": cid, "message_id": reply_id, "classification": classification,
+                "envelope": env, "metadata": metadata}
 
+
+def _dispatch_conversation(args, ctx, *, cid, text, raw_ids, as_of, task, classification,
+                           reply_id, metadata, files):
+    from agents import intake
+    from gateway import envelope as ev
+    store = ctx.store
     # 4a. nothing to run.
     if task == intake.NEEDS_CLARIFICATION:
         env = ev.build(status=ev.NEEDS_CLARIFICATION, task=task, as_of=as_of,
@@ -2079,11 +2241,10 @@ def _conversation_send(args: dict, ctx: Context) -> dict:
                                      or "Could you say what you would like done?",
                                      "citation_ids": []}],
                        bodies=[], citations=[], files=files)
-        store.append_message({"message_id": reply_id, "conversation_id": cid,
-                              "ordinal": ordinal + 1, "role": "assistant", "text": "",
-                              "file_ids": [], "task": task, "envelope": env})
+
+        store.update_message(reply_id, task=task, run_id=None, envelope=env, metadata=metadata)
         return {"conversation_id": cid, "message_id": reply_id,
-                "classification": classification, "envelope": env}
+                "classification": classification, "envelope": env, "metadata": metadata}
 
     verb_name = TASK_VERB.get(task, "")
     if not verb_name:
@@ -2094,38 +2255,10 @@ def _conversation_send(args: dict, ctx: Context) -> dict:
                            f"serves it. Nothing was read, so nothing follows about any "
                            f"obligation."), "citation_ids": []}],
                        bodies=[], citations=[], files=files)
-        store.append_message({"message_id": reply_id, "conversation_id": cid,
-                              "ordinal": ordinal + 1, "role": "assistant", "text": "",
-                              "file_ids": [], "task": task, "envelope": env})
-        return {"conversation_id": cid, "message_id": reply_id,
-                "classification": classification, "envelope": env}
 
-    # 4b. long work -> the queue, and the run_id comes back at once.
-    intent = TASK_INTENT.get(task)
-    if intent and ctx.queue is not None:
-        sub = _runs_submit({"intent": intent, "args": _task_args(task, text, raw_ids, ctx,
-                                                                 args)}, ctx)
-        if sub.get("status") == "REFUSED":
-            return sub
-        run_id = sub.get("run_id")
-        store.append_message({"message_id": reply_id, "conversation_id": cid,
-                              "ordinal": ordinal + 1, "role": "assistant", "text": "",
-                              "file_ids": [], "task": task, "run_id": run_id,
-                              "envelope": None})
-        # READING, and this is the only path that can honestly say it: a worker holds the
-        # file and has not finished with it. Returned alongside the run_id so the panel has
-        # something to show while `envelope` is null -- without it READING was a state in
-        # the schema that nothing ever produced.
-        reading = [dict(f, state=ev.READING, pages=None, reason=None)
-                   if f["state"] == ev.READ else f for f in files]
-        reading = [{k: v for k, v in f.items() if v is not None or k in
-                    ("file_id", "name", "state")} for f in reading]
+        store.update_message(reply_id, task=task, run_id=None, envelope=env, metadata=metadata)
         return {"conversation_id": cid, "message_id": reply_id,
-                "classification": classification, "run_id": run_id,
-                "envelope": None, "files": reading, "task": task,
-                "note": ("queued. The envelope is written when the worker finishes; poll "
-                         "runs.get, or read the message again. `envelope: null` means the "
-                         "reply has not arrived, which is not an empty answer.")}
+                "classification": classification, "envelope": env, "metadata": metadata}
 
     # 4c. short enough to answer now.
     verb = by_name()[verb_name]
@@ -2159,13 +2292,12 @@ def _conversation_send(args: dict, ctx: Context) -> dict:
                       prose_note=prose_note)
     env = _envelope_for(task, result, as_of=as_of, run_id=result.get("run_id"),
                         files=files, ctx=ctx, question=text)
-    store.append_message({"message_id": reply_id, "conversation_id": cid,
-                          "ordinal": ordinal + 1, "role": "assistant", "text": "",
-                          "file_ids": [], "task": task,
-                          "run_id": result.get("run_id"), "envelope": env})
+
+    metadata = _turn_metadata(metadata, result)
+    store.update_message(reply_id, task=task, run_id=result.get("run_id"), envelope=env, metadata=metadata)
     out = {"conversation_id": cid, "message_id": reply_id,
            "classification": classification, "run_id": result.get("run_id"),
-           "envelope": env}
+           "envelope": env, "metadata": metadata}
     # The source picker's per-source report rides the conversation RESPONSE, a sibling of
     # the envelope -- never inside answer_envelope.v1, which is versioned and immutable. It
     # is retrieval metadata (which sources were searched / searched-empty / not-searched),
@@ -2236,7 +2368,7 @@ def _task_args(task: str, text: str, file_ids, ctx: Context, args: dict,
                 "kind": args.get("kind") or DRAFT_KIND_UNKNOWN}
     if task == "REVIEW_CONTRACT":
         return {"text": doc or text, "name": "conversation upload",
-                "test_data": args.get("test_data") or "unspecified"}
+                "test_data": args.get("test_data", False)}
     return {"text": doc or text, "name": "conversation upload"}
 
 
@@ -2272,6 +2404,12 @@ def _vault_upload(args: dict, ctx: Context) -> dict:
         return _refuse("BAD_REQUEST",
                        "text is required. Binary upload is a route, not a verb -- see "
                        "the download routes in gateway/app.py for the shape it will take")
+    matter = args.get("matter_id")
+    if matter is not None and not isinstance(matter, str):
+        return _refuse("BAD_REQUEST", "matter_id must be a string")
+    matter = (matter or "").strip() or None
+    if matter is not None and not any(m["matter_id"] == matter for m in ctx.store.list_matters()):
+        return _refuse("NOT_FOUND", "This matter is unavailable in this workspace.")
     data = text.encode("utf-8")
     from checker import archive_guard as ag
     verdict = ag.inspect(data)
@@ -2324,7 +2462,7 @@ def _vault_upload(args: dict, ctx: Context) -> dict:
     else:
         note = ("stored. No queue is configured, so nothing will ingest it and it "
                 "will stay PENDING -- said plainly rather than left to look done.")
-    return {"document_id": did, "sha256": sha, "state": "PENDING", "job_id": queued,
+    return {"document_id": did, "sha256": sha, "name": name, "state": "PENDING", "job_id": queued,
             "queue_error": queue_error or None, "note": note}
 
 
@@ -2349,6 +2487,48 @@ def _vault_ingest_job(args: dict, ctx: Context) -> dict:
     outcome = ingest(args, files=ctx.files, store=ctx.store,
                      extract=lambda data, name: data.decode("utf-8", "replace"))
     return outcome.to_dict()
+
+
+def _vault_list(args: dict, ctx: Context) -> dict:
+    """Browse only metadata in one matter or the unfiled workspace scope."""
+    import uuid
+    if ctx.store is None:
+        return _refuse("NO_STORE", "Document storage is not configured.")
+    matter = args.get("matter_id")
+    if matter is not None:
+        if not isinstance(matter, str):
+            return _refuse("BAD_REQUEST", "Choose a valid matter.")
+        try:
+            matter = str(uuid.UUID(matter))
+        except ValueError:
+            return _refuse("BAD_REQUEST", "Choose a valid matter.")
+        if not any(m["matter_id"] == matter for m in ctx.store.list_matters()):
+            return _refuse("NOT_FOUND", "This matter is unavailable in this workspace.")
+    query = args.get("query", "")
+    if not isinstance(query, str) or len(query) > 120:
+        return _refuse("BAD_REQUEST", "Search names with at most 120 characters.")
+    def number(key, default, low, high):
+        raw = args.get(key, default)
+        if isinstance(raw, bool) or not re.fullmatch(r"[0-9]{1,5}", str(raw)):
+            raise ValueError(key)
+        value = int(raw)
+        if not low <= value <= high:
+            raise ValueError(key)
+        return value
+    try:
+        limit = number("limit", 30, 1, 50)
+        offset = number("offset", 0, 0, 10000)
+    except ValueError:
+        return _refuse("BAD_REQUEST", "Use a page size of 1–50 and an offset of 0–10000.")
+    rows = ctx.store.browse_vault_documents(matter_id=matter, query=query.strip(),
+                                          limit=limit + 1, offset=offset)
+    more = len(rows) > limit
+    next_offset = offset + limit if more and offset + limit <= 10000 else None
+    return {"documents": rows[:limit], "next_offset": next_offset,
+            "truncated": more and next_offset is None,
+            "scope": "matter" if matter else "unfiled", "matter_id": matter,
+            "note": "Documents in this matter." if matter else
+                    "Unfiled workspace documents. Files in other matters are not listed."}
 
 
 def _vault_status(args: dict, ctx: Context) -> dict:
@@ -2435,11 +2615,10 @@ def _vault_verify(args: dict, ctx: Context) -> dict:
             [{"name": VERIFY_NOT_DELETED, "result": VERIFY_FAIL,
               "detail": "deleted on " + str(row.get("deleted_at"))},
              {"name": VERIFY_BYTES_PRESENT, "result": VERIFY_NOT_RUN,
-              "detail": "not run: a deleted document's bytes are destroyed on purpose"},
+              "detail": "not run: this workspace no longer has access to the deleted document"},
              {"name": VERIFY_HASH_MATCHES, "result": VERIFY_NOT_RUN,
-              "detail": "not run: there were no bytes to hash"}],
-            "this document was deleted; its bytes are gone, and that is the intended state "
-            "rather than a corruption")
+              "detail": "not run: access to this deleted document is revoked"}],
+            "this document was deleted from this workspace. Shared bytes may remain under retention policy")
 
     not_deleted = {"name": VERIFY_NOT_DELETED, "result": VERIFY_PASS,
                    "detail": "the record is live"}
@@ -2806,7 +2985,7 @@ def _vault_compile(args: dict, ctx: Context) -> dict:
 
 
 def _vault_delete(args: dict, ctx: Context) -> dict:
-    """Destroy the bytes, keep the record. A WRITE verb."""
+    """Revoke this tenant's document and chunks; defer shared-byte purge."""
     refusal = _vault_ready(ctx)
     if refusal:
         return refusal
@@ -2819,26 +2998,13 @@ def _vault_delete(args: dict, ctx: Context) -> dict:
                        f"{did} was already deleted on {row['deleted_at']}. Saying so is "
                        f"more useful than reporting a second destruction that did not "
                        f"happen")
-    sha = row["sha256"]
     gone = ctx.store.delete_vault_document(did, now=_now(ctx))
-    # The bytes last, and only if no live document still points at them: dedupe means two
-    # documents can share a key, and destroying the file would blank the other one.
-    others = [d for d in ctx.store.read_vault_chunks() if d.get("document_id") != did]
-    shared = any((ctx.store.read_vault_document(d["document_id"]) or {}).get("sha256")
-                 == sha for d in others)
-    bytes_gone = False
-    if gone and not shared:
-        try:
-            bytes_gone = bool(ctx.files.delete(sha))
-        except Exception:                                        # noqa: BLE001
-            bytes_gone = False
-    return {"document_id": did, "deleted": bool(gone), "bytes_destroyed": bytes_gone,
-            "note": ("The record stays and says it was deleted, with the date. The bytes, "
-                     "the text and the chunks are gone. 'We never had it' and 'we had it "
-                     "and destroyed it' are different answers to a regulator."
-                     + ("" if bytes_gone or not gone else
-                        " The bytes were kept because another document in this vault has "
-                        "the same content."))}
+    # The content-addressed byte store may be shared across tenants. A tenant-scoped
+    # reference query cannot prove that no other tenant still needs the same SHA. Purge
+    # belongs to a privileged retention job with a global reference check, not this verb.
+    return {"document_id": did, "deleted": bool(gone), "bytes_destroyed": False,
+            "note": "The document is deleted from this workspace and its searchable chunks are removed. Shared stored bytes are retained until a retention job can safely purge them."}
+
 
 
 def _calendar_upcoming(args: dict, ctx: Context) -> dict:
@@ -3022,6 +3188,55 @@ def _conversation_list(args: dict, ctx: Context) -> dict:
                                                           limit=min(limit, 200))}
 
 
+def _reconcile_message(message: dict, ctx: Context) -> dict:
+    if message.get("role") != "assistant" or message.get("envelope") is not None:
+        return message
+    if not message.get("run_id"):
+        from datetime import datetime
+        metadata = message.get("metadata") or {}
+        try:
+            age = (datetime.fromisoformat(_now(ctx).replace("Z", "+00:00")) -
+                   datetime.fromisoformat(metadata["accepted_at"].replace("Z", "+00:00"))).total_seconds()
+        except (KeyError, ValueError, TypeError):
+            return message
+        if age < 300:
+            return message
+        from gateway import envelope as ev
+        env = ev.failed(task=message["task"], as_of=metadata.get("as_of") or _today(ctx),
+                        detail="This request was interrupted. Your question is saved. Check existing drafts before retrying as a new turn.")
+        if ctx.store.expire_pending_message(message["message_id"], env):
+            return dict(message, envelope=env)
+        # The original request completed after the snapshot above. Never overwrite it.
+        return next((m for m in ctx.store.read_messages(message["conversation_id"])
+                     if m["message_id"] == message["message_id"]), message)
+    # A worker stores its result BEFORE marking its job terminal. Check the job first,
+    # then read the result; reversing these reads can freeze a stale failed attempt after
+    # a retry has completed successfully between the two reads.
+    if ctx.queue is not None:
+        job = ctx.queue.get(message["run_id"])
+        if job is not None and job.status in ("QUEUED", "LEASED"):
+            return message
+    run = ctx.store.read(message["run_id"])
+    if not run or run.get("status") in ("PLANNED", "RUNNING"):
+        return message
+    metadata = message.get("metadata") or {"schema": "conversation_turn.v1", "artifacts": [], "files": []}
+    result = dict(run.get("result") or {})
+    if run.get("status") == "FAILED":
+        result = {"status": "FAILED", "error": "The request could not finish. Your question is saved."}
+    elif run.get("status") == "REFUSED" and not result.get("status"):
+        result.update(status="REFUSED", detail="The request was cancelled or declined.")
+    metadata = _turn_metadata(metadata, result)
+    messages = ctx.store.read_messages(message["conversation_id"])
+    question = next((m.get("text") or "" for m in messages
+                     if m["ordinal"] == message["ordinal"] - 1 and m["role"] == "user"), "")
+    env = _envelope_for(message["task"], result, as_of=metadata.get("as_of") or _today(ctx),
+                        run_id=message["run_id"], files=metadata.get("files") or [],
+                        ctx=ctx, question=question)
+    ctx.store.update_message(message["message_id"], task=message["task"],
+                             run_id=message["run_id"], envelope=env, metadata=metadata)
+    return dict(message, envelope=env, metadata=metadata)
+
+
 def _conversation_get(args: dict, ctx: Context) -> dict:
     """One thread and every message in it, in order, each with its stored envelope."""
     if ctx.store is None:
@@ -3032,7 +3247,8 @@ def _conversation_get(args: dict, ctx: Context) -> dict:
     conv = ctx.store.read_conversation(cid)
     if conv is None:
         return _refuse("NOT_FOUND", f"no conversation {cid!r} for this tenant")
-    return {"conversation": conv, "messages": ctx.store.read_messages(cid)}
+    return {"conversation": conv, "messages": [
+        _reconcile_message(message, ctx) for message in ctx.store.read_messages(cid)]}
 
 
 def _citation_get(args: dict, ctx: Context) -> dict:
@@ -3941,18 +4157,18 @@ def _documents_upload(args: dict, ctx: Context) -> dict:
     name = args.get("name") or "document"
     seed = text if text.strip() else f"{name}\u0000{cannot}"
     digest = hashlib.sha256(seed.encode("utf-8")).hexdigest()
-    ctx.documents[digest] = {"sha256": digest, "bytes": len(text.encode("utf-8")),
-                             "name": name, "tenant": ctx.tenant}
+    record = {"sha256": digest, "bytes": len(text.encode("utf-8")),
+              "name": name, "tenant": ctx.tenant, "text": text}
     if cannot:
-        ctx.documents[digest]["cannot_read"] = cannot
+        record["cannot_read"] = cannot
+    ctx.documents[digest] = record
     return {"document_id": digest, "sha256": digest,
-            "bytes": ctx.documents[digest]["bytes"],
+            "bytes": record["bytes"],
             "state": ("CANNOT_READ" if cannot else "READ"),
             "reason": cannot or None,
             "stored": "memory",
-            "note": ("held in this process only. gateway/migrations/*.sql are not "
-                     "applied, so nothing here survives a restart and no database "
-                     "enforces tenant isolation.")}
+            "note": ("Held in a temporary process cache that may expire or evict it and "
+                     "does not survive a restart. Use the vault for durable documents.")}
 
 
 def _sources_list(args: dict, ctx: Context) -> dict:
@@ -4309,9 +4525,10 @@ VERBS: tuple[Verb, ...] = (
          "once when the work belongs on the queue.",
          (Field("conversation_id", STRING, False,
                 describes="the thread to append to. Absent starts a new one"),
-          Field("text", STRING, False, describes="the user's words"),
+          Field("text", STRING, False, describes="the user's words, at most 8000 characters"),
+          Field("request_id", STRING, False, describes="stable retry ID; reused only with identical input"),
           Field("file_ids", ARRAY, False,
-                describes="sha256 ids from documents.upload"),
+                describes="vault document IDs, or process-local sha256 upload IDs"),
           Field("as_of", STRING, False,
                 describes="YYYY-MM-DD, the date to read the law as at. Defaults to today"),
           Field("sources", ARRAY, False,
@@ -4344,6 +4561,14 @@ VERBS: tuple[Verb, ...] = (
           Field("text", STRING, True, describes="its text"),
           Field("matter_id", STRING, False, describes="the matter to file it under")),
          "POST", read_only=False, run=_vault_upload),
+
+    Verb("vault.list",
+         "Browse document metadata in one matter, or unfiled workspace documents only.",
+         (Field("matter_id", STRING, False, describes="one matter; omit for unfiled only"),
+          Field("query", STRING, False, describes="filename text, at most 120 characters"),
+          Field("limit", STRING, False, describes="page size, 1–50"),
+          Field("offset", STRING, False, describes="page offset, 0–10000")),
+         "POST", read_only=True, mcp=False, run=_vault_list),
 
     Verb("vault.status",
          "One document's state and tags, or the whole vault's counts including how many "
@@ -4728,11 +4953,11 @@ def _test() -> None:
                     "runs.preview",
                     # move 8 and move 10 (T3).
                     "document.verify", "document.check"} | {
-                        "vault.upload", "vault.status", "vault.find",
+                        "vault.upload", "vault.status", "vault.find", "vault.list",
                                             "vault.verify", "vault.summarize",
                                             "vault.research", "vault.compile",
                                             "vault.delete"},
-          f"the forty-seven verbs are declared once ({sorted(names)})")
+          f"the forty-eight verbs are declared once ({sorted(names)})")
     # sources.* are READ-ONLY, so they reach MCP. That is the intended shape: an agent may
     # ask what a source permits and search what may be read, and there is no sources verb
     # that fetches, stores or spends. S3's Indian Kanoon connector will spend money, and
@@ -6227,7 +6452,7 @@ def _test() -> None:
           f"({sorted(mcp_names)})")
     _opted = {v.name for v in VERBS if v.read_only and not v.mcp}
     check(_opted == {"matters.list", "calendar.upcoming", "usage.status", "jobs.dead",
-                     "vault.status",
+                     "vault.status", "vault.list",
                      "vault.find", "vault.verify", "vault.summarize", "vault.research",
                      "vault.compile",
                      # move 16 (T4). Off MCP: it prices the firm's own SPEND, and the
@@ -6301,7 +6526,7 @@ def _test() -> None:
           "...while a WRITE verb is kept out of MCP by mcp_tools(), not by the author "
           "remembering to")
     check("widgets.delete" in write_verbs(hypo), "...and is named in write_verbs()")
-    check(len(VERBS) == 47 and "widgets.count" not in rest_spec(),
+    check(len(VERBS) == 48 and "widgets.count" not in rest_spec(),
           "...and the probe changed nothing in this module: the surfaces are generated "
           "from an argument, not from a global the test rebound")
 

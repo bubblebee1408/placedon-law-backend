@@ -31,6 +31,9 @@ Run: PYTHONPATH=. python3 gateway/jobs.py
 from __future__ import annotations
 
 import json
+import threading
+from functools import wraps
+from contextlib import nullcontext
 import re
 import uuid
 from dataclasses import dataclass, field
@@ -125,11 +128,25 @@ def check_lane(lane: str) -> str:
     return lane
 
 
+MAX_PENDING_JOBS = 1024
+
+class QueueFull(QueueError):
+    """No job was inserted because the tenant's durable backlog is full."""
+
+
+def _locked(method):
+    @wraps(method)
+    def wrapped(self, *args, **kwargs):
+        with self._lock:
+            return method(self, *args, **kwargs)
+    return wrapped
+
+
 class Queue(Protocol):
     kind: str
 
     def enqueue(self, *, run_id: str, intent: str, args: dict,
-                lane: str = DEFAULT_LANE) -> Job: ...
+                lane: str = DEFAULT_LANE, connection=None) -> Job: ...
     def claim(self, *, worker: str, lease_seconds: int = DEFAULT_LEASE_SECONDS,
               capacity: int | None = None, reserve_interactive: int = 0) -> Job | None: ...
     def finish(self, job_id: str, status: str) -> None: ...
@@ -154,18 +171,23 @@ class MemoryQueue:
     # Injected so a test can expire a lease without sleeping. Postgres uses now() and the
     # conformance suite never asserts on wall-clock time, only on ordering.
     clock: object = None
+    max_pending: int = MAX_PENDING_JOBS
+    _lock: object = field(default_factory=threading.RLock, repr=False)
 
     def _now(self) -> datetime:
         return self.clock() if callable(self.clock) else _now()
 
+    @_locked
     def enqueue(self, *, run_id: str, intent: str, args: dict,
-                lane: str = DEFAULT_LANE) -> Job:
+                lane: str = DEFAULT_LANE, connection=None) -> Job:
         check_lane(lane)
         for j in self.jobs.values():
             if j["run_id"] == run_id:
                 raise QueueError(
                     f"run {run_id} already has job {j['job_id']}. A second job for one run "
                     f"is the double execution the queue exists to prevent.")
+        if sum(r["status"] in (QUEUED, LEASED) for r in self.jobs.values()) >= self.max_pending:
+            raise QueueFull("The work queue is full. Retry shortly; no job was added.")
         job_id = str(uuid.uuid4())
         self.jobs[job_id] = {"job_id": job_id, "run_id": run_id, "intent": intent,
                              "args": json.loads(json.dumps(args)), "status": QUEUED,
@@ -174,6 +196,7 @@ class MemoryQueue:
                              "lane": lane, "not_before": None, "dead_reason": ""}
         return self._job(self.jobs[job_id])
 
+    @_locked
     def oldest_pending_seconds(self) -> float | None:
         """Age in seconds of the oldest QUEUED job, or None when there are none.
 
@@ -195,6 +218,7 @@ class MemoryQueue:
                    lane=row.get("lane", DEFAULT_LANE),
                    dead_reason=row.get("dead_reason", ""))
 
+    @_locked
     def claim(self, *, worker: str, lease_seconds: int = DEFAULT_LEASE_SECONDS,
               capacity: int | None = None, reserve_interactive: int = 0) -> Job | None:
         """The highest-priority claimable job, oldest first within its lane.
@@ -234,6 +258,7 @@ class MemoryQueue:
         row["attempts"] += 1
         return self._job(row)
 
+    @_locked
     def fail(self, job_id: str, reason: str, *, retryable: bool = True) -> Job:
         """One attempt failed. Retry with backoff, or DEAD at MAX_ATTEMPTS.
 
@@ -265,6 +290,7 @@ class MemoryQueue:
                 seconds=backoff_for(row["attempts"]))
         return self._job(row)
 
+    @_locked
     def claim_counts(self, run_ids) -> dict:
         """`{missing, unclaimed, claimed}` over `run_ids`. One pass, not one read per id.
 
@@ -286,12 +312,14 @@ class MemoryQueue:
                 claimed += 1
         return {"missing": missing, "unclaimed": unclaimed, "claimed": claimed}
 
+    @_locked
     def dead(self, limit: int = 100) -> list[Job]:
         """Jobs that stopped, newest first. What `jobs.dead` serves."""
         rows = [r for r in self.jobs.values() if r["status"] == DEAD]
         rows.sort(key=lambda r: r["created_at"], reverse=True)
         return [self._job(r) for r in rows[:limit]]
 
+    @_locked
     def finish(self, job_id: str, status: str) -> None:
         if status not in TERMINAL:
             raise QueueError(f"{status!r} is not a terminal job status; one of {TERMINAL}")
@@ -302,6 +330,7 @@ class MemoryQueue:
         row["claimed_by"] = None
         row["lease_expires_at"] = None
 
+    @_locked
     def request_cancel(self, run_id: str) -> bool:
         for row in self.jobs.values():
             if row["run_id"] == run_id:
@@ -311,12 +340,14 @@ class MemoryQueue:
                 return True
         return False
 
+    @_locked
     def get(self, run_id: str) -> Job | None:
         for row in self.jobs.values():
             if row["run_id"] == run_id:
                 return self._job(row)
         return None
 
+    @_locked
     def depth(self) -> int:
         return sum(1 for r in self.jobs.values() if r["status"] == QUEUED)
 
@@ -328,7 +359,7 @@ class PostgresQueue:
 
     kind: str = "postgres"
 
-    def __init__(self, url: str, *, tenant_id: str, actor_id: str | None = None) -> None:
+    def __init__(self, url: str, *, tenant_id: str, actor_id: str | None = None, max_pending: int = MAX_PENDING_JOBS) -> None:
         if not tenant_id:
             raise QueueError(
                 "PostgresQueue needs a tenant_id: the policies compare against "
@@ -336,6 +367,9 @@ class PostgresQueue:
         self._url = url
         self.tenant_id = tenant_id
         self.actor_id = actor_id or tenant_id
+        if max_pending < 1:
+            raise ValueError("max_pending must be positive")
+        self.max_pending = max_pending
 
     def _conn(self, *, autocommit: bool = True):
         import psycopg
@@ -362,27 +396,28 @@ class PostgresQueue:
                    cancel_requested=bool(r[6]), lane=r[7], dead_reason=r[8] or "")
 
     def enqueue(self, *, run_id: str, intent: str, args: dict,
-                lane: str = DEFAULT_LANE) -> Job:
+                lane: str = DEFAULT_LANE, connection=None) -> Job:
         import psycopg
         job_id = str(uuid.uuid4())
         try:
-            with self._conn() as c:
+            with (nullcontext(connection) if connection is not None else self._conn(autocommit=False)) as c:
+                # Serialize admission per tenant across replicas; RLS scopes the count.
+                c.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", ("job-admission:" + self.tenant_id,))
+                pending = c.execute("SELECT count(*) FROM jobs WHERE status IN ('QUEUED','LEASED')").fetchone()[0]
+                if pending >= self.max_pending:
+                    raise QueueFull("The work queue is full. Retry shortly; no job was added.")
                 r = c.execute(
                     "INSERT INTO jobs (job_id, run_id, tenant_id, actor_id, intent, args, "
                     "lane) VALUES (%s,%s,%s,%s,%s,%s,%s) "
                     f"RETURNING {self._COLS}",
                     (job_id, run_id, self.tenant_id, self.actor_id, intent,
                      json.dumps(args), check_lane(lane))).fetchone()
+                # Delivered only on commit, including a borrowed turn transaction.
+                c.execute(f"NOTIFY {NOTIFY_CHANNEL}")
         except psycopg.errors.UniqueViolation:
             raise QueueError(
                 f"run {run_id} already has a job. A second job for one run is the double "
                 f"execution the queue exists to prevent.") from None
-        # Wake a listening worker. AFTER the insert and outside the failure path, so a
-        # notification is never sent for a job that does not exist. A missed notification
-        # costs latency and nothing else -- `gateway/worker.serve` polls on a timeout as
-        # well, because a NOTIFY sent while nobody was listening is simply gone.
-        with self._conn() as c:
-            c.execute(f"NOTIFY {NOTIFY_CHANNEL}")
         return self._job(r)
 
     def claim(self, *, worker: str, lease_seconds: int = DEFAULT_LEASE_SECONDS,

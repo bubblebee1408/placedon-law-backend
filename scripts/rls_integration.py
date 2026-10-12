@@ -622,7 +622,7 @@ def run(url: str) -> int:
                   "020_vault.sql",
                   "021_job_lanes.sql",
                   "022_grid_budget_state.sql",
-                  "023_document_checks.sql"):
+                  "023_document_checks.sql", "024_conversation_turns.sql"):
             cur.execute(sql(f))
             print(f"  applied {f}")
         _ensure_app_role(cur)

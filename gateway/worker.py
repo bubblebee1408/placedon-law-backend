@@ -96,6 +96,18 @@ def run_one(*, queue, store, handlers: dict[str, Callable], worker: str = "w1",
         queue.fail(job.job_id, f"no handler for intent {job.intent!r}", retryable=False)
         return Outcome(job.run_id, FAILED, error=f"no handler for intent {job.intent!r}")
 
+    if job.cancel_requested:
+        recorded = store.append_step(job.run_id,
+            {"capability": "intake", "status": "CANCELLED",
+             "cost_note": "Cancelled before the handler ran; no model was called."},
+            key=step_key(job.run_id, "cancel:intake"))
+        store.set_run(job.run_id, status=REFUSED, refusal_code=CANCELLED_CODE,
+                      result={"status": "REFUSED", "code": CANCELLED_CODE,
+                              "detail": "Cancelled before execution."})
+        queue.finish(job.job_id, q.CANCELLED)
+        return Outcome(job.run_id, REFUSED, CANCELLED_CODE,
+                       steps_written=int(recorded), steps_replayed=int(not recorded))
+
     store.set_run(job.run_id, status=RUNNING)
 
     started = monotonic()
@@ -103,11 +115,11 @@ def run_one(*, queue, store, handlers: dict[str, Callable], worker: str = "w1",
         steps, result = handler(job.args)
     except Exception as e:                                        # noqa: BLE001
         store.set_run(job.run_id, status=FAILED,
-                      result={"error": f"{type(e).__name__}: {e}"})
+                      result={"error": f"{type(e).__name__}: the handler could not complete the request"})
         # A1. Retryable: a handler that raised may have hit a transport error. `fail` decides
         # retry-with-backoff or DEAD, so the policy is not restated here.
-        queue.fail(job.job_id, f"{type(e).__name__}: {e}")
-        return Outcome(job.run_id, FAILED, error=f"{type(e).__name__}: {e}")
+        queue.fail(job.job_id, f"{type(e).__name__}: the handler could not complete the request")
+        return Outcome(job.run_id, FAILED, error=f"{type(e).__name__}: the handler could not complete the request")
 
     written = replayed = 0
     for step in steps:
@@ -118,8 +130,8 @@ def run_one(*, queue, store, handlers: dict[str, Callable], worker: str = "w1",
             store.append_step(
                 job.run_id,
                 {"capability": step.get("capability", "?"), "status": "CANCELLED",
-                 "cost_note": "a person cancelled the run before this step ran, so no "
-                              "model was called and there is nothing to price"},
+                 "cost_note": "cancellation was observed after the handler returned; "
+                              "work may already have executed and unrecorded cost is unknown"},
                 key=step_key(job.run_id, f"cancel:{step.get('capability', '?')}"))
             store.set_run(job.run_id, status=REFUSED, refusal_code=CANCELLED_CODE,
                           result={"cancelled_before": step.get("capability")})
@@ -148,11 +160,27 @@ def run_one(*, queue, store, handlers: dict[str, Callable], worker: str = "w1",
         else:
             replayed += 1
 
+    # Some deterministic handlers produce no steps. Cancellation still wins if it was
+    # requested while such a handler was running; no statement is made that it ran nothing.
+    live = queue.get(job.run_id)
+    if live is not None and live.cancel_requested:
+        store.set_run(job.run_id, status=REFUSED, refusal_code=CANCELLED_CODE,
+                      result={"status": "REFUSED", "code": CANCELLED_CODE,
+                              "detail": "Cancelled. Work already performed remains in the trace."})
+        queue.finish(job.job_id, q.CANCELLED)
+        return Outcome(job.run_id, REFUSED, CANCELLED_CODE, written, replayed)
     status = result.get("status") if isinstance(result, dict) else None
-    final = REFUSED if status == "REFUSED" else ANSWERED
-    code = result.get("code") if final == REFUSED and isinstance(result, dict) else None
+    # Run status describes execution; the result retains the exact legal outcome.
+    # In particular a completed abstention or partial answer must never become ANSWERED.
+    final = {"PARTIAL": "PARTIAL", "ABSTAINED": REFUSED,
+             "NEEDS_LAWYER": "AWAITING_HUMAN", "REFUSED": REFUSED,
+             "FAILED": FAILED}.get(status, ANSWERED)
+    code = (result.get("code") or "NO_EVIDENCE") if final == REFUSED else None
     store.set_run(job.run_id, status=final, refusal_code=code, result=result)
-    queue.finish(job.job_id, q.DONE)
+    if final == FAILED:
+        queue.fail(job.job_id, "The handler could not complete the request")
+    else:
+        queue.finish(job.job_id, q.DONE)
     return Outcome(job.run_id, final, code, written, replayed)
 
 

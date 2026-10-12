@@ -123,11 +123,16 @@ def provider_outage() -> Injection:
     before = _tenant_b_rows(store)
 
     breaker = circuit.Breaker(threshold=2, cooldown=60, clock=lambda: 0.0)
+    provider_calls = 0
+    blocked = []
 
     def flaky(_args):
+        nonlocal provider_calls
         refusal = breaker.check("bedrock")
         if refusal is not None:
+            blocked.append(refusal.code)
             raise RuntimeError(f"{refusal.code}: {refusal.detail[:60]}")
+        provider_calls += 1
         breaker.record_failure("bedrock")
         raise RuntimeError("provider returned 503")
 
@@ -148,7 +153,9 @@ def provider_outage() -> Injection:
            f"({[c for c in FINDING_CODES if c in blob]})")
     inj.ck(breaker.state("bedrock") == circuit.OPEN,
            f"the breaker OPENED, so the deployment stopped asking ({breaker.state('bedrock')})")
-    inj.ck(any(circuit.CIRCUIT_OPEN in str(o.error) for o in outcomes if o),
+    # Worker errors are deliberately sanitized: assert the actual calls and refusals,
+    # rather than depending on potentially sensitive provider text reaching a response.
+    inj.ck(provider_calls == 2 and blocked == [circuit.CIRCUIT_OPEN] * 2,
            "...and later runs were refused by the breaker rather than calling the provider")
     inj.ck(_tenant_b_rows(store) == before,
            "no other tenant's rows changed")
