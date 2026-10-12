@@ -1616,10 +1616,19 @@ def _bodies_from_ask(result: dict, question: str = "") -> list:
                            "this question is about another body of law, so the Companies "
                            "Act was not engaged"))
     else:
-        out.append(ev.body(held.key, held.name,
-                           ev.B_ANSWERED if traced else ev.B_NEED_FACT,
-                           "held and read as at the date shown" if traced else
-                           "held, and nothing on point was found for this question"))
+        _searched = (result.get("sources") or {}).get("searched")
+        if _searched is not None and "held" not in _searched:
+            # The held corpus was not among the picked sources, so it was not searched.
+            # NEED_FACT "nothing on point was found" would claim a search that never ran
+            # (R-018); NOT_ENGAGED with the reason is the honest body.
+            out.append(ev.body(held.key, held.name, ev.B_NOT_ENGAGED,
+                               "the held corpus was not among the picked sources, so it "
+                               "was not searched"))
+        else:
+            out.append(ev.body(held.key, held.name,
+                               ev.B_ANSWERED if traced else ev.B_NEED_FACT,
+                               "held and read as at the date shown" if traced else
+                               "held, and nothing on point was found for this question"))
 
     if reading.body is not None and reading.body.key != held.key:
         b = reading.body
@@ -1753,7 +1762,11 @@ def _envelope_for(task: str, result: dict, *, as_of: str, run_id=None,
                f"below is built from the run's own findings, which is the whole of it."
                if result.get("prose_note") else "")))
     citations, dropped = _citations_for(task, result)
+    # `abstained_reason` before `note`: when `ask` abstains (e.g. the held corpus was not
+    # picked) it carries the reason there, and dropping it left the envelope saying "See the
+    # findings." over an abstention that read nothing. R-018.
     text = (result.get("answer") or result.get("detail")
+            or result.get("abstained_reason")
             or result.get("note") or "See the findings.")
     blocks = [{"text": str(text), "citation_ids": [c["id"] for c in citations]}] \
         if str(text).strip() else []
@@ -5172,6 +5185,25 @@ def _test() -> None:
           "...and FAILED is NOT a refusal, and carries no bodies and no citations")
     check("not a finding about the law" in _fail["text_blocks"][0]["text"],
           "...and says so in words")
+
+    # R-018: a question whose picked sources EXCLUDE the held corpus must ABSTAIN with ask's
+    # own reason -- never "See the findings." over a held body falsely reported as searched
+    # and empty. `ask` abstains; the envelope must carry that, word for word.
+    _unpicked = _ask({"question": "How many meetings of the Board must a company hold "
+                      "under section 173?", "sources": ["vault"]}, _cctx)
+    check(_unpicked["status"] == _ev.ABSTAINED,
+          f"held un-picked: ask ABSTAINS ({_unpicked['status']})")
+    _uenv = _envelope_for("RESEARCH_QUESTION", _unpicked, as_of="2026-10-01", run_id=None,
+                          files=[], ctx=_cctx, question="s.173 board meetings")
+    check(_uenv["status"] == _ev.ABSTAINED, "...the envelope is ABSTAINED")
+    check("not a finding that no obligation exists" in str(_uenv["text_blocks"]),
+          "...carrying ask's abstention reason, not 'See the findings.'")
+    check("See the findings." not in str(_uenv["text_blocks"]),
+          "...so the reader is told WHY nothing was read, not pointed at absent findings")
+    _ca = next((b for b in _uenv["bodies"] if b["body_id"] == "CA2013"), None)
+    check(_ca is not None and _ca["status"] == _ev.B_NOT_ENGAGED,
+          f"...and the held body is NOT_ENGAGED (not searched), not NEED_FACT 'nothing "
+          f"found' ({_ca and _ca['status']})")
 
     # The thread, in order, with the envelope stored.
     _g = _V["conversation.get"].run({"conversation_id": _cid}, _cctx)
