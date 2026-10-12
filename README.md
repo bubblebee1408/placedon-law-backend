@@ -67,6 +67,41 @@ Environment variables are read where they are used. The main ones are
 `PLACEDON_DATABASE_URL` (`gateway/store.py`; unset means in-memory) and the model-provider
 settings read by `checker/azure_model.py` (e.g. `PLACEDON_ACCEPT_REGION`). **Never commit a key.**
 
+### Staging gateway credentials and vault storage
+
+For a single-firm server-to-server pilot, the gateway can load one stable deployment key at
+startup from `PLACEDON_GATEWAY_SERVICE_KEY`, `PLACEDON_GATEWAY_TENANT_ID`, and
+`PLACEDON_GATEWAY_ACTOR_ID`. Configure all three or none. The key must be generated as
+`secrets.token_urlsafe(32)` and supplied through a secret manager; the frontend receives the
+same value only as its server-side `PLACEDON_GATEWAY_KEY`. Never use a `NEXT_PUBLIC_` variable
+or send this credential to a browser. Every replica needs the same key. Rotation means updating
+both services and restarting them. The key store keeps only the SHA-256 hash in process memory.
+
+This service credential uses the fixed `lawyer` role and one tenant. It is not individual
+lawyer identity, matter-level membership, or per-user audit. The console's shared passcode has
+the same single-firm limitation; a staging environment must use synthetic documents until
+individual sign-in and matter authorization are in place.
+
+The vault can store bytes in a private Azure Blob container when both
+`PLACEDON_AZURE_BLOB_ACCOUNT_URL` and `PLACEDON_AZURE_BLOB_CONTAINER` are set. The SDK uses
+`DefaultAzureCredential`: assign the hosted workload's managed identity `Storage Blob Data
+Contributor` at the vault container scope, keep anonymous/public access disabled, and do not
+configure a storage account key or SAS token. Local development may authenticate through Azure
+CLI. Do not set both `PLACEDON_FILES_DIR` and the Azure Blob settings; startup refuses the
+ambiguous split. A missing or incomplete Blob configuration does not silently write files to
+ephemeral disk.
+
+Azure Blob stores the content-addressed file bytes; Postgres continues to own tenant-scoped
+vault metadata, extracted text, and search chunks. Both services need durable backups and a
+restore test before any real client files are allowed. Before routing staging traffic, run a
+synthetic upload/read/delete smoke test using the hosted identity; startup checks container
+read access, while the smoke test also proves the identity can upload and remove blobs.
+
+Deleting a vault record removes its searchable chunks and hides its metadata, but deliberately
+retains content-addressed bytes. They may be shared by another tenant and are purged only by a
+future retention worker after a global reference check. Until that worker, retention policy,
+and per-user identity/matter authorization are implemented and tested, use synthetic data only.
+
 ## Run it
 
 ```bash

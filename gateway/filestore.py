@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Where a vault's bytes live. Local today; S3 is BLOCKED by name, not stubbed.
+"""Where a vault's bytes live. Local and Azure Blob are supported; S3 stays blocked.
 
 V1. `documents` already stores a hash, a name and a byte count; a vault of twenty thousand
 files needs somewhere to put the bytes themselves.
@@ -15,7 +15,7 @@ That also means a corrupted read is detectable: `get` re-hashes what it read and
 the bytes do not match the name they were stored under. A silent bit-flip in a client's
 contract is worse than an error.
 
-## S3 is BLOCKED, and that is a different thing from missing
+## Azure Blob uses workload identity; S3 remains BLOCKED
 
 `S3FileStore` exists and every method raises `FileStoreBlocked` with the reason. The
 alternative -- not writing the class until AWS is ready -- means the day someone configures
@@ -34,13 +34,16 @@ Run: PYTHONPATH=. python3 gateway/filestore.py --test
 from __future__ import annotations
 
 import hashlib
+import logging
 import re
 import os
 import tempfile
+from urllib.parse import urlsplit
 from dataclasses import dataclass
 from pathlib import Path
 
-__all__ = ["FileStoreError", "FileStoreBlocked", "LocalFileStore", "S3FileStore",
+__all__ = ["FileStoreError", "FileStoreBlocked", "FileStoreUnavailable",
+           "LocalFileStore", "AzureBlobFileStore", "S3FileStore",
            "digest", "MAX_BYTES"]
 
 # One file. A vault holds twenty thousand of them, and the limit that matters for the
@@ -56,6 +59,16 @@ class FileStoreError(RuntimeError):
 
 class FileStoreBlocked(FileStoreError):
     """A backend that exists and is deliberately not available yet."""
+
+
+class FileStoreUnavailable(FileStoreError):
+    """A configured backing store could not serve this operation right now."""
+
+    def __init__(self, message: str, *, retryable: bool = True,
+                 status_code: int | None = None) -> None:
+        super().__init__(message)
+        self.retryable = retryable
+        self.status_code = status_code
 
 
 def digest(data: bytes) -> str:
@@ -124,6 +137,146 @@ class LocalFileStore:
             return False
         path.unlink()
         return True
+
+
+@dataclass
+class AzureBlobFileStore:
+    """Private Azure container storage using an Entra managed identity.
+
+    The container is provisioned separately with public access disabled. No account key or
+    SAS token is accepted here. `client` is injectable for the no-network contract tests;
+    production construction uses DefaultAzureCredential.
+    """
+    account_url: str
+    container: str
+    client: object | None = None
+    kind: str = "azure-blob"
+
+    def __post_init__(self) -> None:
+        parsed = urlsplit(self.account_url)
+        try:
+            port = parsed.port
+        except ValueError:
+            port = -1
+        if (parsed.scheme != "https" or not parsed.hostname
+                or not re.fullmatch(r"[a-z0-9]{3,24}\.blob\.core\.windows\.net",
+                                    parsed.hostname.lower())
+                or parsed.username or parsed.password or parsed.query or parsed.fragment
+                or parsed.path not in ("", "/") or port not in (None, 443)):
+            raise FileStoreError(
+                "Azure Blob URL must be an account host in Azure public cloud over HTTPS"
+            )
+        if (not re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{1,61})[a-z0-9]", self.container)
+                or "--" in self.container):
+            raise FileStoreError("Azure Blob container name is invalid")
+        if self.client is None:
+            try:
+                from azure.identity import DefaultAzureCredential
+                from azure.storage.blob import BlobServiceClient
+            except ImportError:
+                raise FileStoreBlocked(
+                    "Azure Blob support requires azure-identity and azure-storage-blob"
+                ) from None
+            service = BlobServiceClient(
+                account_url=self.account_url,
+                credential=DefaultAzureCredential(),
+            )
+            self.client = service.get_container_client(self.container)
+
+    @staticmethod
+    def _validate_key(key: str) -> str:
+        if not _KEY.fullmatch(key or ""):
+            raise FileStoreError("blob key must be a lowercase sha256")
+        return key
+
+    @staticmethod
+    def _failure(operation: str, exc: Exception) -> FileStoreError:
+        # Keep useful operator diagnostics without logging SDK messages, URLs, or tokens.
+        status = getattr(exc, "status_code", None)
+        response = getattr(exc, "response", None)
+        headers = getattr(response, "headers", {}) or {}
+        request_id = headers.get("x-ms-request-id") if hasattr(headers, "get") else None
+        logging.getLogger(__name__).warning(
+            "azure_blob_operation_failed",
+            extra={"operation": operation, "exception_type": type(exc).__name__,
+                   "status_code": status, "request_id": request_id})
+        retryable = status is None or status in (408, 429) or (isinstance(status, int) and status >= 500)
+        reason = "temporarily unavailable" if retryable else "is not accessible"
+        return FileStoreUnavailable(f"Azure Blob {operation} {reason}",
+                                    retryable=retryable, status_code=status)
+
+    @staticmethod
+    def _not_found(exc: Exception) -> bool:
+        return getattr(exc, "status_code", None) == 404
+
+    def put(self, data: bytes) -> str:
+        if not isinstance(data, (bytes, bytearray)):
+            raise FileStoreError(f"bytes are required, got {type(data).__name__}")
+        body = bytes(data)
+        if len(body) > MAX_BYTES:
+            raise FileStoreError(f"{len(body)} bytes is over the {MAX_BYTES} limit for one file")
+        key = digest(body)
+        blob = self.client.get_blob_client(key)
+        try:
+            blob.upload_blob(body, overwrite=False)
+            return key
+        except Exception as exc:
+            if getattr(exc, "status_code", None) not in (409, 412):
+                raise self._failure("upload", exc) from None
+        existing = self.get(key)
+        if existing == body:
+            return key
+        if existing is not None:
+            raise FileStoreError("Azure Blob content does not match its sha256 key")
+        # A concurrent delete may race the conflict response. Recreate the same content;
+        # its content-addressed key makes this overwrite deterministic and idempotent.
+        try:
+            blob.upload_blob(body, overwrite=True)
+            return key
+        except Exception as exc:
+            raise self._failure("upload", exc) from None
+
+    def get(self, key: str) -> bytes | None:
+        blob = self.client.get_blob_client(self._validate_key(key))
+        try:
+            data = blob.download_blob().readall()
+        except Exception as exc:
+            if self._not_found(exc):
+                return None
+            raise self._failure("download", exc) from None
+        if digest(data) != key:
+            raise FileStoreError("Azure Blob content does not match its sha256 key")
+        return data
+
+    def exists(self, key: str) -> bool:
+        blob = self.client.get_blob_client(self._validate_key(key))
+        try:
+            return bool(blob.exists())
+        except Exception as exc:
+            if self._not_found(exc):
+                return False
+            raise self._failure("exists", exc) from None
+
+    def delete(self, key: str) -> bool:
+        blob = self.client.get_blob_client(self._validate_key(key))
+        try:
+            blob.delete_blob()
+            return True
+        except Exception as exc:
+            if self._not_found(exc):
+                return False
+            raise self._failure("delete", exc) from None
+
+    def check_ready(self) -> None:
+        """Verify the pre-created container exists and this identity can access it."""
+        try:
+            if not self.client.exists():
+                raise FileStoreUnavailable("Azure Blob vault container does not exist",
+                                           retryable=False, status_code=404)
+        except FileStoreUnavailable:
+            raise
+        except Exception as exc:
+            raise self._failure("readiness check", exc) from None
 
 
 @dataclass
@@ -233,6 +386,138 @@ def _test() -> int:
         rel = store._path(k3).relative_to(Path(tmp))
         check(len(rel.parts) == 3 and rel.parts[0] == k3[:2],
               f"files fan out two levels by their key ({rel})")
+
+    # ── Azure Blob contract, without cloud credentials or network access ────
+    class FakeAzureError(RuntimeError):
+        def __init__(self, status_code: int, message: str = ""):
+            self.status_code = status_code
+            super().__init__(message)
+
+    class FakeDownload:
+        def __init__(self, data: bytes):
+            self.data = data
+
+        def readall(self) -> bytes:
+            return self.data
+
+    class FakeAzureBlob:
+        def __init__(self, blobs: dict[str, bytes], key: str):
+            self.blobs, self.key = blobs, key
+
+        def upload_blob(self, data: bytes, *, overwrite: bool) -> None:
+            if self.key in self.blobs and not overwrite:
+                raise FakeAzureError(409)
+            self.blobs[self.key] = bytes(data)
+
+        def download_blob(self) -> FakeDownload:
+            if self.key not in self.blobs:
+                raise FakeAzureError(404)
+            return FakeDownload(self.blobs[self.key])
+
+        def exists(self) -> bool:
+            return self.key in self.blobs
+
+        def delete_blob(self) -> None:
+            if self.key not in self.blobs:
+                raise FakeAzureError(404)
+            del self.blobs[self.key]
+
+    class FakeAzureContainer:
+        def __init__(self):
+            self.blobs: dict[str, bytes] = {}
+
+        def exists(self) -> bool:
+            return True
+
+        def get_blob_client(self, key: str) -> FakeAzureBlob:
+            return FakeAzureBlob(self.blobs, key)
+
+    container = FakeAzureContainer()
+    azure = AzureBlobFileStore(
+        "https://placedon.blob.core.windows.net", "vault", client=container,
+    )
+    try:
+        azure.check_ready()
+        check(True, "Azure Blob readiness confirms an accessible container")
+    except FileStoreError:
+        check(False, "Azure Blob readiness confirms an accessible container")
+    azure_data = b"synthetic staging document"
+    azure_key = azure.put(azure_data)
+    check(azure_key == digest(azure_data) and azure.get(azure_key) == azure_data,
+          "Azure Blob writes and reads content-addressed bytes")
+    check(azure.put(azure_data) == azure_key and len(container.blobs) == 1,
+          "parallel-safe duplicate upload is idempotent after conflict check")
+    check(azure.exists(azure_key) and azure.get("0" * 64) is None,
+          "Azure existence and not-found responses have explicit results")
+    check(azure.delete(azure_key) and not azure.delete(azure_key),
+          "Azure delete is idempotent and treats an absent blob as already deleted")
+    try:
+        AzureBlobFileStore("http://insecure.example", "vault", client=container)
+        check(False, "Azure Blob refuses an insecure account URL")
+    except FileStoreError:
+        check(True, "Azure Blob refuses an insecure account URL")
+    for untrusted_url in (
+        "https://storage.blob.core.windows.net.attacker.example",
+        "https://attacker.example",
+        "https://placedon.blob.core.windows.net:8443",
+    ):
+        try:
+            AzureBlobFileStore(untrusted_url, "vault", client=container)
+            check(False, "managed identity refuses an untrusted Blob endpoint")
+        except FileStoreError:
+            check(True, "managed identity refuses an untrusted Blob endpoint")
+    try:
+        AzureBlobFileStore("https://safe.example", "bad--container", client=container)
+        check(False, "Azure Blob refuses an invalid container name")
+    except FileStoreError:
+        check(True, "Azure Blob refuses an invalid container name")
+    try:
+        azure.get("../outside")
+        check(False, "Azure Blob validates object keys before requesting them")
+    except FileStoreError:
+        check(True, "Azure Blob validates object keys before requesting them")
+    container.blobs["0" * 64] = b"tampered"
+    try:
+        azure.get("0" * 64)
+        check(False, "Azure Blob detects a body whose digest differs from its key")
+    except FileStoreError:
+        check(True, "Azure Blob detects a body whose digest differs from its key")
+    class FakeFailingBlob:
+        def upload_blob(self, data: bytes, *, overwrite: bool) -> None:
+            raise FakeAzureError(503, "credential=secret-value")
+
+    class FakeFailingContainer:
+        def get_blob_client(self, key: str) -> FakeFailingBlob:
+            return FakeFailingBlob()
+
+    try:
+        AzureBlobFileStore(
+            "https://placedon.blob.core.windows.net", "vault",
+            client=FakeFailingContainer(),
+        ).put(b"test")
+        check(False, "Azure outages surface as safe store errors")
+    except FileStoreError as exc:
+        check("credential=secret-value" not in str(exc),
+              "Azure SDK errors are surfaced without leaking response details")
+        check(isinstance(exc, FileStoreUnavailable) and exc.retryable,
+              "transient Azure 503 failures are classified as retryable")
+    _forbidden = AzureBlobFileStore._failure("upload", FakeAzureError(403, "private detail"))
+    check(isinstance(_forbidden, FileStoreUnavailable) and not _forbidden.retryable
+          and "private detail" not in str(_forbidden),
+          "Azure permission failures are non-retryable and sanitized")
+
+    class MissingAzureContainer(FakeAzureContainer):
+        def exists(self) -> bool:
+            return False
+
+    try:
+        AzureBlobFileStore(
+            "https://placedon.blob.core.windows.net", "vault",
+            client=MissingAzureContainer(),
+        ).check_ready()
+        check(False, "an absent Azure container blocks service startup")
+    except FileStoreUnavailable:
+        check(True, "an absent Azure container blocks service startup")
 
     # ── S3 is BLOCKED, by name, on every method ────────────────────────────
     s3 = S3FileStore(bucket="placedon-vault")

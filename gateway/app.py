@@ -152,10 +152,12 @@ PUBLIC_ROUTES = frozenset({HEALTH_PATH})
 
 
 FILES_DIR_ENV = "PLACEDON_FILES_DIR"
+AZURE_BLOB_URL_ENV = "PLACEDON_AZURE_BLOB_ACCOUNT_URL"
+AZURE_BLOB_CONTAINER_ENV = "PLACEDON_AZURE_BLOB_CONTAINER"
 
 
-def default_file_store():
-    """A `LocalFileStore` under `PLACEDON_FILES_DIR`, or None when it is unset.
+def default_file_store(env=None, azure_factory=None):
+    """Select local dev storage or a private Azure Blob container, or no vault.
 
     None is not a failure: a deployment with no vault is a real deployment, and the vault
     verbs refuse `NO_VAULT` by name on it. What is NOT acceptable is the previous
@@ -163,12 +165,28 @@ def default_file_store():
     `gateway/screens.py` does in its own test, and no HTTP caller could do at all. So the
     verbs were proved and unreachable at once.
 
-    `S3FileStore` stays BLOCKED until AWS exists (H1); this reads a directory because a
-    directory is what a laptop and a Lightsail box both have.
+    Azure uses DefaultAzureCredential, so a hosted service uses its managed identity and
+    local development can use Azure CLI auth. A configured local directory and Azure
+    container together are refused; silently choosing one would split the vault.
     """
     import os
 
-    root = (os.environ.get(FILES_DIR_ENV) or "").strip()
+    configured = os.environ if env is None else env
+    root = (configured.get(FILES_DIR_ENV) or "").strip()
+    account_url = (configured.get(AZURE_BLOB_URL_ENV) or "").strip()
+    container = (configured.get(AZURE_BLOB_CONTAINER_ENV) or "").strip()
+    azure_configured = bool(account_url or container)
+    if azure_configured and (not account_url or not container):
+        raise RuntimeError(
+            f"{AZURE_BLOB_URL_ENV} and {AZURE_BLOB_CONTAINER_ENV} must be configured together"
+        )
+    if root and azure_configured:
+        raise RuntimeError(f"Configure either {FILES_DIR_ENV} or Azure Blob, not both")
+    if azure_configured:
+        if azure_factory is None:
+            from gateway.filestore import AzureBlobFileStore
+            azure_factory = AzureBlobFileStore
+        return azure_factory(account_url=account_url, container=container)
     if not root:
         return None
     from gateway.filestore import LocalFileStore
@@ -209,6 +227,9 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
     @asynccontextmanager
     async def lifespan(app):
         try:
+            check_ready = getattr(getattr(app.state, "files", None), "check_ready", None)
+            if callable(check_ready):
+                check_ready()
             yield
         finally:
             executor.close()
@@ -288,7 +309,11 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
                 return PostgresQueue(app.state.db_url, tenant_id=tenant_id, actor_id=actor_id, max_pending=queue.max_pending)
             raise SingleTenantOnly("The configured job queue belongs to a different tenant.")
         return queue
-    app.state.keys = keys if keys is not None else KeyStore()
+    # A deployed process can accept one stable, operator-provisioned server credential.
+    # It is hashed into this process-local store at startup, so every replica must receive
+    # the same secret through its secret manager. User/browser keys are never accepted from
+    # environment variables, and partial configuration fails closed in KeyStore.
+    app.state.keys = keys if keys is not None else KeyStore.from_service_environment()
     # Injected, or read from the environment. Never discovered inside a handler: a verb
     # that reached for its own file store would be a second place the vault's location
     # lives, and the two would disagree the first time either moved.
@@ -556,9 +581,15 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
             code = 200
             if isinstance(out, dict) and out.get("code") in ("NOT_FOUND", "NO_STORE"):
                 code = 404 if out["code"] == "NOT_FOUND" else 503
+            elif isinstance(out, dict) and out.get("code") == "STORAGE_UNAVAILABLE":
+                code = 503
+            elif isinstance(out, dict) and out.get("code") == "STORAGE_MISCONFIGURED":
+                code = 503
             elif isinstance(out, dict) and out.get("code") == "BAD_REQUEST":
                 code = 400
             elif isinstance(out, dict) and out.get("code") == "IDEMPOTENCY_CONFLICT":
+                code = 409
+            elif isinstance(out, dict) and out.get("code") == "CONFLICT":
                 code = 409
             elif isinstance(out, dict) and out.get("code") == "BUSY":
                 code = 429
@@ -572,7 +603,11 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
                     route=f"{verb.method} {path}", resource=str(resource),
                     outcome="served" if code < 400 else "refused", status=code)
             return Response(content=dumps(out), status_code=code,
-                            media_type="application/json", headers={"Retry-After": "2"} if code == 429 else None)
+                            media_type="application/json",
+                            headers={"Retry-After": "2"}
+                            if code == 429 or (isinstance(out, dict) and
+                               out.get("code") in ("STORAGE_UNAVAILABLE", "NO_STORE"))
+                            else None)
 
         app.add_api_route(path, _route, methods=[verb.method],
                           name=f"v2:{verb.name}", summary=verb.summary)
@@ -1655,6 +1690,10 @@ def _test() -> None:
               f"a vault upload over HTTP is ACCEPTED when a file store is configured "
               f"({_up.status_code}: {str(_up.json())[:70]})")
         _doc = _up.json()
+        _dup = _vc.post("/v2/vault/upload", json={"name": "copy.txt", "text": NDA})
+        check(_dup.status_code == 409 and "CONFLICT" in _dup.text
+              and "Retry-After" not in _dup.headers,
+              "duplicate content is a safe client conflict without a retry hint")
         check(_doc.get("state") == "PENDING",
               f"...and is PENDING, because nothing is searchable until a worker reads it "
               f"({_doc.get('state')})")
@@ -1693,6 +1732,75 @@ def _test() -> None:
               f"/v1/health reports the file store as its own object, like `store` ({_h.get('files')})")
         check(_h["files"].get("kind") == "local" and _h["files"].get("configured") is True,
               f"...naming its kind and that it is configured ({_h.get('files')})")
+
+    # Storage mode selection fails closed and can be tested without an Azure account.
+    check(default_file_store({}) is None, "no configured file store disables vault bytes")
+    try:
+        default_file_store({AZURE_BLOB_URL_ENV: "https://storage.example"})
+        check(False, "partial Azure Blob configuration is rejected")
+    except RuntimeError:
+        check(True, "partial Azure Blob configuration is rejected")
+    try:
+        default_file_store({
+            FILES_DIR_ENV: "/tmp/placedon-test-files",
+            AZURE_BLOB_URL_ENV: "https://storage.example",
+            AZURE_BLOB_CONTAINER_ENV: "vault",
+        })
+        check(False, "local and cloud storage cannot split a vault")
+    except RuntimeError:
+        check(True, "local and cloud storage cannot split a vault")
+
+    selected = {}
+    def _azure_factory(**kwargs):
+        selected.update(kwargs)
+        return object()
+    _selected_store = default_file_store({
+        AZURE_BLOB_URL_ENV: "https://storage.example",
+        AZURE_BLOB_CONTAINER_ENV: "vault",
+    }, azure_factory=_azure_factory)
+    check(_selected_store is not None and selected == {
+        "account_url": "https://storage.example", "container": "vault",
+    }, "configured Azure Blob settings select one explicit storage adapter")
+
+    class _FailingFileStore:
+        kind = "test"
+        def put(self, data):
+            raise RuntimeError("storage credential=do-not-expose")
+
+    _failed_store_app = create_app(
+        clock=lambda: GEN, handler=handle, keys=keys, db_url="", files=_FailingFileStore(),
+    )
+    _failed_store_client = TestClient(
+        _failed_store_app, headers={"Authorization": f"Bearer {KEY}"},
+    )
+    _failed_store_response = _failed_store_client.post(
+        "/v2/vault/upload", json={"name": "synthetic.txt", "text": "synthetic contract text"},
+    )
+    check(_failed_store_response.status_code == 503
+          and _failed_store_response.headers.get("retry-after") == "2",
+          "vault storage outage becomes a retryable 503")
+    check("STORAGE_UNAVAILABLE" in _failed_store_response.text
+          and "do-not-expose" not in _failed_store_response.text,
+          "vault outage response is stable and does not leak backend exception text")
+
+    from gateway.filestore import FileStoreUnavailable as _FSUnavailable
+    class _MisconfiguredFileStore(_FailingFileStore):
+        def put(self, data):
+            raise _FSUnavailable("private storage detail", retryable=False, status_code=403)
+    _misconfigured_app = create_app(
+        clock=lambda: GEN, handler=handle, keys=keys, db_url="", files=_MisconfiguredFileStore(),
+    )
+    _misconfigured_client = TestClient(
+        _misconfigured_app, headers={"Authorization": f"Bearer {KEY}"},
+    )
+    _misconfigured_response = _misconfigured_client.post(
+        "/v2/vault/upload", json={"name": "synthetic.txt", "text": "synthetic contract text"},
+    )
+    check(_misconfigured_response.status_code == 503
+          and "STORAGE_MISCONFIGURED" in _misconfigured_response.text
+          and "retry-after" not in _misconfigured_response.headers
+          and "private storage detail" not in _misconfigured_response.text,
+          "permanent storage permission failures are sanitized 503s without retry hints")
 
     # With NO file store the refusal is KEPT, and health says so rather than being silent.
     _noapp = create_app(clock=lambda: GEN, handler=handle, keys=keys, db_url="")
