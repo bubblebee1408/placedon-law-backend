@@ -32,8 +32,10 @@ Run: PYTHONPATH=. python3 gateway/store.py
 from __future__ import annotations
 
 import os
+from copy import deepcopy
 import re
-from contextlib import contextmanager
+import threading
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass, field
 from typing import Protocol
 
@@ -47,6 +49,10 @@ _UUID = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-"
 
 class StoreError(RuntimeError):
     """The store could not do what was asked. Never swallowed into a None."""
+
+
+class TurnConflict(StoreError):
+    """An idempotency key or a conversation matter was reused inconsistently."""
 
 
 class Backend(Protocol):
@@ -82,6 +88,7 @@ class Backend(Protocol):
     def write_vault_document(self, doc: dict) -> dict: ...
     def read_vault_document(self, document_id: str) -> dict | None: ...
     def list_vault_documents(self, *, matter_id: str) -> list[dict]: ...
+    def browse_vault_documents(self, *, matter_id: str | None, query: str, limit: int, offset: int) -> list[dict]: ...
     def write_vault_chunks(self, document_id: str, chunks: list) -> int: ...
     def read_vault_chunks(self) -> list[dict]: ...
     def write_vault_tags(self, document_id: str, tags: list) -> int: ...
@@ -94,6 +101,11 @@ class Backend(Protocol):
                              limit: int = 100) -> list[dict]: ...
     def read_renewals(self, *, on_or_before: str = "") -> list[dict]: ...
     def list_matters(self) -> list[dict]: ...
+    def reserve_turn(self, conversation: dict, user: dict, assistant: dict, *,
+                     request_id: str, payload_digest: str, queue=None, queued=None) -> tuple[dict, bool]: ...
+    def find_turn(self, request_id: str, payload_digest: str) -> dict | None: ...
+    def expire_pending_message(self, message_id: str, envelope: dict) -> bool: ...
+    def update_message(self, message_id: str, *, task, run_id, envelope, metadata) -> bool: ...
     def append_message(self, message: dict) -> dict: ...
     def read_messages(self, conversation_id: str) -> list[dict]: ...
     def set_message_envelope(self, message_id: str, envelope: dict) -> bool: ...
@@ -170,7 +182,7 @@ MIN_REASON_CHARS = 10
 # returns every column, a dict returns what it was handed, and `msg["envelope"]` must not be
 # a KeyError on one backend and None on the other.
 MESSAGE_KEYS = ("message_id", "conversation_id", "ordinal", "role", "text", "file_ids",
-                "task", "run_id", "envelope")
+                "task", "run_id", "envelope", "metadata")
 # 8b: matter_id is part of a conversation row on both backends. Without it in the shaped
 # key set, a dict conversation has no matter and the memory listing matches nothing.
 CONVERSATION_KEYS = ("conversation_id", "title", "created_at", "updated_at",
@@ -225,6 +237,8 @@ def _check_message(row: dict) -> None:
     if not isinstance(row.get("ordinal"), int) or row["ordinal"] < 0:
         raise MessageShape(f"ordinal must be a non-negative integer, got "
                            f"{row.get('ordinal')!r}")
+    if row.get("metadata") is not None and not isinstance(row["metadata"], dict):
+        raise MessageShape("metadata must be an object or absent")
     env = row.get("envelope")
     if env is not None and not isinstance(env, dict):
         raise MessageShape(f"envelope must be an object or absent, got "
@@ -411,6 +425,8 @@ class MemoryBackend:
     cascades: list = field(default_factory=list)
     conversations: dict = field(default_factory=dict)
     messages: dict = field(default_factory=dict)       # conversation_id -> [row]
+    turn_requests: dict = field(default_factory=dict)
+    _turn_lock: object = field(default_factory=threading.RLock, repr=False, compare=False)
     grids: dict = field(default_factory=dict)
     grid_cells: dict = field(default_factory=dict)     # grid_id -> {(doc, col): row}
     drafts: dict = field(default_factory=dict)
@@ -713,6 +729,15 @@ class MemoryBackend:
                                         key=lambda r: r["name"].lower())
                 if str(r.get("matter_id") or "") == want and not r.get("deleted_at")]
 
+    def browse_vault_documents(self, *, matter_id: str | None, query: str, limit: int, offset: int) -> list[dict]:
+        """Metadata for one matter, or unfiled rows only; never all matters."""
+        rows = sorted((r for r in self.vault_docs.values()
+                       if r.get("matter_id") == matter_id and not r.get("deleted_at")
+                       and r.get("state") != "DELETED" and query.lower() in r["name"].lower()),
+                      key=lambda r: (r["name"].lower(), r["document_id"]))
+        fields = ("document_id", "name", "state", "matter_id", "byte_count", "doc_class")
+        return [{k: r.get(k) for k in fields} for r in rows[offset:offset + limit]]
+
     def write_vault_chunks(self, document_id: str, chunks: list) -> int:
         did = str(document_id or "")
         if did not in self.vault_docs:
@@ -856,6 +881,78 @@ class MemoryBackend:
                 "unsearchable": sum(1 for r in live
                                     if r["state"] in ("PENDING", "CANNOT_READ"))}
 
+    def find_turn(self, request_id: str, payload_digest: str) -> dict | None:
+        with self._turn_lock:
+            prior = self.turn_requests.get(request_id)
+            if prior is None:
+                return None
+            if prior["digest"] != payload_digest:
+                raise TurnConflict("request_id was already used with different input")
+            return next((deepcopy(m) for m in self.messages[prior["conversation_id"]]
+                         if m["message_id"] == prior["message_id"]), None)
+
+    def reserve_turn(self, conversation: dict, user: dict, assistant: dict, *,
+                     request_id: str, payload_digest: str, queue=None, queued=None) -> tuple[dict, bool]:
+        """Reserve adjacent user/assistant slots and the retry key under one lock."""
+        with self._turn_lock, (queue._lock if queued is not None else nullcontext()):
+            prior = self.find_turn(request_id, payload_digest)
+            if prior is not None:
+                return prior, False
+            cid = conversation["conversation_id"]
+            existing = self.conversations.get(cid)
+            if existing and existing.get("matter_id") != conversation.get("matter_id"):
+                raise TurnConflict("a conversation's matter cannot change during a turn")
+            ordinal = max((m["ordinal"] for m in self.messages.get(cid, [])), default=-1) + 1
+            u = dict(user, conversation_id=cid, ordinal=ordinal)
+            a = dict(assistant, conversation_id=cid, ordinal=ordinal + 1)
+            _check_message(u)
+            _check_message(a)
+            previous = list(self.messages.get(cid, []))
+            try:
+                if existing is None:
+                    self.write_conversation(conversation)
+                if queued is not None:
+                    self.write_run({"id": queued["run_id"], "intent": queued["intent"],
+                                    "status": "PLANNED", "refusal_code": None,
+                                    "steps": [], "propositions": []})
+                self.append_message(u)
+                row = self.append_message(a)
+                if queued is not None:
+                    queue.enqueue(**queued)
+            except Exception:
+                if existing is None:
+                    self.conversations.pop(cid, None)
+                    self.messages.pop(cid, None)
+                else:
+                    self.messages[cid] = previous
+                if queued is not None:
+                    for collection in (self.runs, self.steps, self.props):
+                        collection.pop(queued["run_id"], None)
+                raise
+            self.turn_requests[request_id] = {"digest": payload_digest,
+                "conversation_id": cid, "message_id": a["message_id"]}
+            return row, True
+
+    def expire_pending_message(self, message_id: str, envelope: dict) -> bool:
+        with self._turn_lock:
+            for thread in self.messages.values():
+                for m in thread:
+                    if (m["message_id"] == message_id and m["role"] == "assistant"
+                            and m.get("envelope") is None and m.get("run_id") is None):
+                        m["envelope"] = deepcopy(envelope)
+                        return True
+            return False
+
+    def update_message(self, message_id: str, *, task, run_id, envelope, metadata) -> bool:
+        with self._turn_lock:
+            for thread in self.messages.values():
+                for m in thread:
+                    if m["message_id"] == message_id and m["role"] == "assistant":
+                        m.update(task=task, run_id=run_id, envelope=deepcopy(envelope),
+                                 metadata=deepcopy(metadata))
+                        return True
+            return False
+
     def append_message(self, message: dict) -> dict:
         _check_message(message)
         cid = message["conversation_id"]
@@ -868,11 +965,12 @@ class MemoryBackend:
             raise StoreError(f"ordinal {message['ordinal']} is already used in {cid!r}")
         row = _shaped(message, MESSAGE_KEYS)
         row["file_ids"] = list(message.get("file_ids") or [])
+        row["metadata"] = deepcopy(message.get("metadata"))
         thread.append(row)
-        return dict(row)
+        return deepcopy(row)
 
     def read_messages(self, conversation_id: str) -> list[dict]:
-        return [dict(m) for m in sorted(self.messages.get(conversation_id, []),
+        return [deepcopy(m) for m in sorted(self.messages.get(conversation_id, []),
                                         key=lambda m: m["ordinal"])]
 
     def set_message_envelope(self, message_id: str, envelope: dict) -> bool:
@@ -1647,6 +1745,20 @@ class PostgresBackend:
                 "AND deleted_at IS NULL ORDER BY lower(name)", (want,)).fetchall()
         return [self.read_vault_document(str(r[0])) or {} for r in rows]
 
+    def browse_vault_documents(self, *, matter_id: str | None, query: str, limit: int, offset: int) -> list[dict]:
+        """One bounded metadata query under tenant RLS, without N+1 reads."""
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT document_id, name, state, matter_id, byte_count, doc_class "
+                "FROM vault_documents WHERE matter_id IS NOT DISTINCT FROM %s::uuid "
+                "AND deleted_at IS NULL AND state <> 'DELETED' "
+                "AND position(%s in lower(name)) > 0 "
+                "ORDER BY lower(name), document_id LIMIT %s OFFSET %s",
+                (matter_id, query.lower(), limit, offset)).fetchall()
+        return [{"document_id": str(r[0]), "name": r[1], "state": r[2],
+                 "matter_id": str(r[3]) if r[3] else None, "byte_count": int(r[4]),
+                 "doc_class": r[5]} for r in rows]
+
     def write_vault_chunks(self, document_id: str, chunks: list) -> int:
         import psycopg
         try:
@@ -1779,6 +1891,99 @@ class PostgresBackend:
                 "unsearchable": by_state.get("PENDING", 0)
                 + by_state.get("CANNOT_READ", 0)}
 
+    @staticmethod
+    def _turn_row(row) -> dict:
+        return {"message_id": str(row[0]), "conversation_id": str(row[1]),
+                "ordinal": row[2], "role": row[3], "text": row[4],
+                "file_ids": list(row[5] or []), "task": row[6],
+                "run_id": str(row[7]) if row[7] else None,
+                "envelope": row[8], "metadata": row[9]}
+
+    def _find_turn(self, c, request_id: str, payload_digest: str) -> dict | None:
+        row = c.execute(
+            "SELECT message_id, conversation_id, ordinal, role, text, file_ids, task, "
+            "run_id, envelope, metadata, payload_digest FROM messages WHERE request_id = %s",
+            (request_id,)).fetchone()
+        if row is None:
+            return None
+        if row[10] != payload_digest:
+            raise TurnConflict("request_id was already used with different input")
+        return self._turn_row(row)
+
+    def find_turn(self, request_id: str, payload_digest: str) -> dict | None:
+        with self._conn() as c:
+            return self._find_turn(c, request_id, payload_digest)
+
+    def reserve_turn(self, conversation: dict, user: dict, assistant: dict, *,
+                     request_id: str, payload_digest: str, queue=None, queued=None) -> tuple[dict, bool]:
+        """Retry reservation and both ordinal slots commit in a single transaction.
+
+        The request lock also works when the first caller had no conversation_id. The
+        conversation row lock serializes different requests in the same thread. Neither
+        lock is held during model work. RLS applies to every statement below.
+        """
+        cid = conversation["conversation_id"]
+        with self._conn() as c, c.transaction():
+            c.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
+                      (self.tenant_id + ":turn:" + request_id,))
+            prior = self._find_turn(c, request_id, payload_digest)
+            if prior is not None:
+                return prior, False
+            c.execute("INSERT INTO conversations (conversation_id, tenant_id, actor_id, "
+                      "title, matter_id) VALUES (%s,%s,%s,%s,%s) "
+                      "ON CONFLICT (conversation_id) DO NOTHING",
+                      (cid, self.tenant_id, self.actor_id, conversation.get("title") or "",
+                       conversation.get("matter_id")))
+            existing = c.execute("SELECT matter_id FROM conversations "
+                                 "WHERE conversation_id = %s FOR UPDATE", (cid,)).fetchone()
+            if existing is None:
+                raise StoreError("conversation is unavailable")
+            if (str(existing[0]) if existing[0] else None) != conversation.get("matter_id"):
+                raise TurnConflict("a conversation's matter cannot change during a turn")
+            ordinal = c.execute("SELECT COALESCE(max(ordinal), -1) + 1 FROM messages "
+                                "WHERE conversation_id = %s", (cid,)).fetchone()[0]
+            if queued is not None:
+                c.execute("INSERT INTO runs (run_id, tenant_id, actor_id, intent, status) "
+                          "VALUES (%s,%s,%s,%s,'PLANNED')",
+                          (queued["run_id"], self.tenant_id, self.actor_id, queued["intent"]))
+            for offset, message in enumerate((user, assistant)):
+                message = dict(message, conversation_id=cid, ordinal=ordinal + offset)
+                _check_message(message)
+                c.execute("INSERT INTO messages (message_id, conversation_id, tenant_id, "
+                          "ordinal, role, text, file_ids, task, run_id, envelope, metadata, "
+                          "request_id, payload_digest) VALUES "
+                          "(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+                          (message["message_id"], cid, self.tenant_id, message["ordinal"],
+                           message["role"], message.get("text") or "",
+                           _json(message.get("file_ids") or []), message.get("task"),
+                           message.get("run_id"), _json(message.get("envelope")),
+                           _json(message.get("metadata")), request_id if offset else None,
+                           payload_digest if offset else None))
+            if queued is not None:
+                # Same transaction: no worker can see a job without its run and message.
+                queue.enqueue(**queued, connection=c)
+            c.execute("UPDATE conversations SET updated_at = now() "
+                      "WHERE conversation_id = %s", (cid,))
+            return _shaped(message, MESSAGE_KEYS), True
+
+    def expire_pending_message(self, message_id: str, envelope: dict) -> bool:
+        if not _UUID.match(message_id or ""):
+            return False
+        with self._conn() as c:
+            n = c.execute("UPDATE messages SET envelope = %s WHERE message_id = %s "
+                          "AND role = 'assistant' AND envelope IS NULL AND run_id IS NULL",
+                          (_json(envelope), message_id)).rowcount
+        return bool(n)
+
+    def update_message(self, message_id: str, *, task, run_id, envelope, metadata) -> bool:
+        if not _UUID.match(message_id or ""):
+            return False
+        with self._conn() as c:
+            n = c.execute("UPDATE messages SET task = %s, run_id = %s, envelope = %s, "
+                          "metadata = %s WHERE message_id = %s AND role = 'assistant'",
+                          (task, run_id, _json(envelope), _json(metadata), message_id)).rowcount
+        return bool(n)
+
     def append_message(self, message: dict) -> dict:
         """Append one message, translating the database's refusals into StoreError.
 
@@ -1795,12 +2000,13 @@ class PostgresBackend:
             with self._conn() as c:
                 c.execute(
                     "INSERT INTO messages (message_id, conversation_id, tenant_id, "
-                    "ordinal, role, text, file_ids, task, run_id, envelope) "
-                    "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+                    "ordinal, role, text, file_ids, task, run_id, envelope, metadata) "
+                    "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
                     (message["message_id"], message["conversation_id"], self.tenant_id,
                      message["ordinal"], message["role"], message.get("text") or "",
                      _json(list(message.get("file_ids") or [])), message.get("task"),
-                     message.get("run_id"), _json(message.get("envelope"))))
+                     message.get("run_id"), _json(message.get("envelope")),
+                     _json(message.get("metadata"))))
                 c.execute("UPDATE conversations SET updated_at = now() WHERE "
                           "conversation_id = %s", (message["conversation_id"],))
         except psycopg.errors.IntegrityError as exc:
@@ -1817,12 +2023,12 @@ class PostgresBackend:
         with self._conn() as c:
             rows = c.execute(
                 "SELECT message_id, conversation_id, ordinal, role, text, file_ids, task, "
-                "run_id, envelope FROM messages WHERE conversation_id = %s "
+                "run_id, envelope, metadata FROM messages WHERE conversation_id = %s "
                 "ORDER BY ordinal", (conversation_id,)).fetchall()
         return [{"message_id": str(r[0]), "conversation_id": str(r[1]), "ordinal": r[2],
                  "role": r[3], "text": r[4], "file_ids": list(r[5] or []),
                  "task": r[6], "run_id": str(r[7]) if r[7] is not None else None,
-                 "envelope": r[8]} for r in rows]
+                 "envelope": r[8], "metadata": r[9]} for r in rows]
 
     def set_message_envelope(self, message_id: str, envelope: dict) -> bool:
         if not _UUID.match(message_id or ""):
@@ -2530,6 +2736,33 @@ def conformance(backend) -> list[tuple[bool, str]]:
         ck(False, "a message for a conversation that does not exist is refused")
     except Exception:
         ck(True, "a message for a conversation that does not exist is refused")
+
+    # A single reservation owns both ordinal slots and the stable retry ID.
+    rid = str(_uuid.uuid4())
+    reply_id = str(_uuid.uuid4())
+    metadata = {"schema": "conversation_turn.v1", "request_id": rid,
+                "artifacts": [{"type": "draft", "id": str(_uuid.uuid4()), "version": 1}]}
+    reserve_args = ({"conversation_id": cid, "matter_id": _CONF_MATTER},
+                    {"message_id": str(_uuid.uuid4()), "role": "user", "text": "next"},
+                    {"message_id": reply_id, "role": "assistant", "text": "",
+                     "metadata": metadata})
+    reserved, created = backend.reserve_turn(*reserve_args, request_id=rid, payload_digest="a" * 64)
+    ck(created and reserved["ordinal"] == 3, "reservation allocates an adjacent pair atomically")
+    repeated, created_again = backend.reserve_turn(*reserve_args, request_id=rid, payload_digest="a" * 64)
+    ck(not created_again and repeated["message_id"] == reply_id,
+       "repeated request returns its original reply without appending messages")
+    ck(len(backend.read_messages(cid)) == 4, "the duplicate did not allocate another ordinal")
+    try:
+        backend.find_turn(rid, "b" * 64)
+        ck(False, "changed payload with the same request ID conflicts")
+    except TurnConflict:
+        ck(True, "changed payload with the same request ID conflicts")
+    ck(backend.update_message(reply_id, task="DRAFT", run_id=None,
+                              envelope={"status": "PARTIAL"}, metadata=metadata),
+       "turn completion persists the envelope and sibling metadata together")
+    reopened = backend.read_messages(cid)[3]
+    ck(reopened["metadata"] == metadata and reopened["envelope"]["status"] == "PARTIAL",
+       "artifact metadata and honest outcome survive a reload")
 
     # ── H4: review grids, on BOTH backends ──────────────────────────────────
     gid = str(_uuid.uuid4())

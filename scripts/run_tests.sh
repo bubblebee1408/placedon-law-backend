@@ -389,7 +389,7 @@ extra+=("scripts/demo.py --test")
 # line carrying document text. Structural, so a future diff cannot forget them.
 extra+=("scripts/hardening.py")
 extra+=("gateway/logs.py --test")
-extra+=("gateway/limits.py")
+extra+=("gateway/limits.py" "gateway/admission.py" "gateway/document_cache.py" "scripts/conversation_http_checks.py" "scripts/conversation_regression_checks.py")
 # P2: 50 real threads. Nothing runs twice, and the single-tenant guard holds under
 # load -- a guard that held serially and raced open would be worse than none.
 extra+=("scripts/concurrency_test.py --test")

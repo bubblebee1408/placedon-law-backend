@@ -58,7 +58,7 @@ ANSWERED, PARTIAL, OUT_OF_SCOPE = "answered", "partial", "out_of_scope"
 # A question is rendered verbatim and, where it names no provision, is the retrieval
 # query. Past this it is a pasted document, not a question -- and a 50,000-character
 # query is a cost nobody asked for. The document path takes the document separately.
-MAX_QUESTION_CHARS = 2000
+MAX_QUESTION_CHARS = 8000
 
 # Everything a request may carry. Unknown keys are refused rather than ignored, for the
 # reason document_check gives: a mistyped field silently changes the answer.

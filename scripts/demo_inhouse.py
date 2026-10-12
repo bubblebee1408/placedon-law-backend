@@ -132,8 +132,11 @@ def run(*, model_for=None) -> list[Step]:
     # newest reviewable turn IN THIS THREAD. Calling review_contract directly left the
     # review outside the conversation, and the draft silently fell back to the research
     # question -- a client email about the wrong thing, which looked like a pass.
+    uploaded = verbs["documents.upload"].run(
+        {"name": "synthetic-petrichor-nda.txt", "text": SYNTHETIC_NDA}, ctx)
     reviewed_turn = verbs["conversation.send"].run(
         {"conversation_id": asked.get("conversation_id"),
+         "file_ids": [uploaded["document_id"]],
          "text": "Please review this NDA against our standard.",
          "task_override": "REVIEW_CONTRACT", "test_data": "synthetic",
          "matter_id": matter["matter_id"]}, ctx)

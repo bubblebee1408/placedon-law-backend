@@ -132,7 +132,8 @@ def _test() -> None:
                     "020_vault.sql",
                     "021_job_lanes.sql",
                     "022_grid_budget_state.sql",
-                    "023_document_checks.sql"],
+                    "023_document_checks.sql",
+                    "024_conversation_turns.sql"],
           f"every migration exists, in order ({files})")
 
     # 012: H3's drafts. The CHECK that matters is the one the derivation cannot see.
