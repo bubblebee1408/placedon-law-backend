@@ -131,6 +131,31 @@ The correct behaviour on reaching it: write the handoff, name what is needed and
 stop. `docs/guides/ACQUISITION_HANDOFF_board_rules_2014.md` is the worked example — a five-minute browser
 task, because a browser session is not subject to the block that stopped the automation.
 
+### AGENT_ASSISTED_HUMAN_RETRIEVAL (founder decision, 2026-10-12)
+
+A middle route between automation and a pure human handoff, authorised by the founder on
+2026-10-12 for cases where the automated gated routes are `BLOCKED` but a human browser could
+still retrieve the document. The agent may **operate the founder's own browser** (via computer
+use, or Claude in Chrome) **at the founder's explicit, per-acquisition direction** to retrieve
+**one** official document. It is the agent acting as the human's hands in the human's own
+session — **not** a new automated fetch path, and it **relaxes no gate**:
+
+- **Hard stop on any warning.** ANY certificate or security warning → close the tab and **stop**.
+  Never click through. A statute fetched over a connection the browser could not verify is not
+  trustworthy as law — the whole reason the gated path refuses it.
+- **Official hosts only**, in order: India Code first, then `legislative.gov.in`. **No mirrors**,
+  no aggregators, no model recall.
+- **One file. No crawling, no repeated requests, no user-agent tricks.**
+- **Provenance recorded exactly:** `"retrieved by Claude operating the founder's browser at the
+  founder's direction, <date>, <address-bar URL>"`, with the sha256 computed from the saved file.
+  Any identity lead (e.g. an act_id) remains a lead until checked against the document.
+- **Capability note:** this route requires browser-driving tools (Claude Desktop computer use, or
+  the Claude-in-Chrome extension). It **cannot run from the Claude Code CLI**, which has no such
+  tools; invoking it there is not possible and must be reported, not worked around.
+
+It does not change the `BLOCKED → retry Never` rule for automated fetches, and it never licenses
+bypassing TLS, robots, a WAF, or source terms.
+
 ## Leads are not facts
 
 An acquisition often turns up a third-party claim about the instrument — a notification number, a
