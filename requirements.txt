@@ -10,3 +10,11 @@ pydantic==2.12.5
 # because backend/services/llm.py imports it, and that path switches on the day a lawyer
 # verifies the corpus.
 anthropic==0.89.0
+
+# B1: Claude on Amazon Bedrock is the CLIENT-DATA model provider (ap-south-1, India) — the
+# only endpoint a client document may reach (PLAN_22 D3). boto3 is its Converse client and
+# SigV4 signer; hand-rolling AWS signing we cannot live-test would be the riskier path. It is
+# a real dependency now, not an optional install, so the live B1 path is one `pip install`
+# away for nobody — it is already here. checker/bedrock_model.py imports it lazily, so the
+# keyless gate still never opens an AWS socket.
+boto3==1.43.108

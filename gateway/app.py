@@ -1057,6 +1057,96 @@ def _test() -> None:
     check(anon.post("/v2/ask/stream", json={"question": "x"}).status_code == 401,
           "an unauthenticated stream request is 401, like every other /v2 route")
 
+    # ── F2: a multi-body question is REACHABLE over HTTP, answered body-by-body ──────
+    # Proven through /v2/research/multi (a real request, not a direct ctx call), keyless:
+    # the held worker is the supervisor's deterministic held-corpus stand-in, so this holds
+    # in the keyless gate exactly as it will once a model is served to PHRASE the same quote.
+    # (A dedicated verb, not a branch of /v2/ask: conversation.send derives its bodies from
+    # ask's shape, which is body-level, so the per-State supervisor shape lives on its own.)
+    _MB_Q = ("5-year office leases in Bengaluru and Mumbai, and a share allotment to a "
+             "Singapore investor")
+    _mb = client.post("/v2/research/multi", json={"question": _MB_Q})
+    check(_mb.status_code == 200, f"/v2/research/multi takes a multi-body question ({_mb.status_code})")
+    _mbj = json.loads(_mb.content)
+    check(_mbj.get("status") == "PARTIAL",
+          f"...and answers PARTIAL -- part held, part named, never one national answer "
+          f"({_mbj.get('status')})")
+    _secs = {(s["body"], s.get("state")): s for s in _mbj.get("sections", [])}
+    _ca = next((s for (b, _st), s in _secs.items() if b == "CA2013"), None)
+    check(_ca is not None and _ca["status"] == "ANSWERED" and (_ca.get("text") or "").strip(),
+          "...the Companies Act part is ANSWERED with served text")
+    from checker import quoted_span as _qs
+    check(_ca is not None and bool(_qs.parse(_ca.get("text") or "")),
+          "...and that text quotes the held Act verbatim (a SENTENCE/QUOTE block)")
+    check(any(b == "FEMA1999" and s["status"] == "NOT_HELD"
+              for (b, _st), s in _secs.items()),
+          "...FEMA is refused BY NAME, not answered")
+    _stamp = {st for (b, st), s in _secs.items()
+              if b == "STAMP" and s["status"] in ("NOT_HELD", "NEED_FACT")}
+    check({"Karnataka", "Maharashtra"} <= _stamp,
+          f"...and each State's stamp duty is named (NEED_FACT/NOT_HELD) ({sorted(_stamp)})")
+    _plan = _mbj.get("plan", {})
+    check("CA2013" in _plan.get("bodies", []) and "FEMA1999" in _plan.get("bodies", [])
+          and {"Karnataka", "Maharashtra"} <= set(_plan.get("states", [])),
+          f"...the plan names every body and State ({_plan})")
+    check(any(w["body"] == "CA2013" for w in _plan.get("workers", [])),
+          "...and the Companies Act is the one planned worker")
+    _rid = _mbj.get("run_id")
+    _caps = {s["capability"] for s in
+             json.loads(client.get(f"/v2/runs/{_rid}/trace").content).get("steps", [])}
+    check({"research.CA2013", "research.FEMA1999", "research.STAMP"} <= _caps,
+          f"...and runs.trace carries the plan step by step ({sorted(_caps)})")
+
+    # ── source picker: the SAME question over HTTP searches only the picked sources ──────
+    # Proven through /v2/ask (a real request). The report is model-independent, so it holds
+    # in the keyless gate even when the answer itself is a NO_MODEL refusal.
+    _SRC_Q = "What is the quorum for a meeting of the Board?"
+    _held = json.loads(client.post("/v2/ask",
+                                   json={"question": _SRC_Q, "sources": ["held"]}).content)
+    _case = json.loads(client.post("/v2/ask",
+                                   json={"question": _SRC_Q, "sources": ["indiankanoon"]}).content)
+    _hv = json.loads(client.post("/v2/ask",
+                                 json={"question": _SRC_Q, "sources": ["held", "vault"]}).content)
+
+    def _row(doc, sid):
+        return next((r for r in doc.get("sources", {}).get("report", []) if r["id"] == sid), None)
+
+    _hh = _row(_held, "held")
+    check(_hh is not None and _hh["outcome"] == "SEARCHED_HITS" and _hh["hits"] > 0,
+          f"held-only searched the held corpus and found hits ({_hh})")
+    check(_held.get("sources", {}).get("searched") == ["held"],
+          f"...and held is the only source it searched ({_held.get('sources', {}).get('searched')})")
+
+    _ci = _row(_case, "indiankanoon")
+    check(_ci is not None and _ci["status"] == "KEY_MISSING" and _ci["outcome"] == "NOT_SEARCHED",
+          f"case-law-only names indiankanoon KEY_MISSING / NOT_SEARCHED ({_ci})")
+    check(_ci is not None and "not found" not in (_ci["reason"] or "").lower()
+          and "PLACEDON_INDIANKANOON_KEY" in _ci["reason"],
+          "...a KEY_MISSING source is a NAMED STATE that names the key, never 'not found'")
+    check(_case.get("sources", {}).get("searched") == []
+          and _row(_case, "held") is None,
+          "...and case-law-only searched the held corpus NOT at all — different evidence")
+    check(_held.get("sources", {}).get("searched") != _case.get("sources", {}).get("searched"),
+          "the same question gives a different searched set for Central-law-only vs case-law-only")
+
+    # searched-empty is not not-searched: the vault was searched and matched nothing
+    _hv_v = _row(_hv, "vault")
+    check(_hv_v is not None and _hv_v["outcome"] == "SEARCHED_EMPTY",
+          f"a picked-but-empty vault reports SEARCHED_EMPTY, distinct from NOT_SEARCHED ({_hv_v})")
+
+    # sources.list carries the picker view: every card has a tier, status and switchable flag
+    _sl = json.loads(client.post("/v2/sources/list", json={}).content)["picker"]
+    _by = {c["id"]: c for c in _sl}
+    check(_by["held"]["tier"] == "HELD" and _by["held"]["switchable"],
+          "sources.list shows held as HELD and switchable")
+    check(_by["indiankanoon"]["tier"] == "LICENSED"
+          and not _by["indiankanoon"]["switchable"]
+          and _by["indiankanoon"]["status"] == "KEY_MISSING",
+          "...indiankanoon as LICENSED, KEY_MISSING, not switchable")
+    check(all(c["tier"] in ("HELD", "LICENSED", "PUBLIC") for c in _sl)
+          and all(c.get("reason") for c in _sl if not c["switchable"]),
+          "...every card has a HELD/LICENSED/PUBLIC tier and every unavailable one a reason")
+
     # ── the serialiser is stated, because byte-identity needs an encoding ───
     check(dumps({"b": 1, "a": "é"}) == b'{"b":1,"a":"\xc3\xa9"}',
           "the encoding is fixed: key order preserved, no spaces, UTF-8 not escaped")

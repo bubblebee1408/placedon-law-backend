@@ -118,6 +118,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `checker/grounding_policy.py` |  | Strict grounding: what a citation proves, and what it does not. |
 | `checker/instrument_registry.py` | R0 legal core | Which instruments are on record at all, and which of them a person has read. |
 | `checker/interval.py` |  | Honest error bars, in the standard library. |
+| `checker/jurisdiction.py` |  | F3 — which body of law, and whose: Central, a State, or both. Triage, not a finding. |
 | `checker/lattice.py` |  | Ordinal state algebra — one implementation of "the worst thing wins". |
 | `checker/law_versions.py` |  | Which law answered: the corpus by content, and the instruments that amended it. |
 | `checker/lawyer_summary.py` |  | The lawyer summary: a sentence is traced to a span, or it is refused and shown as refused. |
@@ -236,6 +237,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `agents/intake.py` | R3 inference | Layer 1: which of six fixed tasks a request is, decided in code wherever code can. |
 | `agents/multi_plan.py` | R3 inference | MA1: what a supervisor may propose, and the four reasons code refuses it. |
 | `agents/multi_runner.py` | R3 inference | MA1: run a validated plan. Read-only workers fan out; ONE writer merges. |
+| `agents/multi_supervisor.py` | R3 inference | F2 — the supervisor: one researcher per (body of law, State), run in parallel, synthesised. |
 | `agents/plans.py` | R3 inference | Intent -> a fixed step list, written in code. A model may pick, never invent. |
 | `agents/research_question.py` | R3 inference | research_question, end to end: a question about the Companies Act, answered or refused. |
 | `agents/review_contract.py` | R3 inference | review_contract, end to end: a contract against a company playbook, and what it will not say. |
@@ -384,4 +386,4 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/watch_gazette.py` |  | Run the Gazette watcher once: what did the Gazette publish since we last looked? |
 | `scripts/watch_ofac.py` |  | Poll OFAC's SDN list and report what CHANGED since the last trustworthy poll. |
 
-344 modules listed.
+346 modules listed.

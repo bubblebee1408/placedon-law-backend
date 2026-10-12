@@ -64,6 +64,9 @@ class Backend(Protocol):
     def read_actor(self, actor_id: str) -> dict | None: ...
     def create_invite(self, invite: dict) -> dict: ...
     def accept_invite(self, token_hash: str, *, actor_id: str, now: str) -> dict | None: ...
+    def find_actor_by_email(self, email: str) -> dict | None: ...
+    def read_invite(self, token_hash: str) -> dict | None: ...
+    def list_actors(self) -> list[dict]: ...
     def append_step(self, run_id: str, step: dict, *, key: str) -> bool: ...
     def set_run(self, run_id: str, *, status: str, refusal_code=None, result=None) -> None: ...
     def read_failure_counts(self) -> list[dict]: ...
@@ -1086,6 +1089,28 @@ class MemoryBackend:
             return dict(row)
         return None
 
+    def find_actor_by_email(self, email: str) -> dict | None:
+        """The account with this email in this tenant, case-insensitively, or None."""
+        want = str(email or "").strip().lower()
+        if not want:
+            return None
+        for row in self.actors.values():
+            if str(row.get("email") or "").lower() == want:
+                return dict(row)
+        return None
+
+    def read_invite(self, token_hash: str) -> dict | None:
+        """The invite stored under this token hash, used or not; the caller judges it."""
+        for row in self.invites.values():
+            if row.get("token_hash") == str(token_hash or ""):
+                return dict(row)
+        return None
+
+    def list_actors(self) -> list[dict]:
+        """Every person with an email, without their password hash."""
+        return [{k: v for k, v in row.items() if k != "password_hash"}
+                for row in self.actors.values() if row.get("email")]
+
     def read_labels(self) -> list[dict]:
         """[{task, body, decision}] — every lawyer decision, with the run's intent.
 
@@ -1410,6 +1435,34 @@ class PostgresBackend:
             "invite_id": str(r[0]), "email": r[1], "role": r[2], "token_hash": r[3],
             "invited_by": str(r[4]), "expires_at": r[5].isoformat(),
             "accepted_at": r[6].isoformat(), "accepted_by": str(r[7])}
+
+    def find_actor_by_email(self, email: str) -> dict | None:
+        want = str(email or "").strip()
+        if not want:
+            return None
+        with self._conn() as c:
+            r = c.execute("SELECT actor_id FROM actors WHERE lower(email) = lower(%s)",
+                          (want,)).fetchone()
+        return None if r is None else self.read_actor(str(r[0]))
+
+    def read_invite(self, token_hash: str) -> dict | None:
+        with self._conn() as c:
+            r = c.execute(
+                "SELECT invite_id, email, role, token_hash, invited_by, expires_at, "
+                "accepted_at, accepted_by FROM invites WHERE token_hash = %s",
+                (str(token_hash or ""),)).fetchone()
+        return None if r is None else {
+            "invite_id": str(r[0]), "email": r[1], "role": r[2], "token_hash": r[3],
+            "invited_by": str(r[4]), "expires_at": r[5].isoformat(),
+            "accepted_at": r[6].isoformat() if r[6] else None,
+            "accepted_by": str(r[7]) if r[7] else None}
+
+    def list_actors(self) -> list[dict]:
+        with self._conn() as c:
+            rows = c.execute("SELECT actor_id, label, role, email, disabled_at FROM actors "
+                             "WHERE email IS NOT NULL ORDER BY lower(email)").fetchall()
+        return [{"actor_id": str(r[0]), "label": r[1], "role": r[2], "email": r[3],
+                 "disabled_at": r[4].isoformat() if r[4] else None} for r in rows]
 
     def read_labels(self) -> list[dict]:
         with self._conn() as c:

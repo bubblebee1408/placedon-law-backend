@@ -212,7 +212,33 @@ def _ask(args: dict, ctx: Context) -> dict:
     if hit is not None:
         return hit
 
-    ev = rq.evidence(q)
+    # The source picker. Retrieval searches ONLY the picked sources; the default is the held
+    # corpus plus the vault. `ask` retrieves HELD (here) and the vault (in the report below);
+    # an external pick is resolved for its status and named, never silently searched or dropped.
+    from checker import source_picker as _sp
+    _picked = args.get("sources")
+    _resolved = _sp.resolve(_picked)
+    _held_searched = _sp.HELD_ID in _resolved.searchable
+    ev = rq.evidence(q) if _held_searched else ()
+    # The per-source report is built once, from the retrieval that actually ran, and travels
+    # on EVERY return path -- including a NO_MODEL refusal -- so "which sources were searched"
+    # is answered even when no model was available to phrase the answer.
+    _report = _sources_report(_picked, _resolved, ev, q, ctx)
+    # `ask` answers only from the held statute. If the held corpus was not picked, it reads
+    # nothing to answer from and ABSTAINS -- rather than letting the answer path re-retrieve
+    # the held corpus and quietly ignore the caller's pick. The report still records every
+    # picked source's state (the vault was searched; an external pick is named).
+    if not _held_searched:
+        rid = _persist_run(ctx, intent="research_question", status="ABSTAINED",
+                           steps=[{"capability": "intake", "status": "ANSWERED"},
+                                  {"capability": "research", "status": "ABSTAINED"}],
+                           propositions=[])
+        return {"status": "ABSTAINED", "answer": "", "citations": [],
+                "abstained_reason": (
+                    "the held corpus was not among the picked sources, and `ask` reads the "
+                    "held statute, so nothing was read. This is not a finding that no "
+                    "obligation exists. Each picked source's state is in `sources`."),
+                "run_id": rid, "sources": _report}
     origins = tuple(o for _, o in ev)
     served, refusal = (None, None)
     if origins:
@@ -225,6 +251,7 @@ def _ask(args: dict, ctx: Context) -> dict:
                 steps=[{"capability": "intake", "status": "ANSWERED"},
                        {"capability": "research", "status": "REFUSED"}],
                 propositions=[])
+            refusal["sources"] = _report
             return refusal
 
     try:
@@ -237,7 +264,7 @@ def _ask(args: dict, ctx: Context) -> dict:
                            steps=[{"capability": "research", "status": "FAILED"}],
                            propositions=[])
         return {"status": "FAILED", "error": f"{type(e).__name__}: {str(e)[:200]}",
-                "run_id": rid}
+                "run_id": rid, "sources": _report}
 
     d = out.to_dict()
     # The traced spans, as citations. `to_dict()` carries the provision NAMES and not the
@@ -281,7 +308,134 @@ def _ask(args: dict, ctx: Context) -> dict:
         # note records which half is missing -- see `nonconformity_for`.
         traced=len(out.summary.traced) if out.summary else 0,
         sentences=len(out.summary.sentences) if out.summary else 0)
+    d["sources"] = _report
     _cache_store(cache_key, q, "RESEARCH_QUESTION", args.get("sources"), d, ctx)
+    return d
+
+
+def _vault_hits(question: str, ctx: Context) -> int:
+    """How many vault/client documents the question matched. 0 when no vault, never an error."""
+    try:
+        from checker.sources.base import load
+        from checker.sources.client import ClientDocuments
+        return len(load(ClientDocuments(ctx.documents or {})).search(question))
+    except Exception:                                            # noqa: BLE001
+        return 0
+
+
+def _sources_report(picked, resolved, ev, question: str, ctx: Context) -> dict:
+    """What each picked source did: SEARCHED_HITS / SEARCHED_EMPTY / NOT_SEARCHED (+ named state).
+
+    `ask` retrieves two sources for real -- the held corpus and the vault -- so only those can
+    report SEARCHED. Every other picked source is NOT_SEARCHED and says why: its availability
+    state (KEY_MISSING / NOT_ACQUIRED / BLOCKED) when it cannot be switched on, or that live
+    retrieval for it is served by sources.search, not ask, when it can. searched-empty (a search
+    ran, nothing matched) is reported apart from not-searched (no search ran) on purpose.
+    """
+    from checker import source_picker as _sp
+    picked_ids = tuple(dict.fromkeys(picked or _sp.DEFAULT))
+    searchable = set(resolved.searchable)
+    unavailable = {u["id"]: u for u in resolved.unavailable}
+
+    def _tier(sid: str) -> str:
+        try:
+            return _sp.source(sid).tier
+        except Exception:                                        # noqa: BLE001
+            return _sp.PUBLIC
+
+    searched, rows = [], []
+    for sid in picked_ids:
+        if sid == _sp.HELD_ID and sid in searchable:
+            searched.append(sid)
+            rows.append({"id": sid, "tier": _sp.HELD, "status": _sp.AVAILABLE,
+                         "outcome": "SEARCHED_HITS" if ev else "SEARCHED_EMPTY",
+                         "hits": len(ev), "reason": ""})
+        elif sid == _sp.VAULT_ID and sid in searchable:
+            hits = _vault_hits(question, ctx)
+            searched.append(sid)
+            rows.append({"id": sid, "tier": _sp.PUBLIC, "status": _sp.AVAILABLE,
+                         "outcome": "SEARCHED_HITS" if hits else "SEARCHED_EMPTY",
+                         "hits": hits, "reason": ""})
+        elif sid in unavailable:
+            u = unavailable[sid]
+            rows.append({"id": sid, "tier": _tier(sid), "status": u["status"],
+                         "outcome": "NOT_SEARCHED", "hits": 0, "reason": u["reason"]})
+        else:
+            rows.append({"id": sid, "tier": _tier(sid), "status": _sp.AVAILABLE,
+                         "outcome": "NOT_SEARCHED", "hits": 0,
+                         "reason": "available, but ask searches the held corpus and your "
+                                   "vault; use sources.search for this source"})
+    return {"picked": list(picked_ids), "searched": searched, "report": rows,
+            "note": ("searched-empty is not not-searched: an empty search ran; a not-searched "
+                     "source did not. Only HELD rows can make an answer VERIFIED.")}
+
+
+# ── F2: research.multi, the multi-body path ───────────────────────────────────
+#
+# A dedicated verb, NOT a branch inside `ask`: `conversation.send` calls `ask` and derives
+# its body table from `ask`'s shape via `_bodies_from_ask` (which re-reads `ask_scope`, a
+# body-level authority with no per-State notion), so re-shaping `ask` for a compound,
+# per-State question would break that contract. `research.multi` is its own verb on the one
+# table (REST, MCP-read, CLI) and leaves `ask`/`conversation.send` untouched.
+#
+# `agents/multi_supervisor` is the orchestrator. The held worker/verifier are its
+# deterministic held-corpus stand-ins -- no model, no key, a real BYTE-MATCHED quote of the
+# Companies Act. The served model that only PHRASES that quote is wired in B1; until then
+# this serves the verified quote as-is and says so (ponytail: stand-in phrasing until
+# Bedrock lands).
+
+def _research_multi(args: dict, ctx: Context) -> dict:
+    """A compound question answered body-by-body: one section per (body, State), own status.
+
+    The supervisor plans one researcher per held (body, State), refuses the bodies we do not
+    hold BY NAME, resolves a State topic with no date to NEED_FACT, and synthesises the held
+    answers by code. The plan (workers, bodies, States) travels both in the response and, as
+    one step per part, in the persisted run -- so `runs.trace` shows what was planned.
+    """
+    from agents import multi_supervisor as ms
+    question = (args.get("question") or "").strip()
+    if not question:
+        return _refuse("BAD_REQUEST", "question is required")
+    as_of = (args.get("as_of") or "").strip() or None
+    # Source picker: the held bodies are researched only when the held corpus is picked
+    # (default). Held not picked -> a no-op worker, so those parts come back NEEDS_LAWYER
+    # rather than being answered from a source the caller excluded.
+    from checker import source_picker as _sp
+    _resolved = _sp.resolve(args.get("sources"))
+    _held = _sp.HELD_ID in _resolved.searchable
+    _worker = ms._held_researcher() if _held else (lambda _t: "")
+    outcome = ms.research(question, as_of=as_of, worker=_worker,
+                          verify=ms._byte_match_verify, merge=ms._code_merge,
+                          budget=_ledger())
+    d = outcome.to_dict()
+
+    # The plan, derived from the sections so the shape has one source of truth: a held worker
+    # section is one the supervisor researched (ANSWERED / NEEDS_LAWYER); the rest are named
+    # refusals (a body not held, or a missing fact).
+    held_statuses = {ms.ANSWERED, "NEEDS_LAWYER"}
+    workers, bodies, states = [], [], []
+    for s in d["sections"]:
+        if s["body"] not in bodies:
+            bodies.append(s["body"])
+        if s.get("state") and s["state"] not in states:
+            states.append(s["state"])
+        if s["status"] in held_statuses:
+            workers.append({"body": s["body"], "state": s.get("state")})
+    d["plan"] = {"workers": workers, "bodies": bodies, "states": states,
+                 "researcher": ms.RESEARCHER}
+
+    # The run that RECORDS the plan: one step per (body, State) so the trace shows what was
+    # planned and what each part returned, not one opaque "research" step.
+    steps = [{"capability": "intake", "status": "ANSWERED",
+              "cost_note": f"multi-body: {len(bodies)} bodies, {len(states)} States"}]
+    for s in d["sections"]:
+        steps.append({"capability": f"research.{s['body']}", "status": s["status"],
+                      "cost_note": f"{s.get('name') or s['body']} / "
+                                   f"{s.get('state') or 'Central'}"})
+    _held_ans = tuple(s for s in d["sections"] if s.get("status") == ms.ANSWERED) if _held else ()
+    d["sources"] = _sources_report(args.get("sources"), _resolved, _held_ans, question, ctx)
+    d["run_id"] = _persist_run(ctx, intent="research_multi", status=d["status"],
+                               steps=steps, propositions=[])
     return d
 
 
@@ -2022,6 +2176,12 @@ def _conversation_send(args: dict, ctx: Context) -> dict:
     out = {"conversation_id": cid, "message_id": reply_id,
            "classification": classification, "run_id": result.get("run_id"),
            "envelope": env}
+    # The source picker's per-source report rides the conversation RESPONSE, a sibling of
+    # the envelope -- never inside answer_envelope.v1, which is versioned and immutable. It
+    # is retrieval metadata (which sources were searched / searched-empty / not-searched),
+    # not part of the legal answer, and it matches the shape the `ask` verb already returns.
+    if result.get("sources"):
+        out["sources"] = result["sources"]
     if task == "DRAFT" and result.get("draft_id"):
         out["draft_id"] = result["draft_id"]
         out["version"] = result.get("version")
@@ -2048,7 +2208,10 @@ def _task_args(task: str, text: str, file_ids, ctx: Context, args: dict,
             doc = str(d["text"])
             break
     if task == "RESEARCH_QUESTION":
-        return {"question": text}
+        # Thread the picked sources through to `ask`, so a conversation turn honours the
+        # @-sources chip. Omitted when absent so the verb applies its own default.
+        picked = args.get("sources")
+        return {"question": text, **({"sources": picked} if picked else {})}
     if task == "EVENT_ASSESS":
         return {"event": (args.get("event") or "commercial_contract"),
                 "facts": args.get("facts") or {}}
@@ -3843,9 +4006,15 @@ def _sources_list(args: dict, ctx: Context) -> dict:
                 {"source_id": "client", "name": "Your uploaded documents", "tier": CLIENT,
                  "may_fetch": True,
                  "may_fetch_reason": "the tenant's own document, under review"}]
+    from checker import source_picker
     return {"tiers": list(TIERS), "adapters": built_in, "external": out,
             "fetchable": [r["source_id"] for r in out if r["may_fetch"]],
             "cacheable": [r["source_id"] for r in out if r["may_cache"]],
+            # The @-sources picker view: one card per pickable source with its display tier
+            # (HELD / LICENSED / PUBLIC), switchable status (available / KEY_MISSING /
+            # NOT_ACQUIRED / BLOCKED, with the reason), and its terms record. An unavailable
+            # source is listed here too, with switchable=false, so the UI can show it greyed.
+            "picker": source_picker.listing(),
             "note": ("Only HELD can make an answer VERIFIED (PLAN_26 §2). External sources "
                      "are listed with what their own terms permit, read on the date shown; "
                      "an unread term is OPEN, and OPEN is not permission.")}
@@ -3903,6 +4072,54 @@ def _sources_search(args: dict, ctx: Context) -> dict:
     }
 
 
+# ── Lane B: a predictive signal, never a legal decision ───────────────────────
+
+def _forecast_summary(args: dict, ctx: Context) -> dict:
+    """Time-to-decision for Companies Act matters at a forum, as a PREDICTIVE_SIGNAL.
+
+    Reads the committed Companies Act matters dataset (built from the open judgment metadata),
+    counts the matters still PENDING as censored, and reads a Kaplan-Meier median with its
+    interval and n -- or ABSTAINS, by name, when too few matters have been decided there. No
+    model is called; `checker.forecast` is Ring 3 (INFERENCE) and the rings firewall forbids any
+    Ring 0 decider from receiving this value. The result is labelled predictive_signal and
+    carries the case ids behind it.
+    """
+    from checker.forecast import matters as fm
+    court = (args.get("court") or "").strip()
+    if not court:
+        return _refuse("BAD_REQUEST", "court is required, e.g. 'Bombay High Court'")
+    as_of = (args.get("as_of") or "").strip() or _today(ctx)
+    not_legal = ("A predictive signal from past matters, not advice and not a statement of "
+                 "law. It cannot decide your matter.")
+    ds = fm.load()
+    # SYNTHETIC data must never feed a user-visible number. Until a real pull writes a
+    # non-synthetic dataset, this abstains by name rather than dress a fixture as a measurement.
+    if ds.synthetic:
+        return {"status": "ABSTAINED", "label": "predictive_signal", "court": court,
+                "estimate": None, "n_total": 0, "n_timeable": 0, "events": 0, "case_ids": [],
+                "as_of": as_of, "synthetic": True,
+                "reason": ("the Companies Act matters dataset is SYNTHETIC (illustrative rows, "
+                           "not the licensed open data), so no estimate is served from it. Pull "
+                           "the real open judgment metadata with "
+                           "scripts/build_companies_act_matters.py --build (needs the pyarrow "
+                           "parquet engine) first."),
+                "not_legal_advice": not_legal}
+    known = {m.court.strip().lower(): m.court for m in ds.matters}
+    canonical = known.get(court.lower())
+    if canonical is None:
+        return {"status": "ABSTAINED", "label": "predictive_signal", "court": court,
+                "estimate": None, "n_total": 0, "n_timeable": 0, "events": 0, "case_ids": [],
+                "as_of": as_of,
+                "reason": (f"no Companies Act matters for {court!r} in the dataset; "
+                           f"known forums: {sorted(set(known.values()))}"),
+                "not_legal_advice": not_legal}
+    out = fm.time_to_decision(ds.matters, court=canonical, as_of=as_of).to_dict()
+    out["as_of"] = as_of
+    out["not_legal_advice"] = ("A predictive signal from past matters, not advice and not a "
+                               "statement of law. It cannot decide your matter.")
+    return out
+
+
 # ── the table ────────────────────────────────────────────────────────────────
 
 VERBS: tuple[Verb, ...] = (
@@ -3923,8 +4140,40 @@ VERBS: tuple[Verb, ...] = (
                 describes="'true' to split a compound question into at most 4 "
                           "sub-questions (PLAN_23 O5), answer each through the verified "
                           "cascade and join only the parts that came back cited. One "
-                          "unanswered part makes the whole PARTIAL and is named")),
+                          "unanswered part makes the whole PARTIAL and is named"),
+          Field("sources", ARRAY, False,
+                describes="source ids to search, from sources.list (e.g. ['held']). "
+                          "Retrieval searches ONLY these. Default = the held corpus plus "
+                          "your vault. An unavailable pick (KEY_MISSING / NOT_ACQUIRED / "
+                          "BLOCKED) is named, never silently dropped. Only HELD can VERIFY")),
          "POST", read_only=True, run=_ask),
+
+    Verb("research.multi",
+         "A compound question split across bodies of law and States, answered body-by-body: "
+         "one section per (body, State) with its own status. The Companies Act parts are "
+         "answered and quoted; a body we do not hold, or a State topic with no date, is "
+         "named -- never squeezed into a single national answer.",
+         (Field("question", STRING, True, describes="the compound question, in plain English"),
+          Field("as_of", STRING, False,
+                describes="an ISO date (YYYY-MM-DD). A State topic such as stamp duty needs "
+                          "one, since State rates change over time; without it that part is "
+                          "returned NEED_FACT rather than guessed"),
+          Field("sources", ARRAY, False,
+                describes="source ids to search, from sources.list. Retrieval searches ONLY "
+                          "these; default = the held corpus plus your vault. Held parts need "
+                          "the held corpus picked; an unavailable pick is named, not dropped")),
+         "POST", read_only=True, run=_research_multi),
+
+    Verb("forecast.summary",
+         "A predictive signal: how long Companies Act matters take at a forum, from the open "
+         "judgment metadata. A Kaplan-Meier median with its interval and n, counting matters "
+         "still pending as censored; it ABSTAINS by name when too few have been decided there. "
+         "Labelled predictive_signal -- never a statement of law, never a decision about your "
+         "matter.",
+         (Field("court", STRING, True, describes="the forum, e.g. 'Bombay High Court'"),
+          Field("as_of", STRING, False,
+                describes="ISO date (YYYY-MM-DD) to censor pending matters at; defaults to today")),
+         "POST", read_only=True, run=_forecast_summary),
 
     Verb("review_contract",
          "A contract against a company playbook. Every finding is a POTENTIAL_ISSUE "
@@ -4481,7 +4730,8 @@ def _test() -> None:
     rest, cli, mcp = rest_spec(), cli_spec(), mcp_tools()
     names = {v.name for v in VERBS}
 
-    check(names == {"ask", "review_contract", "review_document", "events.assess",
+    check(names == {"ask", "research.multi", "forecast.summary",
+                    "review_contract", "review_document", "events.assess",
                     "runs.get", "runs.trace", "runs.approve", "runs.reject",
                     "runs.submit", "runs.cancel", "documents.upload",
                     "sources.list", "sources.search", "company_facts.extract",
@@ -4500,7 +4750,7 @@ def _test() -> None:
                                             "vault.verify", "vault.summarize",
                                             "vault.research", "vault.compile",
                                             "vault.delete"},
-          f"the forty-five verbs are declared once ({sorted(names)})")
+          f"the forty-seven verbs are declared once ({sorted(names)})")
     # sources.* are READ-ONLY, so they reach MCP. That is the intended shape: an agent may
     # ask what a source permits and search what may be read, and there is no sources verb
     # that fetches, stores or spends. S3's Indian Kanoon connector will spend money, and
@@ -4718,7 +4968,7 @@ def _test() -> None:
           "firm acts for, and no agent task needs it. read_only is about whether a call "
           "changes anything; mcp is about whether a tool may ask at all")
     check("matters.list" not in {t.name.split(".", 1)[-1] for t in mcp_tools()}
-          and len(mcp_tools()) == 19,
+          and len(mcp_tools()) == 21,
           f"...and it really is absent from the generated tool list ({len(mcp_tools())})")
     check(_V["conversation.get"].run({"conversation_id": "nope"}, _cctx)["status"]
           == "REFUSED", "an unknown conversation is REFUSED, not an empty thread")
@@ -4895,6 +5145,43 @@ def _test() -> None:
     check(_mb["FEMA1999"]["note"] == _sc.refusal_for("FEMA1999"),
           "...and FEMA's note is the REGISTER'S OWN refusal text, not a sentence composed "
           "here")
+
+    # ── the source picker's report rides the conversation RESPONSE, beside the envelope ──
+    # The console Ask (conversation.send) needs "which sources were searched"; the versioned
+    # answer_envelope.v1 cannot carry it, so it travels as a sibling of the envelope.
+    _src = _send_research(text="What is the quorum for a meeting of the Board?",
+                          sources=["held"])
+    check(_src.get("sources", {}).get("searched") == ["held"],
+          f"a research turn carries the per-source report on the RESPONSE "
+          f"({_src.get('sources', {}).get('searched')})")
+    _hrow = next((r for r in _src.get("sources", {}).get("report", []) if r["id"] == "held"),
+                 None)
+    check(_hrow is not None and _hrow["outcome"] == "SEARCHED_HITS",
+          f"...held reports SEARCHED_HITS through conversation.send ({_hrow})")
+    check("sources" not in _src["envelope"],
+          "...and the versioned envelope is untouched -- the report is a sibling, not in it")
+
+    # ── Lane B: forecast.summary never serves a number from SYNTHETIC data ──────────────
+    # The committed dataset is synthetic (illustrative, not the licensed open data), so the
+    # verb ABSTAINS -- a provenance gate, not a broken path. The median/interval/n/case-ids
+    # mechanism, and the too-few abstention, are proven on real-shaped data in
+    # checker/forecast/matters.py's own suite.
+    _fc = by_name()["forecast.summary"].run(
+        {"court": "Bombay High Court", "as_of": "2024-01-01"}, Context(store=None))
+    check(_fc["status"] == "ABSTAINED" and _fc.get("synthetic") is True and _fc["estimate"] is None,
+          f"forecast.summary serves NO number from the synthetic dataset ({_fc.get('status')})")
+    check("SYNTHETIC" in _fc["reason"] and "pyarrow" in _fc["reason"],
+          "...saying why: synthetic rows, and the real pull needs the parquet engine")
+    check(_fc["label"] == "predictive_signal" and "not a statement of law" in _fc["not_legal_advice"],
+          "...labelled predictive_signal, and in words not a statement of law")
+    from checker.forecast import matters as _fm
+    check(_fm.load().synthetic is True,
+          "...and the committed dataset is marked synthetic, so an unmarked file cannot pass as real")
+    from checker import rings as _rings
+    check(_rings.ring_of("checker.forecast.matters") == _rings.RING_3,
+          "forecast.matters is Ring 3 (INFERENCE): the firewall keeps this signal out of a "
+          "Ring 0 legal decision")
+
     # And the case that must NOT be PARTIAL: a second body is named, but the Act has
     # nothing on point, so nothing was answered. ABSTAINED is the honest outcome and
     # PARTIAL here would be a claim to have answered half of it.
@@ -6052,7 +6339,7 @@ def _test() -> None:
           "...while a WRITE verb is kept out of MCP by mcp_tools(), not by the author "
           "remembering to")
     check("widgets.delete" in write_verbs(hypo), "...and is named in write_verbs()")
-    check(len(VERBS) == 45 and "widgets.count" not in rest_spec(),
+    check(len(VERBS) == 47 and "widgets.count" not in rest_spec(),
           "...and the probe changed nothing in this module: the surfaces are generated "
           "from an argument, not from a global the test rebound")
 
