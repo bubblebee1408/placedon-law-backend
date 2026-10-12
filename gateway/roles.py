@@ -84,6 +84,7 @@ REQUIRED: dict[str, str] = {
     "conversation.list": VIEWER,
     "draft.diff": VIEWER,
     "draft.export": VIEWER,
+    "draft.list": VIEWER,
     "draft.status": VIEWER,
     "draft.versions": VIEWER,
     "events.assess": VIEWER,

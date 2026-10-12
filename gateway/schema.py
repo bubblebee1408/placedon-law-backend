@@ -133,8 +133,14 @@ def _test() -> None:
                     "021_job_lanes.sql",
                     "022_grid_budget_state.sql",
                     "023_document_checks.sql",
-                    "024_conversation_turns.sql"],
+                    "024_conversation_turns.sql",
+                    "025_draft_inbox_idx.sql"],
           f"every migration exists, in order ({files})")
+
+    inbox_sql = (MIGRATIONS / "025_draft_inbox_idx.sql").read_text(encoding="utf-8")
+    check("CREATE INDEX IF NOT EXISTS drafts_inbox_idx" in inbox_sql
+          and "ON drafts (tenant_id, updated_at DESC, draft_id DESC)" in inbox_sql,
+          "025 indexes tenant and stable inbox pagination order")
 
     # 012: H3's drafts. The CHECK that matters is the one the derivation cannot see.
     draft_sql = (MIGRATIONS / "012_drafts.sql").read_text(encoding="utf-8")

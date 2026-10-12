@@ -146,6 +146,8 @@ class Backend(Protocol):
     # H3: drafts and their versions (012_drafts.sql).
     def write_draft(self, draft: dict) -> dict: ...
     def read_draft(self, draft_id: str) -> dict | None: ...
+    def list_drafts(self, *, limit: int, before_updated_at: str | None = None,
+                    before_draft_id: str | None = None) -> list[dict]: ...
     def append_draft_version(self, version: dict) -> int: ...
     def read_draft_versions(self, draft_id: str) -> list[dict]: ...
 
@@ -446,15 +448,39 @@ class MemoryBackend:
 
     # ── H3: drafts ───────────────────────────────────────────────────────────
     def write_draft(self, draft: dict) -> dict:
+        from datetime import datetime, timezone
         did = draft["draft_id"]
         self.drafts[did] = {"draft_id": did, "kind": draft.get("kind") or "unknown",
-                            "title": draft.get("title") or ""}
+                            "title": draft.get("title") or "",
+                            "updated_at": datetime.now(timezone.utc).isoformat()}
         self.draft_versions.setdefault(did, [])
         return dict(self.drafts[did])
 
     def read_draft(self, draft_id: str) -> dict | None:
         row = self.drafts.get(draft_id)
         return dict(row) if row else None
+
+    def list_drafts(self, *, limit: int, before_updated_at: str | None = None,
+                    before_draft_id: str | None = None) -> list[dict]:
+        if limit < 1 or limit > 51:
+            raise StoreError("draft list page size must be from 1 to 51")
+        rows = []
+        for did, draft in self.drafts.items():
+            versions = self.draft_versions.get(did, [])
+            if not versions:
+                continue
+            latest = max(versions, key=lambda row: int(row["version"]))
+            updated_at = draft.get("updated_at") or latest.get("created_at") or ""
+            if before_updated_at is not None and (updated_at, did) >= (
+                    before_updated_at, before_draft_id or ""):
+                continue
+            rows.append({"draft_id": did, "kind": draft.get("kind") or "unknown",
+                         "title": latest.get("title") or draft.get("title") or "",
+                         "updated_at": updated_at, "version": int(latest["version"]),
+                         "blocking_count": int(latest.get("blocking_count") or 0),
+                         "approved": bool(latest.get("approved_by"))})
+        return sorted(rows, key=lambda row: (row["updated_at"], row["draft_id"]),
+                      reverse=True)[:limit]
 
     def append_draft_version(self, version: dict) -> int:
         """The new version number. Raises on a version that 012 would refuse."""
@@ -474,6 +500,9 @@ class MemoryBackend:
         row["slots"] = list(version.get("slots") or [])
         row["citations"] = list(version.get("citations") or [])
         rows.append(row)
+        from datetime import datetime, timezone
+        self.drafts[did]["updated_at"] = datetime.now(timezone.utc).isoformat()
+        self.drafts[did]["title"] = row.get("title") or self.drafts[did]["title"]
         return n
 
     def read_draft_versions(self, draft_id: str) -> list[dict]:
@@ -2261,6 +2290,31 @@ class PostgresBackend:
                           (draft_id,)).fetchone()
         return None if r is None else {"draft_id": str(r[0]), "kind": r[1], "title": r[2]}
 
+    def list_drafts(self, *, limit: int, before_updated_at: str | None = None,
+                    before_draft_id: str | None = None) -> list[dict]:
+        if limit < 1 or limit > 51:
+            raise StoreError("draft list page size must be from 1 to 51")
+        if before_updated_at is not None and not before_draft_id:
+            raise StoreError("a draft cursor needs both updated_at and draft_id")
+        if before_draft_id is not None and not _UUID.match(before_draft_id):
+            raise StoreError("a draft cursor has an invalid draft_id")
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT d.draft_id, d.kind, d.title, d.updated_at, v.version, "
+                "v.blocking_count, (v.approved_at IS NOT NULL) AS approved "
+                "FROM drafts d JOIN LATERAL ("
+                "  SELECT version, blocking_count, approved_at FROM draft_versions "
+                "  WHERE draft_id = d.draft_id ORDER BY version DESC LIMIT 1"
+                ") v ON true "
+                "WHERE (%s::timestamptz IS NULL OR (d.updated_at, d.draft_id) < "
+                "(%s::timestamptz, %s::uuid)) "
+                "ORDER BY d.updated_at DESC, d.draft_id DESC LIMIT %s",
+                (before_updated_at, before_updated_at, before_draft_id, limit),
+            ).fetchall()
+        return [{"draft_id": str(r[0]), "kind": r[1], "title": r[2],
+                 "updated_at": r[3].isoformat(), "version": int(r[4]),
+                 "blocking_count": int(r[5]), "approved": bool(r[6])} for r in rows]
+
     def append_draft_version(self, version: dict) -> int:
         import psycopg
         _check_draft_version(version)
@@ -2919,6 +2973,26 @@ def conformance(backend) -> list[tuple[bool, str]]:
        f"...every version has every key on both backends ({sorted(vs[0])})")
     ck(vs[0]["blocking_count"] == 1 and vs[1]["blocking_count"] == 0,
        "...and the blocking count survives the round trip")
+    inbox = backend.list_drafts(limit=10)
+    ck(len(inbox) == 1 and inbox[0]["draft_id"] == did
+       and inbox[0]["version"] == 2 and inbox[0]["blocking_count"] == 0
+       and "body" not in inbox[0],
+       "the draft inbox returns latest metadata only and never returns document text")
+    ck(backend.list_drafts(limit=10, before_updated_at=inbox[0]["updated_at"],
+                           before_draft_id=inbox[0]["draft_id"]) == [],
+       "a keyset cursor after the only draft returns an empty page")
+    did2 = str(_uuid.uuid4())
+    backend.write_draft({"draft_id": did2, "kind": "unknown", "title": "Second draft"})
+    backend.append_draft_version({"draft_id": did2, "title": "Second draft", "body": "private text",
+                                  "slots": [], "blocking_count": 0})
+    first_page = backend.list_drafts(limit=1)
+    second_page = backend.list_drafts(
+        limit=1, before_updated_at=first_page[0]["updated_at"],
+        before_draft_id=first_page[0]["draft_id"])
+    ck(len(first_page) == len(second_page) == 1
+       and first_page[0]["draft_id"] != second_page[0]["draft_id"]
+       and "body" not in first_page[0] and "body" not in second_page[0],
+       "keyset pagination is bounded, has no overlap for tied timestamps, and keeps text private")
 
     try:
         backend.append_draft_version(
@@ -3476,7 +3550,7 @@ def _test() -> None:
             "write_conversation", "read_conversation", "list_conversations",
             "append_message", "read_messages", "set_message_envelope", "next_ordinal",
             "write_grid", "read_grid", "read_grid_cells", "write_grid_cell",
-            "cancel_grid", "write_draft", "read_draft", "append_draft_version",
+            "cancel_grid", "write_draft", "read_draft", "list_drafts", "append_draft_version",
             "read_draft_versions", "write_cache_entry", "read_cache_entry",
             "bump_cache_stat", "read_cache_stats", "read_failure_counts",
             "read_labels", "write_actor", "read_actor", "create_invite",
