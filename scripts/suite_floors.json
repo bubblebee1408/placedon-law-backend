@@ -291,6 +291,7 @@
     "scripts/check_doc_refs.py": 40,
     "scripts/concurrency_test.py": 12,
     "scripts/conversation_http_checks.py": 15,
+    "scripts/conversation_persist_integration.py": 2,
     "scripts/conversation_regression_checks.py": 34,
     "scripts/date_properties.py": 29,
     "scripts/demo.py": 17,

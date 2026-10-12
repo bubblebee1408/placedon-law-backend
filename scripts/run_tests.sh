@@ -445,6 +445,10 @@ extra+=("checker/sources/company_facts.py --test"
 # The safe migration runner. Only its OFFLINE unit tests run in the gate; the scratch-DB
 # end-to-end is `scripts/migrate.py --self-test` and needs a server, so it stays out of here.
 extra+=("scripts/migrate.py --test")
+# R-019: conversation.send must persist on Postgres (actor_id threaded through backend_for,
+# not defaulted to the tenant). The OFFLINE structural guard runs here; the live round-trip
+# is `scripts/conversation_persist_integration.py --run` against a throwaway DB.
+extra+=("scripts/conversation_persist_integration.py --test")
 
 # A module that prints "9/10 passed" has failed, whatever its exit code says.
 # Eight modules once defined _test() without `raise SystemExit(1)`, so their
