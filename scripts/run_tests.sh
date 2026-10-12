@@ -440,6 +440,10 @@ extra+=("checker/sources/company_facts.py --test"
         "checker/sources/mca_fixture.py --test"
         "checker/sources/mca_master_data.py --test")
 
+# The safe migration runner. Only its OFFLINE unit tests run in the gate; the scratch-DB
+# end-to-end is `scripts/migrate.py --self-test` and needs a server, so it stays out of here.
+extra+=("scripts/migrate.py --test")
+
 # A module that prints "9/10 passed" has failed, whatever its exit code says.
 # Eight modules once defined _test() without `raise SystemExit(1)`, so their
 # failures never reached the exit code and the sweep printed "all suites green"
