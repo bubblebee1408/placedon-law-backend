@@ -60,6 +60,13 @@ def rank(role: str) -> int:
 REQUIRED: dict[str, str] = {
     # ── reading ─────────────────────────────────────────────────────────────
     "ask": VIEWER,
+    # Read-only research, like `ask`: it reads the held corpus and NAMES the bodies it does
+    # not hold. It writes an audit run (as `ask` does) but spends on no client data and
+    # decides nothing, so a viewer may run it.
+    "research.multi": VIEWER,
+    # Lane B. Read-only predictive signal over public judgment metadata; decides nothing,
+    # spends nothing, calls no model. A viewer may read it.
+    "forecast.summary": VIEWER,
     "calendar.upcoming": VIEWER,
     # P2. LAWYER rather than ADMIN: a person whose next question is about to be refused for
     # budget needs to be able to find out why. Not VIEWER -- the firm's spend is its

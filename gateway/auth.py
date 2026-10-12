@@ -73,14 +73,27 @@ def key_id(raw: str) -> str:
     return hash_key(raw)[:PREFIX_LEN]
 
 
-class KeyStore:
-    """Hash -> Principal. The raw keys are not here, and cannot be recovered from here."""
+# A person's sign-in key carries this label, and only keys carrying it may be revoked by
+# the person holding them. The deployment's own key is never a session: "log out" must not
+# be able to switch the whole console off.
+SESSION_LABEL = "session"
 
-    def __init__(self) -> None:
+
+class KeyStore:
+    """Hash -> Principal. The raw keys are not here, and cannot be recovered from here.
+
+    A key may carry an expiry (a person's session does; a deployment key does not). An
+    expired key resolves exactly like an unknown one, and is dropped when it is seen.
+    """
+
+    def __init__(self, *, clock=None) -> None:
+        import time
+        self._clock = clock or time.time
         self._by_hash: dict[str, Principal] = {}
+        self._expires: dict[str, float] = {}
 
     def mint(self, *, tenant_id: str, actor: str, label: str = "",
-             role: str = "viewer") -> tuple[str, Principal]:
+             role: str = "viewer", ttl_seconds: float | None = None) -> tuple[str, Principal]:
         """Create a key. The raw value is returned ONCE and never stored.
 
         There is no `add_existing(key)`. A caller-supplied key could be low entropy, and
@@ -90,14 +103,24 @@ class KeyStore:
         raw = secrets.token_urlsafe(KEY_BYTES)
         p = Principal(tenant_id=tenant_id, actor=actor, key_id=key_id(raw), label=label,
                       role=role)
-        self._by_hash[hash_key(raw)] = p
+        h = hash_key(raw)
+        self._by_hash[h] = p
+        if ttl_seconds is not None:
+            self._expires[h] = self._clock() + float(ttl_seconds)
         return raw, p
 
     def resolve(self, raw: str | None) -> Principal:
         """The principal for a key, or AuthError. Lookup is by hash, so no compare leaks."""
         if not raw:
             raise AuthError("no API key presented")
-        p = self._by_hash.get(hash_key(raw))
+        h = hash_key(raw)
+        p = self._by_hash.get(h)
+        exp = self._expires.get(h)
+        if p is not None and exp is not None and self._clock() >= exp:
+            # Expired: forgotten now, and refused exactly like an unknown key.
+            self._by_hash.pop(h, None)
+            self._expires.pop(h, None)
+            p = None
         if p is None:
             # Deliberately the same message as the branch above. A refusal that said
             # "unknown key" versus "no key" would let a caller learn which of the two it
@@ -105,8 +128,21 @@ class KeyStore:
             raise AuthError("no API key presented")
         return p
 
+    def expires_at(self, raw: str) -> float | None:
+        """When this key stops working (epoch seconds), or None for a key that does not."""
+        return self._expires.get(hash_key(raw))
+
     def revoke(self, raw: str) -> bool:
-        return self._by_hash.pop(hash_key(raw), None) is not None
+        h = hash_key(raw)
+        self._expires.pop(h, None)
+        return self._by_hash.pop(h, None) is not None
+
+    def revoke_session(self, raw: str) -> bool:
+        """Revoke a person's SESSION key. Refuses (False) for any other kind of key."""
+        p = self._by_hash.get(hash_key(raw))
+        if p is None or p.label != SESSION_LABEL:
+            return False
+        return self.revoke(raw)
 
     def __len__(self) -> int:
         return len(self._by_hash)
@@ -192,6 +228,30 @@ def _test() -> None:
     check(not hasattr(ks, "add_existing") and not hasattr(ks, "add_key"),
           "there is no way to register a key someone else chose: the argument for SHA-256 "
           "over argon2 rests on 256 random bits, and a chosen key would make it untrue")
+
+    # ── a person's session expires; a deployment key does not ──────────────
+    _t = [1000.0]
+    ks2 = KeyStore(clock=lambda: _t[0])
+    _sess, _ = ks2.mint(tenant_id=T, actor=A, label=SESSION_LABEL, role="lawyer",
+                        ttl_seconds=60)
+    _dep, _ = ks2.mint(tenant_id=T, actor=A, label="deployment", role="lawyer")
+    check(ks2.resolve(_sess).role == "lawyer" and ks2.expires_at(_sess) == 1060.0,
+          "a session key works until it expires, and says when")
+    _t[0] = 1060.0
+    try:
+        ks2.resolve(_sess)
+        check(False, "an expired session key is refused")
+    except AuthError as e:
+        check(str(e) == "no API key presented",
+              "an expired session key is refused exactly like an unknown one")
+    check(ks2.resolve(_dep).label == "deployment" and ks2.expires_at(_dep) is None,
+          "...while the deployment key, which has no expiry, still works")
+    # Only a SESSION may be ended by the person holding it.
+    check(ks2.revoke_session(_dep) is False and ks2.resolve(_dep) is not None,
+          "revoke_session refuses the deployment key: logging out cannot switch the "
+          "console off")
+    _s2, _ = ks2.mint(tenant_id=T, actor=A, label=SESSION_LABEL, ttl_seconds=60)
+    check(ks2.revoke_session(_s2) is True, "...and revokes a live session")
 
     # ── the header parser ───────────────────────────────────────────────────
     check(bearer("Bearer abc") == "abc" and bearer("bearer abc") == "abc",

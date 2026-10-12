@@ -1,0 +1,30 @@
+{
+  "synthetic": true,
+  "note": "SYNTHETIC. These rows are NOT real judgments and NOT an extract of the licensed data. They are illustrative records authored to exercise the Lane B pipeline (field mapping, censoring, Kaplan-Meier, abstention). Because they are synthetic, forecast.summary ABSTAINS on this dataset and serves NO user-visible number from it. scripts/build_companies_act_matters.py --build rewrites this file from the real metadata (which needs the pyarrow parquet engine); only a non-synthetic dataset produces an estimate. A field the real metadata does not state is absent, which reads as UNKNOWN; a matter with no decision_date is PENDING (censored).",
+  "represents_source": {
+    "dataset": "Indian High Court Judgments — AWS Open Data (eCourts), managed by Dattam Labs",
+    "buckets": ["s3://indian-high-court-judgments", "s3://indian-supreme-court-judgments"],
+    "region": "ap-south-1",
+    "licence": "CC-BY-4.0",
+    "licence_text": "Licensed under the Creative Commons Attribution 4.0 International Licence (https://creativecommons.org/licenses/by/4.0/). Attribution: eCourts, Supreme Court of India / High Courts of India; dataset prepared and hosted by Dattam Labs on the AWS Open Data programme.",
+    "tier": "LICENSED"
+  },
+  "source": "SYNTHETIC illustration of: AWS Open Data indian-high-court-judgments (CC-BY-4.0, eCourts / Dattam Labs)",
+  "matters": [
+    {"case_id": "BOMHC/CP/011/2018", "court": "Bombay High Court", "registration_date": "2018-01-04", "decision_date": "2018-09-01", "section": "Companies Act, 2013 s.241", "outcome": "dismissed", "source_path": "metadata/parquet/year=2018/court=bombay/bench=principal/metadata.parquet"},
+    {"case_id": "BOMHC/CP/027/2018", "court": "Bombay High Court", "registration_date": "2018-02-12", "decision_date": "2018-12-20", "section": "Companies Act, 2013 s.59", "outcome": "allowed", "source_path": "metadata/parquet/year=2018/court=bombay/bench=principal/metadata.parquet"},
+    {"case_id": "BOMHC/CP/044/2018", "court": "Bombay High Court", "registration_date": "2018-03-01", "decision_date": "2019-02-05", "section": "Companies Act, 2013 s.230", "outcome": "allowed", "source_path": "metadata/parquet/year=2019/court=bombay/bench=principal/metadata.parquet"},
+    {"case_id": "BOMHC/CP/061/2018", "court": "Bombay High Court", "registration_date": "2018-04-18", "decision_date": "2019-05-10", "section": "Companies Act, 2013 s.271", "outcome": "dismissed", "source_path": "metadata/parquet/year=2019/court=bombay/bench=principal/metadata.parquet"},
+    {"case_id": "BOMHC/CP/078/2018", "court": "Bombay High Court", "registration_date": "2018-05-22", "decision_date": "2019-07-30", "section": "Companies Act, 2013 s.241", "outcome": "allowed", "source_path": "metadata/parquet/year=2019/court=bombay/bench=principal/metadata.parquet"},
+    {"case_id": "BOMHC/CP/090/2018", "court": "Bombay High Court", "registration_date": "2018-06-11", "decision_date": "2019-09-15", "section": "Companies Act, 2013 s.242", "outcome": "dismissed", "source_path": "metadata/parquet/year=2019/court=bombay/bench=principal/metadata.parquet"},
+    {"case_id": "BOMHC/CP/103/2018", "court": "Bombay High Court", "registration_date": "2018-07-03", "decision_date": "2020-01-20", "section": "Companies Act, 2013 s.230", "outcome": "allowed", "source_path": "metadata/parquet/year=2020/court=bombay/bench=principal/metadata.parquet"},
+    {"case_id": "BOMHC/CP/118/2018", "court": "Bombay High Court", "registration_date": "2018-08-27", "decision_date": "2020-05-12", "section": "Companies Act, 2013 s.66", "outcome": "allowed", "source_path": "metadata/parquet/year=2020/court=bombay/bench=principal/metadata.parquet"},
+    {"case_id": "BOMHC/CP/131/2018", "court": "Bombay High Court", "registration_date": "2018-09-14", "decision_date": "2020-11-02", "section": "Companies Act, 2013 s.241", "outcome": "dismissed", "source_path": "metadata/parquet/year=2020/court=bombay/bench=principal/metadata.parquet"},
+    {"case_id": "BOMHC/CP/147/2018", "court": "Bombay High Court", "registration_date": "2018-10-30", "decision_date": "2021-06-18", "section": "Companies Act, 2013 s.271", "outcome": "allowed", "source_path": "metadata/parquet/year=2021/court=bombay/bench=principal/metadata.parquet"},
+    {"case_id": "BOMHC/CP/212/2022", "court": "Bombay High Court", "registration_date": "2022-06-01", "section": "Companies Act, 2013 s.230", "source_path": "metadata/parquet/year=2024/court=bombay/bench=principal/metadata.parquet"},
+    {"case_id": "BOMHC/CP/238/2022", "court": "Bombay High Court", "registration_date": "2022-09-19", "section": "Companies Act, 2013 s.241", "source_path": "metadata/parquet/year=2024/court=bombay/bench=principal/metadata.parquet"},
+    {"case_id": "CALHC/CP/004/2019", "court": "Calcutta High Court", "registration_date": "2019-02-01", "decision_date": "2020-07-09", "section": "Companies Act, 2013 s.59", "outcome": "allowed", "source_path": "metadata/parquet/year=2020/court=calcutta/bench=principal/metadata.parquet"},
+    {"case_id": "CALHC/CP/016/2019", "court": "Calcutta High Court", "registration_date": "2019-05-20", "decision_date": "2021-01-14", "section": "Companies Act, 2013 s.241", "outcome": "dismissed", "source_path": "metadata/parquet/year=2021/court=calcutta/bench=principal/metadata.parquet"},
+    {"case_id": "CALHC/CP/029/2022", "court": "Calcutta High Court", "registration_date": "2022-03-10", "section": "Companies Act, 2013 s.230", "source_path": "metadata/parquet/year=2024/court=calcutta/bench=principal/metadata.parquet"}
+  ]
+}

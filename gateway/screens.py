@@ -81,7 +81,8 @@ SCREENS = (
         Call("conversation.get", ("conversation_id",),
              ("result.conversation", "result.messages")),
         Call("citation.get", ("citation_id", "conversation_id"),
-             ("result.quote", "result.provision", "result.verified", "result.detail"),
+             ("result.citation", "result.reverified", "result.reverified_note",
+              "result.section"),
              "the source panel: re-read from the corpus, never trusted from the stored "
              "envelope"),
         Call("runs.trace", ("run_id",),
