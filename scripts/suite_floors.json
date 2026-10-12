@@ -307,6 +307,7 @@
     "scripts/merge_repo_map.py": 4,
     "scripts/merge_suite_floors.py": 14,
     "scripts/merge_tasks.py": 8,
+    "scripts/migrate.py": 11,
     "scripts/parse_board_rules.py": 25,
     "scripts/prove_temporal.py": 13,
     "scripts/provenance_census.py": 13,

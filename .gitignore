@@ -98,3 +98,6 @@ corpus/benchmark/cuad/data.zip
 
 # runtime single-gate lock (scripts/gate_lock.py)
 .gate.lock
+
+# pg_dump backups taken by scripts/migrate.py --apply. Database dumps, never committed.
+backups/
