@@ -4337,6 +4337,18 @@ def _sources_list(args: dict, ctx: Context) -> dict:
             # NOT_ACQUIRED / BLOCKED, with the reason), and its terms record. An unavailable
             # source is listed here too, with switchable=false, so the UI can show it greyed.
             "picker": source_picker.listing(),
+            # Document-management systems are not legal research sources. Keep their setup
+            # state separate so choosing iManage never implies it was searched or that its
+            # documents were copied into the Wall System.
+            "integrations": [{
+                "id": "imanage",
+                "label": "iManage",
+                "kind": "document_management",
+                "status": "NOT_CONFIGURED",
+                "message": ("A firm administrator must register and authorize Placedon in "
+                            "iManage. No files have been imported."),
+                "can_connect": False,
+            }],
             "note": ("Only HELD can make an answer VERIFIED (PLAN_26 §2). External sources "
                      "are listed with what their own terms permit, read on the date shown; "
                      "an unread term is OPEN, and OPEN is not permission.")}
@@ -4354,6 +4366,7 @@ def _sources_search(args: dict, ctx: Context) -> dict:
     from checker.sources.evidence import verifying
     from checker.sources.held import AsOfUnsupported, HeldCorpus
     from checker.sources.tiers import label_for
+    from checker import source_picker
 
     query = (args.get("query") or "").strip()
     if not query:
@@ -4379,6 +4392,8 @@ def _sources_search(args: dict, ctx: Context) -> dict:
         ok, why = terms.may_fetch(source_id)
         if not ok:
             refusals.append({"source_id": source_id, "detail": why})
+    lexis = source_picker.source(source_picker.LEXIS_ID)
+    refusals.append({"source_id": lexis.id, "detail": lexis.reason})
 
     return {
         "query": query,
@@ -5514,6 +5529,23 @@ def _test() -> None:
           f"...held reports SEARCHED_HITS through conversation.send ({_hrow})")
     check("sources" not in _src["envelope"],
           "...and the versioned envelope is untouched -- the report is a sibling, not in it")
+
+    # ── licensed research and DMS integrations are explicit, distinct and fail closed ──
+    _catalog = by_name()["sources.list"].run({}, Context())
+    _lexis = next((s for s in _catalog["picker"] if s["id"] == "lexisnexis_india"), None)
+    check(_lexis is not None and _lexis["tier"] == "LICENSED"
+          and _lexis["switchable"] is False and _lexis["status"] == "NOT_ACQUIRED",
+          f"Lexis India appears as licensed but unavailable until Placedon has rights ({_lexis})")
+    _imanage = next((s for s in _catalog["integrations"] if s["id"] == "imanage"), None)
+    check(_imanage is not None and _imanage["kind"] == "document_management"
+          and _imanage["can_connect"] is False
+          and "No files have been imported" in _imanage["message"],
+          f"iManage is a separate, unconfigured DMS integration, never a legal source ({_imanage})")
+    _search = by_name()["sources.search"].run({"query": "Companies Act director meeting"}, Context())
+    _lexis_refusal = next((s for s in _search["not_searched"]
+                           if s["source_id"] == "lexisnexis_india"), None)
+    check(_lexis_refusal is not None and "API agreement" in _lexis_refusal["detail"],
+          f"sources.search reports Lexis as not searched with its rights reason ({_lexis_refusal})")
 
     # ── Lane B: forecast.summary never serves a number from SYNTHETIC data ──────────────
     # The committed dataset is synthetic (illustrative, not the licensed open data), so the
