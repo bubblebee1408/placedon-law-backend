@@ -271,21 +271,23 @@ def build(*, status: str, task: str, as_of: str, text_blocks=(), bodies=(), cita
     return validate(env)
 
 
-def failed(*, task: str, as_of: str, detail: str, run_id: str | None = None,
-           trace_url: str | None = None) -> dict:
-    """A TRANSPORT failure. Carries no bodies and no citations, by construction.
+def failed(*, task: str, as_of: str, detail: str | None = None, text: str | None = None,
+           run_id: str | None = None, trace_url: str | None = None) -> dict:
+    """A could-not-run outcome: a TRANSPORT failure, or a provider that was unavailable.
+    Carries no bodies and no citations, by construction, and is never a refusal.
 
     The text block says what broke in words a reader can act on, and says explicitly that
     it is not a statement about the law -- because the one thing a reader must not conclude
-    from a failure is that there was no obligation.
+    from a failure is that there was no obligation. `detail` fills the default wording;
+    `text` overrides it wholesale for a state with its own message (e.g. the model being
+    unavailable, which is a dead provider, not an abstention).
     """
+    block = text or (f"This attempt did not complete: {detail}. That is a failure of ours, "
+                     f"not a finding about the law -- nothing was read and nothing was "
+                     f"decided, so no conclusion about any obligation follows from it. "
+                     f"Please try again.")
     env = {"schema": SCHEMA_ID, "status": FAILED, "task": task, "as_of": as_of,
-           "text_blocks": [{"text": (f"This attempt did not complete: {detail}. That is a "
-                                     f"failure of ours, not a finding about the law -- "
-                                     f"nothing was read and nothing was decided, so no "
-                                     f"conclusion about any obligation follows from it. "
-                                     f"Please try again."),
-                            "citation_ids": []}],
+           "text_blocks": [{"text": block, "citation_ids": []}],
            "bodies": [], "citations": [], "files": [],
            "run_id": run_id, "trace_url": trace_url}
     return validate(env)
