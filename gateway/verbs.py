@@ -4498,6 +4498,44 @@ def _sources_search(args: dict, ctx: Context) -> dict:
     }
 
 
+def _research_cases(args: dict, ctx: Context) -> dict:
+    """Find case law by a generic query -- party or case name, year, court.
+
+    The surface for "just write what you're looking for" over judgments. Tier LICENSED: a
+    judgment may SUPPORT an answer and can NEVER make one VERIFIED, and this verb produces NO
+    obligation (the scope.py invariant holds -- it serves authorities, not findings). Discovery
+    is by PARTY/TITLE metadata, not legal topic; the verbatim passage is read on OPEN via
+    judgments_open.OpenJudgments, never here. Reads the local index only -- no network.
+    """
+    from checker.sources.judgment_index import discover, indexed_source_ids, JUDGMENT_SOURCE_IDS
+    from checker.sources import terms
+
+    query = (args.get("query") or "").strip()
+    if not query:
+        return _refuse("BAD_REQUEST", "query is required")
+    permitted = {sid for sid in JUDGMENT_SOURCE_IDS if terms.may_fetch(sid)[0]}
+    hits = [r for r in discover(query, limit=20) if r.source_id in permitted]
+    not_searched = []
+    for sid in sorted(set(JUDGMENT_SOURCE_IDS) - permitted):
+        ok, why = terms.may_fetch(sid)
+        not_searched.append({"source_id": sid, "detail": why})
+    for sid in sorted(permitted - indexed_source_ids()):
+        not_searched.append({"source_id": sid, "detail": (
+            "permitted, but its judgment index is not built yet (Supreme Court only in "
+            "this release)")})
+    return {
+        "query": query,
+        "judgments": [{"source_id": r.source_id, "title": r.title, "parties": list(r.parties),
+                       "year": r.year, "date": r.date, "court": r.court, "s3_key": r.s3_key,
+                       "tier": "LICENSED"} for r in hits],
+        "not_searched": not_searched,
+        "note": ("Case-law candidates found by party/title/year. LICENSED: supporting "
+                 "authority only -- never a verified statutory answer and never an "
+                 "obligation. Open one to read its verbatim passage. Search is by party or "
+                 "case name, not legal topic."),
+    }
+
+
 # ── Lane B: a predictive signal, never a legal decision ───────────────────────
 
 def _forecast_summary(args: dict, ctx: Context) -> dict:
@@ -4717,6 +4755,16 @@ VERBS: tuple[Verb, ...] = (
                           "UNVERIFIED against any external source, so a past date gets a "
                           "named refusal rather than today's text")),
          "POST", read_only=True, run=_sources_search),
+
+    Verb("research.cases",
+         "Find case law by a generic query -- a party or case name, optionally a year or "
+         "court. Returns LICENSED judgment candidates (supporting authority, NEVER a verified "
+         "statutory answer); open one to read its verbatim passage. Search is by party/title, "
+         "not legal topic.",
+         (Field("query", STRING, True,
+                describes="a party or case name, e.g. 'Tata Sons Cyrus Mistry' or "
+                          "'a 2021 oppression case'"),),
+         "POST", read_only=True, mcp=False, run=_research_cases),
 
     Verb("company_facts.extract",
          "Read an MCA Company Master Data page you downloaded from mca.gov.in and "
@@ -5173,7 +5221,7 @@ def _test() -> None:
                     "review_contract", "review_document", "events.assess",
                     "runs.get", "runs.trace", "runs.approve", "runs.reject",
                     "runs.submit", "runs.cancel", "documents.upload",
-                    "sources.list", "sources.search", "company_facts.extract",
+                    "sources.list", "sources.search", "research.cases", "company_facts.extract",
                     "intake.classify", "conversation.send", "conversation.list",
                     "conversation.get", "citation.get", "review_table.create",
                     "review_table.status", "review_table.export",
@@ -5189,7 +5237,7 @@ def _test() -> None:
                                             "vault.verify", "vault.summarize",
                                             "vault.research", "vault.compile",
                                             "vault.delete"},
-          f"the forty-nine verbs are declared once ({sorted(names)})")
+          f"the fifty verbs are declared once ({sorted(names)})")
     # sources.* are READ-ONLY, so they reach MCP. That is the intended shape: an agent may
     # ask what a source permits and search what may be read, and there is no sources verb
     # that fetches, stores or spends. S3's Indian Kanoon connector will spend money, and
@@ -5690,6 +5738,18 @@ def _test() -> None:
           "every judgment discovery hit is LICENSED (support only, never VERIFIED)")
     check(all("quoted_span" not in j for j in (_jg or [])),
           "a discovery hit carries no quote -- the verbatim passage is read on open, not here")
+
+    # research.cases: the generic "just write what you're looking for" case-law surface.
+    _rc = by_name()["research.cases"].run({"query": "Tata Sons Cyrus Mistry"}, Context())
+    _rcj = _rc.get("judgments")
+    check(isinstance(_rcj, list) and any("CYRUS" in (j.get("title", "") + " ".join(j.get("parties", []))).upper() for j in _rcj),
+          f"research.cases finds the Tata/Cyrus judgment by a generic party query ({len(_rcj or [])} hits)")
+    check(bool(_rcj) and all(j.get("tier") == "LICENSED" for j in _rcj),
+          "research.cases hits are all LICENSED -- supporting authority, never a verified answer")
+    check(all("quoted_span" not in j for j in (_rcj or [])),
+          "research.cases returns no quote and no obligation -- authorities, not findings")
+    check(by_name()["research.cases"].run({"query": "   "}, Context()).get("code") == "BAD_REQUEST",
+          "research.cases refuses an empty query rather than searching for nothing")
 
     # ── Lane B: forecast.summary never serves a number from SYNTHETIC data ──────────────
     # The committed dataset is synthetic (illustrative, not the licensed open data), so the
@@ -6817,11 +6877,16 @@ def _test() -> None:
                      # verifies the CLIENT'S OWN document -- and additionally because
                      # `scripts/themis_mcp.py` asserts `len(TOOLS) == 31` and is a Themis
                      # file this session must not edit.
-                     "document.verify"},
+                     "document.verify",
+                     # general-research. Off MCP on the SAME mechanical limit as
+                     # document.verify -- the Themis tool count is frozen at 31 and
+                     # scripts/themis_mcp.py must not be edited here -- NOT because case
+                     # law is sensitive: it is public LICENSED open data.
+                     "research.cases"},
           f"...and the verbs that opt out are the ones that should: client and draft lists, the "
           f"firm's SPEND, and "
           f"every read of the VAULT -- which is the client's documents themselves. "
-          f"calendar.upcoming is the odd one, out on a LIMITATION rather than a "
+          f"calendar.upcoming and research.cases are the odd ones, out on a LIMITATION rather than a "
           f"principle, and its handler says so ({sorted(_opted)})")
     check(all(not v.mcp for v in VERBS if v.name.startswith("vault.") and v.read_only),
           "**no vault read is an MCP tool**: there is no agent task that should be able "
@@ -6881,7 +6946,7 @@ def _test() -> None:
           "...while a WRITE verb is kept out of MCP by mcp_tools(), not by the author "
           "remembering to")
     check("widgets.delete" in write_verbs(hypo), "...and is named in write_verbs()")
-    check(len(VERBS) == 49 and "widgets.count" not in rest_spec(),
+    check(len(VERBS) == 50 and "widgets.count" not in rest_spec(),
           "...and the probe changed nothing in this module: the surfaces are generated "
           "from an argument, not from a global the test rebound")
 
