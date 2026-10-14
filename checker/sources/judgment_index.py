@@ -45,6 +45,17 @@ JUDGMENT_SOURCE_IDS = ("aws_sc_judgments", "aws_hc_judgments")
 _MIN_TOKEN = 3
 _YEAR = re.compile(r"^(1[89]|20)\d{2}$")
 
+# Discovery matches on PARTY NAMES and the case title, not on legal subject: the dataset
+# metadata has no topic field, so "insolvency case" cannot match unless a party is named
+# "insolvency". These filler and legal-generic words are therefore dropped from a query, so
+# "a 2026 case" becomes the year 2026 and "the legal battle between Tata Sons and Cyrus
+# Mistry" becomes {tata, sons, cyrus, mistry} -- the distinctive tokens that actually match.
+_STOPWORDS = frozenset((
+    "a an the of on in for to and or vs versus case cases judgment judgement court order "
+    "find show me need want documents document legal battle between about regarding matter "
+    "dispute please get give latest recent any some this that with from new old year"
+).split())
+
 
 class IndexError_(ValueError):
     """A row that cannot be an index entry. Never silently dropped."""
@@ -93,7 +104,8 @@ def search_index(query: str, index, *, limit: int = 20) -> list[JudgmentRef]:
     """
     toks = _tokens(query)
     year = next((int(t) for t in toks if _YEAR.match(t)), None)
-    terms = [t for t in toks if not _YEAR.match(t) and len(t) >= _MIN_TOKEN]
+    terms = [t for t in toks
+             if not _YEAR.match(t) and len(t) >= _MIN_TOKEN and t not in _STOPWORDS]
 
     ranked: list[tuple[int, int, JudgmentRef]] = []
     for ref in index:
@@ -172,6 +184,14 @@ def _test() -> int:
           "an empty query matches nothing, not everything")
     check(search_index("2019", idx) and all(j.year == 2019 for j in search_index("2019", idx)),
           "a year-only query returns that year (the year is the signal)")
+
+    # Filler words must not break a natural query.
+    ac = search_index("a 2026 case", idx)
+    check(len(ac) == 1 and ac[0].year == 2026,
+          "'a 2026 case' drops the filler 'case' -> year-only -> returns 2026, not nothing")
+    nat = search_index("the legal battle between Tata Sons and Cyrus Mistry", idx)
+    check(bool(nat) and "Cyrus" in (nat[0].title + " ".join(nat[0].parties)),
+          "a natural sentence still finds the case on its distinctive party tokens")
 
     # Every result can actually be opened and is terms-governed.
     for j in search_index("Tata", idx):
