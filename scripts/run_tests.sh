@@ -306,6 +306,7 @@ extra+=("checker/source_picker.py --test")
 # Lane B: Companies Act matters from the open judgment metadata, as a time-to-decision signal.
 extra+=("checker/forecast/matters.py --test")
 extra+=("scripts/build_companies_act_matters.py --test")
+extra+=("scripts/build_judgment_index.py --test")
 extra+=("scripts/suite_floors.py --test")
 # The git merge drivers that resolve the three files two branches always churn on.
 extra+=("scripts/merge_suite_floors.py --test" "scripts/merge_tasks.py --test" "scripts/merge_repo_map.py --test")
@@ -441,6 +442,7 @@ extra+=("checker/sources/connector_base.py --test"
 # the parquet reader are injected, so the gate opens no socket and needs no parquet engine.
 # The --live smoke test (one real anonymous read) is deliberately NOT here.
 extra+=("checker/sources/judgments_open.py --test")
+extra+=("checker/sources/judgment_index.py --test")
 extra+=("checker/sources/case_law.py --test")
 extra+=("checker/sources/company_facts.py --test"
         "checker/sources/mca_fixture.py --test"

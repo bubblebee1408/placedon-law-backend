@@ -126,6 +126,9 @@ REQUIRED: dict[str, str] = {
     # 8a. Reading your OWN identity is not a professional act and not commercially
     # sensitive -- it is what a client renders a nav bar from.
     "auth.me": VIEWER,
+    # Read-only case-law DISCOVERY over LICENSED open judgments; supports, never verifies,
+    # and writes no obligation. A viewer may read authorities.
+    "research.cases": VIEWER,
 
     # ── doing work ──────────────────────────────────────────────────────────
     # A viewer may read a contract review someone else ran; running one spends money and
