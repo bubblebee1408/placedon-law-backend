@@ -4459,6 +4459,28 @@ def _sources_search(args: dict, ctx: Context) -> dict:
     lexis = source_picker.source(source_picker.LEXIS_ID)
     refusals.append({"source_id": lexis.id, "detail": lexis.reason})
 
+    # ── judgment DISCOVERY: find a case by a generic query (parties/title/year) ──────────
+    # Reads the committed local index only -- no network -- so the gate stays socket-free.
+    # These are candidates to OPEN, not Evidence: there is no quote until the PDF is fetched
+    # and byte-quoted by judgments_open.OpenJudgments. Tier LICENSED: a judgment may SUPPORT
+    # an answer and can never make one VERIFIED. Metadata search is by PARTY/TITLE, not topic.
+    judgments: list[dict] = []
+    if not wanted or "LICENSED" in wanted:
+        from checker.sources.judgment_index import (
+            discover as _discover, indexed_source_ids as _indexed, JUDGMENT_SOURCE_IDS)
+        permitted = {sid for sid in JUDGMENT_SOURCE_IDS if terms.may_fetch(sid)[0]}
+        for ref in _discover(query, limit=10):
+            if ref.source_id in permitted:
+                judgments.append({
+                    "source_id": ref.source_id, "title": ref.title,
+                    "parties": list(ref.parties), "year": ref.year, "date": ref.date,
+                    "court": ref.court, "s3_key": ref.s3_key, "tier": "LICENSED"})
+        # A permitted judgment source with no rows yet is said so, not silently omitted.
+        for sid in sorted(permitted - _indexed()):
+            refusals.append({"source_id": sid, "detail": (
+                "permitted, but its judgment index is not built yet (Supreme Court only in "
+                "this release)")})
+
     return {
         "query": query,
         "results": [{"tier": e.tier, "source": e.source, "ref": e.ref,
@@ -4467,9 +4489,12 @@ def _sources_search(args: dict, ctx: Context) -> dict:
                      "label": label_for(e.tier, date=e.fetched_at[:10], source=e.source),
                      "can_verify": e.can_verify} for e in rows],
         "verified_count": len(verifying(rows)),
+        "judgments": judgments,
         "not_searched": refusals,
         "note": ("Every row carries its tier. Only a HELD row may support a legal claim; "
-                 "`not_searched` says which sources were not asked and why."),
+                 "`judgments` are LICENSED case-law candidates found by party/title (open one "
+                 "to read its verbatim passage); `not_searched` says which sources were not "
+                 "asked and why."),
     }
 
 
@@ -5656,6 +5681,15 @@ def _test() -> None:
                            if s["source_id"] == "lexisnexis_india"), None)
     check(_lexis_refusal is not None and "API agreement" in _lexis_refusal["detail"],
           f"sources.search reports Lexis as not searched with its rights reason ({_lexis_refusal})")
+
+    _cases = by_name()["sources.search"].run({"query": "Tata Sons Cyrus Mistry"}, Context())
+    _jg = _cases.get("judgments")
+    check(isinstance(_jg, list) and any("CYRUS" in (j.get("title", "") + " ".join(j.get("parties", []))).upper() for j in _jg),
+          f"sources.search discovers the Tata/Cyrus judgment from the committed index ({len(_jg or [])} hits)")
+    check(bool(_jg) and all(j.get("tier") == "LICENSED" for j in _jg),
+          "every judgment discovery hit is LICENSED (support only, never VERIFIED)")
+    check(all("quoted_span" not in j for j in (_jg or [])),
+          "a discovery hit carries no quote -- the verbatim passage is read on open, not here")
 
     # ── Lane B: forecast.summary never serves a number from SYNTHETIC data ──────────────
     # The committed dataset is synthetic (illustrative, not the licensed open data), so the

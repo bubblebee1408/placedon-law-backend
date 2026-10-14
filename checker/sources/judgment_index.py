@@ -142,6 +142,32 @@ def load_index(path) -> list[JudgmentRef]:
     return out
 
 
+# ── the committed default index, for discovery at request time ──────────────────────────
+# repo root is parents[2]: checker/sources/judgment_index.py -> sources -> checker -> root.
+DEFAULT_INDEX_PATH = Path(__file__).resolve().parents[2] / "corpus" / "judgments" / "sc_index.json"
+_DEFAULT: list | None = None
+
+
+def default_index() -> list:
+    """The committed index, loaded once. Empty when none is built yet, so discovery degrades
+    to 'no judgments' rather than raising on a deployment that has not shipped the index."""
+    global _DEFAULT
+    if _DEFAULT is None:
+        _DEFAULT = load_index(DEFAULT_INDEX_PATH) if DEFAULT_INDEX_PATH.exists() else []
+    return _DEFAULT
+
+
+def indexed_source_ids(index=None) -> frozenset:
+    """Which judgment sources actually have rows (the rest are 'permitted but not built yet')."""
+    return frozenset(r.source_id for r in (default_index() if index is None else index))
+
+
+def discover(query: str, *, limit: int = 10, index=None) -> list:
+    """Discovery hits for a generic query. Reads the LOCAL index only (no network); the
+    verbatim quote is fetched on OPEN by `judgments_open.OpenJudgments`. Support, not VERIFIED."""
+    return search_index(query, default_index() if index is None else index, limit=limit)
+
+
 def _test() -> int:
     ok = fail = 0
 
@@ -192,6 +218,12 @@ def _test() -> int:
     nat = search_index("the legal battle between Tata Sons and Cyrus Mistry", idx)
     check(bool(nat) and "Cyrus" in (nat[0].title + " ".join(nat[0].parties)),
           "a natural sentence still finds the case on its distinctive party tokens")
+
+    d = discover("Tata Cyrus", index=idx)
+    check(bool(d) and "Cyrus" in (d[0].title + " ".join(d[0].parties)),
+          "discover() runs the search over an injected index")
+    check(indexed_source_ids(idx) == {"aws_sc_judgments", "aws_hc_judgments"},
+          "indexed_source_ids reports exactly the sources present in an index")
 
     # Every result can actually be opened and is terms-governed.
     for j in search_index("Tata", idx):
