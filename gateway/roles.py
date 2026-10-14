@@ -109,6 +109,9 @@ REQUIRED: dict[str, str] = {
     "vault.verify": VIEWER,
     "sources.list": VIEWER,
     "sources.search": VIEWER,
+    # Read-only case-law DISCOVERY over LICENSED open judgments; supports, never verifies,
+    # and writes no obligation. A viewer may read authorities.
+    "research.cases": VIEWER,
 
     # ── doing work ──────────────────────────────────────────────────────────
     # A viewer may read a contract review someone else ran; running one spends money and
