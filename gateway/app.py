@@ -51,9 +51,10 @@ from fastapi.responses import Response, StreamingResponse     # noqa: E402
 
 from gateway.admission import BoundedExecutor, Busy, await_work
 from gateway import audit as audit_mod                       # noqa: E402
-from gateway.auth import AuthError, KeyStore, bearer          # noqa: E402
-from gateway.store import (MEMORY, POSTGRES, MemoryBackend,   # noqa: E402
-                           PostgresBackend, database_url)
+from gateway.auth import (AuthError, KeyStore, Principal,     # noqa: E402
+                          SESSION_LABEL, bearer, hash_key, key_id as _key_id)
+from gateway.store import (AuthLookup, MEMORY, POSTGRES,       # noqa: E402
+                           MemoryBackend, PostgresBackend, database_url)
 
 V1_PREFIX = "/v1"
 HEALTH_PATH = "/v1/health"
@@ -246,6 +247,11 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
     app.state.memory_backend = MemoryBackend()
     # P2. Which tenant the shared memory backend has served. See backend_for.
     app.state.memory_tenant = None
+    # 026. NEVER bound to a tenant, unlike backend_for's result -- the two cross-tenant
+    # reads auth.login and invites.accept need (now three; see
+    # gateway/migrations/026_accounts.sql) and the session-fallback branch of
+    # `_principal` below all run before any tenant is known.
+    app.state.auth = AuthLookup(db_url=url, memory=None if url else app.state.memory_backend)
 
     def backend_for(tenant_id: str, actor_id: str | None = None):
         """The backend for this tenant, or a refusal if memory cannot keep them apart.
@@ -422,9 +428,33 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
                         headers={"WWW-Authenticate": "Bearer"})
 
     def _principal(request: Request):
+        """A key first, then a session (026, Decision 3). Every failure in either branch
+        raises the SAME AuthError with the SAME message: a caller must not be able to
+        tell "not an API key" from "not a session" from "an expired or revoked one" --
+        the exact enumeration gateway/auth.py's own KeyStore.resolve already refuses.
+        """
         raw = bearer(request.headers.get("authorization")) or \
             request.headers.get("x-api-key")
-        return app.state.keys.resolve(raw)
+        try:
+            return app.state.keys.resolve(raw)
+        except AuthError:
+            pass
+        if not raw or app.state.auth is None:
+            raise AuthError("no API key presented")
+        token_hash = hash_key(raw)
+        row = app.state.auth.resolve_session(token_hash)
+        if row is None or row.get("revoked_at") is not None \
+                or row.get("disabled_at") is not None:
+            raise AuthError("no API key presented")
+        from datetime import datetime, timezone
+        expires = datetime.fromisoformat(str(row["expires_at"]))
+        if expires.tzinfo is None:
+            expires = expires.replace(tzinfo=timezone.utc)
+        if expires <= datetime.now(timezone.utc):
+            raise AuthError("no API key presented")
+        return Principal(tenant_id=row["tenant_id"], actor=row["actor_id"],
+                         key_id=_key_id(raw), label=SESSION_LABEL, role=row["role"],
+                         credential_hash=token_hash)
 
     def _record(principal, *, action: str, route: str, resource: str,
                 outcome: str, status: int) -> None:
@@ -507,7 +537,7 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
                         media_type="application/json")
 
     # ── /v2, generated from the verb table. No route is written by hand here ──
-    from gateway.roles import REQUIRED, may
+    from gateway.roles import PUBLIC_VERBS, REQUIRED, may
     from gateway.verbs import VERBS, Context, rest_path
 
 
@@ -533,7 +563,8 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
                 return _single_tenant(exc)
             ctx = Context(tenant=principal.tenant_id, actor=principal.actor,
                           store=store, documents=documents_for(principal.tenant_id), clock=now,
-                          files=app.state.files, queue=tenant_queue)
+                          files=app.state.files, queue=tenant_queue,
+                          credential_hash=principal.credential_hash)
             args = dict(request.path_params)
             if verb.method == "POST":
                 raw, over = await _read_body(request)
@@ -612,8 +643,69 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
         app.add_api_route(path, _route, methods=[verb.method],
                           name=f"v2:{verb.name}", summary=verb.summary)
 
+    def _mount_public(verb):
+        """PUBLIC_VERBS only (auth.login, invites.accept): no Bearer, no `may()` check,
+        no tenant-bound `store` -- there is no tenant yet. Mounted separately from
+        `_mount` rather than branching inside it, the same way the SSE and binary-download
+        routes below already get their own mount functions: it keeps every one of the
+        other ~50 verbs' request path completely unchanged, with zero risk of a public
+        branch leaking into a route that is supposed to require a key.
+        """
+        path = rest_path(verb)
+
+        async def _route(request: Request) -> Response:
+            args = dict(request.path_params)
+            if verb.method == "POST":
+                raw, over = await _read_body(request)
+                if over:
+                    return _limit_response(over)
+                if raw:
+                    try:
+                        body = json.loads(raw)
+                    except ValueError:
+                        return Response(content=dumps(
+                            {"error": "bad_request", "detail": "body is not valid JSON"}),
+                            status_code=400, media_type="application/json")
+                    if not isinstance(body, dict):
+                        return Response(content=dumps(
+                            {"error": "bad_request",
+                             "detail": "body must be a JSON object"}),
+                            status_code=400, media_type="application/json")
+                    args |= body
+            missing = [f.name for f in verb.inputs
+                       if f.required and not str(args.get(f.name) or "").strip()]
+            if missing:
+                return Response(content=dumps(
+                    {"error": "bad_request",
+                     "detail": f"missing required input(s): {', '.join(missing)}"}),
+                    status_code=400, media_type="application/json")
+            ctx = Context(tenant="", actor="", store=None, clock=now,
+                          auth=app.state.auth, backend_for=app.state.backend_for,
+                          client_ip=(request.client.host if request.client else ""))
+            try:
+                out = await executor.run("__public__", verb.run, args, ctx, control=False)
+            except Busy:
+                return _busy_response()
+            except Exception:                                   # noqa: BLE001
+                logging.getLogger(__name__).error(
+                    "public gateway operation failed: %s", verb.name)
+                return _failed_response()
+            code = 200
+            if isinstance(out, dict) and out.get("code") == "BAD_REQUEST":
+                code = 400
+            elif isinstance(out, dict) and out.get("code") in ("NO_STORE",):
+                code = 503
+            return Response(content=dumps(out), status_code=code,
+                            media_type="application/json")
+
+        app.add_api_route(path, _route, methods=[verb.method],
+                          name=f"v2:{verb.name}", summary=verb.summary)
+
     for _v in VERBS:
-        _mount(_v)
+        if _v.name in PUBLIC_VERBS:
+            _mount_public(_v)
+        else:
+            _mount(_v)
 
     # ── R0 move 12: ask over Server-Sent Events ─────────────────────────────
     #
@@ -1368,8 +1460,14 @@ def _test() -> None:
                                  "vault.upload", "vault.delete",
                                  # T3 move 10: it records a judgement in an append-only
                                  # audit table, which is a write and is LAWYER-only.
-                                 "document.check"},
-          f"fourteen write verbs today, and each is named ({sorted(write_verbs())})")
+                                 "document.check",
+                                 # 026: sign-in, sessions, invites. Two of the four are
+                                 # PUBLIC_VERBS, mounted by _mount_public with no role
+                                 # check at all -- named here anyway, so this count stays
+                                 # the single place "every write verb" is enumerated.
+                                 "auth.login", "auth.logout", "invites.create",
+                                 "invites.accept"},
+          f"eighteen write verbs today, and each is named ({sorted(write_verbs())})")
 
     # ── auth: a key is required everywhere except liveness ──────────────────
     check(anon.get(HEALTH_PATH).status_code == 200,
@@ -1814,6 +1912,77 @@ def _test() -> None:
     check(_nh["files"].get("note"),
           "...with a note, so an operator reading health knows the vault cannot accept "
           "an upload rather than discovering it from a refusal")
+
+    # ── 026: PUBLIC_VERBS routing and the session-fallback branch of _principal ──
+    #
+    # The business logic (lockout, generic failure, ambiguous email, disabled accounts)
+    # is proved at the handler level in gateway/verbs.py's own suite. What can ONLY be
+    # proved here, over the real HTTP surface, is the WIRING: that auth.login and
+    # invites.accept truly need no Authorization header at all, and that the session
+    # token they mint then authenticates an ORDINARY, role-checked verb through
+    # _principal's key-first-then-session branch.
+    acct_keys = KeyStore()
+    ADMIN_KEY, _ = acct_keys.mint(tenant_id=T, actor=A, label="gate", role="admin")
+    acct_app = create_app(clock=lambda: GEN, keys=acct_keys, db_url="")
+    acct = TestClient(acct_app, headers={"Authorization": f"Bearer {ADMIN_KEY}"})
+    # No Authorization header at all -- PUBLIC_VERBS never call _principal().
+    pub = TestClient(acct_app)
+
+    inv = acct.post("/v2/invites/create",
+                    json={"email": "newlawyer@example.com", "role": "lawyer"})
+    check(inv.status_code == 200 and inv.json().get("token"),
+          f"invites.create (admin, over HTTP) returns a raw token ({inv.json()})")
+    invite_token = inv.json()["token"]
+
+    VIEWER_KEY2, _ = acct_keys.mint(tenant_id=T, actor=A, label="viewer2", role="viewer")
+    viewer_client = TestClient(acct_app, headers={"Authorization": f"Bearer {VIEWER_KEY2}"})
+    check(viewer_client.post("/v2/invites/create",
+                             json={"email": "x@example.com", "role": "viewer"}
+                             ).status_code == 403,
+          "a VIEWER cannot create an invite over HTTP either (ADMIN-only)")
+
+    accept = pub.post("/v2/invites/accept",
+                      json={"token": invite_token, "password": "a-strong-enough-password"})
+    check(accept.status_code == 200 and accept.json().get("status") == "accepted",
+          f"invites.accept over HTTP, with NO Authorization header, creates the account "
+          f"({accept.json()})")
+
+    login = pub.post("/v2/auth/login",
+                     json={"email": "newlawyer@example.com",
+                           "password": "a-strong-enough-password"})
+    check(login.status_code == 200 and login.json().get("token"),
+          f"auth.login over HTTP, with NO Authorization header, signs in ({login.json()})")
+    session_token = login.json()["token"]
+
+    sess_client = TestClient(acct_app, headers={"Authorization": f"Bearer {session_token}"})
+    me = sess_client.post("/v2/auth/me", json={})
+    check(me.status_code == 200 and me.json().get("email") == "newlawyer@example.com",
+          f"the minted session token authenticates an ORDINARY verb through "
+          f"_principal's session-fallback branch -- a key first, then a session (026 "
+          f"Decision 3) ({me.json()})")
+
+    check(sess_client.post("/v2/invites/create",
+                           json={"email": "y@example.com", "role": "viewer"}
+                           ).status_code == 403,
+          "...and the normal role check still applies to a SESSION principal, exactly "
+          "as it does to an API key -- a lawyer session may not create an invite")
+
+    logout = sess_client.post("/v2/auth/logout", json={})
+    check(logout.status_code == 200 and logout.json().get("revoked") is True,
+          f"auth.logout revokes the session over HTTP ({logout.json()})")
+    check(sess_client.post("/v2/auth/me", json={}).status_code == 401,
+          "...and the SAME session token is refused immediately afterward")
+    check(acct.post("/v2/auth/logout", json={}).json().get("code") == "BAD_REQUEST",
+          "an API key cannot be \"logged out\" through this verb -- it is not a session")
+
+    garbage = TestClient(acct_app, headers={"Authorization": "Bearer not-a-real-key"})
+    garbage_login = garbage.post(
+        "/v2/auth/login",
+        json={"email": "someone-else@example.com", "password": "irrelevant-password-12"})
+    check(garbage_login.status_code == 200
+          and garbage_login.json().get("code") == "INVALID_CREDENTIALS",
+          "a garbage Authorization header neither helps nor hurts a PUBLIC verb -- "
+          "_mount_public never reads it")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:

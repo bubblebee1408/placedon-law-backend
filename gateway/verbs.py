@@ -108,6 +108,22 @@ class Context:
     # V1. Where a vault's bytes live. None means no vault is configured on this
     # deployment, and the vault verbs refuse by name rather than writing nowhere.
     files: object | None = None
+    # 026. The cross-tenant AuthLookup (gateway/store.py), for the two PUBLIC_VERBS --
+    # auth.login and invites.accept -- which run before any tenant is known. None for
+    # every other verb: they already have a tenant-bound `store` and have no business
+    # reaching across one.
+    auth: object | None = None
+    # 026. A store FACTORY, not a store: `auth.login`/`invites.accept` learn the tenant
+    # only partway through the handler (after auth_find_login / invite_find_by_token), so
+    # the tenant-scoped backend for the session insert or the accepted actor has to be
+    # built THEN, not injected up front. Mirrors app.py's own `backend_for` closure.
+    backend_for: Callable | None = None
+    # 026. The caller's IP, hashed into login_attempts -- never logged or stored raw.
+    client_ip: str = ""
+    # 026. sha256 of the SESSION token that authenticated this request, carried from
+    # Principal.credential_hash so `auth.logout` can revoke exactly this session and no
+    # other. Empty for an API-key principal: nothing today lets a key revoke itself here.
+    credential_hash: str = ""
     # The steps the last handler built, kept so the QUEUE path can reuse the very code the
     # request path runs instead of a second implementation of it. `_persist_run` fills it.
     # Without this the durable executor would have its own idea of what a run's steps are,
@@ -4521,6 +4537,169 @@ def _forecast_summary(args: dict, ctx: Context) -> dict:
     return out
 
 
+# ── 026: sign-in, sessions, invites ──────────────────────────────────────────
+#
+# auth.login and invites.accept are PUBLIC_VERBS (gateway/roles.py): app.py mounts them
+# with no Bearer token and no role check, so `ctx.store` is None and `ctx.auth` /
+# `ctx.backend_for` carry what they need instead -- the cross-tenant lookup, and a
+# factory for the tenant-scoped backend once the lookup has named a tenant. See
+# DECISION_ACCOUNTS.md and gateway/migrations/026_accounts.sql.
+
+def _future(seconds: int):
+    """now + seconds, timezone-aware. The one place session and invite TTLs compute from."""
+    from datetime import datetime, timedelta, timezone
+    return datetime.now(timezone.utc) + timedelta(seconds=seconds)
+
+
+def _auth_login(args: dict, ctx: Context) -> dict:
+    """Sign in by email and password. PUBLIC.
+
+    Wrong password, unknown email, a disabled account and an un-accepted invite (which
+    has no `actors` row yet, so it IS an unknown email) all return
+    `accounts.generic_failure()` -- byte-identical, so none is distinguishable from
+    outside (DECISION_ACCOUNTS.md Decision 6). More than one match across tenants is the
+    ambiguous-email case (Decision 7): refused the same way, never guessed.
+    """
+    from gateway import accounts
+    from gateway.auth import hash_key
+    email = str(args.get("email") or "").strip()
+    password = str(args.get("password") or "")
+    if not email or not password:
+        return _refuse("BAD_REQUEST", "email and password are both required")
+    if ctx.auth is None:
+        return _refuse("NO_STORE", "no auth backend is configured")
+
+    email_hash = hash_key(email.lower())
+    ip_hash = hash_key(ctx.client_ip or "")
+    locked = accounts.check_lockout(ctx.auth, email_hash=email_hash, ip_hash=ip_hash)
+    if locked is not None:
+        return locked
+
+    rows = ctx.auth.find_logins(email)
+    if len(rows) != 1:
+        accounts.verify_login(None, password)   # pays the same cost as a real check
+        ctx.auth.record_attempt(email_hash=email_hash, ip_hash=ip_hash, ok=False)
+        return accounts.generic_failure()
+
+    row = rows[0]
+    if not accounts.verify_login(row, password) or row.get("disabled_at") is not None:
+        ctx.auth.record_attempt(email_hash=email_hash, ip_hash=ip_hash, ok=False)
+        return accounts.generic_failure()
+
+    if ctx.backend_for is None:
+        return _refuse("NO_STORE", "no tenant store factory is configured")
+    import uuid
+    tenant_id, actor_id = row["tenant_id"], row["actor_id"]
+    store = ctx.backend_for(tenant_id, actor_id)
+    raw_token, token_hash = accounts.mint_token()
+    expires_at = _future(accounts.SESSION_TTL_SECONDS)
+    store.create_session({"session_id": str(uuid.uuid4()), "actor_id": actor_id,
+                          "token_hash": token_hash, "expires_at": expires_at})
+    actor_row = store.read_actor(actor_id) or {}
+    ctx.auth.record_attempt(email_hash=email_hash, ip_hash=ip_hash, ok=True)
+    return {"status": "ok", "token": raw_token, "actor_id": actor_id,
+            "tenant_id": tenant_id, "role": actor_row.get("role") or "viewer",
+            "expires_at": str(expires_at)}
+
+
+def _auth_logout(args: dict, ctx: Context) -> dict:
+    """End the CALLER'S OWN session. Needs a Bearer (not public); routed normally."""
+    if not ctx.credential_hash:
+        return _refuse("BAD_REQUEST", "this credential is not a session; there is "
+                       "nothing for auth.logout to revoke")
+    if ctx.store is None:
+        return _refuse("NO_STORE", "no store is configured")
+    revoked = ctx.store.revoke_session(ctx.credential_hash)
+    return {"status": "ok", "revoked": revoked}
+
+
+def _auth_me(args: dict, ctx: Context) -> dict:
+    """Who the caller is. Always the caller's OWN row; there is no argument that names
+    somebody else's."""
+    if ctx.store is None:
+        return _refuse("NO_STORE", "no store is configured")
+    actor = ctx.store.read_actor(ctx.actor) or {}
+    return {"actor_id": ctx.actor, "tenant_id": ctx.tenant, "email": actor.get("email"),
+            "role": actor.get("role") or "viewer", "label": actor.get("label") or ""}
+
+
+def _invites_create(args: dict, ctx: Context) -> dict:
+    """Invite someone into this firm. ADMIN-only (gateway/roles.py): "admin: everything a
+    lawyer can, plus invite and remove people." The raw token is returned ONCE, to be
+    shared out of band, and is never stored -- only its hash is (018_users_roles.sql)."""
+    from gateway.roles import ROLES
+    if ctx.store is None:
+        return _refuse("NO_STORE", "no store is configured")
+    email = str(args.get("email") or "").strip()
+    role = str(args.get("role") or "").strip()
+    if not email or "@" not in email[1:]:
+        return _refuse("BAD_REQUEST", "a real email address is required")
+    if role not in ROLES:
+        return _refuse("BAD_REQUEST", f"role must be one of {ROLES}")
+    import uuid
+
+    from gateway import accounts
+    raw_token, token_hash = accounts.mint_token()
+    try:
+        row = ctx.store.create_invite({
+            "invite_id": str(uuid.uuid4()), "email": email, "role": role,
+            "token_hash": token_hash, "invited_by": ctx.actor,
+            "expires_at": _future(accounts.INVITE_TTL_SECONDS)})
+    except Exception as e:                                       # noqa: BLE001
+        return _refuse("BAD_REQUEST", str(e)[:200])
+    return dict(row, token=raw_token,
+               note="Share this token with the invitee out of band. It is shown once "
+                    "here and is never stored -- only its hash is.")
+
+
+def _invites_accept(args: dict, ctx: Context) -> dict:
+    """Spend a single-use invite token and create the account it names. PUBLIC.
+
+    role and email come from the INVITE, never from this request -- accepting an invite
+    must not let the acceptor choose their own role.
+    """
+    from gateway import accounts
+    from gateway.auth import hash_key
+    from gateway.passwords import PasswordError, hash_password
+    token = str(args.get("token") or "").strip()
+    password = str(args.get("password") or "")
+    if not token or not password:
+        return _refuse("BAD_REQUEST", "token and password are both required")
+    if ctx.auth is None:
+        return _refuse("NO_STORE", "no auth backend is configured")
+
+    token_hash = hash_key(token)
+    invite = ctx.auth.find_invite(token_hash)
+    if invite is None or invite.get("accepted_at") is not None:
+        return _refuse("INVALID_INVITE",
+                       "this invite link is not valid or has already been used")
+
+    try:
+        pw_hash = hash_password(password)
+    except PasswordError as e:
+        return _refuse("BAD_REQUEST", str(e))
+
+    if ctx.backend_for is None:
+        return _refuse("NO_STORE", "no tenant store factory is configured")
+    import uuid
+    from datetime import datetime, timezone
+    new_actor_id = str(uuid.uuid4())
+    store = ctx.backend_for(invite["tenant_id"], new_actor_id)
+    # The single-use AND expiry guarantees both live in accept_invite's own atomic
+    # UPDATE (gateway/store.py) -- "accepted_at IS NULL AND expires_at > now()" -- not in
+    # this handler, so a concurrent accept of the same token cannot both win.
+    accepted = store.accept_invite(token_hash, actor_id=new_actor_id,
+                                   now=str(datetime.now(timezone.utc)))
+    if accepted is None:
+        return _refuse("INVALID_INVITE",
+                       "this invite link is not valid or has already been used")
+    store.write_actor({"actor_id": new_actor_id, "label": invite["email"],
+                       "role": invite["role"], "email": invite["email"],
+                       "password_hash": pw_hash})
+    return {"status": "accepted", "actor_id": new_actor_id,
+            "tenant_id": invite["tenant_id"], "role": invite["role"]}
+
+
 # ── the table ────────────────────────────────────────────────────────────────
 
 VERBS: tuple[Verb, ...] = (
@@ -5026,6 +5205,39 @@ VERBS: tuple[Verb, ...] = (
                           "photographed page. Recorded so the file panel shows the "
                           "document with CANNOT_READ instead of omitting it")),
          "POST", read_only=False, run=_documents_upload),
+
+    Verb("auth.login",
+         "Sign in with an email and a password. PUBLIC: no API key or session needed, "
+         "because this is how one is obtained.",
+         (Field("email", STRING, True, describes="the account's email"),
+          Field("password", STRING, True, describes="the account's password")),
+         "POST", read_only=False, mcp=False, run=_auth_login),
+
+    Verb("auth.logout",
+         "End the calling session. Refuses for an API key, which is not a session and "
+         "has nothing here to revoke.",
+         (), "POST", read_only=False, mcp=False, run=_auth_logout),
+
+    Verb("auth.me",
+         "Who the caller is: their own actor id, tenant, email and role. There is no "
+         "argument that names somebody else's.",
+         (), "POST", read_only=True, mcp=False, run=_auth_me),
+
+    Verb("invites.create",
+         "Invite someone into this firm by email, at a given role. ADMIN-only. Returns "
+         "the raw invite token ONCE, to be shared out of band -- it is never stored.",
+         (Field("email", STRING, True, describes="the invitee's email"),
+          Field("role", STRING, True, describes="viewer, lawyer, or admin")),
+         "POST", read_only=False, run=_invites_create),
+
+    Verb("invites.accept",
+         "Accept an invite token and set a password, creating the account it names. "
+         "PUBLIC: the unguessable token IS the credential. The role is the invite's, "
+         "never a value supplied here.",
+         (Field("token", STRING, True, describes="the raw invite token, from the email"),
+          Field("password", STRING, True,
+                describes="the new account's password, at least 12 characters")),
+         "POST", read_only=False, mcp=False, run=_invites_accept),
 )
 
 
@@ -5163,8 +5375,11 @@ def _test() -> None:
                         "vault.upload", "vault.status", "vault.find", "vault.list",
                                             "vault.verify", "vault.summarize",
                                             "vault.research", "vault.compile",
-                                            "vault.delete"},
-          f"the forty-nine verbs are declared once ({sorted(names)})")
+                                            "vault.delete"} | {
+                        # 026: sign-in, sessions, invites.
+                        "auth.login", "auth.logout", "auth.me",
+                        "invites.create", "invites.accept"},
+          f"the fifty-four verbs are declared once ({sorted(names)})")
     # sources.* are READ-ONLY, so they reach MCP. That is the intended shape: an agent may
     # ask what a source permits and search what may be read, and there is no sources verb
     # that fetches, stores or spends. S3's Indian Kanoon connector will spend money, and
@@ -5183,8 +5398,17 @@ def _test() -> None:
                                  # T3 move 10. It WRITES: an append-only row in
                                  # `document_checks` recording a judgement a firm may rely
                                  # on. LAWYER in gateway/roles.py for the same reason.
-                                 "document.check"},
-          f"...and exactly fourteen of them write ({sorted(write_verbs())})")
+                                 "document.check",
+                                 # 026. auth.login mints a session and writes a
+                                 # login_attempts row; auth.logout revokes one;
+                                 # invites.create writes an invite; invites.accept spends
+                                 # one and creates an actor. All four are kept off MCP by
+                                 # mcp_tools() for the same reason as every other write
+                                 # here -- plus two of them are PUBLIC_VERBS, which have
+                                 # no role to check and no business in an agent's toolbox.
+                                 "auth.login", "auth.logout", "invites.create",
+                                 "invites.accept"},
+          f"...and exactly eighteen of them write ({sorted(write_verbs())})")
     check(f"{MCP_NAMESPACE}.conversation.send" not in {t.name for t in mcp},
           "conversation.send WRITES -- it creates a thread, appends messages and may "
           "enqueue work -- so mcp_tools() keeps it off MCP, by rule and not by the author "
@@ -6783,7 +7007,11 @@ def _test() -> None:
                      # verifies the CLIENT'S OWN document -- and additionally because
                      # `scripts/themis_mcp.py` asserts `len(TOOLS) == 31` and is a Themis
                      # file this session must not edit.
-                     "document.verify"},
+                     "document.verify",
+                     # 026. Read-only, but there is no agent task that needs "who am I",
+                     # and a brand-new identity-reading tool gets no MCP exposure without
+                     # a stated reason -- the same default `jobs.dead`/`usage.status` use.
+                     "auth.me"},
           f"...and the verbs that opt out are the ones that should: client and draft lists, the "
           f"firm's SPEND, and "
           f"every read of the VAULT -- which is the client's documents themselves. "
@@ -6847,7 +7075,7 @@ def _test() -> None:
           "...while a WRITE verb is kept out of MCP by mcp_tools(), not by the author "
           "remembering to")
     check("widgets.delete" in write_verbs(hypo), "...and is named in write_verbs()")
-    check(len(VERBS) == 49 and "widgets.count" not in rest_spec(),
+    check(len(VERBS) == 54 and "widgets.count" not in rest_spec(),
           "...and the probe changed nothing in this module: the surfaces are generated "
           "from an argument, not from a global the test rebound")
 
@@ -8092,6 +8320,149 @@ def _test() -> None:
     check(_ledger is _real_ledger_fn,
           "...and the real ledger function is restored, so a suite running after this one "
           "prices against the deployment's own ledger and not a temporary file")
+
+    # ── 026: sign-in, sessions, invites ──────────────────────────────────────
+    import uuid as _uuid_mod
+
+    from gateway.auth import hash_key as _hashk
+    from gateway import accounts as _accounts_mod
+    from gateway.passwords import hash_password as _hp
+    from gateway.roles import LAWYER as _LAWYER, VIEWER as _VIEWER
+    from gateway.store import AuthLookup as _AuthLookup
+
+    _acc_mem = _MB()
+    _acc_mem.tenant_id = "aaaaaaaa-0000-0000-0000-000000000001"
+    _acc_auth = _AuthLookup(memory=_acc_mem)
+
+    def _acc_backend_for(tenant_id, actor_id=None):
+        # One MemoryBackend instance cannot hold two tenants at once (SingleTenantOnly
+        # lives in app.py, not here) -- this stand-in is deliberately single-tenant, like
+        # every other MemoryBackend-based verb test in this file.
+        return _acc_mem
+
+    def _acc_ctx(**over):
+        base = dict(tenant=_acc_mem.tenant_id, actor="admin-actor", store=_acc_mem,
+                    auth=_acc_auth, backend_for=_acc_backend_for,
+                    client_ip="203.0.113.5", clock=lambda: "2026-10-10T00:00:00Z")
+        base.update(over)
+        return Context(**base)
+
+    _pub_ctx = Context(auth=_acc_auth, backend_for=_acc_backend_for, client_ip="203.0.113.5",
+                       clock=lambda: "2026-10-10T00:00:00Z")
+
+    # invites.create: the raw token comes back ONCE
+    _inv = _V["invites.create"].run({"email": "lawyer@firm.example", "role": _LAWYER},
+                                    _acc_ctx())
+    check(bool(_inv.get("token")) and bool(_inv.get("invite_id")),
+          f"invites.create returns a raw token ONCE ({_inv})")
+    check(_V["invites.create"].run({"email": "not-an-email", "role": _LAWYER},
+                                   _acc_ctx())["status"] == "REFUSED",
+          "invites.create refuses a malformed email")
+    check(_V["invites.create"].run({"email": "x@firm.example", "role": "superuser"},
+                                   _acc_ctx())["status"] == "REFUSED",
+          "...and a role that is not one of the three")
+    _inv_token = _inv["token"]
+
+    # invites.accept: PUBLIC shape (no ctx.store up front). Role and email come from the
+    # INVITE, never from this request, which supplied neither.
+    _accepted = _V["invites.accept"].run(
+        {"token": _inv_token, "password": "a-strong-enough-password"}, _pub_ctx)
+    check(_accepted.get("status") == "accepted" and _accepted.get("role") == _LAWYER,
+          f"invites.accept creates the account with the ROLE FROM THE INVITE ({_accepted})")
+    _new_actor = _accepted["actor_id"]
+    check(_acc_mem.read_actor(_new_actor)["email"] == "lawyer@firm.example",
+          "...and the actor row exists, carrying the invite's email")
+
+    _replay = _V["invites.accept"].run(
+        {"token": _inv_token, "password": "another-strong-password"}, _pub_ctx)
+    check(_replay.get("code") == "INVALID_INVITE",
+          f"the same invite token cannot be accepted twice ({_replay})")
+    check(_V["invites.accept"].run({"token": "no-such-token", "password": "whatever-123"},
+                                   _pub_ctx).get("code") == "INVALID_INVITE",
+          "an unknown token gets the SAME refusal code as an already-used one")
+
+    _inv2 = _V["invites.create"].run({"email": "second@firm.example", "role": _VIEWER},
+                                     _acc_ctx())
+    _short = _V["invites.accept"].run({"token": _inv2["token"], "password": "short"},
+                                      _pub_ctx)
+    check(_short.get("code") == "BAD_REQUEST", f"a short password is refused ({_short})")
+    check(_acc_auth.find_invite(_hashk(_inv2["token"])).get("accepted_at") is None,
+          "...and a REFUSED accept does not spend the invite")
+
+    # auth.login
+    _login = _V["auth.login"].run(
+        {"email": "lawyer@firm.example", "password": "a-strong-enough-password"}, _pub_ctx)
+    check(_login.get("status") == "ok" and bool(_login.get("token"))
+          and _login.get("role") == _LAWYER,
+          f"auth.login succeeds for the just-accepted account ({_login})")
+    _session_token = _login["token"]
+
+    _wrong = _V["auth.login"].run(
+        {"email": "lawyer@firm.example", "password": "totally the wrong password"}, _pub_ctx)
+    _unknown = _V["auth.login"].run(
+        {"email": "nobody-here@firm.example", "password": "anything-at-all-123"}, _pub_ctx)
+    check(_wrong == _unknown,
+          f"a wrong password and an unknown email return the byte-identical refusal "
+          f"({_wrong})")
+    check(_wrong["code"] == "INVALID_CREDENTIALS", "...named INVALID_CREDENTIALS")
+
+    _disabled_id = str(_uuid_mod.uuid4())
+    _acc_mem.write_actor({"actor_id": _disabled_id, "label": "x", "role": _VIEWER,
+                          "email": "disabled@firm.example",
+                          "password_hash": _hp("a-strong-enough-password", n=1 << 12, r=8, p=1),
+                          "disabled_at": "2026-01-01T00:00:00Z"})
+    _disabled_try = _V["auth.login"].run(
+        {"email": "disabled@firm.example", "password": "a-strong-enough-password"}, _pub_ctx)
+    check(_disabled_try == _wrong,
+          f"a DISABLED account's CORRECT password still returns the generic failure "
+          f"({_disabled_try})")
+
+    # Ambiguous across tenants (Decision 7): two actors, same email, both with a
+    # password. One MemoryBackend instance cannot represent two real tenants at once, so
+    # this proves the handler refuses on COUNT alone; the cross-TENANT case is proved
+    # against a real Postgres auth_find_login, not here.
+    # Written straight into the dict, bypassing write_actor's per-tenant uniqueness
+    # check: MemoryBackend represents one tenant at a time, so this is the only way to
+    # stand in for two REAL tenants that each independently allow this email once.
+    for _aid in (str(_uuid_mod.uuid4()), str(_uuid_mod.uuid4())):
+        _acc_mem.actors[_aid] = {
+            "actor_id": _aid, "label": "amb", "role": _VIEWER,
+            "email": "ambiguous@firm.example",
+            "password_hash": _hp("whatever-password-12", n=1 << 12, r=8, p=1),
+            "disabled_at": None}
+    _amb_try = _V["auth.login"].run(
+        {"email": "ambiguous@firm.example", "password": "whatever-password-12"}, _pub_ctx)
+    check(_amb_try == _wrong,
+          f"an email matching MORE THAN ONE actor refuses generically rather than "
+          f"guessing which one ({_amb_try})")
+
+    # session lifecycle: me, logout
+    _me = _V["auth.me"].run(
+        {}, Context(tenant=_acc_mem.tenant_id, actor=_login["actor_id"], store=_acc_mem))
+    check(_me.get("email") == "lawyer@firm.example" and _me.get("role") == _LAWYER,
+          f"auth.me reports the caller's own identity, role read live from actors ({_me})")
+
+    _sess_ctx = _acc_ctx(credential_hash=_hashk(_session_token))
+    _logout = _V["auth.logout"].run({}, _sess_ctx)
+    check(_logout.get("revoked") is True, f"auth.logout revokes the session ({_logout})")
+    check(_acc_mem.revoke_session(_hashk(_session_token)) is False,
+          "...and the same session cannot be revoked a second time")
+    check(_V["auth.logout"].run({}, _acc_ctx())["code"] == "BAD_REQUEST",
+          "an API-key-shaped principal (no credential_hash) cannot call auth.logout -- "
+          "there is nothing here for it to revoke")
+
+    # lockout
+    for _ in range(_accounts_mod.LOGIN_LOCKOUT_MAX):
+        _V["auth.login"].run(
+            {"email": "lockout-target@firm.example", "password": "wrong-every-time"},
+            _pub_ctx)
+    _locked = _V["auth.login"].run(
+        {"email": "lockout-target@firm.example", "password": "wrong-every-time"}, _pub_ctx)
+    check(_locked.get("code") == "LOCKED_OUT",
+          f"enough failed attempts lock out the email, end to end through the verb "
+          f"({_locked})")
+    check(_locked.get("retry_after") == _accounts_mod.LOGIN_LOCKOUT_WINDOW_SECONDS,
+          "...carrying retry_after")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:

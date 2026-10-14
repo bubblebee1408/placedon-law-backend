@@ -109,6 +109,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `checker/forecast/__init__.py` | R3 inference | Ring 3 forecasting: the maths that lets Themis say something about what is LIKELY, |
 | `checker/forecast/conformal.py` | R3 inference | Forecast as a SET, and abstain when the set holds both outcomes. |
 | `checker/forecast/events.py` | R3 inference | Will this instrument change within h years? Gamma-Poisson, pooled across instruments. |
+| `checker/forecast/matters.py` | R3 inference | Companies Act 2013 matters, from the open judgment METADATA, as a time-to-decision signal. |
 | `checker/forecast/propagate.py` | R3 inference | What-if under uncertainty: the probability that a DETERMINISTIC rule applies when a |
 | `checker/forecast/rates.py` | R3 inference | Rates for small strata: Beta-Binomial partial pooling, and exact Beta intervals. |
 | `checker/forecast/scoring.py` | R3 inference | Scoring forecasts, and combining several: Brier, the Murphy decomposition, log-odds pooling. |
@@ -119,6 +120,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `checker/grounding_policy.py` |  | Strict grounding: what a citation proves, and what it does not. |
 | `checker/instrument_registry.py` | R0 legal core | Which instruments are on record at all, and which of them a person has read. |
 | `checker/interval.py` |  | Honest error bars, in the standard library. |
+| `checker/jurisdiction.py` |  | F3 — which body of law, and whose: Central, a State, or both. Triage, not a finding. |
 | `checker/lattice.py` |  | Ordinal state algebra — one implementation of "the worst thing wins". |
 | `checker/law_versions.py` |  | Which law answered: the corpus by content, and the instruments that amended it. |
 | `checker/lawyer_summary.py` |  | The lawyer summary: a sentence is traced to a span, or it is refused and shown as refused. |
@@ -198,6 +200,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `checker/section_index.py` |  | Look up a Companies Act section by its NUMBER. |
 | `checker/session.py` |  | The ephemeral session: where a client document lives, and where it does not. |
 | `checker/shadow.py` |  | Shadow mode: measure a model's proposals without any of them reaching a user. |
+| `checker/source_picker.py` |  | The pickable sources, and whether each can be switched on — the one authority for @-sources. |
 | `checker/sources/__init__.py` | R2 feeds | Every source behind one interface, and every result carrying the tier that limits it. |
 | `checker/sources/base.py` | R2 feeds | The Source interface, the terms gate a connector loads through, and the payload check. |
 | `checker/sources/case_law.py` | R2 feeds | Case-law search over the open eCourts judgment metadata. LICENSED, and kept apart. |
@@ -237,6 +240,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `agents/intake.py` | R3 inference | Layer 1: which of six fixed tasks a request is, decided in code wherever code can. |
 | `agents/multi_plan.py` | R3 inference | MA1: what a supervisor may propose, and the four reasons code refuses it. |
 | `agents/multi_runner.py` | R3 inference | MA1: run a validated plan. Read-only workers fan out; ONE writer merges. |
+| `agents/multi_supervisor.py` | R3 inference | F2 — the supervisor: one researcher per (body of law, State), run in parallel, synthesised. |
 | `agents/plans.py` | R3 inference | Intent -> a fixed step list, written in code. A model may pick, never invent. |
 | `agents/research_question.py` | R3 inference | research_question, end to end: a question about the Companies Act, answered or refused. |
 | `agents/review_contract.py` | R3 inference | review_contract, end to end: a contract against a company playbook, and what it will not say. |
@@ -251,13 +255,16 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | File | Ring | Purpose |
 |---|---|---|
 | `gateway/__init__.py` | R2 feeds | The gateway: auth, tenancy, audit, and the HTTP surface (PLAN_18 §2.1). |
+| `gateway/accounts.py` | R2 feeds | The business logic behind `auth.login` and `invites.accept`: generic failure, lockout, |
+| `gateway/admission.py` | R2 feeds | Bounded synchronous work, with reserved capacity for status/cancel reads. |
 | `gateway/app.py` | R2 feeds | The HTTP gateway. /v1 is the engine, forwarded and not reinterpreted. |
 | `gateway/audit.py` | R2 feeds | Append-only audit, hash-chained. Metadata only — never document or prompt text. |
 | `gateway/auth.py` | R2 feeds | API keys, stored hashed, resolving to (tenant, actor). |
 | `gateway/circuit.py` | R2 feeds | A per-provider circuit breaker. An open breaker is a TRANSPORT failure, never a finding. |
 | `gateway/cli.py` | R2 feeds | `placedon` -- the third surface, generated from the same verb table as the other two. |
+| `gateway/document_cache.py` | R2 feeds | Bounded, expiring process cache for legacy upload references. |
 | `gateway/envelope.py` | R2 feeds | One answer envelope, versioned, validated against the schema file beside it. |
-| `gateway/filestore.py` | R2 feeds | Where a vault's bytes live. Local today; S3 is BLOCKED by name, not stubbed. |
+| `gateway/filestore.py` | R2 feeds | Where a vault's bytes live. Local and Azure Blob are supported; S3 stays blocked. |
 | `gateway/jobs.py` | R2 feeds | The durable job queue. One contract, two backends, one conformance suite. |
 | `gateway/limits.py` | R2 feeds | Per-tenant rate and request-size limits, shared by both HTTP surfaces. |
 | `gateway/logs.py` | R2 feeds | One JSON object per operational event, and document text cannot get into it. |
@@ -313,6 +320,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/batch1_omissions.py` |  | Batch 1 — ten omission spans against amending Acts we hold. Report, then stop. |
 | `scripts/batch1_review.py` |  | The Batch 1 review screen. Presents proposed decisions; approves nothing. |
 | `scripts/benchmark_refreeze_request.py` |  | What a benchmark re-freeze would change. Writes nothing; asks for a decision. |
+| `scripts/build_companies_act_matters.py` |  | Build the Companies Act 2013 matters dataset from the open judgment METADATA. |
 | `scripts/build_section_index.py` |  | Build the section_number -> section_id index for the Companies Act corpus. |
 | `scripts/cache_report.py` |  | The answer cache's hit rate, and what the number does not include. |
 | `scripts/calibration_report.py` |  | What the lawyer labels can and cannot support, per (task, body of law). |
@@ -321,6 +329,9 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/check_deps.py` |  | Are the pinned dependencies importable? Exit 0 if yes. |
 | `scripts/check_doc_refs.py` |  | Every path an ACTIVE document cites must exist on disk. |
 | `scripts/concurrency_test.py` |  | Fifty at once: nothing runs twice, no tenant reads another's rows, and p95 is recorded. |
+| `scripts/conversation_http_checks.py` |  | Deterministic overload, body-cap and file-race regressions; no model or network calls. |
+| `scripts/conversation_persist_integration.py` |  | R-019 regression: conversation.send must persist on Postgres, not FK-fail. |
+| `scripts/conversation_regression_checks.py` |  | Expose conversation regressions to the repository's counted offline gate. |
 | `scripts/cross_validate_corpus.py` |  | Compare the two renderings of the Companies Act we already hold. |
 | `scripts/date_properties.py` |  | Thousands of seeded random dates over every DerivedDate rule, checking stated properties. |
 | `scripts/demo.py` |  | One command: walk the whole product on synthetic data, and say pass or fail. |
@@ -339,6 +350,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/merge_repo_map.py` |  | Git merge driver for docs/REPO_MAP.md: regenerate, never hand-merge. |
 | `scripts/merge_suite_floors.py` |  | Git merge driver for scripts/suite_floors.json: the MAX floor per suite, never a lower. |
 | `scripts/merge_tasks.py` |  | Git merge driver for research/TASKS.md: a three-way merge, with conflicts unioned by row. |
+| `scripts/migrate.py` |  | A safe migration runner for the gateway's SQL migrations. |
 | `scripts/parse_board_rules.py` |  | Parse the Companies (Meetings of Board and its Powers) Rules, 2014 into addressable records. |
 | `scripts/preflight.py` |  | Check whether this checkout can actually run, and say what to do if not. |
 | `scripts/prove_temporal.py` |  | Prove the temporal engine on three sections, at every boundary date. |
@@ -385,4 +397,4 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/watch_gazette.py` |  | Run the Gazette watcher once: what did the Gazette publish since we last looked? |
 | `scripts/watch_ofac.py` |  | Poll OFAC's SDN list and report what CHANGED since the last trustworthy poll. |
 
-345 modules listed.
+357 modules listed.

@@ -134,8 +134,37 @@ def _test() -> None:
                     "022_grid_budget_state.sql",
                     "023_document_checks.sql",
                     "024_conversation_turns.sql",
-                    "025_draft_inbox_idx.sql"],
+                    "025_draft_inbox_idx.sql",
+                    "026_accounts.sql"],
           f"every migration exists, in order ({files})")
+
+    # 026: sign-in, sessions, and the two (now three) cross-tenant reads auth needs.
+    accounts_sql = (MIGRATIONS / "026_accounts.sql").read_text(encoding="utf-8")
+    for tbl in ("sessions",):
+        check(f"CREATE TABLE IF NOT EXISTS {tbl}" in accounts_sql,
+              f"026 creates {tbl}, idempotently")
+        check(tbl in tenant_scoped() and declares("FORCE", tbl, accounts_sql),
+              f"...and {tbl} is tenant-scoped and FORCE-bound, DERIVED from its tenant_id "
+              f"column -- not from a list someone maintains")
+    check("login_attempts" not in tenant_scoped(),
+          "login_attempts has NO tenant_id column, so the derivation correctly does not "
+          "demand a tenant policy for it -- it is deliberately global")
+    check("CREATE POLICY global_access ON login_attempts USING (true)" in accounts_sql,
+          "...and it still gets an explicit USING (true) policy: 'no row restriction, on "
+          "purpose', not a forgotten one")
+    for fn in ("auth_find_login", "auth_resolve_session", "invite_find_by_token"):
+        anchor = f"CREATE OR REPLACE FUNCTION {fn}"
+        check(anchor in accounts_sql
+              and "SECURITY DEFINER" in accounts_sql.split(anchor)[1][:400],
+              f"{fn} is a SECURITY DEFINER function")
+        check(f"SET search_path = pg_catalog, public" in
+              accounts_sql.split(anchor)[1][:400],
+              f"...with search_path PINNED in the definition, so a caller cannot shadow "
+              f"a table it reads from earlier in its own search_path")
+    check(accounts_sql.count("LANGUAGE sql STABLE SECURITY DEFINER") == 3,
+          "exactly three SECURITY DEFINER function DEFINITIONS -- counted on the actual "
+          "LANGUAGE clause, not on how many times the prose above says the phrase -- a "
+          "count any new one changes on purpose, not by accident")
 
     inbox_sql = (MIGRATIONS / "025_draft_inbox_idx.sql").read_text(encoding="utf-8")
     check("CREATE INDEX IF NOT EXISTS drafts_inbox_idx" in inbox_sql
@@ -319,7 +348,11 @@ def _test() -> None:
                      "vault_documents", "vault_chunks", "vault_tags",
                      # T3 move 10: the Document Check record -- our JUDGEMENT on another
                      # firm's documents, which is advice rather than fact.
-                     "document_checks"},
+                     "document_checks",
+                     # 026. A person's signed-in session. Created and revoked through the
+                     # normal tenant-scoped path once a tenant is known; the only
+                     # tenant-blind read of it is auth_resolve_session (SECURITY DEFINER).
+                     "sessions"},
           f"every other table is tenant-scoped, DERIVED from having a tenant_id ({sorted(scoped)})")
 
     # ── the check this module exists for ────────────────────────────────────
