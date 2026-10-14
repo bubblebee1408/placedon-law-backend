@@ -1624,6 +1624,12 @@ def _bodies_from_ask(result: dict, question: str = "") -> list:
             out.append(ev.body(held.key, held.name, ev.B_NOT_ENGAGED,
                                "the held corpus was not among the picked sources, so it "
                                "was not searched"))
+        elif result.get("code") == "NOTHING_TRACED":
+            # Provisions WERE found; the model just could not trace a sentence to them.
+            # "nothing on point was found" would be false -- that is the NO_EVIDENCE case.
+            out.append(ev.body(held.key, held.name, ev.B_NEED_FACT,
+                               "relevant provisions were found, but no sentence could be "
+                               "traced to them"))
         else:
             out.append(ev.body(held.key, held.name,
                                ev.B_ANSWERED if traced else ev.B_NEED_FACT,
@@ -1730,6 +1736,14 @@ def _envelope_for(task: str, result: dict, *, as_of: str, run_id=None,
         return ev.failed(task=task, as_of=as_of,
                          detail="The request could not finish. Your question is saved; please retry.",
                          run_id=run_id, trace_url=trace)
+    # NO_MODEL (the provider was unavailable) is a could-not-run state, NOT an abstention:
+    # the model never evaluated the law. Render it in the FAILED register (whose definition
+    # includes "a dead provider") with its own message and no bodies, so a cold start can
+    # never read as "nothing held answers this". The code rides the response as a sibling.
+    if result.get("code") == "NO_MODEL":
+        return ev.failed(task=task, as_of=as_of, run_id=run_id, trace_url=trace,
+                         text="The model was unavailable — this is not a finding about the "
+                              "law. Try again.")
 
     bodies = _bodies_for(task, result, question)
     if task == "REVIEW_TABLE" and result.get("grid_id"):
@@ -1762,12 +1776,23 @@ def _envelope_for(task: str, result: dict, *, as_of: str, run_id=None,
                f"below is built from the run's own findings, which is the whole of it."
                if result.get("prose_note") else "")))
     citations, dropped = _citations_for(task, result)
+    # NOTHING_TRACED: relevant provisions WERE retrieved; the model's sentences did not trace
+    # to them, so no generated prose is shown. Surface the provisions themselves as openable
+    # sources (verbatim via citation.get, no model prose) rather than a bare abstention, and
+    # say exactly that -- never "nothing on point was found", which belongs to NO_EVIDENCE.
+    nothing_traced = result.get("code") == "NOTHING_TRACED"
+    if nothing_traced:
+        citations = _provision_citations(result.get("provisions") or [])
+        dropped = []
     # `abstained_reason` before `note`: when `ask` abstains (e.g. the held corpus was not
     # picked) it carries the reason there, and dropping it left the envelope saying "See the
     # findings." over an abstention that read nothing. R-018.
     text = (result.get("answer") or result.get("detail")
             or result.get("abstained_reason")
             or result.get("note") or "See the findings.")
+    if nothing_traced:
+        text = ("Relevant provisions were found, but no sentence could be traced to them, "
+                "so nothing generated is shown.")
     blocks = [{"text": str(text), "citation_ids": [c["id"] for c in citations]}] \
         if str(text).strip() else []
     if dropped:
@@ -1812,6 +1837,40 @@ def _split_provision(source_id: str) -> tuple[str, str]:
         head, _, tail = source_id.partition(", s.")
         return head.strip(), f"s.{tail.strip()}"
     return source_id.strip(), ""
+
+
+def _provision_citations(provisions) -> list:
+    """Retrieved provisions as openable citations, for the NOTHING_TRACED path.
+
+    Each quotes a VERBATIM leading span of its section, so `citation.get` re-reads and serves
+    the whole provision verbatim -- the law itself, with no model prose. A provision the
+    corpus cannot resolve, or one that will not pass `ev.citation`, is skipped rather than
+    shown. The spans are a contiguous slice of `html_to_text`, the exact text `citation.get`
+    re-reads against, so the quote byte-matches and the panel opens.
+    """
+    from gateway import envelope as ev
+    from checker import section_index
+    from checker.sarvam_model import html_to_text
+    out: list = []
+    for name in provisions:
+        instrument, provision = _split_provision(name)
+        if not provision:
+            continue
+        rec = section_index.section_by_number(provision.removeprefix("s."))
+        if not rec:
+            continue
+        quote = html_to_text(rec.get("content") or "")[:200].strip()
+        if not quote:
+            continue
+        try:
+            out.append(ev.citation(
+                id=f"c{len(out) + 1}", instrument=instrument, provision=provision,
+                source=f"corpus/companies_act/{rec.get('section_id')}.json",
+                fetched_at=str(rec.get("fetched_at") or "unrecorded"),
+                sha256=str(rec.get("sha256") or ""), quote=quote, in_force_from=None))
+        except ev.EnvelopeError:
+            continue
+    return out
 
 
 def verify_citation(c: dict) -> tuple[bool, str]:
@@ -2345,6 +2404,11 @@ def _dispatch_conversation(args, ctx, *, cid, text, raw_ids, as_of, task, classi
     # not part of the legal answer, and it matches the shape the `ask` verb already returns.
     if result.get("sources"):
         out["sources"] = result["sources"]
+    # The refusal/failure code rides the RESPONSE, a sibling of the versioned envelope (which
+    # has no field for it) -- so a client can tell NO_MODEL / NOTHING_TRACED / NO_EVIDENCE
+    # apart machine-readably without re-deriving it from prose. Same shape as `sources`.
+    if result.get("code"):
+        out["code"] = result["code"]
     if task == "DRAFT" and result.get("draft_id"):
         out["draft_id"] = result["draft_id"]
         out["version"] = result.get("version")
@@ -5298,6 +5362,52 @@ def _test() -> None:
     check(_ca is not None and _ca["status"] == _ev.B_NOT_ENGAGED,
           f"...and the held body is NOT_ENGAGED (not searched), not NEED_FACT 'nothing "
           f"found' ({_ca and _ca['status']})")
+
+    # ── model-shortfall vs abstention: NO_MODEL / NOTHING_TRACED / NO_EVIDENCE each distinct ──
+    # NO_MODEL (a dead provider) is a could-not-run state, NOT an abstention: FAILED register,
+    # its own message, no bodies -- so a cold start never reads as "nothing held answers this".
+    _nm = _envelope_for("RESEARCH_QUESTION",
+                        {"status": "REFUSED", "code": "NO_MODEL", "detail": "no provider",
+                         "provisions": ["Companies Act 2013, s.173"]},
+                        as_of="2026-10-01", run_id="r", files=[], ctx=_cctx, question="s.173")
+    check(_nm["status"] == _ev.FAILED and not _ev.is_refusal(_nm),
+          f"NO_MODEL renders in the FAILED register, not as an abstention ({_nm['status']})")
+    check("model was unavailable" in _nm["text_blocks"][0]["text"] and _nm["bodies"] == [],
+          "...with its own message and NO body claiming the held law was read")
+
+    # NOTHING_TRACED: provisions found, nothing traced -- say so, and list them as OPENABLE
+    # citations (verbatim via citation.get); never "nothing on point was found".
+    _nt = _envelope_for("RESEARCH_QUESTION",
+                        {"status": "REFUSED", "code": "NOTHING_TRACED",
+                         "provisions": ["Companies Act 2013, s.173"]},
+                        as_of="2026-10-01", run_id="r", files=[],
+                        ctx=_cctx, question="How many board meetings must a company hold?")
+    check(_nt["status"] == _ev.ABSTAINED
+          and "no sentence could be traced" in _nt["text_blocks"][0]["text"],
+          f"NOTHING_TRACED abstains and says the provisions were found but nothing traced "
+          f"({_nt['status']})")
+    check(len(_nt["citations"]) >= 1 and _nt["citations"][0]["provision"] == "s.173"
+          and _nt["citations"][0]["quote"].strip() != "",
+          f"...listing retrieved provisions as openable, verbatim citations "
+          f"({len(_nt['citations'])})")
+    _ntb = next((b for b in _nt["bodies"] if b["body_id"] == "CA2013"), None)
+    check(_ntb is not None and "no sentence could be traced" in _ntb["note"]
+          and "nothing on point was found" not in _ntb["note"],
+          f"...and the held body says found-not-traced, never 'nothing on point was found' "
+          f"({_ntb and _ntb['note'][:40]})")
+
+    # NO_EVIDENCE (nothing retrieved) keeps "nothing on point was found in the held law".
+    _ne = _envelope_for("RESEARCH_QUESTION",
+                        {"status": "REFUSED", "code": "NO_EVIDENCE", "provisions": []},
+                        as_of="2026-10-01", run_id="r", files=[],
+                        ctx=_cctx, question="How many board meetings must a company hold?")
+    _neb = next((b for b in _ne["bodies"] if b["body_id"] == "CA2013"), None)
+    check(_ne["status"] == _ev.ABSTAINED and _neb is not None
+          and "nothing on point was found" in _neb["note"],
+          "NO_EVIDENCE still says nothing on point was found in the held law")
+
+    # (The refusal/failure code riding the conversation RESPONSE as a sibling is exercised by
+    # the live integration test; here the envelope rendering for each code is what matters.)
 
     # The thread, in order, with the envelope stored.
     _g = _V["conversation.get"].run({"conversation_id": _cid}, _cctx)
