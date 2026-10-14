@@ -1,0 +1,56 @@
+# Render Blueprint for the Placedon gateway — the /v2 FastAPI app (gateway/app.py).
+#
+# Prep only. Connect your Render account and deploy by following docs/deploy/RENDER.md.
+# Everything marked `sync: false` is set in the Render dashboard (a secret, or an
+# operator-chosen value), never committed here. No model/vault keys are required to BOOT
+# or to serve case-law search — only `ask` needs a model (see the runbook).
+
+databases:
+  - name: placedon-gateway-db
+    databaseName: placedon
+    # `basic-256mb` is a small always-on paid DB. `free` works for a 30-day trial but
+    # expires and is wiped — not "durable". See the runbook for the cost note.
+    plan: basic-256mb
+    # EU, to match the project's region. `singapore` is closer to the ap-south-1 judgment
+    # data in S3 (lower read latency) — pick one and keep the web service in the SAME region.
+    region: frankfurt
+
+services:
+  - type: web
+    name: placedon-gateway
+    runtime: python
+    region: frankfurt
+    # `starter` is always-on. `free` spins down when idle (cold starts on the first request)
+    # and skips preDeployCommand — so migrations would not run. Not "durable"; see the runbook.
+    plan: starter
+    branch: main
+    # Served WITHOUT a key, on purpose — a liveness probe that needs a credential lies during
+    # the outage you built it for (gateway/app.py).
+    healthCheckPath: /v1/health
+    buildCommand: pip install -r requirements-gateway.txt
+    # Apply migrations before traffic switches to the new deploy. scripts/migrate.py REFUSES
+    # to run as a superuser (RLS and ownership must match prod); Render's managed-DB user is a
+    # non-super owner, which passes the guard. Runs only on paid plans — on `free`, apply once
+    # by hand from a Render Shell (runbook).
+    preDeployCommand: python scripts/migrate.py --url "$PLACEDON_DATABASE_URL"
+    # create_app() is the ASGI factory: given no args it reads the environment
+    # (database_url() + KeyStore.from_service_environment()) and configures itself.
+    startCommand: uvicorn gateway.app:create_app --factory --host 0.0.0.0 --port $PORT
+    envVars:
+      # The managed Postgres connection string, injected by Render.
+      - key: PLACEDON_DATABASE_URL
+        fromDatabase:
+          name: placedon-gateway-db
+          property: connectionString
+      - key: PYTHON_VERSION
+        value: "3.12.7"
+      # The server-to-server service credential (43-char secrets.token_urlsafe(32)).
+      # The SAME value must be the frontend's server-only PLACEDON_GATEWAY_KEY. Never a browser.
+      - key: PLACEDON_GATEWAY_SERVICE_KEY
+        sync: false
+      # The tenant + actor the service key acts as. Seed them once (runbook), paste the UUIDs.
+      # All three gateway vars must be set together or startup fails closed, by design.
+      - key: PLACEDON_GATEWAY_TENANT_ID
+        sync: false
+      - key: PLACEDON_GATEWAY_ACTOR_ID
+        sync: false
