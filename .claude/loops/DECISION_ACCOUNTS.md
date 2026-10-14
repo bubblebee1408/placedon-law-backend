@@ -68,11 +68,20 @@ way the request becomes the same `Principal(tenant_id, actor, key_id, label, rol
 session carries `label="session"` and `key_id` = the session id prefix (never the token). An
 expired/revoked/disabled session raises `AuthError` → 401. API-key behaviour is unchanged.
 
-### Decision 4 — these two functions are the only cross-tenant reads of tenant data
+### Decision 4 — these THREE functions are the only cross-tenant reads of tenant data
+
+**Amended 2026-10-15 (was "two"):** `invites.accept` turned out to have the *same* problem as
+`auth.login` — a raw single-use token arrives before any tenant is known, and `invites` is
+tenant-scoped with FORCE RLS exactly like `actors`, so the token cannot be looked up under RLS.
+It therefore needs its own `SECURITY DEFINER` read, `invite_find_by_token(token_hash text)`,
+with the same discipline as the other two: pinned `search_path`, keyed on `sha256(token)` (256
+bits, nothing to guess), returning only the invite-identity columns needed to accept it and no
+tenant content. So there are **three** tenant-blind reads — `auth_find_login`,
+`auth_resolve_session`, `invite_find_by_token` — and no others.
 
 Everything else stays tenant-scoped under the existing RLS: creating a session (after
 `auth_find_login` yields the tenant, set `app.tenant_id` and insert normally), logout, `me`,
-invites.create/accept, and all user management run with a known tenant.
+invites.create (the inviter's tenant is known), and all user management run with a known tenant.
 
 ### Decision 5 — the two new tables
 

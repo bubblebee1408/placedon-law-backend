@@ -38,8 +38,9 @@ __all__ = ["GENERIC_LOGIN_FAILURE_CODE", "LOGIN_LOCKOUT_MAX", "LOGIN_LOCKOUT_WIN
 LOGIN_LOCKOUT_MAX = 5
 LOGIN_LOCKOUT_WINDOW_SECONDS = 15 * 60
 
-# Not specified by the design doc; a reasonable default, easy to change in one place.
-SESSION_TTL_SECONDS = 24 * 60 * 60
+# Session lifetime: 7 days (founder's call 2026-10-15 -- longer, so testing doesn't force a
+# re-sign-in mid-flow). Easy to change in one place. Invites stay at 7 days.
+SESSION_TTL_SECONDS = 7 * 24 * 60 * 60
 INVITE_TTL_SECONDS = 7 * 24 * 60 * 60
 
 GENERIC_LOGIN_FAILURE_CODE = "INVALID_CREDENTIALS"
