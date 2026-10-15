@@ -228,6 +228,10 @@ suites=(
   checker/reranker.py
   checker/ablation.py
   checker/dense_index.py
+  # The runtime half of the semantic-retrieval activation: ranks a precomputed Voyage
+  # index against a query, offline by construction on the corpus side. Keyless/no-network
+  # in the gate -- it injects its own query vector, same discipline as voyage_model.py.
+  checker/voyage_dense.py
   checker/ollama_runner.py
   checker/backtest.py
   checker/annotation.py
@@ -307,6 +311,11 @@ extra+=("checker/source_picker.py --test")
 extra+=("checker/forecast/matters.py --test")
 extra+=("scripts/build_companies_act_matters.py --test")
 extra+=("scripts/build_judgment_index.py --test")
+# Semantic retrieval activation, step 2: the OFFLINE builder for the Voyage dense
+# index checker/voyage_dense.py reads at runtime. --test proves the batching and
+# the corpus-row -> index-record mapping on a fixture transport; --live (not in the
+# gate) makes the real Voyage call and needs VOYAGE_API_KEY.
+extra+=("scripts/build_voyage_index.py --test")
 extra+=("scripts/suite_floors.py --test")
 # The git merge drivers that resolve the three files two branches always churn on.
 extra+=("scripts/merge_suite_floors.py --test" "scripts/merge_tasks.py --test" "scripts/merge_repo_map.py --test")
