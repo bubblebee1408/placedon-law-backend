@@ -185,6 +185,7 @@
       "requires": "sentence_transformers",
       "unavailable_floor": 3
     },
+    "checker/resource_route.py": 32,
     "checker/resubmission.py": 13,
     "checker/retrieval_eval.py": 11,
     "checker/retrieval_metrics.py": 25,
@@ -272,7 +273,7 @@
     "gateway/schema.py": 94,
     "gateway/screens.py": 125,
     "gateway/store.py": 260,
-    "gateway/verbs.py": 580,
+    "gateway/verbs.py": 592,
     "gateway/worker.py": 47,
     "scripts/acquire_cuad.py": 14,
     "scripts/acquire_rules.py": 38,

@@ -440,6 +440,11 @@ extra+=("checker/sources/connector_base.py --test"
 extra+=("checker/sources/judgments_open.py --test")
 extra+=("checker/sources/judgment_index.py --test")
 extra+=("checker/sources/case_law.py --test")
+# The RESOURCE router: a conservative, deterministic, no-model text classifier that decides
+# whether a research question reads against the held statute or judgment discovery. Pure
+# text in, a Decision out -- no index, no network -- so it gates here like any other
+# keyless module.
+extra+=("checker/resource_route.py --test")
 extra+=("checker/sources/company_facts.py --test"
         "checker/sources/mca_fixture.py --test"
         "checker/sources/mca_master_data.py --test")
