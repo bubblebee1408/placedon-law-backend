@@ -259,7 +259,15 @@ def narrate(prompt: str, *, origin, model: str = DEFAULT_DEPLOYMENT, budget=None
     if budget is not None and not budget.can_make_call().allowed:
         raise ModelUnavailable("budget exhausted; no call was made")
 
-    deployment = model.removeprefix(PREFIX)
+    # AZURE_AI_DEPLOYMENT, if set, overrides whatever deployment router.py asked for.
+    # router.py's preference table names a deployment by what it MEASURED, not by what
+    # exists on any one Azure resource -- and `AZURE_LLAMA_70B` 404s on an account that was
+    # never granted it. Rather than hardcode a different name into that table (which would
+    # also have to carry the pricing and bake-off notes keyed on the old one), an operator
+    # states which deployment actually exists here, and every call targets it regardless of
+    # what was routed. router.py's labels, and everything priced or measured against them,
+    # are untouched.
+    deployment = os.getenv("AZURE_AI_DEPLOYMENT") or model.removeprefix(PREFIX)
     if timeout is None:
         timeout = default_timeout(deployment)
     # NARRATION_BUDGET for every deployment, reasoning ones included, and that is a
@@ -422,6 +430,26 @@ def _test() -> None:
           "exactly what it asked before")
     sent.clear()
     narrate(cleared, origin=_o, _transport=spy)
+
+    # ── AZURE_AI_DEPLOYMENT overrides the routed deployment name ────────────
+    held_dep = os.environ.pop("AZURE_AI_DEPLOYMENT", None)
+    try:
+        sent.clear()
+        narrate(cleared, origin=_o, model="llama-3-3-70b", _transport=spy)
+        check(sent[0][0] == "llama-3-3-70b",
+              "with no override set, the routed deployment name is sent, unchanged")
+        os.environ["AZURE_AI_DEPLOYMENT"] = "gpt-4o"
+        sent.clear()
+        narrate(cleared, origin=_o, model="llama-3-3-70b", _transport=spy)
+        check(sent[0][0] == "gpt-4o",
+              "...and with it set, the call targets THAT deployment regardless of what "
+              "was routed -- the live account, not the preference table, says which "
+              "deployments actually exist")
+    finally:
+        os.environ.pop("AZURE_AI_DEPLOYMENT", None)
+        if held_dep is not None:
+            os.environ["AZURE_AI_DEPLOYMENT"] = held_dep
+
     # ── the region guard: a client document may not go to an unconfirmed region ─
     import os as _os
     held_region = _os.environ.pop(ACCEPT_REGION_ENV, None)
