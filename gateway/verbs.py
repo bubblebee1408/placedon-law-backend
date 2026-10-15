@@ -216,6 +216,17 @@ def _ask(args: dict, ctx: Context) -> dict:
     q = (args.get("question") or "").strip()
     if not q:
         return _refuse("BAD_REQUEST", "question is required")
+
+    # The RESOURCE router (not `checker/router.py`, which picks the MODEL). A conservative,
+    # deterministic, no-model-call text classifier: CASE routes to judgment discovery
+    # instead of the held statute; STATUTE and UNSURE fall straight through to the
+    # unchanged path below -- UNSURE is treated exactly like STATUTE on purpose, so an
+    # ambiguous query never silently loses the statute search it would otherwise get.
+    from checker import resource_route
+    _route = resource_route.classify(q)
+    if _route.resource == resource_route.CASE:
+        return _ask_case(q, _route, ctx)
+
     user_facts, refusal = _company_facts(args.get("company_facts"))
     if refusal:
         return refusal
@@ -345,6 +356,64 @@ def _ask(args: dict, ctx: Context) -> dict:
     d["sources"] = _report
     _cache_store(cache_key, q, "RESEARCH_QUESTION", args.get("sources"), d, ctx)
     return d
+
+
+def _ask_case(question: str, route, ctx: Context) -> dict:
+    """A case-shaped question (`resource_route.CASE`), answered from judgment DISCOVERY
+    instead of the held statute.
+
+    Reuses `_research_cases` wholesale -- same index, same terms gate, same tier-LICENSED
+    rows -- rather than a second call into `judgment_index.discover`, so there is exactly
+    one place that decides which judgment sources are permitted. The shape returned here
+    matches `_ask`'s own success/abstain shape (`status`/`answer`/`citations`/`run_id`/
+    `sources`) so it flows through `_envelope_for` unchanged, plus two additive fields
+    (`judgments`, `resource`) nothing downstream reads yet.
+
+    Tier LICENSED (CLAUDE.md): a judgment may SUPPORT, never VERIFY. So this never builds a
+    `citations` entry (every one needs a byte-matched `quote`, which would mean fetching and
+    quoting the PDF here -- the verbatim read belongs to `judgments_open.OpenJudgments` on
+    OPEN, not to this list) and never touches the obligation register. `resource="case"`
+    tells `_bodies_from_ask` the held corpus was never searched, not that it was searched
+    and found nothing -- the distinction R-018 exists to keep honest.
+    """
+    found = _research_cases({"query": question}, ctx)
+    judgments = found.get("judgments") or []
+    status = "PARTIAL" if judgments else "ABSTAINED"
+    rid = _persist_run(
+        ctx, intent="research_question", status=status,
+        steps=[{"capability": "intake", "status": "ANSWERED"},
+               {"capability": "case_discovery", "status": status}],
+        propositions=[])
+    sources = {"picked": ["held"], "searched": [],
+               "report": [{"id": "held", "tier": "HELD", "status": "available",
+                          "outcome": "NOT_SEARCHED", "hits": 0,
+                          "reason": ("the resource router read this as a case-law lookup "
+                                     f"({route.rule}), so the held statute was not "
+                                     "searched")}],
+               "judgments": judgments, "not_searched": found.get("not_searched") or [],
+               "note": found.get("note") or ""}
+    if judgments:
+        lines = [
+            f"- {j['title']} ({j.get('court') or 'Supreme Court'}, {j['year']}) -- "
+            f"parties: {', '.join(j.get('parties') or []) or 'not recorded'}."
+            for j in judgments]
+        answer = (
+            f"Found {len(judgments)} judgment(s) by party/case name that may support this "
+            f"(tier LICENSED: supporting authority, never a verified statutory answer, and "
+            f"no obligation rests on it):\n" + "\n".join(lines) +
+            "\nOpen one to read a verbatim, byte-quoted passage -- nothing above is a "
+            "citation.")
+    else:
+        answer = (
+            "No judgment matched this by party, case title, or year. We searched the "
+            "judgment index (the licensed Supreme Court / High Court eCourts metadata, "
+            "not the Companies Act), and this is not a finding about the law: a case we "
+            "did not find is not a case that does not exist. Discovery matches on party "
+            "and case names, not legal topic -- naming a party, or the year, is most "
+            "likely to find it.")
+    return {"status": status, "answer": answer, "citations": [], "judgments": judgments,
+            "resource": "case", "resource_rule": route.rule, "run_id": rid,
+            "sources": sources}
 
 
 def _vault_hits(question: str, ctx: Context) -> int:
@@ -1631,6 +1700,17 @@ def _bodies_from_ask(result: dict, question: str = "") -> list:
         out.append(ev.body(held.key, held.name, ev.B_NOT_ENGAGED,
                            "this question is about another body of law, so the Companies "
                            "Act was not engaged"))
+    elif result.get("resource") == "case":
+        # `_ask_case` never searches the held corpus: the resource router sent this
+        # question to judgment discovery instead. NEED_FACT's wording ("nothing on point
+        # was found") would claim a search that never ran -- the exact lie R-018 was fixed
+        # to stop -- so this is its own NOT_ENGAGED branch rather than reusing the
+        # "not among the picked sources" wording below, which is about a caller's @-pick
+        # and would misname what actually happened here.
+        out.append(ev.body(held.key, held.name, ev.B_NOT_ENGAGED,
+                           "this question was routed to case-law discovery (a party, case "
+                           "name, citation, or 'vs'/'v.'/'judgment' was recognised), not "
+                           "the held statute, so the Companies Act was not searched"))
     else:
         _searched = (result.get("sources") or {}).get("searched")
         if _searched is not None and "held" not in _searched:
@@ -5974,6 +6054,72 @@ def _test() -> None:
           "research.cases returns no quote and no obligation -- authorities, not findings")
     check(by_name()["research.cases"].run({"query": "   "}, Context()).get("code") == "BAD_REQUEST",
           "research.cases refuses an empty query rather than searching for nothing")
+
+    # ══ resource router: a CASE-shaped question reaches judgment discovery ══════════════
+    # BEFORE this change, `ask` only ever read the held statute: a case-shaped question
+    # found no provision on point and abstained with "no resource", even though the same
+    # judgment index `research.cases` just used above already holds the answer.
+    _case_q = "find the Tata Sons Cyrus Mistry case"
+    _ca = by_name()["ask"].run({"question": _case_q}, Context())
+    check(_ca.get("resource") == "case" and _ca.get("resource_rule")
+          == "case_word+named_party_or_year",
+          f"a case-shaped question is routed by the resource router, not the model router "
+          f"({_ca.get('resource')}/{_ca.get('resource_rule')})")
+    check(_ca["status"] == "PARTIAL" and bool(_ca["judgments"]),
+          f"...and the ask verb that used to abstain now returns the judgment(s) it found "
+          f"({_ca['status']}, {len(_ca['judgments'])} hit(s))")
+    check(any("CYRUS" in (j.get("title", "") + " ".join(j.get("parties", []))).upper()
+              for j in _ca["judgments"]),
+          "...and it is the Tata/Cyrus judgment, from the same committed index "
+          "research.cases reads")
+    check(_ca["citations"] == [],
+          "...with NO citation: a citation needs a byte-matched quote, and the verbatim "
+          "read belongs to OpenJudgments on open, never to discovery")
+    check(all(j.get("tier") == "LICENSED" for j in _ca["judgments"])
+          and "never a verified statutory answer" in _ca["answer"]
+          and "no obligation" in _ca["answer"],
+          "...labelled LICENSED and, in words, supporting only -- never VERIFIED and never "
+          "an obligation")
+
+    # The honest empty: a case-shaped query that matches no judgment says what was
+    # searched, not the generic statute refusal.
+    _ca_empty = by_name()["ask"].run(
+        {"question": "Zqphoenix Vwbobcat v. Mxyzptlk Quorlax"}, Context())
+    check(_ca_empty.get("resource") == "case" and _ca_empty["status"] == "ABSTAINED"
+          and _ca_empty["judgments"] == [],
+          f"a case query matching nothing is ABSTAINED, honestly, not PARTIAL with nothing "
+          f"({_ca_empty['status']})")
+    check("judgment index" in _ca_empty["answer"]
+          and "not a finding about the law" in _ca_empty["answer"],
+          f"...and says WHAT was searched (the judgment index), never the generic statute "
+          f"refusal ({_ca_empty['answer'][:70]!r})")
+
+    # A plain statute question is completely unaffected: no `resource` key, same path.
+    _stat = by_name()["ask"].run({"question": "What is the quorum for a meeting of the "
+                                              "Board?"}, Context())
+    check("resource" not in _stat, "a statute question carries no `resource` key at all -- "
+                                    "the existing held-corpus path is untouched")
+
+    # ── through conversation.send: the envelope says the Act was not engaged, honestly ──
+    _conv_store = _MB()
+    _conv = by_name()["conversation.send"].run(
+        {"text": _case_q}, Context(store=_conv_store, clock=lambda: "2026-10-01T10:00:00+05:30"))
+    check(_conv["classification"]["task"] == "RESEARCH_QUESTION",
+          f"intake still classifies a case-shaped question as RESEARCH_QUESTION -- the "
+          f"resource router, not the task classifier, is what changed "
+          f"({_conv['classification']['task']})")
+    _cenv = _conv["envelope"]
+    check(_cenv["status"] == "PARTIAL" and _cenv["citations"] == [],
+          f"conversation.send carries the judgment(s) through as PARTIAL, no citations "
+          f"({_cenv['status']})")
+    _cbodies = {b["body_id"]: b for b in _cenv["bodies"]}
+    check(_cbodies.get("CA2013", {}).get("status") == "NOT_ENGAGED"
+          and "case-law discovery" in _cbodies["CA2013"]["note"],
+          f"...and the Companies Act body says it was NOT searched, not that it was "
+          f"searched and found nothing (R-018) ({_cbodies.get('CA2013')})")
+    check(_conv.get("sources", {}).get("judgments"),
+          "...and the judgment hits ride the conversation RESPONSE's sources sibling, same "
+          "as any other ask result")
 
     # ── Lane B: forecast.summary never serves a number from SYNTHETIC data ──────────────
     # The committed dataset is synthetic (illustrative, not the licensed open data), so the

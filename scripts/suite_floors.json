@@ -185,6 +185,7 @@
       "requires": "sentence_transformers",
       "unavailable_floor": 3
     },
+    "checker/resource_route.py": 32,
     "checker/resubmission.py": 13,
     "checker/retrieval_eval.py": 11,
     "checker/retrieval_metrics.py": 25,
