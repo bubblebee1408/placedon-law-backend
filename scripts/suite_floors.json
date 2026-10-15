@@ -130,6 +130,7 @@
     "checker/grounding_policy.py": 13,
     "checker/instrument_registry.py": 15,
     "checker/interval.py": 18,
+    "checker/judgment_dense.py": 18,
     "checker/jurisdiction.py": 12,
     "checker/lattice.py": 15,
     "checker/law_versions.py": 28,

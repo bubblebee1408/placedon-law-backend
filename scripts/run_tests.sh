@@ -232,6 +232,9 @@ suites=(
   # index against a query, offline by construction on the corpus side. Keyless/no-network
   # in the gate -- it injects its own query vector, same discipline as voyage_model.py.
   checker/voyage_dense.py
+  # Topic-based judgment search: the judgment-body mirror of voyage_dense.py above, ranked
+  # by s3_key identity rather than a section number. Same keyless/no-network discipline.
+  checker/judgment_dense.py
   checker/ollama_runner.py
   checker/backtest.py
   checker/annotation.py
