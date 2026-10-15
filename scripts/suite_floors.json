@@ -242,6 +242,7 @@
     "checker/timeline.py": 10,
     "checker/trust.py": 16,
     "checker/vault_search.py": 25,
+    "checker/voyage_dense.py": 18,
     "checker/voyage_model.py": 85,
     "checker/witness_span.py": 16,
     "eval/goldset/__init__.py": 19,

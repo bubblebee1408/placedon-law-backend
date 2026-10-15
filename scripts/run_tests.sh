@@ -228,6 +228,10 @@ suites=(
   checker/reranker.py
   checker/ablation.py
   checker/dense_index.py
+  # The runtime half of the semantic-retrieval activation: ranks a precomputed Voyage
+  # index against a query, offline by construction on the corpus side. Keyless/no-network
+  # in the gate -- it injects its own query vector, same discipline as voyage_model.py.
+  checker/voyage_dense.py
   checker/ollama_runner.py
   checker/backtest.py
   checker/annotation.py
