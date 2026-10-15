@@ -288,6 +288,7 @@
     "scripts/benchmark_refreeze_request.py": 7,
     "scripts/build_companies_act_matters.py": 3,
     "scripts/build_judgment_index.py": 10,
+    "scripts/build_voyage_index.py": 13,
     "scripts/cache_report.py": 6,
     "scripts/calibration_report.py": 9,
     "scripts/cascade_report.py": 34,
