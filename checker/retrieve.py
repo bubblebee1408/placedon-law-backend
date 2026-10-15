@@ -29,11 +29,13 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from checker import admission as adm
+from checker import section_index as _si
+from checker import voyage_dense
 from checker.evidence_pack import EvidencePack, build_pack
 from checker.legal_retrieval import Hit, names_a_provision, resolve
 from checker.text_search import search
 
-__all__ = ["retrieve", "ROUTE_EXACT", "ROUTE_SEARCH", "ROUTE_ABSTAIN",
+__all__ = ["retrieve", "hybrid_search", "ROUTE_EXACT", "ROUTE_SEARCH", "ROUTE_ABSTAIN",
            "HELD_NOT_ADMITTED", "CITATION_UNRESOLVED", "NOTHING_RETRIEVED",
            "ABSTAIN_REASONS",
            "MODE_MODEL", "MODE_REVIEW"]
@@ -125,6 +127,95 @@ def _withheld_rules(query: str) -> list[str]:
     return out
 
 
+# ── hybrid (lexical + dense) search for the no-citation path ──────────────────
+#
+# Semantic retrieval activation. Lexical alone is `text_search.search` above -- a
+# match of the question's WORDS against the corpus. `voyage_dense.search` finds the
+# same corpus by MEANING, via a precomputed Voyage embedding index
+# (scripts/build_voyage_index.py). The two are fused by Reciprocal Rank Fusion --
+# the k=60 published constant `checker/fusion.py` already measured this on (BM25 +
+# MiniLM dense): a lexical score and a cosine are not on the same scale, and fusing
+# RANKS rather than scores never invents a comparability that is not there. This is
+# a separate, smaller fusion than `checker.fusion`/`checker.reranker` on purpose --
+# those two are wired to `corpus_retrieval` (a different BM25) and `dense_index`
+# (local MiniLM), measured against the frozen 70-case eval as an experiment that is
+# "judged, not adopted" by its own docstring. Routing Voyage's numbers through that
+# model would silently swap retrievers out from under an unrelated, already-measured
+# comparison. This fusion is purpose-built for the pair this task activates.
+#
+# Fail-safe by construction: when the dense index or a Voyage key is unavailable --
+# every environment until `--live` builds the index with a key -- `hybrid_search`
+# degrades EXACTLY to `text_search.search` alone. That is this module's entire
+# behaviour before this function existed, so nothing already shipped regresses.
+_RRF_K = 60
+_DENSE_POOL = 10
+
+
+def _rank_map(numbers: list[str]) -> dict[str, int]:
+    """Best-first section numbers -> {number: 1-based rank}, first occurrence wins."""
+    ranks: dict[str, int] = {}
+    for i, n in enumerate(numbers):
+        ranks.setdefault(n, i + 1)
+    return ranks
+
+
+def _row_for_number(number: str, lexical_by_number: dict[str, dict]) -> dict | None:
+    """A row for one corpus section number: the lexical hit if there is one, else
+    built fresh from the section index for a dense-only hit.
+
+    Returns None for a number the corpus does not actually hold. A dense "hit" that
+    is not a real corpus ID must never be served -- CLAUDE.md forbids fabricating a
+    provision, and this is the one place a bare number from outside the corpus could
+    otherwise slip into an evidence pack.
+    """
+    if number in lexical_by_number:
+        return lexical_by_number[number]
+    rec = _si.section_by_number(number)
+    if rec is None:
+        return None
+    return {"section_number": number, "section_id": str(rec["section_id"]),
+            "title": rec["title"], "score": 0.0, "route": "dense", "matched": "",
+            "defects": ()}
+
+
+def hybrid_search(query: str, top_k: int) -> list[dict]:
+    """Lexical UNION dense, fused by reciprocal rank -- the identical row shape
+    `text_search.search()` returns, so nothing downstream of `retrieve()` can tell
+    which retriever found a given row.
+
+    Additive: lexical results are never removed for a dense disagreement, and a
+    section only dense finds is added, never substituted for one lexical already
+    found. Falls back to lexical alone whenever dense retrieval cannot run.
+    """
+    pool = max(top_k, _DENSE_POOL)
+    lexical_rows = search(query, top_k=pool)
+    dense_ok, _why = voyage_dense.available()
+    if not dense_ok:
+        return lexical_rows[:top_k]
+    try:
+        dense_hits = voyage_dense.search(query, top_k=_DENSE_POOL)
+    except voyage_dense.VoyageDenseUnavailable:
+        return lexical_rows[:top_k]           # fail-safe: never worse than lexical alone
+
+    lexical_by_number = {r["section_number"]: r for r in lexical_rows}
+    rank_maps = (_rank_map([r["section_number"] for r in lexical_rows]),
+                 _rank_map([number for number, _title, _score in dense_hits]))
+    fused: dict[str, float] = {}
+    for ranks in rank_maps:
+        for number, rank in ranks.items():
+            fused[number] = fused.get(number, 0.0) + 1.0 / (_RRF_K + rank)
+    order = sorted(fused, key=lambda n: -fused[n])
+
+    rows: list[dict] = []
+    for number in order:
+        row = _row_for_number(number, lexical_by_number)
+        if row is not None:
+            rows.append(row)
+        if len(rows) >= top_k:
+            break
+    return rows
+
+
 def _rows(hits: list[Hit]) -> list[dict]:
     return [{"section_number": h.ref.number, "section_id": h.section_id,
              "title": h.title, "defects": h.defects}
@@ -196,7 +287,7 @@ def retrieve(query: str, *, top_k: int = SEARCH_TOP_K,
 
     from checker.text_search import expand_query
     _, expansions = expand_query(query)
-    found = search(query, top_k=top_k)
+    found = hybrid_search(query, top_k)
     rows, blocked = _admission_filter(found, mode)
     blocked = blocked + rule_notices
     # Two different abstains hide behind this branch, and they are not the same fact:
@@ -328,6 +419,83 @@ def _test() -> None:
     check("INSUFFICIENT EVIDENCE" in block, "the prompt block names the abstention answer")
     check("bare section number is not an identity" in block.lower(),
           "the prompt block forbids bare-number citation")
+
+    # ── semantic retrieval activation: hybrid_search fuses lexical UNION dense ──
+    from unittest import mock
+
+    # 1. Fail-safe default. This gate strips VOYAGE_API_KEY and ships no prebuilt
+    #    index, so dense is unavailable here -- and hybrid_search must degrade to
+    #    EXACTLY lexical search. Every check above this line already exercised this
+    #    path implicitly (hybrid_search is what retrieve() now calls); this makes the
+    #    guarantee explicit rather than incidental.
+    dense_ok, _why = voyage_dense.available()
+    check(not dense_ok, "dense retrieval is unavailable by default in this gate (no key, no index)")
+    for q in ("related party transactions", "loans to directors", "quorum for board meetings"):
+        check(hybrid_search(q, SEARCH_TOP_K) == search(q, top_k=SEARCH_TOP_K),
+              f"with dense unavailable, hybrid_search({q!r}) is IDENTICAL to lexical search alone "
+              f"-- never worse than before this activation")
+
+    # 2. The concrete case this activation exists for: a question phrased in words
+    #    lexical retrieval cannot reach AT ALL. text_search.py's own docstring names
+    #    this exact limit -- "can a director dial in remotely" has no lexical hook
+    #    once "attend" is swapped out, while the Act governs it at s.173 ("participation
+    #    ... through video conferencing"). Confirmed empty today, by the real module,
+    #    before any mock is installed.
+    REMOTE_Q = "can a director dial in remotely to a board meeting"
+    check(search(REMOTE_Q, top_k=5) == [],
+          "lexical retrieval alone reaches nothing for this phrasing (confirmed live)")
+
+    def fake_available(path=voyage_dense.INDEX_PATH):
+        return True, "stub index for this test"
+
+    def fake_dense_search(q, top_k=5, **kw):
+        # A real cosine ranking would find s.173 by MEANING; stubbed here because
+        # no Voyage key is configured in this gate (check 1 above proves that).
+        return [("173", "Meetings of Board", 0.81)] if q == REMOTE_Q else []
+
+    with mock.patch.object(voyage_dense, "available", side_effect=fake_available), \
+         mock.patch.object(voyage_dense, "search", side_effect=fake_dense_search):
+        hyb = hybrid_search(REMOTE_Q, SEARCH_TOP_K)
+        check([r["section_number"] for r in hyb] == ["173"],
+              f"hybrid_search reaches s.173 where lexical alone reaches nothing "
+              f"({[r['section_number'] for r in hyb]})")
+        check(bool(hyb[0]["section_id"]) and hyb[0]["title"] == "Meetings of Board",
+              "the dense-only row carries real corpus identity (section_id, title) -- it is "
+              "built from the section index, not a stub")
+
+        # End to end through retrieve() -- the same contract ask.py reads.
+        pack, route = retrieve(REMOTE_Q, mode=MODE_MODEL)
+        check(route == ROUTE_SEARCH, "the hybrid route is still reported as 'search' (unchanged)")
+        check("ACT:COMPANIES_ACT_2013:S173" in [p.key for p in pack.usable],
+              "the pack built from a dense-only row carries s.173 as usable evidence")
+
+    # 3. The invariant this activation must never break: a dense "hit" naming a
+    #    section the corpus does not actually hold is dropped, never fabricated into
+    #    evidence (CLAUDE.md: never fabricate a provision).
+    def fake_dense_bogus(q, top_k=5, **kw):
+        return [("999999-no-such-section", "invented", 0.99), ("185", "Loan to directors, etc.", 0.5)]
+
+    with mock.patch.object(voyage_dense, "available", side_effect=fake_available), \
+         mock.patch.object(voyage_dense, "search", side_effect=fake_dense_bogus):
+        hyb = hybrid_search("loans to directors", SEARCH_TOP_K)
+        nums = [r["section_number"] for r in hyb]
+        check("999999-no-such-section" not in nums,
+              f"a dense hit naming a section the corpus does not hold is silently dropped, "
+              f"never served as evidence ({nums})")
+        check("185" in nums, "a genuine dense hit for a real section is still served")
+
+    # 4. Additive, not substitutive: a section lexical already found at rank 1 is not
+    #    displaced just because dense (stubbed) disagrees and finds something else.
+    def fake_dense_disjoint(q, top_k=5, **kw):
+        return [("173", "Meetings of Board", 0.4)]      # unrelated to this query's lexical hit
+
+    with mock.patch.object(voyage_dense, "available", side_effect=fake_available), \
+         mock.patch.object(voyage_dense, "search", side_effect=fake_dense_disjoint):
+        hyb = hybrid_search("related party transactions", top_k=5)
+        nums = [r["section_number"] for r in hyb]
+        check("188" in nums,
+              f"the lexical hit for 'related party transactions' (s.188) survives fusion even "
+              f"though dense (stubbed) ranks something unrelated ({nums})")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:

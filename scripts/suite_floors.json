@@ -189,7 +189,7 @@
     "checker/resubmission.py": 13,
     "checker/retrieval_eval.py": 11,
     "checker/retrieval_metrics.py": 25,
-    "checker/retrieve.py": 34,
+    "checker/retrieve.py": 46,
     "checker/review_grid.py": 70,
     "checker/review_queue.py": 18,
     "checker/review_record.py": 19,
