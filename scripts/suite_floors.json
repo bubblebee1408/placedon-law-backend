@@ -225,7 +225,7 @@
     "checker/sources/evidence.py": 23,
     "checker/sources/held.py": 18,
     "checker/sources/indiankanoon.py": 20,
-    "checker/sources/judgment_index.py": 18,
+    "checker/sources/judgment_index.py": 28,
     "checker/sources/judgments_open.py": 23,
     "checker/sources/mca_fixture.py": 16,
     "checker/sources/mca_master_data.py": 55,

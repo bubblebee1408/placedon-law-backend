@@ -162,10 +162,84 @@ def indexed_source_ids(index=None) -> frozenset:
     return frozenset(r.source_id for r in (default_index() if index is None else index))
 
 
+# ── topic (dense) fusion ──────────────────────────────────────────────────────────────────
+# `search_index` above matches a query's WORDS against PARTY/TITLE/COURT metadata only -- the
+# dataset carries no topic field, so "oppression and mismanagement cases" or "cases on
+# related-party transactions" return an honest [] even when judgments on exactly that topic
+# sit in the index. `checker/judgment_dense.py` mirrors #99's `checker/voyage_dense.py` for
+# judgments: a precomputed Voyage index over judgment BODIES, ranked by meaning. The two
+# lists are fused by Reciprocal Rank Fusion, mirroring `checker/retrieve.py:hybrid_search`
+# exactly (same k=60 constant): a metadata rank and a cosine are not on the same scale, and
+# fusing RANKS rather than scores never invents a comparability that is not there.
+#
+# Fail-safe by construction, the same shape as hybrid_search: when the judgment dense index
+# or a Voyage key is unavailable -- every environment until a --live build supplies both --
+# `discover()` degrades EXACTLY to `search_index` alone, so nothing already shipped regresses.
+# And a dense hit is never served unless its s3_key is ALSO a real row of THIS index -- a
+# dense hit naming a judgment the index does not hold is dropped, mirroring
+# `checker/retrieve.py`'s `_row_for_number` guard against fabricating a provision.
+_RRF_K = 60
+_DENSE_POOL = 20
+
+
+def _rank_map(keys: list[str]) -> dict[str, int]:
+    """Best-first s3_keys -> {s3_key: 1-based rank}, first occurrence wins."""
+    ranks: dict[str, int] = {}
+    for i, k in enumerate(keys):
+        ranks.setdefault(k, i + 1)
+    return ranks
+
+
+def _dense_topic_hits(query: str, *, top_k: int) -> list[tuple[str, str, float]]:
+    """(s3_key, title, cosine) the dense judgment index ranks for this query, or [] when it
+    cannot run. Never raises: a caller already has the metadata list and must fall back to
+    it exactly -- the same discipline as `checker/retrieve.py`'s `hybrid_search`."""
+    from checker import judgment_dense
+    ok, _why = judgment_dense.available()
+    if not ok:
+        return []
+    try:
+        return judgment_dense.search(query, top_k=top_k)
+    except judgment_dense.JudgmentDenseUnavailable:
+        return []
+
+
 def discover(query: str, *, limit: int = 10, index=None) -> list:
-    """Discovery hits for a generic query. Reads the LOCAL index only (no network); the
-    verbatim quote is fetched on OPEN by `judgments_open.OpenJudgments`. Support, not VERIFIED."""
-    return search_index(query, default_index() if index is None else index, limit=limit)
+    """Discovery hits for a generic query: metadata (party/title) UNION topic (dense), fused.
+
+    Reads the LOCAL metadata index for the party/title half (no network) and a LOCAL
+    precomputed Voyage index for the topic half (no network -- only the query, if any, is
+    embedded live). The verbatim quote is still fetched on OPEN by
+    `judgments_open.OpenJudgments`. Support, not VERIFIED.
+
+    Fail-safe: when the dense index or a Voyage key is unavailable -- true until a --live
+    build supplies both -- this is IDENTICAL to metadata-only discovery, never worse.
+    """
+    idx = default_index() if index is None else index
+    pool = max(limit, _DENSE_POOL)
+    metadata_hits = search_index(query, idx, limit=pool)
+    dense_hits = _dense_topic_hits(query, top_k=_DENSE_POOL)
+    if not dense_hits:
+        return metadata_hits[:limit]
+
+    by_key = {r.s3_key: r for r in idx}
+    meta_by_key = {r.s3_key: r for r in metadata_hits}
+    rank_maps = (_rank_map([r.s3_key for r in metadata_hits]),
+                 _rank_map([key for key, _title, _cosine in dense_hits]))
+    fused: dict[str, float] = {}
+    for ranks in rank_maps:
+        for key, rank in ranks.items():
+            fused[key] = fused.get(key, 0.0) + 1.0 / (_RRF_K + rank)
+    order = sorted(fused, key=lambda k: -fused[k])
+
+    out: list[JudgmentRef] = []
+    for key in order:
+        ref = meta_by_key.get(key) or by_key.get(key)
+        if ref is not None:            # a dense hit naming a row not in THIS index is dropped
+            out.append(ref)
+        if len(out) >= limit:
+            break
+    return out
 
 
 def _test() -> int:
@@ -224,6 +298,66 @@ def _test() -> int:
           "discover() runs the search over an injected index")
     check(indexed_source_ids(idx) == {"aws_sc_judgments", "aws_hc_judgments"},
           "indexed_source_ids reports exactly the sources present in an index")
+
+    # ── topic (dense) fusion: fail-safe identity first ──────────────────────────────
+    # No VOYAGE_API_KEY and no built judgment dense index exist in this gate (run_tests.sh
+    # unsets every provider key), so judgment_dense.available() is False here by
+    # construction -- discover() must degrade to EXACTLY metadata-only search_index.
+    from checker import judgment_dense
+    for q in ("Tata Sons vs Cyrus Mistry", "a 2026 data protection case",
+              "insolvency waterfall priority", "2019", ""):
+        check(discover(q, index=idx) == search_index(q, idx, limit=10),
+              f"with dense unavailable, discover({q!r}) is IDENTICAL to metadata search alone")
+
+    # ── topic (dense) fusion: a topic query metadata cannot reach ───────────────────
+    # "cases on related-party transactions" names no party and matches no fixture
+    # title/court -- metadata search is an honest []. A dense index built from judgment
+    # BODIES can carry that topic even though no word of it is in the title.
+    TOPIC_Q = "cases on related-party transactions"
+    check(search_index(TOPIC_Q, idx) == [],
+          "the topic query matches nothing in metadata -- an honest empty, as today")
+
+    from unittest import mock
+
+    def fake_available(path=judgment_dense.INDEX_PATH):
+        return True, "fixture"
+
+    def fake_dense_hit(q, top_k=5, **kw):
+        # Stubbed as though the Tata/Cyrus judgment's BODY discusses related-party
+        # governance -- the index's own vectors are never read by this fixture.
+        return [(idx[0].s3_key, idx[0].title, 0.91)]
+
+    with mock.patch.object(judgment_dense, "available", side_effect=fake_available), \
+         mock.patch.object(judgment_dense, "search", side_effect=fake_dense_hit):
+        hits = discover(TOPIC_Q, index=idx)
+        check(hits == [idx[0]],
+              f"discover() reaches the Tata/Cyrus judgment by TOPIC where metadata alone "
+              f"reaches nothing ({hits})")
+        check(hits[0].s3_key in {r.s3_key for r in idx},
+              "...and the row served is the real, committed JudgmentRef -- not fabricated")
+
+    # ── invariant: a dense hit naming a judgment THIS index does not hold is dropped ─
+    def fake_dense_bogus(q, top_k=5, **kw):
+        return [("data/pdf/year=1999/english/not-a-real-judgment_EN.pdf", "Invented", 0.99)]
+
+    with mock.patch.object(judgment_dense, "available", side_effect=fake_available), \
+         mock.patch.object(judgment_dense, "search", side_effect=fake_dense_bogus):
+        hits = discover(TOPIC_Q, index=idx)
+        check(hits == [],
+              f"a dense hit naming a judgment not in the real index is silently dropped, "
+              f"never served as though it existed ({hits})")
+
+    # ── additive: a metadata hit already found survives fusion, dense disagreement aside ─
+    def fake_dense_disjoint(q, top_k=5, **kw):
+        return [(idx[1].s3_key, idx[1].title, 0.4)]   # unrelated to this query's metadata hit
+
+    with mock.patch.object(judgment_dense, "available", side_effect=fake_available), \
+         mock.patch.object(judgment_dense, "search", side_effect=fake_dense_disjoint):
+        hits = discover("Tata Sons vs Cyrus Mistry", index=idx)
+        keys = [h.s3_key for h in hits]
+        check(idx[0].s3_key in keys,
+              f"the metadata hit for 'Tata Sons vs Cyrus Mistry' survives fusion even though "
+              f"dense (stubbed) ranks something unrelated ({keys})")
 
     # Every result can actually be opened and is terms-governed.
     for j in search_index("Tata", idx):
