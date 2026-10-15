@@ -232,6 +232,9 @@ suites=(
   # index against a query, offline by construction on the corpus side. Keyless/no-network
   # in the gate -- it injects its own query vector, same discipline as voyage_model.py.
   checker/voyage_dense.py
+  # Topic-based judgment search: the judgment-body mirror of voyage_dense.py above, ranked
+  # by s3_key identity rather than a section number. Same keyless/no-network discipline.
+  checker/judgment_dense.py
   checker/ollama_runner.py
   checker/backtest.py
   checker/annotation.py
@@ -316,6 +319,12 @@ extra+=("scripts/build_judgment_index.py --test")
 # the corpus-row -> index-record mapping on a fixture transport; --live (not in the
 # gate) makes the real Voyage call and needs VOYAGE_API_KEY.
 extra+=("scripts/build_voyage_index.py --test")
+# Topic-based judgment search: the OFFLINE builder for the Voyage dense index
+# checker/judgment_dense.py reads at runtime. --test proves the mapping, batching and
+# round-trip on a fixture (PDF fetch, text extraction and the Voyage call all injected);
+# --live (not in the gate) fetches real judgment PDFs from the keyless S3 bucket and
+# needs VOYAGE_API_KEY.
+extra+=("scripts/build_judgment_voyage_index.py --test")
 extra+=("scripts/suite_floors.py --test")
 # The git merge drivers that resolve the three files two branches always churn on.
 extra+=("scripts/merge_suite_floors.py --test" "scripts/merge_tasks.py --test" "scripts/merge_repo_map.py --test")
