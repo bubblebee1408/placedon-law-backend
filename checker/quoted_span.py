@@ -121,26 +121,86 @@ def _normalise(text: str) -> tuple[str, list[int]]:
     return "".join(out), idx
 
 
+# Matching pairs a model wraps its own copy in, asked to quote "the exact words": gpt-4o
+# (measured live, 15-10-2026, F1: "What is the time limit for holding an annual general
+# meeting under section 96?") returned a byte-perfect copy of the provision on every one
+# of 12 sentences and wrapped every one in these -- `QUOTE: "Every company other than a
+# One Person Company shall..."` -- and an exact search for the WRAPPED string finds
+# nothing, because the source has no such quote marks in it. All 12 refused as NO_CITATION
+# though the quote underneath every one was real. Gemini and Ollama do not do this; Azure's
+# model does, and a bridge that only works for the models that happen not to add
+# punctuation is not a bridge.
+_QUOTE_WRAPPERS = (('"', '"'), ("'", "'"), ("“", "”"), ("‘", "’"))
+
+
+def _unwrap(quote: str) -> str:
+    """`quote`, minus one OUTERMOST matching pair of quotation marks, if it has one.
+
+    Only the outermost pair, and only when both ends match: an unterminated or crossed
+    mark is left alone rather than guessed at. This does not change what counts as FOUND --
+    it only widens what is TRIED, and `locate()` tries the model's own text first.
+    """
+    s = quote.strip()
+    for left, right in _QUOTE_WRAPPERS:
+        if len(s) >= 2 and s.startswith(left) and s.endswith(right):
+            return s[len(left):-len(right)]
+    return quote
+
+
+# The second live mismatch (same measurement): a quote that STOPS mid-provision reads as
+# an incomplete sentence, and gpt-4o closes it with a period even where the source
+# continues with a comma or colon -- "...in the notices calling it." where the Act has
+# "...in the notices calling it, and not more than fifteen months shall elapse...". The
+# words up to the cut are byte-for-byte real; only the mark the model closed its own
+# quotation with is invented. Dropping ONE trailing mark when it is not a word character
+# costs nothing a real quote needed: `str.find` does not require the source to END there,
+# so the match still lands on the exact words, never on one word more or fewer.
+_TRAILING_PUNCT = ".,;:"
+
+
+# The third live mismatch, same measurement: a quote that STARTS mid-provision reads, to
+# the model, as the start of a sentence, and gpt-4o capitalises it even where the source
+# is lower-case there -- "Not more than fifteen months..." where the Act has "...and not
+# more than fifteen months...", "not" lower-case because a different clause precedes it in
+# the same sub-section. Five of eleven quotes on the live F1 run failed for exactly this:
+# every word right, only the FIRST letter's case invented. So case is tried last and only
+# when EVERY exact-case candidate above has failed in EVERY source -- never instead of the
+# exact search, only after it -- and `Citation.quoted` is still `source.text[start:end]`:
+# the recorded span carries the source's real case, never the model's guess at it.
 def locate(quote: str, sources) -> Citation | None:
     """The first source containing `quote`, as a Citation with real offsets, or None.
 
     None is the refusal: `verify_sentence` turns a sentence with no citation into
-    NO_CITATION, and `Summary.prose()` never prints it. Nothing is repaired or guessed.
+    NO_CITATION, and `Summary.prose()` never prints it. Nothing is repaired or guessed --
+    the liberties taken are trying the quote with its own wrapping quotation marks
+    stripped, with one trailing punctuation mark dropped, and case-insensitively, each
+    AFTER trying it exactly as written, so a model's formatting habits cost it nothing and
+    buy it nothing: either the WORDS are in the evidence, in order, or they are not.
     """
-    needle = " ".join(quote.split())
-    if not needle:
-        return None
-    for i, src in enumerate(sources):
-        hay, idx = _normalise(src.text)
-        at = hay.find(needle)
-        if at < 0:
-            continue
-        start = idx[at]
-        end = idx[at + len(needle) - 1] + 1
-        # `quoted` is what is ACTUALLY there, not what the model typed. The model's
-        # version may differ in whitespace, and recording its version would make
-        # verify_sentence's byte-identity check fail on a span that genuinely exists.
-        return Citation(i, start, end, src.text[start:end])
+    unwrapped = _unwrap(quote)
+    base = (quote,) if unwrapped == quote else (quote, unwrapped)
+    candidates = list(base)
+    for c in base:
+        if c and c[-1] in _TRAILING_PUNCT and c[:-1] not in candidates:
+            candidates.append(c[:-1])
+    for fold in (False, True):
+        for candidate in candidates:
+            needle = " ".join(candidate.split())
+            if not needle:
+                continue
+            for i, src in enumerate(sources):
+                hay, idx = _normalise(src.text)
+                h, n = (hay.lower(), needle.lower()) if fold else (hay, needle)
+                at = h.find(n)
+                if at < 0:
+                    continue
+                start = idx[at]
+                end = idx[at + len(needle) - 1] + 1
+                # `quoted` is what is ACTUALLY there, not what the model typed. The
+                # model's version may differ in whitespace, wrapping, a trailing mark or
+                # case, and recording its version would make verify_sentence's
+                # byte-identity check fail on a span that genuinely exists.
+                return Citation(i, start, end, src.text[start:end])
     return None
 
 
@@ -211,8 +271,8 @@ def _test() -> None:
 
     print("quoted_span")
 
-    from checker.lawyer_summary import (DOC_TEXT, NO_CITATION, TRACED, TURN,
-                                        document_source, engine_source)
+    from checker.lawyer_summary import (DOC_TEXT, LAW_FROM_DOCUMENT, NO_CITATION, TRACED,
+                                        TURN, document_source, engine_source)
     doc = document_source("notice.pdf", DOC_TEXT)
     eng = engine_source(TURN)
     SRC = (doc, eng)
@@ -251,6 +311,67 @@ def _test() -> None:
     check(len(_s_reflow.traced) == 1,
           f"...and end to end, a reflowed quote TRACES rather than being refused as a "
           f"misquote ({[x.verdict for x in _s_reflow.sentences]})")
+
+    # ── a model's OWN wrapping quotation marks are tried and discarded ───────
+    # The live bug this fixes: gpt-4o (Azure), asked to copy "the exact words", wraps its
+    # copy in quotation marks -- 'QUOTE: "Every company other than a One Person Company
+    # shall..."' -- and an exact search for the WRAPPED string finds nothing, because the
+    # source carries no such marks. Measured live 15-10-2026 on the F1 fixture: all 12
+    # sentences refused as NO_CITATION though the quote underneath every one was real.
+    quoted_plain = "The Company is a small company within the meaning of section 2(85)"
+    c_wrap = locate(f'"{quoted_plain}"', SRC)
+    c_bare = locate(quoted_plain, SRC)
+    check(c_wrap is not None and c_wrap.source_index == 0,
+          "a quote wrapped in the model's OWN quotation marks still locates")
+    check((c_wrap.start, c_wrap.end) == (c_bare.start, c_bare.end),
+          "...at the SAME offsets as the unwrapped quote: the marks are tried and "
+          "discarded, never kept as part of the located span")
+    check(locate('"The Company resolved to acquire Beta Ltd for Rs 40 crore"', SRC)
+          is None,
+          "...and wrapping a FABRICATED quote does not make it locate either -- the "
+          "fallback widens what is TRIED, never what counts as FOUND")
+    check(locate(f'"{quoted_plain}', SRC) is None,
+          "an unterminated quotation mark is left alone rather than guessed at, so the "
+          "search still runs on the literal (unmatched) text and finds nothing")
+
+    # ── a model's own TERMINAL punctuation is tried and discarded, once ──────
+    # The second live mismatch, same measurement: a quote that stops mid-provision reads,
+    # to the model, as an incomplete sentence, and gpt-4o closes it with a period even
+    # where the source actually continues with a comma -- see `_TRAILING_PUNCT`'s comment.
+    cut_words = ("The Company is a small company within the meaning of section 2(85) "
+                "of the Companies Act, 2013")
+    c_cut = locate(cut_words + ".", SRC)        # the model's own invented closing mark
+    c_full = locate(cut_words, SRC)             # the same words, no invented mark
+    check(c_cut is not None and (c_cut.start, c_cut.end) == (c_full.start, c_full.end),
+          "a quote closed with the model's OWN period, where the source actually "
+          "continues with a comma, still locates -- at the SAME offsets as the bare "
+          "words, so the invented mark is discarded and not folded into the span")
+    check(DOC_TEXT[c_cut.end] == ",",
+          "...confirmed against the source itself: the character right after the "
+          "located span really is the comma the model turned into a period")
+    check(locate("The Company resolved to acquire Beta Ltd for Rs 40 crore.", SRC)
+          is None,
+          "...and a FABRICATED quote with an invented closing period still does not "
+          "locate -- the fallback drops one mark, it does not forgive the words")
+
+    # ── a model's own LEADING capitalisation is tried last, case-insensitively ──
+    # The third live mismatch, same measurement: gpt-4o capitalises the first letter of a
+    # quote that starts mid-sentence in the source -- "Not more than fifteen months..."
+    # where the Act has "...and not more than fifteen months...". Every word is right.
+    lower_words = "will be held on Thursday, 14 August 2025"
+    c_cap = locate("Will be held on Thursday, 14 August 2025.", SRC)
+    c_lower = locate(lower_words, SRC)
+    check(c_cap is not None and (c_cap.start, c_cap.end) == (c_lower.start, c_lower.end),
+          "a quote capitalised AND closed with an invented period at the point it was "
+          "cut still locates, at the same offsets as the literal lower-case words")
+    check(c_cap.quoted == lower_words,
+          "...and the recorded `quoted` carries the SOURCE's real case ('will', lower), "
+          "never the model's capitalised guess at it")
+    check(locate("WILL BE HELD ON THURSDAY, 14 AUGUST 2025", SRC) is not None,
+          "...and this fallback is tried case-insensitively in full, not patched onto "
+          "one leading letter")
+    check(locate("Will resolve to acquire Beta Ltd for Rs 40 crore", SRC) is None,
+          "...while a FABRICATED quote still does not locate, in any case")
 
     # ── refusing ─────────────────────────────────────────────────────────────
     check(locate("The Company resolved to acquire Beta Ltd for Rs 40 crore", SRC) is None,
@@ -300,6 +421,51 @@ def _test() -> None:
           f"({len(s_mix.traced)} traced, {len(s_mix.refused)} refused)")
     check("Beta Ltd" not in s_mix.prose(),
           "...and the dropped one is still not in the prose")
+
+    # ── a paraphrase is refused exactly like a fabrication ───────────────────
+    # Neither a reworded QUOTE line nor an invented one is found by `locate()`, and this
+    # protocol does not need to tell the two apart: both fail to produce a real offset,
+    # and both refuse the same way. `bad`, above, already covers the fabrication; this is
+    # the same mechanism exercised on a genuine paraphrase of real text.
+    paraphrase = (f"{SENTENCE_TAG} The meeting will take place the following Thursday "
+                 f"in August 2025.\n"
+                 f"{QUOTE_TAG} the following Thursday in August 2025\n")
+    s_phrase = check_blocks(blocks(paraphrase, SRC), SRC)
+    check(s_phrase.sentences[0].verdict == NO_CITATION,
+          f"a QUOTE line that paraphrases real text -- reworded, not copied -- is not "
+          f"located, so the sentence refuses exactly like a fabrication "
+          f"({s_phrase.sentences[0].verdict})")
+
+    # ── the law-assertion gate survives a SEARCHED citation, not just a handed one ───
+    # lawyer_summary.verify_sentence refuses a statement of what the law requires when it
+    # rests on the client's DOCUMENT and not on primary law (`checker/lawyer_summary.py`
+    # rule 8) -- proven there with Citations built by hand. This is the same two sentences,
+    # the same sources, and the same expected verdicts, except the Citations now come from
+    # `locate()`'s search. If the search path quietly bypassed the gate -- say, by finding
+    # a quote and stopping there -- this would TRACE instead of refuse.
+    law_from_doc = (
+        f"{SENTENCE_TAG} A small company must have paid-up share capital within the "
+        f"prescribed limit under section 2(85) of the Companies Act, 2013.\n"
+        f"{QUOTE_TAG} small company within the meaning of section 2(85) of the "
+        f"Companies Act, 2013\n")
+    s_law_doc = check_blocks(blocks(law_from_doc, SRC), SRC)
+    check(s_law_doc.sentences[0].verdict == LAW_FROM_DOCUMENT,
+          f"a law assertion with a real, LOCATED quote from the DOCUMENT still refuses "
+          f"as {LAW_FROM_DOCUMENT}, not TRACED: the search finding the quote is not the "
+          f"same as the quote supporting a legal conclusion "
+          f"({s_law_doc.sentences[0].verdict})")
+
+    law_from_engine = (
+        f"{SENTENCE_TAG} The prescribed small-company limits were raised by "
+        f"G.S.R. 880(E).\n"
+        f"{QUOTE_TAG} the prescribed small-company limits were raised by "
+        f"G.S.R. 880(E)\n")
+    s_law_eng = check_blocks(blocks(law_from_engine, SRC), SRC)
+    check(s_law_eng.sentences[0].verdict == TRACED,
+          f"...while the SAME shape of claim, located in the ENGINE source instead, "
+          f"traces ({s_law_eng.sentences[0].verdict}) -- the gate turns on which source "
+          f"the citation names, not on whether it was handed to verify_sentence or found "
+          f"by a search")
 
     # ── the prompt carries the clause and delimits the sources ───────────────
     from checker.prompt_safety import carries_clause, contains_untrusted_block
