@@ -54,6 +54,13 @@ class Principal:
     # nothing. The dangerous default is the other one, and it is the one that gets chosen
     # when a field is added to a class that already has callers.
     role: str = "viewer"
+    # 8a. The sha256 of a SESSION token, for exactly one purpose: `auth.logout` needs to
+    # name which row to revoke, and `auth_resolve_session`'s returned columns deliberately
+    # do not include a session id (DECISION_ACCOUNTS.md Decision 2). A hash is not a
+    # credential -- this docstring's own opening line -- so carrying it here is the same
+    # safety property key_id already relies on. Empty for an API-key principal: nothing
+    # today lets a caller revoke a key through this field.
+    credential_hash: str = ""
 
     def __post_init__(self) -> None:
         from gateway.roles import ROLES

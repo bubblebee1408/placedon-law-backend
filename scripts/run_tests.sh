@@ -365,6 +365,10 @@ extra+=("gateway/screens.py --test")
 # the verb table by test, so a verb added without a role fails the build.
 extra+=("gateway/roles.py --test")
 extra+=("gateway/passwords.py --test")
+# 026: sign-in, sessions, invites. Lockout math, the generic-failure immutability, the
+# timing-safe dummy-hash guard, and token minting -- gateway/verbs.py exercises the HTTP
+# verb handlers; this is the business logic underneath them, in its own small suite.
+extra+=("gateway/accounts.py")
 
 # 8c: the compliance calendar. A missing fact gives an UNKNOWN entry naming the fact,
 # never a guessed date -- and an undatable obligation is never dropped from the view.

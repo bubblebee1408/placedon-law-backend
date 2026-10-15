@@ -77,6 +77,12 @@ class Backend(Protocol):
     def find_actor_by_email(self, email: str) -> dict | None: ...
     def read_invite(self, token_hash: str) -> dict | None: ...
     def list_actors(self) -> list[dict]: ...
+    # 026: sessions. Tenant-scoped CREATE and REVOKE, run once a tenant is known
+    # (DECISION_ACCOUNTS.md Decision 4). The cross-tenant RESOLVE-by-hash is deliberately
+    # NOT here: it is the one tenant-blind read, done by AuthLookup via
+    # auth_resolve_session (SECURITY DEFINER), never through a tenant-bound backend.
+    def create_session(self, session: dict) -> dict: ...
+    def revoke_session(self, token_hash: str) -> bool: ...
     def append_step(self, run_id: str, step: dict, *, key: str) -> bool: ...
     def set_run(self, run_id: str, *, status: str, refusal_code=None, result=None) -> None: ...
     def read_failure_counts(self) -> list[dict]: ...
@@ -447,6 +453,10 @@ class MemoryBackend:
     matters: dict = field(default_factory=dict)         # matter_id -> row
     actors: dict = field(default_factory=dict)          # actor_id -> row
     invites: dict = field(default_factory=dict)         # invite_id -> row
+    sessions: dict = field(default_factory=dict)        # session_id -> row
+    # A LIST, append-only, mirroring login_attempts's shape: no tenant_id, and nothing
+    # ever updates a row once written -- a brute-force count reads the recent tail.
+    login_attempts: list = field(default_factory=list)
     cache: dict = field(default_factory=dict)           # lookup_key -> row
     cache_stats: dict = field(default_factory=dict)     # day -> {hits, misses, stale}
 
@@ -1242,6 +1252,35 @@ class MemoryBackend:
         return [{k: v for k, v in row.items() if k != "password_hash"}
                 for row in self.actors.values() if row.get("email")]
 
+    def create_session(self, session: dict) -> dict:
+        """026's CHECKs, restated: the hash is sha256-shaped, and it expires."""
+        th = str(session.get("token_hash") or "")
+        if len(th) != 64 or any(c not in "0123456789abcdef" for c in th):
+            raise StoreError("a session stores the sha256 of its token, never the token "
+                             "(026 sessions_token_hash_idx)")
+        if not str(session.get("expires_at") or "").strip():
+            raise StoreError("a session must expire (026 sessions_expires_after_creation)")
+        sid = str(session.get("session_id") or "")
+        row = {"session_id": sid, "actor_id": str(session.get("actor_id") or ""),
+               "token_hash": th, "expires_at": str(session["expires_at"]),
+               "revoked_at": None}
+        self.sessions[sid] = row
+        return dict(row)
+
+    def revoke_session(self, token_hash: str) -> bool:
+        """True if a LIVE session held this hash and is now revoked; False otherwise.
+
+        Scoped by whatever the caller already knows: in practice this is always called
+        through a backend bound to one tenant, over a dict with no tenant filter of its
+        own -- MemoryBackend has none, by design (see backend_for in gateway/app.py).
+        """
+        from datetime import datetime, timezone
+        for row in self.sessions.values():
+            if row.get("token_hash") == str(token_hash or "") and row.get("revoked_at") is None:
+                row["revoked_at"] = datetime.now(timezone.utc).isoformat()
+                return True
+        return False
+
     def read_labels(self) -> list[dict]:
         """[{task, body, decision}] — every lawyer decision, with the run's intent.
 
@@ -1566,6 +1605,31 @@ class PostgresBackend:
             "invite_id": str(r[0]), "email": r[1], "role": r[2], "token_hash": r[3],
             "invited_by": str(r[4]), "expires_at": r[5].isoformat(),
             "accepted_at": r[6].isoformat(), "accepted_by": str(r[7])}
+
+    def create_session(self, session: dict) -> dict:
+        import psycopg
+        try:
+            with self._conn() as c:
+                r = c.execute(
+                    "INSERT INTO sessions (session_id, tenant_id, actor_id, token_hash, "
+                    "expires_at) VALUES (%s,%s,%s,%s,%s) "
+                    "RETURNING session_id, actor_id, token_hash, expires_at, revoked_at",
+                    (session["session_id"], self.tenant_id, session["actor_id"],
+                     session["token_hash"], session["expires_at"])).fetchone()
+        except psycopg.errors.IntegrityError as exc:
+            raise StoreError(f"the database refused this session: {type(exc).__name__} "
+                             f"{str(exc).splitlines()[0][:150]}") from None
+        return {"session_id": str(r[0]), "actor_id": str(r[1]), "token_hash": r[2],
+                "expires_at": r[3].isoformat(), "revoked_at": None}
+
+    def revoke_session(self, token_hash: str) -> bool:
+        """Scoped to THIS tenant by the connection's app.tenant_id, like every write here."""
+        with self._conn() as c:
+            r = c.execute(
+                "UPDATE sessions SET revoked_at = now() "
+                "WHERE token_hash = %s AND revoked_at IS NULL RETURNING session_id",
+                (str(token_hash or ""),)).fetchone()
+        return r is not None
 
     def find_actor_by_email(self, email: str) -> dict | None:
         want = str(email or "").strip()
@@ -2449,6 +2513,155 @@ def _json(value):
         return None
     from psycopg.types.json import Jsonb
     return Jsonb(value)
+
+
+class AuthLookup:
+    """The cross-tenant reads authentication needs, and the tenant-blind login_attempts
+    ledger. NEVER bound to one tenant -- unlike every Backend above, which refuses to be
+    constructed without one.
+
+    DECISION_ACCOUNTS.md Decision 4 names two cross-tenant reads of tenant data
+    (auth_find_login, auth_resolve_session); building invites.accept surfaced a third,
+    `find_invite`, with the identical shape keyed by token instead of email. See the
+    top-of-file note in gateway/migrations/026_accounts.sql for why, and the deviation it
+    records. `record_attempt`/`recent_failures` are not cross-tenant reads of tenant data
+    at all -- login_attempts holds no tenant column to begin with.
+    """
+
+    def __init__(self, *, db_url: str | None = None, memory: "MemoryBackend | None" = None):
+        if bool(db_url) == bool(memory):
+            raise StoreError(
+                "AuthLookup needs EXACTLY one of db_url or memory -- it is never bound to "
+                "a tenant, so it cannot also be bound to neither or both a backend")
+        self._url = db_url
+        self._memory = memory
+
+    @property
+    def kind(self) -> str:
+        return POSTGRES if self._url else MEMORY
+
+    def _pg(self):
+        import psycopg
+        return psycopg.connect(self._url, autocommit=True)
+
+    def find_logins(self, email: str) -> list[dict]:
+        """Every actor whose email matches (case-insensitively) and who HAS a password.
+
+        More than one row is the ambiguous-email case (Decision 7): auth.login must
+        refuse rather than guess a tenant.
+        """
+        want = str(email or "").strip().lower()
+        if not want:
+            return []
+        if self._memory is not None:
+            # The shared dict has no tenant filter to begin with (see backend_for in
+            # gateway/app.py), so this already searches every tenant that has used this
+            # process's memory backend -- exactly the cross-tenant behaviour the real
+            # function provides, for free, because memory never had isolation to bypass.
+            # Individual rows carry NO tenant_id in MemoryBackend (isolation there is one
+            # backend instance pinned to one tenant, not a per-row column) -- so the
+            # backend's OWN current tenant is what every row found in it belongs to.
+            tenant_id = self._memory.tenant_id
+            return [{"actor_id": row["actor_id"], "tenant_id": tenant_id,
+                     "password_hash": row["password_hash"],
+                     "disabled_at": row.get("disabled_at")}
+                    for row in self._memory.actors.values()
+                    if row.get("password_hash")
+                    and str(row.get("email") or "").lower() == want]
+        with self._pg() as c:
+            rows = c.execute("SELECT actor_id, tenant_id, password_hash, disabled_at "
+                             "FROM auth_find_login(%s)", (want,)).fetchall()
+        return [{"actor_id": str(r[0]), "tenant_id": str(r[1]), "password_hash": r[2],
+                 "disabled_at": r[3].isoformat() if r[3] else None} for r in rows]
+
+    def resolve_session(self, token_hash: str) -> dict | None:
+        """At most one row: actor_id, tenant_id, role, expires_at, revoked_at, disabled_at.
+
+        `role` and `disabled_at` are read from `actors` LIVE (joined inside the SQL
+        function on Postgres; read fresh here for memory), never cached on the session.
+        """
+        th = str(token_hash or "")
+        if not th:
+            return None
+        if self._memory is not None:
+            row = next((s for s in self._memory.sessions.values()
+                       if s.get("token_hash") == th), None)
+            if row is None:
+                return None
+            actor = self._memory.actors.get(row["actor_id"]) or {}
+            return {"actor_id": row["actor_id"], "tenant_id": self._memory.tenant_id,
+                    "role": actor.get("role") or "viewer",
+                    "expires_at": row["expires_at"], "revoked_at": row.get("revoked_at"),
+                    "disabled_at": actor.get("disabled_at")}
+        with self._pg() as c:
+            r = c.execute("SELECT actor_id, tenant_id, role, expires_at, revoked_at, "
+                          "disabled_at FROM auth_resolve_session(%s)", (th,)).fetchone()
+        if r is None:
+            return None
+        return {"actor_id": str(r[0]), "tenant_id": str(r[1]), "role": r[2],
+                "expires_at": r[3].isoformat(),
+                "revoked_at": r[4].isoformat() if r[4] else None,
+                "disabled_at": r[5].isoformat() if r[5] else None}
+
+    def find_invite(self, token_hash: str) -> dict | None:
+        """invite_id, tenant_id, email, role, expires_at, accepted_at -- or None.
+
+        Never the token_hash: the caller already holds the raw token, which is strictly
+        more than its hash.
+        """
+        th = str(token_hash or "")
+        if not th:
+            return None
+        if self._memory is not None:
+            row = next((i for i in self._memory.invites.values()
+                       if i.get("token_hash") == th), None)
+            if row is None:
+                return None
+            # No per-row tenant_id in MemoryBackend (see find_logins); the backend's own
+            # current tenant is the invite's tenant.
+            out = {k: row.get(k) for k in
+                  ("invite_id", "email", "role", "expires_at", "accepted_at")}
+            out["tenant_id"] = self._memory.tenant_id
+            return out
+        with self._pg() as c:
+            r = c.execute("SELECT invite_id, tenant_id, email, role, expires_at, "
+                          "accepted_at FROM invite_find_by_token(%s)", (th,)).fetchone()
+        if r is None:
+            return None
+        return {"invite_id": str(r[0]), "tenant_id": str(r[1]), "email": r[2],
+                "role": r[3], "expires_at": r[4].isoformat(),
+                "accepted_at": r[5].isoformat() if r[5] else None}
+
+    def record_attempt(self, *, email_hash: str, ip_hash: str, ok: bool) -> None:
+        """Append-only, like the table it mirrors: nothing here is ever updated."""
+        if self._memory is not None:
+            import datetime as _dt
+            self._memory.login_attempts.append(
+                {"email_hash": email_hash, "ip_hash": ip_hash, "ok": bool(ok),
+                 "at": _dt.datetime.now(_dt.timezone.utc)})
+            return
+        with self._pg() as c:
+            c.execute("INSERT INTO login_attempts (email_hash, ip_hash, ok) "
+                     "VALUES (%s,%s,%s)", (email_hash, ip_hash, bool(ok)))
+
+    def recent_failures(self, *, email_hash: str, ip_hash: str, since) -> int:
+        """How many FAILED attempts for this email OR this IP, at or after `since`.
+
+        `since` is a timezone-aware `datetime`, never a formatted string: two different
+        ISO-8601 renderings (microseconds present or not, 'Z' vs '+00:00') do not compare
+        correctly as strings at a boundary a few seconds wide, which is exactly where a
+        lockout window is evaluated.
+        """
+        if self._memory is not None:
+            return sum(1 for row in self._memory.login_attempts
+                       if not row["ok"] and row["at"] >= since
+                       and (row["email_hash"] == email_hash or row["ip_hash"] == ip_hash))
+        with self._pg() as c:
+            r = c.execute(
+                "SELECT count(*) FROM login_attempts WHERE NOT ok AND at >= %s "
+                "AND (email_hash = %s OR ip_hash = %s)",
+                (since, email_hash, ip_hash)).fetchone()
+        return int(r[0])
 
 
 def conformance(backend) -> list[tuple[bool, str]]:

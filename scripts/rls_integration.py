@@ -232,7 +232,45 @@ LAST_RUN: str | None = (
     "old seven columns after 021 added three, so a DEAD job read through it reported no "
     "reason and the default lane. `_job` had a `len(r) > 7` fallback that supplied both "
     "silently, which is what hid it -- a default standing in for a column the query forgot "
-    "is a lie with a safety net. The fallback is gone, so a short row raises. 2026-10-05, T3 move 10: 001-021 plus 023_document_checks applied TOGETHER to a fresh throwaway database on PostgreSQL 18.6 (Postgres.app, local socket), asserted as placedon_app (NOSUPERUSER, NOBYPASSRLS): 365 checks, 0 failures. `document_checks` is the TWENTY-FIFTH tenant-scoped table and the leak would be our JUDGEMENT on another firm's documents -- which of them we told that firm were expired, forged or needed a lawyer. Worse than the documents in one respect: a document is a fact, and this is advice. Proved the way the other twenty-four are -- A sees its own row and none of B's, the policy dropped fails CLOSED, RLS disabled makes B's row APPEAR where 0 were visible, restoring returns to isolation. Its isolation checks reported 0 rows on the first run, exactly as `invites` and `matters` did, and the seed was added only after that: a check measuring an empty table proves nothing. The conformance list then found the SIXTH divergence of its favourite shape -- Postgres returns a uuid column as `uuid.UUID` while MemoryBackend stores the `str` the caller passed, so `read_renewals()` returned the right ROW and `row['document_id'] == did` was False. One check reported an empty result against a table that held it, and the check before it passed VACUOUSLY for the same reason. `_doc_check_row` now stringifies uuid columns. 022_grid_budget_state is NOT in this list: it belongs to the still-open PR #67 and branches are never stacked, so 023 sits on top of 021 here. 2026-10-06, merge of PR #69 into main: #67 is now MERGED, so 022_grid_budget_state applies AHEAD of 023 and the list reads 001-023 with no gap -- the '022 is NOT in this list' sentence above is a dated record superseded by this merge, not edited. 001-023 applied TOGETHER to a fresh throwaway database on PostgreSQL 18.6 (Postgres.app, local socket), asserted as placedon_app (NOSUPERUSER, NOBYPASSRLS): 368 checks, 0 failures. The live --run also caught a wired-and-unreachable gap the gate could not: gateway/jobs.conformance gained queue.claim_counts but _SeededQueue never delegated it, so the proof crashed where _test() stayed green -- the wrapper now forwards it, translating only the input ids since the {missing,unclaimed,claimed} aggregate carries no run id.")
+    "is a lie with a safety net. The fallback is gone, so a short row raises. 2026-10-05, T3 move 10: 001-021 plus 023_document_checks applied TOGETHER to a fresh throwaway database on PostgreSQL 18.6 (Postgres.app, local socket), asserted as placedon_app (NOSUPERUSER, NOBYPASSRLS): 365 checks, 0 failures. `document_checks` is the TWENTY-FIFTH tenant-scoped table and the leak would be our JUDGEMENT on another firm's documents -- which of them we told that firm were expired, forged or needed a lawyer. Worse than the documents in one respect: a document is a fact, and this is advice. Proved the way the other twenty-four are -- A sees its own row and none of B's, the policy dropped fails CLOSED, RLS disabled makes B's row APPEAR where 0 were visible, restoring returns to isolation. Its isolation checks reported 0 rows on the first run, exactly as `invites` and `matters` did, and the seed was added only after that: a check measuring an empty table proves nothing. The conformance list then found the SIXTH divergence of its favourite shape -- Postgres returns a uuid column as `uuid.UUID` while MemoryBackend stores the `str` the caller passed, so `read_renewals()` returned the right ROW and `row['document_id'] == did` was False. One check reported an empty result against a table that held it, and the check before it passed VACUOUSLY for the same reason. `_doc_check_row` now stringifies uuid columns. 022_grid_budget_state is NOT in this list: it belongs to the still-open PR #67 and branches are never stacked, so 023 sits on top of 021 here. 2026-10-06, merge of PR #69 into main: #67 is now MERGED, so 022_grid_budget_state applies AHEAD of 023 and the list reads 001-023 with no gap -- the '022 is NOT in this list' sentence above is a dated record superseded by this merge, not edited. 001-023 applied TOGETHER to a fresh throwaway database on PostgreSQL 18.6 (Postgres.app, local socket), asserted as placedon_app (NOSUPERUSER, NOBYPASSRLS): 368 checks, 0 failures. The live --run also caught a wired-and-unreachable gap the gate could not: gateway/jobs.conformance gained queue.claim_counts but _SeededQueue never delegated it, so the proof crashed where _test() stayed green -- the wrapper now forwards it, translating only the input ids since the {missing,unclaimed,claimed} aggregate carries no run id. "
+    "2026-10-15, 026 (accounts: sign-in, sessions, invites): 001-026 applied TOGETHER to a "
+    "fresh throwaway database (placedon_throwaway_026) on PostgreSQL 18.6 (Postgres.app, "
+    "local socket), asserted as placedon_app (NOSUPERUSER, NOBYPASSRLS). `sessions` is the "
+    "TWENTY-SIXTH tenant-scoped table, proved the way the other twenty-five are. "
+    "auth_find_login, auth_resolve_session and invite_find_by_token -- the three SECURITY "
+    "DEFINER cross-tenant reads, one more than DECISION_ACCOUNTS.md Decision 4 names; see "
+    "026_accounts.sql's top-of-file note -- were each proved live: a unique email/token "
+    "resolves its real tenant with NO app.tenant_id set on the connection at all; an email "
+    "shared by TWO REAL TENANTS (not simulated) returns BOTH rows and both real tenant "
+    "ids; each function returns EXACTLY its documented columns and no more; a role change "
+    "on `actors` takes effect on the VERY NEXT auth_resolve_session call, with no session "
+    "re-minted; an unknown email/token/hash returns nothing. The run also found, live, "
+    "that BYPASSRLS alone is not sufficient -- it bypasses row-level POLICIES, not the "
+    "ordinary table GRANT a role still needs, and the first version of the ownership "
+    "bootstrap failed every one of the three functions with 'permission denied for table "
+    "actors' until explicit GRANT SELECT was added (`_ensure_authn_role`, and the matching "
+    "fix in 026_accounts.sql's own bootstrap note). The NEGATIVE case was run too: "
+    "reassigning auth_find_login's ownership back to placedon_app makes the SAME function, "
+    "same arguments, return NOTHING under FORCE ROW LEVEL SECURITY with no app.tenant_id "
+    "set -- proof the ownership reassignment is load-bearing, not decorative prose -- and "
+    "restoring it to placedon_authn restores the function. That restoration surfaced a "
+    "second live-only finding: ALTER FUNCTION ... OWNER TO a role that already holds an "
+    "explicit GRANT on the object COLLAPSES that grant (Postgres treats an ACL entry "
+    "matching the new owner as redundant and drops it), so the test's own re-grant after "
+    "restoring is not defensive paranoia -- without it the next call is 'permission denied "
+    "for function'. login_attempts was proved global: read AND write succeed with no "
+    "app.tenant_id set at all, and again once one is set, which is what USING (true) means "
+    "on purpose; pg_class confirms FORCE ROW LEVEL SECURITY is still set on it, so that "
+    "permissiveness is a recorded decision and not an accidental absence of a policy. "
+    "ALL of the above -- every 026 check -- PASSED. The run as a WHOLE did not: two "
+    "PRE-EXISTING, UNRELATED checks FAILED ('the draft inbox returns latest metadata only' "
+    "and 'a keyset cursor after the only draft returns an empty page', both inside "
+    "gateway/store.conformance()'s drafts section, 012/025), and this script's own exit "
+    "code is 1 because of them, honestly. Reproduced IDENTICALLY with 026 entirely absent "
+    "(migrations 001-025 only, a separate isolated throwaway database, PostgresBackend "
+    "called directly, no rls_integration.py involved), so they predate this change and are "
+    "not investigated further here -- out of scope, and this script's own rule is to "
+    "report a failure, not edit the script to make it pass.")
 
 TENANT_TABLES = ("actors", "api_keys", "documents", "audit_log",
                  "runs", "run_steps", "propositions", "decisions", "jobs",
@@ -264,7 +302,14 @@ TENANT_TABLES = ("actors", "api_keys", "documents", "audit_log",
                  # judgement on their own documents -- which of them we told that firm were
                  # expired, forged or needed a lawyer. Worse than the documents in one
                  # respect: a document is a fact, and this is advice.
-                 "document_checks")
+                 "document_checks",
+                 # 026: sessions. Created and revoked through the normal tenant-scoped
+                 # path; this generic proof covers that path. The one TENANT-BLIND read
+                 # of it, auth_resolve_session, is proved separately below -- a SECURITY
+                 # DEFINER function is not a row this loop's SELECTs would ever reach.
+                 # The leak this loop guards against would be another firm's live
+                 # sign-in sessions becoming readable by an ordinary query.
+                 "sessions")
 
 
 class RlsFailure(AssertionError):
@@ -329,6 +374,41 @@ def _ensure_app_role(cur) -> None:
     cur.execute(f"GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public "
                 f"TO {APP_ROLE}")
     cur.execute(f"GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO {APP_ROLE}")
+
+
+# 026. The role that owns the three SECURITY DEFINER cross-tenant reads. NOT a login
+# role -- nothing ever connects as it -- and its only purpose is BYPASSRLS, which
+# 026_accounts.sql's top-of-file note explains is the whole reason a plain SECURITY
+# DEFINER function owned by APP_ROLE would not work: FORCE ROW LEVEL SECURITY applies to
+# the table owner too, and APP_ROLE is deliberately NOBYPASSRLS. Granting BYPASSRLS
+# requires a superuser, which is exactly the elevated connection this function runs on,
+# the same way _ensure_app_role already creates APP_ROLE before anything runs as it.
+AUTHN_ROLE = "placedon_authn"
+AUTHN_FUNCTIONS = ("auth_find_login(text)", "auth_resolve_session(text)",
+                   "invite_find_by_token(text)")
+
+
+def _ensure_authn_role(cur) -> None:
+    """Create AUTHN_ROLE with BYPASSRLS, and reassign the three functions to it.
+
+    Idempotent, and run AFTER the migrations above so the functions already exist
+    (`ALTER FUNCTION ... OWNER TO` fails on a function that is not there yet).
+
+    BYPASSRLS bypasses row-level POLICIES. It does not bypass ordinary GRANTs -- those
+    are a separate privilege system, and a role with no SELECT on `actors` is refused
+    "permission denied for table actors" before RLS is ever consulted, whatever its
+    BYPASSRLS attribute says. Measured live: the first version of this function granted
+    only BYPASSRLS and the three functions failed with exactly that error. The explicit
+    SELECT grants below are what actually make the functions able to read.
+    """
+    if not cur.execute("SELECT 1 FROM pg_roles WHERE rolname=%s", (AUTHN_ROLE,)).fetchone():
+        cur.execute(f"CREATE ROLE {AUTHN_ROLE} NOSUPERUSER NOLOGIN BYPASSRLS")
+    cur.execute(f"ALTER ROLE {AUTHN_ROLE} NOSUPERUSER NOLOGIN BYPASSRLS")
+    cur.execute(f"GRANT USAGE ON SCHEMA public TO {AUTHN_ROLE}")
+    cur.execute(f"GRANT SELECT ON actors, sessions, invites TO {AUTHN_ROLE}")
+    for fn in AUTHN_FUNCTIONS:
+        cur.execute(f"ALTER FUNCTION {fn} OWNER TO {AUTHN_ROLE}")
+    cur.execute(f"GRANT EXECUTE ON FUNCTION {', '.join(AUTHN_FUNCTIONS)} TO {APP_ROLE}")
 
 
 import json as _json
@@ -450,6 +530,21 @@ def _seed(cur, tenant, actor, tag: str) -> None:
                 "now() + interval '7 days')",
                 (uuid.uuid4(), tenant, f"{tag}-joiner@example.com",
                  ("a" if tag.startswith("A") else "b") * 64, actor))
+
+    # 026: a live session. The leak would be another firm's PERSON being able to act as
+    # someone who signed in to this one -- auth_resolve_session is the only tenant-blind
+    # read of this table, proved separately; this row is what the generic per-table loop
+    # above isolates like any other.
+    #
+    # token_hash is GLOBALLY unique (sessions_token_hash_idx), unlike the tenant-scoped
+    # sha256 columns elsewhere in this function, so it cannot reuse their
+    # `tag.startswith("A")` trick -- "alpha" and "bravo" are both lowercase and that
+    # expression is always False, which is harmless where the real key is
+    # (tenant_id, sha256) and fatal here. A fresh random hex string, like api_keys.key_hash
+    # above, is unique regardless.
+    cur.execute("INSERT INTO sessions (session_id, tenant_id, actor_id, token_hash, "
+                "expires_at) VALUES (%s,%s,%s,%s, now() + interval '1 day')",
+                (uuid.uuid4(), tenant, actor, uuid.uuid4().hex + uuid.uuid4().hex))
 
     # O9: a cached answer. The leak would carry the QUESTION another firm's lawyer asked
     # and the answer we gave them -- the same kind of private thing `conversations` holds,
@@ -622,11 +717,19 @@ def run(url: str) -> int:
                   "020_vault.sql",
                   "021_job_lanes.sql",
                   "022_grid_budget_state.sql",
-                  "023_document_checks.sql", "024_conversation_turns.sql"):
+                  "023_document_checks.sql", "024_conversation_turns.sql",
+                  # 025 was missing from this list before 026 was added -- an index-only
+                  # migration, so the gap was harmless, but adding 026 on top of a list
+                  # that skips its immediate predecessor would make a new gap look
+                  # intentional. Both now apply, in order.
+                  "025_draft_inbox_idx.sql", "026_accounts.sql"):
             cur.execute(sql(f))
             print(f"  applied {f}")
         _ensure_app_role(cur)
         print(f"  ensured role {APP_ROLE}\n")
+        _ensure_authn_role(cur)
+        print(f"  ensured role {AUTHN_ROLE}, and reassigned the three SECURITY DEFINER "
+              f"functions to it\n")
 
         for t in (a, b):
             cur.execute("INSERT INTO tenants (tenant_id, name) VALUES (%s,%s) "
@@ -1038,6 +1141,162 @@ def run(url: str) -> int:
     for _j in (j_a, j_b):
         if _j:
             pq.finish(_j.job_id, "DONE")
+
+    # ── 026: the three SECURITY DEFINER cross-tenant reads, and login_attempts ──
+    #
+    # These functions are the ONE deliberate exception to "a tenant query sees only its
+    # own tenant" -- they must cross tenants because sign-in precedes tenant knowledge.
+    # Proved here, not merely declared: _ensure_authn_role's ownership reassignment is
+    # what actually makes the bypass work under FORCE ROW LEVEL SECURITY, and the
+    # NEGATIVE case below -- reassigning ownership back to APP_ROLE -- proves that
+    # reassignment is load-bearing rather than decorative prose.
+    print()
+    import hashlib as _hashlib
+
+    def _sha(raw: str) -> str:
+        return _hashlib.sha256(raw.encode()).hexdigest()
+
+    _shared_email = "shared-across-tenants@example.com"
+    _pw_shape = "scrypt$131072$8$1$" + "c" * 24 + "$" + "d" * 44   # shape only; never verified
+    with _connect(url) as admin:
+        cur = admin.cursor()
+        cur.execute("UPDATE actors SET email=%s, password_hash=%s, disabled_at=now() "
+                    "WHERE actor_id=%s", ("solo@example.com", _pw_shape, actor_a))
+        cur.execute("UPDATE actors SET email=%s, password_hash=%s WHERE actor_id=%s",
+                    (_shared_email, _pw_shape, actor_b))
+        actor_a2 = uuid.uuid4()
+        cur.execute("INSERT INTO actors (actor_id, tenant_id, label, email, password_hash) "
+                    "VALUES (%s,%s,'amb-a2',%s,%s)", (actor_a2, a, _shared_email, _pw_shape))
+
+    with _connect(app_url) as app:
+        c = app.cursor()
+        # Deliberately NO app.tenant_id set on this connection at all: that is the whole
+        # point of this function.
+        r = c.execute("SELECT * FROM auth_find_login(%s)", ("solo@example.com",))
+        solo = r.fetchall()
+        cols = {d[0] for d in r.description}
+        note(len(solo) == 1 and str(solo[0][0]) == str(actor_a),
+             f"auth_find_login: a unique email returns exactly ONE row, with no "
+             f"app.tenant_id set on the connection at all ({len(solo)})")
+        note(solo[0][3] is not None,
+             "...and a DISABLED actor's disabled_at is reported, not hidden")
+        note(cols == {"actor_id", "tenant_id", "password_hash", "disabled_at"},
+             f"...returning EXACTLY the four documented columns, no more ({sorted(cols)})")
+
+        amb = c.execute("SELECT actor_id, tenant_id FROM auth_find_login(%s)",
+                        (_shared_email,)).fetchall()
+        note(len(amb) == 2 and {str(r2[1]) for r2 in amb} == {str(a), str(b)},
+             f"auth_find_login: an email shared by TWO REAL TENANTS returns BOTH rows, "
+             f"naming both tenant ids -- the cross-tenant ambiguity (Decision 7) that "
+             f"gateway/verbs.py's MemoryBackend-based suite cannot represent with only "
+             f"one tenant at a time ({[(str(r2[0])[:8], str(r2[1])[:8]) for r2 in amb]})")
+
+        unknown = c.execute("SELECT actor_id FROM auth_find_login(%s)",
+                            ("no-such-person@example.com",)).fetchall()
+        note(unknown == [], "...and an unknown email returns NOTHING")
+
+    _raw_token_hash = "e" * 64
+    with _connect(url) as admin:
+        admin.execute(
+            "INSERT INTO sessions (session_id, tenant_id, actor_id, token_hash, "
+            "expires_at) VALUES (%s,%s,%s,%s, now() + interval '1 day')",
+            (uuid.uuid4(), b, actor_b, _raw_token_hash))
+    with _connect(app_url) as app:
+        c = app.cursor()
+        r = c.execute("SELECT * FROM auth_resolve_session(%s)", (_raw_token_hash,))
+        row = r.fetchone()
+        cols = {d[0] for d in r.description}
+        note(row is not None and str(row[1]) == str(b),
+             f"auth_resolve_session: resolves the right TENANT with no app.tenant_id set "
+             f"({row})")
+        note(cols == {"actor_id", "tenant_id", "role", "expires_at", "revoked_at",
+                      "disabled_at"},
+             f"...returning EXACTLY the six documented columns, no token_hash among them "
+             f"({sorted(cols)})")
+        note(row[2] == "viewer",
+             "...and role is read LIVE from actors, not cached on the session")
+        with _connect(url) as admin2:
+            admin2.execute("UPDATE actors SET role='admin' WHERE actor_id=%s", (actor_b,))
+        row2 = c.execute("SELECT role FROM auth_resolve_session(%s)",
+                         (_raw_token_hash,)).fetchone()
+        note(row2[0] == "admin",
+             "...a role change takes effect on the VERY NEXT resolve, with no session "
+             "re-minted")
+        note(c.execute("SELECT * FROM auth_resolve_session(%s)",
+                       ("f" * 64,)).fetchone() is None,
+             "...and an unknown token hash resolves to nothing")
+
+    with _connect(url) as admin:
+        admin.execute(
+            "INSERT INTO invites (invite_id, tenant_id, email, role, token_hash, "
+            "invited_by, expires_at) VALUES (%s,%s,'invitee@example.com','lawyer',%s,%s,"
+            "now() + interval '7 days')", (uuid.uuid4(), a, "1" * 64, actor_a))
+    with _connect(app_url) as app:
+        c = app.cursor()
+        irow = c.execute("SELECT invite_id, tenant_id, email, role, expires_at, "
+                         "accepted_at FROM invite_find_by_token(%s)", ("1" * 64,)).fetchone()
+        note(irow is not None and str(irow[1]) == str(a)
+             and irow[2] == "invitee@example.com",
+             f"invite_find_by_token: resolves the right tenant with no app.tenant_id set "
+             f"({irow})")
+
+    # The NEGATIVE proof: reassigning ownership BACK to APP_ROLE breaks the bypass.
+    with _connect(url) as admin:
+        admin.execute(f"ALTER FUNCTION auth_find_login(text) OWNER TO {APP_ROLE}")
+    with _connect(app_url) as app:
+        c = app.cursor()
+        broken = c.execute("SELECT actor_id FROM auth_find_login(%s)",
+                           ("solo@example.com",)).fetchall()
+        note(broken == [],
+             f"...OWNED BY {APP_ROLE} instead: the SAME function, same arguments, now "
+             f"returns NOTHING, because {APP_ROLE} is NOBYPASSRLS and FORCE ROW LEVEL "
+             f"SECURITY applies to it like any other query with no app.tenant_id set. "
+             f"The ownership reassignment is what makes the bypass real, not a comment "
+             f"describing one")
+    with _connect(url) as admin:
+        admin.execute(f"ALTER FUNCTION auth_find_login(text) OWNER TO {AUTHN_ROLE}")
+        # Measured live: reassigning ownership TO a role that already held an explicit
+        # EXECUTE grant (APP_ROLE, two steps up) silently COLLAPSES that grant -- Postgres
+        # drops an ACL entry that exactly matches the object's new owner, since an owner's
+        # privilege is implicit and the entry is redundant. Moving ownership away again
+        # does not bring it back. So APP_ROLE's EXECUTE grant, present since the migration
+        # applied, is gone after this sequence, and this re-grant is not defensive
+        # paranoia -- without it the very next call is "permission denied for function".
+        admin.execute(f"GRANT EXECUTE ON FUNCTION auth_find_login(text) TO {APP_ROLE}")
+    with _connect(app_url) as app:
+        c = app.cursor()
+        restored = c.execute("SELECT actor_id FROM auth_find_login(%s)",
+                             ("solo@example.com",)).fetchall()
+        note(len(restored) == 1,
+             "...restoring ownership to the BYPASSRLS role restores the function")
+
+    # login_attempts: deliberately global. No app.tenant_id, no definer function needed --
+    # USING (true) is the whole mechanism, proved rather than merely declared.
+    print()
+    with _connect(app_url) as app:
+        c = app.cursor()
+        before_count = c.execute("SELECT count(*) FROM login_attempts").fetchone()[0]
+        c.execute("INSERT INTO login_attempts (email_hash, ip_hash, ok) "
+                 "VALUES (%s,%s,false)", (_sha("probe-a@example.com"), _sha("203.0.113.9")))
+        after_1 = c.execute("SELECT count(*) FROM login_attempts").fetchone()[0]
+        c.execute("SELECT set_config('app.tenant_id', %s, false)", (str(a),))
+        c.execute("INSERT INTO login_attempts (email_hash, ip_hash, ok) "
+                 "VALUES (%s,%s,false)", (_sha("probe-b@example.com"), _sha("203.0.113.10")))
+        after_2 = c.execute("SELECT count(*) FROM login_attempts").fetchone()[0]
+        note(after_1 == before_count + 1 and after_2 == after_1 + 1,
+             f"login_attempts: readable and writable with NO app.tenant_id at all, and "
+             f"again once one is set -- USING (true) means exactly that, on purpose "
+             f"({before_count} -> {after_1} -> {after_2})")
+
+    with _connect(url) as admin:
+        cur = admin.cursor()
+        forced = cur.execute(
+            "SELECT relforcerowsecurity FROM pg_class WHERE relname='login_attempts'"
+        ).fetchone()[0]
+        note(forced is True,
+             "login_attempts still has FORCE ROW LEVEL SECURITY set -- the USING (true) "
+             "policy is a DECISION recorded in the database, not an accidental absence "
+             "of one")
 
     print()
     if failures:

@@ -31,8 +31,8 @@ Run: PYTHONPATH=. python3 gateway/roles.py --test
 """
 from __future__ import annotations
 
-__all__ = ["VIEWER", "LAWYER", "ADMIN", "ROLES", "RANK", "REQUIRED", "may", "rank",
-           "RoleError"]
+__all__ = ["VIEWER", "LAWYER", "ADMIN", "ROLES", "RANK", "REQUIRED", "PUBLIC_VERBS", "may",
+           "rank", "RoleError"]
 
 VIEWER = "viewer"
 LAWYER = "lawyer"
@@ -51,6 +51,20 @@ def rank(role: str) -> int:
     if role not in RANK:
         raise RoleError(f"{role!r} is not a role; one of {ROLES}")
     return RANK[role]
+
+
+# The two verbs app.py serves with NO Bearer token: _principal() and may() are both
+# skipped for these, so they must never be handed a role they would bypass anyway. Kept
+# here, not just in app.py, so the exhaustiveness test below can assert these are the
+# ONLY verbs missing from REQUIRED -- any other missing entry is still the build failure
+# gateway/roles.py exists to cause.
+PUBLIC_VERBS = frozenset({"auth.login", "invites.accept"})
+
+# The one named exception to "no write verb is open to a viewer": ending your OWN session
+# is a write (it revokes a row) but not a professional act on firm or client data, unlike
+# every other write in REQUIRED. A viewer who cannot log themselves out is a worse
+# property than one who can.
+SELF_SERVICE_WRITES = frozenset({"auth.logout"})
 
 
 # Every verb, with the LEAST role that may call it. Exhaustive by test.
@@ -109,6 +123,9 @@ REQUIRED: dict[str, str] = {
     "vault.verify": VIEWER,
     "sources.list": VIEWER,
     "sources.search": VIEWER,
+    # 8a. Reading your OWN identity is not a professional act and not commercially
+    # sensitive -- it is what a client renders a nav bar from.
+    "auth.me": VIEWER,
     # Read-only case-law DISCOVERY over LICENSED open judgments; supports, never verifies,
     # and writes no obligation. A viewer may read authorities.
     "research.cases": VIEWER,
@@ -137,6 +154,15 @@ REQUIRED: dict[str, str] = {
     "document.check": LAWYER,
     "vault.upload": LAWYER,
     "vault.delete": LAWYER,
+    # Inviting and removing people is the one act this module's docstring names as
+    # ADMIN-only, not LAWYER: "admin: everything a lawyer can, plus invite and remove
+    # people."
+    "invites.create": ADMIN,
+    # A write (it revokes a row), but not a professional act on firm or client data -- it
+    # ends the CALLER'S OWN session and nobody else's. Declared in SELF_SERVICE_WRITES
+    # below, the one named exception to "no write verb is open to a viewer": a viewer who
+    # cannot log themselves out is a worse security property than one who can.
+    "auth.logout": VIEWER,
 
     # ── signing off ─────────────────────────────────────────────────────────
     # The line this file exists for. A decision here becomes labelled data (CAL-1) and the
@@ -176,10 +202,14 @@ def _test() -> int:
 
     names = {v.name for v in VERBS}
     # ── exhaustive, in BOTH directions ──────────────────────────────────────
-    missing = sorted(names - set(REQUIRED))
+    missing = sorted(names - set(REQUIRED) - PUBLIC_VERBS)
     check(not missing,
           f"**every verb declares a minimum role** -- a verb added without one fails this "
           f"build, which is the only kind of reminder that works ({missing})")
+    check(PUBLIC_VERBS <= names and not (PUBLIC_VERBS & set(REQUIRED)),
+          "...and the two PUBLIC_VERBS are excluded from that rule BY NAME, not silently: "
+          "they run with no Bearer token, so app.py skips may() for them, and giving them "
+          "a role here would be a role they bypass anyway")
     extra = sorted(set(REQUIRED) - names)
     check(not extra,
           f"...and no role is declared for a verb that no longer exists, which would be a "
@@ -228,12 +258,18 @@ def _test() -> int:
         check(True, "an unknown role RAISES rather than being treated as the lowest one")
     check(not may(VIEWER, ""), "an empty verb name is refused")
 
-    # ── every WRITE verb needs at least lawyer ──────────────────────────────
-    writes = {v.name for v in VERBS if not v.read_only}
+    # ── every WRITE verb needs at least lawyer, except the named self-service ones ──
+    writes = {v.name for v in VERBS if not v.read_only} - PUBLIC_VERBS
     weak = sorted(w for w in writes if REQUIRED.get(w) == VIEWER)
+    weak = sorted(set(weak) - SELF_SERVICE_WRITES)
     check(not weak,
           f"NO write verb is open to a viewer -- read_only is about MCP exposure and this "
-          f"is about who may act, and the two must not disagree ({weak})")
+          f"is about who may act, and the two must not disagree -- EXCEPT the named "
+          f"SELF_SERVICE_WRITES, which act only on the caller's own row ({weak})")
+    check(SELF_SERVICE_WRITES <= writes and
+          all(REQUIRED.get(w) == VIEWER for w in SELF_SERVICE_WRITES),
+          "...and every declared self-service write really is VIEWER, not merely "
+          "exempted from the check above by an entry that then went unused")
     reads = {v.name for v in VERBS if v.read_only}
     check(all(REQUIRED[r] in (VIEWER, LAWYER) for r in reads),
           "no read verb is reserved to admin: there is nothing to read that only an "
