@@ -43,17 +43,23 @@ def _needs_case_clarification(query: str) -> bool:
 
 def _looks_like_live_status(query: str) -> bool:
     q = query.casefold()
-    if re.search(r"\bstatus\b", q) and re.search(
-            r"\b(?:case|court|petition|cnr|fir|diary|docket)\b", q):
-        return True
-    return bool(re.search(
-        r"\bnext hearing\b|\bdocket\b|\bcase listing\b|\bcase history\b|"
-        r"\bcase updates?\b|\bcase progress\b|\bcase proceedings?\b|"
-        r"\b(?:latest|recent|next|last)\s+(?:court\s+)?"
-        r"(?:orders?|hearings?|listing|proceedings?)\b", q, re.I)
-        or re.search(r"\b(?:case|petition|docket|criminal matter|court matter)\b.{0,100}"
-                     r"\b(?:latest|recent|next|last)\s+(?:orders?|hearings?|updates?|listing)\b",
-                     q, re.I))
+    has_matter = bool(re.search(
+        r"\b(?:case|court|petition|cnr|fir|diary|docket|proceedings?|litigation)\b", q))
+    if not has_matter:
+        return False
+    asks_current_state = bool(re.search(
+        r"\b(?:status|situation|progress|updates?|developments?|outcome|result|"
+        r"hearing|filing|docket|orders?|listing|case history)\b", q))
+    current_or_recent = bool(re.search(
+        r"\b(?:current(?:ly)?|latest|recent|today|ongoing|right now|as of|next|last)\b", q))
+    direct_docket_intent = bool(re.search(
+        r"\b(?:status|hearing|filing|docket|listing|case history|case proceedings?)\b", q))
+    legal_decision_search = bool(re.search(
+        r"\b(?:case law|judgments?|rulings?|precedents?|legal decisions?)\b", q))
+    if legal_decision_search and not direct_docket_intent:
+        return False
+    current_case_context = current_or_recent and not legal_decision_search
+    return (asks_current_state and (current_or_recent or direct_docket_intent)) or current_case_context
 
 
 def _asks_for_docket_confirmation(query: str) -> bool:
@@ -282,12 +288,14 @@ def search(query: str, *, mode: str, consent: bool,
     answer, claim_removed = _strip_unverified_docket_claims(answer)
     docket_question = docket_question or claim_removed
     if docket_question:
-        # Search results can supply reporting leads, but cannot verify docket state.
-        # Do not append model prose here: an incomplete pattern list must never leak
-        # a confident filing/hearing claim into a current-status answer.
-        answer = ("Placedon cannot confirm a live court filing, hearing, or docket status "
-                  "from public web reporting. Review the linked reports for context and "
-                  "check the official court portal for the record.")
+        # Do not put our own warning in an ANSWERED/provider-summary field. Keep
+        # sourced reports as leads and make the official-record gate a distinct state.
+        return _result(
+            "OFFICIAL_STATUS_REQUIRED", query=query,
+            message=("Public reports are research leads, not a live court record. "
+                     "Use the official court portal to verify the filing, hearing, and status."),
+            citations=citations, queried_at=current, portals=_public_portals(),
+        )
     return _result(
         "ANSWERED", query=query, answer=answer.strip()[:10000], citations=citations,
         queried_at=current, note=("Public-web research only. Review the linked sources. "
@@ -321,6 +329,20 @@ def _test() -> int:
           "case-update paraphrases do not trigger an unconsented public search")
     check(search("Current status CNR ABC1234567890123 Supreme Court", mode="GENERAL_WEB", consent=True)["status"] == "OFFICIAL_STATUS_REQUIRED",
           "even an identified live docket is routed to official court sources")
+    check(_looks_like_live_status("What is the current situation of the Tata court case?"),
+          "natural current-situation wording is recognized as a live docket question")
+    check(not _looks_like_live_status("Recent case law on contract interpretation"),
+          "general legal research is not treated as a live docket request")
+    check(not _looks_like_live_status("What are the latest Supreme Court judgments on arbitration?"),
+          "recent court judgments remain searchable legal research")
+    check(not _looks_like_live_status("Recent High Court rulings about Section 138 cheque bounce"),
+          "recent High Court rulings remain searchable legal research")
+    check(not _looks_like_live_status("What are recent developments in Supreme Court case law on arbitration?"),
+          "case-law developments remain searchable legal research")
+    check(not _looks_like_live_status("Summarize the Supreme Court order in the Kesavananda Bharati case"),
+          "historical court orders remain searchable legal research")
+    check(not _looks_like_live_status("Explain the order in the Tata Trusts case"),
+          "requests to explain a past order are not treated as live docket checks")
     check(search("crime case status", mode="CASE_DISCOVERY", consent=False)["status"] == "CONSENT_REQUIRED",
           "case discovery also requires explicit consent")
     check(not _looks_like_live_status("What is the current status of Tata Sons listing plans?"),
@@ -355,8 +377,9 @@ def _test() -> int:
         docket = search("Has a court case been filed?", mode="CASE_DISCOVERY", consent=True,
                         transport=lambda body, key: {"answer": "No active court case exists. The dispute concerns a listing proposal [1].",
                                                      "citations": fake["citations"]})
-    check(docket["status"] == "ANSWERED" and "No active court case" not in docket["answer"]
-          and "listing proposal" not in docket["answer"] and len(docket["portals"]) == 2
+    check(docket["status"] == "OFFICIAL_STATUS_REQUIRED" and docket["answer"] is None
+          and "No active court case" not in str(docket["answer"])
+          and "listing proposal" not in str(docket["answer"]) and len(docket["portals"]) == 2
           and len(docket["citations"]) == 1,
           "live docket questions suppress provider prose and retain report leads plus official portals")
     with patch.dict(os.environ, {"PLACEDON_EXA_WEB_ENABLED": "1", "EXA_API_KEY": "test-secret-never-log"}):
@@ -364,8 +387,9 @@ def _test() -> int:
                             mode="GENERAL_WEB", consent=True,
                             transport=lambda body, key: {"answer": "There is currently no active court case [1]. The board dispute concerns listing [2].",
                                                          "citations": fake["citations"]})
-    check("no active court case" not in historical["answer"].lower()
-          and "board dispute" not in historical["answer"] and len(historical["portals"]) == 2
+    check(historical["status"] == "OFFICIAL_STATUS_REQUIRED" and historical["answer"] is None
+          and "no active court case" not in str(historical["answer"]).lower()
+          and "board dispute" not in str(historical["answer"]) and len(historical["portals"]) == 2
           and len(historical["citations"]) == 1,
           "a saved current-case question suppresses provider prose and keeps source leads")
     cleaned, removed = _strip_unverified_docket_claims(

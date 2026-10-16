@@ -88,12 +88,33 @@ class PublicWebReliability(unittest.TestCase):
         result = self.search({
             "answer": "The court matter has been listed for next week [1]. The companies disagree over governance [2].",
             "citations": [self.source(), self.source("https://example.org/report-2", "Report 2")],
-        }, query="What is the current status of the Tata court case?")
-        self.assertEqual(result["status"], "ANSWERED")
-        self.assertIn("cannot confirm a live court", result["answer"])
-        self.assertNotIn("listed for next week", result["answer"])
-        self.assertNotIn("disagree over governance", result["answer"])
+        }, query="Has a court case been filed?")
+        self.assertEqual(result["status"], "OFFICIAL_STATUS_REQUIRED")
+        self.assertIsNone(result["answer"])
+        self.assertIn("not a live court record", result["message"])
         self.assertEqual(len(result["citations"]), 2)
+        self.assertEqual(len(result["portals"]), 2)
+
+    def test_natural_current_situation_of_case_uses_official_status_gate(self):
+        query = "What is the current situation of the Tata court case?"
+        with patch.dict(public_web.os.environ, {"PLACEDON_EXA_WEB_ENABLED": "1", "EXA_API_KEY": "synthetic-test-key"}):
+            result = public_web.search(query, mode="GENERAL_WEB", consent=True,
+                                       transport=lambda *_: {
+                                           "answer": "A report says a hearing is next week [1].",
+                                           "citations": [self.source()],
+                                       })
+        self.assertEqual(result["status"], "OFFICIAL_STATUS_REQUIRED")
+        self.assertIsNone(result["answer"])
+        self.assertEqual(len(result["citations"]), 1)
+
+    def test_current_case_wording_gets_reporting_leads_but_no_answer(self):
+        result = self.search({
+            "answer": "A proceeding is listed next week [1].",
+            "citations": [self.source()],
+        }, query="Tata case study on current case between Tata Sons and Tata Trusts")
+        self.assertEqual(result["status"], "OFFICIAL_STATUS_REQUIRED")
+        self.assertIsNone(result["answer"])
+        self.assertEqual(len(result["citations"]), 1)
         self.assertEqual(len(result["portals"]), 2)
 
     def test_plain_provider_summary_remains_explicitly_unverified(self):
