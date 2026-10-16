@@ -26,11 +26,13 @@ _IN_FLIGHT = threading.BoundedSemaphore(4)
 
 def _needs_case_clarification(query: str) -> bool:
     """Recognize under-specified live docket requests before any external request."""
-    if not _looks_like_live_status(query):
+    if not (_looks_like_live_status(query) or _asks_for_docket_confirmation(query)):
         return False
     has_identifier = bool(re.search(
-        r"\bCNR\b|\bFIR\s*(?:no\.?|number)?\s*[:#-]?\s*[A-Z0-9/-]{4,}|"
-        r"\b(?:case|diary|petition)\s*(?:no\.?|number)\s*[:#-]?\s*[A-Z0-9/-]{4,}",
+        r"\bCNR\s*[:#-]?\s*(?=[A-Z0-9/-]*\d)[A-Z0-9][A-Z0-9/-]{3,}|"
+        r"\bFIR\s*(?:no\.?|number)\s*[:#-]?\s*(?=[A-Z0-9/-]*\d)[A-Z0-9][A-Z0-9/-]{3,}|"
+        r"\b(?:case|diary|petition)\s*(?:no\.?|number)\s*[:#-]?\s*"
+        r"(?=[A-Z0-9/-]*\d)[A-Z0-9][A-Z0-9/-]{3,}",
         query, re.I))
     has_court = bool(re.search(
         r"\b(?:supreme court|high court|district court|sessions court|"
@@ -44,7 +46,8 @@ def _needs_case_clarification(query: str) -> bool:
 def _looks_like_live_status(query: str) -> bool:
     q = query.casefold()
     has_matter = bool(re.search(
-        r"\b(?:case|court|petition|cnr|fir|diary|docket|proceedings?|litigation)\b", q))
+        r"\b(?:case|court|petition|cnr|fir|diary|docket|proceedings?|litigation|"
+        r"lawsuits?|suits?|disputes?)\b", q))
     if not has_matter:
         return False
     asks_current_state = bool(re.search(
@@ -65,8 +68,15 @@ def _looks_like_live_status(query: str) -> bool:
 def _asks_for_docket_confirmation(query: str) -> bool:
     """Public reporting cannot confirm that a court filing exists or is absent."""
     q = query.casefold()
-    return bool(re.search(r"\b(?:court|case|proceeding|litigation|petition|docket)\b", q)
-                and re.search(r"\b(?:filed|pending|active|status|hearing|docket)\b", q))
+    has_case_context = bool(re.search(
+        r"\b(?:court|case|proceeding|litigation|lawsuit|petition|docket|dispute)\b", q))
+    asks_for_status = bool(re.search(
+        r"\b(?:filed|pending|active|status|hearing|docket)\b|"
+        r"\b(?:moved|approached|gone|went)\s+(?:to\s+)?(?:the\s+)?"
+        r"(?:supreme|high|district|sessions|commercial|company|family)?\s*court\b|"
+        r"\bbefore\s+(?:the\s+)?(?:supreme|high|district|sessions|commercial|"
+        r"company|family)?\s*court\b", q))
+    return has_case_context and asks_for_status
 
 
 _DOCKET_STATUS_CLAIM = re.compile(
@@ -99,7 +109,7 @@ def _public_portals() -> list[dict[str, str]]:
 
 
 def _result(status: str, **kwargs) -> dict:
-    return {"status": status, "provider": "exa", "queried_at": None,
+    return {"status": status, "queried_at": None,
             "answer": None, "citations": [], **kwargs}
 
 
@@ -196,7 +206,13 @@ def search(query: str, *, mode: str, consent: bool,
         return _result("BAD_REQUEST", message=f"Search questions must be 3–{MAX_QUERY_CHARS} characters.")
     live_status = _looks_like_live_status(query)
     docket_question = live_status or _asks_for_docket_confirmation(query)
-    if live_status and not _needs_case_clarification(query):
+    if docket_question and mode == "GENERAL_WEB":
+        if _needs_case_clarification(query):
+            return _result(
+                "NEEDS_CASE_DETAILS",
+                message=("To check a live docket without mixing up cases, add the court and exact "
+                         "case or CNR number. Party names alone are not enough to confirm current status."),
+            )
         return _result(
             "OFFICIAL_STATUS_REQUIRED",
             message=("This prototype cannot retrieve a live docket. Check the official court portal "
@@ -229,23 +245,25 @@ def search(query: str, *, mode: str, consent: bool,
         }
         data = (transport or _default_transport)(body, os.environ["EXA_API_KEY"])
     except ProviderBusy as exc:
-        return _result("BUSY", message=str(exc), retryable=True)
+        return _result("BUSY", provider="exa", message=str(exc), retryable=True)
     except ProviderNotReady as exc:
-        return _result("NOT_CONFIGURED", message=str(exc))
+        return _result("NOT_CONFIGURED", provider="exa", message=str(exc))
     except Exception:  # provider details and credentials never reach the user or logs here
-        return _result("UNAVAILABLE", message="Public web research failed. Your question was not answered.", retryable=True)
+        return _result("UNAVAILABLE", provider="exa",
+                       message="Public web research failed. Your question was not answered.", retryable=True)
     finally:
         _IN_FLIGHT.release()
 
     if not isinstance(data, dict):
-        return _result("UNAVAILABLE", message="The public web provider returned an unreadable response.", retryable=True)
+        return _result("UNAVAILABLE", provider="exa",
+                       message="The public web provider returned an unreadable response.", retryable=True)
     answer = data.get("answer")
     if isinstance(answer, dict):
         # Structured answer responses are accepted only when they also carry a string
         # summary; do not stringify unknown JSON into confident prose.
         answer = answer.get("summary")
     if not isinstance(answer, str) or not answer.strip():
-        return _result("NO_RESULTS", message="The provider returned no answer.")
+        return _result("NO_RESULTS", provider="exa", message="The provider returned no answer.")
     citations = []
     # Provider [n] references refer to its original list. Filtering, deduplication,
     # and truncation must never silently point a claim at a different source.
@@ -263,7 +281,7 @@ def search(query: str, *, mode: str, consent: bool,
             source_numbers[citation["url"]] = len(citations)
             reference_numbers[source_number] = len(citations)
     if not citations:
-        return _result("NO_RESULTS", message="The provider returned no citable sources.")
+        return _result("NO_RESULTS", provider="exa", message="The provider returned no citable sources.")
     # Exa normally emits single numeric markers. Do not silently retain grouped
     # or ranged markers: their interpretation is not part of this adapter's contract.
     # Match arbitrary lengths, but bound conversion so hostile digits cannot trigger
@@ -275,9 +293,22 @@ def search(query: str, *, mode: str, consent: bool,
         for reference in references
     )
     if invalid_references:
-        # Preserve useful leads, but never show prose whose claimed source is absent.
-        answer = ("The provider's summary referenced a source that could not be shown. "
-                  "Review the source leads below; no reliable summary is available for this response.")
+        # Preserve useful leads, but never label a synthetic fallback as provider prose.
+        current = now() if callable(now) else datetime.now(timezone.utc).isoformat()
+        if docket_question:
+            return _result(
+                "OFFICIAL_STATUS_REQUIRED", provider="exa", query=query, citations=citations,
+                queried_at=current,
+                message=("The summary could not be safely matched to its sources. Public reports are "
+                         "research leads, not a live court record; verify status in the official portal."),
+                portals=_public_portals(),
+            )
+        return _result(
+            "SUMMARY_UNAVAILABLE", provider="exa", query=query, citations=citations,
+            queried_at=current,
+            message=("The summary referenced a source that could not be matched. "
+                     "No reliable summary is available; review these links as research leads."),
+        )
     else:
         answer = re.sub(r"\[([0-9]+)\]",
                         lambda match: f"[{reference_numbers[int(match.group(1))]}]", answer)
@@ -287,13 +318,13 @@ def search(query: str, *, mode: str, consent: bool,
         # Do not put our own warning in an ANSWERED/provider-summary field. Keep
         # sourced reports as leads and make the official-record gate a distinct state.
         return _result(
-            "OFFICIAL_STATUS_REQUIRED", query=query,
+            "OFFICIAL_STATUS_REQUIRED", provider="exa", query=query,
             message=("Public reports are research leads, not a live court record. "
                      "Use the official court portal to verify the filing, hearing, and status."),
             citations=citations, queried_at=current, portals=_public_portals(),
         )
     return _result(
-        "ANSWERED", query=query, answer=answer.strip()[:10000], citations=citations,
+        "ANSWERED", provider="exa", query=query, answer=answer.strip()[:10000], citations=citations,
         queried_at=current, note=("Public-web research only. Review the linked sources. "
                                   "This is not verified law or a live court docket record."),
     )
@@ -318,10 +349,10 @@ def _test() -> int:
     redirect = _NoRedirectHandler().redirect_request(
         urllib.request.Request(ENDPOINT), None, 302, "Found", {}, "https://attacker.example/collect")
     check(redirect is None, "provider redirects are rejected before API key/query headers can cross origins")
-    check(search("crime case status", mode="GENERAL_WEB", consent=False)["status"] == "CONSENT_REQUIRED",
-          "an ambiguous case-status question can search public sources only with consent")
-    check(search("latest order and recent hearing for a criminal case", mode="GENERAL_WEB", consent=False)["status"] == "CONSENT_REQUIRED",
-          "case-update paraphrases do not trigger an unconsented public search")
+    check(search("crime case status", mode="GENERAL_WEB", consent=False)["status"] == "NEEDS_CASE_DETAILS",
+          "an ambiguous live case-status question asks for identifiers before external search")
+    check(search("latest order and recent hearing for a criminal case", mode="GENERAL_WEB", consent=False)["status"] == "NEEDS_CASE_DETAILS",
+          "case-update paraphrases ask for identifiers before external search")
     check(search("Current status CNR ABC1234567890123 Supreme Court", mode="GENERAL_WEB", consent=True)["status"] == "OFFICIAL_STATUS_REQUIRED",
           "even an identified live docket is routed to official court sources")
     check(_looks_like_live_status("What is the current situation of the Tata court case?"),
@@ -339,11 +370,13 @@ def _test() -> int:
     check(not _looks_like_live_status("Explain the order in the Tata Trusts case"),
           "requests to explain a past order are not treated as live docket checks")
     check(search("crime case status", mode="CASE_DISCOVERY", consent=False)["status"] == "CONSENT_REQUIRED",
-          "case discovery also requires explicit consent")
+          "case discovery requires consent before an external query")
     check(not _looks_like_live_status("What is the current status of Tata Sons listing plans?"),
           "a general current-status question is not mistaken for a court docket")
-    check(search("Tata Sons Cyrus Mistry judgments", mode="CASE_DISCOVERY", consent=True)["status"] == "NOT_CONFIGURED",
-          "unconfigured provider is named instead of returning fake or empty search results")
+    with patch.dict(os.environ, {}, clear=True):
+        unconfigured = search("Tata Sons Cyrus Mistry judgments", mode="CASE_DISCOVERY", consent=True)
+    check(unconfigured["status"] == "NOT_CONFIGURED" and "provider" not in unconfigured,
+          "unconfigured preflight does not claim a provider search occurred")
     check(search("hello world", mode="GENERAL_WEB", consent=False)["status"] == "CONSENT_REQUIRED",
           "external query is not sent without consent")
     check(search("ab", mode="GENERAL_WEB", consent=True)["status"] == "BAD_REQUEST",
@@ -369,24 +402,17 @@ def _test() -> int:
           and result["queried_at"] == "2026-10-16T00:00:00+00:00",
           "source domain and retrieval time are explicit")
     with patch.dict(os.environ, {"PLACEDON_EXA_WEB_ENABLED": "1", "EXA_API_KEY": "test-secret-never-log"}):
-        docket = search("Has a court case been filed?", mode="CASE_DISCOVERY", consent=True,
-                        transport=lambda body, key: {"answer": "No active court case exists. The dispute concerns a listing proposal [1].",
-                                                     "citations": fake["citations"]})
-    check(docket["status"] == "OFFICIAL_STATUS_REQUIRED" and docket["answer"] is None
-          and "No active court case" not in str(docket["answer"])
-          and "listing proposal" not in str(docket["answer"]) and len(docket["portals"]) == 2
-          and len(docket["citations"]) == 1,
-          "live docket questions suppress provider prose and retain report leads plus official portals")
+        docket = search("Has a court case been filed?", mode="GENERAL_WEB", consent=True,
+                        transport=lambda body, key: (_ for _ in ()).throw(AssertionError("provider must not be called")))
+    check(docket["status"] == "NEEDS_CASE_DETAILS" and docket["answer"] is None
+          and "case or CNR number" in docket["message"],
+          "ambiguous docket confirmation asks for identifiers before external search")
     with patch.dict(os.environ, {"PLACEDON_EXA_WEB_ENABLED": "1", "EXA_API_KEY": "test-secret-never-log"}):
         historical = search("Tata case study on current case between Tata Sons and Tata Trusts",
                             mode="GENERAL_WEB", consent=True,
-                            transport=lambda body, key: {"answer": "There is currently no active court case [1]. The board dispute concerns listing [2].",
-                                                         "citations": fake["citations"]})
-    check(historical["status"] == "OFFICIAL_STATUS_REQUIRED" and historical["answer"] is None
-          and "no active court case" not in str(historical["answer"]).lower()
-          and "board dispute" not in str(historical["answer"]) and len(historical["portals"]) == 2
-          and len(historical["citations"]) == 1,
-          "a saved current-case question suppresses provider prose and keeps source leads")
+                            transport=lambda body, key: (_ for _ in ()).throw(AssertionError("provider must not be called")))
+    check(historical["status"] == "NEEDS_CASE_DETAILS" and historical["answer"] is None,
+          "an ambiguous current-case query requests identifiers before external search")
     removed = _contains_unverified_docket_claim(
         "The governance dispute concerns listing. No court has issued a ruling as of today.")
     check(removed,
