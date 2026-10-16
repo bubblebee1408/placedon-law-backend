@@ -129,6 +129,8 @@ REQUIRED: dict[str, str] = {
     # Read-only case-law DISCOVERY over LICENSED open judgments; supports, never verifies,
     # and writes no obligation. A viewer may read authorities.
     "research.cases": VIEWER,
+    # Opt-in query-only public web research. No case files or matter context are accepted.
+    "research.web": VIEWER,
 
     # ── doing work ──────────────────────────────────────────────────────────
     # A viewer may read a contract review someone else ran; running one spends money and

@@ -79,10 +79,10 @@ fi
 # fail HERE, on a dev laptop, not only on a fresh clone with no .env. Before any suite runs,
 # unset every provider key from the shell AND tell checker/env.py not to supply one from .env
 # (PLACEDON_GATE_NO_KEYS). The `--live` path above exec'd already and keeps its keys.
-for _name in $(env | sed -nE 's/^(ANTHROPIC_[A-Za-z0-9_]*|AZURE_AI_[A-Za-z0-9_]*|GEMINI_[A-Za-z0-9_]*|GOOGLE_[A-Za-z0-9_]*|SARVAM_[A-Za-z0-9_]*|VOYAGE_[A-Za-z0-9_]*|AWS_[A-Za-z0-9_]*)=.*/\1/p'); do
+for _name in $(env | sed -nE 's/^(ANTHROPIC_[A-Za-z0-9_]*|AZURE_AI_[A-Za-z0-9_]*|GEMINI_[A-Za-z0-9_]*|GOOGLE_[A-Za-z0-9_]*|SARVAM_[A-Za-z0-9_]*|VOYAGE_[A-Za-z0-9_]*|AWS_[A-Za-z0-9_]*|EXA_[A-Za-z0-9_]*|PLACEDON_EXA_[A-Za-z0-9_]*)=.*/\1/p'); do
   unset "$_name" 2>/dev/null || true
 done
-unset PLACEDON_INDIANKANOON_KEY PLACEDON_DATA_GOV_IN_KEY 2>/dev/null || true
+unset PLACEDON_INDIANKANOON_KEY PLACEDON_DATA_GOV_IN_KEY PLACEDON_EXA_WEB_ENABLED 2>/dev/null || true
 export PLACEDON_GATE_NO_KEYS=1
 
 suites=(
@@ -462,6 +462,7 @@ extra+=("checker/sources/connector_base.py --test"
 extra+=("checker/sources/judgments_open.py --test")
 extra+=("checker/sources/judgment_index.py --test")
 extra+=("checker/sources/case_law.py --test")
+extra+=("checker/public_web.py --test")
 # The RESOURCE router: a conservative, deterministic, no-model text classifier that decides
 # whether a research question reads against the held statute or judgment discovery. Pure
 # text in, a Decision out -- no index, no network -- so it gates here like any other

@@ -4632,6 +4632,16 @@ def _research_cases(args: dict, ctx: Context) -> dict:
     }
 
 
+def _research_web(args: dict, ctx: Context) -> dict:
+    """Opt-in general web answer, separate from held-law and live docket workflows."""
+    from checker import public_web
+
+    query = args.get("query")
+    mode = args.get("mode")
+    consent = args.get("external_search_consent") is True
+    return public_web.search(query, mode=mode, consent=consent)
+
+
 # ── Lane B: a predictive signal, never a legal decision ───────────────────────
 
 def _forecast_summary(args: dict, ctx: Context) -> dict:
@@ -5024,6 +5034,16 @@ VERBS: tuple[Verb, ...] = (
                 describes="a party or case name, e.g. 'Tata Sons Cyrus Mistry' or "
                           "'a 2021 oppression case'"),),
          "POST", read_only=True, mcp=False, run=_research_cases),
+
+    Verb("research.web",
+         "Opt-in public web research with cited sources. Sends only the user-entered query "
+         "to the configured provider; it does not search Vault files, verify law, or fetch a live docket.",
+         (Field("query", STRING, True, describes="a public question; max 800 characters"),
+          Field("mode", STRING, True,
+                describes="GENERAL_WEB or CASE_DISCOVERY; not live case status"),
+          Field("external_search_consent", BOOLEAN, True,
+                describes="true only after the user confirms the query may go to the public provider")),
+         "POST", read_only=True, mcp=False, run=_research_web),
 
     Verb("company_facts.extract",
          "Read an MCA Company Master Data page you downloaded from mca.gov.in and "
@@ -5513,7 +5533,7 @@ def _test() -> None:
                     "review_contract", "review_document", "events.assess",
                     "runs.get", "runs.trace", "runs.approve", "runs.reject",
                     "runs.submit", "runs.cancel", "documents.upload",
-                    "sources.list", "sources.search", "research.cases", "company_facts.extract",
+                    "sources.list", "sources.search", "research.cases", "research.web", "company_facts.extract",
                     "intake.classify", "conversation.send", "conversation.list",
                     "conversation.get", "citation.get", "review_table.create",
                     "review_table.status", "review_table.export",
@@ -5532,7 +5552,7 @@ def _test() -> None:
                         # 026: sign-in, sessions, invites.
                         "auth.login", "auth.logout", "auth.me",
                         "invites.create", "invites.accept"},
-          f"the fifty-five verbs are declared once ({sorted(names)})")
+          f"the fifty-six verbs are declared once ({sorted(names)})")
     # sources.* are READ-ONLY, so they reach MCP. That is the intended shape: an agent may
     # ask what a source permits and search what may be read, and there is no sources verb
     # that fetches, stores or spends. S3's Indian Kanoon connector will spend money, and
@@ -6054,6 +6074,17 @@ def _test() -> None:
           "research.cases returns no quote and no obligation -- authorities, not findings")
     check(by_name()["research.cases"].run({"query": "   "}, Context()).get("code") == "BAD_REQUEST",
           "research.cases refuses an empty query rather than searching for nothing")
+
+    _web_ambiguous = by_name()["research.web"].run({
+        "query": "What's the current status of a crime case?",
+        "mode": "GENERAL_WEB", "external_search_consent": True}, Context())
+    check(_web_ambiguous.get("status") == "NEEDS_CASE_DETAILS",
+          "research.web asks for case details instead of turning web search into docket status")
+    _web_no_consent = by_name()["research.web"].run({
+        "query": "recent criminal cases in Delhi", "mode": "CASE_DISCOVERY",
+        "external_search_consent": False}, Context())
+    check(_web_no_consent.get("status") == "CONSENT_REQUIRED",
+          "research.web requires consent before an external query")
 
     # ══ resource router: a CASE-shaped question reaches judgment discovery ══════════════
     # BEFORE this change, `ask` only ever read the held statute: a case-shaped question
@@ -7256,7 +7287,7 @@ def _test() -> None:
                      # document.verify -- the Themis tool count is frozen at 31 and
                      # scripts/themis_mcp.py must not be edited here -- NOT because case
                      # law is sensitive: it is public LICENSED open data.
-                     "research.cases"},
+                     "research.cases", "research.web"},
           f"...and the verbs that opt out are the ones that should: client and draft lists, the "
           f"firm's SPEND, and "
           f"every read of the VAULT -- which is the client's documents themselves. "
@@ -7320,7 +7351,7 @@ def _test() -> None:
           "...while a WRITE verb is kept out of MCP by mcp_tools(), not by the author "
           "remembering to")
     check("widgets.delete" in write_verbs(hypo), "...and is named in write_verbs()")
-    check(len(VERBS) == 55 and "widgets.count" not in rest_spec(),
+    check(len(VERBS) == 56 and "widgets.count" not in rest_spec(),
           "...and the probe changed nothing in this module: the surfaces are generated "
           "from an argument, not from a global the test rebound")
 
