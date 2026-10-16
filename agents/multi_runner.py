@@ -22,7 +22,7 @@ what "a person has to look at this" means here, and it is the same word
 
 ## A worker that fails three times is dead-lettered, and the RUN is PARTIAL
 
-`gateway/jobs.MAX_ATTEMPTS` is 3 and DEAD is already a terminal state distinct from FAILED.
+The maximum attempts are reserved up front by `multi_plan`; DEAD is already a terminal state distinct from FAILED.
 A dead worker does not fail the run: the other seven answers are real and paid for. The run
 is PARTIAL and **names the gap**, because a PARTIAL that did not say what was missing would
 be read as a complete answer with fewer findings.
@@ -38,9 +38,11 @@ Run: PYTHONPATH=. python3 agents/multi_runner.py --test
 """
 from __future__ import annotations
 
+import uuid
 from dataclasses import dataclass, field
 
 from agents import multi_plan as mp
+from backend.budget import DEFAULT_MODEL, cost_inr
 
 # Two in a row, not three. See the module docstring: a third attempt spends money to learn
 # the same thing.
@@ -101,8 +103,10 @@ class RunOutcome:
                 "note": self.note, "detail": self.detail}
 
 
-def run(plan, *, call, verify, merge, budget=None, max_attempts: int = 3,
-        reservations: tuple = ()) -> RunOutcome:
+def run(plan, *, call, verify, merge, budget=None,
+        max_attempts: int = mp.MAX_WORKER_ATTEMPTS,
+        reservations: tuple = (), actual_cost=None,
+        model: str = DEFAULT_MODEL, per_model_cap: int | None = None) -> RunOutcome:
     """Run a validated plan. `call`, `verify` and `merge` are INJECTED.
 
       call(task)          -> text, or raises for a transport failure
@@ -113,26 +117,112 @@ def run(plan, *, call, verify, merge, budget=None, max_attempts: int = 3,
     and a worker runs it against whatever `gateway/models.py` serves. That is the same shape
     `agents/review_grid.run_cell` uses, for the same reason.
 
-    `reservations` are the ids `validate` took. Each is settled as its worker finishes --
-    including a dead one, which settles at 0.0 because it never billed.
+    `reservations` are the ids `validate` took. A provider integration may inject
+    `actual_cost(task, result)` with provider-reported cost across all attempts. If usage is
+    absent or that callback fails, the full reservation is committed. Missing usage is not
+    proof that the provider billed nothing.
     """
-    # Validated WITHOUT the budget when the caller already reserved. `_reservation_id` is
-    # stable per (goal, index, agent) -- deliberately, so a resumed plan cannot double-hold
-    # -- which means re-reserving ids the caller is still holding raises "already
-    # outstanding". Found by `runs.preview`'s own test: preview -> start -> result went
-    # through validate twice and the second call collided with the first's reservations.
-    #
-    # The structural checks still run either way. What is skipped is only the reservation,
-    # because the money is already held and taking it twice is the bug, not the check.
-    verdict = mp.validate(plan, budget=(None if reservations else budget))
+    # Validate structure WITHOUT reserving again when the caller already has a hold set.
+    # IDs have a stable plan/worker hash plus a fresh run suffix, so completed runs cannot
+    # reuse old receipts while an in-flight preview can still pass its exact holds here.
+    # Structural checks run either way; only duplicate reservation is skipped.
+    if not isinstance(max_attempts, int) or not 1 <= max_attempts <= mp.MAX_WORKER_ATTEMPTS:
+        return RunOutcome(REFUSED, note=(
+            f"max_attempts must be between 1 and the reserved cap of "
+            f"{mp.MAX_WORKER_ATTEMPTS}; no worker ran and no spend was admitted"),
+            detail={"code": "INVALID_ATTEMPT_CAP"})
+    verdict = mp.validate(plan, budget=(None if reservations else budget),
+                          model=model, per_model_cap=per_model_cap)
     if not verdict.ok:
         return RunOutcome(REFUSED, note=verdict.reason,
                           detail={"code": verdict.code, **verdict.detail})
-    held = list(reservations or verdict.reservations)
+    if reservations:
+        expected = tuple(mp._reservation_id(plan, i) for i in range(len(plan.workers)))
+        reservation_ids = tuple(reservations) if isinstance(reservations, (tuple, list)) else ()
+        run_tokens = []
+        for base, rid in zip(expected, reservation_ids):
+            if isinstance(rid, str) and rid.startswith(base + "-"):
+                run_tokens.append(rid[len(base) + 1:])
+        if (budget is None or len(reservation_ids) != len(plan.workers)
+                or len(run_tokens) != len(plan.workers)
+                or len(set(run_tokens)) != 1
+                or not run_tokens[0].isalnum() or len(run_tokens[0]) != 12):
+            return RunOutcome(REFUSED, note=(
+                "caller-supplied reservations must be the complete ordered set for one run of this plan "
+                "and an active budget ledger; no worker ran"),
+                detail={"code": "INVALID_RESERVATIONS"})
+        required = cost_inr(
+            model, mp.WORKER_INPUT_TOKENS * mp.MAX_WORKER_ATTEMPTS,
+            mp.WORKER_MAX_TOKENS * mp.MAX_WORKER_ATTEMPTS)
+        for rid in reservation_ids:
+            try:
+                details = budget.reservation_details(rid)
+            except Exception:  # noqa: BLE001
+                details = None
+            if (details is None or details["amount_inr"] + 1e-9 < required
+                    or details["request_count"] < mp.MAX_WORKER_ATTEMPTS
+                    or details["model"] != model or details["claimed"]):
+                return RunOutcome(REFUSED, note=(
+                    "caller-supplied reservation is absent or below the required retry cap; "
+                    "no worker ran"), detail={"code": "INVALID_RESERVATIONS"})
+        held = list(reservations)
+    else:
+        held = list(verdict.reservations)
 
-    def settle(i: int, actual: float) -> None:
+    if budget is not None:
+        required = cost_inr(
+            model, mp.WORKER_INPUT_TOKENS * mp.MAX_WORKER_ATTEMPTS,
+            mp.WORKER_MAX_TOKENS * mp.MAX_WORKER_ATTEMPTS)
+        claim_id = uuid.uuid4().hex
+        try:
+            claimed = budget.claim_reservations(tuple(held), claim_id, required)
+        except Exception:  # noqa: BLE001
+            claimed = False
+        if not claimed:
+            return RunOutcome(REFUSED, note=(
+                "the complete reservation set could not be atomically claimed; no worker ran"),
+                detail={"code": "RESERVATIONS_NOT_CLAIMED"})
+
+    accounting_warnings: list[str] = []
+
+    def settle(i: int, task, result: WorkerResult) -> None:
         if budget is not None and i < len(held):
-            budget.settle(held[i], actual)
+            actual = None
+            if actual_cost is not None:
+                try:
+                    actual = actual_cost(task, result)
+                except Exception as e:  # noqa: BLE001
+                    accounting_warnings.append(
+                        f"worker {i}: usage lookup failed ({type(e).__name__}); full reserve committed")
+            try:
+                verdict = budget.settle(held[i], actual, actual_calls=result.attempts)
+            except Exception as e:  # noqa: BLE001
+                accounting_warnings.append(
+                    f"worker {i}: settlement failed ({type(e).__name__}); reservation status is unknown")
+                return
+            if not verdict.allowed:
+                accounting_warnings.append(
+                    f"worker {i}: spend could not be settled; its reservation remains held")
+
+    def detail(base: dict) -> dict:
+        return ({**base, "cost_accounting_warnings": accounting_warnings}
+                if accounting_warnings else base)
+
+    def release_unstarted(start_index: int) -> None:
+        # These reservations have not been dispatched, so settling at zero is supported by
+        # direct evidence: no worker call was made for these indices.
+        if budget is None:
+            return
+        for j in range(start_index, len(held)):
+            try:
+                verdict = budget.settle(held[j], 0.0, actual_calls=0)
+            except Exception as e:  # noqa: BLE001
+                accounting_warnings.append(
+                    f"worker {j}: release failed ({type(e).__name__}); reservation status is unknown")
+                continue
+            if not verdict.allowed:
+                accounting_warnings.append(
+                    f"worker {j}: undispatched reservation could not be released")
 
     results: list[WorkerResult] = []
     verified: list[WorkerResult] = []
@@ -161,6 +251,20 @@ def run(plan, *, call, verify, merge, budget=None, max_attempts: int = 3,
                 if strikes >= VERIFY_STRIKES:
                     break
                 continue
+            except Exception as e:  # noqa: BLE001
+                # A verifier malfunction makes the result unusable. We still must settle
+                # the possibly billed worker and release holds for workers never dispatched.
+                outcome = WorkerResult(i, task.agent, W_NEEDS_LAWYER, "", attempts,
+                                       f"verifier error ({type(e).__name__}); result was not merged")
+                results.append(outcome)
+                gaps.append(f"worker {i} ({task.agent}): {outcome.state} -- {outcome.reason}")
+                settle(i, task, outcome)
+                release_unstarted(i + 1)
+                return RunOutcome(NEEDS_LAWYER, tuple(results), "", tuple(gaps), note=(
+                    "verification failed internally; the result was withheld and remaining "
+                    "workers were not dispatched"),
+                    detail=detail({"verified": len(verified), "workers": len(results),
+                                   "code": "VERIFIER_ERROR"}))
             outcome = WorkerResult(i, task.agent, W_OK, checked, attempts)
             break
         else:
@@ -177,11 +281,9 @@ def run(plan, *, call, verify, merge, budget=None, max_attempts: int = 3,
                                    f"evidence will not answer it on a third try, and "
                                    f"spending another call learns the same thing")
         results.append(outcome)
-        # Settled whatever happened. A worker that died never billed, so 0.0; a worker that
-        # answered is settled by the caller's accounting, which this module does not have --
-        # so 0.0 here too, and the reservation is RELEASED rather than left outstanding.
-        # Holding money for finished work is the leak move 3 measured at ₹2.00 a cell.
-        settle(i, 0.0)
+        # An unknown outcome may still have incurred provider spend. Only commit zero when
+        # the caller can establish that no paid model call occurred.
+        settle(i, task, outcome)
         if outcome.state == W_OK:
             verified.append(outcome)
         else:
@@ -195,22 +297,22 @@ def run(plan, *, call, verify, merge, budget=None, max_attempts: int = 3,
         return RunOutcome(NEEDS_LAWYER, tuple(results), "", tuple(gaps), note=(
             "every worker either died or was refused by the verifier, so there is nothing "
             "to merge. Not an empty answer -- an empty answer would read as 'we looked and "
-            "found nothing'"), detail={"verified": 0, "workers": len(results)})
+            "found nothing'"), detail=detail({"verified": 0, "workers": len(results)}))
     if any(r.state == W_NEEDS_LAWYER for r in results):
         return RunOutcome(NEEDS_LAWYER, tuple(results), merged, tuple(gaps), note=(
             f"{sum(1 for r in results if r.state == W_NEEDS_LAWYER)} branch(es) were "
             f"refused by the verifier twice in a row and a person has to look at them. The "
             f"{len(verified)} verified result(s) are merged and real; the gaps are named"),
-            detail={"verified": len(verified), "workers": len(results)})
+            detail=detail({"verified": len(verified), "workers": len(results)}))
     if gaps:
         return RunOutcome(PARTIAL, tuple(results), merged, tuple(gaps), note=(
             f"{len(verified)} of {len(results)} workers answered and were verified. The "
             f"rest are NAMED above: a PARTIAL that did not say what was missing would be "
             f"read as a complete answer with fewer findings"),
-            detail={"verified": len(verified), "workers": len(results)})
+            detail=detail({"verified": len(verified), "workers": len(results)}))
     return RunOutcome(ANSWERED, tuple(results), merged, (), note=(
         f"all {len(results)} workers answered and every result passed the verifier before "
-        f"the merge saw it"), detail={"verified": len(verified), "workers": len(results)})
+        f"the merge saw it"), detail=detail({"verified": len(verified), "workers": len(results)}))
 
 
 def _test() -> int:
@@ -342,19 +444,28 @@ def _test() -> int:
     check(out.detail.get("code") == mp.UNKNOWN_AGENT,
           f"...carrying the validator's own code ({out.detail.get('code')})")
 
-    # ── reservations are settled, whatever happened ─────────────────────────
+    # ── unknown provider usage commits the hold, never zero ─────────────────
     from datetime import date as _date
     from backend.budget import BudgetTracker
 
     class _Mem:
         def __init__(self) -> None:
             self.d: dict = {}
+            from threading import RLock
+            self.lock = RLock()
 
         def read(self) -> dict:
-            return dict(self.d)
+            with self.lock:
+                return dict(self.d)
 
         def write(self, data: dict) -> None:
-            self.d = dict(data)
+            with self.lock:
+                self.d = dict(data)
+
+        def update(self, fn) -> dict:
+            with self.lock:
+                self.d = dict(fn(dict(self.d)))
+                return dict(self.d)
 
     def outstanding(t) -> dict:
         return {k: v for k, v in (t._state().get("reservations") or {}).items()
@@ -365,9 +476,83 @@ def _test() -> int:
     check(out.status in (PARTIAL, ANSWERED),
           f"a budgeted run completes ({out.status})")
     check(not outstanding(t),
-          f"...and leaves NOTHING reserved -- including for the worker that DIED, which "
-          f"never billed. Holding money for finished work is the leak move 3 measured at "
-          f"₹2.00 a cell ({outstanding(t)})")
+          f"...and leaves NOTHING reserved after settling ({outstanding(t)})")
+    check(t._state()["month_inr"] > 0,
+          "...and commits the conservative reservation when usage is unknown instead of "
+          "releasing it as a zero-cost call")
+    check(t._state()["calls_today"] == sum(worker.attempts for worker in out.results),
+          "every retry counts as an admitted provider request; unused reserved attempts are released")
+
+    # An internal verifier exception withholds the answer, commits the possibly paid worker,
+    # and releases reservations for workers that never started.
+    t_verify_error = BudgetTracker(_Mem(), today=_date(2026, 10, 5))
+
+    def broken_verifier(_text, _task):
+        raise RuntimeError("verifier backend unavailable")
+
+    out_verify_error = run(plan_of(2), call=lambda task: task.task,
+                           verify=broken_verifier, merge=merge, budget=t_verify_error)
+    check(out_verify_error.status == NEEDS_LAWYER
+          and out_verify_error.detail.get("code") == "VERIFIER_ERROR",
+          "an unexpected verifier exception is surfaced as a withheld result")
+    check(not outstanding(t_verify_error)
+          and t_verify_error._state()["month_inr"] > 0,
+          "the attempted worker reserve is committed and undispatched worker holds are released")
+
+    # A provider usage callback may settle the measured total across all attempts.
+    t_usage = BudgetTracker(_Mem(), today=_date(2026, 10, 5))
+    out_usage = run(plan_of(2), call=lambda task: task.task,
+                    verify=lambda text, task: text, merge=merge, budget=t_usage,
+                    actual_cost=lambda _task, _result: 0.25)
+    check(out_usage.status == ANSWERED and abs(t_usage._state()["month_inr"] - 0.5) < 0.0001,
+          "...and a provider-reported usage callback records measured cost for every worker")
+
+    # The current HTTP route explicitly uses a deterministic worker; only that known
+    # no-provider path is allowed to release its reservation at zero.
+    t_free = BudgetTracker(_Mem(), today=_date(2026, 10, 5))
+    run(plan_of(2), call=lambda task: task.task, verify=lambda text, task: text,
+        merge=merge, budget=t_free, actual_cost=lambda _task, _result: 0.0)
+    check(t_free._state()["month_inr"] == 0.0,
+          "an explicitly measured no-model path settles at zero spend")
+
+    t_unknown = BudgetTracker(_Mem(), today=_date(2026, 10, 5))
+    out_unknown = run(plan_of(1), call=lambda task: task.task,
+                      verify=lambda text, task: text, merge=merge, budget=t_unknown,
+                      actual_cost=lambda _task, _result: (_ for _ in ()).throw(
+                          RuntimeError("usage unavailable")))
+    check(bool(out_unknown.detail.get("cost_accounting_warnings"))
+          and t_unknown._state()["month_inr"] > 0,
+          "usage callback failure is visible and still commits the worst-case reservation")
+
+    class _BrokenSettlement(BudgetTracker):
+        def settle(self, _reservation_id, _actual_inr, **_kwargs):
+            raise OSError("ledger unavailable")
+
+    t_ledger_error = _BrokenSettlement(_Mem(), today=_date(2026, 10, 5))
+    out_ledger_error = run(plan_of(1), call=lambda task: task.task,
+                           verify=lambda text, task: text, merge=merge,
+                           budget=t_ledger_error, actual_cost=lambda *_: 0.1)
+    check(out_ledger_error.status == ANSWERED
+          and bool(out_ledger_error.detail.get("cost_accounting_warnings")),
+          "ledger settlement failure is surfaced without converting the answer into a crash")
+
+    ran_over_cap: list = []
+    refused_over_cap = run(plan_of(1), call=lambda task: ran_over_cap.append(task) or "x",
+                           verify=lambda text, task: text, merge=merge,
+                           max_attempts=mp.MAX_WORKER_ATTEMPTS + 1)
+    check(refused_over_cap.status == REFUSED and not ran_over_cap
+          and refused_over_cap.detail.get("code") == "INVALID_ATTEMPT_CAP",
+          "raising retries above the reserved bound is refused before a worker runs")
+
+    t_quota = BudgetTracker(_Mem(), today=_date(2026, 10, 5))
+    quota_calls: list = []
+    quota_refusal = run(plan_of(2), call=lambda task: quota_calls.append(task) or "x",
+                        verify=lambda text, task: text, merge=merge, budget=t_quota,
+                        per_model_cap=4)
+    check(quota_refusal.status == REFUSED and not quota_calls
+          and not outstanding(t_quota) and t_quota._state()["calls_today"] == 0,
+          "the model-specific request cap reserves all retries before dispatch and releases "
+          "partial admission when the plan cannot fit")
 
     # ── a caller that already reserved is not charged twice ────────────────
     # `_reservation_id` is stable per (goal, index, agent), so re-reserving ids the caller
@@ -377,6 +562,29 @@ def _test() -> int:
     v5 = mp.validate(plan_of(3), budget=t5)
     check(v5.ok and len(outstanding(t5)) == 3,
           f"the caller reserves three ({len(outstanding(t5))})")
+    dispatched_bad_res: list = []
+    short_res = run(plan_of(3), call=lambda task: dispatched_bad_res.append(task) or "a",
+                    verify=lambda x, t: x, merge=merge, budget=t5,
+                    reservations=v5.reservations[:1])
+    check(short_res.status == REFUSED and short_res.detail.get("code") == "INVALID_RESERVATIONS"
+          and not dispatched_bad_res,
+          "an incomplete caller reservation set refuses before any worker runs")
+    extra_res = run(plan_of(3), call=lambda task: dispatched_bad_res.append(task) or "a",
+                    verify=lambda x, t: x, merge=merge, budget=t5,
+                    reservations=v5.reservations + ("extra",))
+    check(extra_res.status == REFUSED and not dispatched_bad_res,
+          "an extra/mismatched caller reservation refuses before dispatch")
+    wrong_plan = mp.MultiPlan("different goal", plan_of(3).workers)
+    wrong_res = run(wrong_plan, call=lambda task: dispatched_bad_res.append(task) or "a",
+                    verify=lambda x, t: x, merge=merge, budget=t5,
+                    reservations=v5.reservations)
+    check(wrong_res.status == REFUSED and not dispatched_bad_res,
+          "holds for a different plan cannot authorize these workers")
+    no_ledger = run(plan_of(3), call=lambda task: dispatched_bad_res.append(task) or "a",
+                    verify=lambda x, t: x, merge=merge,
+                    reservations=v5.reservations)
+    check(no_ledger.status == REFUSED and not dispatched_bad_res,
+          "caller-supplied reservation IDs without their ledger are rejected")
     out5 = run(plan_of(3), call=lambda t: "a", verify=lambda x, t: x, merge=merge,
                budget=t5, reservations=v5.reservations)
     check(out5.status == ANSWERED,
@@ -384,6 +592,56 @@ def _test() -> int:
     check(not outstanding(t5),
           f"...settling exactly those, so the ledger balances to zero "
           f"({outstanding(t5)})")
+    stale_res = run(plan_of(3), call=lambda task: dispatched_bad_res.append(task) or "a",
+                    verify=lambda x, t: x, merge=merge, budget=t5,
+                    reservations=v5.reservations)
+    check(stale_res.status == REFUSED and not dispatched_bad_res,
+          "already-settled reservation IDs cannot be replayed for another run")
+    fresh_run = mp.validate(plan_of(3), budget=t5)
+    check(fresh_run.ok and not set(fresh_run.reservations).intersection(v5.reservations),
+          "the same plan can run again with fresh reservation IDs after a completed run")
+    for rid in fresh_run.reservations:
+        t5.settle(rid, 0.0, actual_calls=0)
+
+    # Two in-flight calls cannot both spend against the same reservation. The store's
+    # update() and the reservation claim must be one atomic compare-and-set.
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier, Lock
+    concurrent_plan = plan_of(1)
+    t_concurrent = BudgetTracker(_Mem(), today=_date(2026, 10, 5))
+    preflight = mp.validate(concurrent_plan, budget=t_concurrent)
+    dispatch_count = 0
+    dispatch_lock = Lock()
+    start = Barrier(3)
+
+    def compete_for_hold():
+        start.wait()
+        return run(concurrent_plan, call=lambda _task: counted_dispatch(),
+                   verify=lambda text, _task: text, merge=merge,
+                   budget=t_concurrent, reservations=preflight.reservations)
+
+    def counted_dispatch():
+        nonlocal dispatch_count
+        with dispatch_lock:
+            dispatch_count += 1
+        return "a"
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        contenders = [pool.submit(compete_for_hold) for _ in range(2)]
+        start.wait()
+        concurrent_outcomes = [future.result() for future in contenders]
+    check(sorted(out.status for out in concurrent_outcomes) == [ANSWERED, REFUSED]
+          and dispatch_count == 1,
+          "simultaneous replay atomically admits one run and dispatches exactly one worker")
+
+    t_low = BudgetTracker(_Mem(), today=_date(2026, 10, 5))
+    one_plan = plan_of(1)
+    low_id = mp._reservation_id(one_plan, 0)
+    t_low.reserve(input_tokens=1, max_tokens=1, reservation_id=low_id)
+    low = run(one_plan, call=lambda task: dispatched_bad_res.append(task) or "a",
+              verify=lambda x, t: x, merge=merge, budget=t_low, reservations=(low_id,))
+    check(low.status == REFUSED and not dispatched_bad_res,
+          "a live hold below the maximum retry reserve cannot authorize a call")
     # And the structural checks still run on that path: a bad plan with reservations
     # supplied is still refused.
     _bad_with_res = run(mp.MultiPlan("g", (mp.Task("nope", "x"),)), call=lambda t: "a",

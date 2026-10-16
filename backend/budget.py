@@ -553,14 +553,11 @@ class AtomicStore(Protocol):
 
 
 class FileStore:
-    """Good enough for ONE WRITER. Swap for Supabase/Redis when there are several.
+    """Local file ledger with atomic read-modify-write on one shared filesystem.
 
-    `write` is atomic — `tmp.replace` — but read-modify-write is not, and FileStore
-    deliberately does not implement `AtomicStore.update`. A lock file would make the
-    one-box multi-process case safe while leaving the multi-instance case this module was
-    written for (see the Persistence note at the top) still broken, and would put a second,
-    weaker notion of atomicity beside the real one. The honest fix is the store that has a
-    transaction, not a lock beside the one that does not.
+    The advisory lock protects processes using this store on the same host/volume. It is
+    not a distributed transaction across hosts or serverless instances; deployments with
+    multiple machines must use a database/Redis store that implements `AtomicStore`.
     """
 
     def __init__(self, path: Path | str = "corpus/.budget.json") -> None:
@@ -580,6 +577,24 @@ class FileStore:
         tmp = self.path.with_suffix(".tmp")
         tmp.write_text(json.dumps(data, indent=2))
         tmp.replace(self.path)
+
+    def update(self, fn: Callable[[dict], dict]) -> dict:
+        """Apply a transaction while holding a stable lock file for this ledger path."""
+        if os.name != "posix":
+            raise RuntimeError("FileStore atomic updates require a POSIX host; use a shared "
+                               "database/Redis store on other platforms")
+        import fcntl
+
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        lock_path = self.path.with_suffix(self.path.suffix + ".lock")
+        with lock_path.open("a+") as lock_file:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+            try:
+                row = fn(self.read())
+                self.write(row)
+                return row
+            finally:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
 
 class BudgetTracker:
@@ -605,10 +620,28 @@ class BudgetTracker:
             return {"corrupt": True, "day": "", "month": "", "day_inr": 0.0,
                     "month_inr": 0.0, "calls_today": 0, "calls_by_model": {},
                     "spend_cap": False, "tenant_month_inr": {}, "user_day_inr": {},
-                    "credit_exhausted": False, "reservations": {}}
+                    "credit_exhausted": False, "reservations": {},
+                    "reservation_claims": {}, "reservation_calls": {},
+                    "settled_reservations": {}}
         day_key, month_key = self._today.isoformat(), self._today.strftime("%Y-%m")
         same_day = raw.get("day") == day_key
         raw_res = raw.get("reservations")
+        raw_call_info = raw.get("reservation_calls")
+        reservation_calls: dict[str, dict] = {}
+        if same_day and isinstance(raw_res, dict):
+            for rid in raw_res:
+                info = raw_call_info.get(rid) if isinstance(raw_call_info, dict) else None
+                try:
+                    count = int(info.get("count", 1)) if isinstance(info, dict) else 1
+                    if count < 0:
+                        count = 1
+                except (TypeError, ValueError, OverflowError):
+                    count = 1
+                model = info.get("model") if isinstance(info, dict) else None
+                reservation_calls[str(rid)] = {
+                    "count": count,
+                    "model": str(model) if model is not None else None,
+                }
         return {
             "corrupt": False,
             "day": day_key,
@@ -647,10 +680,98 @@ class BudgetTracker:
             # reservation whose call may in fact have completed is the cheap direction.
             "reservations": ({str(k): float(v) for k, v in raw_res.items()}
                              if same_day and isinstance(raw_res, dict) else {}),
+            # A claimed reservation belongs to one active run. Claims expire with the
+            # same day-scoped reservation; an interrupted run fails closed until rollover.
+            "reservation_claims": ({str(k): str(v) for k, v in
+                                    (raw.get("reservation_claims") or {}).items()}
+                                   if same_day else {}),
+            # Request slots are reserved with money so retries cannot bypass the daily
+            # request cap. Older holds predate this field and conservatively count as one.
+            "reservation_calls": reservation_calls,
+            # Idempotency receipts are day-scoped alongside the holds. They prevent a
+            # retried settlement transaction from charging the same provider work twice.
+            "settled_reservations": ({str(k): dict(v) for k, v in
+                                      (raw.get("settled_reservations") or {}).items()
+                                      if isinstance(v, dict)}
+                                     if same_day else {}),
         }
 
     def _state(self) -> dict:
         return self._normalise(self.store.read())
+
+    def reservation_amount(self, reservation_id: str) -> float | None:
+        """Return a live hold amount, or None when it is absent/unreadable.
+
+        Callers use this only to prove admission before dispatch; it does not settle or
+        otherwise mutate the ledger.
+        """
+        state = self._state()
+        if state["corrupt"]:
+            return None
+        amount = state["reservations"].get(reservation_id)
+        return float(amount) if amount is not None else None
+
+    def reservation_details(self, reservation_id: str) -> dict | None:
+        """Read live reservation metadata for admission checks without mutating it."""
+        state = self._state()
+        if state["corrupt"] or reservation_id not in state["reservations"]:
+            return None
+        calls = state["reservation_calls"].get(reservation_id, {"count": 1, "model": None})
+        return {"amount_inr": float(state["reservations"][reservation_id]),
+                "request_count": int(calls["count"]), "model": calls["model"],
+                "claimed": reservation_id in state["reservation_claims"],
+                "settled": reservation_id in state["settled_reservations"]}
+
+    def claim_reservations(self, reservation_ids: tuple[str, ...], claim_id: str,
+                           minimum_amount: float) -> bool:
+        """Atomically claim a complete set of live holds for exactly one run.
+
+        A read-only existence check is not admission control: two concurrent runs could
+        both observe the same hold and dispatch paid workers. Refuse stores without an
+        atomic update primitive; a file read/write cannot safely make this one-time claim.
+        """
+        if (not reservation_ids or not claim_id or minimum_amount < 0
+                or not isinstance(self.store, AtomicStore)):
+            return False
+
+        def claim(raw: dict) -> dict:
+            state = self._normalise(raw)
+            if state["corrupt"]:
+                return self._row(state)
+            holds = state["reservations"]
+            claims = state["reservation_claims"]
+            if any(rid not in holds or holds[rid] + 1e-9 < minimum_amount or rid in claims
+                   for rid in reservation_ids):
+                return self._row(state)
+            return self._row(state, reservation_claims={
+                **claims, **{rid: claim_id for rid in reservation_ids}})
+
+        try:
+            row = self.store.update(claim)
+        except Exception:  # noqa: BLE001 - uncertain admission must fail closed
+            # A store may commit and lose its response. If this unique claim is fully
+            # present, it belongs to this invocation and it is safe to proceed. Partial
+            # claims are rolled back only when they still carry this invocation's id.
+            try:
+                state = self._state()
+                if all(state["reservation_claims"].get(rid) == claim_id
+                       for rid in reservation_ids):
+                    return True
+
+                def rollback(raw: dict) -> dict:
+                    current = self._normalise(raw)
+                    if current["corrupt"]:
+                        return self._row(current)
+                    return self._row(current, reservation_claims={
+                        rid: owner for rid, owner in current["reservation_claims"].items()
+                        if owner != claim_id})
+
+                self.store.update(rollback)
+            except Exception:  # noqa: BLE001 - an uncertain claim never admits work
+                pass
+            return False
+        claimed = row.get("reservation_claims", {})
+        return all(claimed.get(rid) == claim_id for rid in reservation_ids)
 
     # ── the one write path ───────────────────────────────────────────────
     def _row(self, s: dict, **overrides) -> dict:
@@ -672,9 +793,18 @@ class BudgetTracker:
             row["credit_exhausted_day"] = s["day"]
         if s["reservations"]:
             row["reservations"] = dict(s["reservations"])
+        if s["reservation_claims"]:
+            row["reservation_claims"] = dict(s["reservation_claims"])
+        if s["reservation_calls"]:
+            row["reservation_calls"] = dict(s["reservation_calls"])
+        if s["settled_reservations"]:
+            row["settled_reservations"] = dict(s["settled_reservations"])
         row.update(overrides)
         if not row.get("reservations"):
             row.pop("reservations", None)
+        for field in ("reservation_claims", "reservation_calls", "settled_reservations"):
+            if not row.get(field):
+                row.pop(field, None)
         if not row.get("calls_by_model"):
             row.pop("calls_by_model", None)
         for scoped in ("tenant_month_inr", "user_day_inr"):
@@ -704,7 +834,9 @@ class BudgetTracker:
     def can_make_call(self, estimated_inr: float | None = None, *, model: str = DEFAULT_MODEL,
                       input_tokens: int | None = None, output_tokens: int | None = None,
                       per_model_cap: int | None = None,
-                      tenant_id: str | None = None, user_id: str | None = None) -> Verdict:
+                      tenant_id: str | None = None, user_id: str | None = None,
+                      _snapshot: dict | None = None,
+                      _additional_requests: int = 1) -> Verdict:
         # A half-given pair is refused rather than zero-filled, on `estimate_tokens`' rule:
         # supplying the missing half quietly is wrong in whichever direction the caller did
         # not mean, and a zero-filled OUTPUT count is wrong in the cheap one.
@@ -716,7 +848,9 @@ class BudgetTracker:
             estimated_inr = (typical_call_inr(model) if input_tokens is None else
                              cost_inr(model, input_tokens, output_tokens))
 
-        s = self._state()
+        # `reserve()` supplies the state read inside its atomic transaction. Public callers
+        # omit this and get a normal point-in-time estimate, never an admission guarantee.
+        s = _snapshot if _snapshot is not None else self._state()
         if s["corrupt"]:
             return Verdict(False, "offline",
                            "budget ledger unreadable — refusing to spend against an unknown balance",
@@ -774,9 +908,11 @@ class BudgetTracker:
         # Counted, not priced. This is the only gate a ₹0.00 call can fail, and it is
         # checked last so a paid call that breaches both still reports the money first —
         # that is the number a person can act on.
-        if s["calls_today"] >= DAILY_REQUEST_CAP:
+        reserved_requests = sum(item["count"] for item in s["reservation_calls"].values())
+        if s["calls_today"] + reserved_requests + _additional_requests > DAILY_REQUEST_CAP:
             return Verdict(False, "budget",
-                           f"daily request cap reached: {s['calls_today']} calls of "
+                           f"daily request cap reached: {s['calls_today']} used + "
+                           f"{reserved_requests} reserved + {_additional_requests} requested of "
                            f"{DAILY_REQUEST_CAP}, derived from {FREE_TIER_TPM:,} tokens/min "
                            f"over {MEASURED_TOKENS_PER_ANSWER:,} tokens per answer. Free-tier "
                            f"limits bind on tokens per minute, so this caps the request rate "
@@ -789,9 +925,13 @@ class BudgetTracker:
         # not the ledger's -- backend/ must not grow a table of provider model names.
         if per_model_cap is not None:
             used = s["calls_by_model"].get(model, 0)
-            if used >= per_model_cap:
+            reserved_model = sum(
+                item["count"] for item in s["reservation_calls"].values()
+                if item["model"] in (model, None))
+            if used + reserved_model + _additional_requests > per_model_cap:
                 return Verdict(False, "budget",
-                               f"{model} has used {used} of its {per_model_cap} requests "
+                               f"{model} has used {used} + reserved {reserved_model} + "
+                               f"requested {_additional_requests} of its {per_model_cap} requests "
                                f"today. This is the provider's own per-model daily quota, "
                                f"not a rupee limit: the calls cost nothing and are still "
                                f"refused, because the next one would return HTTP 429. "
@@ -963,61 +1103,175 @@ class BudgetTracker:
     def reserve(self, *, model: str = DEFAULT_MODEL, input_tokens: int, max_tokens: int,
                 cache_creation_input_tokens: int = 0, cache_read_input_tokens: int = 0,
                 cache_ttl: str = DEFAULT_CACHE_TTL, batch: bool = False,
-                reservation_id: str | None = None) -> Reservation:
+                reservation_id: str | None = None, request_count: int = 1,
+                per_model_cap: int | None = None) -> Reservation:
         """Hold the worst-case cost of one call against the caps before making it.
 
         A refused reservation writes NOTHING: a gate that charged for the calls it turned
         away would ratchet itself shut.
         """
+        if (not isinstance(request_count, int) or isinstance(request_count, bool)
+                or request_count < 1):
+            raise ValueError("request_count must be a positive integer")
+        if per_model_cap is not None and (
+                not isinstance(per_model_cap, int) or isinstance(per_model_cap, bool)
+                or per_model_cap < 1):
+            raise ValueError("per_model_cap must be a positive integer")
         worst = cost_inr(model, input_tokens, max_tokens,
                          cache_creation_input_tokens=cache_creation_input_tokens,
                          cache_read_input_tokens=cache_read_input_tokens,
                          cache_ttl=cache_ttl, batch=batch)
-        verdict = self.can_make_call(worst)
-        if not verdict.allowed:
-            return Reservation(None, worst, verdict)
-
         rid = reservation_id or uuid.uuid4().hex[:12]
-        if rid in self._state()["reservations"]:
-            raise ValueError(f"reservation {rid!r} is already outstanding — settle it first")
-        self._mutate(lambda st: self._row(
-            st, reservations={**st["reservations"], rid: worst}))
+        if not isinstance(self.store, AtomicStore):
+            state = self._state()
+            return Reservation(None, worst, Verdict(
+                False, "offline", "budget store does not support atomic reserve; refusing to "
+                "admit a call against a potentially stale balance", state["day_inr"],
+                state["month_inr"], _reserved_total(state["reservations"])))
+
+        result: dict = {}
+
+        def reserve_if_affordable(raw: dict) -> dict:
+            state = self._normalise(raw)
+            verdict = self.can_make_call(worst, model=model, per_model_cap=per_model_cap,
+                                         _snapshot=state, _additional_requests=request_count)
+            result["verdict"] = verdict
+            if not verdict.allowed:
+                return self._row(state)
+            if rid in state["reservations"] or rid in state["settled_reservations"]:
+                result["duplicate"] = True
+                return self._row(state)
+            result["reserved"] = True
+            return self._row(
+                state,
+                reservations={**state["reservations"], rid: worst},
+                reservation_calls={**state["reservation_calls"], rid: {
+                    "count": request_count, "model": model}})
+
+        try:
+            self.store.update(reserve_if_affordable)
+        except Exception:  # noqa: BLE001 - a failed transaction cannot admit provider work
+            state = self._state()
+            return Reservation(None, worst, Verdict(
+                False, "offline", "atomic budget reservation failed; no call was admitted",
+                state["day_inr"], state["month_inr"],
+                _reserved_total(state["reservations"])))
+        if result.get("duplicate"):
+            raise ValueError(f"reservation id {rid!r} was already used; choose a fresh id")
+        verdict = result["verdict"]
+        if not result.get("reserved"):
+            return Reservation(None, worst, verdict)
         return Reservation(rid, worst, verdict)
 
-    def settle(self, reservation_id: str, actual_inr: float) -> Verdict:
+    def settle(self, reservation_id: str, actual_inr: float | None,
+               *, actual_calls: int | None = 1) -> Verdict:
         """Record what the call actually cost and release the rest of its reservation.
 
         A call that never billed — a connection error, or the spend-cap 429 of BUD-1 —
         settles at 0.0. A call that may have billed but whose usage never came back should
         settle at the reserved amount, not at 0.0: an unknown cost is an expensive one.
+        Pass ``None`` when usage is unknown; this commits the full reservation. An unknown
+        reservation cannot safely be settled without a measured cost.
         """
-        if actual_inr < 0:
+        if actual_inr is not None and actual_inr < 0:
             raise ValueError(f"actual cost must be >= 0, got {actual_inr}")
-        s = self._state()
-        if s["corrupt"]:
+        if actual_calls is not None and (not isinstance(actual_calls, int) or actual_calls < 0):
+            raise ValueError("actual_calls must be a non-negative integer or None")
+        if not reservation_id:
+            raise ValueError("reservation_id must be non-empty")
+        before = self._state()
+        if before["corrupt"]:
+            if actual_inr is None:
+                return Verdict(False, "offline",
+                               "ledger unreadable — provider spend may have occurred, but its "
+                               "amount is unknown and could not be recorded", 0.0, 0.0)
             return self._unrecordable(actual_inr)
-        held = s["reservations"].get(reservation_id)
+        if not isinstance(self.store, AtomicStore):
+            return Verdict(False, "offline", "atomic settlement unavailable; ledger unchanged",
+                           before["day_inr"], before["month_inr"],
+                           _reserved_total(before["reservations"]))
 
-        row = self._mutate(lambda st: self._row(
-            st,
-            day_inr=round(st["day_inr"] + actual_inr, 4),
-            month_inr=round(st["month_inr"] + actual_inr, 4),
-            calls_today=st["calls_today"] + 1,
-            reservations={k: v for k, v in st["reservations"].items()
-                          if k != reservation_id}))
+        result: dict = {}
+
+        def settle_atomically(raw: dict) -> dict:
+            state = self._normalise(raw)
+            if state["corrupt"]:
+                result["corrupt"] = True
+                return raw
+            receipt = state["settled_reservations"].get(reservation_id)
+            if receipt is not None:
+                result.update(duplicate=True, amount=receipt.get("amount", 0.0),
+                              calls=receipt.get("calls", 0))
+                return self._row(state)
+
+            held = state["reservations"].get(reservation_id)
+            if actual_inr is None and held is None:
+                result["unknown_unheld"] = True
+                return self._row(state)
+            amount = float(held if actual_inr is None else actual_inr)
+            call_info = state["reservation_calls"].get(
+                reservation_id, {"count": 1, "model": None})
+            count = call_info["count"] if actual_calls is None else actual_calls
+            model = call_info["model"]
+            by_model = dict(state["calls_by_model"])
+            if model is not None and count:
+                by_model[model] = by_model.get(model, 0) + count
+            settled = dict(state["settled_reservations"])
+            settled[reservation_id] = {"amount": amount, "calls": count, "model": model}
+            result.update(settled=True, held=held, amount=amount, calls=count)
+            return self._row(
+                state,
+                day_inr=round(state["day_inr"] + amount, 4),
+                month_inr=round(state["month_inr"] + amount, 4),
+                calls_today=state["calls_today"] + count,
+                calls_by_model=by_model,
+                reservations={k: v for k, v in state["reservations"].items()
+                              if k != reservation_id},
+                reservation_claims={k: v for k, v in state["reservation_claims"].items()
+                                    if k != reservation_id},
+                reservation_calls={k: v for k, v in state["reservation_calls"].items()
+                                   if k != reservation_id},
+                settled_reservations=settled)
+
+        try:
+            row = self.store.update(settle_atomically)
+        except Exception:  # noqa: BLE001 - inspect a possibly committed transaction
+            state = self._state()
+            receipt = state["settled_reservations"].get(reservation_id)
+            if receipt is not None:
+                result.update(settled=True, held=None, amount=receipt.get("amount", 0.0),
+                              calls=receipt.get("calls", 0), uncertain_commit=True)
+                row = self._row(state)
+            else:
+                return Verdict(False, "offline", "atomic settlement outcome is unknown; no retry "
+                               "should be made until the reservation is reconciled",
+                               state["day_inr"], state["month_inr"],
+                               _reserved_total(state["reservations"]))
+
         reserved = _reserved_total(row.get("reservations", {}))
-
+        if result.get("corrupt"):
+            if actual_inr is None:
+                return Verdict(False, "offline",
+                               "ledger unreadable — provider spend may have occurred, but its "
+                               "amount is unknown and could not be recorded", 0.0, 0.0)
+            return self._unrecordable(actual_inr)
+        if result.get("unknown_unheld"):
+            return Verdict(False, "offline",
+                           f"cannot settle unknown cost for reservation {reservation_id!r}: "
+                           "there is no held amount to commit", row["day_inr"],
+                           row["month_inr"], reserved)
+        if result.get("duplicate"):
+            return Verdict(True, "normal", "duplicate settlement ignored; prior receipt is final",
+                           row["day_inr"], row["month_inr"], reserved)
+        held = result.get("held")
         if held is None:
-            # Never silently: the spend is real and is recorded, but something is out of
-            # step — a double settle, or the day rolled over and released the hold.
             return Verdict(True, "normal",
-                           f"settled ₹{actual_inr} against an unknown reservation "
-                           f"{reservation_id!r} — the spend IS recorded; the reservation was "
-                           f"already settled, or a day rollover released it",
+                           f"settled ₹{result['amount']} against unknown reservation "
+                           f"{reservation_id!r}; the spend is recorded once",
                            row["day_inr"], row["month_inr"], reserved)
         return Verdict(True, "normal",
-                       f"settled: held ₹{held}, actual ₹{actual_inr}, "
-                       f"released ₹{round(held - actual_inr, 4)}",
+                       f"settled: held {held!r}, actual ₹{result['amount']}, "
+                       f"recorded {result['calls']} provider request(s)",
                        row["day_inr"], row["month_inr"], reserved)
 
     def mode(self) -> Mode:
@@ -1036,6 +1290,9 @@ if __name__ == "__main__":
         def __init__(self) -> None: self.d: dict = {}
         def read(self) -> dict: return dict(self.d)
         def write(self, data: dict) -> None: self.d = dict(data)
+        def update(self, fn) -> dict:
+            self.d = dict(fn(dict(self.d)))
+            return dict(self.d)
 
     failures = 0
     total = 0
@@ -1280,6 +1537,14 @@ if __name__ == "__main__":
           getattr(r1, "amount_inr", r1), 31.1116)
     check("  ...and it is allowed, and carries an id",
           bool(getattr(r1, "allowed", False)) and bool(getattr(r1, "id", None)), True)
+    tracker_for_hold = BudgetTracker(Mem(), today=date(2026, 8, 8))
+    held = tracker_for_hold.reserve(model="claude-haiku-4-5", input_tokens=10,
+                                    max_tokens=10, reservation_id="held-check")
+    check("reservation_amount returns a live hold without mutating it",
+          tracker_for_hold.reservation_amount("held-check"), held.amount_inr)
+    tracker_for_hold.settle("held-check", 0.0)
+    check("reservation_amount returns None after settlement",
+          tracker_for_hold.reservation_amount("held-check"), None)
 
     # Four worst-case reservations breach the daily cap. The same four calls, costed at
     # what they typically cost, would not have come close — which is the whole point.
@@ -1306,6 +1571,15 @@ if __name__ == "__main__":
     v6 = attempt(lambda: t4.settle("r0", actual))
     check("settle records the actual cost, not the reservation",
           getattr(v6, "spent_today", v6), actual)
+    settled_once = t4._state()["month_inr"]
+    calls_once = t4._state()["calls_today"]
+    duplicate_settle = t4.settle("r0", actual)
+    check("replaying a settlement never charges one reservation twice",
+          duplicate_settle.allowed and t4._state()["month_inr"] == settled_once
+          and t4._state()["calls_today"] == calls_once, True)
+    check("a settled reservation identifier cannot be reused for a fresh hold",
+          refused(lambda: t4.reserve(model="claude-haiku-4-5", input_tokens=10,
+                                     max_tokens=10, reservation_id="r0")), True)
     check("  ...and releases the reserved amount",
           getattr(v6, "reserved", None), round(2 * 31.1116, 4))
     check("  ...which frees the day again", attempt(lambda: t4.can_make_call().allowed), True)
@@ -1315,6 +1589,14 @@ if __name__ == "__main__":
     check("settling at zero releases a reservation without spending",
           attempt(lambda: t4.can_make_call().reserved), 31.1116)
 
+    unknown_cost = attempt(lambda: t4.settle("r2", None))
+    check("unknown provider usage commits the full held reservation",
+          isinstance(unknown_cost, Verdict) and unknown_cost.spent_today > actual
+          and unknown_cost.reserved == 0.0, True)
+    unknown_unheld = attempt(lambda: t4.settle("not-held", None))
+    check("unknown usage without a reservation refuses rather than recording zero",
+          isinstance(unknown_unheld, Verdict) and not unknown_unheld.allowed, True)
+
     v7 = attempt(lambda: t4.settle("nosuchid", 0.5))
     check("settling an unknown reservation still records the spend",
           isinstance(v7, Verdict) and v7.spent_today > actual, True)
@@ -1322,10 +1604,33 @@ if __name__ == "__main__":
     # if the clause that says the money WAS recorded is deleted. Assert both.
     check("  ...and says so rather than swallowing it",
           all(w in getattr(v7, "reason", "") for w in ("unknown", "recorded")), True)
+    unknown_id_spend = t4._state()["month_inr"]
+    duplicate_unknown = t4.settle("nosuchid", 0.5)
+    check("even a first-time unknown-id accounting receipt is idempotent",
+          t4._state()["month_inr"] == unknown_id_spend and duplicate_unknown.allowed, True)
 
+    request_ledger = BudgetTracker(Mem(), today=date(2026, 8, 8))
+    request_hold = request_ledger.reserve(model="claude-haiku-4-5", input_tokens=10,
+                                          max_tokens=10, reservation_id="three-requests",
+                                          request_count=3, per_model_cap=4)
+    check("multi-request reservations atomically consume quota capacity",
+          request_hold.allowed and not request_ledger.reserve(
+              model="claude-haiku-4-5", input_tokens=10, max_tokens=10,
+              reservation_id="over-quota", request_count=2,
+              per_model_cap=4).allowed, True)
+    request_ledger.settle("three-requests", 0.1, actual_calls=2)
+    check("settlement records actual retry count against total and per-model quotas",
+          request_ledger._state()["calls_today"] == 2
+          and request_ledger._state()["calls_by_model"]["claude-haiku-4-5"] == 2
+          and not request_ledger.can_make_call(model="claude-haiku-4-5",
+                                               per_model_cap=2).allowed, True)
+
+    attempt(lambda: t4.reserve(model="claude-haiku-4-5", input_tokens=1,
+                               max_tokens=1, reservation_id="duplicate"))
     check("a duplicate reservation id is refused",
           refused(lambda: t4.reserve(model="claude-haiku-4-5", input_tokens=1,
-                                     max_tokens=1, reservation_id="r2")), True)
+                                     max_tokens=1, reservation_id="duplicate")), True)
+    attempt(lambda: t4.settle("duplicate", 0.0))
     check("a negative settlement is refused — it would credit the ledger",
           refused(lambda: t4.settle("r2", -1.0)), True)
 
@@ -1352,6 +1657,10 @@ if __name__ == "__main__":
     rf = attempt(lambda: tf.reserve(model="claude-haiku-4-5", input_tokens=6_700,
                                     max_tokens=64_000, reservation_id="disk"))
     check("FileStore persists a reservation to disk", bool(getattr(rf, "allowed", False)), True)
+    check("FileStore claims a reservation using a locked atomic update",
+          tf.claim_reservations(("disk",), "run-one", rf.amount_inr), True)
+    check("a second run cannot claim that same file-backed hold",
+          tf.claim_reservations(("disk",), "run-two", rf.amount_inr), False)
     check("  ...and a fresh tracker over the same file still sees it reserved",
           attempt(lambda: BudgetTracker(FileStore(pathlib.Path(tmpdir) / "budget.json"),
                                         today=date(2026, 8, 8)).can_make_call().reserved), 31.1116)
@@ -1360,6 +1669,64 @@ if __name__ == "__main__":
           attempt(lambda: BudgetTracker(FileStore(pathlib.Path(tmpdir) / "budget.json"),
                                         today=date(2026, 8, 8)).can_make_call().spent_today),
           actual)
+
+    class CommitThenRaiseMem:
+        def __init__(self) -> None:
+            self.d: dict = {}
+            self.raise_claim_response = True
+        def read(self) -> dict:
+            return dict(self.d)
+        def write(self, data: dict) -> None:
+            self.d = dict(data)
+        def update(self, fn):
+            self.d = dict(fn(dict(self.d)))
+            if self.d.get("reservation_claims") and self.raise_claim_response:
+                self.raise_claim_response = False
+                raise OSError("response lost after durable commit")
+            return dict(self.d)
+
+    uncertain_store = CommitThenRaiseMem()
+    uncertain_tracker = BudgetTracker(uncertain_store, today=date(2026, 8, 8))
+    uncertain_hold = uncertain_tracker.reserve(model="claude-haiku-4-5", input_tokens=10,
+                                               max_tokens=10, reservation_id="uncertain-claim")
+    check("a committed claim with a lost response is recognized as owned by its run",
+          uncertain_tracker.claim_reservations(("uncertain-claim",), "owning-run",
+                                               uncertain_hold.amount_inr)
+          and uncertain_tracker.reservation_details("uncertain-claim")["claimed"], True)
+
+    # The affordability check and hold must be one transaction across processes. A
+    # separate can_make_call() followed by a locked write still admits four stale passes.
+    import multiprocessing as _mp
+    _mp_ctx = _mp.get_context("fork")
+    _race_path = pathlib.Path(tmpdir) / "race-budget.json"
+    _race_barrier = _mp_ctx.Barrier(4)
+    _race_results = _mp_ctx.Queue()
+
+    def _reserve_in_process(index: int) -> None:
+        _race_barrier.wait(timeout=10)
+        result = BudgetTracker(FileStore(_race_path), today=date(2026, 8, 8)).reserve(
+            model="claude-haiku-4-5", input_tokens=6_700, max_tokens=64_000,
+            reservation_id=f"race-{index}")
+        _race_results.put(bool(result.allowed))
+
+    _race_workers = [_mp_ctx.Process(target=_reserve_in_process, args=(i,)) for i in range(4)]
+    for _worker in _race_workers:
+        _worker.start()
+    for _worker in _race_workers:
+        _worker.join(15)
+    _race_clean = all(_worker.exitcode == 0 for _worker in _race_workers)
+    _race_allowed = []
+    if _race_clean:
+        try:
+            _race_allowed = [_race_results.get(timeout=2) for _ in _race_workers]
+        except Exception:  # noqa: BLE001
+            _race_clean = False
+    _race_ledger = BudgetTracker(FileStore(_race_path), today=date(2026, 8, 8))._state()
+    check("concurrent distinct reservations cannot pass a stale affordability check",
+          _race_clean and sum(_race_allowed) == 3
+          and _reserved_total(_race_ledger["reservations"]) <= DAILY_CAP_INR, True)
+    _race_results.close()
+    _race_results.join_thread()
 
     # A corrupt ledger must not be written to at all: a write invents zeros over whatever
     # real spend is in the file. Before BUD-4 this raised KeyError from inside _persist.
@@ -1372,6 +1739,10 @@ if __name__ == "__main__":
     vc = attempt(lambda: tcorrupt.record_call(1.0))
     check("recording a call against a corrupt ledger refuses instead of raising",
           isinstance(vc, Verdict) and not vc.allowed, True)
+    v_unknown = attempt(lambda: tcorrupt.settle("unknown", None))
+    check("unknown spend against a corrupt ledger stays unknown in its refusal",
+          isinstance(v_unknown, Verdict) and not v_unknown.allowed
+          and "amount is unknown" in v_unknown.reason, True)
     check("  ...and writes nothing over the real spend", c2.writes, 0)
     check("  ...and a reservation against it is refused too",
           bool(getattr(attempt(lambda: tcorrupt.reserve(model="claude-haiku-4-5",
@@ -1399,9 +1770,54 @@ if __name__ == "__main__":
                                reservation_id="a1"))
     check("a store offering atomic update() is used for the mutation", am.updates >= 1, True)
     check("  ...and read-modify-write is not used behind its back", am.writes, 0)
-    check("  ...while a store without update() still works (FileStore has none)",
-          bool(getattr(attempt(lambda: BudgetTracker(Mem(), today=date(2026, 8, 8)).reserve(
-              model="claude-haiku-4-5", input_tokens=10, max_tokens=10)), "allowed", False)), True)
+
+    from threading import Barrier, Lock, Thread
+
+    class ConcurrentMem:
+        def __init__(self) -> None:
+            self.d: dict = {}
+            self.lock = Lock()
+        def read(self) -> dict:
+            with self.lock:
+                return dict(self.d)
+        def write(self, data: dict) -> None:
+            with self.lock:
+                self.d = dict(data)
+        def update(self, fn):
+            with self.lock:
+                self.d = dict(fn(dict(self.d)))
+                return dict(self.d)
+
+    settlement_store = ConcurrentMem()
+    settlement_tracker = BudgetTracker(settlement_store, today=date(2026, 8, 8))
+    settlement_tracker.reserve(model="claude-haiku-4-5", input_tokens=10, max_tokens=10,
+                               reservation_id="settle-once")
+    settle_barrier = Barrier(2)
+    settle_results: list[Verdict] = []
+
+    def settle_same_hold() -> None:
+        settle_barrier.wait(timeout=5)
+        settle_results.append(settlement_tracker.settle("settle-once", 0.25))
+
+    settle_threads = [Thread(target=settle_same_hold) for _ in range(2)]
+    for thread in settle_threads:
+        thread.start()
+    for thread in settle_threads:
+        thread.join(5)
+    check("concurrent duplicate settlement is idempotent",
+          all(not thread.is_alive() for thread in settle_threads)
+          and len(settle_results) == 2
+          and settlement_tracker._state()["month_inr"] == 0.25
+          and settlement_tracker._state()["calls_today"] == 1, True)
+
+    class NonAtomicMem:
+        def read(self): return {}
+        def write(self, _data): pass
+
+    legacy = BudgetTracker(NonAtomicMem(), today=date(2026, 8, 8)).reserve(
+        model="claude-haiku-4-5", input_tokens=10, max_tokens=10)
+    check("a store without atomic update is refused before admitting spend",
+          not legacy.allowed and legacy.verdict.mode == "offline", True)
 
     # A mutant that dropped `reserved` from the MONTHLY gate survived the first version of
     # these tests: the only monthly check used remaining_month, and the leaked-reservation

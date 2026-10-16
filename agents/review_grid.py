@@ -263,7 +263,8 @@ def schedule(table: rg.Table, *, queue, cancelled: bool = False, budget=None,
                 # is for work nobody will do. Released immediately rather than left
                 # outstanding, which would shrink the cap until the day rolled over.
                 if reservation_id is not None and budget is not None:
-                    budget.settle(reservation_id, 0.0)
+                    # Queue rejection happened before dispatch; release request quota too.
+                    budget.settle(reservation_id, 0.0, actual_calls=0)
                     reservations.remove(reservation_id)
                 continue
             enqueued.append(key)
@@ -419,6 +420,38 @@ def _test() -> int:
           == [(d, c.name) for d, c in plan_cells(t0)],
           "...in a STABLE order, so a resumed run schedules the same cells in the same "
           "order and the trace stays replayable")
+
+    # A queue refusal happens before provider work and must not consume call quota.
+    from datetime import date as _date
+    from gateway.jobs import QueueError
+    from backend.budget import BudgetTracker
+
+    class _MemBudget:
+        def __init__(self):
+            self.data = {}
+
+        def read(self):
+            return dict(self.data)
+
+        def write(self, data):
+            self.data = dict(data)
+
+        def update(self, fn):
+            self.data = dict(fn(dict(self.data)))
+            return dict(self.data)
+
+    class _RejectingQueue:
+        def enqueue(self, **_kwargs):
+            raise QueueError("queue unavailable")
+
+    rejected_budget = BudgetTracker(_MemBudget(), today=_date(2026, 10, 5))
+    rejected = schedule(rg.Table("gq", "queue failure", COLS, (D1,)),
+                        queue=_RejectingQueue(), budget=rejected_budget)
+    rejected_state = rejected_budget._state()
+    check(len(rejected.already_queued) == 2 and not rejected.reservations,
+          "queue refusals are reported without keeping undispatched reservations")
+    check(rejected_state["calls_today"] == 0 and not rejected_state["reservations"],
+          "queue rejection releases money and request quota because no provider was called")
 
     # ── running the cells ───────────────────────────────────────────────────
     cells = []
@@ -584,6 +617,10 @@ def _test() -> int:
 
         def write(self, data):
             self.d = dict(data)
+
+        def update(self, fn):
+            self.d = dict(fn(dict(self.d)))
+            return dict(self.d)
 
     # A cap that affords SOME cells and not all four. Set by spending the day down to a
     # sliver, so the refusal happens mid-table rather than on the first cell -- the hard

@@ -508,7 +508,12 @@ def _research_multi(args: dict, ctx: Context) -> dict:
     _worker = ms._held_researcher() if _held else (lambda _t: "")
     outcome = ms.research(question, as_of=as_of, worker=_worker,
                           verify=ms._byte_match_verify, merge=ms._code_merge,
-                          budget=_ledger())
+                          budget=_ledger(),
+                          # This serving path still uses the deterministic held-corpus
+                          # stand-in above; no provider call occurs. If it is replaced with
+                          # a model worker, wire provider-reported usage here rather than
+                          # retaining this explicit zero-cost declaration.
+                          actual_cost=lambda _task, _result: 0.0)
     d = outcome.to_dict()
 
     # The plan, derived from the sections so the shape has one source of truth: a held worker
@@ -2919,7 +2924,8 @@ def _runs_preview(args: dict, ctx: Context) -> dict:
         quoted = verdict.reserved_inr
         # RELEASED at once. See the docstring: a preview that held would be A-016.
         for rid in verdict.reservations:
-            ledger.settle(rid, 0.0)
+            # No provider request ran during a preview, so release reserved request quota too.
+            ledger.settle(rid, 0.0, actual_calls=0)
 
     body = {"plan": plan.to_dict(),
             "agents": sorted({w.agent for w in workers}),
@@ -7488,6 +7494,8 @@ def _test() -> None:
                   f"cap every time somebody looked at a plan and thought better of it -- "
                   f"which is A-016, measured at 58 reservations worth ₹115.99 against a "
                   f"₹116.67 cap ({_t5_held()})")
+            check(_t5ledger._state()["calls_today"] == 0,
+                  "a quote releases request-count quota too; previews do not call a provider")
             check("A QUOTE, not a hold" in _pv["note"],
                   "...and the note says so in those words, so a reader is not told the "
                   "money is set aside")
@@ -8261,6 +8269,10 @@ def _test() -> None:
 
         def write(self, data):
             self.d = dict(data)
+
+        def update(self, fn):
+            self.d = dict(fn(dict(self.d)))
+            return dict(self.d)
 
     _mper = _mcost(_MDM, _MIN_T, _MMAX_T)
     _mtracker = _MBT(store=_MMem(), today=_mdate(2026, 10, 5))
