@@ -22,6 +22,7 @@ __pycache__/
 *.pyc
 corpus/.asks.jsonl
 corpus/.budget.json
+corpus/.budget.json.lock
 corpus/.checks.jsonl
 # D5 pre-labelling: one line per extraction, so a killed run resumes instead of
 # paying for the same answers again.

@@ -1,9 +1,9 @@
-"""F2 — the supervisor: one researcher per (body of law, State), run in parallel, synthesised.
+"""F2 — the supervisor: one researcher per (body of law, State), synthesised by code.
 
 A compound question ("office leases in Bengaluru and Mumbai, and a share allotment to a
 Singapore investor") reaches several bodies of law at once — some we hold, some we do not,
 some Central, some per-State. The supervisor splits it by (body, State), researches ONLY the
-bodies we hold, refuses the rest BY NAME, runs the held researchers in parallel, and lets
+bodies we hold, refuses the rest BY NAME, runs only admitted held researchers, and lets
 code — not a model — assemble the pieces into one PARTIAL answer.
 
 ## The split, and why refusals are not workers
@@ -15,21 +15,21 @@ REFUSAL — not a worker, because there is nothing to read, and sending a questi
 do not hold to a model is how a confident guess gets made. A State topic with no State or no
 date is NEED_FACT, from `jurisdiction.resolve`, never a guess.
 
-## Parallel, verified, then synthesised by code
+## Admitted, verified, then synthesised by code
 
-The held workers run in parallel (an injected executor; the production one rides the gateway
-job queue, the gate one is a thread pool or a deterministic map). Each result is VERIFIED
-before it reaches the blackboard — `agents/multi_runner` already enforces "only verified
-results merge". Synthesis is code: the merged held answer, plus the named refusals, plus any
-case-law **supporting authority** (never VERIFIED — a judgment may support an answer, never
-make one). The model only phrases a held answer inside its worker; it decides nothing here.
+`agents/multi_runner` validates and reserves the complete retry budget before its first
+worker call. It makes a fresh call per attempt, and each result is VERIFIED before it reaches
+the merger — only verified results merge. Workers run sequentially here until a concurrent
+executor can preserve admission-before-dispatch, per-attempt retry and settlement semantics.
+Synthesis is code: the merged held answer, plus named refusals and any case-law supporting
+authority (never VERIFIED — a judgment may support an answer, never make one). The model only
+phrases a held answer inside its worker; it decides nothing here.
 
 The plan the supervisor builds is validated by `agents/multi_plan.validate` (registered
 agents only, ≤8 workers, depth 1, budget reserved) — the validator is code, as F2 requires.
 """
 from __future__ import annotations
 
-import concurrent.futures as _futures
 from dataclasses import dataclass, field
 
 from agents import multi_plan as mp
@@ -163,37 +163,9 @@ def plan(question: str, *, as_of: str | None) -> tuple[mp.MultiPlan, tuple[Refus
     return mp.MultiPlan(goal=question, workers=tuple(workers)), tuple(refusals), subs
 
 
-def _parallel_call(worker, tasks, *, max_workers: int):
-    """Run `worker(task)` for every task CONCURRENTLY, once; cache (text | exception) by task.
-
-    Returned is a `call(task)` the runner uses: it hands back the pre-computed result, raising
-    the cached exception on a transport failure. The model calls therefore happen in parallel
-    (the expensive, I/O-bound part), while the runner's verify/settle/merge stay ordered and
-    deterministic. The production executor enqueues each worker on the gateway job queue; this
-    thread-pool one is the same shape without a database.
-    """
-    cache: dict[int, object] = {}
-    if tasks:
-        with _futures.ThreadPoolExecutor(max_workers=min(max_workers, len(tasks))) as ex:
-            futs = {ex.submit(worker, t): i for i, t in enumerate(tasks)}
-            for fut, i in futs.items():
-                try:
-                    cache[i] = fut.result()
-                except Exception as e:                           # noqa: BLE001
-                    cache[i] = e
-    index = {id(t): i for i, t in enumerate(tasks)}
-
-    def call(task):
-        res = cache[index[id(task)]]
-        if isinstance(res, Exception):
-            raise res
-        return res
-    return call
-
-
 def research(question: str, *, as_of: str | None, worker, verify, merge,
-             budget=None, support=(), max_parallel: int = mp.MAX_WORKERS) -> Outcome:
-    """Decompose, plan, run the held workers in parallel, synthesise by code.
+             budget=None, support=(), actual_cost=None) -> Outcome:
+    """Decompose, reserve, run the held workers, and synthesise by code.
 
     `worker(task) -> text` researches one held sub-question (it phrases; the gate injects a
     deterministic stand-in). `verify(text, task) -> text` byte-checks the quote and raises
@@ -216,8 +188,11 @@ def research(question: str, *, as_of: str | None, worker, verify, merge,
                        detail={"reason": "no held body of law is engaged; every part is "
                                          "named above", "subs": len(subs)})
 
-    call = _parallel_call(worker, the_plan.workers, max_workers=max_parallel)
-    run_out = mr.run(the_plan, call=call, verify=verify, merge=merge, budget=budget)
+    # Pass the real worker function through. multi_runner performs the budget validation and
+    # reservation before invoking it; retries therefore issue a fresh provider call instead
+    # of replaying a cached answer or exception.
+    run_out = mr.run(the_plan, call=worker, verify=verify, merge=merge, budget=budget,
+                     actual_cost=actual_cost)
 
     gaps = tuple(run_out.gaps)
     # Code synthesis of the overall status. A held answer plus any named refusal is PARTIAL:
@@ -249,7 +224,9 @@ def research(question: str, *, as_of: str | None, worker, verify, merge,
                    sections=tuple(sections),
                    detail={"held_workers": len(the_plan.workers),
                            "runner_status": run_out.status,
-                           "verified": run_out.detail.get("verified")})
+                           "verified": run_out.detail.get("verified"),
+                           "cost_accounting_warnings": run_out.detail.get(
+                               "cost_accounting_warnings", [])})
 
 
 # ── gate stand-ins: a deterministic held-body researcher and verifier, no model, no network ──
@@ -394,6 +371,72 @@ def _test() -> None:
                        verify=_byte_match_verify, merge=_code_merge, support=support)
     check(sup_out.status == ANSWERED and len(sup_out.support) == len(support),
           "the answer carries its supporting case law alongside, not merged into the finding")
+
+    # Accounting warnings must make it through the supervisor's public outcome. A failure
+    # to retrieve provider usage is not a reason to hide the conservative reservation.
+    from datetime import date as _date
+    from backend.budget import BudgetTracker
+
+    class _Mem:
+        def __init__(self):
+            self.data = {}
+            from threading import RLock
+            self.lock = RLock()
+
+        def read(self):
+            with self.lock:
+                return dict(self.data)
+
+        def write(self, data):
+            with self.lock:
+                self.data = dict(data)
+
+        def update(self, fn):
+            with self.lock:
+                self.data = dict(fn(dict(self.data)))
+                return dict(self.data)
+
+    budget = BudgetTracker(_Mem(), today=_date(2026, 10, 7))
+
+    def usage_unavailable(_task, _result):
+        raise RuntimeError("test usage unavailable")
+
+    budget_out = research(
+        "What is the time limit for filing the annual return under section 92?",
+        as_of="2026-10-07", worker=_held_researcher(), verify=_byte_match_verify,
+        merge=_code_merge, budget=budget, actual_cost=usage_unavailable)
+    check(bool(budget_out.detail.get("cost_accounting_warnings"))
+          and budget._state()["month_inr"] > 0,
+          "the supervisor exposes missing-usage warnings and commits the held budget")
+
+    from backend.budget import Reservation, Verdict
+
+    class _RefusingBudget:
+        def reserve(self, **_kwargs):
+            return Reservation(None, 1.0, Verdict(False, "budget", "test cap reached", 0.0, 0.0))
+
+    dispatched: list = []
+    refused = research(
+        "What is the time limit for filing the annual return under section 92?",
+        as_of="2026-10-07", worker=lambda task: dispatched.append(task) or "should not run",
+        verify=_byte_match_verify, merge=_code_merge, budget=_RefusingBudget())
+    check(refused.status == mr.REFUSED and not dispatched,
+          "a budget refusal happens before any worker is dispatched")
+
+    calls: list = []
+
+    def transient_worker(task):
+        calls.append(task)
+        if len(calls) < 3:
+            raise ConnectionError("transient test error")
+        return _held_researcher()(task)
+
+    retried = research(
+        "What is the time limit for filing the annual return under section 92?",
+        as_of="2026-10-07", worker=transient_worker, verify=_byte_match_verify,
+        merge=_code_merge)
+    check(retried.status == ANSWERED and len(calls) == 3,
+          "transport retries invoke fresh worker attempts rather than replaying a cached result")
 
     print(f"{passed}/{passed + failed} passed")
     if failed:

@@ -285,6 +285,10 @@ def budget_out_mid_table() -> Injection:
         def write(self, data):
             self.d = dict(data)
 
+        def update(self, fn):
+            self.d = dict(fn(dict(self.d)))
+            return dict(self.d)
+
     per_cell = cost_inr(DEFAULT_MODEL, CELL_INPUT_TOKENS, CELL_MAX_TOKENS)
     tracker = BudgetTracker(store=_Mem(), today=date(2026, 10, 4))
     # Leave room for two cells of a six-cell table, so the cap runs out MID-table -- the

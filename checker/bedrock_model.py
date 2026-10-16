@@ -222,29 +222,55 @@ def narrate(prompt: str, *, origin, model: str = PRIMARY, budget=None,
             raise BedrockUnavailable(f"budget refused the call: {res.verdict.reason}")
         rid = res.id
 
-    runtime = _runtime if _runtime is not None else _runtime_client()
-    control = _control if _control is not None else _control_client()
+    attempted_calls = 0
     try:
+        # Client construction and the India-region preflight happen after the hold but
+        # before inference. Keep them inside the cleanup boundary so setup failures cannot
+        # strand money or request quota.
+        runtime = _runtime if _runtime is not None else _runtime_client()
+        control = _control if _control is not None else _control_client()
         assert_india(control, model_id)
+        attempted_calls = 1
         text, usage = converse(prompt, system=UNTRUSTED_CLAUSE, model_id=model_id,
                                runtime=runtime)
-    except Exception:
-        # Nothing billed on a refusal/not-ready/transport error: settle at 0.0 so a call that
-        # never produced tokens does not spend the cap. (A call that MAY have billed but hid
-        # its usage would settle at the reservation; we only reach here when no usage exists.)
+    except Exception as inference_error:
+        # Local setup/region refusal cannot have reached inference, so release the request
+        # slot. Once runtime.converse was invoked, count the attempt even if its response
+        # failed; no returned usage still settles the conservative full rupee hold.
         if budget is not None and rid is not None:
-            budget.settle(rid, 0.0)
+            try:
+                cleanup = budget.settle(
+                    rid, 0.0 if attempted_calls == 0 else None,
+                    actual_calls=attempted_calls)
+            except Exception as cleanup_error:                    # noqa: BLE001
+                raise BedrockUnavailable(
+                    "Bedrock failed and budget cleanup could not be confirmed; "
+                    "the reservation needs reconciliation") from cleanup_error
+            if not cleanup.allowed:
+                raise BedrockUnavailable(
+                    "Bedrock failed and budget cleanup was refused; the reservation "
+                    "needs reconciliation") from inference_error
         raise
 
-    if on_usage is not None:
-        on_usage(usage | {"model": model, "provider": "bedrock", "region": REGION})
     if budget is not None and rid is not None:
         tin, tout = usage.get("tokens_in"), usage.get("tokens_out")
         # Unknown usage settles at the reservation, not 0.0 — an unknown cost is an
         # expensive one (backend/budget's own rule).
         actual = cost_inr(model, tin or 0, tout or 0) if tin is not None and tout is not None \
             else res.amount_inr
-        budget.settle(rid, actual)
+        try:
+            settlement = budget.settle(rid, actual)
+        except Exception as settlement_error:                      # noqa: BLE001
+            raise BedrockUnavailable(
+                "Bedrock returned an answer, but cost settlement could not be confirmed; "
+                "the answer was withheld and the reservation needs reconciliation") \
+                from settlement_error
+        if not settlement.allowed:
+            raise BedrockUnavailable(
+                "Bedrock returned an answer, but cost settlement was refused; "
+                "the answer was withheld and the reservation needs reconciliation")
+    if on_usage is not None:
+        on_usage(usage | {"model": model, "provider": "bedrock", "region": REGION})
     return text
 
 
@@ -374,6 +400,74 @@ def _test() -> None:
         narrate(cleared, origin=_o, model=PRIMARY, budget=bt,
                 _runtime=rt2, _control=_FakeControl())
         check(True, "a call with a real budget reserves and settles without raising")
+
+    # Preflight refusal and client construction failure release the hold and request slot.
+    with _tf.TemporaryDirectory() as d:
+        preflight_budget = BudgetTracker(store=FileStore(_P(d) / "ledger.json"))
+        _ASSERTED.clear()
+        blocked_runtime = _FakeRuntime()
+        try:
+            narrate(cleared, origin=_o, model=PRIMARY, budget=preflight_budget,
+                    _runtime=blocked_runtime,
+                    _control=_FakeControl(("ap-south-1", "us-east-1")))
+            check(False, "a non-India preflight is refused before inference")
+        except RegionRefused:
+            state = preflight_budget._state()
+            check(not blocked_runtime.calls and not state["reservations"]
+                  and state["calls_today"] == 0,
+                  "region refusal releases the reservation and does not consume a model request")
+
+    with _tf.TemporaryDirectory() as d:
+        setup_budget = BudgetTracker(store=FileStore(_P(d) / "ledger.json"))
+        original_runtime_client = globals()["_runtime_client"]
+
+        def fail_runtime_client():
+            raise RuntimeError("client setup failed")
+
+        globals()["_runtime_client"] = fail_runtime_client
+        try:
+            try:
+                narrate(cleared, origin=_o, model=PRIMARY, budget=setup_budget,
+                        _control=_FakeControl())
+                check(False, "runtime client setup failure is surfaced")
+            except RuntimeError as e:
+                state = setup_budget._state()
+                check("setup failed" in str(e) and not state["reservations"]
+                      and state["calls_today"] == 0,
+                      "client setup failure releases the hold and request slot")
+        finally:
+            globals()["_runtime_client"] = original_runtime_client
+
+    from types import SimpleNamespace as _NS
+
+    class _SettlementDenied:
+        def reserve(self, **_kwargs):
+            return _NS(allowed=True, id="held", amount_inr=1.0, verdict=_NS(reason="ok"))
+
+        def settle(self, *_args, **_kwargs):
+            return _NS(allowed=False, reason="ledger unavailable")
+
+    _ASSERTED.clear()
+    try:
+        narrate(cleared, origin=_o, model=PRIMARY, budget=_SettlementDenied(),
+                _runtime=_FakeRuntime(text="must not escape"), _control=_FakeControl())
+        check(False, "a response is withheld when successful cost settlement fails")
+    except BedrockUnavailable as e:
+        check("answer was withheld" in str(e),
+              "successful inference with refused settlement is a visible accounting failure")
+
+    original_runtime_client = globals()["_runtime_client"]
+    globals()["_runtime_client"] = lambda: (_ for _ in ()).throw(RuntimeError("setup failed"))
+    try:
+        try:
+            narrate(cleared, origin=_o, model=PRIMARY, budget=_SettlementDenied(),
+                    _control=_FakeControl())
+            check(False, "a failed cleanup is not hidden behind the setup error")
+        except BedrockUnavailable as e:
+            check("needs reconciliation" in str(e),
+                  "failed cleanup reports that the reservation needs reconciliation")
+    finally:
+        globals()["_runtime_client"] = original_runtime_client
 
     # ── access-pending is a typed STATE, not a crash ────────────────────────
     _ASSERTED.clear()

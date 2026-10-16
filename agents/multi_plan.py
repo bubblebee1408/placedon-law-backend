@@ -35,8 +35,8 @@ then bound one level of a tree rather than the tree.
 
 ## The budget is RESERVED, not estimated
 
-`validate` takes a budget and calls `reserve()` once per worker, holding each worst case
-before anything runs. On any refusal it RELEASES everything it took: a validator that
+`validate` takes a budget and calls `reserve()` once per worker, holding the worst case for
+every permitted call attempt before anything runs. On any refusal it RELEASES everything it took: a validator that
 charged for the plans it turned away would ratchet itself shut, which is the same reason
 `budget.reserve` itself writes nothing when it refuses.
 
@@ -45,6 +45,7 @@ Run: PYTHONPATH=. python3 agents/multi_plan.py --test
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from backend.budget import DEFAULT_MODEL
 
 # The agents a supervisor may fan out to. WRITTEN OUT, never scanned: a scan would make
 # every module added to `agents/` into something a model may invoke, and nobody decided that.
@@ -64,6 +65,7 @@ SPAWNING_AGENTS = ("supervisor",)
 # PLATFORM_FEATURES_AND_INTEGRATIONS.md §5. Eight, written down rather than derived, so
 # raising it is a visible edit to this line and not a consequence of something else.
 MAX_WORKERS = 8
+MAX_WORKER_ATTEMPTS = 3
 
 # What one worker is assumed to cost at worst. The same shape as a review cell
 # (`agents/review_grid.CELL_*`), because a worker sends one document's relevant text and
@@ -121,7 +123,8 @@ class Verdict:
                 "reserved_inr": self.reserved_inr, "detail": self.detail}
 
 
-def validate(plan, *, budget=None, max_workers: int = MAX_WORKERS) -> Verdict:
+def validate(plan, *, budget=None, max_workers: int = MAX_WORKERS,
+             model: str = DEFAULT_MODEL, per_model_cap: int | None = None) -> Verdict:
     """Accept or refuse one proposed plan. Never raises; refuses by naming a code.
 
     Cheap structural checks FIRST, the budget LAST. Reserving before checking the agent
@@ -178,23 +181,48 @@ def validate(plan, *, budget=None, max_workers: int = MAX_WORKERS) -> Verdict:
 
     taken: list[str] = []
     total = 0.0
+    import uuid
+    run_id = uuid.uuid4().hex[:12]
     for i, w in enumerate(plan.workers):
-        res = budget.reserve(input_tokens=WORKER_INPUT_TOKENS,
-                             max_tokens=WORKER_MAX_TOKENS,
-                             reservation_id=_reservation_id(plan, i))
+        # A worker may be retried after transport failure or verifier rejection. Reserve the
+        # maximum number of attempts up front; a reservation for one call cannot authorize
+        # three paid calls.
+        res = budget.reserve(input_tokens=WORKER_INPUT_TOKENS * MAX_WORKER_ATTEMPTS,
+                             max_tokens=WORKER_MAX_TOKENS * MAX_WORKER_ATTEMPTS,
+                             reservation_id=_reservation_id(plan, i, run_id),
+                             request_count=MAX_WORKER_ATTEMPTS,
+                             model=model, per_model_cap=per_model_cap)
         if res.id is None:
             # RELEASE everything already taken. A validator that charged for the plans it
             # turned away would ratchet itself shut -- the same reason `reserve` writes
             # nothing when it refuses.
+            cleanup_failures = []
             for rid in taken:
-                budget.settle(rid, 0.0)
+                try:
+                    released = budget.settle(rid, 0.0, actual_calls=0)
+                except Exception as exc:  # noqa: BLE001 - report a stuck hold to caller
+                    cleanup_failures.append({"reservation_id": rid,
+                                             "error": type(exc).__name__})
+                    continue
+                if not released.allowed:
+                    cleanup_failures.append({"reservation_id": rid,
+                                             "error": released.reason})
+            if cleanup_failures:
+                refusal_detail = (
+                    f"worker {i} of {len(plan.workers)} could not be afforded: "
+                    f"{res.verdict.reason} The plan was refused; cleanup failed for "
+                    f"{len(cleanup_failures)} reservation(s), which remain held and need "
+                    "reconciliation.")
+            else:
+                refusal_detail = (
+                    f"worker {i} of {len(plan.workers)} could not be afforded: "
+                    f"{res.verdict.reason} The plan was refused and all earlier holds were "
+                    "released; no reservations remain for this plan.")
             return Verdict(False, NO_BUDGET,
-                           f"worker {i} of {len(plan.workers)} could not be afforded: "
-                           f"{res.verdict.reason} Nothing was reserved -- the "
-                           f"{len(taken)} reservation(s) already taken were released, so a "
-                           f"refused plan holds none of the firm's cap",
+                           refusal_detail,
                            detail={"affordable_workers": i,
-                                   "proposed": len(plan.workers)})
+                                   "proposed": len(plan.workers),
+                                   "cleanup_failures": cleanup_failures})
         taken.append(res.id)
         total += float(res.amount_inr or 0.0)
     return Verdict(True, reason=(
@@ -204,8 +232,8 @@ def validate(plan, *, budget=None, max_workers: int = MAX_WORKERS) -> Verdict:
         reservations=tuple(taken), reserved_inr=round(total, 4))
 
 
-def _reservation_id(plan: MultiPlan, index: int) -> str:
-    """A stable id per (plan, worker). HASHED, not truncated.
+def _reservation_id(plan: MultiPlan, index: int, run_id: str | None = None) -> str:
+    """A plan-and-worker identity, with a fresh run suffix for live reservations.
 
     `agents/review_grid.reservation_id_for_cell` learned this the hard way: slicing an
     identifier to fit destroyed the one property that made it an identifier, and two cells of
@@ -213,7 +241,8 @@ def _reservation_id(plan: MultiPlan, index: int) -> str:
     """
     import hashlib
     key = f"{plan.goal}\x00{index}\x00{plan.workers[index].agent}"
-    return "ma1-" + hashlib.sha256(key.encode("utf-8")).hexdigest()[:20]
+    base = "ma1-" + hashlib.sha256(key.encode("utf-8")).hexdigest()[:20]
+    return f"{base}-{run_id}" if run_id else base
 
 
 def _test() -> int:
@@ -316,6 +345,10 @@ def _test() -> int:
         def write(self, data: dict) -> None:
             self.d = dict(data)
 
+        def update(self, fn) -> dict:
+            self.d = dict(fn(dict(self.d)))
+            return dict(self.d)
+
     def held(t) -> dict:
         return {k: v for k, v in (t._state().get("reservations") or {}).items()
                 if k.startswith("ma1-")}
@@ -323,7 +356,7 @@ def _test() -> int:
     t = BudgetTracker(_Mem(), today=_date(2026, 10, 5))
     v = validate(plan_of(3), budget=t)
     check(v.ok and len(v.reservations) == 3,
-          f"an affordable plan reserves one worst case PER WORKER before anything runs "
+          f"an affordable plan reserves the maximum attempts PER WORKER before anything runs "
           f"({len(v.reservations)})")
     check(v.reserved_inr > 0.0,
           f"...and reports what it is holding ({v.reserved_inr})")
@@ -352,6 +385,18 @@ def _test() -> int:
           f"...naming how many WOULD have fitted, which is what a supervisor needs to "
           f"narrow the plan ({poor.detail})")
 
+    class CleanupFailureBudget(BudgetTracker):
+        def settle(self, _reservation_id, _actual_inr, **_kwargs):
+            from backend.budget import Verdict as _BudgetVerdict
+            return _BudgetVerdict(False, "offline", "ledger unavailable")
+
+    cleanup_budget = CleanupFailureBudget(_Mem(), today=_date(2026, 10, 5))
+    cleanup_budget.record_call(DAILY_CAP_INR * 0.90)
+    cleanup_verdict = validate(plan_of(2), budget=cleanup_budget)
+    check(not cleanup_verdict.ok and bool(cleanup_verdict.detail.get("cleanup_failures"))
+          and "reconciliation" in cleanup_verdict.reason,
+          "a failed release is disclosed as a stuck budget hold instead of claiming rollback")
+
     # The structural checks run BEFORE the budget. A plan refused for a typo must not have
     # taken money on the way.
     t4 = BudgetTracker(_Mem(), today=_date(2026, 10, 5))
@@ -377,7 +422,7 @@ def _test() -> int:
     p = plan_of(2)
     check(_reservation_id(p, 0) == _reservation_id(p, 0)
           and _reservation_id(p, 0) != _reservation_id(p, 1),
-          "a reservation id is stable per worker and distinct between workers -- hashed, "
+          "a reservation identity is stable per worker and distinct between workers -- hashed, "
           "because truncating an identifier to fit destroyed exactly that property for "
           "review cells")
     check(len(set(REFUSALS)) == len(REFUSALS) == 6,

@@ -1227,7 +1227,21 @@ def _test() -> None:
     # ask's shape, which is body-level, so the per-State supervisor shape lives on its own.)
     _MB_Q = ("5-year office leases in Bengaluru and Mumbai, and a share allotment to a "
              "Singapore investor")
-    _mb = client.post("/v2/research/multi", json={"question": _MB_Q})
+    # Keep this HTTP integration from touching the developer's real budget ledger. The
+    # route reserves before dispatch, so a failed assertion must not leave a live hold in
+    # corpus/.budget.json and starve the next test or a local conversation.
+    import tempfile as _mb_tmp
+    from pathlib import Path as _mb_path
+    from backend.budget import BudgetTracker as _mb_budget, FileStore as _mb_file_store
+    from gateway import verbs as _mb_verbs
+    with _mb_tmp.TemporaryDirectory() as _mb_dir:
+        _mb_ledger = _mb_verbs._ledger
+        _mb_verbs._ledger = lambda: _mb_budget(_mb_file_store(
+            _mb_path(_mb_dir) / "budget.json"))
+        try:
+            _mb = client.post("/v2/research/multi", json={"question": _MB_Q})
+        finally:
+            _mb_verbs._ledger = _mb_ledger
     check(_mb.status_code == 200, f"/v2/research/multi takes a multi-body question ({_mb.status_code})")
     _mbj = json.loads(_mb.content)
     check(_mbj.get("status") == "PARTIAL",
