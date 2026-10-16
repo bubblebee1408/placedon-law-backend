@@ -6,12 +6,12 @@ from checker import public_web
 
 
 class PublicWebReliability(unittest.TestCase):
-    def search(self, response):
+    def search(self, response, query="Tata governance dispute"):
         with patch.dict(public_web.os.environ, {
             "PLACEDON_EXA_WEB_ENABLED": "1", "EXA_API_KEY": "synthetic-test-key",
         }):
             return public_web.search(
-                "Tata governance dispute", mode="GENERAL_WEB", consent=True,
+                query, mode="GENERAL_WEB", consent=True,
                 transport=lambda body, key: response,
             )
 
@@ -82,6 +82,19 @@ class PublicWebReliability(unittest.TestCase):
                 self.assertNotIn("Unsupported conclusion", result["answer"])
                 self.assertIn("summary referenced a source", result["answer"])
                 self.assertEqual(len(result["citations"]), 1)
+
+
+    def test_live_docket_question_never_appends_provider_status_narrative(self):
+        result = self.search({
+            "answer": "The court matter has been listed for next week [1]. The companies disagree over governance [2].",
+            "citations": [self.source(), self.source("https://example.org/report-2", "Report 2")],
+        }, query="What is the current status of the Tata court case?")
+        self.assertEqual(result["status"], "ANSWERED")
+        self.assertIn("cannot confirm a live court", result["answer"])
+        self.assertNotIn("listed for next week", result["answer"])
+        self.assertNotIn("disagree over governance", result["answer"])
+        self.assertEqual(len(result["citations"]), 2)
+        self.assertEqual(len(result["portals"]), 2)
 
     def test_plain_provider_summary_remains_explicitly_unverified(self):
         # Citation presence is not semantic support or a correctness guarantee.

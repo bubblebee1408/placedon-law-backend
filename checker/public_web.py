@@ -244,7 +244,6 @@ def search(query: str, *, mode: str, consent: bool,
     if not isinstance(answer, str) or not answer.strip():
         return _result("NO_RESULTS", message="The provider returned no answer.")
     citations = []
-    seen = set()
     # Provider [n] references refer to its original list. Filtering, deduplication,
     # and truncation must never silently point a claim at a different source.
     reference_numbers = {}
@@ -254,10 +253,9 @@ def search(query: str, *, mode: str, consent: bool,
         citation = _clean_citation(raw)
         if not citation:
             continue
-        if citation["url"] in seen:
+        if citation["url"] in source_numbers:
             reference_numbers[source_number] = source_numbers[citation["url"]]
         elif len(citations) < MAX_CITATIONS:
-            seen.add(citation["url"])
             citations.append(citation)
             source_numbers[citation["url"]] = len(citations)
             reference_numbers[source_number] = len(citations)
@@ -284,11 +282,12 @@ def search(query: str, *, mode: str, consent: bool,
     answer, claim_removed = _strip_unverified_docket_claims(answer)
     docket_question = docket_question or claim_removed
     if docket_question:
-        # The provider may confidently claim that a filing exists or does not exist.
-        # Neither claim is verified by public search, even when news links are cited.
+        # Search results can supply reporting leads, but cannot verify docket state.
+        # Do not append model prose here: an incomplete pattern list must never leak
+        # a confident filing/hearing claim into a current-status answer.
         answer = ("Placedon cannot confirm a live court filing, hearing, or docket status "
-                  "from public web reporting. Check the official court portal."
-                  + ("\n\n" + answer if answer else "\n\nReview the linked source leads below."))
+                  "from public web reporting. Review the linked reports for context and "
+                  "check the official court portal for the record.")
     return _result(
         "ANSWERED", query=query, answer=answer.strip()[:10000], citations=citations,
         queried_at=current, note=("Public-web research only. Review the linked sources. "
@@ -357,16 +356,18 @@ def _test() -> int:
                         transport=lambda body, key: {"answer": "No active court case exists. The dispute concerns a listing proposal [1].",
                                                      "citations": fake["citations"]})
     check(docket["status"] == "ANSWERED" and "No active court case" not in docket["answer"]
-          and "listing proposal" in docket["answer"] and len(docket["portals"]) == 2,
-          "case discovery removes unverified docket claims, keeps context, and links portals")
+          and "listing proposal" not in docket["answer"] and len(docket["portals"]) == 2
+          and len(docket["citations"]) == 1,
+          "live docket questions suppress provider prose and retain report leads plus official portals")
     with patch.dict(os.environ, {"PLACEDON_EXA_WEB_ENABLED": "1", "EXA_API_KEY": "test-secret-never-log"}):
         historical = search("Tata case study on current case between Tata Sons and Tata Trusts",
                             mode="GENERAL_WEB", consent=True,
                             transport=lambda body, key: {"answer": "There is currently no active court case [1]. The board dispute concerns listing [2].",
                                                          "citations": fake["citations"]})
     check("no active court case" not in historical["answer"].lower()
-          and "board dispute" in historical["answer"] and len(historical["portals"]) == 2,
-          "a saved current-case question keeps its useful summary without a false docket claim")
+          and "board dispute" not in historical["answer"] and len(historical["portals"]) == 2
+          and len(historical["citations"]) == 1,
+          "a saved current-case question suppresses provider prose and keeps source leads")
     cleaned, removed = _strip_unverified_docket_claims(
         "The governance dispute concerns listing. No court has issued a ruling as of today.")
     check(removed and "governance dispute" in cleaned and "no court" not in cleaned.lower(),
