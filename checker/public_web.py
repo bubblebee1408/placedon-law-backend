@@ -85,13 +85,10 @@ _DOCKET_STATUS_CLAIM = re.compile(
 )
 
 
-def _strip_unverified_docket_claims(answer: str) -> tuple[str, bool]:
-    """Keep useful context while removing sentences that purport to know docket state."""
+def _contains_unverified_docket_claim(answer: str) -> bool:
+    """Flag docket claims so public reporting is not presented as a current record."""
     sentences = re.split(r"(?<=[.!?])(?=\s+[A-Z])", answer.strip())
-    removed = any(_DOCKET_STATUS_CLAIM.search(sentence) for sentence in sentences)
-    safe = "".join(sentence for sentence in sentences
-                   if not _DOCKET_STATUS_CLAIM.search(sentence)).strip()
-    return safe, removed
+    return any(_DOCKET_STATUS_CLAIM.search(sentence) for sentence in sentences)
 
 
 def _public_portals() -> list[dict[str, str]]:
@@ -285,8 +282,7 @@ def search(query: str, *, mode: str, consent: bool,
         answer = re.sub(r"\[([0-9]+)\]",
                         lambda match: f"[{reference_numbers[int(match.group(1))]}]", answer)
     current = now() if callable(now) else datetime.now(timezone.utc).isoformat()
-    answer, claim_removed = _strip_unverified_docket_claims(answer)
-    docket_question = docket_question or claim_removed
+    docket_question = docket_question or _contains_unverified_docket_claim(answer)
     if docket_question:
         # Do not put our own warning in an ANSWERED/provider-summary field. Keep
         # sourced reports as leads and make the official-record gate a distinct state.
@@ -300,7 +296,6 @@ def search(query: str, *, mode: str, consent: bool,
         "ANSWERED", query=query, answer=answer.strip()[:10000], citations=citations,
         queried_at=current, note=("Public-web research only. Review the linked sources. "
                                   "This is not verified law or a live court docket record."),
-        **({"portals": _public_portals()} if docket_question else {}),
     )
 
 
@@ -392,10 +387,10 @@ def _test() -> int:
           and "board dispute" not in str(historical["answer"]) and len(historical["portals"]) == 2
           and len(historical["citations"]) == 1,
           "a saved current-case question suppresses provider prose and keeps source leads")
-    cleaned, removed = _strip_unverified_docket_claims(
+    removed = _contains_unverified_docket_claim(
         "The governance dispute concerns listing. No court has issued a ruling as of today.")
-    check(removed and "governance dispute" in cleaned and "no court" not in cleaned.lower(),
-          "a negative court-ruling claim is removed without losing the dispute summary")
+    check(removed,
+          "a negative court-ruling claim diverts the provider summary to official-status review")
 
     print(f"\n{passed}/{passed + failed} passed")
     return 1 if failed else 0
