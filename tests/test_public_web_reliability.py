@@ -59,8 +59,9 @@ class PublicWebReliability(unittest.TestCase):
             "answer": "Invented court conclusion [1].",
             "citations": [self.source("javascript:bad"), self.source()],
         })
-        self.assertNotIn("Invented court conclusion", result["answer"])
-        self.assertIn("summary referenced a source", result["answer"])
+        self.assertEqual(result["status"], "SUMMARY_UNAVAILABLE")
+        self.assertIsNone(result["answer"])
+        self.assertIn("summary referenced a source", result["message"])
         self.assertEqual(len(result["citations"]), 1)
 
     def test_out_of_range_or_truncated_source_reference_withholds_prose(self):
@@ -69,7 +70,8 @@ class PublicWebReliability(unittest.TestCase):
                 "answer": f"Invented court conclusion [{reference}].",
                 "citations": [self.source(f"https://example.org/{n}") for n in range(9)],
             })
-            self.assertNotIn("Invented court conclusion", result["answer"])
+            self.assertEqual(result["status"], "SUMMARY_UNAVAILABLE")
+            self.assertIsNone(result["answer"])
             self.assertEqual(len(result["citations"]), public_web.MAX_CITATIONS)
 
     def test_grouped_ranged_and_oversized_references_withhold_summary(self):
@@ -79,43 +81,156 @@ class PublicWebReliability(unittest.TestCase):
                     "answer": f"Unsupported conclusion [{reference}].",
                     "citations": [self.source(), self.source("javascript:bad")],
                 })
-                self.assertNotIn("Unsupported conclusion", result["answer"])
-                self.assertIn("summary referenced a source", result["answer"])
+                self.assertEqual(result["status"], "SUMMARY_UNAVAILABLE")
+                self.assertIsNone(result["answer"])
+                self.assertIn("summary referenced a source", result["message"])
                 self.assertEqual(len(result["citations"]), 1)
 
 
-    def test_live_docket_question_never_appends_provider_status_narrative(self):
+    def test_provider_docket_claim_is_withheld_as_official_status_lead(self):
         result = self.search({
-            "answer": "The court matter has been listed for next week [1]. The companies disagree over governance [2].",
+            "answer": "A court case is pending [1]. The companies disagree over governance [2].",
             "citations": [self.source(), self.source("https://example.org/report-2", "Report 2")],
-        }, query="Has a court case been filed?")
+        }, query="Tata governance dispute")
         self.assertEqual(result["status"], "OFFICIAL_STATUS_REQUIRED")
         self.assertIsNone(result["answer"])
         self.assertIn("not a live court record", result["message"])
         self.assertEqual(len(result["citations"]), 2)
         self.assertEqual(len(result["portals"]), 2)
 
-    def test_natural_current_situation_of_case_uses_official_status_gate(self):
+    def test_natural_current_situation_of_case_asks_for_details_without_search(self):
         query = "What is the current situation of the Tata court case?"
+        calls = []
         with patch.dict(public_web.os.environ, {"PLACEDON_EXA_WEB_ENABLED": "1", "EXA_API_KEY": "synthetic-test-key"}):
             result = public_web.search(query, mode="GENERAL_WEB", consent=True,
-                                       transport=lambda *_: {
-                                           "answer": "A report says a hearing is next week [1].",
-                                           "citations": [self.source()],
-                                       })
-        self.assertEqual(result["status"], "OFFICIAL_STATUS_REQUIRED")
+                                       transport=lambda body, key: calls.append((body, key)))
+        self.assertEqual(result["status"], "NEEDS_CASE_DETAILS")
         self.assertIsNone(result["answer"])
+        self.assertEqual(calls, [])
+
+    def test_current_case_wording_asks_for_details_before_external_search(self):
+        calls = []
+        with patch.dict(public_web.os.environ, {
+            "PLACEDON_EXA_WEB_ENABLED": "1", "EXA_API_KEY": "synthetic-test-key",
+        }):
+            result = public_web.search(
+                "Tata case study on current case between Tata Sons and Tata Trusts",
+                mode="GENERAL_WEB", consent=True,
+                transport=lambda body, key: calls.append((body, key)),
+            )
+        self.assertEqual(result["status"], "NEEDS_CASE_DETAILS")
+        self.assertIsNone(result["answer"])
+        self.assertEqual(calls, [])
+
+    def test_case_discovery_mode_can_search_for_reporting_leads(self):
+        calls = []
+        with patch.dict(public_web.os.environ, {
+            "PLACEDON_EXA_WEB_ENABLED": "1", "EXA_API_KEY": "synthetic-test-key",
+        }):
+            result = public_web.search(
+                "Tata case between Tata Sons and Tata Trusts",
+                mode="CASE_DISCOVERY", consent=True,
+                transport=lambda body, key: calls.append((body, key)) or {
+                    "answer": "Public reports discuss a corporate dispute [1].",
+                    "citations": [self.source()],
+                },
+            )
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(result["status"], "ANSWERED")
         self.assertEqual(len(result["citations"]), 1)
 
-    def test_current_case_wording_gets_reporting_leads_but_no_answer(self):
-        result = self.search({
-            "answer": "A proceeding is listed next week [1].",
-            "citations": [self.source()],
-        }, query="Tata case study on current case between Tata Sons and Tata Trusts")
+    def test_case_study_words_are_not_mistaken_for_a_case_number(self):
+        query = "What is the current status of the Supreme Court case study?"
+        with patch.dict(public_web.os.environ, {
+            "PLACEDON_EXA_WEB_ENABLED": "1", "EXA_API_KEY": "synthetic-test-key",
+        }):
+            result = public_web.search(query, mode="GENERAL_WEB", consent=True,
+                                       transport=lambda *_: self.fail("provider must not be called"))
+        self.assertEqual(result["status"], "NEEDS_CASE_DETAILS")
+        self.assertNotIn("provider", result)
+
+    def test_ambiguous_live_case_status_is_clarified_before_provider_call(self):
+        calls = []
+        with patch.dict(public_web.os.environ, {
+            "PLACEDON_EXA_WEB_ENABLED": "1", "EXA_API_KEY": "synthetic-test-key",
+        }):
+            result = public_web.search(
+                "crime case status", mode="GENERAL_WEB", consent=True,
+                transport=lambda body, key: calls.append((body, key)),
+            )
+        self.assertEqual(result["status"], "NEEDS_CASE_DETAILS")
+        self.assertIsNone(result["answer"])
+        self.assertNotIn("provider", result)
+        self.assertEqual(calls, [])
+        self.assertIn("court", result["message"])
+
+    def test_live_case_paraphrases_are_clarified_before_provider_call(self):
+        for query in (
+            "latest update on Tata Trusts lawsuit",
+            "Is the Tata dispute before the Supreme Court?",
+            "Has Tata moved court?",
+        ):
+            with self.subTest(query=query), patch.dict(public_web.os.environ, {
+                "PLACEDON_EXA_WEB_ENABLED": "1", "EXA_API_KEY": "synthetic-test-key",
+            }):
+                calls = []
+                result = public_web.search(
+                    query, mode="GENERAL_WEB", consent=True,
+                    transport=lambda body, key: calls.append((body, key)),
+                )
+            self.assertEqual(result["status"], "NEEDS_CASE_DETAILS")
+            self.assertEqual(calls, [])
+
+    def test_identified_live_case_status_routes_to_official_portal_without_provider_call(self):
+        calls = []
+        with patch.dict(public_web.os.environ, {
+            "PLACEDON_EXA_WEB_ENABLED": "1", "EXA_API_KEY": "synthetic-test-key",
+        }):
+            result = public_web.search(
+                "Current status CNR ABC1234567890123 Supreme Court",
+                mode="GENERAL_WEB", consent=True,
+                transport=lambda body, key: calls.append((body, key)),
+            )
         self.assertEqual(result["status"], "OFFICIAL_STATUS_REQUIRED")
         self.assertIsNone(result["answer"])
-        self.assertEqual(len(result["citations"]), 1)
+        self.assertNotIn("provider", result)
         self.assertEqual(len(result["portals"]), 2)
+        self.assertEqual(calls, [])
+
+    def test_case_number_placeholder_words_are_not_treated_as_identifiers(self):
+        for query in (
+            "What is current status of the case number please check at Supreme Court?",
+            "What is current status of the case number pending at Supreme Court?",
+        ):
+            with self.subTest(query=query), patch.dict(public_web.os.environ, {
+                "PLACEDON_EXA_WEB_ENABLED": "1", "EXA_API_KEY": "synthetic-test-key",
+            }):
+                calls = []
+                result = public_web.search(
+                    query, mode="GENERAL_WEB", consent=True,
+                    transport=lambda body, key: calls.append((body, key)),
+                )
+            self.assertEqual(result["status"], "NEEDS_CASE_DETAILS")
+            self.assertEqual(calls, [])
+
+    def test_unmatched_citation_returns_leads_without_answered_summary(self):
+        result = self.search({
+            "answer": "Unsupported conclusion [2].",
+            "citations": [self.source()],
+        })
+        self.assertEqual(result["status"], "SUMMARY_UNAVAILABLE")
+        self.assertIsNone(result["answer"])
+        self.assertEqual(len(result["citations"]), 1)
+        self.assertIn("research leads", result["message"])
+
+    def test_preflight_outcomes_do_not_claim_exa_was_used(self):
+        with patch.dict(public_web.os.environ, {}, clear=True):
+            consent = public_web.search("Tata governance update", mode="GENERAL_WEB", consent=False)
+            disabled = public_web.search("Tata governance update", mode="GENERAL_WEB", consent=True)
+        self.assertEqual(consent["status"], "CONSENT_REQUIRED")
+        self.assertEqual(disabled["status"], "NOT_CONFIGURED")
+        self.assertNotIn("provider", consent)
+        self.assertNotIn("provider", disabled)
 
     def test_plain_provider_summary_remains_explicitly_unverified(self):
         # Citation presence is not semantic support or a correctness guarantee.
