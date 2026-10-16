@@ -107,8 +107,14 @@ def _clean_citation(row: object) -> dict | None:
     title = row.get("title")
     if not isinstance(url, str) or not isinstance(title, str):
         return None
-    parsed = urlparse(url)
-    if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
+    try:
+        parsed = urlparse(url)
+        if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
+            return None
+        _ = parsed.port  # urlparse defers invalid-port validation until this access.
+    except ValueError:
+        return None
+    if any(char.isspace() or ord(char) < 32 for char in url):
         return None
     if len(url) > 2048 or len(title) > 300:
         return None
@@ -228,6 +234,8 @@ def search(query: str, *, mode: str, consent: bool,
     finally:
         _IN_FLIGHT.release()
 
+    if not isinstance(data, dict):
+        return _result("UNAVAILABLE", message="The public web provider returned an unreadable response.", retryable=True)
     answer = data.get("answer")
     if isinstance(answer, dict):
         # Structured answer responses are accepted only when they also carry a string
@@ -237,15 +245,41 @@ def search(query: str, *, mode: str, consent: bool,
         return _result("NO_RESULTS", message="The provider returned no answer.")
     citations = []
     seen = set()
-    for raw in data.get("citations", []) if isinstance(data.get("citations"), list) else []:
+    # Provider [n] references refer to its original list. Filtering, deduplication,
+    # and truncation must never silently point a claim at a different source.
+    reference_numbers = {}
+    source_numbers = {}
+    raw_citations = data.get("citations")
+    for source_number, raw in enumerate(raw_citations if isinstance(raw_citations, list) else [], 1):
         citation = _clean_citation(raw)
-        if citation and citation["url"] not in seen:
+        if not citation:
+            continue
+        if citation["url"] in seen:
+            reference_numbers[source_number] = source_numbers[citation["url"]]
+        elif len(citations) < MAX_CITATIONS:
             seen.add(citation["url"])
             citations.append(citation)
-        if len(citations) >= MAX_CITATIONS:
-            break
+            source_numbers[citation["url"]] = len(citations)
+            reference_numbers[source_number] = len(citations)
     if not citations:
         return _result("NO_RESULTS", message="The provider returned no citable sources.")
+    # Exa normally emits single numeric markers. Do not silently retain grouped
+    # or ranged markers: their interpretation is not part of this adapter's contract.
+    # Match arbitrary lengths, but bound conversion so hostile digits cannot trigger
+    # Python's integer-string limit or consume disproportionate parsing work.
+    references = re.findall(r"\[(\s*[0-9][0-9\s,;–—-]*)\]", answer)
+    invalid_references = any(
+        not reference.isascii() or not reference.isdigit() or len(reference) > 5
+        or int(reference) not in reference_numbers
+        for reference in references
+    )
+    if invalid_references:
+        # Preserve useful leads, but never show prose whose claimed source is absent.
+        answer = ("The provider's summary referenced a source that could not be shown. "
+                  "Review the source leads below; no reliable summary is available for this response.")
+    else:
+        answer = re.sub(r"\[([0-9]+)\]",
+                        lambda match: f"[{reference_numbers[int(match.group(1))]}]", answer)
     current = now() if callable(now) else datetime.now(timezone.utc).isoformat()
     answer, claim_removed = _strip_unverified_docket_claims(answer)
     docket_question = docket_question or claim_removed
