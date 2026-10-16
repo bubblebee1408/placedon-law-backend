@@ -6077,9 +6077,9 @@ def _test() -> None:
 
     _web_ambiguous = by_name()["research.web"].run({
         "query": "What's the current status of a crime case?",
-        "mode": "GENERAL_WEB", "external_search_consent": True}, Context())
-    check(_web_ambiguous.get("status") == "NEEDS_CASE_DETAILS",
-          "research.web asks for case details instead of turning web search into docket status")
+        "mode": "GENERAL_WEB", "external_search_consent": False}, Context())
+    check(_web_ambiguous.get("status") == "CONSENT_REQUIRED",
+          "research.web keeps broad case discovery behind explicit consent")
     _web_no_consent = by_name()["research.web"].run({
         "query": "recent criminal cases in Delhi", "mode": "CASE_DISCOVERY",
         "external_search_consent": False}, Context())
