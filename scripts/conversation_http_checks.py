@@ -73,7 +73,9 @@ def _test():
                     await asyncio.Event().wait()
                 expired = await client.post("/v2/ask", content=incomplete())
                 check(expired.status_code == 408, "incomplete upload expires and releases its body slot")
-                app.state.limiter = Limiter(burst=0)
+                exhausted = Limiter(burst=1)
+                exhausted.check("11111111-1111-1111-1111-111111111111")
+                app.state.limiter = exhausted
                 export = await client.get("/v2/drafts/example/export.docx")
                 check(export.status_code == 429, f"binary downloads use the same rate limiter ({export.status_code})")
         finally:

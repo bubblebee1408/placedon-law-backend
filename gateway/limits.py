@@ -39,9 +39,13 @@ from __future__ import annotations
 
 import time
 import threading
+import asyncio
+import logging
+from decimal import Decimal, ROUND_CEILING
 from dataclasses import dataclass, field
 
 __all__ = ["MAX_BODY_BYTES", "RATE_PER_MINUTE", "BURST", "Refusal", "Limiter",
+           "PostgresLimiter",
            "check_body_size", "TOO_LARGE", "RATE_LIMITED"]
 
 # 10 MiB. A 200-page agreement as text is about 1 MB, so this is generous for every path that
@@ -53,6 +57,21 @@ BURST = 120                 # the bucket's depth: what a tenant may spend at onc
 
 TOO_LARGE = "REQUEST_TOO_LARGE"
 RATE_LIMITED = "RATE_LIMITED"
+RATE_LIMIT_UNAVAILABLE = "RATE_LIMIT_UNAVAILABLE"
+_LOG = logging.getLogger(__name__)
+_LOG_LOCK = threading.Lock()
+_LAST_UNAVAILABLE_LOG = 0.0
+
+
+def _log_limiter_unavailable(failure_kind: str) -> None:
+    """Emit a sampled, identifier-free signal so an outage cannot flood logs."""
+    global _LAST_UNAVAILABLE_LOG
+    now = time.monotonic()
+    with _LOG_LOCK:
+        if now - _LAST_UNAVAILABLE_LOG < 30:
+            return
+        _LAST_UNAVAILABLE_LOG = now
+    _LOG.warning("shared_rate_limiter_unavailable", extra={"failure_kind": failure_kind})
 
 
 @dataclass(frozen=True)
@@ -110,6 +129,8 @@ class Limiter:
         recovery time out every time a blocked client retried, which turns a brief limit into
         an indefinite one.
         """
+        if not tenant_id or not isinstance(cost, int) or cost < 1 or cost > self.burst:
+            raise ValueError("tenant and a positive cost within the bucket burst are required")
         with self._lock:
             now = float(self.clock())
             rate = self.per_minute / 60.0
@@ -143,6 +164,132 @@ class Limiter:
             return min(float(self.burst), b.tokens + elapsed * (self.per_minute / 60.0))
 
 
+def _refilled(tokens: Decimal, updated_at, now, *, per_minute: int,
+              burst: int) -> tuple[Decimal, object]:
+    """Refill from a database timestamp, clamping backward wall-clock corrections."""
+    effective_now = max(now, updated_at)
+    elapsed = Decimal(str((effective_now - updated_at).total_seconds()))
+    rate = Decimal(per_minute) / Decimal(60)
+    return min(Decimal(burst), tokens + elapsed * rate), effective_now
+
+
+@dataclass
+class PostgresLimiter:
+    """Tenant token buckets shared by gateway replicas through PostgreSQL.
+
+    The caller must pass the tenant resolved from authenticated credentials. A short
+    transaction sets that tenant for FORCE RLS, locks exactly its bucket row, refills with
+    the database clock, and consumes only when allowed. Storage failures fail closed; this
+    class never falls back to the process-local Limiter.
+    """
+    url: str
+    per_minute: int = RATE_PER_MINUTE
+    burst: int = BURST
+    connect_timeout: int = 2
+    statement_timeout_ms: int = 1200
+    lock_timeout_ms: int = 700
+    max_concurrent_checks: int = 10
+    acquire_timeout: float = 0.25
+    _slots: asyncio.Semaphore = field(init=False, repr=False)
+    _pool: object = field(init=False, repr=False)
+
+    def __post_init__(self):
+        if (not self.url or self.per_minute < 1 or self.burst < 1 or self.burst > 10000
+                or self.connect_timeout < 1 or self.statement_timeout_ms < 1
+                or self.lock_timeout_ms < 1 or not 1 <= self.max_concurrent_checks <= 100
+                or self.acquire_timeout <= 0):
+            raise ValueError("invalid shared limiter configuration")
+        self._slots = asyncio.Semaphore(self.max_concurrent_checks)
+        # Reuse bounded process-local connections. The database remains the shared atomic
+        # authority; this cap only limits sockets opened by this replica.
+        from gateway.pool import Pool
+        import psycopg
+        self._pool = Pool(self.url, max_size=self.max_concurrent_checks,
+                          acquire_timeout=self.acquire_timeout, name="rate-limit",
+                          connect=lambda url: psycopg.connect(
+                              url, autocommit=True, connect_timeout=self.connect_timeout))
+
+    async def check_async(self, tenant_id: str, *, cost: int = 1) -> Refusal | None:
+        """Consume shared tenant capacity, or return a stable, sanitized refusal."""
+        if not tenant_id or not isinstance(cost, int) or cost < 1 or cost > self.burst:
+            raise ValueError("tenant and a positive cost within the bucket burst are required")
+        try:
+            await asyncio.wait_for(self._slots.acquire(), timeout=self.acquire_timeout)
+        except TimeoutError:
+            _log_limiter_unavailable("admission_timeout")
+            return Refusal(RATE_LIMIT_UNAVAILABLE,
+                           "Shared request limits are temporarily unavailable. Retry shortly.",
+                           503, retry_after=2)
+        work = asyncio.create_task(asyncio.to_thread(self._consume_sync, tenant_id, cost))
+        try:
+            # A cancelled request cannot stop a running thread. Keep its admission slot until
+            # that DB transaction has actually finished, or repeated client disconnects could
+            # bypass the connection cap while abandoned worker threads keep running.
+            return await asyncio.shield(work)
+        except asyncio.CancelledError:
+            try:
+                await asyncio.shield(work)
+            except Exception:  # noqa: BLE001 - cancellation remains the caller's outcome.
+                pass
+            raise
+        except Exception as exc:  # noqa: BLE001 - never include DSN, SQL or tenant details.
+            _log_limiter_unavailable(type(exc).__name__)
+            return Refusal(RATE_LIMIT_UNAVAILABLE,
+                           "Shared request limits are temporarily unavailable. Retry shortly.",
+                           503, retry_after=2)
+        finally:
+            self._slots.release()
+
+    def close(self) -> None:
+        """Close idle pooled connections during application shutdown."""
+        self._pool.close()
+
+    def _consume_sync(self, tenant_id: str, cost: int) -> Refusal | None:
+        # The pool resets app.tenant_id on every checkout; set transaction-local values for
+        # query and lock bounds. Keep all state changes in the same short transaction.
+        with self._pool.connection(tenant_id=tenant_id) as conn:
+            with conn.transaction():
+                conn.execute("SET TRANSACTION ISOLATION LEVEL READ COMMITTED")
+                conn.execute("SELECT set_config('statement_timeout', %s, true)",
+                             (f"{self.statement_timeout_ms}ms",))
+                conn.execute("SELECT set_config('lock_timeout', %s, true)",
+                             (f"{self.lock_timeout_ms}ms",))
+                conn.execute("SELECT set_config('app.tenant_id', %s, true)", (tenant_id,))
+                conn.execute(
+                    "INSERT INTO gateway_rate_limits (tenant_id, tokens, updated_at) "
+                    "VALUES (%s, %s, clock_timestamp()) ON CONFLICT (tenant_id) DO NOTHING",
+                    (tenant_id, Decimal(self.burst)))
+                row = conn.execute(
+                    "SELECT tokens, updated_at FROM gateway_rate_limits "
+                    "WHERE tenant_id = %s FOR UPDATE", (tenant_id,)).fetchone()
+                if row is None:
+                    # RLS should make a missing row impossible after the insert. Do not
+                    # reinterpret a policy/configuration error as a fresh full bucket.
+                    raise RuntimeError("shared limiter row unavailable")
+                stored_tokens, updated_at = row
+                # Sample the clock only AFTER the row lock is held. Otherwise lock wait time
+                # is lost from refill/retry calculations and can make contention unfair.
+                now = conn.execute("SELECT clock_timestamp()").fetchone()[0]
+                available, effective_now = _refilled(
+                    stored_tokens, updated_at, now,
+                    per_minute=self.per_minute, burst=self.burst)
+                rate = Decimal(self.per_minute) / Decimal(60)
+                allowed = available >= Decimal(cost)
+                remaining = available - Decimal(cost) if allowed else available
+                conn.execute(
+                    "UPDATE gateway_rate_limits SET tokens = %s, updated_at = %s "
+                    "WHERE tenant_id = %s", (remaining, effective_now, tenant_id))
+                if allowed:
+                    return None
+                retry_after = int(((Decimal(cost) - available) / rate)
+                                  .to_integral_value(rounding=ROUND_CEILING))
+                return Refusal(
+                    RATE_LIMITED,
+                    f"the tenant is over its rate limit of {self.per_minute} requests/minute "
+                    f"(burst {self.burst})",
+                    429, retry_after=max(1, retry_after))
+
+
 def _test() -> int:
     ok = fail = 0
 
@@ -156,6 +303,67 @@ def _test() -> int:
             print(f"  [FAIL] {label}")
 
     print("limits")
+
+    from datetime import datetime, timedelta, timezone
+    t0 = datetime(2026, 10, 17, tzinfo=timezone.utc)
+    filled, effective = _refilled(Decimal(0), t0, t0 + timedelta(seconds=1),
+                                  per_minute=60, burst=5)
+    check(filled == Decimal(1), "database bucket refills one token per second")
+    full, _ = _refilled(Decimal(4), t0, t0 + timedelta(minutes=10),
+                        per_minute=60, burst=5)
+    check(full == Decimal(5), "database bucket refill is capped at the configured burst")
+    unchanged, effective = _refilled(Decimal(2), t0, t0 - timedelta(seconds=5),
+                                     per_minute=60, burst=5)
+    check(unchanged == Decimal(2) and effective == t0,
+          "database clock moving backward cannot create tokens or move bucket time backward")
+
+    async def async_refusals():
+        # No database is touched: this verifies sanitized failure behavior and that a slow
+        # store cannot create an unbounded wait for additional checks in the same process.
+        class Broken(PostgresLimiter):
+            def _consume_sync(self, _tenant_id, _cost):
+                raise RuntimeError("dsn=secret tenant=private query=client text")
+
+        broken = Broken("postgresql://sensitive", max_concurrent_checks=1,
+                        acquire_timeout=0.01)
+        import unittest
+        with unittest.TestCase().assertLogs(_LOG, level="WARNING") as captured:
+            refusal = await broken.check_async("tenant-id")
+        safe = (refusal.code == RATE_LIMIT_UNAVAILABLE and refusal.http_status == 503
+                and refusal.retry_after == 2 and "sensitive" not in refusal.detail
+                and "tenant" not in refusal.detail and "query" not in refusal.detail
+                and all(secret not in " ".join(captured.output)
+                        for secret in ("sensitive", "private", "client text")))
+
+        class Slow(PostgresLimiter):
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+                self.entered = threading.Event()
+                self.release = threading.Event()
+
+            def _consume_sync(self, _tenant_id, _cost):
+                self.entered.set()
+                self.release.wait()
+                return None
+
+        slow = Slow("postgresql://unused", max_concurrent_checks=1, acquire_timeout=0.01)
+        first = asyncio.create_task(slow.check_async("tenant-id"))
+        await asyncio.to_thread(slow.entered.wait)
+        first.cancel()
+        await asyncio.sleep(0)
+        held_through_cancel = not first.done()
+        second = await slow.check_async("tenant-id")
+        slow.release.set()
+        try:
+            await first
+        except asyncio.CancelledError:
+            pass
+        return (safe, second.code == RATE_LIMIT_UNAVAILABLE and second.http_status == 503
+                and held_through_cancel)
+
+    safe_failure, bounded = asyncio.run(async_refusals())
+    check(safe_failure, "database failure returns sanitized fail-closed 503, never local fallback")
+    check(bounded, "admission stays bounded through saturation and caller cancellation")
 
     def at(t0=0.0):
         """A limiter on a clock the test moves, so the boundary cases are reachable."""
@@ -237,7 +445,10 @@ def _test() -> int:
           "an unparseable Content-Length is not a size claim, and does not refuse a small body")
 
     # ── a refusal is a named reason, never a bare drop ─────────────────────
-    for r in (check_body_size(b"x" * (MAX_BODY_BYTES + 1)), at()[0].check("t", cost=BURST + 1)):
+    limited, _ = at()
+    for _ in range(BURST):
+        limited.check("t")
+    for r in (check_body_size(b"x" * (MAX_BODY_BYTES + 1)), limited.check("t")):
         check(r.code and r.detail and r.http_status >= 400,
               f"every refusal carries a code, a reason and a status ({r.code})")
 
