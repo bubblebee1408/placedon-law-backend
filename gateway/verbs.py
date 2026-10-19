@@ -2239,6 +2239,8 @@ def _turn_response(message: dict) -> dict:
            "metadata": metadata, "files": metadata.get("files") or []}
     if metadata.get("sources"):
         out["sources"] = metadata["sources"]
+    if metadata.get("document_evidence"):
+        out["document_evidence"] = metadata["document_evidence"]
     for artifact in metadata.get("artifacts") or []:
         if artifact.get("type") == "draft":
             out.update(draft_id=artifact["id"], version=artifact.get("version"))
@@ -2247,7 +2249,7 @@ def _turn_response(message: dict) -> dict:
     return out
 
 
-def _resolve_conversation_documents(file_ids, ctx: Context, matter_id):
+def _resolve_conversation_documents(file_ids, ctx: Context, matter_id, *, evidence_only=False, enabled=True):
     """Resolve selected vault IDs using tenant rows before touching the byte store.
 
     Legacy process-local uploads remain readable only in their tenant's Context. Unknown
@@ -2257,7 +2259,9 @@ def _resolve_conversation_documents(file_ids, ctx: Context, matter_id):
     import hashlib
     from dataclasses import replace
     from gateway.filestore import FileStoreError
+    from gateway import document_evidence as de
     resolved = {}
+    byte_total = 0
     for fid in file_ids:
         row = ctx.store.read_vault_document(fid)
         if row is not None:
@@ -2265,7 +2269,12 @@ def _resolve_conversation_documents(file_ids, ctx: Context, matter_id):
                 return None, _refuse("DOCUMENT_SCOPE_MISMATCH",
                                      "The selected document belongs to a different matter.")
             doc = {"name": row["name"]}
-            if row.get("deleted_at") or row.get("state") != "INGESTED":
+            if evidence_only and not enabled:
+                doc["cannot_read"] = "Document sources were not selected; no text was read."
+            elif evidence_only and (row.get("byte_count", 0) > de.MAX_DOCUMENT_BYTES
+                    or byte_total + row.get("byte_count", 0) > de.MAX_TOTAL_BYTES):
+                doc.update(cannot_read="Document exceeds this turn's reading limit.", limit_exceeded=True)
+            elif row.get("deleted_at") or row.get("state") != "INGESTED":
                 doc["cannot_read"] = "This document is not ready to read. Check its upload status."
             elif ctx.files is None:
                 doc["cannot_read"] = "The document file store is unavailable. Nothing was read."
@@ -2274,6 +2283,10 @@ def _resolve_conversation_documents(file_ids, ctx: Context, matter_id):
                     data = ctx.files.get(row["sha256"])
                     if data is None or hashlib.sha256(data).hexdigest() != row["sha256"]:
                         raise ValueError("document hash mismatch")
+                    byte_total += len(data)
+                    if evidence_only and (len(data) > de.MAX_DOCUMENT_BYTES or byte_total > de.MAX_TOTAL_BYTES):
+                        doc["limit_exceeded"] = True
+                        raise ValueError("document exceeds reading limit")
                     doc["text"] = data.decode("utf-8")
                     if not doc["text"].strip():
                         raise ValueError("empty document")
@@ -2282,7 +2295,10 @@ def _resolve_conversation_documents(file_ids, ctx: Context, matter_id):
             resolved[fid] = doc
         else:
             legacy = ctx.documents.get(fid)
-            if legacy and legacy.get("tenant", ctx.tenant) == ctx.tenant:
+            if evidence_only:
+                resolved[fid] = {"name": "Unavailable document", "cannot_read":
+                                 "Save this file to the vault before researching it; a durable source is required."}
+            elif legacy and legacy.get("tenant", ctx.tenant) == ctx.tenant:
                 resolved[fid] = dict(legacy)
                 if not legacy.get("text") and not legacy.get("cannot_read"):
                     resolved[fid]["cannot_read"] = "The document text is unavailable; upload it again."
@@ -2357,23 +2373,35 @@ def _conversation_send(args: dict, ctx: Context) -> dict:
         matter = conv.get("matter_id")
     if matter is not None and not any(m["matter_id"] == matter for m in store.list_matters()):
         return _refuse("NOT_FOUND", "This matter is unavailable in this workspace.")
-    resolved, refusal = _resolve_conversation_documents(raw_ids, ctx, matter)
-    if refusal:
-        return refusal
-    ctx = resolved
+    from gateway import document_evidence as de
     if override:
         task, classification = override, {"task": override, "decided_by": "override",
                                           "reason": "the caller named the task"}
     else:
-        named = [{"name": ctx.documents[f].get("name") or f, "type": ""} for f in raw_ids]
+        named = []
+        for fid in raw_ids:
+            row = store.read_vault_document(fid)
+            legacy = ctx.documents.get(fid) or {}
+            if row is None and legacy.get("tenant", ctx.tenant) == ctx.tenant:
+                row = legacy
+            named.append({"name": (row or {}).get("name") or "Unavailable document", "type": ""})
         got = intake.classify(text, files=named, facts=args.get("facts"))
         task, classification = got.task, got.to_dict()
+    # An overview is a fallback for an otherwise undecided document question, never
+    # permission to replace an explicit table, review, drafting or event workflow.
+    if (raw_ids and not override and de.is_overview(text)
+            and task in (intake.NEEDS_CLARIFICATION, intake.RESEARCH_QUESTION)):
+        task = "RESEARCH_QUESTION"
+        classification = {"task": task, "decided_by": "rules", "reason": "selected-document excerpt overview"}
+    document_research = bool(raw_ids and task == "RESEARCH_QUESTION")
+    document_sources_enabled = sources is None or "vault" in sources
+    resolved, refusal = _resolve_conversation_documents(raw_ids, ctx, matter,
+        evidence_only=document_research, enabled=document_sources_enabled)
+    if refusal:
+        return refusal
+    ctx = resolved
     files = _files_block(raw_ids, ctx)
-    if raw_ids and task == "RESEARCH_QUESTION":
-        task = intake.NEEDS_CLARIFICATION
-        classification = {"task": task, "decided_by": "rules", "reason": "document research is not wired",
-            "question": "These documents are attached, but legal research does not use their contents yet. Choose document review, or ask a standalone legal question without attachments."}
-    elif raw_ids and task in ("REVIEW_DOCUMENT", "REVIEW_CONTRACT") and (
+    if raw_ids and task in ("REVIEW_DOCUMENT", "REVIEW_CONTRACT") and (
             len(raw_ids) != 1 or any(f["state"] == ev.CANNOT_READ for f in files)):
         task = intake.NEEDS_CLARIFICATION
         classification = {"task": task, "decided_by": "rules", "reason": "document is unavailable or ambiguous",
@@ -2383,7 +2411,7 @@ def _conversation_send(args: dict, ctx: Context) -> dict:
         task = intake.NEEDS_CLARIFICATION
         classification = {"task": task, "decided_by": "rules", "reason": "ambiguous follow-up",
             "question": "Please name the provision, document or issue in this follow-up. Prior assistant answers are not treated as legal evidence."}
-    if TASK_INTENT.get(task) and ctx.queue is not None:
+    if not document_research and TASK_INTENT.get(task) and ctx.queue is not None:
         try:
             limit = max(1, int(os.environ.get("PLACEDON_CONVERSATION_QUEUE_LIMIT", "100")))
         except ValueError:
@@ -2394,7 +2422,7 @@ def _conversation_send(args: dict, ctx: Context) -> dict:
                 "classification": classification, "artifacts": [], "files": files, "as_of": as_of,
                 "accepted_at": _now(ctx)}
     queued = None
-    if TASK_INTENT.get(task) and ctx.queue is not None:
+    if not document_research and TASK_INTENT.get(task) and ctx.queue is not None:
         queued = {"run_id": str(uuid.uuid4()), "intent": TASK_INTENT[task],
                   "args": _task_args(task, text, raw_ids, ctx, args), "lane": INTERACTIVE}
     reply_id = str(uuid.uuid4())
@@ -2435,6 +2463,17 @@ def _dispatch_conversation(args, ctx, *, cid, text, raw_ids, as_of, task, classi
     from agents import intake
     from gateway import envelope as ev
     store = ctx.store
+    if raw_ids and task == "RESEARCH_QUESTION":
+        from gateway import document_evidence as de
+        evidence = de.collect(text, ctx.documents,
+                              enabled=args.get("sources") is None or "vault" in args["sources"])
+        metadata = dict(metadata, document_evidence=evidence)
+        env = ev.build(status=ev.PARTIAL, task=task, as_of=as_of,
+            text_blocks=[{"text": de.description(evidence), "citation_ids": []}],
+            bodies=[], citations=[], files=files)
+        store.update_message(reply_id, task=task, run_id=None, envelope=env, metadata=metadata)
+        return _turn_response({"conversation_id": cid, "message_id": reply_id, "task": task,
+                               "envelope": env, "metadata": metadata})
     # 4a. nothing to run.
     if task == intake.NEEDS_CLARIFICATION:
         env = ev.build(status=ev.NEEDS_CLARIFICATION, task=task, as_of=as_of,

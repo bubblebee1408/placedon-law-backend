@@ -9,6 +9,7 @@ sys.path.insert(0, str(root))
 def main():
     suite = unittest.defaultTestLoader.discover(str(root / "tests"), pattern="test_conversation_reliability.py")
     suite.addTests(unittest.defaultTestLoader.discover(str(root / "tests"), pattern="test_vault_catalog.py"))
+    suite.addTests(unittest.defaultTestLoader.discover(str(root / "tests"), pattern="test_document_evidence.py"))
     result = unittest.TextTestRunner(verbosity=1).run(suite)
     failed = len(result.failures) + len(result.errors)
     passed = result.testsRun - failed - len(result.skipped)
