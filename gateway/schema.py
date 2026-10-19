@@ -135,7 +135,8 @@ def _test() -> None:
                     "023_document_checks.sql",
                     "024_conversation_turns.sql",
                     "025_draft_inbox_idx.sql",
-                    "026_accounts.sql"],
+                    "026_accounts.sql",
+                    "027_gateway_rate_limits.sql"],
           f"every migration exists, in order ({files})")
 
     # 026: sign-in, sessions, and the two (now three) cross-tenant reads auth needs.
@@ -317,7 +318,7 @@ def _test() -> None:
            "runs", "run_steps", "propositions", "decisions", "jobs",
            "cascade_runs", "source_documents", "conversations", "messages",
            "review_grids", "review_grid_columns", "review_grid_cells",
-           "drafts", "draft_versions"} <= set(t),
+           "drafts", "draft_versions", "gateway_rate_limits"} <= set(t),
           f"every table the gateway needs is declared ({sorted(t)})")
 
     scoped = tenant_scoped()
@@ -352,8 +353,20 @@ def _test() -> None:
                      # 026. A person's signed-in session. Created and revoked through the
                      # normal tenant-scoped path once a tenant is known; the only
                      # tenant-blind read of it is auth_resolve_session (SECURITY DEFINER).
-                     "sessions"},
+                     "sessions", "gateway_rate_limits"},
           f"every other table is tenant-scoped, DERIVED from having a tenant_id ({sorted(scoped)})")
+
+    limiter_sql = (MIGRATIONS / "027_gateway_rate_limits.sql").read_text(encoding="utf-8")
+    check("CREATE TABLE IF NOT EXISTS gateway_rate_limits" in limiter_sql
+          and "tenant_id  uuid        PRIMARY KEY" in limiter_sql,
+          "027 creates one shared limiter row per tenant")
+    check(declares("ENABLE", "gateway_rate_limits", limiter_sql)
+          and declares("FORCE", "gateway_rate_limits", limiter_sql)
+          and has_policy("gateway_rate_limits", limiter_sql)
+          and "WITH CHECK" in limiter_sql,
+          "027 applies FORCE RLS with both row visibility and write checks")
+    check("ON DELETE CASCADE" in limiter_sql,
+          "027 removes the non-content quota row with its owning tenant")
 
     # ── the check this module exists for ────────────────────────────────────
     check(not unprotected(),

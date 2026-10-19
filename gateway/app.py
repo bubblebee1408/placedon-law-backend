@@ -35,6 +35,7 @@ from __future__ import annotations
 import json
 import asyncio
 import logging
+import os
 import threading
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -233,7 +234,12 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
                 check_ready()
             yield
         finally:
-            executor.close()
+            try:
+                limiter_close = getattr(getattr(app.state, "limiter", None), "close", None)
+                if callable(limiter_close):
+                    limiter_close()
+            finally:
+                executor.close()
     app = FastAPI(title="Placedon gateway", docs_url=None, redoc_url=None, lifespan=lifespan)
     app.state.admission = executor
     memory_lock = threading.Lock()
@@ -324,10 +330,22 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
     # that reached for its own file store would be a second place the vault's location
     # lives, and the two would disagree the first time either moved.
     app.state.files = files if files is not None else default_file_store()
-    # P2. One limiter for the deployment, shared by /v1 and /v2. Two surfaces read a body,
-    # and a limit wired into one of them is a limit the other does not have.
+    # P2. One limiter for the deployment, shared by /v1 and /v2. In memory/demo mode it is
+    # process-local; Postgres deployments use the FORCE-RLS shared bucket so adding replicas
+    # cannot multiply a tenant's allowance. Storage failures never downgrade to local limits.
     from gateway import limits as limits_mod
-    app.state.limiter = limits_mod.Limiter()
+    if url:
+        try:
+            # This cap is per process; size it against replicas × workers and Postgres
+            # max_connections. The limiter itself also refuses overload after this pool's
+            # short wait rather than opening unbounded sockets.
+            limiter_pool_size = int(os.getenv("PLACEDON_RATE_LIMIT_POOL_SIZE", "10"))
+        except ValueError as exc:
+            raise RuntimeError("PLACEDON_RATE_LIMIT_POOL_SIZE must be a positive integer") from exc
+        app.state.limiter = limits_mod.PostgresLimiter(
+            url, max_concurrent_checks=limiter_pool_size)
+    else:
+        app.state.limiter = limits_mod.Limiter()
     # The audit chain, in memory with the rest of it. Append-only and hash-chained already
     # (gateway/audit.py); what is missing is Postgres, not the chain.
     app.state.audit = ()
@@ -406,7 +424,7 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
             _record(principal, action=audit_mod.READ, route="execution", resource="operation", outcome="refused", status=503)
             return _failed_response()
 
-    def _rate_limited(principal):
+    async def _rate_limited(principal):
         """A Refusal if this TENANT is over its rate, else None.
 
         Per tenant, which is what P2 asks for, and which means an UNAUTHENTICATED flood is
@@ -414,6 +432,9 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
         reverse proxy, with the body-size limit the server enforces before this process sees
         a request (H1's deployment scripts). Stated rather than left to be assumed.
         """
+        shared_check = getattr(app.state.limiter, "check_async", None)
+        if callable(shared_check):
+            return await shared_check(principal.tenant_id)
         return app.state.limiter.check(principal.tenant_id)
 
     def _single_tenant(exc: SingleTenantOnly) -> Response:
@@ -497,7 +518,7 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
                 principal = _principal(request)
             except AuthError:
                 return _unauthorised()
-            slow = _rate_limited(principal)
+            slow = await _rate_limited(principal)
             if slow:
                 _record(principal, action=audit_mod.READ,
                         route=f"{request.method} {bare}", resource=bare,
@@ -550,7 +571,7 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
                 principal = _principal(request)
             except AuthError:
                 return _unauthorised()
-            slow = _rate_limited(principal)
+            slow = await _rate_limited(principal)
             if slow:
                 _record(principal, action=audit_mod.READ,
                         route=f"{verb.method} {path}", resource=verb.name,
@@ -753,7 +774,7 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
             principal = _principal(request)
         except AuthError:
             return _unauthorised()
-        slow = _rate_limited(principal)
+        slow = await _rate_limited(principal)
         if slow:
             _record(principal, action=audit_mod.READ, route=f"POST {SSE_PATH}",
                     resource="ask.stream", outcome="refused", status=slow.http_status)
@@ -878,7 +899,7 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
                 principal = _principal(request)
             except AuthError:
                 return _unauthorised()
-            slow = _rate_limited(principal)
+            slow = await _rate_limited(principal)
             if slow:
                 return _limit_response(slow)
             try:
@@ -1540,6 +1561,11 @@ def _test() -> None:
           "not from a flag someone set separately")
     check(json.loads(fc.get(HEALTH_PATH).content)["store"]["degraded"] is False,
           "...and stops calling itself degraded")
+    from gateway.limits import Limiter as _MemoryLimiter, PostgresLimiter as _PostgresLimiter
+    check(isinstance(forced.state.limiter, _PostgresLimiter),
+          "a configured Postgres deployment selects a shared limiter, not process-local state")
+    check(isinstance(app.state.limiter, _MemoryLimiter),
+          "the isolated memory/demo deployment keeps the deterministic local limiter")
     check(forced.state.db_url and app.state.db_url is None,
           "the app holds the URL it selected on, and the gate's app holds none")
     b = app.state.backend_for(T)
