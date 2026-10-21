@@ -74,9 +74,32 @@ def _now_iso(clock) -> str:
     return clock() if clock else time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
 
+def _identity_failure(queue, job, error: str) -> Outcome:
+    """Never mutate a possibly wrong actor's store to report a binding failure."""
+    queue.fail(job.job_id, error, retryable=False)
+    return Outcome(job.run_id, FAILED, error=error)
+
+
+def postgres_job_bindings(url: str, *, tenant_id: str, files=None):
+    """Build handlers from trusted job columns; no payload field controls identity."""
+    from gateway.store import PostgresBackend
+    from gateway.verbs import Context, queue_handlers
+
+    def bind(job):
+        if job.tenant_id != tenant_id or not job.actor_id:
+            raise ValueError("Job is outside this worker's tenant")
+        store = PostgresBackend(url, tenant_id=tenant_id, actor_id=job.actor_id)
+        queue = q.PostgresQueue(url, tenant_id=tenant_id, actor_id=job.actor_id)
+        ctx = Context(tenant=tenant_id, actor=job.actor_id, store=store,
+                      queue=queue, files=files)
+        return store, queue_handlers(ctx)
+
+    return bind
+
+
 def run_one(*, queue, store, handlers: dict[str, Callable], worker: str = "w1",
             clock=None, timeout_seconds: int = STEP_TIMEOUT_SECONDS,
-            monotonic=time.monotonic) -> Outcome | None:
+            monotonic=time.monotonic, bind_job=None) -> Outcome | None:
     """Claim one job and take it to a terminal state. None when the queue is empty.
 
     `handlers` maps an intent to `handler(args) -> (steps, result)`. It is injected so this
@@ -85,6 +108,46 @@ def run_one(*, queue, store, handlers: dict[str, Callable], worker: str = "w1",
     job = queue.claim(worker=worker)
     if job is None:
         return None
+
+    # Durable jobs carry the authenticated submitter separately from untrusted args.
+    # Resolve before reading/writing any run or invoking a handler. A fixed context
+    # may only execute jobs for its own actor; the service supplies a fresh binding.
+    durable = getattr(queue, "kind", None) == "postgres" or getattr(store, "kind", None) == "postgres"
+    if durable or job.actor_id is not None:
+        if not job.tenant_id or not job.actor_id or job.tenant_id != queue.tenant_id:
+            return _identity_failure(queue, job, "Job identity is missing or outside this queue")
+        if bind_job is not None:
+            try:
+                store, handlers = bind_job(job)
+            except Exception:  # A store outage may recover; never expose connection details.
+                error = "Job context could not be restored"
+                queue.fail(job.job_id, error)
+                return Outcome(job.run_id, FAILED, error=error)
+        if (getattr(store, "tenant_id", None) != job.tenant_id
+                or getattr(store, "actor_id", None) != job.actor_id):
+            return _identity_failure(queue, job, "Job and execution identity do not match")
+        if durable:
+            try:
+                actor = store.read_actor(job.actor_id)
+            except Exception:
+                error = "Job actor could not be checked"
+                # Binding was already verified. Record an execution failure if the
+                # store can still write, but a database outage must not prevent the
+                # queue's bounded retry/dead-letter transition.
+                try:
+                    store.set_run(job.run_id, status=FAILED, result={"error": error})
+                except Exception:
+                    error += "; run failure state could not be recorded"
+                queue.fail(job.job_id, error)
+                return Outcome(job.run_id, FAILED, error=error)
+            # Every currently queued intent requires lawyer-level submission. Recheck
+            # after waiting: removal, disabling or demotion must prevent new work.
+            if (not actor or actor.get("disabled_at") is not None
+                    or actor.get("role") not in ("lawyer", "admin")):
+                error = ("Job actor is missing, disabled, or lacks queued-work permission. "
+                         "An administrator must check the actor account before resubmission.")
+                store.set_run(job.run_id, status=FAILED, result={"error": error})
+                return _identity_failure(queue, job, error)
 
     handler = handlers.get(job.intent)
     if handler is None:
@@ -344,9 +407,11 @@ def main(argv=None) -> int:
     # from PLACEDON_FILES_DIR by the same function the gateway uses, so a worker and a
     # gateway started from the same environment read the same directory rather than two.
     from gateway.app import default_file_store
-    ctx = Context(store=store, queue=queue, files=default_file_store())
+    files = default_file_store()
+    ctx = Context(store=store, queue=queue, files=files)
+    bind_job = postgres_job_bindings(url, tenant_id=store.tenant_id, files=files) if url else None
     report = serve(queue=queue, store=store, handlers=queue_handlers(ctx),
-                   worker=f"launchd-{__import__('os').getpid()}",
+                   bind_job=bind_job, worker=f"launchd-{__import__('os').getpid()}",
                    should_stop=lambda: stopping["now"], wait=wait)
     report.stopped_because = stopping["why"] or report.stopped_because
     print(f"worker: stopped after {report.jobs} job(s) "

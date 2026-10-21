@@ -2252,7 +2252,7 @@ def _turn_response(message: dict) -> dict:
 def _resolve_conversation_documents(file_ids, ctx: Context, matter_id, *, evidence_only=False, enabled=True):
     """Resolve selected vault IDs using tenant rows before touching the byte store.
 
-    Legacy process-local uploads remain readable only in their tenant's Context. Unknown
+    Legacy process-local uploads use the authenticated actor's cache view. Unknown
     or unreadable files remain explicit CANNOT_READ entries; no task receives the user's
     instruction as a substitute for a missing document.
     """

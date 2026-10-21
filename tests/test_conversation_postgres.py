@@ -30,7 +30,7 @@ class PostgresConversationReliability(unittest.TestCase):
         self.tenant, self.actor = str(uuid.uuid4()), str(uuid.uuid4())
         with psycopg.connect(ADMIN_URL, autocommit=True) as c:
             c.execute("INSERT INTO tenants (tenant_id, name) VALUES (%s, 'conversation test')", (self.tenant,))
-            c.execute("INSERT INTO actors (actor_id, tenant_id, label) VALUES (%s,%s,'test lawyer')", (self.actor, self.tenant))
+            c.execute("INSERT INTO actors (actor_id, tenant_id, label, role) VALUES (%s,%s,'test lawyer','lawyer')", (self.actor, self.tenant))
         with psycopg.connect(APP_URL) as c:
             privileged = c.execute("SELECT rolsuper OR rolbypassrls FROM pg_roles WHERE rolname = current_user").fetchone()[0]
             self.assertFalse(privileged, "App tests must run without superuser or RLS bypass")
