@@ -154,7 +154,7 @@ class Backend(Protocol):
     def bump_cache_stat(self, kind: str, *, day: str) -> None: ...
     def read_cache_stats(self) -> dict: ...
     # H3: drafts and their versions (012_drafts.sql).
-    def write_draft(self, draft: dict) -> dict: ...
+    def write_draft(self, draft: dict, *, create_only: bool = False) -> dict: ...
     def read_draft(self, draft_id: str) -> dict | None: ...
     def list_drafts(self, *, limit: int, before_updated_at: str | None = None,
                     before_draft_id: str | None = None) -> list[dict]: ...
@@ -461,9 +461,11 @@ class MemoryBackend:
     cache_stats: dict = field(default_factory=dict)     # day -> {hits, misses, stale}
 
     # ── H3: drafts ───────────────────────────────────────────────────────────
-    def write_draft(self, draft: dict) -> dict:
+    def write_draft(self, draft: dict, *, create_only: bool = False) -> dict:
         from datetime import datetime, timezone
         did = draft["draft_id"]
+        if create_only and did in self.drafts:
+            raise StoreError("draft already exists")
         self.drafts[did] = {"draft_id": did, "kind": draft.get("kind") or "unknown",
                             "title": draft.get("title") or "",
                             "updated_at": datetime.now(timezone.utc).isoformat()}
@@ -488,11 +490,14 @@ class MemoryBackend:
             if before_updated_at is not None and (updated_at, did) >= (
                     before_updated_at, before_draft_id or ""):
                 continue
+            from checker.draft_versions import stored_review_count
+            count = stored_review_count(latest.get("body") or "", latest.get("slots") or [],
+                                        int(latest.get("blocking_count") or 0))
             rows.append({"draft_id": did, "kind": draft.get("kind") or "unknown",
                          "title": latest.get("title") or draft.get("title") or "",
                          "updated_at": updated_at, "version": int(latest["version"]),
-                         "blocking_count": int(latest.get("blocking_count") or 0),
-                         "approved": bool(latest.get("approved_by"))})
+                         "blocking_count": count,
+                         "approved": bool(latest.get("approved_by")) and count == 0})
         return sorted(rows, key=lambda row: (row["updated_at"], row["draft_id"]),
                       reverse=True)[:limit]
 
@@ -2338,14 +2343,15 @@ class PostgresBackend:
         return {"hits": int(r[0]), "misses": int(r[1]), "stale": int(r[2])}
 
     # ── H3: drafts ───────────────────────────────────────────────────────────
-    def write_draft(self, draft: dict) -> dict:
+    def write_draft(self, draft: dict, *, create_only: bool = False) -> dict:
         import psycopg
         did = draft["draft_id"]
         try:
             with self._conn() as c:
                 c.execute("INSERT INTO drafts (draft_id, tenant_id, kind, title) "
-                          "VALUES (%s,%s,%s,%s) ON CONFLICT (draft_id) DO UPDATE SET "
-                          "title = EXCLUDED.title, updated_at = now()",
+                          "VALUES (%s,%s,%s,%s) " + ("" if create_only else
+                          "ON CONFLICT (draft_id) DO UPDATE SET "
+                          "title = EXCLUDED.title, updated_at = now()"),
                           (did, self.tenant_id, draft.get("kind") or "unknown",
                            draft.get("title") or ""))
         except psycopg.errors.IntegrityError as exc:
@@ -2371,9 +2377,9 @@ class PostgresBackend:
         with self._conn() as c:
             rows = c.execute(
                 "SELECT d.draft_id, d.kind, v.title, d.updated_at, v.version, "
-                "v.blocking_count, (v.approved_at IS NOT NULL) AS approved "
+                "v.blocking_count, (v.approved_at IS NOT NULL) AS approved, v.body, v.slots "
                 "FROM drafts d JOIN LATERAL ("
-                "  SELECT version, title, blocking_count, approved_at FROM draft_versions "
+                "  SELECT version, title, blocking_count, approved_at, body, slots FROM draft_versions "
                 "  WHERE draft_id = d.draft_id ORDER BY version DESC LIMIT 1"
                 ") v ON true "
                 "WHERE (%s::timestamptz IS NULL OR (d.updated_at, d.draft_id) < "
@@ -2381,9 +2387,14 @@ class PostgresBackend:
                 "ORDER BY d.updated_at DESC, d.draft_id DESC LIMIT %s",
                 (before_updated_at, before_updated_at, before_draft_id, limit),
             ).fetchall()
-        return [{"draft_id": str(r[0]), "kind": r[1], "title": r[2],
-                 "updated_at": r[3].isoformat(), "version": int(r[4]),
-                 "blocking_count": int(r[5]), "approved": bool(r[6])} for r in rows]
+        from checker.draft_versions import stored_review_count
+        result = []
+        for r in rows:
+            count = stored_review_count(r[7] or "", r[8] or [], int(r[5]))
+            result.append({"draft_id": str(r[0]), "kind": r[1], "title": r[2],
+                           "updated_at": r[3].isoformat(), "version": int(r[4]),
+                           "blocking_count": count, "approved": bool(r[6]) and count == 0})
+        return result
 
     def append_draft_version(self, version: dict) -> int:
         import psycopg
