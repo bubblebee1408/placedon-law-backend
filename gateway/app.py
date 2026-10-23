@@ -300,26 +300,26 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
     app.state.run_store = app.state.memory_backend
     from gateway.document_cache import DocumentCache
     document_cache = DocumentCache()
-    app.state.documents = document_cache.for_tenant("memory")
-    app.state.memory_backend.documents = app.state.documents
-
-    def documents_for(tenant_id):
-        # Legacy uploads have not migrated to durable vault IDs. Keep their process
-        # cache tenant-scoped even when the persistent backend enforces RLS.
-        if not app.state.db_url:
-            return app.state.documents
-        return document_cache.for_tenant(tenant_id)
+    def documents_for(tenant_id, actor_id):
+        # The cache contains private extracted text. Use the authenticated identity on
+        # every surface, including memory mode; a client-supplied actor is never used.
+        return document_cache.for_actor(tenant_id, actor_id)
 
     def queue_for(tenant_id, actor_id):
         if queue is not None and getattr(queue, "kind", None) == "memory":
             if app.state.db_url:
                 raise SingleTenantOnly("An in-memory queue cannot serve a database deployment.")
             return queue  # backend_for already enforces a single tenant in memory mode.
-        if queue is not None and getattr(queue, "tenant_id", tenant_id) != tenant_id:
+        if queue is not None:
             from gateway.jobs import PostgresQueue
             if app.state.db_url and isinstance(queue, PostgresQueue):
-                return PostgresQueue(app.state.db_url, tenant_id=tenant_id, actor_id=actor_id, max_pending=queue.max_pending)
-            raise SingleTenantOnly("The configured job queue belongs to a different tenant.")
+                # A tenant can have several lawyers. Reusing its first actor's queue
+                # silently attributes every later job to that actor.
+                if queue.tenant_id != tenant_id or queue.actor_id != actor_id:
+                    return PostgresQueue(app.state.db_url, tenant_id=tenant_id,
+                                         actor_id=actor_id, max_pending=queue.max_pending)
+            elif getattr(queue, "tenant_id", tenant_id) != tenant_id:
+                raise SingleTenantOnly("The configured job queue belongs to a different tenant.")
         return queue
     # A deployed process can accept one stable, operator-provisioned server credential.
     # It is hashed into this process-local store at startup, so every replica must receive
@@ -583,7 +583,7 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
             except SingleTenantOnly as exc:
                 return _single_tenant(exc)
             ctx = Context(tenant=principal.tenant_id, actor=principal.actor,
-                          store=store, documents=documents_for(principal.tenant_id), clock=now,
+                          store=store, documents=documents_for(principal.tenant_id, principal.actor), clock=now,
                           files=app.state.files, queue=tenant_queue,
                           credential_hash=principal.credential_hash)
             args = dict(request.path_params)
@@ -799,7 +799,7 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
 
         ask_verb = next(v for v in VERBS if v.name == "ask")
         ctx = Context(tenant=principal.tenant_id, actor=principal.actor,
-                      store=store, documents=documents_for(principal.tenant_id), clock=now)
+                      store=store, documents=documents_for(principal.tenant_id, principal.actor), clock=now)
 
         if not may(principal.role, "ask"):
             return Response(content=dumps({"error": "forbidden", "detail": "This role cannot research."}), status_code=403, media_type="application/json")
@@ -908,7 +908,7 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
             except SingleTenantOnly as exc:
                 return _single_tenant(exc)
             ctx = Context(tenant=principal.tenant_id, actor=principal.actor,
-                          store=store, documents=documents_for(principal.tenant_id), clock=now,
+                          store=store, documents=documents_for(principal.tenant_id, principal.actor), clock=now,
                           files=app.state.files, queue=tenant_queue)
             if not may(principal.role, verb_name):
                 _record(principal, action=audit_mod.READ, route=f"GET {path}",

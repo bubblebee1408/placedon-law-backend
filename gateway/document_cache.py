@@ -1,6 +1,8 @@
 """Bounded, expiring process cache for legacy upload references.
 
-Durable documents belong in the vault. Evicted legacy references are reported as
+Views require both tenant and authenticated actor. Budgets remain per tenant, so
+creating many actor views cannot bypass memory limits. Durable documents belong in the
+vault. Evicted legacy references are reported as
 unreadable by the conversation resolver; cache misses must never substitute prompt text.
 """
 from collections import OrderedDict
@@ -25,18 +27,20 @@ class DocumentCache:
             if expires <= now:
                 del self._rows[key]
 
-    def for_tenant(self, tenant):
-        return _Documents(self, tenant)
+    def for_actor(self, tenant, actor):
+        if not all(isinstance(value, str) and value.strip() for value in (tenant, actor)):
+            raise ValueError("Temporary documents require a tenant and authenticated actor.")
+        return _Documents(self, tenant, actor)
 
 
 class _Documents(MutableMapping):
-    def __init__(self, cache, tenant):
-        self.cache, self.tenant = cache, tenant
+    def __init__(self, cache, tenant, actor):
+        self.cache, self.tenant, self.actor = cache, tenant, actor
 
     def __getitem__(self, document_id):
         with self.cache._lock:
             self.cache._expire()
-            key = (self.tenant, document_id)
+            key = (self.tenant, self.actor, document_id)
             value, _, _ = self.cache._rows[key]
             self.cache._rows.move_to_end(key)
             return deepcopy(value)
@@ -48,10 +52,10 @@ class _Documents(MutableMapping):
             raise ValueError("This legacy document exceeds cache capacity. Use the durable vault.")
         with self.cache._lock:
             self.cache._expire()
-            key = (self.tenant, document_id)
+            key = (self.tenant, self.actor, document_id)
             self.cache._rows.pop(key, None)
             self.cache._rows[key] = (deepcopy(value), size, self.cache.clock() + self.cache.ttl_seconds)
-            while sum(s for (tenant, _), (_, s, _) in self.cache._rows.items() if tenant == self.tenant) > self.cache.tenant_bytes:
+            while sum(s for (tenant, _, _), (_, s, _) in self.cache._rows.items() if tenant == self.tenant) > self.cache.tenant_bytes:
                 oldest = next(k for k in self.cache._rows if k[0] == self.tenant)
                 del self.cache._rows[oldest]
             while len(self.cache._rows) > self.cache.max_entries or sum(s for _, s, _ in self.cache._rows.values()) > self.cache.total_bytes:
@@ -59,12 +63,13 @@ class _Documents(MutableMapping):
 
     def __delitem__(self, document_id):
         with self.cache._lock:
-            del self.cache._rows[(self.tenant, document_id)]
+            del self.cache._rows[(self.tenant, self.actor, document_id)]
 
     def __iter__(self):
         with self.cache._lock:
             self.cache._expire()
-            return iter([key for tenant, key in self.cache._rows if tenant == self.tenant])
+            return iter([key for tenant, actor, key in self.cache._rows
+                         if tenant == self.tenant and actor == self.actor])
 
     def __len__(self):
         return sum(1 for _ in self)
@@ -73,7 +78,7 @@ class _Documents(MutableMapping):
 def _test():
     now = [0]
     cache = DocumentCache(total_bytes=150, tenant_bytes=80, max_entries=3, ttl_seconds=10, clock=lambda: now[0])
-    a, b = cache.for_tenant("a"), cache.for_tenant("b")
+    a, b = cache.for_actor("a", "alice"), cache.for_actor("b", "alice")
     tests = []
     a["same"] = {"text": "x"*35}
     tests.append((b.get("same") is None, "tenant views cannot read another tenant's entry"))
@@ -97,7 +102,7 @@ def _test():
         rejected = True
     tests.append((rejected and not a, "oversized entries cannot exceed cache limits"))
     for i in range(10):
-        cache.for_tenant(str(i))["doc"] = {"text": "x"*35}
+        cache.for_actor(str(i), "alice")["doc"] = {"text": "x"*35}
     tests.append((len(cache._rows) <= 3 and sum(s for _, s, _ in cache._rows.values()) <= 150, "global budget bounds many tenants"))
     for good, label in tests:
         print(f"  [{'PASS' if good else 'FAIL'}] {label}")

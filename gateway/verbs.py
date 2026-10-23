@@ -2252,7 +2252,7 @@ def _turn_response(message: dict) -> dict:
 def _resolve_conversation_documents(file_ids, ctx: Context, matter_id, *, evidence_only=False, enabled=True):
     """Resolve selected vault IDs using tenant rows before touching the byte store.
 
-    Legacy process-local uploads remain readable only in their tenant's Context. Unknown
+    Legacy process-local uploads use the authenticated actor's cache view. Unknown
     or unreadable files remain explicit CANNOT_READ entries; no task receives the user's
     instruction as a substitute for a missing document.
     """
@@ -3880,14 +3880,13 @@ def _save_version(ctx: Context, draft_id: str, *, title: str, body: str, slots: 
     conflict. A read-then-check in the handler alone cannot fix that, because the check and
     the write are not one step; the unique key is.
     """
-    from checker.provenance_slots import blocking_slots
+    from checker.draft_versions import draft_blockers
     return ctx.store.append_draft_version({
         "draft_id": draft_id, "title": title, "body": body,
         **({} if version is None else {"version": int(version)}),
         "slots": [s.to_dict() for s in slots], "citations": list(citations),
-        # From blocking_slots(), the function Version.approve() gates on -- so the
-        # denormalised count in 012 cannot drift from the rule it enforces.
-        "blocking_count": len(blocking_slots(slots)),
+        # Use the same body/provenance gate as Version.ready and exports.
+        "blocking_count": len(draft_blockers(body, slots)),
         "approved_by": approved_by or None, "approved_at": approved_at or None})
 
 
@@ -3921,12 +3920,17 @@ def _draft_create(args: dict, ctx: Context) -> dict:
     if len(body) > 100_000:
         return _refuse("BAD_REQUEST", "draft text must be 100000 characters or fewer")
     draft_id = (args.get("draft_id") or "").strip() or str(uuid.uuid4())
-    ctx.store.write_draft({"draft_id": draft_id,
-                           "kind": (args.get("kind") or DRAFT_KIND_UNKNOWN),
-                           "title": title})
+    from gateway.store import StoreError
+    try:
+        ctx.store.write_draft({"draft_id": draft_id,
+                              "kind": (args.get("kind") or DRAFT_KIND_UNKNOWN),
+                              "title": title}, create_only=True)
+    except StoreError:
+        return _refuse("CREATE_CONFLICT", "The draft could not be created. If this ID "
+                       "already exists, open it and save a revision with its current version.")
     try:
         n = _save_version(ctx, draft_id, title=title, body=body, slots=slots,
-                          citations=tuple(args.get("citations") or ()))
+                          citations=tuple(args.get("citations") or ()), version=1)
     except Exception as e:                                      # noqa: BLE001
         return _refuse("BAD_REQUEST", str(e))
     return _draft_status(ctx, draft_id, version=n,
@@ -3999,6 +4003,18 @@ def _draft_revise(args: dict, ctx: Context) -> dict:
         return _refuse("BAD_REQUEST", "body must be a string")
     if len(body) > 100_000:
         return _refuse("BAD_REQUEST", "draft text must be 100000 characters or fewer")
+    # Edits invalidate the previous evidence-to-text binding. A caller cannot remove
+    # this server-owned marker by submitting an empty or relabelled slot list.
+    from checker.draft_versions import REVISION_REVIEW
+    from checker.provenance_slots import Slot, UNKNOWN
+    needs_review = bool(latest and (
+        body != latest.body or any(s.name == REVISION_REVIEW for s in latest.slots)))
+    slots = tuple(s for s in slots if s.name != REVISION_REVIEW)
+    if needs_review:
+        slots += (Slot(REVISION_REVIEW, "", UNKNOWN,
+                       note="The draft text changed. Recheck its facts and citations. "
+                            "Formal sign-off requires authenticated review, which is "
+                            "not available through Save."),)
     citations = tuple(args.get("citations") or (latest.citations if latest else ()))
 
     try:
@@ -4034,6 +4050,7 @@ def _draft_status(ctx: Context, draft_id: str, *, version=None, note: str = "") 
         return _refuse("NOT_FOUND", f"no draft {draft_id!r} for this tenant")
     latest = history.latest
     ready = bool(latest and latest.ready)
+    from checker.draft_versions import review_items
     return {"draft_id": draft_id, "title": row["title"], "kind": row.get("kind"),
             "versions": len(history.versions), "version": version or (
                 latest.version if latest else 0),
@@ -4044,6 +4061,7 @@ def _draft_status(ctx: Context, draft_id: str, *, version=None, note: str = "") 
             # document nobody has written is the worst thing this envelope could say.
             "requires_review": not ready,
             "blocking": [s.name for s in (latest.blockers() if latest else ())],
+            "review_items": review_items(latest.body, latest.slots) if latest else [],
             "approved": bool(latest and latest.approved),
             "approved_by": (latest.approved_by or None) if latest else None,
             "note": note or ("A MODEL_SUGGESTION or UNKNOWN slot blocks approval: a "
@@ -5360,7 +5378,7 @@ VERBS: tuple[Verb, ...] = (
                           "MODEL_SUGGESTION|UNKNOWN"),
           Field("citations", ARRAY, False, describes="the legal basis, as strings"),
           Field("kind", STRING, False, describes="the template, e.g. agm_notice"),
-          Field("draft_id", STRING, False, describes="supply one to make it idempotent")),
+          Field("draft_id", STRING, False, describes="optional client ID; existing IDs are refused")),
          "POST", read_only=False, run=_draft_create),
 
     Verb("draft.revise",

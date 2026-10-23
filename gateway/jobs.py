@@ -107,12 +107,16 @@ class Job:
     # Why a DEAD job stopped. Empty on every other status -- a dead job with no nameable
     # reason is indistinguishable from one nobody looked at.
     dead_reason: str = ""
+    # Trusted queue metadata, never taken from the submitted args.
+    tenant_id: str | None = None
+    actor_id: str | None = None
 
     def to_dict(self) -> dict:
         return {"job_id": self.job_id, "run_id": self.run_id, "intent": self.intent,
                 "args": dict(self.args), "status": self.status,
                 "attempts": self.attempts, "cancel_requested": self.cancel_requested,
-                "lane": self.lane, "dead_reason": self.dead_reason}
+                "lane": self.lane, "dead_reason": self.dead_reason,
+                "tenant_id": self.tenant_id, "actor_id": self.actor_id}
 
 
 def backoff_for(attempts: int) -> int:
@@ -173,6 +177,7 @@ class MemoryQueue:
     clock: object = None
     max_pending: int = MAX_PENDING_JOBS
     _lock: object = field(default_factory=threading.RLock, repr=False)
+    actor_id: str | None = None
 
     def _now(self) -> datetime:
         return self.clock() if callable(self.clock) else _now()
@@ -193,7 +198,8 @@ class MemoryQueue:
                              "args": json.loads(json.dumps(args)), "status": QUEUED,
                              "attempts": 0, "claimed_by": None, "lease_expires_at": None,
                              "cancel_requested": False, "created_at": self._now(),
-                             "lane": lane, "not_before": None, "dead_reason": ""}
+                             "lane": lane, "not_before": None, "dead_reason": "",
+                             "tenant_id": self.tenant_id, "actor_id": self.actor_id}
         return self._job(self.jobs[job_id])
 
     @_locked
@@ -216,7 +222,8 @@ class MemoryQueue:
                    args=dict(row["args"]), status=row["status"], attempts=row["attempts"],
                    cancel_requested=row["cancel_requested"],
                    lane=row.get("lane", DEFAULT_LANE),
-                   dead_reason=row.get("dead_reason", ""))
+                   dead_reason=row.get("dead_reason", ""),
+                   tenant_id=row.get("tenant_id"), actor_id=row.get("actor_id"))
 
     @_locked
     def claim(self, *, worker: str, lease_seconds: int = DEFAULT_LEASE_SECONDS,
@@ -379,7 +386,7 @@ class PostgresQueue:
 
     # Every SELECT returns these columns in this order, so _job reads one shape.
     _COLS = ("job_id, run_id, intent, args, status, attempts, cancel_requested, lane, "
-             "dead_reason")
+             "dead_reason, tenant_id, actor_id")
 
     @staticmethod
     def _job(r) -> Job:
@@ -393,7 +400,8 @@ class PostgresQueue:
         """
         return Job(job_id=str(r[0]), run_id=str(r[1]), intent=r[2],
                    args=r[3] or {}, status=r[4], attempts=r[5],
-                   cancel_requested=bool(r[6]), lane=r[7], dead_reason=r[8] or "")
+                   cancel_requested=bool(r[6]), lane=r[7], dead_reason=r[8] or "",
+                   tenant_id=str(r[9]), actor_id=str(r[10]))
 
     def enqueue(self, *, run_id: str, intent: str, args: dict,
                 lane: str = DEFAULT_LANE, connection=None) -> Job:
@@ -461,7 +469,7 @@ class PostgresQueue:
             "  attempts = j.attempts + 1, updated_at = now()"
             " FROM claimed WHERE j.job_id = claimed.job_id"
             f" RETURNING j.job_id, j.run_id, j.intent, j.args, j.status, j.attempts,"
-            f"           j.cancel_requested, j.lane, j.dead_reason")
+            f"           j.cancel_requested, j.lane, j.dead_reason, j.tenant_id, j.actor_id")
         with self._conn(autocommit=False) as c:
             r = c.execute(sql, (worker, float(lease_seconds))).fetchone()
             c.commit()
@@ -501,6 +509,21 @@ class PostgresQueue:
             r = c.execute(sql, (limit, limit, note, MAX_ATTEMPTS,
                                 limit, float(b1), float(b2), float(b3),
                                 job_id)).fetchone()
+            if r is not None and r[4] == DEAD:
+                # A context/identity failure can occur before the executor has a
+                # trustworthy store. Reconcile only this persisted job's own pending
+                # run, in the same transaction as DEAD. Neither args nor the worker's
+                # configured actor participates in authorization here.
+                from gateway.store import failure_tag
+                result = {"error": "Queued work could not complete. An administrator must review the failed job before resubmission."}
+                category, failure_reason = failure_tag("FAILED", None, result)
+                c.execute(
+                    "UPDATE runs r SET status='FAILED', refusal_code=NULL, "
+                    "result=%s::jsonb, failure_category=%s, failure_reason=%s, finished_at=now() "
+                    "FROM jobs j WHERE j.job_id=%s AND j.status='DEAD' "
+                    "AND r.run_id=j.run_id AND r.tenant_id=j.tenant_id "
+                    "AND r.actor_id=j.actor_id AND r.status IN ('PLANNED','RUNNING')",
+                    (json.dumps(result), category, failure_reason, job_id))
             c.commit()
         if r is None:
             raise QueueError(f"no job {job_id!r}")

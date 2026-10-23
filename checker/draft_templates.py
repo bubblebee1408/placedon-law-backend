@@ -1,49 +1,10 @@
 #!/usr/bin/env python3
-"""Two drafts, built from a run that already happened. The model may join sentences, not make them.
+"""Build research memos and client notes from completed runs.
 
-Job 3. H3 gave drafts a history; this gives them content. Two templates:
-
-    client_email    a note to the client about a REVIEW_CONTRACT result
-    research_memo   a memo recording a RESEARCH_QUESTION answer
-
-## The one rule
-
-**A statement of law comes from a verified citation in the source run, verbatim, or it does
-not appear.** Not "is flagged", not "is marked unverified" -- does not appear. The model's
-job here is joining prose: "Three clauses differ from your standard. The first is this one."
-Sentences like that become MODEL_SUGGESTION slots, which `checker/provenance_slots.py`
-already makes block approval until a person accepts or edits them.
-
-So a sentence reaches the draft by one of three routes:
-
-    from a citation    the quote, verbatim, as SOURCE_QUOTE with its citation id
-    model prose        no legal assertion in it -> MODEL_SUGGESTION, blocks approval
-    model prose        a legal assertion carrying a citation id the run really holds ->
-                       MODEL_SUGGESTION, blocks approval, and the id travels with it
-
-and by no other. **A model sentence that asserts law with no citation, or with an id the
-run does not hold, is DROPPED**, and `dropped` reports it with the reason. A fluent sentence
-about a duty nobody can check is the single most dangerous thing this product could emit,
-and leaving it in with a warning label is how it reaches a client anyway.
-
-## Why a contract review's email contains no law at all
-
-`review_contract` produces findings against a company PLAYBOOK, and `law_not_held` says in
-terms that the Contract Act, the Arbitration Act and stamp duty are declared and not held.
-So there is nothing for a SOURCE_QUOTE to come from, and the honest email says "these
-clauses differ from your standard" and never "this clause is unenforceable". The template
-puts that sentence in the draft itself, as TEMPLATE_TEXT, so it is not left to the covering
-email.
-
-## What `asserts_law` is, and what it is not
-
-A deliberately blunt detector: a statutory reference, or duty/validity language. It
-over-fires -- "the agreement must be signed by both parties" is a fact about a document, not
-a claim about law, and it will be caught. That direction is the safe one: a dropped
-connecting sentence costs a person one edit, and an admitted uncited legal claim costs a
-client. `_test` pins both directions, including sentences it must NOT catch.
-
-Run: PYTHONPATH=. python3 checker/draft_templates.py --test
+Law quotations retain citation IDs. Model prose remains review-blocking; the
+heuristic admission filter drops detected legal claims without known citations.
+Citation membership alone does not prove semantic support. Contract notes describe
+playbook differences, not enforceability. Run this module with --test for checks.
 """
 from __future__ import annotations
 

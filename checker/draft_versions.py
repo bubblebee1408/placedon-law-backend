@@ -1,56 +1,7 @@
 #!/usr/bin/env python3
-"""Every save is a version, and any two versions diff exactly.
+"""Immutable draft versions, provenance-aware review gates, diffs and text/DOCX export.
 
-H3 of `.claude/loops/DECISION_harvey_parity.md`. The approval rule it asks for already
-exists and is not re-implemented here: `checker/provenance_slots.py` types every value and
-makes `MODEL_SUGGESTION` and `UNKNOWN` block approval, and `checker/drafting.py` assembles
-one draft from those slots. **This module adds the history**: versions, the diff between
-any two, and the exports.
-
-## Why this is not `checker/drafts.py`, which H3 names
-
-`checker/drafting.py` already exists, and `drafts.py` beside it is a trap: two files one
-character apart, one assembling a draft and one storing its history, and a reader reaching
-for the wrong one every time. The same confusion H4 created with `review_grid` /
-`review_table`, which is now a paragraph in `docs/START_HERE.md` §5. This is
-`draft_versions.py` because that is what it holds.
-
-## A version is immutable, and that is the whole feature
-
-`save()` appends. It never edits a version in place, because the point of a version is that
-someone can go back to exactly what was approved — or exactly what was NOT approved and
-why. A "current draft" that is mutated in place has no history, only a present tense.
-
-## The diff that matters is not the text diff
-
-A unified diff over the body shows which words changed. It does **not** show that a
-sentence stopped being a `SOURCE_QUOTE` and became a `MODEL_SUGGESTION` — the words can be
-identical and the support gone, which is the one change a lawyer must see. So `diff()`
-returns both, and names `newly_blocking` separately: slots that now block approval and did
-not before.
-
-The reverse matters too. A slot that was `MODEL_SUGGESTION` and is now a verified
-`SOURCE_QUOTE` is the revision working, and `newly_supported` says so.
-
-## No new dependency for .docx, and that is the reason
-
-A `.docx` is a ZIP of XML. `zipfile` and `xml` are in the standard library, so
-`to_docx()` writes the three parts the format requires and nothing else. A writer was
-considered and refused:
-
-- `python-docx` is neither installed nor declared here, and README's claim that the SERVED
-  path has no dependency outside the standard library would become false the day a draft
-  export shipped through it. `checker/pdf_pages.py` holds that boundary for reading, with
-  its own test; this keeps it for writing.
-- A document WRITER is a format emitter, not a parser. The failure mode of a hand-written
-  one is "Word will not open it", which a test can check by reading the archive back. The
-  failure mode of a hand-written PDF *reader* is silently wrong text, which is why
-  `pdf_pages` uses a library and this does not.
-
-**The ceiling, stated:** plain paragraphs, no styling, no tables, no tracked changes. The
-day a lawyer needs real formatting, `python-docx` is the right answer and gets declared in
-`requirements.txt` with that as the reason.
-
+Exports include unresolved review items. DOCX supports plain paragraphs only.
 Run: PYTHONPATH=. python3 checker/draft_versions.py --test
 """
 from __future__ import annotations
@@ -62,9 +13,8 @@ import zipfile
 from dataclasses import dataclass, replace
 from datetime import datetime
 
-from checker.provenance_slots import (BLOCKING_TYPES, MODEL_SUGGESTION, Slot,
-                                      blocking_slots, provenance_panel,
-                                      ready_for_approval)
+from checker.provenance_slots import (BLOCKING_TYPES, MODEL_SUGGESTION, UNKNOWN, Slot,
+                                      blocking_slots, provenance_panel)
 
 __all__ = ["Version", "VersionError", "History", "save", "diff", "to_docx",
            "to_text", "docx_text"]
@@ -72,6 +22,38 @@ __all__ = ["Version", "VersionError", "History", "save", "diff", "to_docx",
 
 class VersionError(ValueError):
     """A version or a diff that cannot be described. Never a warning."""
+
+
+REVISION_REVIEW = "_body_revision_review"
+
+
+def draft_blockers(body: str, slots: tuple) -> tuple:
+    """Shared readiness policy for storage, API responses and exported versions."""
+    blocked = blocking_slots(tuple(slots))
+    if not body.strip():
+        return blocked + (Slot("_draft_body", "", UNKNOWN,
+                               note="Add draft text before requesting review."),)
+    if not slots:
+        return (Slot("_draft_provenance", "", UNKNOWN,
+                     note="Record the facts and sources supporting this draft."),)
+    return blocked
+
+
+def stored_review_count(body: str, slots: list, stored_count: int = 0) -> int:
+    """Current-policy metadata for older rows without rewriting immutable history."""
+    blocked = sum(s.get("type", s.get("slot_type")) in BLOCKING_TYPES for s in slots)
+    blocked += int(not body.strip() or not slots)
+    return max(stored_count, blocked)
+
+
+def review_items(body: str, slots: tuple) -> list[dict]:
+    """Actions for a reviewer; these checks do not establish legal correctness."""
+    return [{"code": "REVIEW_REQUIRED", "field": slot.name,
+             "message": slot.note or (
+                 "Review this model suggestion against the supporting evidence."
+                 if slot.slot_type == MODEL_SUGGESTION else
+                 "Supply and check the missing value and its source.")}
+            for slot in draft_blockers(body, slots)]
 
 
 @dataclass(frozen=True)
@@ -110,20 +92,20 @@ class Version:
         if self.approved_by and blocking_slots(tuple(self.slots)):
             raise VersionError(
                 f"version {self.version} is recorded as approved by "
-                f"{self.approved_by!r} while {len(blocking_slots(tuple(self.slots)))} "
+                f"{self.approved_by!r} while {len(self.blockers())} "
                 f"slot(s) still block approval. That combination cannot exist: it is the "
                 f"record of a gate that did not hold")
 
     @property
     def ready(self) -> bool:
-        return ready_for_approval(tuple(self.slots))
+        return not self.blockers()
 
     def blockers(self) -> tuple:
-        return blocking_slots(tuple(self.slots))
+        return draft_blockers(self.body, tuple(self.slots))
 
     @property
     def approved(self) -> bool:
-        return bool(self.approved_by)
+        return bool(self.approved_by) and self.ready
 
     def approve(self, reviewer: str, at: str) -> "Version":
         """A NEW version carrying the approval. Raises while anything is unsupported."""
@@ -144,9 +126,11 @@ class Version:
                 "slots": [s.to_dict() for s in self.slots],
                 "citations": list(self.citations),
                 "ready": self.ready, "approved": self.approved,
+                "historical_approval": bool(self.approved_by),
                 "approved_by": self.approved_by or None,
                 "approved_at": self.approved_at or None,
-                "blocking": [s.name for s in self.blockers()]}
+                "blocking": [s.name for s in self.blockers()],
+                "review_items": review_items(self.body, tuple(self.slots))}
 
 
 @dataclass(frozen=True)
@@ -239,7 +223,8 @@ def to_text(v: Version) -> str:
     out = [v.title, "=" * len(v.title), "", v.body, ""]
     if v.citations:
         out += ["LEGAL BASIS", *[f"  - {c}" for c in v.citations], ""]
-    out.append(provenance_panel(tuple(v.slots)))
+    out.append(provenance_panel(tuple(v.slots) + tuple(
+        s for s in v.blockers() if s not in v.slots)))
     if not v.ready:
         out += ["", f"NOT APPROVABLE: {len(v.blockers())} slot(s) are unsupported -- "
                     + ", ".join(f"{s.name} ({s.slot_type})" for s in v.blockers())]
