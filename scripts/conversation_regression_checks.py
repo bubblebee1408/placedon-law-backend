@@ -12,6 +12,7 @@ def main():
     suite.addTests(unittest.defaultTestLoader.discover(str(root / "tests"), pattern="test_document_evidence.py"))
     suite.addTests(unittest.defaultTestLoader.discover(str(root / "tests"), pattern="test_actor_document_cache.py"))
     suite.addTests(unittest.defaultTestLoader.discover(str(root / "tests"), pattern="test_worker_actor_identity.py"))
+    suite.addTests(unittest.defaultTestLoader.discover(str(root / "tests"), pattern="test_draft_review_integrity.py"))
     result = unittest.TextTestRunner(verbosity=1).run(suite)
     failed = len(result.failures) + len(result.errors)
     passed = result.testsRun - failed - len(result.skipped)

@@ -301,7 +301,7 @@
     "scripts/concurrency_test.py": 12,
     "scripts/conversation_http_checks.py": 15,
     "scripts/conversation_persist_integration.py": 2,
-    "scripts/conversation_regression_checks.py": 72,
+    "scripts/conversation_regression_checks.py": 78,
     "scripts/date_properties.py": 29,
     "scripts/demo.py": 17,
     "scripts/demo_e2e.py": 12,

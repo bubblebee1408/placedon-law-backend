@@ -115,6 +115,33 @@ class PostgresConversationReliability(unittest.TestCase):
         self.assertEqual(other.browse_vault_documents(matter_id=None, query="", limit=30, offset=0), [])
         self.assertEqual(other.browse_vault_documents(matter_id=matter, query="", limit=30, offset=0), [])
 
+    def test_draft_create_race_cannot_replace_existing_revision(self):
+        from gateway.verbs import _draft_create, _draft_revise, _draft_versions
+        did = str(uuid.uuid4())
+        args = {"draft_id": did, "title": "Concurrent draft", "body": "Initial text"}
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            results = list(pool.map(lambda _: _draft_create(args, self.ctx), range(8)))
+        self.assertEqual(sum(r.get("draft_id") == did for r in results), 1)
+        self.assertEqual(sum(r.get("code") == "CREATE_CONFLICT" for r in results), 7)
+        _draft_revise({"draft_id": did, "base_version": 1, "body": "Changed"}, self.ctx)
+        self.assertEqual(_draft_create(args, self.ctx)["code"], "CREATE_CONFLICT")
+        history = _draft_versions({"draft_id": did}, self.ctx)["versions"]
+        self.assertEqual(len(history), 2)
+        self.assertFalse(history[-1]["ready"])
+
+    def test_legacy_draft_list_matches_current_review_policy(self):
+        from gateway.verbs import _draft_versions
+        did = str(uuid.uuid4())
+        self.store.write_draft({"draft_id": did, "title": "Legacy"})
+        self.store.append_draft_version({"draft_id": did, "title": "Legacy", "body": "",
+            "slots": [], "blocking_count": 0, "approved_by": "historical reviewer",
+            "approved_at": "2026-10-01T00:00:00Z"})
+        detail = _draft_versions({"draft_id": did}, self.ctx)["versions"][0]
+        row = self.store.list_drafts(limit=20)[0]
+        self.assertEqual(row["blocking_count"], len(detail["blocking"]))
+        self.assertFalse(row["approved"])
+        self.assertTrue(detail["historical_approval"])
+
 
 if __name__ == "__main__":
     unittest.main()
