@@ -107,12 +107,11 @@ MATTER = "MATTER"
 # publication-style decision, exactly like PUBLIC_ROOTS: a provider is added by a person
 # who has confirmed where the bytes land, never because it was convenient at the call site.
 #
-# `azure` is here because PLAN_22 D3 routes client work to Azure. **The residency question
-# is OPEN and recorded, not closed by this line**: the deployments are on the
-# `placedon-law-eval` resource in UAE North, and whether a UAE region is acceptable for an
-# Indian in-house legal team's contracts is a buyer's decision nobody here has taken. This
-# tuple governs which provider may be SENT one; it does not certify the region.
-MATTER_PROVIDERS = frozenset({"azure"})
+# Azure remains listed for deployments with an explicitly accepted region; its adapter
+# refuses the current UAE North endpoint by default. Bedrock is the confirmed India-region
+# provider for client documents. The adapter independently checks the inference profile's
+# member regions before opening the request.
+MATTER_PROVIDERS = frozenset({"azure", "bedrock"})
 
 PUBLIC_ROOTS: tuple[Path, ...] = (
     ROOT / "corpus" / "companies_act",
@@ -595,6 +594,8 @@ def _test() -> None:
            "Limited. The term is three years from the Effective Date.")
     check("gemini" not in MATTER_PROVIDERS,
           "the Gemini free tier is NOT permitted a matter document (PLAN_22 D3)")
+    check("bedrock" in MATTER_PROVIDERS,
+          "the India-region Bedrock provider may receive client data after its route check")
     for bad in ("gemini", "ollama", "sarvam", ""):
         try:
             clear_matter(DOC, name="nda.docx", provider=bad)

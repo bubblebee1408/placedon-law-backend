@@ -343,7 +343,7 @@ def narrate(prompt: str, *, origin, model: str = DEFAULT_DEPLOYMENT, budget=None
 
 
 def as_text_model(*, origin, model: str = DEFAULT_DEPLOYMENT, budget=None,
-                  _transport=None, on_usage=None):
+                  _transport=None, on_usage=None, timeout: int | None = None):
     """`narrate` as the Callable[[str], str] that `quoted_span.summarise` takes.
 
     The clearance is bound once, here, by the caller that knows which published files the
@@ -354,7 +354,7 @@ def as_text_model(*, origin, model: str = DEFAULT_DEPLOYMENT, budget=None,
 
     def _m(prompt: str) -> str:
         return narrate(prompt, origin=origin, model=model, budget=budget,
-                       _transport=_transport, on_usage=on_usage)
+                       timeout=timeout, _transport=_transport, on_usage=on_usage)
     return _m
 
 

@@ -188,9 +188,12 @@ def _provider_not_ready():
 
 
 def _served_or_refusal(origins, *, name: str, purpose: str, ctx: Context,
-                       consequence: str | None = None):
+                       consequence: str | None = None,
+                       timeout_seconds: int | None = None,
+                       retry_tries: int = 3,
+                       allowed_providers: tuple[str, ...] | None = None):
     """(Served|None, refusal dict|None). Never returns neither, never returns both."""
-    from gateway.models import NotServed, serve
+    from gateway.models import NotServed, available_providers, serve
     if ctx.model_for is not None:                     # a test or a caller-supplied model
         # A dataclass instance, not a class with `call` as a class attribute: a plain
         # function stored on a class becomes a BOUND METHOD through an instance, so
@@ -204,8 +207,14 @@ def _served_or_refusal(origins, *, name: str, purpose: str, ctx: Context,
         return None, _refuse("NO_BUDGET", "The spending guard is unavailable. No model call was made; retry after the budget store is restored.")
     try:
         from checker import router as _r
+        provider_scope = None
+        if allowed_providers is not None:
+            provider_scope = tuple(provider for provider in available_providers()
+                                   if provider in allowed_providers)
         return serve(origins, name=name, purpose=purpose, budget=budget,
-                     consequence=consequence or _r.LOW), None
+                     consequence=consequence or _r.LOW,
+                     timeout_seconds=timeout_seconds, retry_tries=retry_tries,
+                     available=provider_scope), None
     except NotServed as e:
         # REFUSED with the code, never a quiet UNVERIFIED: UNVERIFIED is a claim about
         # EVIDENCE, and there is no evidence when no call was made.
@@ -1221,11 +1230,13 @@ QUEUED_INTENTS: dict[str, str] = {
     # retryable, and the document stayed PENDING having been "queued for ingestion".
     # Writes, like a grid cell: an ingested document is the product, not a run record.
     "vault_ingest": "_vault_ingest_job",
+    # D1: bounded client-document synthesis in the conversation job lane.
+    "document_summary": "_document_summary_job",
 }
 
 # Intents whose handler needs the STORE, because what they produce is not a run record.
 # Everything else runs store-less so it cannot write a second run.
-STORE_WRITING_INTENTS = frozenset({"review_grid_cell", "vault_ingest"})
+STORE_WRITING_INTENTS = frozenset({"review_grid_cell", "vault_ingest", "document_summary"})
 
 
 def queue_handlers(ctx: "Context") -> dict:
@@ -1258,7 +1269,8 @@ def queue_handlers(ctx: "Context") -> dict:
                "_review_contract": _review_contract,
                "_ask": _ask,
                "_review_grid_cell": _review_grid_cell,
-               "_vault_ingest_job": _vault_ingest_job}
+               "_vault_ingest_job": _vault_ingest_job,
+               "_document_summary_job": _document_summary_job}
     return {intent: wrap(by_name[fn], keep_store=(intent in STORE_WRITING_INTENTS))
             for intent, fn in QUEUED_INTENTS.items()}
 
@@ -1848,6 +1860,15 @@ def _envelope_for(task: str, result: dict, *, as_of: str, run_id=None,
                          text="The model was unavailable — this is not a finding about the "
                               "law. Try again.")
 
+    if task == "RESEARCH_QUESTION" and isinstance(result.get("document_summary"), dict):
+        summary = result["document_summary"]
+        text = ("A review-draft summary was generated from the selected document text. Quotes are exact text matches, not proof that each point is accurate; check each quote in context."
+                if summary.get("status") == "SUMMARY_DRAFT_READY" else
+                "No summary items passed the quotation-format checks. No summary text was shown.")
+        return ev.build(status=ev.PARTIAL, task=task, as_of=as_of,
+                        text_blocks=[{"text": text, "citation_ids": []}],
+                        bodies=[], citations=[], files=files, run_id=run_id, trace_url=trace)
+
     bodies = _bodies_for(task, result, question)
     if task == "REVIEW_TABLE" and result.get("grid_id"):
         t = result.get("scheduled") or {}
@@ -2222,6 +2243,11 @@ def _turn_metadata(metadata: dict, result: dict) -> dict:
     out = dict(metadata)
     if isinstance(result.get("sources"), dict):
         out["sources"] = result["sources"]
+    for key in ("document_summary", "document_evidence"):
+        if isinstance(result.get(key), dict):
+            out[key] = result[key]
+    if isinstance(result.get("document_summary"), dict):
+        out.pop("document_summary_pending", None)
     artifacts = []
     if result.get("draft_id"):
         artifacts.append({"type": "draft", "id": result["draft_id"],
@@ -2243,6 +2269,10 @@ def _turn_response(message: dict) -> dict:
         out["sources"] = metadata["sources"]
     if metadata.get("document_evidence"):
         out["document_evidence"] = metadata["document_evidence"]
+    if metadata.get("document_summary"):
+        out["document_summary"] = metadata["document_summary"]
+    if metadata.get("document_summary_pending"):
+        out["note"] = "Preparing a structured summary from the selected documents."
     for artifact in metadata.get("artifacts") or []:
         if artifact.get("type") == "draft":
             out.update(draft_id=artifact["id"], version=artifact.get("version"))
@@ -2308,6 +2338,87 @@ def _resolve_conversation_documents(file_ids, ctx: Context, matter_id, *, eviden
                 resolved[fid] = {"name": "Unavailable document", "cannot_read":
                                  "This document is unavailable in this workspace. Nothing was read."}
     return replace(ctx, documents=resolved), None
+
+
+def _document_summary_job(args: dict, ctx: Context) -> dict:
+    """One bounded summary attempt, reauthorizing and rereading selected vault files."""
+    from gateway import document_summary as ds
+    from checker import public_only, router
+
+    file_ids = args.get("file_ids")
+    matter_id = args.get("matter_id")
+    expected = args.get("sha256_by_id")
+    sources = args.get("sources")
+    if (not isinstance(file_ids, list) or not 1 <= len(file_ids) <= ds.MAX_SUMMARY_DOCUMENTS
+            or not all(isinstance(fid, str) for fid in file_ids)
+            or len(set(file_ids)) != len(file_ids) or not isinstance(expected, dict)
+            or set(expected) != set(file_ids)
+            or (sources is not None and (not isinstance(sources, list)
+                or not all(isinstance(source, str) for source in sources)
+                or "vault" not in sources))
+            or (matter_id is not None and not isinstance(matter_id, str))):
+        return _refuse("BAD_REQUEST", "The queued document-summary request is incomplete or invalid.")
+    if ctx.store is None or ctx.files is None:
+        return _refuse("NO_STORE", "The document store is unavailable; no summary was generated.")
+    # Every job, including direct runs.submit calls, repeats authorization at execution.
+    for fid in file_ids:
+        row = ctx.store.read_vault_document(fid)
+        if (not row or row.get("deleted_at") or row.get("state") != "INGESTED"
+                or row.get("matter_id") != matter_id or row.get("sha256") != expected.get(fid)):
+            return _refuse("DOCUMENT_SCOPE_MISMATCH", "A selected document changed or is unavailable. No summary was generated.")
+    resolved, refusal = _resolve_conversation_documents(file_ids, ctx, matter_id,
+                                                         evidence_only=True, enabled=True)
+    if refusal:
+        return refusal
+    try:
+        evidence = ds.prepare(resolved.documents)
+        model_prompt = ds.prompt(evidence)
+        text = "\n".join(p["text"] for p in evidence["passages"])
+        origin = public_only.clear_matter(text, name="selected conversation documents",
+                                          provider=router.BEDROCK)
+    except ds.SummaryError as error:
+        return _refuse(error.code, error.detail)
+    except Exception:
+        return _refuse("DOCUMENT_UNAVAILABLE", "The selected text could not be prepared safely.")
+    served, refusal = _served_or_refusal((origin,), name="document_summary",
+        purpose=router.EXTRACTION, consequence=router.HIGH, ctx=ctx,
+        timeout_seconds=25, retry_tries=1,
+        allowed_providers=(router.BEDROCK,))
+    if refusal:
+        if refusal.get("code") == "NO_BUDGET":
+            return refusal
+        return {"status": "REFUSED", "code": refusal.get("code", "NO_MODEL"),
+                "detail": "No permitted document-summary model is available. No summary was generated."}
+    try:
+        raw = served.call(model_prompt)
+    except Exception:
+        # Provider adapters settle their reservation even when transport/usage is uncertain.
+        ctx.last_steps.append({"capability": "document.summary", "status": "FAILED",
+                               "provider": served.provider, "model": served.model,
+                               "region": served.region,
+                               "cost_note": "Provider attempt failed; usage may be unknown and was accounted by its adapter."})
+        return {"status": "FAILED", "code": "SUMMARY_PROVIDER_FAILED",
+                "error": "The document summary could not be completed. Your document remains unchanged."}
+    try:
+        summary = ds.parse(raw, evidence)
+    except ds.SummaryError as error:
+        try:
+            step = served.step_fields()
+            ctx.last_steps.append({"capability": "document.summary", "status": "FAILED", **step})
+        except Exception:
+            ctx.last_steps.append({"capability": "document.summary", "status": "FAILED",
+                                   "provider": served.provider, "model": served.model,
+                                   "region": served.region, "cost_note": "Provider usage could not be recorded in the run trace."})
+        return {"status": "FAILED", "code": error.code, "error": error.detail}
+    try:
+        step = served.step_fields()
+    except Exception:
+        return {"status": "FAILED", "code": "SUMMARY_ACCOUNTING_FAILED",
+                "error": "Summary accounting could not be confirmed. The result was withheld."}
+    ctx.last_steps.append({"capability": "document.summary", "status": "ANSWERED", **step})
+    result_status = "PARTIAL" if summary["status"] == "SUMMARY_DRAFT_READY" else "ABSTAINED"
+    return {"status": result_status, "document_summary": summary,
+            "summary_note": "This is a model-generated summary draft. Quotations show source locations; a lawyer must review meaning and completeness."}
 
 
 def _conversation_send(args: dict, ctx: Context) -> dict:
@@ -2396,6 +2507,7 @@ def _conversation_send(args: dict, ctx: Context) -> dict:
         task = "RESEARCH_QUESTION"
         classification = {"task": task, "decided_by": "rules", "reason": "selected-document excerpt overview"}
     document_research = bool(raw_ids and task == "RESEARCH_QUESTION")
+    document_summary = bool(document_research and de.is_overview(text))
     document_sources_enabled = sources is None or "vault" in sources
     resolved, refusal = _resolve_conversation_documents(raw_ids, ctx, matter,
         evidence_only=document_research, enabled=document_sources_enabled)
@@ -2403,6 +2515,28 @@ def _conversation_send(args: dict, ctx: Context) -> dict:
         return refusal
     ctx = resolved
     files = _files_block(raw_ids, ctx)
+    if document_summary and not document_sources_enabled:
+        document_summary = False
+    if document_summary and ctx.queue is None:
+        return _refuse("QUEUE_UNAVAILABLE",
+                       "Document summaries need the background worker. This request was not saved; retry when the worker is available.")
+    if document_summary:
+        try:
+            from gateway import document_summary as ds
+            ds.prepare(ctx.documents)
+        except ds.SummaryError as error:
+            return _refuse(error.code, error.detail)
+        sha256_by_id = {}
+        for fid in raw_ids:
+            row = ctx.store.read_vault_document(fid)
+            if not row or row.get("state") != "INGESTED" or row.get("deleted_at"):
+                return _refuse("DOCUMENT_UNAVAILABLE", "Save each selected file to the vault and wait until it is ready before summarizing.")
+            sha256_by_id[fid] = row.get("sha256")
+        from gateway import document_evidence as de
+        initial_document_evidence = de.collect(text, ctx.documents, enabled=True)
+    else:
+        initial_document_evidence = None
+
     if raw_ids and task in ("REVIEW_DOCUMENT", "REVIEW_CONTRACT") and (
             len(raw_ids) != 1 or any(f["state"] == ev.CANNOT_READ for f in files)):
         task = intake.NEEDS_CLARIFICATION
@@ -2413,7 +2547,7 @@ def _conversation_send(args: dict, ctx: Context) -> dict:
         task = intake.NEEDS_CLARIFICATION
         classification = {"task": task, "decided_by": "rules", "reason": "ambiguous follow-up",
             "question": "Please name the provision, document or issue in this follow-up. Prior assistant answers are not treated as legal evidence."}
-    if not document_research and TASK_INTENT.get(task) and ctx.queue is not None:
+    if (not document_research or document_summary) and TASK_INTENT.get(task) and ctx.queue is not None:
         try:
             limit = max(1, int(os.environ.get("PLACEDON_CONVERSATION_QUEUE_LIMIT", "100")))
         except ValueError:
@@ -2422,11 +2556,17 @@ def _conversation_send(args: dict, ctx: Context) -> dict:
             return _refuse("BUSY", "The workspace is busy. Your question has not been submitted; retry shortly.")
     metadata = {"schema": "conversation_turn.v1", "request_id": request_id,
                 "classification": classification, "artifacts": [], "files": files, "as_of": as_of,
-                "accepted_at": _now(ctx)}
+                "accepted_at": _now(ctx),
+                **({"document_summary_pending": True,
+                    "document_evidence": initial_document_evidence} if document_summary else {})}
     queued = None
-    if not document_research and TASK_INTENT.get(task) and ctx.queue is not None:
-        queued = {"run_id": str(uuid.uuid4()), "intent": TASK_INTENT[task],
-                  "args": _task_args(task, text, raw_ids, ctx, args), "lane": INTERACTIVE}
+    if (not document_research or document_summary) and TASK_INTENT.get(task) and ctx.queue is not None:
+        intent = "document_summary" if document_summary else TASK_INTENT[task]
+        job_args = ({"file_ids": raw_ids, "matter_id": matter,
+                     "sha256_by_id": sha256_by_id, "sources": sources}
+                    if document_summary else _task_args(task, text, raw_ids, ctx, args))
+        queued = {"run_id": str(uuid.uuid4()), "intent": intent,
+                  "args": job_args, "lane": INTERACTIVE}
     reply_id = str(uuid.uuid4())
     try:
         message, created = store.reserve_turn(
@@ -2444,6 +2584,8 @@ def _conversation_send(args: dict, ctx: Context) -> dict:
         return _turn_response(_reconcile_message(message, ctx))
     if queued is not None:
         response = _turn_response(message)
+        if document_summary:
+            response["note"] = "Preparing a structured summary from the selected documents."
         response["files"] = [{k: v for k, v in dict(f, state=ev.READING).items()
                               if k not in ("reason", "pages")} if f["state"] == ev.READ else f
                              for f in files]

@@ -103,10 +103,11 @@ class DocumentEvidenceSimulation(unittest.TestCase):
         self.assertEqual(got['searched_document_ids'], [])
         self.assertEqual(got['passages'], [])
 
-    def test_summary_is_labelled_as_limited_excerpts_not_full_summary(self):
+    def test_summary_stays_pending_and_keeps_initial_limited_excerpts(self):
         did = self.document('First paragraph.\n\nSecond paragraph about the contract.')
         result = self.send([did], text='Summarize this document')
-        got = self.evidence(result)
+        self.assertTrue(result['metadata']['document_summary_pending'])
+        got = result['metadata']['document_evidence']
         self.assertEqual(got['mode'], 'overview')
         self.assertTrue(got['passages'])
         self.assertTrue(any('complete summary' in s for s in got['limitations']))
