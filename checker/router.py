@@ -258,6 +258,10 @@ _PREFERENCE = {
          "F12 contract clause extraction. Measured on CUAD 29-09-2026: quotes verbatim "
          "0.933 of the time, and every value is re-derived from its span before use, so a "
          "miss becomes UNVERIFIED rather than a wrong clause. requires_review is set"),
+        (BEDROCK, "claude-haiku-4-5",
+         "India-region prototype fallback for client-document extraction. Not benchmarked "
+         "for legal summaries; the gateway marks this high-consequence route for lawyer "
+         "review and requires exact source quotations"),
         (OLLAMA, OPERATOR_NAMED,
          "no Anthropic credit, so extraction runs on the operator's own machine rather "
          "than not at all. UNMEASURED on this task and the route says so: requires_review "

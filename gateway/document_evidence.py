@@ -56,7 +56,7 @@ class DocumentEvidence(TypedDict):
     limitations: list[str]
 
 
-_OVERVIEW = re.compile(r'^\s*(?:please\s+)?(?:summari[sz]e\b|give\s+(?:me\s+)?(?:a\s+)?(?:summary|overview)\b)', re.I)
+_OVERVIEW = re.compile(r'^\s*(?:(?:please|can you|could you|give me)\s+)*(?:summari[sz]e\b|give\s+(?:me\s+)?(?:a\s+)?(?:summary|overview)\b)', re.I)
 _STOP = frozenset('a an the is are was were be being been to of and or for in on at as by '
                   'with from that this these those it its my our your their what which '
                   'where when how who why can could would should does do did please '

@@ -83,14 +83,30 @@ def available() -> bool:
         return False
 
 
-def _runtime_client():
-    import boto3
-    return boto3.client("bedrock-runtime", region_name=REGION)
+def _client_config(timeout_seconds: int | None):
+    if timeout_seconds is None:
+        return None
+    from botocore.config import Config
+    return Config(connect_timeout=min(10, timeout_seconds), read_timeout=timeout_seconds,
+                  retries={"total_max_attempts": 1})
 
 
-def _control_client():
+def _runtime_client(timeout_seconds: int | None = None):
     import boto3
-    return boto3.client("bedrock", region_name=REGION)
+    kwargs = {"region_name": REGION}
+    config = _client_config(timeout_seconds)
+    if config is not None:
+        kwargs["config"] = config
+    return boto3.client("bedrock-runtime", **kwargs)
+
+
+def _control_client(timeout_seconds: int | None = None):
+    import boto3
+    kwargs = {"region_name": REGION}
+    config = _client_config(timeout_seconds)
+    if config is not None:
+        kwargs["config"] = config
+    return boto3.client("bedrock", **kwargs)
 
 
 def _profile_member_regions(control, profile_id: str) -> tuple[str, ...]:
@@ -196,7 +212,8 @@ def cost_inr(model: str, tokens_in: int, tokens_out: int) -> float:
 
 
 def narrate(prompt: str, *, origin, model: str = PRIMARY, budget=None,
-            _runtime=None, _control=None, on_usage=None) -> str:
+            _runtime=None, _control=None, on_usage=None,
+            timeout_seconds: int | None = None) -> str:
     """A text-in/text-out Converse call, under public-only clearance and the budget caps.
 
     `origin` is an Origin or a tuple of them; `verify_prompt` runs BEFORE the socket opens,
@@ -227,8 +244,12 @@ def narrate(prompt: str, *, origin, model: str = PRIMARY, budget=None,
         # Client construction and the India-region preflight happen after the hold but
         # before inference. Keep them inside the cleanup boundary so setup failures cannot
         # strand money or request quota.
-        runtime = _runtime if _runtime is not None else _runtime_client()
-        control = _control if _control is not None else _control_client()
+        runtime = (_runtime if _runtime is not None else
+                   (_runtime_client() if timeout_seconds is None else
+                    _runtime_client(timeout_seconds)))
+        control = (_control if _control is not None else
+                   (_control_client() if timeout_seconds is None else
+                    _control_client(timeout_seconds)))
         assert_india(control, model_id)
         attempted_calls = 1
         text, usage = converse(prompt, system=UNTRUSTED_CLAUSE, model_id=model_id,
@@ -295,14 +316,16 @@ def with_backoff(call, *, sleep=None, tries: int = 3, base: float = RETRY_BASE_S
 
 
 def as_text_model(*, origin, model: str = PRIMARY, budget=None,
-                  _runtime=None, _control=None, on_usage=None):
+                  _runtime=None, _control=None, on_usage=None,
+                  timeout_seconds: int | None = None):
     """`narrate` as the Callable[[str], str] the gateway's `serve()` wires as `.call`."""
     if origin is None:
         raise TypeError("as_text_model(origin=...) is required")
 
     def _m(prompt: str) -> str:
         return narrate(prompt, origin=origin, model=model, budget=budget,
-                       _runtime=_runtime, _control=_control, on_usage=on_usage)
+                       _runtime=_runtime, _control=_control, on_usage=on_usage,
+                       timeout_seconds=timeout_seconds)
     return _m
 
 

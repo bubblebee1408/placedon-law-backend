@@ -116,12 +116,17 @@ def available_providers(credit_exhausted=None) -> tuple[str, ...]:
 
 def serve(origins, *, name: str, purpose: str, consequence: str = router.LOW,
           budget=None, available: tuple[str, ...] | None = None,
-          sleep=None, transport=None, breaker=None) -> Served:
+          sleep=None, transport=None, breaker=None, timeout_seconds: int | None = None,
+          retry_tries: int = 3) -> Served:
     """The route for this task, as a callable. Raises NotServed with a code, never None.
 
     `origins` is the public_only clearance the model call will be made under; it is bound
     here so the returned callable cannot be used against a different document.
     """
+    if timeout_seconds is not None and timeout_seconds < 1:
+        raise ValueError("timeout_seconds must be positive")
+    if retry_tries < 1:
+        raise ValueError("retry_tries must be positive")
     providers = available_providers() if available is None else available
     if not providers:
         raise NotServed(
@@ -163,16 +168,20 @@ def serve(origins, *, name: str, purpose: str, consequence: str = router.LOW,
         region = bedrock_model.REGION
         inner = (transport if transport is not None
                  else bedrock_model.as_text_model(origin=origins, model=route.model,
-                                                  budget=budget, on_usage=usage.append))
-        call = bedrock_model.with_backoff(inner, sleep=sleep or time.sleep)
+                                                  budget=budget, on_usage=usage.append,
+                                                  timeout_seconds=timeout_seconds))
+        call = bedrock_model.with_backoff(inner, sleep=sleep or time.sleep,
+                                          tries=retry_tries)
     else:
         # Azure UAE: test-only for CLIENT data -- azure_model.refuse_unconfirmed_region blocks
         # a client document here -- and the public-text fallback when Bedrock is unavailable.
         region = REGION
         inner = (transport if transport is not None
                  else azure_model.as_text_model(origin=origins, model=route.model,
-                                                budget=budget, on_usage=usage.append))
-        call = azure_model.with_backoff(inner, sleep=sleep or time.sleep)
+                                                budget=budget, on_usage=usage.append,
+                                                timeout=timeout_seconds))
+        call = azure_model.with_backoff(inner, sleep=sleep or time.sleep,
+                                        tries=retry_tries)
 
     if breaker is not None:
         # The breaker only learns anything if someone tells it the outcome, and the only
