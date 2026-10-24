@@ -155,6 +155,7 @@ class Backend(Protocol):
     def read_cache_stats(self) -> dict: ...
     # H3: drafts and their versions (012_drafts.sql).
     def write_draft(self, draft: dict, *, create_only: bool = False) -> dict: ...
+    def create_draft(self, draft: dict, first_version: dict) -> int: ...
     def read_draft(self, draft_id: str) -> dict | None: ...
     def list_drafts(self, *, limit: int, before_updated_at: str | None = None,
                     before_draft_id: str | None = None) -> list[dict]: ...
@@ -235,6 +236,18 @@ def _check_draft_version(row: dict) -> None:
             f"a version cannot be approved by {str(by)[:24]!r} while {blocking} slot(s) "
             f"still block approval (012 draft_versions_no_approval_while_blocked). That "
             f"row is the record of a gate that did not hold")
+
+
+def _insert_draft_version(connection, tenant_id: str, version: dict, number: int) -> None:
+    connection.execute(
+        "INSERT INTO draft_versions (draft_id, tenant_id, version, title, "
+        "body, slots, citations, blocking_count, approved_by, approved_at) "
+        "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+        (version["draft_id"], tenant_id, number, version.get("title") or "",
+         version.get("body") or "", _json(list(version.get("slots") or [])),
+         _json(list(version.get("citations") or [])),
+         int(version.get("blocking_count") or 0),
+         version.get("approved_by"), version.get("approved_at")))
 
 
 def _check_message(row: dict) -> None:
@@ -419,6 +432,9 @@ def _doc_check_row(row) -> dict:
     return out
 
 
+_DRAFT_CREATE_LOCK = threading.Lock()
+
+
 @dataclass
 class MemoryBackend:
     """A dict, with the same decomposition discipline as Postgres so the tests can be one.
@@ -471,6 +487,20 @@ class MemoryBackend:
                             "updated_at": datetime.now(timezone.utc).isoformat()}
         self.draft_versions.setdefault(did, [])
         return dict(self.drafts[did])
+
+    def create_draft(self, draft: dict, first_version: dict) -> int:
+        """Publish metadata and version 1 only after both have been validated."""
+        staged = MemoryBackend()
+        staged.write_draft(draft, create_only=True)
+        staged.append_draft_version(dict(first_version, draft_id=draft["draft_id"], version=1))
+        did = draft["draft_id"]
+        # Publish through a shared lock so competing creates cannot replace version 1.
+        with _DRAFT_CREATE_LOCK:
+            if did in self.drafts:
+                raise StoreError("draft already exists")
+            self.draft_versions[did] = staged.draft_versions[did]
+            self.drafts[did] = staged.drafts[did]
+        return 1
 
     def read_draft(self, draft_id: str) -> dict | None:
         row = self.drafts.get(draft_id)
@@ -2358,6 +2388,23 @@ class PostgresBackend:
             raise StoreError(f"the database refused this draft: {type(exc).__name__}") from None
         return self.read_draft(did) or {"draft_id": did}
 
+    def create_draft(self, draft: dict, first_version: dict) -> int:
+        """Insert metadata and version 1 in the same transaction, or neither."""
+        import psycopg
+        version = dict(first_version, draft_id=draft["draft_id"], version=1)
+        _check_draft_version(version)
+        try:
+            with self._conn() as c:
+                with c.transaction():
+                    c.execute("INSERT INTO drafts (draft_id, tenant_id, kind, title) "
+                              "VALUES (%s,%s,%s,%s)",
+                              (draft["draft_id"], self.tenant_id,
+                               draft.get("kind") or "unknown", draft.get("title") or ""))
+                    _insert_draft_version(c, self.tenant_id, version, 1)
+        except psycopg.errors.IntegrityError as exc:
+            raise StoreError(f"the database refused draft creation: {type(exc).__name__}") from None
+        return 1
+
     def read_draft(self, draft_id: str) -> dict | None:
         if not _UUID.match(draft_id or ""):
             return None
@@ -2408,15 +2455,7 @@ class PostgresBackend:
                                     "draft_versions WHERE draft_id = %s",
                                     (did,)).fetchone()
                     n = int(row[0]) if row else 1
-                c.execute(
-                    "INSERT INTO draft_versions (draft_id, tenant_id, version, title, "
-                    "body, slots, citations, blocking_count, approved_by, approved_at) "
-                    "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
-                    (did, self.tenant_id, n, version.get("title") or "",
-                     version.get("body") or "", _json(list(version.get("slots") or [])),
-                     _json(list(version.get("citations") or [])),
-                     int(version.get("blocking_count") or 0),
-                     version.get("approved_by"), version.get("approved_at")))
+                _insert_draft_version(c, self.tenant_id, version, int(n))
                 c.execute("UPDATE drafts SET updated_at = now() WHERE draft_id = %s",
                           (did,))
         except psycopg.errors.IntegrityError as exc:
