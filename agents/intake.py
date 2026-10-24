@@ -215,6 +215,17 @@ _STANDING_PHRASES = ("are we compliant", "am i compliant", "our compliance",
                      "outstanding filings", "overdue filings", "pending filings",
                      "compliance position", "compliance health", "are we in default")
 
+# An imperative over attached passages is a research request even without a question
+# mark. Keep the command anchored: mentioning that someone will "find" a clause is
+# not an instruction. Review/table rules retain precedence; web discovery is separate.
+_PASSAGE_COMMAND_RE = re.compile(r"^(?:please\s+)?(?:find|show|locate)\b")
+_PASSAGE_NOUNS = ("clause", "clauses", "paragraph", "paragraphs", "passage", "passages",
+                  "provision", "provisions", "section", "sections", "sentence",
+                  "sentences", "payment terms")
+_EXTERNAL_DISCOVERY_WORDS = ("web", "google", "online", "internet", "news", "latest",
+                             "current", "case", "cases", "judgment", "judgments",
+                             "judgement", "judgements")
+
 # A question about the law, rather than a report about a fact.
 _ASK_OPENERS = ("what ", "which ", "who ", "when ", "where ", "why ", "how ", "is ",
                 "are there", "is there", "can ", "could ", "may ", "must ", "do we",
@@ -436,6 +447,18 @@ def _rules(message: str, files, facts) -> Classification | None:
 
     # A review verb with no attachment is not a review: there is nothing to review.
     # It falls through, and usually lands on the question rules below.
+
+    # Passage retrieval precedes event detection: "find the related party clause"
+    # describes text to retrieve, not a corporate event taking place. Draft requests
+    # stay on their existing route even when accompanied by a retrieval imperative.
+    if (has_file and _PASSAGE_COMMAND_RE.match(text)
+            and _any_word(text, _PASSAGE_NOUNS)
+            and not _any_word(text, _EXTERNAL_DISCOVERY_WORDS)
+            and not _DRAFT_RE.search(text)):
+        return Classification(
+            task=RESEARCH_QUESTION, rule="attachment+passage_command", decided_by="rules",
+            alternatives=_alts(RESEARCH_QUESTION, prefer=REVIEW_DOCUMENT),
+            reason="it explicitly asks to retrieve passages from selected documents")
 
     key, phrase = event_in(text)
     asks = text.startswith(tuple(_ASK_OPENERS)) or text.endswith("?")
