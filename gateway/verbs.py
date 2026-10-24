@@ -3919,20 +3919,24 @@ def _draft_create(args: dict, ctx: Context) -> dict:
         return _refuse("BAD_REQUEST", "body must be a string")
     if len(body) > 100_000:
         return _refuse("BAD_REQUEST", "draft text must be 100000 characters or fewer")
+    citations = args.get("citations")
+    if citations is None:
+        citations = []
+    if not isinstance(citations, list):
+        return _refuse("BAD_REQUEST", "citations must be an array")
     draft_id = (args.get("draft_id") or "").strip() or str(uuid.uuid4())
     from gateway.store import StoreError
+    from checker.draft_versions import draft_blockers
     try:
-        ctx.store.write_draft({"draft_id": draft_id,
-                              "kind": (args.get("kind") or DRAFT_KIND_UNKNOWN),
-                              "title": title}, create_only=True)
+        n = ctx.store.create_draft(
+            {"draft_id": draft_id, "kind": args.get("kind") or DRAFT_KIND_UNKNOWN,
+             "title": title},
+            {"title": title, "body": body, "slots": [s.to_dict() for s in slots],
+             "citations": citations,
+             "blocking_count": len(draft_blockers(body, slots))})
     except StoreError:
         return _refuse("CREATE_CONFLICT", "The draft could not be created. If this ID "
                        "already exists, open it and save a revision with its current version.")
-    try:
-        n = _save_version(ctx, draft_id, title=title, body=body, slots=slots,
-                          citations=tuple(args.get("citations") or ()), version=1)
-    except Exception as e:                                      # noqa: BLE001
-        return _refuse("BAD_REQUEST", str(e))
     return _draft_status(ctx, draft_id, version=n,
                          note="Version 1 saved. Every save is a new version; nothing is "
                               "edited in place.")

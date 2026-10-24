@@ -86,6 +86,36 @@ class DraftReviewIntegrity(unittest.TestCase):
         export = _draft_export({"draft_id": did}, self.ctx)
         self.assertIn("NOT APPROVABLE", docx_text(base64.b64decode(export["docx_base64"])))
 
+    def test_create_failure_leaves_no_metadata_and_same_id_can_retry(self):
+        import uuid
+        did = str(uuid.uuid4())
+        store = self.ctx.store
+        from gateway.store import StoreError
+        with self.assertRaises(StoreError):
+            store.create_draft({"draft_id": did, "title": "New"},
+                               {"title": "", "body": "Text", "slots": []})
+        self.assertIsNone(store.read_draft(did))
+        self.assertEqual(store.read_draft_versions(did), [])
+        self.assertEqual(store.create_draft({"draft_id": did, "title": "New"},
+                         {"title": "New", "body": "Text", "slots": []}), 1)
+
+    def test_concurrent_memory_creates_have_one_winner(self):
+        from concurrent.futures import ThreadPoolExecutor
+        import uuid
+        did = str(uuid.uuid4())
+        args = {"draft_id": did, "title": "Concurrent", "body": "Text"}
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            results = list(pool.map(lambda _: _draft_create(args, self.ctx), range(12)))
+        self.assertEqual(sum(r.get("draft_id") == did for r in results), 1)
+        self.assertEqual(len(self.ctx.store.read_draft_versions(did)), 1)
+
+    def test_non_array_citations_are_refused_without_writing(self):
+        for value in (1, "source", {"id": "source"}, False):
+            with self.subTest(value=value):
+                result = _draft_create({"title": "Test", "body": "Text", "citations": value}, self.ctx)
+                self.assertEqual(result["code"], "BAD_REQUEST")
+        self.assertEqual(self.ctx.store.drafts, {})
+
     def test_blank_body_blocks_even_with_supported_slots(self):
         v = Version("draft", 1, "Title", " ", (Slot("fact", "fact", USER_FACT),),
                     created_at="2026-10-23T00:00:00+00:00")

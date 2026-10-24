@@ -142,6 +142,23 @@ class PostgresConversationReliability(unittest.TestCase):
         self.assertFalse(row["approved"])
         self.assertTrue(detail["historical_approval"])
 
+    def test_first_version_database_failure_rolls_back_metadata(self):
+        from unittest.mock import patch
+        from gateway import store as store_module
+        from gateway.verbs import _draft_create
+        did = str(uuid.uuid4())
+        insert = store_module._insert_draft_version
+        def invalid_version(connection, tenant, version, number):
+            # Trigger the real version-number CHECK after the draft row was inserted.
+            return insert(connection, tenant, version, 0)
+        args = {"draft_id": did, "title": "Rollback test", "body": "Text"}
+        with patch.object(store_module, "_insert_draft_version", invalid_version):
+            refused = _draft_create(args, self.ctx)
+        self.assertEqual(refused["status"], "REFUSED")
+        self.assertIsNone(self.store.read_draft(did))
+        self.assertEqual(self.store.read_draft_versions(did), [])
+        self.assertEqual(_draft_create(args, self.ctx)["version"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()
