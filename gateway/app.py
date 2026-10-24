@@ -1828,10 +1828,17 @@ def _test() -> None:
               f"a vault upload over HTTP is ACCEPTED when a file store is configured "
               f"({_up.status_code}: {str(_up.json())[:70]})")
         _doc = _up.json()
+        _jobs_before = len(getattr(_vq, "jobs", ()) or ())
         _dup = _vc.post("/v2/vault/upload", json={"name": "copy.txt", "text": NDA})
-        check(_dup.status_code == 409 and "CONFLICT" in _dup.text
-              and "Retry-After" not in _dup.headers,
-              "duplicate content is a safe client conflict without a retry hint")
+        # Was a 409 CONFLICT, which the console rendered as "Upload interrupted, try again"
+        # -- a retry that could never succeed. The same bytes are one document, so the
+        # caller gets that document back.
+        check(_dup.status_code == 200 and _dup.json().get("document_id") == _up.json().get("document_id")
+              and _dup.json().get("duplicate") is True and "Retry-After" not in _dup.headers,
+              f"duplicate content returns the document already held, without a retry hint "
+              f"({_dup.status_code}: {str(_dup.json())[:70]})")
+        check(len(getattr(_vq, "jobs", ()) or ()) == _jobs_before,
+              "...and queues no second ingest job for bytes already held")
         check(_doc.get("state") == "PENDING",
               f"...and is PENDING, because nothing is searchable until a worker reads it "
               f"({_doc.get('state')})")

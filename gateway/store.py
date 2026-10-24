@@ -56,7 +56,15 @@ class TurnConflict(StoreError):
 
 
 class DuplicateVaultDocument(StoreError):
-    """The same content already has a tenant-scoped vault record."""
+    """The same content already has a tenant-scoped vault record.
+
+    `document_id` names that record when the backend could read it back, so `vault.upload`
+    can hand the caller the document they already have instead of a dead-end refusal.
+    """
+
+    def __init__(self, message: str, document_id: str | None = None) -> None:
+        super().__init__(message)
+        self.document_id = document_id
 
 
 class Backend(Protocol):
@@ -785,7 +793,7 @@ class MemoryBackend:
             if other != did and row.get("sha256") == sha:
                 raise DuplicateVaultDocument(
                     f"these bytes are already in this tenant's vault as {other} (020 "
-                    f"vault_documents_tenant_sha)")
+                    f"vault_documents_tenant_sha)", document_id=other)
         row = {"document_id": did, "matter_id": doc.get("matter_id"), "sha256": sha,
                "name": str(doc["name"]), "byte_count": int(doc.get("byte_count") or 0),
                "state": state, "doc_class": doc.get("doc_class"),
@@ -1851,8 +1859,20 @@ class PostgresBackend:
         except psycopg.errors.IntegrityError as exc:
             constraint = getattr(getattr(exc, "diag", None), "constraint_name", None)
             if constraint == "vault_documents_tenant_sha":
+                # The failed INSERT aborted its transaction, so look the holder up on a
+                # fresh connection. RLS scopes the read to this tenant, which is exactly
+                # the scope of the unique constraint that fired.
+                existing = None
+                try:
+                    with self._conn() as c:
+                        r = c.execute("SELECT document_id FROM vault_documents "
+                                      "WHERE sha256 = %s", (doc["sha256"],)).fetchone()
+                    existing = str(r[0]) if r else None
+                except Exception:                                # noqa: BLE001
+                    existing = None
                 raise DuplicateVaultDocument(
-                    "these bytes are already in this tenant's vault") from None
+                    "these bytes are already in this tenant's vault",
+                    document_id=existing) from None
             raise StoreError("the database refused this vault document") from None
         return self.read_vault_document(doc["document_id"]) or {}
 
@@ -3416,9 +3436,12 @@ def conformance(backend) -> list[tuple[bool, str]]:
             "document_id": str(_uuid.uuid4()), "matter_id": _vm, "sha256": "a" * 64,
             "name": "NDA (copy).pdf", "byte_count": 2048})
         ck(False, "the same bytes twice is refused")
-    except StoreError:
+    except DuplicateVaultDocument as dup:
         ck(True, "**the same bytes twice is ONE document**: dedupe is a constraint, not a "
                  "check the caller remembers")
+        ck(dup.document_id == _vd,
+           f"...and the refusal names the document already holding those bytes, so an "
+           f"upload can return it ({dup.document_id} vs {_vd})")
 
     ck(backend.write_vault_chunks(_vd, ["2. Term\n\nThe term is five years.",
                                         "7. Governing law\n\nIndia."]) == 2,

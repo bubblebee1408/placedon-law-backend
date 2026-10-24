@@ -1919,6 +1919,7 @@ def _envelope_for(task: str, result: dict, *, as_of: str, run_id=None,
                 "so nothing generated is shown.")
     blocks = [{"text": str(text), "citation_ids": [c["id"] for c in citations]}] \
         if str(text).strip() else []
+    blocks += _finding_blocks(task, result)
     if dropped:
         # Stated, not silent. A dropped citation changes what the reader is looking at.
         blocks.append({"text": (
@@ -1954,6 +1955,58 @@ def _envelope_for(task: str, result: dict, *, as_of: str, run_id=None,
 
 
 # ── citations: built from the traced spans, re-verified against the corpus ───
+
+_DOC_FINDING_LABEL = {"DEFECT": "Defect", "NEEDS_BOOK": "Needs the minutes book"}
+_CONTRACT_FINDING_LABEL = {"DEVIATES": "Deviates from your playbook",
+                           "MISSING": "Missing against your playbook",
+                           "NEEDS_LAWYER": "A lawyer needs to decide"}
+
+
+def _finding_blocks(task: str, result: dict) -> list:
+    """A review's findings as envelope text blocks, one per finding that needs attention.
+
+    The conversation envelope used to carry only the review's `note`, so a minutes review
+    with five defects rendered as "A lawyer needs to decide this" and named none of them.
+    Each block keeps the rule, its source and (for minutes) the precedent, because a finding
+    without its basis is an assertion. Passes and inapplicable checks are counted, not
+    listed, so the reader still sees the list is not the whole of what was checked.
+    """
+    findings = [f for f in (result.get("findings") or []) if isinstance(f, dict)]
+    out = []
+    if task == "REVIEW_DOCUMENT":
+        for f in findings:
+            label = _DOC_FINDING_LABEL.get(f.get("status"))
+            if not label or f.get("applies") is False:
+                continue
+            text = f"{label}: {f.get('defect') or f.get('rule_id')}."
+            if f.get("source"):
+                text += f" Rule {f.get('rule_id')}, {f['source']}."
+            if f.get("precedent"):
+                text += f" Precedent: {f['precedent']}."
+            out.append({"text": text, "citation_ids": []})
+        passed = sum(1 for f in findings if f.get("status") == "PASS")
+        skipped = sum(1 for f in findings if f.get("status") == "N/A")
+    elif task == "REVIEW_CONTRACT":
+        for f in findings:
+            label = _CONTRACT_FINDING_LABEL.get(f.get("status"))
+            if not label:
+                continue
+            text = f"{label}: {f.get('clause') or f.get('rule_id')}"
+            text += f" -- {f['detail']}." if f.get("detail") else "."
+            if f.get("standard_text"):
+                text += f" Standard: {f['standard_text']}"
+            out.append({"text": text, "citation_ids": []})
+        passed = sum(1 for f in findings if f.get("status") == "MATCHES")
+        skipped = 0
+    else:
+        return []
+    if findings:
+        out.append({"text": (f"{len(out)} finding(s) above; {passed} check(s) passed"
+                             + (f" and {skipped} did not apply to this document"
+                                if skipped else "") + "."),
+                    "citation_ids": []})
+    return out
+
 
 def _split_provision(source_id: str) -> tuple[str, str]:
     """"Companies Act 2013, s.174" -> ("Companies Act 2013", "s.174")."""
@@ -2829,6 +2882,20 @@ def _vault_upload(args: dict, ctx: Context) -> dict:
     except Exception as exc:                                     # noqa: BLE001
         from gateway.store import DuplicateVaultDocument
         if isinstance(exc, DuplicateVaultDocument):
+            # The same bytes twice is one document, so attaching a file the vault already
+            # holds hands back THAT document -- a refusal here left the composer saying
+            # "Upload interrupted, try again", and trying again could never succeed.
+            # A DELETED holder is not handed back: its text is gone and nothing can read it.
+            existing = (ctx.store.read_vault_document(exc.document_id)
+                        if exc.document_id else None)
+            if existing and existing.get("state") != "DELETED":
+                return {"document_id": existing["document_id"], "sha256": sha,
+                        "name": existing.get("name") or name,
+                        "state": existing.get("state") or "PENDING", "job_id": None,
+                        "queue_error": None, "duplicate": True,
+                        "note": ("these bytes are already in this workspace's vault; the "
+                                 "existing document is returned and nothing new was "
+                                 "queued.")}
             return _refuse("CONFLICT", "These bytes are already in this workspace's vault.")
         # Bytes may now exist in Blob without a metadata row. Keep the response generic;
         # operators can use the exception class and database telemetry to diagnose it.
@@ -7643,6 +7710,19 @@ def _test() -> None:
           "...every finding carrying a rule id, a source and a quoted span (PLAN_23 O1)")
     check(any(f["needs_human"] for f in rdoc["findings"]),
           "...and the physical-book items are flagged for a person, not guessed at")
+    # The conversation envelope carries the findings, not only the review's note: it once
+    # rendered "A lawyer needs to decide this" over five defects and named none of them.
+    _rd_env = _envelope_for("REVIEW_DOCUMENT", rdoc, as_of="2026-10-24", ctx=rd_ctx)
+    _rd_text = " ".join(b["text"] for b in _rd_env["text_blocks"])
+    _rd_flagged = [f for f in rdoc["findings"] if f["status"] in ("DEFECT", "NEEDS_BOOK")]
+    check(_rd_flagged and all(f["defect"] in _rd_text and f["rule_id"] in _rd_text
+                              for f in _rd_flagged),
+          f"every DEFECT / NEEDS_BOOK finding reaches the conversation envelope with its "
+          f"rule id ({len(_rd_flagged)} flagged)")
+    check(f"{len(_rd_flagged)} finding(s) above" in _rd_text,
+          "...and a count line says how many were listed and how many passed")
+    check(not _finding_blocks("RESEARCH_QUESTION", {"findings": [{"status": "DEFECT"}]}),
+          "...and no other task grows finding blocks from an unrelated `findings` key")
 
     notice = _review_document({"text": _NOTICE}, Context(store=_MB()))
     minutes_only = {c for c, a in _ss.APPLICABILITY.items() if a == frozenset({"minutes"})}
@@ -8771,6 +8851,17 @@ def _test() -> None:
         check((_d3_row or {}).get("state") == "INGESTED",
               f"...and the document reaches INGESTED through the WORKER "
               f"({(_d3_row or {}).get('state')})")
+        # The same bytes again: the document already held, not a refusal the composer
+        # can only show as "Upload interrupted".
+        _d3_again = _vault_upload({"name": "nda (copy).txt",
+                                   "text": "This Agreement is governed by the laws of India."},
+                                  _d3_ctx)
+        check(_d3_again.get("document_id") == _d3_up["document_id"]
+              and _d3_again.get("duplicate") is True,
+              f"re-uploading held bytes returns the existing document ({str(_d3_again)[:80]})")
+        check(_d3_again.get("state") == "INGESTED" and _d3_again.get("job_id") is None,
+              f"...with its real state and no second ingest job "
+              f"({_d3_again.get('state')}, {_d3_again.get('job_id')})")
 
     # ── move 3: a queued job must point at a run that EXISTS ────────────────
     # `jobs.run_id` references `runs(run_id)`. `_runs_submit` writes the run row first and
