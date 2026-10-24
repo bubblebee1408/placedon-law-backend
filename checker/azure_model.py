@@ -231,11 +231,12 @@ def usage_of(data: dict) -> dict:
     An absent count is not a count of zero: backend/azure_pricing.py prices None as
     UNPRICED, and a zero would price as free.
     """
-    u = (data or {}).get("usage") or {}
+    u = data.get("usage") if isinstance(data, dict) else None
+    u = u if isinstance(u, dict) else {}
 
     def _n(key):
         v = u.get(key)
-        return int(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else None
+        return v if isinstance(v, int) and not isinstance(v, bool) and v >= 0 else None
 
     return {"tokens_in": _n("prompt_tokens"), "tokens_out": _n("completion_tokens"),
             "deployment": None}
@@ -250,14 +251,13 @@ def narrate(prompt: str, *, origin, model: str = DEFAULT_DEPLOYMENT, budget=None
     outside the delimiters is our own instructions; everything inside has to be published.
     A prompt with no delimiters at all is refused, because then nothing in it can be told
     apart. The clearance runs BEFORE the key is read and before the socket is opened, so a
-    refusal costs no request and leaks nothing.
+    refusal costs no request and leaks nothing. With a budget, Azure uses the shared
+    INR safety caps and atomic request reservations; its price comes from azure_pricing.
+    Unknown deployment prices refuse admission, and missing usage consumes the full hold.
     """
     from checker.public_only import verify_prompt
     refuse_unconfirmed_region(origin)
     verify_prompt(prompt, origin)
-
-    if budget is not None and not budget.can_make_call().allowed:
-        raise ModelUnavailable("budget exhausted; no call was made")
 
     # AZURE_AI_DEPLOYMENT, if set, overrides whatever deployment router.py asked for.
     # router.py's preference table names a deployment by what it MEASURED, not by what
@@ -284,26 +284,61 @@ def narrate(prompt: str, *, origin, model: str = DEFAULT_DEPLOYMENT, budget=None
     # than a fragment. The safe failure was cheaper than the cure. Left at 4096 until a
     # bake-off with intervals says otherwise; n=1 per setting is not a finding.
     body = chat_body(prompt, deployment, max_tokens=NARRATION_BUDGET)
-    if _transport is not None:
-        data = _transport(deployment, body)
-    else:
+    key = None
+    if _transport is None:
         key = os.getenv("AZURE_AI_API_KEY")
         if not key:
-            raise ModelUnavailable(
-                "AZURE_AI_API_KEY is not set. This refuses rather than returning an "
-                "empty string, because a blank answer is indistinguishable from a "
-                "model that had nothing to say.")
-        data = _call(body, key, timeout)
+            raise ModelUnavailable("AZURE_AI_API_KEY is not set; no call was made")
+        _url()
+        from checker.robots import ssl_context
+        if ssl_context() is None:
+            raise ModelUnavailable("no CA trust store; no call was made")
 
+    reservation = None
+    if budget is not None:
+        from backend.azure_pricing import price_inr
+        # UTF-8 bytes plus message framing is a deliberately conservative input bound
+        # for byte-level tokenizers, avoiding English word estimates for Indian scripts.
+        tokens_in_bound = len(prompt.encode("utf-8")) + 256
+        tokens_out_bound = body.get("max_completion_tokens", body.get("max_tokens"))
+        worst, note = price_inr(deployment, tokens_in=tokens_in_bound,
+                                tokens_out=tokens_out_bound)
+        if worst is None:
+            raise ModelUnavailable(f"budget cannot price this Azure deployment: {note}")
+        reservation = budget.reserve(model=PREFIX + deployment, input_tokens=tokens_in_bound,
+                                     max_tokens=tokens_out_bound, amount_inr=worst)
+        if not reservation.allowed:
+            raise ModelUnavailable(f"budget refused the call: {reservation.verdict.reason}")
+
+    def settle(actual):
+        if reservation is None:
+            return
+        try:
+            result = budget.settle(reservation.id, actual, actual_calls=1)
+        except Exception as error:
+            raise ModelUnavailable("Azure budget settlement failed; answer withheld and "
+                                   "reservation needs reconciliation") from error
+        if not result.allowed:
+            raise ModelUnavailable("Azure budget settlement refused; answer withheld and "
+                                   "reservation needs reconciliation")
+
+    try:
+        data = _transport(deployment, body) if _transport is not None else _call(body, key, timeout)
+    except Exception:
+        # The provider may have billed even if no response reached us. Charge the hold,
+        # including throttled attempts, so a retry cannot bypass request/cost limits.
+        settle(None)
+        raise
+    usage = usage_of(data)
+    actual = None
+    if reservation is not None:
+        actual, _ = price_inr(deployment, tokens_in=usage["tokens_in"],
+                              tokens_out=usage["tokens_out"])
+    settle(actual)
+    # Account for completed transport before checking truncation/content-filter errors.
     text = reply_text(data)
     if on_usage is not None:
-        on_usage(usage_of(data) | {"deployment": deployment})
-    if budget is not None:
-        # 0.0 against the RUPEE ledger, and that stays correct: MONTHLY_CAP_INR bounds
-        # Anthropic spend, and an Azure call consumes no rupees from it. What the call DOES
-        # consume is Azure for Students credit, a separate pot -- priced per step by
-        # backend/azure_pricing.py from the tokens reported above, never assumed to be zero.
-        budget.record_call(0.0)
+        on_usage(usage | {"deployment": deployment})
     return text
 
 
