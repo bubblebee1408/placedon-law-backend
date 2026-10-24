@@ -170,9 +170,8 @@ def _refuse(code: str, detail: str) -> dict:
 def _ledger():
     """The real rupee/request ledger, or None if it cannot be read.
 
-    An unreadable ledger is not evidence the budget is empty, so the call proceeds -- the
-    same choice backend/budget.py makes in providers_available(). The cost of being wrong
-    is one call that records itself properly.
+    A missing guard is not permission to spend. Serving boundaries must refuse real
+    model calls when this returns None; injected offline models do not use the ledger.
     """
     try:
         from backend.budget import BudgetTracker
@@ -200,9 +199,12 @@ def _served_or_refusal(origins, *, name: str, purpose: str, ctx: Context,
         return Served(call=ctx.model_for(origins), provider="stub", model="stub",
                       region="n/a", degraded=False, requires_review=False,
                       est_cost_inr=0.0), None
+    budget = _ledger()
+    if budget is None:
+        return None, _refuse("NO_BUDGET", "The spending guard is unavailable. No model call was made; retry after the budget store is restored.")
     try:
         from checker import router as _r
-        return serve(origins, name=name, purpose=purpose, budget=_ledger(),
+        return serve(origins, name=name, purpose=purpose, budget=budget,
                      consequence=consequence or _r.LOW), None
     except NotServed as e:
         # REFUSED with the code, never a quiet UNVERIFIED: UNVERIFIED is a claim about
@@ -3630,14 +3632,13 @@ def _review_table_create(args: dict, ctx: Context) -> dict:
                        f"queue depth, not just a big table. Narrow the documents or the "
                        f"columns, or raise the cap deliberately.")
     ledger = _ledger()
-    if ledger is not None:
-        verdict = ledger.can_make_call()
-        if not verdict.allowed:
-            # Checked BEFORE the first enqueue. A grid that half-runs bills the user for
-            # the part that ran and leaves them without a table.
-            return _refuse("NO_BUDGET",
-                           f"{verdict.reason} No cell was enqueued, so nothing was spent "
-                           f"on this table.")
+    if ledger is None:
+        return _refuse("NO_BUDGET", "budget ledger unavailable; no table was saved or cell enqueued")
+    verdict = ledger.can_make_call()
+    if not verdict.allowed:
+        return _refuse("NO_BUDGET",
+                       f"{verdict.reason} No cell was enqueued, so nothing was spent "
+                       f"on this table.")
 
     store = ctx.store
     if store is None:
@@ -4390,36 +4391,39 @@ def _review_grid_cell(args: dict, ctx: Context) -> dict:
             # see, which becomes a FAILED cell naming the document -- the right answer, and
             # one a fabricated empty string would have hidden behind NOT_FOUND.
             pass
-    # The reservation this cell holds, released no matter how this function leaves.
-    # `schedule()` reserves each cell's WORST CASE before dispatch and passes the id here
-    # for the worker to settle; nothing settled it, so a cell that ran held its worst case
-    # until the day rolled over. In a `finally` rather than on the happy path, because a
-    # write that raises leaks the money as surely as one that returns.
-    settled = {"done": False}
+    # Settlement must succeed before a completed cell is published. Failed accounting
+    # leaves its hold for reconciliation rather than retrying cleanup at a zero cost.
+    settled = {"done": False, "attempted": False}
 
-    def _settle(actual_inr: float) -> None:
+    class SettlementFailed(Exception):
+        pass
+
+    def _settle(actual_inr: float | None) -> None:
         rid = (args.get("reservation_id") or "").strip() if args.get("reservation_id") else ""
-        if not rid or settled["done"]:
+        if not rid or settled["attempted"]:
             return
-        ledger = _ledger()
-        if ledger is None:
-            return
-        ledger.settle(rid, actual_inr)
+        settled["attempted"] = True
+        try:
+            ledger = _ledger()
+            if ledger is None:
+                raise SettlementFailed("budget ledger unavailable")
+            verdict = ledger.settle(rid, actual_inr)
+            if not verdict.allowed:
+                raise SettlementFailed("budget settlement refused")
+        except Exception as error:
+            raise SettlementFailed("budget reconciliation required; cell result withheld") from error
         settled["done"] = True
 
     try:
         try:
             cell = rgr.run_cell(args, documents=documents, answer=answer)
         except rgr.RunnerError as e:
+            _settle(0.0)
             return {"status": "FAILED", "error": str(e),
-                    "reservation_settled": bool((args.get("reservation_id") or ""))}
+                    "reservation_settled": settled["done"]}
         debit = _cell_debit(debits, stubbed=stubbed)
-        # Settled at what it ACTUALLY cost. An unpriced call settles at 0.0 only because a
-        # cell that never reached a provider never billed -- `budget.settle` documents the
-        # other case ("a call that may have billed but whose usage never came back should
-        # settle at the reserved amount"), and `_cell_debit` distinguishes the two by
-        # whether a debit was recorded at all.
-        _settle(float(debit.get("cost_inr") or 0.0))
+        # Missing usage after a provider call consumes the hold, never a fabricated zero.
+        _settle(debit.get("cost_inr") if debits else 0.0)
         wrote = ctx.store.write_grid_cell(
             {"grid_id": args["grid_id"], "document_id": cell.document_id,
              "column_name": cell.column, "state": cell.state, "value": cell.value,
@@ -4442,10 +4446,16 @@ def _review_grid_cell(args: dict, ctx: Context) -> dict:
                 "note": (None if wrote else
                          "this cell was already answered; the earlier answer was kept. A "
                          "worker handed the same cell twice does not overwrite it.")}
-    finally:
-        # 0.0: if we are leaving by an exception the cell did not finish, so it did not
-        # bill. Holding the worst case for work that is over is the leak.
-        _settle(0.0)
+    except SettlementFailed as error:
+        return {"status": "FAILED", "code": "BUDGET_RECONCILIATION_REQUIRED",
+                "error": str(error), "reservation_settled": False}
+    except Exception:
+        try:
+            _settle(None)
+        except SettlementFailed as error:
+            return {"status": "FAILED", "code": "BUDGET_RECONCILIATION_REQUIRED",
+                    "error": str(error), "reservation_settled": False}
+        raise
 
 
 def _review_table_cancel(args: dict, ctx: Context) -> dict:

@@ -1104,11 +1104,13 @@ class BudgetTracker:
                 cache_creation_input_tokens: int = 0, cache_read_input_tokens: int = 0,
                 cache_ttl: str = DEFAULT_CACHE_TTL, batch: bool = False,
                 reservation_id: str | None = None, request_count: int = 1,
-                per_model_cap: int | None = None) -> Reservation:
+                per_model_cap: int | None = None,
+                amount_inr: float | None = None) -> Reservation:
         """Hold the worst-case cost of one call against the caps before making it.
 
         A refused reservation writes NOTHING: a gate that charged for the calls it turned
-        away would ratchet itself shut.
+        away would ratchet itself shut. ``amount_inr`` lets adapters with independently
+        verified pricing reserve against the same caps without changing model identity.
         """
         if (not isinstance(request_count, int) or isinstance(request_count, bool)
                 or request_count < 1):
@@ -1117,10 +1119,17 @@ class BudgetTracker:
                 not isinstance(per_model_cap, int) or isinstance(per_model_cap, bool)
                 or per_model_cap < 1):
             raise ValueError("per_model_cap must be a positive integer")
-        worst = cost_inr(model, input_tokens, max_tokens,
-                         cache_creation_input_tokens=cache_creation_input_tokens,
-                         cache_read_input_tokens=cache_read_input_tokens,
-                         cache_ttl=cache_ttl, batch=batch)
+        # Explicit prices are supplied by provider-specific, provenance-bearing tables.
+        # Never reinterpret an Azure deployment as an Anthropic pricing identity.
+        if amount_inr is not None and (
+                isinstance(amount_inr, bool) or not isinstance(amount_inr, (int, float))
+                or not math.isfinite(amount_inr) or amount_inr < 0):
+            raise ValueError("amount_inr must be finite and non-negative")
+        worst = float(amount_inr) if amount_inr is not None else cost_inr(
+            model, input_tokens, max_tokens,
+            cache_creation_input_tokens=cache_creation_input_tokens,
+            cache_read_input_tokens=cache_read_input_tokens,
+            cache_ttl=cache_ttl, batch=batch)
         rid = reservation_id or uuid.uuid4().hex[:12]
         if not isinstance(self.store, AtomicStore):
             state = self._state()

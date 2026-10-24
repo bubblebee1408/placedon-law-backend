@@ -39,6 +39,10 @@ class EvidenceDocument(TypedDict):
     status: Literal['SEARCHED', 'UNAVAILABLE', 'LIMIT_EXCEEDED', 'NOT_SEARCHED']
     reason: str | None
     total_chars: int | None
+    total_passages: int
+    shown_passages: int
+    excerpt_chars: int
+    excerpt_coverage_ratio: float | None
 
 
 class DocumentEvidence(TypedDict):
@@ -121,14 +125,16 @@ def collect(query: str, documents: dict, *, enabled: bool = True) -> DocumentEvi
         ],
     }
     if overview:
-        result['limitations'].append('Opening excerpts are not a complete summary; later terms, exceptions and schedules may be omitted.')
+        result['limitations'].append('Distributed excerpts are not a complete summary; terms, exceptions and schedules between excerpts may be omitted.')
     candidates = []
+    overview_documents = []
     total_chars = 0
     query_terms = _terms(query)
     for position, (did, doc) in enumerate(documents.items()):
         raw = doc.get('text')
         row: EvidenceDocument = {'document_id': did, 'name': str(doc.get('name') or did)[:512],
-            'sha256': None, 'status': 'NOT_SEARCHED', 'reason': None, 'total_chars': None}
+            'sha256': None, 'status': 'NOT_SEARCHED', 'reason': None, 'total_chars': None,
+            'total_passages': 0, 'shown_passages': 0, 'excerpt_chars': 0, 'excerpt_coverage_ratio': None}
         result['documents'].append(row)
         if not enabled:
             row['reason'] = 'Document sources are not selected. Enable your documents to search these attachments.'
@@ -146,14 +152,19 @@ def collect(query: str, documents: dict, *, enabled: bool = True) -> DocumentEvi
         sha = hashlib.sha256(raw.encode('utf-8')).hexdigest()
         row.update(status='SEARCHED', sha256=sha, total_chars=len(raw))
         result['searched_document_ids'].append(did)
+        if overview:
+            row['total_passages'] = sum(1 for _ in _spans(raw))
+            overview_documents.append((position, did, raw, row))
+            continue
         for ordinal, (start, end) in enumerate(_spans(raw)):
+            row['total_passages'] += 1
             snippet = raw[start:end]
             terms = _terms(snippet)
             overlap = len(query_terms & terms)
             if not overview and not overlap:
                 continue
             # Ranking orders excerpts only. It is never a confidence or legal verdict.
-            score = 1 / (ordinal + 1) if overview else overlap / math.sqrt(max(1, len(terms)))
+            score = overlap / math.sqrt(max(1, len(terms)))
             rank = (-score, ordinal, position)
             if len(candidates) == MAX_PASSAGES and rank >= candidates[-1][:3]:
                 continue
@@ -166,6 +177,34 @@ def collect(query: str, documents: dict, *, enabled: bool = True) -> DocumentEvi
                 candidates.pop()
             bisect.insort(candidates, (*rank, passage), key=lambda candidate: candidate[:3])
     result['passages'] = [item[3] for item in candidates]
+    if overview:
+        # Fair round-robin budget, then evenly spaced source spans per document.
+        # Counts and at most eight selected offsets stay resident; no full span list.
+        allocations = [0] * len(overview_documents)
+        for _ in range(MAX_PASSAGES):
+            eligible = [i for i, item in enumerate(overview_documents)
+                        if allocations[i] < item[3]['total_passages']]
+            if not eligible:
+                break
+            index = min(eligible, key=lambda i: (allocations[i], i))
+            allocations[index] += 1
+        for (position, did, raw, row), count in zip(overview_documents, allocations):
+            if not count:
+                continue
+            total = row['total_passages']
+            selected = {0} if count == 1 else {
+                j * (total - 1) // (count - 1) for j in range(count)}
+            for ordinal, (start, end) in enumerate(_spans(raw)):
+                if ordinal in selected:
+                    result['passages'].append({'id': f'doc-{position + 1}-{start}-{end}',
+                        'document_id': did, 'name': row['name'], 'sha256': row['sha256'],
+                        'start': start, 'end': end, 'text': raw[start:end]})
+    for row in result['documents']:
+        selected = [p for p in result['passages'] if p['document_id'] == row['document_id']]
+        row['shown_passages'] = len(selected)
+        row['excerpt_chars'] = sum(p['end'] - p['start'] for p in selected)
+        if row['status'] == 'SEARCHED':
+            row['excerpt_coverage_ratio'] = row['excerpt_chars'] / row['total_chars']
     if not enabled:
         result['limitations'][3] = 'No source was searched because document sources are not selected.'
     elif not result['searched_document_ids']:
@@ -183,5 +222,5 @@ def description(evidence: DocumentEvidence) -> str:
     if evidence['status'] == 'NO_MATCH':
         return 'I found no keyword matches in the readable selected documents. Try the exact wording or inspect the document; this does not mean the information is absent.'
     if evidence['mode'] == 'overview':
-        return 'Here are opening excerpts from your readable selected documents. This is a limited preview, not a complete summary or legal review.'
+        return 'Here are excerpts sampled across your readable selected documents. This is a limited preview, not a complete summary or legal review.'
     return 'Here are matching excerpts from your readable selected documents. Read the surrounding text before drawing a conclusion; these excerpts have not been checked against law.'

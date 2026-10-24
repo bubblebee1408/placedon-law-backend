@@ -216,8 +216,8 @@ class DocumentEvidenceSimulation(unittest.TestCase):
         # The previous materialized boundaries/candidates used roughly 95 MiB here.
         self.assertLess(peak, 8 * 1024 * 1024)
         self.assertEqual([(p['document_id'], p['start']) for p in got['passages']],
-                         [('one', 0), ('two', 0), ('three', 0), ('one', 3),
-                          ('two', 3), ('three', 3), ('one', 6), ('two', 6)])
+                         [('one', 0), ('one', 98997), ('one', 197997), ('two', 0),
+                          ('two', 98997), ('two', 197997), ('three', 0), ('three', 101997)])
 
     def test_deleted_document_does_not_silently_erase_historical_snapshot(self):
         did = self.document('Termination requires written notice.')
