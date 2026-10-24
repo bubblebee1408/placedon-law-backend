@@ -821,7 +821,7 @@ class MemoryBackend:
                        if r.get("matter_id") == matter_id and not r.get("deleted_at")
                        and r.get("state") != "DELETED" and query.lower() in r["name"].lower()),
                       key=lambda r: (r["name"].lower(), r["document_id"]))
-        fields = ("document_id", "name", "state", "matter_id", "byte_count", "doc_class")
+        fields = ("document_id", "sha256", "name", "state", "matter_id", "byte_count", "doc_class")
         return [{k: r.get(k) for k in fields} for r in rows[offset:offset + limit]]
 
     def write_vault_chunks(self, document_id: str, chunks: list) -> int:
@@ -1903,15 +1903,15 @@ class PostgresBackend:
         """One bounded metadata query under tenant RLS, without N+1 reads."""
         with self._conn() as c:
             rows = c.execute(
-                "SELECT document_id, name, state, matter_id, byte_count, doc_class "
+                "SELECT document_id, sha256, name, state, matter_id, byte_count, doc_class "
                 "FROM vault_documents WHERE matter_id IS NOT DISTINCT FROM %s::uuid "
                 "AND deleted_at IS NULL AND state <> 'DELETED' "
                 "AND position(%s in lower(name)) > 0 "
                 "ORDER BY lower(name), document_id LIMIT %s OFFSET %s",
                 (matter_id, query.lower(), limit, offset)).fetchall()
-        return [{"document_id": str(r[0]), "name": r[1], "state": r[2],
-                 "matter_id": str(r[3]) if r[3] else None, "byte_count": int(r[4]),
-                 "doc_class": r[5]} for r in rows]
+        return [{"document_id": str(r[0]), "sha256": r[1], "name": r[2], "state": r[3],
+                 "matter_id": str(r[4]) if r[4] else None, "byte_count": int(r[5]),
+                 "doc_class": r[6]} for r in rows]
 
     def write_vault_chunks(self, document_id: str, chunks: list) -> int:
         import psycopg

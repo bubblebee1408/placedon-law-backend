@@ -31,8 +31,9 @@ class VaultCatalog(unittest.TestCase):
         self.assertEqual(result["scope"], "unfiled")
         self.assertEqual(len(result["documents"]), 4)
         self.assertTrue(all(d["matter_id"] is None for d in result["documents"]))
+        self.assertTrue(all(len(d["sha256"]) == 64 for d in result["documents"]))
         self.assertNotIn(self.ids[4], [d["document_id"] for d in result["documents"]])
-        self.assertTrue(all(set(d) == {"document_id", "name", "state", "matter_id", "byte_count", "doc_class"}
+        self.assertTrue(all(set(d) == {"document_id", "sha256", "name", "state", "matter_id", "byte_count", "doc_class"}
                             for d in result["documents"]))
 
     def test_matter_and_filename_filter(self):

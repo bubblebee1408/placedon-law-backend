@@ -5404,7 +5404,7 @@ VERBS: tuple[Verb, ...] = (
          "POST", read_only=False, run=_vault_upload),
 
     Verb("vault.list",
-         "Browse document metadata in one matter, or unfiled workspace documents only.",
+         "Browse document metadata in one matter, or unfiled workspace documents only. Includes sha256 content ids for review-table selection; document contents and storage paths are never returned.",
          (Field("matter_id", STRING, False, describes="one matter; omit for unfiled only"),
           Field("query", STRING, False, describes="filename text, at most 120 characters"),
           Field("limit", STRING, False, describes="page size, 1–50"),
