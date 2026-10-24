@@ -2687,6 +2687,20 @@ def _vault_upload(args: dict, ctx: Context) -> dict:
     except Exception as exc:                                     # noqa: BLE001
         from gateway.store import DuplicateVaultDocument
         if isinstance(exc, DuplicateVaultDocument):
+            # The same bytes twice is one document, so attaching a file the vault already
+            # holds hands back THAT document -- a refusal here left the composer saying
+            # "Upload interrupted, try again", and trying again could never succeed.
+            # A DELETED holder is not handed back: its text is gone and nothing can read it.
+            existing = (ctx.store.read_vault_document(exc.document_id)
+                        if exc.document_id else None)
+            if existing and existing.get("state") != "DELETED":
+                return {"document_id": existing["document_id"], "sha256": sha,
+                        "name": existing.get("name") or name,
+                        "state": existing.get("state") or "PENDING", "job_id": None,
+                        "queue_error": None, "duplicate": True,
+                        "note": ("these bytes are already in this workspace's vault; the "
+                                 "existing document is returned and nothing new was "
+                                 "queued.")}
             return _refuse("CONFLICT", "These bytes are already in this workspace's vault.")
         # Bytes may now exist in Blob without a metadata row. Keep the response generic;
         # operators can use the exception class and database telemetry to diagnose it.
@@ -8629,6 +8643,17 @@ def _test() -> None:
         check((_d3_row or {}).get("state") == "INGESTED",
               f"...and the document reaches INGESTED through the WORKER "
               f"({(_d3_row or {}).get('state')})")
+        # The same bytes again: the document already held, not a refusal the composer
+        # can only show as "Upload interrupted".
+        _d3_again = _vault_upload({"name": "nda (copy).txt",
+                                   "text": "This Agreement is governed by the laws of India."},
+                                  _d3_ctx)
+        check(_d3_again.get("document_id") == _d3_up["document_id"]
+              and _d3_again.get("duplicate") is True,
+              f"re-uploading held bytes returns the existing document ({str(_d3_again)[:80]})")
+        check(_d3_again.get("state") == "INGESTED" and _d3_again.get("job_id") is None,
+              f"...with its real state and no second ingest job "
+              f"({_d3_again.get('state')}, {_d3_again.get('job_id')})")
 
     # ── move 3: a queued job must point at a run that EXISTS ────────────────
     # `jobs.run_id` references `runs(run_id)`. `_runs_submit` writes the run row first and
