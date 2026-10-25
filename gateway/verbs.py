@@ -1921,6 +1921,13 @@ def _envelope_for(task: str, result: dict, *, as_of: str, run_id=None,
     # the model never evaluated the law. Render it in the FAILED register (whose definition
     # includes "a dead provider") with its own message and no bodies, so a cold start can
     # never read as "nothing held answers this". The code rides the response as a sibling.
+    if result.get("code") == "NO_MODEL" and result.get("document_summary_refused"):
+        # Not a transient outage: no provider permitted for client documents is configured
+        # (summaries are Bedrock-only, India region). "Try again" would not help.
+        return ev.failed(task=task, as_of=as_of, run_id=run_id, trace_url=trace,
+                         text=("No permitted document-summary model is available in this "
+                               "deployment, so no summary was generated. Your document is "
+                               "unchanged. This is not a finding about the document or the law."))
     if result.get("code") == "NO_MODEL":
         return ev.failed(task=task, as_of=as_of, run_id=run_id, trace_url=trace,
                          text="The model was unavailable — this is not a finding about the "
@@ -2514,6 +2521,7 @@ def _document_summary_job(args: dict, ctx: Context) -> dict:
         if refusal.get("code") == "NO_BUDGET":
             return refusal
         return {"status": "REFUSED", "code": refusal.get("code", "NO_MODEL"),
+                "document_summary_refused": True,
                 "detail": "No permitted document-summary model is available. No summary was generated."}
     try:
         raw = served.call(model_prompt)
@@ -2989,10 +2997,12 @@ def _vault_upload(args: dict, ctx: Context) -> dict:
                         "name": existing.get("name") or name,
                         "state": existing.get("state") or "PENDING", "job_id": None,
                         "queue_error": None, "duplicate": True,
-                        "note": ("these bytes are already in this workspace's vault; the "
-                                 "existing document is returned and nothing new was "
-                                 "queued.")}
-            return _refuse("CONFLICT", "These bytes are already in this workspace's vault.")
+                        # 028: duplicates are per uploader (unfiled) or per matter, never
+                        # across people, so this is the caller's own earlier copy.
+                        "note": (f"You already uploaded these bytes as "
+                                 f"'{existing.get('name') or name}'; that document is "
+                                 f"returned and nothing new was stored or queued.")}
+            return _refuse("CONFLICT", "These bytes are already stored in this matter.")
         # Bytes may now exist in Blob without a metadata row. Keep the response generic;
         # operators can use the exception class and database telemetry to diagnose it.
         logging.getLogger(__name__).error(
