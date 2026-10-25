@@ -5402,6 +5402,10 @@ def _invites_create(args: dict, ctx: Context) -> dict:
     import uuid
 
     from gateway import accounts
+    # One account per email per firm: an invite to an email that already has one could
+    # only fail at accept, after the invitee chose a password.
+    if ctx.store.find_actor_by_email(email):
+        return _refuse("CONFLICT", "An account with this email already exists in this firm.")
     raw_token, token_hash = accounts.mint_token()
     try:
         row = ctx.store.create_invite({
@@ -5451,11 +5455,18 @@ def _invites_accept(args: dict, ctx: Context) -> dict:
     # The single-use AND expiry guarantees both live in accept_invite's own atomic
     # UPDATE (gateway/store.py) -- "accepted_at IS NULL AND expires_at > now()" -- not in
     # this handler, so a concurrent accept of the same token cannot both win.
-    accepted = store.accept_invite(token_hash, actor_id=new_actor_id,
-                                   now=str(datetime.now(timezone.utc)),
-                                   actor={"label": invite["email"], "role": invite["role"],
-                                          "email": invite["email"],
-                                          "password_hash": pw_hash})
+    from gateway.store import StoreError
+    try:
+        accepted = store.accept_invite(token_hash, actor_id=new_actor_id,
+                                       now=str(datetime.now(timezone.utc)),
+                                       actor={"label": invite["email"], "role": invite["role"],
+                                              "email": invite["email"],
+                                              "password_hash": pw_hash})
+    except StoreError:
+        # The account could not be created (an account with this email appeared after the
+        # invite was issued). The transaction rolled back and the invite is unspent; the
+        # answer is the same one every other unusable token gets.
+        accepted = None
     if accepted is None:
         return _refuse("INVALID_INVITE",
                        "this invite link is not valid or has already been used")

@@ -76,6 +76,22 @@ class AccountsPostgres(unittest.TestCase):
             n = c.execute("SELECT count(*) FROM actors WHERE email = %s", (self.email,)).fetchone()[0]
         self.assertEqual(n, 1, "a refused second accept leaves no second account behind")
 
+    def test_an_email_that_already_has_an_account_is_refused_cleanly(self):
+        invite = self.post("/v2/invites/create", {"email": self.email, "role": "lawyer"},
+                           self.key).json()
+        import psycopg
+        with psycopg.connect(ADMIN_URL, autocommit=True) as c:   # the account appears meanwhile
+            c.execute("INSERT INTO actors (actor_id, tenant_id, label, role, email) "
+                      "VALUES (%s,%s,'existing','lawyer',%s)",
+                      (str(uuid.uuid4()), self.tenant, self.email))
+        accepted = self.post("/v2/invites/accept",
+                             {"token": invite["token"], "password": "a long synthetic passphrase"})
+        self.assertEqual((accepted.status_code, accepted.json().get("code")), (200, "INVALID_INVITE"),
+                         "a refused accept is a refusal, not a 503")
+        again = self.post("/v2/invites/create", {"email": self.email.upper(), "role": "lawyer"},
+                          self.key).json()
+        self.assertEqual(again.get("code"), "CONFLICT", "an invite to an existing account is refused")
+
 
 if __name__ == "__main__":
     unittest.main()
