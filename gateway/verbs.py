@@ -5418,13 +5418,13 @@ def _invites_accept(args: dict, ctx: Context) -> dict:
     # UPDATE (gateway/store.py) -- "accepted_at IS NULL AND expires_at > now()" -- not in
     # this handler, so a concurrent accept of the same token cannot both win.
     accepted = store.accept_invite(token_hash, actor_id=new_actor_id,
-                                   now=str(datetime.now(timezone.utc)))
+                                   now=str(datetime.now(timezone.utc)),
+                                   actor={"label": invite["email"], "role": invite["role"],
+                                          "email": invite["email"],
+                                          "password_hash": pw_hash})
     if accepted is None:
         return _refuse("INVALID_INVITE",
                        "this invite link is not valid or has already been used")
-    store.write_actor({"actor_id": new_actor_id, "label": invite["email"],
-                       "role": invite["role"], "email": invite["email"],
-                       "password_hash": pw_hash})
     return {"status": "accepted", "actor_id": new_actor_id,
             "tenant_id": invite["tenant_id"], "role": invite["role"]}
 

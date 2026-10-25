@@ -81,7 +81,8 @@ class Backend(Protocol):
     def write_actor(self, actor: dict) -> dict: ...
     def read_actor(self, actor_id: str) -> dict | None: ...
     def create_invite(self, invite: dict) -> dict: ...
-    def accept_invite(self, token_hash: str, *, actor_id: str, now: str) -> dict | None: ...
+    def accept_invite(self, token_hash: str, *, actor_id: str, now: str,
+                      actor: dict | None = None) -> dict | None: ...
     def find_actor_by_email(self, email: str) -> dict | None: ...
     def read_invite(self, token_hash: str) -> dict | None: ...
     def list_actors(self) -> list[dict]: ...
@@ -1454,8 +1455,12 @@ class MemoryBackend:
         self.invites[row["invite_id"]] = row
         return dict(row)
 
-    def accept_invite(self, token_hash: str, *, actor_id: str, now: str) -> dict | None:
+    def accept_invite(self, token_hash: str, *, actor_id: str, now: str,
+                      actor: dict | None = None) -> dict | None:
         """Mark an invite used, ONCE. Returns the invite, or None if it cannot be used.
+
+        `actor`, when given, is the account the invite creates. It is written only if the
+        invite is spent, so a refused accept leaves no account behind.
 
         None covers three different situations deliberately -- unknown token, already
         accepted, expired -- because telling them apart at this boundary is how a token is
@@ -1468,6 +1473,8 @@ class MemoryBackend:
                 return None                      # single use, and it is already used
             if str(row.get("expires_at") or "") <= str(now):
                 return None
+            if actor is not None:
+                self.write_actor(dict(actor, actor_id=str(actor_id)))
             row["accepted_at"] = str(now)
             row["accepted_by"] = str(actor_id)
             return dict(row)
@@ -1840,20 +1847,45 @@ class PostgresBackend:
                 "invited_by": str(r[4]), "expires_at": r[5].isoformat(),
                 "accepted_at": None, "accepted_by": None}
 
-    def accept_invite(self, token_hash: str, *, actor_id: str, now: str) -> dict | None:
+    def accept_invite(self, token_hash: str, *, actor_id: str, now: str,
+                      actor: dict | None = None) -> dict | None:
         """One UPDATE, so two simultaneous accepts cannot both win.
 
         The `accepted_at IS NULL` in the WHERE clause is the single-use guarantee: the
         second statement matches no row. Checking first and updating after would be a race
         with a window exactly as wide as the round trip.
+
+        `actor` is the account the invite creates, inserted in the SAME transaction and
+        before the UPDATE, because invites.accepted_by is a foreign key to actors: stamping
+        the invite first failed on every real database. A lost race rolls both back.
         """
-        with self._conn() as c:
-            r = c.execute(
-                "UPDATE invites SET accepted_at = now(), accepted_by = %s "
-                "WHERE token_hash = %s AND accepted_at IS NULL AND expires_at > now() "
-                "RETURNING invite_id, email, role, token_hash, invited_by, expires_at, "
-                "accepted_at, accepted_by",
-                (actor_id, str(token_hash or ""))).fetchone()
+        import psycopg
+
+        class _Spent(Exception):
+            pass
+        try:
+            with self._conn() as c, c.transaction():
+                if actor is not None:
+                    c.execute(
+                        "INSERT INTO actors (actor_id, tenant_id, label, role, email, "
+                        "password_hash) VALUES (%s,%s,%s,%s,%s,%s)",
+                        (actor_id, self.tenant_id, actor.get("label") or "",
+                         actor.get("role") or "viewer",
+                         (str(actor.get("email") or "").strip() or None),
+                         actor.get("password_hash")))
+                r = c.execute(
+                    "UPDATE invites SET accepted_at = now(), accepted_by = %s "
+                    "WHERE token_hash = %s AND accepted_at IS NULL AND expires_at > now() "
+                    "RETURNING invite_id, email, role, token_hash, invited_by, expires_at, "
+                    "accepted_at, accepted_by",
+                    (actor_id, str(token_hash or ""))).fetchone()
+                if r is None:
+                    raise _Spent()        # roll the account back with the refused accept
+        except _Spent:
+            return None
+        except psycopg.errors.IntegrityError as exc:
+            raise StoreError(f"the database refused this account: {type(exc).__name__} "
+                             f"{str(exc).splitlines()[0][:150]}") from None
         return None if r is None else {
             "invite_id": str(r[0]), "email": r[1], "role": r[2], "token_hash": r[3],
             "invited_by": str(r[4]), "expires_at": r[5].isoformat(),
@@ -4037,6 +4069,25 @@ def conformance(backend) -> list[tuple[bool, str]]:
        "**the same token cannot be used twice** -- single use is the database's job, not "
        "a handler's: on Postgres the UPDATE carries `accepted_at IS NULL`, so two "
        "simultaneous accepts cannot both win")
+    # The shape invites.accept uses: the account is created BY the accept, atomically.
+    # (The checks above write the actor first, which is why they never caught that the verb
+    # stamped invites.accepted_by -- a foreign key -- before its actor existed.)
+    _tok3 = _hl.sha256(b"atomic-accept").hexdigest()
+    backend.create_invite({"invite_id": str(_uuid.uuid4()), "email": "atomic@example.com",
+                           "role": "lawyer", "token_hash": _tok3, "invited_by": _ad,
+                           "expires_at": "2099-01-01T00:00:00+00:00"})
+    _new = str(_uuid.uuid4())
+    _acc = backend.accept_invite(_tok3, actor_id=_new, now="2026-10-02T00:00:00+00:00",
+                                 actor={"label": "atomic", "role": "lawyer",
+                                        "email": "atomic@example.com"})
+    ck(_acc is not None and (backend.read_actor(_new) or {}).get("role") == "lawyer",
+       "an accept that CREATES its account succeeds on both backends, account and all")
+    _late = str(_uuid.uuid4())
+    ck(backend.accept_invite(_tok3, actor_id=_late, now="2026-10-02T00:00:00+00:00",
+                             actor={"label": "late", "role": "lawyer",
+                                    "email": "atomic@example.com"}) is None
+       and backend.read_actor(_late) is None,
+       "...and a refused second accept leaves NO second account behind")
     # An invite that EXPIRES while we watch. It cannot be created already-expired: 018's
     # invites_expires_after_creation forbids that, correctly -- an invite dated into the
     # past is not an expired invite, it is a nonsense row. So this one is given a second
