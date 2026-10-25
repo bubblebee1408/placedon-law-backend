@@ -136,7 +136,8 @@ def _test() -> None:
                     "024_conversation_turns.sql",
                     "025_draft_inbox_idx.sql",
                     "026_accounts.sql",
-                    "027_gateway_rate_limits.sql"],
+                    "027_gateway_rate_limits.sql",
+                    "028_matter_access.sql"],
           f"every migration exists, in order ({files})")
 
     # 026: sign-in, sessions, and the two (now three) cross-tenant reads auth needs.
@@ -353,7 +354,10 @@ def _test() -> None:
                      # 026. A person's signed-in session. Created and revoked through the
                      # normal tenant-scoped path once a tenant is known; the only
                      # tenant-blind read of it is auth_resolve_session (SECURITY DEFINER).
-                     "sessions", "gateway_rate_limits"},
+                     "sessions", "gateway_rate_limits",
+                     # 028. Who may use which matter, and every reassignment of unfiled
+                     # work: both name a firm's people and its clients.
+                     "matter_memberships", "access_events"},
           f"every other table is tenant-scoped, DERIVED from having a tenant_id ({sorted(scoped)})")
 
     limiter_sql = (MIGRATIONS / "027_gateway_rate_limits.sql").read_text(encoding="utf-8")

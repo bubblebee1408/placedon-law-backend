@@ -53,6 +53,9 @@ def rank(role: str) -> int:
     return RANK[role]
 
 
+# 028. The only reads an administrator alone may make: who holds access to which matter.
+ADMIN_READS = frozenset({"matters.members", "matters.access_report"})
+
 # The two verbs app.py serves with NO Bearer token: _principal() and may() are both
 # skipped for these, so they must never be handed a role they would bypass anyway. Kept
 # here, not just in app.py, so the exhaustiveness test below can assert these are the
@@ -160,6 +163,14 @@ REQUIRED: dict[str, str] = {
     # ADMIN-only, not LAWYER: "admin: everything a lawyer can, plus invite and remove
     # people."
     "invites.create": ADMIN,
+    # 028. Administering who may use which matter is an admin's job. Sharing your OWN
+    # unfiled document is a lawyer's.
+    "matters.grant": ADMIN,
+    "matters.revoke": ADMIN,
+    "matters.members": ADMIN,
+    "matters.access_report": ADMIN,
+    "access.reassign": ADMIN,
+    "vault.share": LAWYER,
     # A write (it revokes a row), but not a professional act on firm or client data -- it
     # ends the CALLER'S OWN session and nobody else's. Declared in SELF_SERVICE_WRITES
     # below, the one named exception to "no write verb is open to a viewer": a viewer who
@@ -273,9 +284,11 @@ def _test() -> int:
           "...and every declared self-service write really is VIEWER, not merely "
           "exempted from the check above by an entry that then went unused")
     reads = {v.name for v in VERBS if v.read_only}
-    check(all(REQUIRED[r] in (VIEWER, LAWYER) for r in reads),
-          "no read verb is reserved to admin: there is nothing to read that only an "
-          "administrator should see")
+    check(all(REQUIRED[r] in (VIEWER, LAWYER) for r in reads - ADMIN_READS),
+          "no read verb is reserved to admin EXCEPT the named ADMIN_READS: who holds "
+          "access to which matter is administration, and nothing else is admin-only")
+    check(ADMIN_READS <= reads and all(REQUIRED[r] == ADMIN for r in ADMIN_READS),
+          "...and every ADMIN_READ is a real read verb that really is ADMIN")
 
     print(f"\n{ok}/{ok + fail} passed")
     return 1 if fail else 0

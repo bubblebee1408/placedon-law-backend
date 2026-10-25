@@ -364,6 +364,9 @@ extra+=("gateway/screens.py --test")
 # 8a: who may call what, and how a password is stored. The role map is exhaustive over
 # the verb table by test, so a verb added without a role fails the build.
 extra+=("gateway/roles.py --test")
+# 028: the shared per-matter access check every verb and the worker call. Its database half
+# is proved live by tests/test_matter_access_postgres.py against a throwaway database.
+extra+=("gateway/access.py --test")
 extra+=("gateway/passwords.py --test")
 # 026: sign-in, sessions, invites. Lockout math, the generic-failure immutability, the
 # timing-safe dummy-hash guard, and token minting -- gateway/verbs.py exercises the HTTP

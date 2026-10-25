@@ -30,6 +30,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Callable
 
+from gateway import access
+
 STRING = "string"
 OBJECT = "object"
 BOOLEAN = "boolean"
@@ -100,6 +102,12 @@ class Context:
     """What a handler is allowed to reach. Injected, so no surface has a private back door."""
     tenant: str = "unknown"
     actor: str = "unknown"
+    # 028. The principal's FIRM role (viewer/lawyer/admin), from the authenticated
+    # session. Least privilege by default: a caller that does not say is not an admin.
+    role: str = "viewer"
+    # 028. The matter the current work is filed to, so a run written for a turn in a
+    # matter is readable by that matter's members and not only by whoever asked.
+    matter_id: str | None = None
     store: object | None = None
     documents: dict = field(default_factory=dict)
     model_for: Callable | None = None
@@ -790,9 +798,12 @@ def _cache_lookup(question: str, task: str, sources, ctx: Context):
     the news.
     """
     from checker import answer_cache as ac
+    partition = _cache_partition(ctx)
+    if not partition:
+        return None, None
     try:
         key = ac.lookup_key(question=question, task=task, as_of=_today(ctx),
-                            sources=sources or ())
+                            sources=sources or (), partition=partition)
     except ac.CacheError:
         return None, None
     try:
@@ -809,7 +820,7 @@ def _cache_lookup(question: str, task: str, sources, ctx: Context):
         ctx.store.bump_cache_stat(kind, day=_today(ctx))
         if not ok:
             return None, key
-        out = dict(entry.payload)
+        out = {k: v for k, v in entry.payload.items() if k not in _CACHE_PRIVATE}
         # Older cache rows advertised a vault search that never grounded the answer.
         # Reuse the reverified statutory answer, never that obsolete retrieval claim.
         report = out.get("sources")
@@ -831,6 +842,19 @@ def _cache_lookup(question: str, task: str, sources, ctx: Context):
         return None, None
 
 
+# Never stored, never served: the asker's own run, and the cache's own annotations.
+_CACHE_PRIVATE = frozenset({"run_id", "sub_run_ids", "cached", "cache_note"})
+
+
+def _cache_partition(ctx: Context) -> str:
+    """Who may reuse a cached answer (028): the matter it was asked in, else the one actor
+    who asked it. No actor, no cache -- an anonymous entry would be reusable by anyone."""
+    if getattr(ctx, "matter_id", None):
+        return f"matter:{ctx.matter_id}"
+    actor = str(getattr(ctx, "actor", "") or "")
+    return f"actor:{actor}" if actor and actor != "unknown" else ""
+
+
 def _cache_store(key, question: str, task: str, sources, result: dict,
                  ctx: Context) -> None:
     """Keep an answer only if it is the kind that can later be shown to be still true."""
@@ -842,14 +866,17 @@ def _cache_store(key, question: str, task: str, sources, result: dict,
     # answer can never be re-verified, so `servable` would refuse it on every read.
     if result.get("status") != "ANSWERED" or not (result.get("citations") or []):
         return
+    partition = _cache_partition(ctx)
+    if not partition:
+        return
     try:
         entry = ac.Entry.build(question=question, task=task, as_of=_today(ctx),
                                sources=sources or (),
                                citations=result.get("citations") or (),
                                payload={k: v for k, v in result.items()
-                                        if k not in ("cached", "cache_note")},
-                               created_at=_now(ctx))
-        ctx.store.write_cache_entry(entry.to_dict())
+                                        if k not in _CACHE_PRIVATE},
+                               created_at=_now(ctx), partition=partition)
+        ctx.store.write_cache_entry(dict(entry.to_dict(), matter_id=ctx.matter_id))
     except Exception:                                            # noqa: BLE001
         return
 
@@ -919,6 +946,7 @@ def _persist_run(ctx: Context, *, intent: str, status: str, steps: list,
     score, why = nonconformity_for(entailed=entailed, traced=traced, total=sentences,
                                    escalations=escalations)
     ctx.store.write({"id": run_id, "intent": intent, "status": status,
+                     "actor_id": ctx.actor, "matter_id": ctx.matter_id,
                      "refusal_code": refusal_code, "law_versions": law_versions,
                      "steps": steps, "propositions": propositions,
                      "nonconformity": score, "nonconformity_note": why})
@@ -1040,7 +1068,7 @@ def _runs_get(args: dict, ctx: Context) -> dict:
     if ctx.store is None:
         return _refuse("NO_STORE", "no run store is configured on this deployment")
     row = ctx.store.read(args["run_id"])
-    if row is None:
+    if row is None or not access.row_allowed(ctx, row):
         return _refuse("NOT_FOUND", f"no run {args['run_id']!r}")
     return {k: v for k, v in row.items() if k != "steps"}
 
@@ -1049,7 +1077,7 @@ def _runs_trace(args: dict, ctx: Context) -> dict:
     if ctx.store is None:
         return _refuse("NO_STORE", "no run store is configured on this deployment")
     row = ctx.store.read(args["run_id"])
-    if row is None:
+    if row is None or not access.row_allowed(ctx, row):
         return _refuse("NOT_FOUND", f"no run {args['run_id']!r}")
     # `critic_enabled` travels with the trace (016). A trace is what someone reads to
     # work out why an answer says what it says, and "a layer that may REMOVE sentences was
@@ -1176,8 +1204,11 @@ def _decide(args: dict, ctx: Context, *, decision: str) -> dict:
                        "A human decision that is not stored is one that was not made.")
 
     run = ctx.store.read_run(run_id)
-    if run is None:
+    if run is None or not access.row_allowed(ctx, run):
         return _refuse("NOT_FOUND", f"no run {run_id!r}")
+    # 028. Signing off a finding in a matter is a write on that matter.
+    if not access.row_allowed(ctx, run, access.WRITE):
+        return _refuse("FORBIDDEN", access.READ_ONLY)
 
     # The item must exist IN THAT RUN. Without this a reviewer could label an item that
     # was never served, and the label would be about nothing.
@@ -1301,11 +1332,17 @@ def _runs_submit(args: dict, ctx: Context) -> dict:
                        "configure PLACEDON_DATABASE_URL.")
 
     from gateway.jobs import QueueError, QueueFull
+    # 028. Whatever the payload names -- a matter, a conversation, documents -- this
+    # actor must be allowed to work on, checked before anything is written or queued.
+    if not access.args_allowed(ctx, payload):
+        return _refuse("NOT_FOUND", "Something this run names is unavailable to you.")
     run_id = str(uuid.uuid4())
     # The run row FIRST. A job pointing at a run that does not exist is a foreign-key error
     # on Postgres and a dangling id in memory, and the poller would get NOT_FOUND for work
     # that was accepted.
     ctx.store.write({"id": run_id, "intent": intent, "status": "PLANNED",
+                     "actor_id": ctx.actor,
+                     "matter_id": (str(payload.get("matter_id") or "").strip() or None),
                      "refusal_code": None, "steps": [], "propositions": []})
     try:
         # A1. INTERACTIVE: this is the path a person is watching a spinner on.
@@ -1338,6 +1375,14 @@ def _runs_cancel(args: dict, ctx: Context) -> dict:
     if ctx.queue is None:
         return _refuse("NO_STORE", "this deployment has no queue, so there is no running "
                                    "job to cancel.")
+    # 028. The queue is service-scoped and would cancel any run in the firm, so the
+    # caller's own access to the run is checked here, and refused with the same answer
+    # as a run that has nothing to cancel.
+    if ctx.store is not None and not access.row_allowed(
+            ctx, ctx.store.read(run_id), access.WRITE):
+        return _refuse("NOT_CANCELLABLE",
+                       f"run {run_id} has no job that is still running. A finished run is "
+                       f"not cancelled retroactively — its trace is what happened.")
     if ctx.queue.request_cancel(run_id):
         return {"status": "CANCEL_REQUESTED", "run_id": run_id,
                 "note": "the run will stop at its next step boundary. Everything already "
@@ -2349,6 +2394,8 @@ def _resolve_conversation_documents(file_ids, ctx: Context, matter_id, *, eviden
     byte_total = 0
     for fid in file_ids:
         row = ctx.store.read_vault_document(fid)
+        if row is not None and not access.document_allowed(ctx, row):
+            row = None  # 028. Not yours reads as not there.
         if row is not None:
             if row.get("matter_id") != matter_id:
                 return None, _refuse("DOCUMENT_SCOPE_MISMATCH",
@@ -2416,7 +2463,8 @@ def _document_summary_job(args: dict, ctx: Context) -> dict:
     # Every job, including direct runs.submit calls, repeats authorization at execution.
     for fid in file_ids:
         row = ctx.store.read_vault_document(fid)
-        if (not row or row.get("deleted_at") or row.get("state") != "INGESTED"
+        if (not row or not access.document_allowed(ctx, row)
+                or row.get("deleted_at") or row.get("state") != "INGESTED"
                 or row.get("matter_id") != matter_id or row.get("sha256") != expected.get(fid)):
             return _refuse("DOCUMENT_SCOPE_MISMATCH", "A selected document changed or is unavailable. No summary was generated.")
     resolved, refusal = _resolve_conversation_documents(file_ids, ctx, matter_id,
@@ -2474,6 +2522,9 @@ def _document_summary_job(args: dict, ctx: Context) -> dict:
             "summary_note": "This is a model-generated summary draft. Quotations show source locations; a lawyer must review meaning and completeness."}
 
 
+CONVERSATION_UNAVAILABLE = "This conversation is unavailable."
+
+
 def _conversation_send(args: dict, ctx: Context) -> dict:
     """Validate, reserve one idempotent message pair, then dispatch bounded work."""
     import hashlib
@@ -2483,7 +2534,7 @@ def _conversation_send(args: dict, ctx: Context) -> dict:
     from datetime import date
     from agents import intake
     from gateway import envelope as ev
-    from gateway.store import TurnConflict
+    from gateway.store import StoreError, TurnConflict
     from gateway.jobs import QueueFull, INTERACTIVE
 
     text = args.get("text") or ""
@@ -2533,12 +2584,21 @@ def _conversation_send(args: dict, ctx: Context) -> dict:
     cid = (args.get("conversation_id") or "").strip() or str(uuid.uuid4())
     conv = store.read_conversation(cid)
     matter = (args.get("matter_id") or "").strip() or None
+    if conv is not None and not access.row_allowed(ctx, conv):
+        # 028. Another person's conversation reads exactly like no conversation.
+        return _refuse("NOT_FOUND", CONVERSATION_UNAVAILABLE)
     if conv is not None:
         if "matter_id" in args and matter != conv.get("matter_id"):
             return _refuse("MATTER_CONFLICT", "A conversation stays in its original matter. Start a new conversation to change it.")
         matter = conv.get("matter_id")
-    if matter is not None and not any(m["matter_id"] == matter for m in store.list_matters()):
-        return _refuse("NOT_FOUND", "This matter is unavailable in this workspace.")
+        if matter is None and not access.row_allowed(ctx, conv, access.WRITE):
+            return _refuse("NOT_FOUND", CONVERSATION_UNAVAILABLE)
+    if matter is not None:
+        refusal = access.require_matter(ctx, matter, access.WRITE)
+        if refusal:
+            return refusal
+    from dataclasses import replace as _replace
+    ctx = _replace(ctx, matter_id=matter)
     from gateway import document_evidence as de
     if override:
         task, classification = override, {"task": override, "decided_by": "override",
@@ -2547,6 +2607,8 @@ def _conversation_send(args: dict, ctx: Context) -> dict:
         named = []
         for fid in raw_ids:
             row = store.read_vault_document(fid)
+            if row is not None and not access.document_allowed(ctx, row):
+                row = None
             legacy = ctx.documents.get(fid) or {}
             if row is None and legacy.get("tenant", ctx.tenant) == ctx.tenant:
                 row = legacy
@@ -2623,7 +2685,8 @@ def _conversation_send(args: dict, ctx: Context) -> dict:
     reply_id = str(uuid.uuid4())
     try:
         message, created = store.reserve_turn(
-            {"conversation_id": cid, "title": text.strip()[:60] or "Attachment", "matter_id": matter},
+            {"conversation_id": cid, "title": text.strip()[:60] or "Attachment", "matter_id": matter,
+             "actor_id": ctx.actor},
             {"message_id": str(uuid.uuid4()), "role": "user", "text": text, "file_ids": raw_ids},
             {"message_id": reply_id, "role": "assistant", "text": "", "file_ids": [],
              "task": task, "envelope": None, "metadata": metadata,
@@ -2633,6 +2696,10 @@ def _conversation_send(args: dict, ctx: Context) -> dict:
         return _refuse("BUSY", "The workspace is busy. Your question has not been submitted; retry shortly.")
     except TurnConflict:
         return _refuse("IDEMPOTENCY_CONFLICT", "The request or matter changed while this turn was submitted.")
+    except StoreError:
+        # 028. A conversation id that names a row this actor cannot see: the insert does
+        # nothing and the row lock finds nothing. Same answer as any unavailable thread.
+        return _refuse("NOT_FOUND", CONVERSATION_UNAVAILABLE)
     if not created:
         return _turn_response(_reconcile_message(message, ctx))
     if queued is not None:
@@ -2851,8 +2918,10 @@ def _vault_upload(args: dict, ctx: Context) -> dict:
     if matter is not None and not isinstance(matter, str):
         return _refuse("BAD_REQUEST", "matter_id must be a string")
     matter = (matter or "").strip() or None
-    if matter is not None and not any(m["matter_id"] == matter for m in ctx.store.list_matters()):
-        return _refuse("NOT_FOUND", "This matter is unavailable in this workspace.")
+    if matter is not None:
+        refusal = access.require_matter(ctx, matter, access.WRITE)
+        if refusal:
+            return refusal
     data = text.encode("utf-8")
     from checker import archive_guard as ag
     verdict = ag.inspect(data)
@@ -2877,7 +2946,7 @@ def _vault_upload(args: dict, ctx: Context) -> dict:
     did = str(uuid.uuid4())
     try:
         ctx.store.write_vault_document({
-            "document_id": did, "matter_id": (args.get("matter_id") or "").strip() or None,
+            "document_id": did, "matter_id": matter, "uploaded_by": ctx.actor,
             "sha256": sha, "name": name, "byte_count": len(data), "state": "PENDING"})
     except Exception as exc:                                     # noqa: BLE001
         from gateway.store import DuplicateVaultDocument
@@ -2888,7 +2957,8 @@ def _vault_upload(args: dict, ctx: Context) -> dict:
             # A DELETED holder is not handed back: its text is gone and nothing can read it.
             existing = (ctx.store.read_vault_document(exc.document_id)
                         if exc.document_id else None)
-            if existing and existing.get("state") != "DELETED":
+            if (existing and existing.get("state") != "DELETED"
+                    and access.document_allowed(ctx, existing)):
                 return {"document_id": existing["document_id"], "sha256": sha,
                         "name": existing.get("name") or name,
                         "state": existing.get("state") or "PENDING", "job_id": None,
@@ -2916,6 +2986,7 @@ def _vault_upload(args: dict, ctx: Context) -> dict:
         # docs/guides/RUN_LOCALLY.md, not by a test -- every test used MemoryBackend, which
         # has no foreign keys.
         ctx.store.write({"id": did, "intent": INTENT, "status": "PLANNED",
+                         "actor_id": ctx.actor, "matter_id": matter,
                          "refusal_code": None, "steps": [], "propositions": []})
         try:
             # A1. BULK: vault ingest and OCR are wanted eventually, and must never take a
@@ -2979,8 +3050,9 @@ def _vault_list(args: dict, ctx: Context) -> dict:
             matter = str(uuid.UUID(matter))
         except ValueError:
             return _refuse("BAD_REQUEST", "Choose a valid matter.")
-        if not any(m["matter_id"] == matter for m in ctx.store.list_matters()):
-            return _refuse("NOT_FOUND", "This matter is unavailable in this workspace.")
+        refusal = access.require_matter(ctx, matter)
+        if refusal:
+            return refusal
     query = args.get("query", "")
     if not isinstance(query, str) or len(query) > 120:
         return _refuse("BAD_REQUEST", "Search names with at most 120 characters.")
@@ -2999,13 +3071,20 @@ def _vault_list(args: dict, ctx: Context) -> dict:
         return _refuse("BAD_REQUEST", "Use a page size of 1–50 and an offset of 0–10000.")
     rows = ctx.store.browse_vault_documents(matter_id=matter, query=query.strip(),
                                           limit=limit + 1, offset=offset)
+    if matter is None:
+        # 028. Unfiled means YOURS, plus anything shared firm-wide. Postgres already
+        # filters this; memory has no policy, and the check is the same sentence here.
+        rows = access.readable_documents(ctx, rows)
+    _catalog = ("document_id", "sha256", "name", "state", "matter_id", "byte_count", "doc_class")
+    rows = [{k: r.get(k) for k in _catalog} for r in rows]
     more = len(rows) > limit
     next_offset = offset + limit if more and offset + limit <= 10000 else None
     return {"documents": rows[:limit], "next_offset": next_offset,
             "truncated": more and next_offset is None,
             "scope": "matter" if matter else "unfiled", "matter_id": matter,
             "note": "Documents in this matter." if matter else
-                    "Unfiled workspace documents. Files in other matters are not listed."}
+                    "Your unfiled documents, and any shared with the firm. Files in "
+                    "matters are listed per matter."}
 
 
 def _vault_status(args: dict, ctx: Context) -> dict:
@@ -3015,7 +3094,7 @@ def _vault_status(args: dict, ctx: Context) -> dict:
     did = (args.get("document_id") or "").strip()
     if did:
         row = ctx.store.read_vault_document(did)
-        if row is None:
+        if row is None or not access.document_allowed(ctx, row):
             return _refuse("NOT_FOUND", f"no vault document {did!r} for this tenant")
         return dict(row, tags=ctx.store.read_vault_tags(did))
     counts = ctx.store.vault_counts()
@@ -3029,7 +3108,11 @@ def _vault_status(args: dict, ctx: Context) -> dict:
 def _vault_index(ctx: Context):
     from checker.vault_search import Index
     counts = ctx.store.vault_counts()
-    return Index.build(ctx.store.read_vault_chunks(), tenant_id=str(ctx.tenant),
+    # 028. Only what this actor may read: its matters' documents, its own unfiled ones and
+    # any shared firm-wide. The search was firm-wide, which under per-matter access is a
+    # search across clients the searcher does not act for.
+    return Index.build(access.readable_documents(ctx, ctx.store.read_vault_chunks()),
+                       tenant_id=str(ctx.tenant),
                        unsearchable=int(counts.get("unsearchable") or 0))
 
 
@@ -3045,10 +3128,10 @@ def _vault_find(args: dict, ctx: Context) -> dict:
     except (TypeError, ValueError):
         return _refuse("BAD_REQUEST", "limit must be a whole number")
     res = _vault_index(ctx).search(query, limit=max(1, min(limit, 50))).to_dict()
-    res["scope"] = "tenant"
-    res["scope_note"] = ("searched the whole firm's vault, not one matter. Listing is "
-                         "per matter (8b); searching is per tenant, which is what V1 "
-                         "specifies and what answers 'have we ever agreed to this'")
+    res["scope"] = "accessible"
+    res["scope_note"] = ("searched every document you can read: the matters you are a "
+                         "member of, your unfiled documents, and any shared with the firm. "
+                         "Matters you are not a member of are not searched")
     return res
 
 
@@ -3078,7 +3161,7 @@ def _vault_verify(args: dict, ctx: Context) -> dict:
         return refusal
     did = (args.get("document_id") or "").strip()
     row = ctx.store.read_vault_document(did) if did else None
-    if row is None:
+    if row is None or not access.document_allowed(ctx, row):
         return _refuse("NOT_FOUND", f"no vault document {did!r} for this tenant")
 
     def answer(checks: list[dict], note: str) -> dict:
@@ -3256,7 +3339,7 @@ def _document_verify(args: dict, ctx: Context) -> dict:
     if not did:
         return _refuse("BAD_REQUEST", "document_id is required")
     row = ctx.store.read_vault_document(did)
-    if row is None:
+    if row is None or not access.document_allowed(ctx, row):
         return _refuse("NOT_FOUND", f"no document {did!r} for this tenant")
     if row.get("deleted_at"):
         return _refuse("GONE",
@@ -3410,7 +3493,7 @@ def _vault_summarize(args: dict, ctx: Context) -> dict:
         return _refuse("NO_STORE", "no store is configured")
     did = (args.get("document_id") or "").strip()
     row = ctx.store.read_vault_document(did) if did else None
-    if row is None:
+    if row is None or not access.document_allowed(ctx, row):
         return _refuse("NOT_FOUND", f"no vault document {did!r} for this tenant")
     tags = ctx.store.read_vault_tags(did)
     chunks = [c for c in ctx.store.read_vault_chunks() if c["document_id"] == did]
@@ -3446,6 +3529,9 @@ def _vault_compile(args: dict, ctx: Context) -> dict:
     if not matter_id:
         return _refuse("BAD_REQUEST",
                        "matter_id is required: a bundle is compiled for one matter (8b)")
+    refusal = access.require_matter(ctx, matter_id)
+    if refusal:
+        return refusal
     try:
         docs = ctx.store.list_vault_documents(matter_id=matter_id)
     except Exception as e:                                       # noqa: BLE001
@@ -3469,8 +3555,10 @@ def _vault_delete(args: dict, ctx: Context) -> dict:
         return refusal
     did = (args.get("document_id") or "").strip()
     row = ctx.store.read_vault_document(did) if did else None
-    if row is None:
+    if row is None or not access.document_allowed(ctx, row):
         return _refuse("NOT_FOUND", f"no vault document {did!r} for this tenant")
+    if not access.document_allowed(ctx, row, access.WRITE):
+        return _refuse("FORBIDDEN", "You can read this document but not delete it.")
     if row.get("deleted_at"):
         return _refuse("ALREADY_DELETED",
                        f"{did} was already deleted on {row['deleted_at']}. Saying so is "
@@ -3574,6 +3662,9 @@ def _calendar_upcoming(args: dict, ctx: Context) -> dict:
     return out
 
 
+MATTER_ID_UNUSABLE = "That matter id cannot be used. Omit matter_id to get a new one."
+
+
 def _matters_create(args: dict, ctx: Context) -> dict:
     """Open a matter. A WRITE verb, so it is off MCP by that rule already."""
     import uuid
@@ -3582,11 +3673,19 @@ def _matters_create(args: dict, ctx: Context) -> dict:
     name = (args.get("name") or "").strip()
     if not name:
         return _refuse("BAD_REQUEST", "a matter needs a name")
+    mid = (args.get("matter_id") or "").strip() or str(uuid.uuid4())
+    # 028. CREATE only. A supplied id that already exists -- one this actor can see or
+    # one it cannot -- is refused with one sentence, so the verb is not an oracle for
+    # which matter ids are real and cannot rename a matter its caller does not own.
+    if any(m["matter_id"] == mid for m in ctx.store.list_matters()):
+        return _refuse("BAD_REQUEST", MATTER_ID_UNUSABLE)
     try:
-        row = ctx.store.write_matter({
-            "matter_id": (args.get("matter_id") or "").strip() or str(uuid.uuid4()),
-            "name": name, "client_ref": args.get("client_ref") or ""})
+        row = ctx.store.write_matter({"matter_id": mid, "name": name,
+                                      "client_ref": args.get("client_ref") or ""},
+                                     owner=ctx.actor)
     except Exception as e:                                       # noqa: BLE001
+        if "matters_pkey" in str(e) or "UniqueViolation" in str(e) and "name" not in str(e):
+            return _refuse("BAD_REQUEST", MATTER_ID_UNUSABLE)
         return _refuse("BAD_REQUEST", str(e)[:200])
     return dict(row, note=("Work is filed to a matter. Conversations are listed one "
                            "matter at a time; there is no 'all matters' listing."))
@@ -3602,8 +3701,183 @@ def _matters_list(args: dict, ctx: Context) -> dict:
     """
     if ctx.store is None:
         return _refuse("NO_STORE", "no store is configured")
-    return {"matters": ctx.store.list_matters()}
+    # 028. Only matters this actor holds a grant on, each with its role; an admin sees
+    # every matter's name, to administer access, but `role: null` where it holds none.
+    return {"matters": access.visible_matters(ctx, ctx.store.list_matters())}
 
+
+# ── 028: administering matter access ─────────────────────────────────────────
+#
+# Every grant is explicit and recorded with who made it and why. After 028 is applied no
+# existing matter has a member, so an admin uses `matters.access_report` to see what needs
+# granting, then `matters.grant` -- and `access.reassign` for unfiled work that predates
+# uploader tracking. Nothing is inferred from tenant membership.
+
+def _active_actor(ctx: Context, actor_id: str) -> dict | None:
+    try:
+        row = ctx.store.read_actor(actor_id)
+    except Exception:                                            # noqa: BLE001
+        return None
+    return row if row and row.get("disabled_at") is None else None
+
+
+def _access_args(args: dict, *fields: str) -> tuple[dict | None, dict]:
+    """The stripped string fields, plus a refusal if any is missing or reason is short."""
+    out = {f: str(args.get(f) or "").strip() for f in fields}
+    missing = [f for f in fields if not out[f]]
+    if missing:
+        return _refuse("BAD_REQUEST", f"{', '.join(missing)} required"), out
+    if "reason" in out and len(out["reason"]) < MIN_REASON_CHARS:
+        return _refuse("REASON_REQUIRED",
+                       f"a reason of at least {MIN_REASON_CHARS} characters is recorded with "
+                       f"every access change"), out
+    return None, out
+
+
+def _admin_matter(ctx: Context, matter_id: str) -> dict | None:
+    """The matter, for an admin, or the same refusal a missing matter gets."""
+    if not any(m["matter_id"] == matter_id for m in ctx.store.list_matters()):
+        return _refuse("NOT_FOUND", access.NOT_AVAILABLE)
+    return None
+
+
+def _matters_grant(args: dict, ctx: Context) -> dict:
+    """Give one person a role on one matter. ADMIN-only, by role AND by database policy."""
+    if ctx.store is None:
+        return _refuse("NO_STORE", "no store is configured")
+    refusal, a = _access_args(args, "matter_id", "actor_id", "role", "reason")
+    if refusal:
+        return refusal
+    if a["role"] not in ("owner", "member", "viewer"):
+        return _refuse("BAD_REQUEST", "role must be owner, member or viewer")
+    refusal = _admin_matter(ctx, a["matter_id"])
+    if refusal:
+        return refusal
+    if _active_actor(ctx, a["actor_id"]) is None:
+        return _refuse("NOT_FOUND", "No active account with that id in this firm.")
+    try:
+        row = ctx.store.grant_matter_access(matter_id=a["matter_id"], actor_id=a["actor_id"],
+                                            role=a["role"], granted_by=ctx.actor,
+                                            reason=a["reason"])
+    except Exception:                                            # noqa: BLE001
+        return _refuse("FORBIDDEN", "This grant was refused.")
+    return {"status": "GRANTED", "membership": row,
+            "self_grant": a["actor_id"] == ctx.actor}
+
+
+def _matters_revoke(args: dict, ctx: Context) -> dict:
+    """End one person's access to one matter. Takes effect on their next request, and on
+    any job of theirs still queued or running (gateway/worker.py re-checks)."""
+    if ctx.store is None:
+        return _refuse("NO_STORE", "no store is configured")
+    refusal, a = _access_args(args, "matter_id", "actor_id", "reason")
+    if refusal:
+        return refusal
+    refusal = _admin_matter(ctx, a["matter_id"])
+    if refusal:
+        return refusal
+    try:
+        revoked = ctx.store.revoke_matter_access(matter_id=a["matter_id"],
+                                                 actor_id=a["actor_id"],
+                                                 revoked_by=ctx.actor, reason=a["reason"])
+    except Exception:                                            # noqa: BLE001
+        return _refuse("FORBIDDEN", "This revocation was refused.")
+    return {"status": "REVOKED" if revoked else "NO_ACTIVE_GRANT",
+            "matter_id": a["matter_id"], "actor_id": a["actor_id"]}
+
+
+def _matters_members(args: dict, ctx: Context) -> dict:
+    """Who holds which role on one matter, and optionally the full grant history."""
+    if ctx.store is None:
+        return _refuse("NO_STORE", "no store is configured")
+    matter_id = str(args.get("matter_id") or "").strip()
+    refusal = _admin_matter(ctx, matter_id) if matter_id else _refuse(
+        "BAD_REQUEST", "matter_id required")
+    if refusal:
+        return refusal
+    return {"matter_id": matter_id, "memberships": ctx.store.list_matter_memberships(
+        matter_id, include_revoked=bool(args.get("include_revoked")))}
+
+
+def _matters_access_report(args: dict, ctx: Context) -> dict:
+    """What an admin must grant after 028: matters with no members, and unfiled work with
+    no recorded owner -- documents, drafts, review tables, conversations. Names only, never
+    their text."""
+    if ctx.store is None:
+        return _refuse("NO_STORE", "no store is configured")
+    matters = []
+    for m in ctx.store.list_matters():
+        # ponytail: one membership read per matter; a single grouped query when firms
+        # have thousands of matters.
+        members = ctx.store.list_matter_memberships(m["matter_id"])
+        matters.append({"matter_id": m["matter_id"], "name": m["name"],
+                        "members": len(members),
+                        "owners": sum(1 for g in members if g["role"] == "owner")})
+    unowned = ctx.store.list_unowned()
+    return {"matters": matters,
+            "matters_without_members": [m["matter_id"] for m in matters if not m["members"]],
+            "unowned": unowned,
+            "note": ("Grant access with matters.grant, and give unowned work an owner or a "
+                     "matter with access.reassign. Nothing here was granted automatically.")}
+
+
+def _vault_share(args: dict, ctx: Context) -> dict:
+    """Share one of YOUR unfiled documents with the whole firm, or stop sharing it."""
+    if ctx.store is None:
+        return _refuse("NO_STORE", "no store is configured")
+    refusal, a = _access_args(args, "document_id", "reason")
+    if refusal:
+        return refusal
+    row = ctx.store.read_vault_document(a["document_id"])
+    if row is None or not access.document_allowed(ctx, row):
+        return _refuse("NOT_FOUND", f"no vault document {a['document_id']!r} for this tenant")
+    if row.get("matter_id") or str(row.get("uploaded_by") or "") != str(ctx.actor):
+        return _refuse("FORBIDDEN", "Only the uploader can share an unfiled document. A "
+                                    "filed document is shared by granting matter access.")
+    shared = args.get("shared") is not False
+    try:
+        out = ctx.store.share_vault_document(a["document_id"], by_actor=ctx.actor,
+                                             reason=a["reason"], shared=shared)
+    except Exception:                                            # noqa: BLE001
+        return _refuse("FORBIDDEN", "This change was refused.")
+    return {"status": "SHARED" if shared else "UNSHARED", "document_id": a["document_id"],
+            "shared_with_firm_at": out.get("shared_with_firm_at")}
+
+
+def _access_reassign(args: dict, ctx: Context) -> dict:
+    """ADMIN: give one piece of UNFILED work an owner, file it to a matter, or both.
+
+    How work that predates 028 -- with no recorded owner, so readable by nobody -- becomes
+    reachable again, and how an admin hands on the unfiled work of someone who left. Filed
+    work is never moved here: who reaches a matter is decided by its grants.
+    """
+    from gateway.store import REASSIGNABLE
+    if ctx.store is None:
+        return _refuse("NO_STORE", "no store is configured")
+    refusal, a = _access_args(args, "kind", "id", "reason")
+    if refusal:
+        return refusal
+    if a["kind"] not in REASSIGNABLE:
+        return _refuse("BAD_REQUEST", f"kind must be one of {sorted(REASSIGNABLE)}")
+    to_actor = str(args.get("to_actor") or "").strip() or None
+    to_matter = str(args.get("to_matter") or "").strip() or None
+    if not (to_actor or to_matter):
+        return _refuse("BAD_REQUEST", "name to_actor, to_matter, or both")
+    if to_actor and _active_actor(ctx, to_actor) is None:
+        return _refuse("NOT_FOUND", "No active account with that id in this firm.")
+    if to_matter:
+        refusal = _admin_matter(ctx, to_matter)
+        if refusal:
+            return refusal
+    try:
+        out = ctx.store.reassign_work(a["kind"], a["id"], by_actor=ctx.actor,
+                                      reason=a["reason"], to_actor=to_actor,
+                                      to_matter=to_matter)
+    except Exception:                                            # noqa: BLE001
+        return _refuse("NOT_FOUND", "No unfiled item with that id.")
+    return {"status": "REASSIGNED", "kind": a["kind"], "id": a["id"],
+            "owner": out.get("owner") or out.get("uploaded_by") or out.get("actor_id"),
+            "matter_id": out.get("matter_id")}
 
 def _jobs_dead(args: dict, ctx: Context) -> dict:
     """Jobs that stopped trying, newest first, with the reason each stopped.
@@ -3624,6 +3898,10 @@ def _jobs_dead(args: dict, ctx: Context) -> dict:
     except (TypeError, ValueError):
         return _refuse("BAD_REQUEST", "limit must be a number")
     jobs = ctx.queue.dead(limit)
+    # 028. A dead job's args can carry a question about a matter, and the queue is a
+    # service that sees the whole firm. A lawyer sees their own; an admin sees all.
+    if not access.is_admin(ctx):
+        jobs = [j for j in jobs if str(getattr(j, "actor_id", "") or "") == str(ctx.actor)]
     return {"dead": [j.to_dict() for j in jobs], "count": len(jobs)}
 
 
@@ -3661,6 +3939,9 @@ def _conversation_list(args: dict, ctx: Context) -> dict:
                        "matter_id is required: conversations are listed one matter at a "
                        "time. There is no 'all matters' listing, because a list of every "
                        "client's work is the accident this rule exists to prevent")
+    refusal = access.require_matter(ctx, matter_id)
+    if refusal:
+        return refusal
     return {"matter_id": matter_id,
             "conversations": ctx.store.list_conversations(matter_id=matter_id,
                                                           limit=min(limit, 200))}
@@ -3723,7 +4004,7 @@ def _conversation_get(args: dict, ctx: Context) -> dict:
     if not cid:
         return _refuse("BAD_REQUEST", "conversation_id is required")
     conv = ctx.store.read_conversation(cid)
-    if conv is None:
+    if conv is None or not access.row_allowed(ctx, conv):
         return _refuse("NOT_FOUND", f"no conversation {cid!r} for this tenant")
     return {"conversation": conv, "messages": [
         _reconcile_message(message, ctx) for message in ctx.store.read_messages(cid)]}
@@ -3747,6 +4028,8 @@ def _citation_get(args: dict, ctx: Context) -> dict:
         return _refuse("BAD_REQUEST",
                        "conversation_id is required: a citation is read back from the "
                        "message that made it, so the tenant's own policy governs the read")
+    if not access.row_allowed(ctx, ctx.store.read_conversation(conv_id)):
+        return _refuse("NOT_FOUND", f"no citation {cid!r} in that conversation")
     for msg in ctx.store.read_messages(conv_id):
         for c in (msg.get("envelope") or {}).get("citations", ()):
             if c.get("id") != cid:
@@ -3856,7 +4139,11 @@ def _review_table_create(args: dict, ctx: Context) -> dict:
                        "one that vanishes on restart would be a lie about what was saved")
     grid_id = (args.get("grid_id") or "").strip() or str(uuid.uuid4())
     table = rg.Table(grid_id, name, columns, tuple(raw_docs))
-    store.write_grid({"grid_id": grid_id, "name": name,
+    # 028. A cell reads bytes by hash straight from the file store, so the hash itself
+    # must belong to a document this actor may read -- or a hash is a key to any file.
+    if not all(access.content_allowed(ctx, d.strip()) for d in raw_docs):
+        return _refuse("NOT_FOUND", "A selected document is unavailable to you.")
+    store.write_grid({"grid_id": grid_id, "name": name, "actor_id": ctx.actor,
                       "columns": [{"name": c.name, "kind": c.kind,
                                    "question": c.question} for c in columns],
                       "document_ids": list(raw_docs)})
@@ -3872,7 +4159,7 @@ def _review_table_create(args: dict, ctx: Context) -> dict:
             # Same reason as the vault upload above: the cell's run row has to exist before
             # its job can reference it.
             ensure_run=lambda rid: ctx.store.write(
-                {"id": rid, "intent": rgr.INTENT, "status": "PLANNED",
+                {"id": rid, "intent": rgr.INTENT, "status": "PLANNED", "actor_id": ctx.actor,
                  "refusal_code": None, "steps": [], "propositions": []}))
         if sched.paused_budget:
             # Persisted, because `create` returns this ONCE. A caller that did not keep the
@@ -4018,8 +4305,8 @@ def _load_grid(ctx: Context, grid_id: str):
     from checker import review_grid as rg
 
     row = ctx.store.read_grid(grid_id)
-    if row is None:
-        return None, False
+    if row is None or not access.row_allowed(ctx, row):
+        return None, False  # 028. Someone else's table reads as no table.
     columns = tuple(rg.Column(c["name"], c["kind"], c["question"])
                     for c in row.get("columns") or ())
     cells = []
@@ -4059,8 +4346,8 @@ def _draft_history(ctx: Context, draft_id: str):
     from checker.provenance_slots import Slot
 
     row = ctx.store.read_draft(draft_id)
-    if row is None:
-        return None, None
+    if row is None or not access.row_allowed(ctx, row):
+        return None, None  # 028. Someone else's draft reads as no draft.
     versions = []
     for v in ctx.store.read_draft_versions(draft_id):
         slots = tuple(Slot(name=s.get("name") or "", value=s.get("value") or "",
@@ -4140,7 +4427,7 @@ def _draft_create(args: dict, ctx: Context) -> dict:
     try:
         n = ctx.store.create_draft(
             {"draft_id": draft_id, "kind": args.get("kind") or DRAFT_KIND_UNKNOWN,
-             "title": title},
+             "title": title, "actor_id": ctx.actor},
             {"title": title, "body": body, "slots": [s.to_dict() for s in slots],
              "citations": citations,
              "blocking_count": len(draft_blockers(body, slots))})
@@ -4405,6 +4692,9 @@ def _draft_list(args: dict, ctx: Context) -> dict:
     rows = ctx.store.list_drafts(limit=limit + 1,
                                  before_updated_at=before_updated_at,
                                  before_draft_id=before_draft_id)
+    # 028. Drafts are not filed to matters, so a draft is its author's. Postgres filters
+    # this by policy; the check here keeps memory to the same rule.
+    rows = [r for r in rows if access.row_allowed(ctx, r)]
     has_more = len(rows) > limit
     page = rows[:limit]
     next_cursor = None
@@ -4414,8 +4704,8 @@ def _draft_list(args: dict, ctx: Context) -> dict:
                              "draft_id": tail["draft_id"]},
                             separators=(",", ":")).encode("utf-8")
         next_cursor = base64.urlsafe_b64encode(packed).decode("ascii").rstrip("=")
-    return {"drafts": page, "next_cursor": next_cursor, "scope": "tenant",
-            "note": "Draft titles and review state for this tenant. Draft text is not included."}
+    return {"drafts": page, "next_cursor": next_cursor, "scope": "author",
+            "note": "Titles and review state of your drafts. Draft text is not included."}
 
 
 def _cell_answerer(ctx: Context, debits: list | None = None):
@@ -5538,6 +5828,54 @@ VERBS: tuple[Verb, ...] = (
           Field("matter_id", STRING, False, describes="supply one, or get a new uuid")),
          "POST", read_only=False, run=_matters_create),
 
+    Verb("matters.grant",
+         "ADMIN: give one person a role (owner, member, viewer) on one matter, with a "
+         "recorded reason. Access is never inferred from being in the firm.",
+         (Field("matter_id", STRING, True, describes="the matter"),
+          Field("actor_id", STRING, True, describes="the person's account id"),
+          Field("role", STRING, True, describes="owner, member, or viewer"),
+          Field("reason", STRING, True, describes="why, recorded with the grant")),
+         "POST", read_only=False, run=_matters_grant),
+
+    Verb("matters.revoke",
+         "ADMIN: end one person's access to one matter, with a recorded reason. Their "
+         "queued and running jobs on it stop before publishing.",
+         (Field("matter_id", STRING, True, describes="the matter"),
+          Field("actor_id", STRING, True, describes="the person's account id"),
+          Field("reason", STRING, True, describes="why, recorded with the revocation")),
+         "POST", read_only=False, run=_matters_revoke),
+
+    Verb("matters.members",
+         "ADMIN: who holds which role on one matter; with include_revoked, every grant "
+         "ever made and who made it.",
+         (Field("matter_id", STRING, True, describes="the matter"),
+          Field("include_revoked", BOOLEAN, False, describes="include ended grants")),
+         "POST", read_only=True, mcp=False, run=_matters_members),
+
+    Verb("matters.access_report",
+         "ADMIN: matters with no members and unfiled documents with no owner -- what to "
+         "grant after per-matter access was switched on. Metadata only.",
+         (),
+         "POST", read_only=True, mcp=False, run=_matters_access_report),
+
+    Verb("vault.share",
+         "Share one of your unfiled documents with the whole firm, or stop (shared=false). "
+         "Recorded with a reason.",
+         (Field("document_id", STRING, True, describes="the vault document"),
+          Field("reason", STRING, True, describes="why, recorded with the change"),
+          Field("shared", BOOLEAN, False, describes="false to stop sharing")),
+         "POST", read_only=False, run=_vault_share),
+
+    Verb("access.reassign",
+         "ADMIN: give one piece of unfiled work (vault_document, draft, review_grid, "
+         "conversation) an owner, file it to a matter, or both. Recorded with a reason.",
+         (Field("kind", STRING, True, describes="vault_document, draft, review_grid or conversation"),
+          Field("id", STRING, True, describes="the item's id"),
+          Field("reason", STRING, True, describes="why, recorded with the change"),
+          Field("to_actor", STRING, False, describes="the new owner's account id"),
+          Field("to_matter", STRING, False, describes="the matter to file it to")),
+         "POST", read_only=False, run=_access_reassign),
+
     Verb("matters.list",
          "Every matter in this firm. Read-only, and NOT exposed as an MCP tool: a client "
          "list names who the firm acts for, and no agent task needs it.",
@@ -5837,8 +6175,11 @@ def _test() -> None:
                                             "vault.delete"} | {
                         # 026: sign-in, sessions, invites.
                         "auth.login", "auth.logout", "auth.me",
-                        "invites.create", "invites.accept"},
-          f"the fifty-six verbs are declared once ({sorted(names)})")
+                        "invites.create", "invites.accept"} | {
+                        # 028: administering per-matter access.
+                        "matters.grant", "matters.revoke", "matters.members",
+                        "matters.access_report", "vault.share", "access.reassign"},
+          f"the sixty-two verbs are declared once ({sorted(names)})")
     # sources.* are READ-ONLY, so they reach MCP. That is the intended shape: an agent may
     # ask what a source permits and search what may be read, and there is no sources verb
     # that fetches, stores or spends. S3's Indian Kanoon connector will spend money, and
@@ -5866,8 +6207,11 @@ def _test() -> None:
                                  # here -- plus two of them are PUBLIC_VERBS, which have
                                  # no role to check and no business in an agent's toolbox.
                                  "auth.login", "auth.logout", "invites.create",
-                                 "invites.accept"},
-          f"...and exactly eighteen of them write ({sorted(write_verbs())})")
+                                 "invites.accept",
+                                 # 028. Each changes who may reach a matter or a document.
+                                 "matters.grant", "matters.revoke", "vault.share",
+                                 "access.reassign"},
+          f"...and exactly twenty-two of them write ({sorted(write_verbs())})")
     check(f"{MCP_NAMESPACE}.conversation.send" not in {t.name for t in mcp},
           "conversation.send WRITES -- it creates a thread, appends messages and may "
           "enqueue work -- so mcp_tools() keeps it off MCP, by rule and not by the author "
@@ -6681,9 +7025,9 @@ def _test() -> None:
     _inbox = by_name()["draft.list"].run({"limit": "50"}, _cctx2)
     _listed = next((d for d in _inbox.get("drafts", [])
                     if d["draft_id"] == _dr["draft_id"]), None)
-    check(_inbox.get("scope") == "tenant" and _listed is not None
+    check(_inbox.get("scope") == "author" and _listed is not None
           and _listed["blocking_count"] >= 1 and "body" not in _listed,
-          "draft.list shows the current tenant's latest state without exposing draft text")
+          "draft.list shows the author's latest state without exposing draft text")
     _bad_page = by_name()["draft.list"].run({"limit": "51"}, _cctx2)
     _bad_cursor = by_name()["draft.list"].run({"cursor": "not-a-cursor"}, _cctx2)
     check(_bad_page.get("code") == "BAD_REQUEST"
@@ -6932,7 +7276,7 @@ def _test() -> None:
 
     # ══ O9: the answer cache ════════════════════════════════════════════════
     from checker import answer_cache as _ac
-    _o9 = Context(store=_MB(), clock=lambda: "2026-10-01T10:00:00+05:30",
+    _o9 = Context(store=_MB(), clock=lambda: "2026-10-01T10:00:00+05:30", actor="a" * 8,
                   model_for=lambda _o: _rq.quoting_model(_srcs))
     _a1 = by_name()["ask"].run({"question": _q}, _o9)
     check(_a1.get("status") == "ANSWERED" and not _a1.get("cached"),
@@ -6944,6 +7288,9 @@ def _test() -> None:
           and [c["id"] for c in _a2.get("citations") or []]
               == [c["id"] for c in _a1.get("citations") or []],
           "...with the same answer and the same citations")
+    check(_a1.get("run_id") and "run_id" not in _a2
+          and _a1["run_id"] not in str(_o9.store.cache),
+          "a cached answer never carries the run id of the ask that stored it")
     check("re-verifies" in str(_a2.get("cache_note")),
           f"...and the note says the citations were RE-READ, not that it was recent "
           f"({str(_a2.get('cache_note'))[:50]!r})")
@@ -6961,12 +7308,26 @@ def _test() -> None:
     check(cache_stats(_o9)["misses"] == 2,
           "...while a different question misses, rather than being served the first "
           "answer")
+    # 028. Reuse stays inside who could read the original: a colleague asking the same
+    # words unfiled misses, so a hit is never an oracle for someone else's question.
+    from dataclasses import replace as _replace
+    _other = _replace(_o9, actor="b" * 8)
+    check(not by_name()["ask"].run({"question": _q}, _other).get("cached"),
+          "**another actor's identical unfiled question is a MISS**, not their answer")
+    _in_m = by_name()["ask"].run({"question": _q}, _replace(_o9, matter_id="m1"))
+    check(not _in_m.get("cached")
+          and by_name()["ask"].run({"question": _q},
+                                   _replace(_other, matter_id="m1")).get("cached") is True,
+          "...while inside ONE matter its members share entries, and outside it nobody does")
+    check(not by_name()["ask"].run({"question": _q}, _replace(_o9, actor="unknown")).get("cached"),
+          "...and a caller with no actor is never served or stored an entry")
 
     # ── THE GATE: a stored answer whose law moved is NOT served ─────────────
     _stale_ctx = Context(store=_MB(), clock=lambda: "2026-10-01T10:00:00+05:30",
-                         model_for=lambda _o: _rq.quoting_model(_srcs))
+                         actor="a" * 8, model_for=lambda _o: _rq.quoting_model(_srcs))
     by_name()["ask"].run({"question": _q}, _stale_ctx)
-    _key = _ac.lookup_key(question=_q, task="RESEARCH_QUESTION", as_of="2026-10-01")
+    _key = _ac.lookup_key(question=_q, task="RESEARCH_QUESTION", as_of="2026-10-01",
+                          partition="actor:" + "a" * 8)
     _row = _stale_ctx.store.read_cache_entry(_key)
     check(_row is not None, "the answer was stored")
     # Rewrite the stored citation's sha256: the corpus file no longer hashes to it, which
@@ -7182,7 +7543,8 @@ def _test() -> None:
     check(MAX_GRID_CELLS == 500, f"the cap is a declared number ({MAX_GRID_CELLS})")
     _exact = _hV["review_table.create"].run(
         {"name": "at the cap", "document_ids": [("%064x" % i) for i in range(250)],
-         "columns": _cols}, Context(store=_MB(), queue=_MQ2()))
+         "columns": _cols}, Context(store=_MB(), queue=_MQ2(), documents={
+             ("%064x" % i): {"text": "synthetic"} for i in range(250)}))
     check(_exact.get("cells") == 500, f"a grid exactly AT the cap is allowed ({_exact.get('cells')})")
 
     # ── bad input ───────────────────────────────────────────────────────────
@@ -7470,6 +7832,7 @@ def _test() -> None:
 
     # A transport error is the ONLY way to FAILED.
     _ft = Context(store=_MB(), queue=_Q(), clock=lambda: "2026-10-01T10:00:00+05:30",
+                  documents={"a" * 64: {"text": "synthetic"}},  # 028: the caller's own upload
                   model_for=lambda _o: (lambda *_a: (_ for _ in ()).throw(
                       TimeoutError("the provider did not respond"))))
     _ft.documents.update(_e2e.documents)
@@ -7573,7 +7936,10 @@ def _test() -> None:
                      # document.verify -- the Themis tool count is frozen at 31 and
                      # scripts/themis_mcp.py must not be edited here -- NOT because case
                      # law is sensitive: it is public LICENSED open data.
-                     "research.cases", "research.web"},
+                     "research.cases", "research.web",
+                     # 028. Who holds access to which matter names the firm's clients and
+                     # its people; administration, not an agent task.
+                     "matters.members", "matters.access_report"},
           f"...and the verbs that opt out are the ones that should: client and draft lists, the "
           f"firm's SPEND, and "
           f"every read of the VAULT -- which is the client's documents themselves. "
@@ -7637,7 +8003,7 @@ def _test() -> None:
           "...while a WRITE verb is kept out of MCP by mcp_tools(), not by the author "
           "remembering to")
     check("widgets.delete" in write_verbs(hypo), "...and is named in write_verbs()")
-    check(len(VERBS) == 56 and "widgets.count" not in rest_spec(),
+    check(len(VERBS) == 62 and "widgets.count" not in rest_spec(),
           "...and the probe changed nothing in this module: the surfaces are generated "
           "from an argument, not from a global the test rebound")
 
@@ -7674,7 +8040,7 @@ def _test() -> None:
 
     class _S:
         def read(self, rid):
-            return {"id": "r1", "status": "ANSWERED",
+            return {"id": "r1", "status": "ANSWERED", "actor_id": "unknown",
                     "steps": [{"capability": "intake"}]} if rid == "r1" else None
     s = Context(store=_S())
     check(_runs_get({"run_id": "nope"}, s)["code"] == "NOT_FOUND",
@@ -7873,7 +8239,7 @@ def _test() -> None:
             sha = _t3_files.put(data)
             did = f"doc-{sha[:12]}"
             _t3_store.write_vault_document(
-                {"document_id": did, "matter_id": None, "sha256": sha, "name": name,
+                {"document_id": did, "matter_id": None, "uploaded_by": "unknown", "sha256": sha, "name": name,
                  "byte_count": len(data), "state": "INGESTED"})
             return did
 
@@ -7939,7 +8305,7 @@ def _test() -> None:
 
         # A deleted document, and a record whose bytes are gone: both named, neither a pass.
         _t3_store.write_vault_document(
-            {"document_id": "doc-gone", "matter_id": None, "sha256": "e" * 64,
+            {"document_id": "doc-gone", "matter_id": None, "uploaded_by": "unknown", "sha256": "e" * 64,
              "name": "gone.pdf", "byte_count": 1, "state": "INGESTED"})
         _t3_g = _document_verify({"document_id": "doc-gone"}, _t3_ctx)
         check(_t3_g.get("code") == "NOT_FOUND"
@@ -7972,7 +8338,7 @@ def _test() -> None:
         _t4_sha = _t4_files.put(_t3_signed[0].read_bytes())
         _t4_did = "11111111-1111-4111-8111-111111111111"
         _t4_store.write_vault_document(
-            {"document_id": _t4_did, "matter_id": None, "sha256": _t4_sha,
+            {"document_id": _t4_did, "matter_id": None, "uploaded_by": "unknown", "sha256": _t4_sha,
              "name": "cert.pdf", "byte_count": 10, "state": "INGESTED"})
         # The document's own text, through the vault chunks the verb reads -- so the date
         # comes from the document rather than from an argument.
@@ -8027,7 +8393,7 @@ def _test() -> None:
         _t4_bsha = _t4_files.put(bytes(_t4_bad))
         _t4_bdid = "22222222-2222-4222-8222-222222222222"
         _t4_store.write_vault_document(
-            {"document_id": _t4_bdid, "matter_id": None, "sha256": _t4_bsha,
+            {"document_id": _t4_bdid, "matter_id": None, "uploaded_by": "unknown", "sha256": _t4_bsha,
              "name": "resaved.pdf", "byte_count": 10, "state": "INGESTED"})
         _t4m = _document_check({"document_id": _t4_bdid, "as_of": "2026-10-05"}, _t4_ctx)
         check(_t4m["verification"]["overall"] == "VERIFICATION_FAILED"
@@ -8575,7 +8941,9 @@ def _test() -> None:
 
     from gateway.jobs import MemoryQueue as _MQ2
     _mctx = Context(store=MemoryBackend(), queue=_MQ2(),
-                    clock=lambda: "2026-10-05T00:00:00Z")
+                    clock=lambda: "2026-10-05T00:00:00Z",
+                    # 028: the caller's own uploads, so the hashes are theirs to read.
+                    documents={h * 64: {"text": "synthetic"} for h in "abc"})
     # `_review_table_create` reads the ledger through `_ledger()`, not from ctx, so the
     # tracker is injected there. Patched rather than mocked away: the verb must use a REAL
     # BudgetTracker, because the pause comes from `reserve()` refusing and nothing else.
@@ -8629,6 +8997,7 @@ def _test() -> None:
 
     # A table that did NOT pause says so, so the field is not simply always true.
     _mctx2 = Context(store=MemoryBackend(), queue=_MQ2(),
+                     documents={"d" * 64: {"text": "synthetic"}},  # 028: the caller's own upload
                      clock=lambda: "2026-10-05T00:00:00Z")
     _mfresh = _MBT(store=_MMem(), today=_mdate(2026, 10, 5))
     globals()["_ledger"] = lambda: _mfresh
@@ -8749,7 +9118,8 @@ def _test() -> None:
     # "Not dispatched because there is no worker" and "dispatched, waiting its turn" are
     # both PENDING, and the difference is the whole of whether anything will ever happen.
     # A silent PENDING is a table that looks busy and is not.
-    _d3_nq = Context(store=MemoryBackend(), clock=lambda: "2026-10-05T00:00:00Z")
+    _d3_nq = Context(store=MemoryBackend(), clock=lambda: "2026-10-05T00:00:00Z",
+                     documents={"e" * 64: {"text": "synthetic"}})  # 028: own upload
     _d3_fresh = _MBT(store=_MMem(), today=_mdate(2026, 10, 5))
     _mreal2 = globals()["_ledger"]
     globals()["_ledger"] = lambda: _d3_fresh
@@ -8778,6 +9148,7 @@ def _test() -> None:
     # With a queue and no worker: dispatched, and nothing has claimed them.
     _d3_q = _MQ2()
     _d3_wq = Context(store=MemoryBackend(), queue=_d3_q,
+                     documents={"f" * 64: {"text": "synthetic"}},  # 028: the caller's own upload
                      clock=lambda: "2026-10-05T00:00:00Z")
     _d3_fresh2 = _MBT(store=_MMem(), today=_mdate(2026, 10, 5))
     globals()["_ledger"] = lambda: _d3_fresh2
@@ -8889,6 +9260,7 @@ def _test() -> None:
 
     _d4_fresh = _MBT(store=_MMem(), today=_mdate(2026, 10, 5))
     _d4_gctx = Context(store=MemoryBackend(), queue=_MQ2(),
+                       documents={"a1" * 32: {"text": "synthetic"}},  # 028: the caller's own upload
                        clock=lambda: "2026-10-05T00:00:00Z")
     _mreal3 = globals()["_ledger"]
     globals()["_ledger"] = lambda: _d4_fresh

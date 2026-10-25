@@ -120,8 +120,8 @@ class ConversationReliability(unittest.TestCase):
 
     def test_existing_matter_is_stable_and_unknown_matter_is_rejected(self):
         first_matter, other = str(uuid.uuid4()), str(uuid.uuid4())
-        self.store.write_matter({"matter_id": first_matter, "name": "First"})
-        self.store.write_matter({"matter_id": other, "name": "Other"})
+        self.store.write_matter({"matter_id": first_matter, "name": "First"}, owner="unknown")
+        self.store.write_matter({"matter_id": other, "name": "Other"}, owner="unknown")
         first = self.send(matter_id=first_matter)
         self.assertEqual(self.send(conversation_id=first["conversation_id"], matter_id=other)["code"], "MATTER_CONFLICT")
         self.assertEqual(self.send(matter_id=str(uuid.uuid4()))["code"], "NOT_FOUND")
@@ -139,7 +139,7 @@ class ConversationReliability(unittest.TestCase):
             content = b"MINUTES OF THE BOARD MEETING. Present: three directors."
             sha = files.put(content)
             did = str(uuid.uuid4())
-            self.store.write_vault_document({"document_id": did, "sha256": sha, "name": "board.txt", "byte_count": len(content), "state": "INGESTED"})
+            self.store.write_vault_document({"uploaded_by": "unknown", "document_id": did, "sha256": sha, "name": "board.txt", "byte_count": len(content), "state": "INGESTED"})
             self.ctx = replace(self.ctx, files=files, documents={})
             result = self.send(text="Review these minutes", file_ids=[did], task_override="REVIEW_DOCUMENT")
             self.assertIsNone(result["envelope"])
@@ -148,10 +148,10 @@ class ConversationReliability(unittest.TestCase):
 
     def test_cross_matter_file_rejected_before_message_write(self):
         a, b = str(uuid.uuid4()), str(uuid.uuid4())
-        self.store.write_matter({"matter_id": a, "name": "A"})
-        self.store.write_matter({"matter_id": b, "name": "B"})
+        self.store.write_matter({"matter_id": a, "name": "A"}, owner="unknown")
+        self.store.write_matter({"matter_id": b, "name": "B"}, owner="unknown")
         did = str(uuid.uuid4())
-        self.store.write_vault_document({"document_id": did, "matter_id": b, "sha256": "1"*64, "name": "secret.txt", "state": "INGESTED"})
+        self.store.write_vault_document({"uploaded_by": "unknown", "document_id": did, "matter_id": b, "sha256": "1"*64, "name": "secret.txt", "state": "INGESTED"})
         result = self.send(matter_id=a, file_ids=[did])
         self.assertEqual(result["code"], "DOCUMENT_SCOPE_MISMATCH")
         self.assertFalse(self.store.messages)
@@ -164,7 +164,7 @@ class ConversationReliability(unittest.TestCase):
             other = MemoryBackend(tenant_id=str(uuid.uuid4()))
             a, b = str(uuid.uuid4()), str(uuid.uuid4())
             for store, did in ((self.store, a), (other, b)):
-                store.write_vault_document({"document_id": did, "sha256": sha, "name": "shared.txt", "state": "INGESTED"})
+                store.write_vault_document({"uploaded_by": "unknown", "document_id": did, "sha256": sha, "name": "shared.txt", "state": "INGESTED"})
                 store.write_vault_chunks(did, [content.decode()])
             result = verbs._vault_delete({"document_id": a}, replace(self.ctx, files=files))
             self.assertFalse(result["bytes_destroyed"])
@@ -206,7 +206,7 @@ class ConversationReliability(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             files = LocalFileStore(Path(folder))
             did = str(uuid.uuid4())
-            self.store.write_vault_document({"document_id": did, "sha256": "1" * 64,
+            self.store.write_vault_document({"uploaded_by": "unknown", "document_id": did, "sha256": "1" * 64,
                                             "name": "missing.txt", "state": "INGESTED"})
             self.ctx = replace(self.ctx, files=files)
             result = self.send(text="Review this", file_ids=[did], task_override="REVIEW_DOCUMENT")
@@ -231,7 +231,7 @@ class ConversationReliability(unittest.TestCase):
 
     def test_abandoned_sync_reservation_becomes_failed_without_redispatch(self):
         cid, mid = str(uuid.uuid4()), str(uuid.uuid4())
-        self.store.reserve_turn({"conversation_id": cid},
+        self.store.reserve_turn({"conversation_id": cid, "actor_id": "unknown"},
             {"message_id": str(uuid.uuid4()), "role": "user", "text": "draft"},
             {"message_id": mid, "role": "assistant", "task": "DRAFT", "metadata":
              {"accepted_at": "2026-10-09T00:00:00Z", "as_of": "2026-10-09"}},
@@ -279,7 +279,8 @@ class ConversationReliability(unittest.TestCase):
                 "picked": ["held", "vault"], "searched": ["held", "vault"],
                 "report": [{"id": "vault", "outcome": "SEARCHED_HITS", "hits": 5}], "note": "old"}}}
         with patch.object(self.store, "read_cache_entry", return_value=row), patch("checker.answer_cache.servable", return_value=(True, "test")):
-            result, _ = verbs._cache_lookup(QUESTION, "RESEARCH_QUESTION", None, self.ctx)
+            result, _ = verbs._cache_lookup(QUESTION, "RESEARCH_QUESTION", None,
+                                            replace(self.ctx, actor="a" * 8))
         self.assertEqual(result["sources"]["searched"], ["held"])
         self.assertEqual(result["sources"]["report"][0]["outcome"], "NOT_SEARCHED")
         self.assertIn("no new search ran", result["sources"]["note"])

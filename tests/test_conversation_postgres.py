@@ -44,8 +44,11 @@ class PostgresConversationReliability(unittest.TestCase):
 
     def counts(self):
         with self.store._conn() as c:
-            return {table: c.execute("SELECT count(*) FROM " + table).fetchone()[0]
-                    for table in ("conversations", "messages", "runs", "jobs")}
+            out = {table: c.execute("SELECT count(*) FROM " + table).fetchone()[0]
+                   for table in ("conversations", "messages", "runs")}
+        with self.queue._conn() as c:   # 028: only the queue scope reads jobs
+            out["jobs"] = c.execute("SELECT count(*) FROM jobs").fetchone()[0]
+        return out
 
     def test_duplicate_request_is_one_transaction_across_connections(self):
         args = {"text": QUESTION, "request_id": "concurrent-same-request"}
@@ -98,7 +101,7 @@ class PostgresConversationReliability(unittest.TestCase):
     def test_bounded_catalog_obeys_real_rls_and_matter_scope(self):
         from gateway.verbs import _vault_list
         matter = str(uuid.uuid4())
-        self.store.write_matter({"matter_id": matter, "name": "Court matter"})
+        self.store.write_matter({"matter_id": matter, "name": "Court matter"}, owner=self.actor)
         for i, (name, scope, state) in enumerate([
             ("Unfiled order.pdf", None, "INGESTED"), ("100%_draft.docx", None, "PENDING"),
             ("Matter order.pdf", matter, "INGESTED"), ("Deleted.pdf", None, "DELETED"),

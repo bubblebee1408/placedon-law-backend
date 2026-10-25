@@ -80,6 +80,31 @@ def _identity_failure(queue, job, error: str) -> Outcome:
     return Outcome(job.run_id, FAILED, error=error)
 
 
+# 028. One sentence, whatever was revoked: naming the matter or document would tell the
+# actor, who may no longer use it, something about it.
+ACCESS_REVOKED = ("The account that submitted this work no longer has access to what it "
+                  "names. Nothing was published.")
+
+
+def _still_allowed(store, job) -> bool:
+    """gateway/access.job_allowed for this job's own actor, never the worker's."""
+    from types import SimpleNamespace
+    from gateway import access
+    who = SimpleNamespace(actor=job.actor_id, store=store, documents={}, role="")
+    return access.job_allowed(who, job.run_id, job.args)
+
+
+def _access_revoked(queue, store, job) -> Outcome:
+    """Stop the job without publishing anything. The run is marked FAILED with no result:
+    by the actor's store if its policy still lets it write the run, and otherwise by the
+    queue's dead-letter reconcile, under 028's `queue` scope, which owns a dead job's run."""
+    try:
+        store.set_run(job.run_id, status=FAILED, result={"error": ACCESS_REVOKED})
+    except Exception:                                            # noqa: BLE001
+        pass  # The reconcile below is the backstop.
+    return _identity_failure(queue, job, ACCESS_REVOKED)
+
+
 def postgres_job_bindings(url: str, *, tenant_id: str, files=None):
     """Build handlers from trusted job columns; no payload field controls identity."""
     from gateway.store import PostgresBackend
@@ -148,6 +173,10 @@ def run_one(*, queue, store, handlers: dict[str, Callable], worker: str = "w1",
                          "An administrator must check the actor account before resubmission.")
                 store.set_run(job.run_id, status=FAILED, result={"error": error})
                 return _identity_failure(queue, job, error)
+        # 028. Matter access is re-checked when the job STARTS, not trusted from submission:
+        # a grant revoked while the job waited must stop it.
+        if not _still_allowed(store, job):
+            return _access_revoked(queue, store, job)
 
     handler = handlers.get(job.intent)
     if handler is None:
@@ -232,6 +261,10 @@ def run_one(*, queue, store, handlers: dict[str, Callable], worker: str = "w1",
                               "detail": "Cancelled. Work already performed remains in the trace."})
         queue.finish(job.job_id, q.CANCELLED)
         return Outcome(job.run_id, REFUSED, CANCELLED_CODE, written, replayed)
+    # 028. And again before PUBLISHING: a grant revoked while the handler ran must not see
+    # its result written where the matter's members -- or the revoked actor -- can read it.
+    if job.actor_id is not None and not _still_allowed(store, job):
+        return _access_revoked(queue, store, job)
     status = result.get("status") if isinstance(result, dict) else None
     # Run status describes execution; the result retains the exact legal outcome.
     # In particular a completed abstention or partial answer must never become ANSWERED.

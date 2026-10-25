@@ -36,7 +36,8 @@ class ActorIdentityTests(unittest.TestCase):
     def make_bound(self, actor="alice", disabled=False):
         queue = MemoryQueue(tenant_id="tenant", actor_id=actor)
         store = ScopedStore("tenant", actor, disabled)
-        store.write_run({"id": "r", "intent": "ask", "status": "PLANNED"})
+        # 028: a submitted run is its submitter's, as runs.submit records it.
+        store.write_run({"id": "r", "intent": "ask", "status": "PLANNED", "actor_id": actor})
         queue.enqueue(run_id="r", intent="ask", args={"actor_id": "mallory"})
         return queue, store
 

@@ -68,7 +68,7 @@ class DraftReviewIntegrity(unittest.TestCase):
     def test_legacy_approval_remains_readable_but_needs_current_review(self):
         import uuid
         did = str(uuid.uuid4())
-        self.ctx.store.write_draft({"draft_id": did, "title": "Legacy"})
+        self.ctx.store.write_draft({"draft_id": did, "title": "Legacy", "actor_id": "unknown"})
         self.ctx.store.append_draft_version({"draft_id": did, "title": "Legacy",
             "body": "Old text", "slots": [], "blocking_count": 0,
             "approved_by": "historical reviewer", "approved_at": "2026-10-01T00:00:00Z"})

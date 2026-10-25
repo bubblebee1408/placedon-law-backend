@@ -32,6 +32,10 @@ class WorkerActorPostgres(unittest.TestCase):
         self.store = PostgresBackend(APP_URL, tenant_id=self.tenant, actor_id=self.actors[0])
         self.queue = PostgresQueue(APP_URL, tenant_id=self.tenant, actor_id=self.actors[0])
 
+    def owner_store(self, actor):
+        # 028: an unfiled run is its submitter's, so it is read back as that actor.
+        return PostgresBackend(APP_URL, tenant_id=self.tenant, actor_id=actor)
+
     def enqueue(self, actor):
         store = PostgresBackend(APP_URL, tenant_id=self.tenant, actor_id=actor)
         queue = PostgresQueue(APP_URL, tenant_id=self.tenant, actor_id=actor)
@@ -53,7 +57,7 @@ class WorkerActorPostgres(unittest.TestCase):
                 response = client.post("/v2/vault/upload", headers={"Authorization": "Bearer " + key},
                                        json={"name": "synthetic.txt", "text": "Synthetic agreement for the identity test."})
             self.assertEqual(response.status_code, 200, response.text)
-        with self.store._conn() as conn:
+        with self.queue._conn() as conn:
             rows = conn.execute("SELECT actor_id FROM jobs").fetchall()
         self.assertEqual([str(row[0]) for row in rows], [self.actors[1]])
 
@@ -72,7 +76,7 @@ class WorkerActorPostgres(unittest.TestCase):
                 self.assertEqual(outcome.status, "ANSWERED")
         self.assertEqual(seen, [(self.tenant, a, a, a) for a in self.actors])
         for run_id, actor in zip(runs, self.actors):
-            self.assertEqual(self.store.read_run(run_id)["result"]["actor"], actor)
+            self.assertEqual(self.owner_store(actor).read_run(run_id)["result"]["actor"], actor)
             self.assertEqual(self.queue.get(run_id).actor_id, actor)
         disabled_run = self.enqueue(self.actors[1])
         with self.store._conn() as conn:
@@ -83,7 +87,7 @@ class WorkerActorPostgres(unittest.TestCase):
         self.assertEqual(outcome.status, "FAILED")
         self.assertEqual(len(seen), 2)
         self.assertEqual(self.queue.get(disabled_run).status, "DEAD")
-        self.assertEqual(self.store.read_run(disabled_run)["status"], "FAILED")
+        self.assertEqual(self.owner_store(self.actors[1]).read_run(disabled_run)["status"], "FAILED")
 
     def test_exhausted_binding_failure_reconciles_only_persisted_job_owner(self):
         run_id = self.enqueue(self.actors[1])
@@ -91,19 +95,19 @@ class WorkerActorPostgres(unittest.TestCase):
             raise ConnectionError("private database address")
         for _ in range(3):
             run_one(queue=self.queue, store=self.store, handlers={}, bind_job=failed_binding)
-            with self.store._conn() as conn:
+            with self.queue._conn() as conn:
                 conn.execute("UPDATE jobs SET not_before=NULL WHERE run_id=%s", (run_id,))
         self.assertEqual(self.queue.get(run_id).status, "DEAD")
-        run = self.store.read_run(run_id)
+        run = self.owner_store(self.actors[1]).read_run(run_id)
         self.assertEqual(run["status"], "FAILED")
         self.assertNotIn("private database", str(run))
 
         mismatched_run = self.enqueue(self.actors[1])
-        with self.store._conn() as conn:
+        with self.queue._conn() as conn:
             conn.execute("UPDATE jobs SET actor_id=%s WHERE run_id=%s", (self.actors[0], mismatched_run))
         job = self.queue.claim(worker="synthetic")
         self.queue.fail(job.job_id, "mismatched actor regression", retryable=False)
-        self.assertEqual(self.store.read_run(mismatched_run)["status"], "PLANNED")
+        self.assertEqual(self.owner_store(self.actors[1]).read_run(mismatched_run)["status"], "PLANNED")
 
     def test_dead_job_reconciliation_preserves_completed_run(self):
         run_id = self.enqueue(self.actors[0])

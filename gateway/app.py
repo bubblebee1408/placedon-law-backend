@@ -582,7 +582,7 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
                 tenant_queue = queue_for(principal.tenant_id, principal.actor)
             except SingleTenantOnly as exc:
                 return _single_tenant(exc)
-            ctx = Context(tenant=principal.tenant_id, actor=principal.actor,
+            ctx = Context(tenant=principal.tenant_id, actor=principal.actor, role=principal.role,
                           store=store, documents=documents_for(principal.tenant_id, principal.actor), clock=now,
                           files=app.state.files, queue=tenant_queue,
                           credential_hash=principal.credential_hash)
@@ -798,7 +798,7 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
                             status_code=400, media_type="application/json")
 
         ask_verb = next(v for v in VERBS if v.name == "ask")
-        ctx = Context(tenant=principal.tenant_id, actor=principal.actor,
+        ctx = Context(tenant=principal.tenant_id, actor=principal.actor, role=principal.role,
                       store=store, documents=documents_for(principal.tenant_id, principal.actor), clock=now)
 
         if not may(principal.role, "ask"):
@@ -907,7 +907,7 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
                 tenant_queue = queue_for(principal.tenant_id, principal.actor)
             except SingleTenantOnly as exc:
                 return _single_tenant(exc)
-            ctx = Context(tenant=principal.tenant_id, actor=principal.actor,
+            ctx = Context(tenant=principal.tenant_id, actor=principal.actor, role=principal.role,
                           store=store, documents=documents_for(principal.tenant_id, principal.actor), clock=now,
                           files=app.state.files, queue=tenant_queue)
             if not may(principal.role, verb_name):
@@ -1469,7 +1469,7 @@ def _test() -> None:
     tr = client.get("/v2/runs/nosuchrun/trace")
     check(tr.status_code == 404, "...and so is its trace")
 
-    app.state.run_store.write({"id": "r1", "status": "ANSWERED",
+    app.state.run_store.write({"id": "r1", "status": "ANSWERED", "actor_id": A,
                                "steps": [{"capability": "intake"}]})
     got = json.loads(client.get("/v2/runs/r1").content)
     check(got["status"] == "ANSWERED" and "steps" not in got,
@@ -1501,8 +1501,11 @@ def _test() -> None:
                                  # check at all -- named here anyway, so this count stays
                                  # the single place "every write verb" is enumerated.
                                  "auth.login", "auth.logout", "invites.create",
-                                 "invites.accept"},
-          f"eighteen write verbs today, and each is named ({sorted(write_verbs())})")
+                                 "invites.accept",
+                                 # 028: who may reach a matter or a document.
+                                 "matters.grant", "matters.revoke", "vault.share",
+                                 "access.reassign"},
+          f"twenty-two write verbs today, and each is named ({sorted(write_verbs())})")
 
     # ── auth: a key is required everywhere except liveness ──────────────────
     check(anon.get(HEALTH_PATH).status_code == 200,
