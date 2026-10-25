@@ -31,6 +31,7 @@ from dataclasses import dataclass, field
 from typing import Callable
 
 from gateway import access
+from gateway.store import READABLE_VAULT_STATES
 
 STRING = "string"
 OBJECT = "object"
@@ -1152,6 +1153,26 @@ def _affirmed(value) -> bool:
     if value is True:
         return True
     return isinstance(value, str) and value.strip().lower() in ("true", "yes")
+
+
+def _partial_note(class_reason) -> str:
+    """The reader-facing half of a PARTIAL document's class_reason: which pages are missing.
+    The classifier's own reasoning before it is an operator's note, not the reader's."""
+    tail = str(class_reason or "").partition("PARTIAL: ")[2].strip()
+    return (tail[:1].upper() + tail[1:] + ".") if tail else "Some pages could not be read."
+
+
+def _boolean(value, *, default: bool) -> bool | None:
+    """A BOOLEAN field as sent: JSON true/false, or the strings "true"/"false" a CLI or
+    form sends. Absent is `default`. Anything else is None -- the caller refuses it,
+    because guessing which way an ambiguous value meant is how a control fails open."""
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str) and value.strip().lower() in ("true", "false"):
+        return value.strip().lower() == "true"
+    return None
 
 
 def _decide(args: dict, ctx: Context, *, decision: str) -> dict:
@@ -2406,7 +2427,7 @@ def _resolve_conversation_documents(file_ids, ctx: Context, matter_id, *, eviden
             elif evidence_only and (row.get("byte_count", 0) > de.MAX_DOCUMENT_BYTES
                     or byte_total + row.get("byte_count", 0) > de.MAX_TOTAL_BYTES):
                 doc.update(cannot_read="Document exceeds this turn's reading limit.", limit_exceeded=True)
-            elif row.get("deleted_at") or row.get("state") != "INGESTED":
+            elif row.get("deleted_at") or row.get("state") not in READABLE_VAULT_STATES:
                 doc["cannot_read"] = "This document is not ready to read. Check its upload status."
             elif ctx.files is None:
                 doc["cannot_read"] = "The document file store is unavailable. Nothing was read."
@@ -2422,6 +2443,10 @@ def _resolve_conversation_documents(file_ids, ctx: Context, matter_id, *, eviden
                     doc["text"] = data.decode("utf-8")
                     if not doc["text"].strip():
                         raise ValueError("empty document")
+                    doc["doc_class"], doc["class_reason"] = row.get("doc_class"), row.get("class_reason")
+                    if row.get("state") == "PARTIAL":
+                        # 029. Readable, and incomplete -- the reader is told which pages.
+                        doc["partial"] = _partial_note(row.get("class_reason"))
                 except (OSError, ValueError, UnicodeError, FileStoreError):
                     doc["cannot_read"] = "The saved document could not be read or verified."
             resolved[fid] = doc
@@ -2464,7 +2489,7 @@ def _document_summary_job(args: dict, ctx: Context) -> dict:
     for fid in file_ids:
         row = ctx.store.read_vault_document(fid)
         if (not row or not access.document_allowed(ctx, row)
-                or row.get("deleted_at") or row.get("state") != "INGESTED"
+                or row.get("deleted_at") or row.get("state") not in READABLE_VAULT_STATES
                 or row.get("matter_id") != matter_id or row.get("sha256") != expected.get(fid)):
             return _refuse("DOCUMENT_SCOPE_MISMATCH", "A selected document changed or is unavailable. No summary was generated.")
     resolved, refusal = _resolve_conversation_documents(file_ids, ctx, matter_id,
@@ -2644,7 +2669,8 @@ def _conversation_send(args: dict, ctx: Context) -> dict:
         sha256_by_id = {}
         for fid in raw_ids:
             row = ctx.store.read_vault_document(fid)
-            if not row or row.get("state") != "INGESTED" or row.get("deleted_at"):
+            if (not row or not access.document_allowed(ctx, row)
+                    or row.get("state") not in READABLE_VAULT_STATES or row.get("deleted_at")):
                 return _refuse("DOCUMENT_UNAVAILABLE", "Save each selected file to the vault and wait until it is ready before summarizing.")
             sha256_by_id[fid] = row.get("sha256")
         from gateway import document_evidence as de
@@ -3031,9 +3057,22 @@ def _vault_ingest_job(args: dict, ctx: Context) -> dict:
     if refusal:
         return refusal
     from agents.vault_ingest import ingest
+    from gateway.document_evidence import PAGE_BREAK
 
+    def pages(data, name):
+        # A PDF's pages arrive joined by form feeds. A page with no text layer is NAMED,
+        # so the document is PARTIAL rather than silently short of a page.
+        from checker.page_stream import PARTIAL, Extraction
+        texts = data.decode("utf-8", "replace").split(PAGE_BREAK)
+        failed = tuple(n for n, t in enumerate(texts, 1) if not t.strip())
+        return Extraction(status=PARTIAL if failed else "COMPLETE", page_count=len(texts),
+                          pages={n: t for n, t in enumerate(texts, 1) if t.strip()},
+                          failed_pages=failed)
+
+    paged = PAGE_BREAK.encode() in (ctx.files.get(str(args.get("sha256") or "")) or b"")
     outcome = ingest(args, files=ctx.files, store=ctx.store,
-                     extract=lambda data, name: data.decode("utf-8", "replace"))
+                     extract=lambda data, name: data.decode("utf-8", "replace"),
+                     pages=pages if paged else None)
     return outcome.to_dict()
 
 
@@ -3450,7 +3489,7 @@ def _document_check(args: dict, ctx: Context) -> dict:
                         if c["result"] == dver.NOT_CHECKED)
     action = dval.act(validity, verification_status=verified["overall"],
                       not_checked=not_checked,
-                      renewable=bool(args.get("renewable")))
+                      renewable=_affirmed(args.get("renewable")))
 
     row = None
     if ctx.store is not None:
@@ -3539,13 +3578,18 @@ def _vault_compile(args: dict, ctx: Context) -> dict:
     out = []
     for d in docs:
         out.append(dict(d, tags=ctx.store.read_vault_tags(d["document_id"])))
-    unreadable = [d["name"] for d in docs if d.get("state") != "INGESTED"]
+    unreadable = [d["name"] for d in docs if d.get("state") not in READABLE_VAULT_STATES]
+    # 029. Read, but not whole: pages without a text layer are missing from these.
+    incomplete = [d["name"] for d in docs if d.get("state") == "PARTIAL"]
     return {"matter_id": matter_id, "documents": out, "count": len(out),
-            "not_ingested": unreadable,
+            "not_ingested": unreadable, "incomplete": incomplete,
             "note": (f"{len(out)} document(s) filed to this matter. "
                      + (f"{len(unreadable)} could not be read and are listed by name, so "
-                        f"a bundle is never quietly short: {unreadable[:5]}"
-                        if unreadable else "Every one was read."))}
+                        f"a bundle is never quietly short: {unreadable[:5]}. "
+                        if unreadable else "")
+                     + (f"{len(incomplete)} were read except for pages with no text layer: "
+                        f"{incomplete[:5]}." if incomplete else "")
+                     + ("" if unreadable or incomplete else "Every one was read."))}
 
 
 def _vault_delete(args: dict, ctx: Context) -> dict:
@@ -3796,7 +3840,7 @@ def _matters_members(args: dict, ctx: Context) -> dict:
     if refusal:
         return refusal
     return {"matter_id": matter_id, "memberships": ctx.store.list_matter_memberships(
-        matter_id, include_revoked=bool(args.get("include_revoked")))}
+        matter_id, include_revoked=_affirmed(args.get("include_revoked")))}
 
 
 def _matters_access_report(args: dict, ctx: Context) -> dict:
@@ -3834,7 +3878,10 @@ def _vault_share(args: dict, ctx: Context) -> dict:
     if row.get("matter_id") or str(row.get("uploaded_by") or "") != str(ctx.actor):
         return _refuse("FORBIDDEN", "Only the uploader can share an unfiled document. A "
                                     "filed document is shared by granting matter access.")
-    shared = args.get("shared") is not False
+    # `is not False` here re-shared on "false": a string is not the boolean False.
+    shared = _boolean(args.get("shared"), default=True)
+    if shared is None:
+        return _refuse("BAD_REQUEST", "shared must be true or false")
     try:
         out = ctx.store.share_vault_document(a["document_id"], by_actor=ctx.actor,
                                              reason=a["reason"], shared=shared)
@@ -5368,6 +5415,10 @@ def _invites_create(args: dict, ctx: Context) -> dict:
     import uuid
 
     from gateway import accounts
+    # One account per email per firm: an invite to an email that already has one could
+    # only fail at accept, after the invitee chose a password.
+    if ctx.store.find_actor_by_email(email):
+        return _refuse("CONFLICT", "An account with this email already exists in this firm.")
     raw_token, token_hash = accounts.mint_token()
     try:
         row = ctx.store.create_invite({
@@ -5417,14 +5468,21 @@ def _invites_accept(args: dict, ctx: Context) -> dict:
     # The single-use AND expiry guarantees both live in accept_invite's own atomic
     # UPDATE (gateway/store.py) -- "accepted_at IS NULL AND expires_at > now()" -- not in
     # this handler, so a concurrent accept of the same token cannot both win.
-    accepted = store.accept_invite(token_hash, actor_id=new_actor_id,
-                                   now=str(datetime.now(timezone.utc)))
+    from gateway.store import StoreError
+    try:
+        accepted = store.accept_invite(token_hash, actor_id=new_actor_id,
+                                       now=str(datetime.now(timezone.utc)),
+                                       actor={"label": invite["email"], "role": invite["role"],
+                                              "email": invite["email"],
+                                              "password_hash": pw_hash})
+    except StoreError:
+        # The account could not be created (an account with this email appeared after the
+        # invite was issued). The transaction rolled back and the invite is unspent; the
+        # answer is the same one every other unusable token gets.
+        accepted = None
     if accepted is None:
         return _refuse("INVALID_INVITE",
                        "this invite link is not valid or has already been used")
-    store.write_actor({"actor_id": new_actor_id, "label": invite["email"],
-                       "role": invite["role"], "email": invite["email"],
-                       "password_hash": pw_hash})
     return {"status": "accepted", "actor_id": new_actor_id,
             "tenant_id": invite["tenant_id"], "role": invite["role"]}
 

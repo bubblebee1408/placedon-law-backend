@@ -73,6 +73,27 @@ class VaultCatalog(unittest.TestCase):
         self.assertEqual([d["document_id"] for d in verbs._vault_list({}, colleague)["documents"]],
                          [self.ids[0]])
 
+    def test_stop_sharing_means_stop_sharing_whatever_shape_false_arrives_in(self):
+        """`"shared": "false"` used to RE-SHARE: the verb tested `is not False`, and a
+        string is not the boolean False. A privacy control must never fail open."""
+        colleague = verbs.Context(store=self.store, actor=str(uuid.uuid4()))
+        reason = "no longer shared with the firm"
+        sees = lambda: [d["document_id"] for d in verbs._vault_list({}, colleague)["documents"]]   # noqa: E731
+        for off in (False, "false", "FALSE", " false "):
+            with self.subTest(off=off):
+                verbs._vault_share({"document_id": self.ids[0], "reason": reason}, self.ctx)
+                self.assertEqual(sees(), [self.ids[0]])
+                out = verbs._vault_share({"document_id": self.ids[0], "reason": reason,
+                                          "shared": off}, self.ctx)
+                self.assertEqual(out["status"], "UNSHARED")
+                self.assertEqual(sees(), [])
+        for bad in ("no", "0", "", 0, [], {"x": 1}):
+            with self.subTest(bad=bad):
+                out = verbs._vault_share({"document_id": self.ids[0], "reason": reason,
+                                          "shared": bad}, self.ctx)
+                self.assertEqual(out["code"], "BAD_REQUEST", "an ambiguous value is refused")
+                self.assertEqual(sees(), [], "...and changes nothing")
+
     def test_other_tenant_cannot_browse_first_tenants_rows(self):
         other = verbs.Context(store=MemoryBackend(tenant_id=str(uuid.uuid4())))
         self.assertEqual(verbs._vault_list({}, other)["documents"], [])

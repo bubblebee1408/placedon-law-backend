@@ -759,7 +759,8 @@ def run(url: str) -> int:
                   # that skips its immediate predecessor would make a new gap look
                   # intentional. Both now apply, in order.
                   "025_draft_inbox_idx.sql", "026_accounts.sql",
-                  "027_gateway_rate_limits.sql", "028_matter_access.sql"):
+                  "027_gateway_rate_limits.sql", "028_matter_access.sql",
+                  "029_vault_partial.sql"):
             cur.execute(sql(f))
             print(f"  applied {f}")
         _ensure_app_role(cur)

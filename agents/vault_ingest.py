@@ -125,7 +125,11 @@ def ingest(args: dict, *, files, store, extract, pages=None) -> Outcome:
                 "ocr_state": "NOT_NEEDED"})
             return Outcome(did, "CANNOT_READ", reason=paged.detail)
         failed_pages = tuple(paged.failed_pages)
-        text = "\n".join(paged.pages[k] for k in sorted(paged.pages))
+        # Rejoined with form feeds, empty pages kept, so the text that is chunked and tagged
+        # is the stored text: tag spans and text_chars index the same characters a citation
+        # re-read will see.
+        text = ("\f".join(paged.pages.get(n, "") for n in range(1, paged.page_count + 1))
+                if paged.page_count else "\n".join(paged.pages[k] for k in sorted(paged.pages)))
     else:
         text = str(extract(data, name) or "")
     if not text.strip():
@@ -151,10 +155,12 @@ def ingest(args: dict, *, files, store, extract, pages=None) -> Outcome:
         "document_id": did, "matter_id": args.get("matter_id"), "sha256": sha,
         "name": name, "byte_count": len(data), "state": state,
         "doc_class": doc_class, "class_reason": note, "text_chars": len(text),
-        "ocr_state": "NOT_NEEDED"})
+        # A page that could not be read still needs reading: NEEDED, not NOT_NEEDED.
+        "ocr_state": "NEEDED" if failed_pages else "NOT_NEEDED"})
     store.write_vault_chunks(did, chunks)
     store.write_vault_tags(did, tags)
     return Outcome(did, state, doc_class, len(chunks), len(tags), len(text),
+                   ocr_state="NEEDED" if failed_pages else "NOT_NEEDED",
                    reason=note, failed_pages=failed_pages)
 
 

@@ -30,6 +30,7 @@ class EvidencePassage(TypedDict):
     start: int
     end: int
     text: str
+    page: int | None
 
 
 class EvidenceDocument(TypedDict):
@@ -64,6 +65,21 @@ _STOP = frozenset('a an the is are was were be being been to of and or for in on
                   'attached attachment agreement contract clause section'.split())
 
 
+# A PDF's pages arrive SEPARATED by form feeds: N pages, N-1 breaks (the frontend reads
+# it page by page). Unlike pdftotext, which ends every page with one, a trailing \f here
+# means the last page had no text layer. Text with none -- a .docx, a .txt -- has no pages.
+PAGE_BREAK = '\f'
+PAGES_FROM_BREAKS = 'Page numbers come from the page breaks in the uploaded text layer; a page that had no text layer is not in it.'
+PAGES_UNKNOWN = 'Offsets count Unicode characters in extracted text, not original PDF pages or bytes.'
+
+
+def page_of(text: str, offset: int) -> int | None:
+    """The 1-indexed page `offset` falls on, or None when the text carries no pages."""
+    if PAGE_BREAK not in text:
+        return None
+    return text.count(PAGE_BREAK, 0, offset) + 1
+
+
 def is_overview(query: str) -> bool:
     return bool(_OVERVIEW.search(query))
 
@@ -86,7 +102,8 @@ def _spans(text: str):
     """Keep exact source offsets while splitting paragraphs and capping long spans."""
     def paragraphs():
         start = 0
-        for separator in re.finditer(r'\n[ \t\r]*\n', text):
+        # A page break is a hard boundary: no passage, and so no quote, spans two pages.
+        for separator in re.finditer(r'\n[ \t\r]*\n|\f', text):
             yield start, separator.start()
             start = separator.end()
         yield start, len(text)
@@ -119,7 +136,7 @@ def collect(query: str, documents: dict, *, enabled: bool = True) -> DocumentEvi
         'documents': [], 'passages': [], 'limitations': [
             'These are exact excerpts from stored extracted text, not verified legal authority.',
             'Keyword matching can miss relevant wording; no match does not establish absence.',
-            'Offsets count Unicode characters in extracted text, not original PDF pages or bytes.',
+            PAGES_UNKNOWN,
             'Only selected documents were searched. Held law, the web and other files were not searched.',
             'Excerpts are saved conversation snapshots. Deleting a vault document does not remove excerpts already saved in a conversation.',
         ],
@@ -170,7 +187,7 @@ def collect(query: str, documents: dict, *, enabled: bool = True) -> DocumentEvi
                 continue
             passage: EvidencePassage = {'id': f'doc-{position + 1}-{start}-{end}',
                 'document_id': did, 'name': row['name'], 'sha256': sha,
-                'start': start, 'end': end, 'text': snippet}
+                'start': start, 'end': end, 'text': snippet, 'page': page_of(raw, start)}
             # Only the eight best records stay resident, even for hundreds of thousands
             # of tiny paragraphs. Ranking is identical to the previous stable full sort.
             if len(candidates) == MAX_PASSAGES:
@@ -198,13 +215,21 @@ def collect(query: str, documents: dict, *, enabled: bool = True) -> DocumentEvi
                 if ordinal in selected:
                     result['passages'].append({'id': f'doc-{position + 1}-{start}-{end}',
                         'document_id': did, 'name': row['name'], 'sha256': row['sha256'],
-                        'start': start, 'end': end, 'text': raw[start:end]})
+                        'start': start, 'end': end, 'text': raw[start:end],
+                        'page': page_of(raw, start)})
     for row in result['documents']:
         selected = [p for p in result['passages'] if p['document_id'] == row['document_id']]
         row['shown_passages'] = len(selected)
         row['excerpt_chars'] = sum(p['end'] - p['start'] for p in selected)
         if row['status'] == 'SEARCHED':
             row['excerpt_coverage_ratio'] = row['excerpt_chars'] / row['total_chars']
+    for doc in documents.values():
+        if doc.get('partial') and not doc.get('cannot_read'):
+            result['limitations'].append(f"{str(doc.get('name') or 'A document')[:200]}: {doc['partial']}")
+    result['partial_documents'] = [str(doc.get('name') or did)[:200] for did, doc in documents.items()
+                                   if doc.get('partial') and not doc.get('cannot_read')]
+    if any(PAGE_BREAK in str(doc.get('text') or '') for doc in documents.values()):
+        result['limitations'][2] = PAGES_FROM_BREAKS
     if not enabled:
         result['limitations'][3] = 'No source was searched because document sources are not selected.'
     elif not result['searched_document_ids']:
@@ -215,6 +240,14 @@ def collect(query: str, documents: dict, *, enabled: bool = True) -> DocumentEvi
 
 
 def description(evidence: DocumentEvidence) -> str:
+    partial = evidence.get('partial_documents') or []
+    if partial and evidence['status'] in ('NO_MATCH', 'EXCERPTS_FOUND'):
+        return (_description(evidence) + ' ' + ', '.join(partial)
+                + ' had pages with no text layer; those pages were not searched.')
+    return _description(evidence)
+
+
+def _description(evidence: DocumentEvidence) -> str:
     if evidence['status'] == 'NOT_SEARCHED':
         return 'Your attachments were not searched. Enable your documents in Sources, then ask again.'
     if evidence['status'] == 'UNAVAILABLE':
