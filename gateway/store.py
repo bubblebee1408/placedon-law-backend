@@ -1867,6 +1867,13 @@ class PostgresBackend:
             pass
         try:
             with self._conn() as c, c.transaction():
+                # Lock the invite while it is still usable, BEFORE creating anything: an
+                # unknown, used or expired token creates no account and gets the same None
+                # the memory backend gives. The row lock keeps two accepts from both passing.
+                if c.execute("SELECT 1 FROM invites WHERE token_hash = %s AND accepted_at IS NULL "
+                             "AND expires_at > now() FOR UPDATE",
+                             (str(token_hash or ""),)).fetchone() is None:
+                    raise _Spent()
                 if actor is not None:
                     c.execute(
                         "INSERT INTO actors (actor_id, tenant_id, label, role, email, "
