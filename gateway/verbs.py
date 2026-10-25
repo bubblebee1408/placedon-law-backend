@@ -31,6 +31,7 @@ from dataclasses import dataclass, field
 from typing import Callable
 
 from gateway import access
+from gateway.store import READABLE_VAULT_STATES
 
 STRING = "string"
 OBJECT = "object"
@@ -2419,7 +2420,7 @@ def _resolve_conversation_documents(file_ids, ctx: Context, matter_id, *, eviden
             elif evidence_only and (row.get("byte_count", 0) > de.MAX_DOCUMENT_BYTES
                     or byte_total + row.get("byte_count", 0) > de.MAX_TOTAL_BYTES):
                 doc.update(cannot_read="Document exceeds this turn's reading limit.", limit_exceeded=True)
-            elif row.get("deleted_at") or row.get("state") != "INGESTED":
+            elif row.get("deleted_at") or row.get("state") not in READABLE_VAULT_STATES:
                 doc["cannot_read"] = "This document is not ready to read. Check its upload status."
             elif ctx.files is None:
                 doc["cannot_read"] = "The document file store is unavailable. Nothing was read."
@@ -2435,6 +2436,10 @@ def _resolve_conversation_documents(file_ids, ctx: Context, matter_id, *, eviden
                     doc["text"] = data.decode("utf-8")
                     if not doc["text"].strip():
                         raise ValueError("empty document")
+                    doc["doc_class"], doc["class_reason"] = row.get("doc_class"), row.get("class_reason")
+                    if row.get("state") == "PARTIAL":
+                        # 029. Readable, and incomplete -- the reader is told which pages.
+                        doc["partial"] = str(row.get("class_reason") or "Some pages could not be read.")
                 except (OSError, ValueError, UnicodeError, FileStoreError):
                     doc["cannot_read"] = "The saved document could not be read or verified."
             resolved[fid] = doc
@@ -2477,7 +2482,7 @@ def _document_summary_job(args: dict, ctx: Context) -> dict:
     for fid in file_ids:
         row = ctx.store.read_vault_document(fid)
         if (not row or not access.document_allowed(ctx, row)
-                or row.get("deleted_at") or row.get("state") != "INGESTED"
+                or row.get("deleted_at") or row.get("state") not in READABLE_VAULT_STATES
                 or row.get("matter_id") != matter_id or row.get("sha256") != expected.get(fid)):
             return _refuse("DOCUMENT_SCOPE_MISMATCH", "A selected document changed or is unavailable. No summary was generated.")
     resolved, refusal = _resolve_conversation_documents(file_ids, ctx, matter_id,
@@ -2657,7 +2662,7 @@ def _conversation_send(args: dict, ctx: Context) -> dict:
         sha256_by_id = {}
         for fid in raw_ids:
             row = ctx.store.read_vault_document(fid)
-            if not row or row.get("state") != "INGESTED" or row.get("deleted_at"):
+            if not row or row.get("state") not in READABLE_VAULT_STATES or row.get("deleted_at"):
                 return _refuse("DOCUMENT_UNAVAILABLE", "Save each selected file to the vault and wait until it is ready before summarizing.")
             sha256_by_id[fid] = row.get("sha256")
         from gateway import document_evidence as de
@@ -3044,9 +3049,22 @@ def _vault_ingest_job(args: dict, ctx: Context) -> dict:
     if refusal:
         return refusal
     from agents.vault_ingest import ingest
+    from gateway.document_evidence import PAGE_BREAK
 
+    def pages(data, name):
+        # A PDF's pages arrive joined by form feeds. A page with no text layer is NAMED,
+        # so the document is PARTIAL rather than silently short of a page.
+        from checker.page_stream import PARTIAL, Extraction
+        texts = data.decode("utf-8", "replace").split(PAGE_BREAK)
+        failed = tuple(n for n, t in enumerate(texts, 1) if not t.strip())
+        return Extraction(status=PARTIAL if failed else "COMPLETE", page_count=len(texts),
+                          pages={n: t for n, t in enumerate(texts, 1) if t.strip()},
+                          failed_pages=failed)
+
+    paged = PAGE_BREAK.encode() in (ctx.files.get(str(args.get("sha256") or "")) or b"")
     outcome = ingest(args, files=ctx.files, store=ctx.store,
-                     extract=lambda data, name: data.decode("utf-8", "replace"))
+                     extract=lambda data, name: data.decode("utf-8", "replace"),
+                     pages=pages if paged else None)
     return outcome.to_dict()
 
 
@@ -3552,7 +3570,7 @@ def _vault_compile(args: dict, ctx: Context) -> dict:
     out = []
     for d in docs:
         out.append(dict(d, tags=ctx.store.read_vault_tags(d["document_id"])))
-    unreadable = [d["name"] for d in docs if d.get("state") != "INGESTED"]
+    unreadable = [d["name"] for d in docs if d.get("state") not in READABLE_VAULT_STATES]
     return {"matter_id": matter_id, "documents": out, "count": len(out),
             "not_ingested": unreadable,
             "note": (f"{len(out)} document(s) filed to this matter. "

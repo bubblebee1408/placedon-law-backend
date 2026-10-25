@@ -314,7 +314,9 @@ CACHE_KEYS = ("lookup_key", "content_key", "question", "task", "as_of", "sources
 CACHE_STATS = ("hits", "misses", "stale")
 
 # V1. 020's state CHECK, named once so the dict and the database cannot disagree.
-VAULT_STATES = ("PENDING", "INGESTED", "CANNOT_READ", "DELETED")
+VAULT_STATES = ("PENDING", "INGESTED", "PARTIAL", "CANNOT_READ", "DELETED")
+# 029. Stored text a person may read and attach: complete, or complete except named pages.
+READABLE_VAULT_STATES = ("INGESTED", "PARTIAL")
 VAULT_OCR_STATES = ("NOT_NEEDED", "NEEDED", "BLOCKED", "DONE")
 
 
@@ -2279,7 +2281,7 @@ class PostgresBackend:
                     "class_reason = EXCLUDED.class_reason, "
                     "text_chars = EXCLUDED.text_chars, ocr_state = EXCLUDED.ocr_state, "
                     "matter_id = EXCLUDED.matter_id, "
-                    "ingested_at = CASE WHEN EXCLUDED.state = 'INGESTED' THEN now() "
+                    "ingested_at = CASE WHEN EXCLUDED.state IN ('INGESTED', 'PARTIAL') THEN now() "
                     "ELSE vault_documents.ingested_at END",
                     (doc["document_id"], self.tenant_id,
                      (str(doc.get("matter_id") or "").strip() or None), doc["sha256"],

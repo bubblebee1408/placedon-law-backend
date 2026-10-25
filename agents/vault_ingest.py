@@ -151,10 +151,12 @@ def ingest(args: dict, *, files, store, extract, pages=None) -> Outcome:
         "document_id": did, "matter_id": args.get("matter_id"), "sha256": sha,
         "name": name, "byte_count": len(data), "state": state,
         "doc_class": doc_class, "class_reason": note, "text_chars": len(text),
-        "ocr_state": "NOT_NEEDED"})
+        # A page that could not be read still needs reading: NEEDED, not NOT_NEEDED.
+        "ocr_state": "NEEDED" if failed_pages else "NOT_NEEDED"})
     store.write_vault_chunks(did, chunks)
     store.write_vault_tags(did, tags)
     return Outcome(did, state, doc_class, len(chunks), len(tags), len(text),
+                   ocr_state="NEEDED" if failed_pages else "NOT_NEEDED",
                    reason=note, failed_pages=failed_pages)
 
 
