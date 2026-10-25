@@ -86,8 +86,12 @@ def _digest(parts) -> str:
                    ensure_ascii=False).encode("utf-8")).hexdigest()
 
 
-def lookup_key(*, question: str, task: str, as_of: str, sources=()) -> str:
-    """What a read queries by. Computable BEFORE the question is answered."""
+def lookup_key(*, question: str, task: str, as_of: str, sources=(), partition: str = "") -> str:
+    """What a read queries by. Computable BEFORE the question is answered.
+
+    `partition` is who may reuse the entry (028: a matter, or the one actor who asked
+    unfiled). Two partitions never share a key, so a hit can never be another
+    matter's or another person's question."""
     q = normalise_question(question)
     if not q:
         raise CacheError("a cache key needs a question; an empty one would collide with "
@@ -95,9 +99,11 @@ def lookup_key(*, question: str, task: str, as_of: str, sources=()) -> str:
     if not str(task or "").strip():
         raise CacheError("a cache key needs a task: the same words asked as a "
                          "RESEARCH_QUESTION and as a DRAFT are different requests")
-    return _digest({"q": q, "task": str(task).strip(),
-                    "as_of": str(as_of or "").strip(),
-                    "sources": sorted({str(s) for s in (sources or ())})})
+    material = {"q": q, "task": str(task).strip(), "as_of": str(as_of or "").strip(),
+                "sources": sorted({str(s) for s in (sources or ())})}
+    if partition:
+        material["partition"] = str(partition)
+    return _digest(material)
 
 
 def provision_hashes(citations) -> tuple[str, ...]:
@@ -130,8 +136,9 @@ class Entry:
 
     @staticmethod
     def build(*, question: str, task: str, as_of: str, sources=(), citations=(),
-              payload: dict, created_at: str) -> "Entry":
-        lk = lookup_key(question=question, task=task, as_of=as_of, sources=sources)
+              payload: dict, created_at: str, partition: str = "") -> "Entry":
+        lk = lookup_key(question=question, task=task, as_of=as_of, sources=sources,
+                        partition=partition)
         hashes = provision_hashes(citations)
         if not str(created_at or "").strip():
             raise CacheError("an entry records when it was made; without that, nothing "
@@ -244,6 +251,9 @@ def _test() -> int:
     check(normalise_question("   ") == "", "whitespace alone normalises to nothing")
 
     # ── the key, and what changes it ───────────────────────────────────────
+    check(lookup_key(question="q", task="t", as_of="d", partition="matter:1")
+          != lookup_key(question="q", task="t", as_of="d", partition="matter:2"),
+          "the same question in two partitions (matters, or actors) never shares a key")
     k = lookup_key(question="When must a company hold its AGM?", task="RESEARCH_QUESTION",
                    as_of="2026-10-01")
     check(k == lookup_key(question="  when must a company hold its agm  ",

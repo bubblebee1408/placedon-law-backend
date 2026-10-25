@@ -9,9 +9,12 @@ from gateway.store import MemoryBackend
 class VaultCatalog(unittest.TestCase):
     def setUp(self):
         self.store = MemoryBackend()
-        self.ctx = verbs.Context(store=self.store)
+        self.actor = str(uuid.uuid4())
+        self.ctx = verbs.Context(store=self.store, actor=self.actor)
         self.matter = str(uuid.uuid4())
-        self.store.write_matter({"matter_id": self.matter, "name": "Matter A"})
+        # 028: the caller made this matter, so it holds the owner grant, and uploaded
+        # every unfiled document below -- the catalog lists a person's own work.
+        self.store.write_matter({"matter_id": self.matter, "name": "Matter A"}, owner=self.actor)
         self.ids = []
         for i, (name, scope, state) in enumerate([
             ("Court order.pdf", None, "INGESTED"),
@@ -24,6 +27,7 @@ class VaultCatalog(unittest.TestCase):
             did = str(uuid.uuid4()); self.ids.append(did)
             self.store.write_vault_document({"document_id": did, "name": name,
                 "matter_id": scope, "state": state, "sha256": hashlib.sha256(str(i).encode()).hexdigest(),
+                "uploaded_by": self.actor,
                 "deleted_at": "2026-10-11T00:00:00Z" if state == "DELETED" else None})
 
     def test_unfiled_does_not_mean_all_matters(self):
@@ -56,6 +60,19 @@ class VaultCatalog(unittest.TestCase):
             with self.subTest(args=args):
                 self.assertEqual(verbs._vault_list(args, self.ctx)["code"], "BAD_REQUEST")
 
+    def test_same_firm_colleague_sees_neither_unfiled_nor_matter_rows(self):
+        colleague = verbs.Context(store=self.store, actor=str(uuid.uuid4()))
+        self.assertEqual(verbs._vault_list({}, colleague)["documents"], [])
+        self.assertEqual(verbs._vault_list({"matter_id": self.matter}, colleague),
+                         verbs._vault_list({"matter_id": str(uuid.uuid4())}, colleague))
+
+    def test_shared_unfiled_document_is_listed_for_the_firm(self):
+        colleague = verbs.Context(store=self.store, actor=str(uuid.uuid4()))
+        self.store.share_vault_document(self.ids[0], by_actor=self.actor,
+                                        reason="firm-wide precedent")
+        self.assertEqual([d["document_id"] for d in verbs._vault_list({}, colleague)["documents"]],
+                         [self.ids[0]])
+
     def test_other_tenant_cannot_browse_first_tenants_rows(self):
         other = verbs.Context(store=MemoryBackend(tenant_id=str(uuid.uuid4())))
         self.assertEqual(verbs._vault_list({}, other)["documents"], [])
@@ -74,7 +91,8 @@ class VaultCatalogHttp(unittest.TestCase):
         from gateway.auth import KeyStore
         from gateway.app import create_app
         keys = KeyStore()
-        key, _ = keys.mint(tenant_id=str(uuid.uuid4()), actor=str(uuid.uuid4()), role="viewer")
+        me = str(uuid.uuid4())
+        key, _ = keys.mint(tenant_id=str(uuid.uuid4()), actor=me, role="viewer")
         other_key, _ = keys.mint(tenant_id=str(uuid.uuid4()), actor=str(uuid.uuid4()), role="viewer")
         app = create_app(keys=keys, db_url="")
         with TestClient(app) as client:
@@ -83,7 +101,7 @@ class VaultCatalogHttp(unittest.TestCase):
             response = client.post("/v2/vault/list", json={}, headers={"Authorization": "Bearer " + key})
             self.assertEqual(response.status_code, 200, response.text)
             store = app.state.memory_backend
-            store.write_vault_document({"document_id": str(uuid.uuid4()), "name": "Court order.pdf", "state": "INGESTED", "sha256": "a"*64})
+            store.write_vault_document({"document_id": str(uuid.uuid4()), "name": "Court order.pdf", "state": "INGESTED", "sha256": "a"*64, "uploaded_by": me})
             listed = client.post("/v2/vault/list", json={"limit": "30", "offset": "0", "query": "order"}, headers={"Authorization": "Bearer " + key})
             self.assertEqual(listed.status_code, 200, listed.text)
             self.assertEqual(listed.json()["documents"][0]["name"], "Court order.pdf")

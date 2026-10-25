@@ -46,7 +46,7 @@ import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 
-__all__ = ["Pool", "PoolExhausted", "API_MAX_SIZE", "WORKER_MAX_SIZE",
+__all__ = ["Pool", "PoolExhausted", "set_identity", "API_MAX_SIZE", "WORKER_MAX_SIZE",
            "ACQUIRE_TIMEOUT_SECONDS", "MAX_IDLE_SECONDS"]
 
 # Separate caps so bulk work cannot take every slot the API needs. Their sum is what the
@@ -61,6 +61,20 @@ ACQUIRE_TIMEOUT_SECONDS = 5.0
 # An idle connection older than this is closed on checkout rather than reused, so a pool does
 # not hold sockets open across a quiet night.
 MAX_IDLE_SECONDS = 300.0
+
+
+# 028's three narrow scopes, each named only in the policies it needs. '' is a person.
+SCOPES = ("", "queue", "grant_bootstrap", "reassign")
+
+
+def set_identity(conn, tenant_id: str, actor_id: str = "", scope: str = "") -> None:
+    """Set the three settings every policy reads, session-scoped, in one statement."""
+    if scope not in SCOPES:
+        raise ValueError(f"unknown actor scope {scope!r}")
+    conn.execute("SELECT set_config('app.tenant_id', %s, false), "
+                 "set_config('app.actor_id', %s, false), "
+                 "set_config('app.actor_scope', %s, false)",
+                 (str(tenant_id), str(actor_id or ""), scope))
 
 
 class PoolExhausted(RuntimeError):
@@ -141,8 +155,10 @@ class Pool:
             self._open = max(0, self._open - 1)
 
     @contextmanager
-    def connection(self, *, tenant_id: str):
-        """A connection with `app.tenant_id` set to `tenant_id`. Always set, every checkout.
+    def connection(self, *, tenant_id: str, actor_id: str = "", scope: str = ""):
+        """A connection with `app.tenant_id`, `app.actor_id` and `app.actor_scope` set.
+        All three are set on every checkout, empty when absent, so a pooled connection
+        never carries the previous caller's actor into this one (028_matter_access.sql).
 
         `tenant_id` is required and is applied before the caller sees the connection. See the
         module docstring: the setting is session-scoped and survives on a pooled connection,
@@ -163,7 +179,7 @@ class Pool:
                 f"{self.acquire_timeout}s wait expired. No connection was opened beyond the "
                 f"cap, which is what the cap is for")
         try:
-            conn.execute("SELECT set_config('app.tenant_id', %s, false)", (str(tenant_id),))
+            set_identity(conn, tenant_id, actor_id, scope)
             yield conn
         except Exception:
             # A connection whose transaction state is unknown is not returned to the pool.
@@ -211,6 +227,8 @@ def _test() -> int:
             if "app.tenant_id" in sql:
                 self.tenant = params[0]
                 self.sets += 1
+            if "app.actor_id" in sql:
+                self.actor, self.scope = params[1], params[2]
             return self
 
         def close(self):
@@ -246,6 +264,26 @@ def _test() -> int:
     with p.connection(tenant_id="firm-b"):
         pass
     check(first.sets == 3, f"...including the same tenant twice ({first.sets})")
+
+    # 028. The actor rides on the same session, so it has the same leak: lawyer A's
+    # connection returned to the pool must not reach lawyer B -- or a caller with NO actor,
+    # which must see nothing -- still identified as A.
+    with p.connection(tenant_id="firm-b", actor_id="lawyer-a") as c:
+        check(c.actor == "lawyer-a" and c.scope == "", "a checkout sets app.actor_id")
+    with p.connection(tenant_id="firm-b") as c:
+        check(c is first and c.actor == "" and c.scope == "",
+              "...and a later checkout with no actor RESETS it to empty, never inherits A")
+    with p.connection(tenant_id="firm-b", actor_id="w", scope="queue") as c:
+        pass
+    with p.connection(tenant_id="firm-b", actor_id="lawyer-b") as c:
+        check(c.actor == "lawyer-b" and c.scope == "",
+              "...and a scope does not survive into the next caller either")
+    try:
+        with p.connection(tenant_id="firm-b", scope="admin"):
+            pass
+        check(False, "an unknown scope is refused")
+    except ValueError:
+        check(True, "an unknown scope is refused")
 
     for bad in ("", "   ", None):
         try:

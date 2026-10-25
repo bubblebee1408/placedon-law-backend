@@ -83,6 +83,25 @@ sys.path.insert(0, str(ROOT))
 
 MIGRATIONS = ROOT / "gateway" / "migrations"
 
+# 028 adds a second, RESTRICTIVE rule on top of tenant isolation: who may use which matter.
+# This file proves the TENANT boundary, so each raw probe runs AS THAT TENANT'S OWN SEEDED
+# ACTOR, with no scope -- the person every seed row belongs to (028 gives the seeded matter
+# that actor an owner grant). The matter rule itself is proved, person against person, in
+# tests/test_matter_access_postgres.py.
+PROBE_ACTOR: dict = {}
+
+
+# 028: `jobs` is read only under the queue scope, as gateway/jobs.py reads it; every other
+# table is probed as the tenant's own seeded person.
+PROBE_SCOPE = {"jobs": "queue"}
+
+
+def _probe(c, tenant, table: str = "") -> None:
+    c.execute("SELECT set_config('app.tenant_id', %s, false), "
+              "set_config('app.actor_id', %s, false), "
+              "set_config('app.actor_scope', %s, false)",
+              (str(tenant), PROBE_ACTOR.get(str(tenant), ""), PROBE_SCOPE.get(table, "")))
+
 # Set this to an ISO date and a server description the day it is actually run.
 LAST_RUN: str | None = (
     "2026-09-30 — PostgreSQL 18.6 (Postgres.app), local socket, database placedon_dev, "
@@ -270,7 +289,17 @@ LAST_RUN: str | None = (
     "(migrations 001-025 only, a separate isolated throwaway database, PostgresBackend "
     "called directly, no rls_integration.py involved), so they predate this change and are "
     "not investigated further here -- out of scope, and this script's own rule is to "
-    "report a failure, not edit the script to make it pass.")
+    "report a failure, not edit the script to make it pass. "
+    "2026-10-25, 028 (per-matter access): 001-028 applied TOGETHER to a fresh throwaway "
+    "database (placedon_throwaway_rls028) on PostgreSQL 18.6 (Postgres.app, local socket), "
+    "asserted as placedon_app (NOSUPERUSER, NOBYPASSRLS): 397 checks, 0 failures, exit 0. "
+    "Every probe now runs as the tenant's own seeded actor, and `jobs` under 028's queue "
+    "scope, the only scope that reads it. The two draft-inbox failures above were then "
+    "explained, not edited away: reproduced on the exact branch base 3b53c28 (395 pass, "
+    "the same 2 fail), they are the conformance list asserting the inbox holds EXACTLY ONE "
+    "draft while this script's own seed puts a draft in the same tenant -- the empty-table "
+    "fault the cache statistics had. They now measure only the draft they wrote. The STORE "
+    "was right throughout; the script was not edited, the conformance check was.")
 
 TENANT_TABLES = ("actors", "api_keys", "documents", "audit_log",
                  "runs", "run_steps", "propositions", "decisions", "jobs",
@@ -417,7 +446,8 @@ import json as _json
 def _seed(cur, tenant, actor, tag: str) -> None:
     """One row per tenant-scoped table, for this tenant. Enough to be leaked."""
     import uuid
-    cur.execute("SELECT set_config('app.tenant_id', %s, false)", (str(tenant),))
+    PROBE_ACTOR[str(tenant)] = str(actor)
+    _probe(cur, str(tenant))
     cur.execute("INSERT INTO actors (actor_id, tenant_id, label) VALUES (%s,%s,%s)",
                 (actor, tenant, tag))
     cur.execute("INSERT INTO api_keys (key_hash, key_id, tenant_id, actor_id, label) "
@@ -487,10 +517,10 @@ def _seed(cur, tenant, actor, tag: str) -> None:
     # documents themselves -- the most concentrated confidential data in the schema.
     vdoc = uuid.uuid4()
     cur.execute("INSERT INTO vault_documents (document_id, tenant_id, matter_id, sha256, "
-                "name, byte_count, state, doc_class, class_reason, text_chars) "
-                "VALUES (%s,%s,NULL,%s,%s,2048,'INGESTED','nda',%s,1200)",
+                "name, byte_count, state, doc_class, class_reason, text_chars, uploaded_by) "
+                "VALUES (%s,%s,NULL,%s,%s,2048,'INGESTED','nda',%s,1200,%s)",
                 (vdoc, tenant, ("a" if tag.startswith("A") else "b") * 64,
-                 f"{tag}: Petrichor NDA.pdf", f"{tag}: nda on 6 points"))
+                 f"{tag}: Petrichor NDA.pdf", f"{tag}: nda on 6 points", actor))
     cur.execute("INSERT INTO vault_chunks (document_id, tenant_id, ordinal, text) "
                 "VALUES (%s,%s,0,%s)",
                 (vdoc, tenant, f"{tag}: the term is five years from the Effective Date"))
@@ -522,6 +552,11 @@ def _seed(cur, tenant, actor, tag: str) -> None:
     cur.execute("INSERT INTO matters (matter_id, tenant_id, name, client_ref) "
                 "VALUES (%s,%s,%s,%s)",
                 (matter, tenant, f"{tag}: Acme acquisition", f"{tag}-REF-1"))
+    # 028: the seeded actor owns the matter, as matters.create would have granted it.
+    cur.execute("INSERT INTO matter_memberships (membership_id, tenant_id, matter_id, "
+                "actor_id, role, granted_by, grant_reason) "
+                "VALUES (%s,%s,%s,%s,'owner',%s,'seed')",
+                (uuid.uuid4(), tenant, matter, actor, actor))
 
     # 8a: an invite. The leak would be another firm's staff email addresses and which of
     # them was being made an admin.
@@ -549,16 +584,17 @@ def _seed(cur, tenant, actor, tag: str) -> None:
     # O9: a cached answer. The leak would carry the QUESTION another firm's lawyer asked
     # and the answer we gave them -- the same kind of private thing `conversations` holds,
     # which is why 014 scopes every row to a tenant rather than sharing statutory answers.
+    # 028: owned by the actor who asked, as gateway/store.py now records it.
     cur.execute("INSERT INTO answer_cache (tenant_id, lookup_key, content_key, question, "
-                "task, as_of, sources, citations, payload) "
+                "task, as_of, sources, citations, payload, actor_id) "
                 "VALUES (%s,%s,%s,%s,'RESEARCH_QUESTION','2026-10-01','[]'::jsonb,"
-                "%s::jsonb,%s::jsonb)",
+                "%s::jsonb,%s::jsonb,%s)",
                 (tenant, ("a" if tag.startswith("A") else "b") * 64,
                  ("c" if tag.startswith("A") else "d") * 64,
                  f"{tag}: when must the board meet?",
                  _json.dumps([{"id": "c1", "provision": "s.173", "sha256": "e" * 64,
                                "quote": f"{tag}: four meetings every year"}]),
-                 _json.dumps({"status": "ANSWERED"})))
+                 _json.dumps({"status": "ANSWERED"}), actor))
     cur.execute("INSERT INTO answer_cache_stats (tenant_id, day, hits, misses, stale) "
                 "VALUES (%s, DATE '2026-10-01', 3, 1, 1)", (tenant,))
 
@@ -722,7 +758,8 @@ def run(url: str) -> int:
                   # migration, so the gap was harmless, but adding 026 on top of a list
                   # that skips its immediate predecessor would make a new gap look
                   # intentional. Both now apply, in order.
-                  "025_draft_inbox_idx.sql", "026_accounts.sql"):
+                  "025_draft_inbox_idx.sql", "026_accounts.sql",
+                  "027_gateway_rate_limits.sql", "028_matter_access.sql"):
             cur.execute(sql(f))
             print(f"  applied {f}")
         _ensure_app_role(cur)
@@ -748,8 +785,8 @@ def run(url: str) -> int:
     before: dict[str, tuple[int, int]] = {}
     with _connect(app_url) as app:
         c = app.cursor()
-        c.execute("SELECT set_config('app.tenant_id', %s, false)", (str(a),))
         for tbl in TENANT_TABLES:
+            _probe(c, str(a), tbl)
             other = c.execute(f"SELECT count(*) FROM {tbl} WHERE tenant_id = %s",
                               (b,)).fetchone()[0]
             mine = c.execute(f"SELECT count(*) FROM {tbl}").fetchone()[0]
@@ -780,14 +817,14 @@ def run(url: str) -> int:
             admin.execute(f"DROP POLICY tenant_isolation ON {tbl}")
         with _connect(app_url) as app:
             c = app.cursor()
-            c.execute("SELECT set_config('app.tenant_id', %s, false)", (str(a),))
+            _probe(c, str(a), tbl)
             own_nopolicy = c.execute(f"SELECT count(*) FROM {tbl}").fetchone()[0]
 
         with _connect(url) as admin:
             admin.execute(f"ALTER TABLE {tbl} DISABLE ROW LEVEL SECURITY")
         with _connect(app_url) as app:
             c = app.cursor()
-            c.execute("SELECT set_config('app.tenant_id', %s, false)", (str(a),))
+            _probe(c, str(a), tbl)
             leaked = c.execute(f"SELECT count(*) FROM {tbl} WHERE tenant_id = %s",
                                (b,)).fetchone()[0]
 
@@ -798,7 +835,7 @@ def run(url: str) -> int:
                           f"(tenant_id = current_setting('app.tenant_id', true)::uuid)")
         with _connect(app_url) as app:
             c = app.cursor()
-            c.execute("SELECT set_config('app.tenant_id', %s, false)", (str(a),))
+            _probe(c, str(a), tbl)
             after_other = c.execute(f"SELECT count(*) FROM {tbl} WHERE tenant_id = %s",
                                     (b,)).fetchone()[0]
             after_own = c.execute(f"SELECT count(*) FROM {tbl}").fetchone()[0]
@@ -890,7 +927,7 @@ def run(url: str) -> int:
     for who, tenant in (("A", a), ("B", b)):
         with _connect(app_url) as app:
             c = app.cursor()
-            c.execute("SELECT set_config('app.tenant_id', %s, false)", (str(tenant),))
+            _probe(c, str(tenant))
             seen[who] = c.execute("SELECT count(*) FROM source_documents WHERE sha256=%s",
                                   (_sha,)).fetchone()[0]
     note(seen["A"] == 1 and seen["B"] == 1,
@@ -902,7 +939,7 @@ def run(url: str) -> int:
     print()
     with _connect(app_url) as app:
         c = app.cursor()
-        c.execute("SELECT set_config('app.tenant_id', %s, false)", (str(a),))
+        _probe(c, str(a))
         for op in ("UPDATE audit_log SET outcome = 'tampered'", "DELETE FROM audit_log"):
             try:
                 c.execute(op)
@@ -941,7 +978,7 @@ def run(url: str) -> int:
     print()
     with _connect(app_url) as app:
         c = app.cursor()
-        c.execute("SELECT set_config('app.tenant_id', %s, false)", (str(a),))
+        _probe(c, str(a))
         rid2 = str(uuid.uuid4())
         c.execute("INSERT INTO runs (run_id, tenant_id, actor_id, intent, status) "
                   "VALUES (%s,%s,%s,'ask','ANSWERED')", (rid2, a, actor_a))
@@ -1005,7 +1042,7 @@ def run(url: str) -> int:
     # conformance() enqueues against run ids of its own, so the runs have to exist first.
     import uuid as _u
     with _connect(url) as _c:
-        _c.execute("SELECT set_config('app.tenant_id', %s, false)", (str(a),))
+        _probe(_c, str(a))
         _queue_runs = []
         # One per distinct run_id the conformance list enqueues. A1 grew that list (lanes,
         # the default, the refused lane, the retry ladder, the backoff), so six is no longer
@@ -1021,7 +1058,7 @@ def run(url: str) -> int:
         CALLER for this because only the caller knows how -- and because the queue it is
         handed here is a wrapper that exposes no connection at all."""
         with _connect(url) as _cc:
-            _cc.execute("SELECT set_config('app.tenant_id', %s, false)", (str(a),))
+            _probe(_cc, str(a))
             _cc.execute("UPDATE jobs SET not_before = NULL WHERE job_id = %s", (job_id,))
 
     # ── A1 item 7: the optimistic lock, arbitrated by the PRIMARY KEY ───────
@@ -1061,14 +1098,14 @@ def run(url: str) -> int:
     # The handler turns that refusal into a typed CONFLICT naming both versions.
     from gateway.verbs import Context as _LCtx, _draft_revise as _lrev
     _lres = _lrev({"draft_id": _ldid, "base_version": 1, "body": "stale"},
-                  _LCtx(store=_lb, clock=lambda: "2026-10-04T00:00:00Z"))
+                  _LCtx(store=_lb, actor=str(actor_a), clock=lambda: "2026-10-04T00:00:00Z"))
     note(_lres.get("code") == "CONFLICT" and _lres.get("base_version") == 1
          and _lres.get("latest_version") == 2,
          f"[lock] a stale revise through the verb is a typed CONFLICT naming BOTH versions "
          f"({_lres.get('code')}: base={_lres.get('base_version')} "
          f"latest={_lres.get('latest_version')})")
     _lres2 = _lrev({"draft_id": _ldid, "base_version": 2, "body": "onward"},
-                   _LCtx(store=_lb, clock=lambda: "2026-10-04T00:00:00Z"))
+                   _LCtx(store=_lb, actor=str(actor_a), clock=lambda: "2026-10-04T00:00:00Z"))
     note(_lres2.get("status") != "REFUSED" and _lres2.get("version") == 3,
          f"[lock] ...while revising from the CURRENT latest succeeds ({_lres2.get('version')})")
 
@@ -1092,7 +1129,7 @@ def run(url: str) -> int:
         _bb = _PB(_app, tenant_id=str(b), actor_id=str(actor_b), pool=_pool)
         _rid = str(_u.uuid4())
         with _connect(url) as _c0:
-            _c0.execute("SELECT set_config('app.tenant_id', %s, false)", (str(a),))
+            _probe(_c0, str(a))
             _c0.execute("INSERT INTO runs (run_id, tenant_id, actor_id, intent, status) "
                         "VALUES (%s,%s,%s,'review_document','PLANNED')", (_rid, a, actor_a))
 
@@ -1122,7 +1159,7 @@ def run(url: str) -> int:
     # Two workers, one queue: the assertion SKIP LOCKED exists for. Without it the second
     # claim blocks on the first's lock instead of stepping over it.
     with _connect(url) as _c:
-        _c.execute("SELECT set_config('app.tenant_id', %s, false)", (str(a),))
+        _probe(_c, str(a))
         _r1, _r2 = _u.uuid4(), _u.uuid4()
         for _r in (_r1, _r2):
             _c.execute("INSERT INTO runs (run_id, tenant_id, actor_id, intent, status) "
@@ -1279,7 +1316,7 @@ def run(url: str) -> int:
         c.execute("INSERT INTO login_attempts (email_hash, ip_hash, ok) "
                  "VALUES (%s,%s,false)", (_sha("probe-a@example.com"), _sha("203.0.113.9")))
         after_1 = c.execute("SELECT count(*) FROM login_attempts").fetchone()[0]
-        c.execute("SELECT set_config('app.tenant_id', %s, false)", (str(a),))
+        _probe(c, str(a))
         c.execute("INSERT INTO login_attempts (email_hash, ip_hash, ok) "
                  "VALUES (%s,%s,false)", (_sha("probe-b@example.com"), _sha("203.0.113.10")))
         after_2 = c.execute("SELECT count(*) FROM login_attempts").fetchone()[0]

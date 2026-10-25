@@ -101,10 +101,11 @@ class Backend(Protocol):
     def read_conversation(self, conversation_id: str) -> dict | None: ...
     def list_conversations(self, *, matter_id: str, limit: int = 50) -> list[dict]: ...
     # 8b: matters (019_matters.sql).
-    def write_matter(self, matter: dict) -> dict: ...
+    def write_matter(self, matter: dict, *, owner: str | None = None) -> dict: ...
     # V1: the vault (020_vault.sql).
     def write_vault_document(self, doc: dict) -> dict: ...
     def read_vault_document(self, document_id: str) -> dict | None: ...
+    def vault_documents_by_sha256(self, sha256: str) -> list[dict]: ...
     def list_vault_documents(self, *, matter_id: str) -> list[dict]: ...
     def browse_vault_documents(self, *, matter_id: str | None, query: str, limit: int, offset: int) -> list[dict]: ...
     def write_vault_chunks(self, document_id: str, chunks: list) -> int: ...
@@ -119,6 +120,19 @@ class Backend(Protocol):
                              limit: int = 100) -> list[dict]: ...
     def read_renewals(self, *, on_or_before: str = "") -> list[dict]: ...
     def list_matters(self) -> list[dict]: ...
+    # 028: explicit, append-only matter grants.
+    def matter_role(self, matter_id: str, actor_id: str) -> str | None: ...
+    def matter_roles(self, actor_id: str) -> dict: ...
+    def grant_matter_access(self, *, matter_id: str, actor_id: str, role: str,
+                            granted_by: str, reason: str) -> dict: ...
+    def revoke_matter_access(self, *, matter_id: str, actor_id: str, revoked_by: str,
+                             reason: str) -> bool: ...
+    def list_matter_memberships(self, matter_id: str, *, include_revoked: bool = False) -> list[dict]: ...
+    def share_vault_document(self, document_id: str, *, by_actor: str, reason: str,
+                             shared: bool = True) -> dict: ...
+    def list_unowned(self) -> dict: ...
+    def reassign_work(self, kind: str, resource_id: str, *, by_actor: str, reason: str,
+                      to_actor: str | None = None, to_matter: str | None = None) -> dict: ...
     def reserve_turn(self, conversation: dict, user: dict, assistant: dict, *,
                      request_id: str, payload_digest: str, queue=None, queued=None) -> tuple[dict, bool]: ...
     def find_turn(self, request_id: str, payload_digest: str) -> dict | None: ...
@@ -207,7 +221,7 @@ MESSAGE_KEYS = ("message_id", "conversation_id", "ordinal", "role", "text", "fil
 # 8b: matter_id is part of a conversation row on both backends. Without it in the shaped
 # key set, a dict conversation has no matter and the memory listing matches nothing.
 CONVERSATION_KEYS = ("conversation_id", "title", "created_at", "updated_at",
-                     "matter_id")
+                     "matter_id", "actor_id")
 
 # 'system' is not among them, and the database refuses it too (010). A system prompt
 # belongs to the run, not to the conversation.
@@ -344,6 +358,70 @@ def _critic_enabled_now():
         return None
 
 
+MATTER_ROLES = ("owner", "member", "viewer")
+VAULT_ACCESS_ACTIONS = ("share", "unshare", "reassign")
+
+
+def _utcnow() -> str:
+    from datetime import datetime, timezone
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _check_grant(role: str, reason: str) -> None:
+    """028's CHECKs, restated so memory refuses exactly what Postgres refuses."""
+    if role not in MATTER_ROLES:
+        raise StoreError(f"{role!r} is not a matter role; one of {MATTER_ROLES}")
+    if not str(reason or "").strip():
+        raise StoreError("a grant needs a reason (028 matter_memberships.grant_reason)")
+
+
+def _membership(matter_id, actor_id, role, granted_by, reason) -> dict:
+    import uuid as _uuid
+    return {"membership_id": str(_uuid.uuid4()), "matter_id": str(matter_id),
+            "actor_id": str(actor_id), "role": role, "granted_by": str(granted_by),
+            "granted_at": _utcnow(), "grant_reason": str(reason), "revoked_at": None,
+            "revoked_by": None, "revoke_reason": None}
+
+
+def _same_vault_scope(row: dict, matter_id, uploaded_by) -> bool:
+    """028's two partial unique indexes: one per matter, one per uploader while unfiled."""
+    matter_id = str(matter_id or "").strip() or None
+    if row.get("matter_id") != matter_id:
+        return False
+    return matter_id is not None or (uploaded_by is not None
+                                     and row.get("uploaded_by") == uploaded_by)
+
+
+# 028. The four kinds of unfiled work an admin may give an owner or a matter:
+# kind -> (memory attribute, table, id column, owner column, name column).
+REASSIGNABLE = {
+    "vault_document": ("vault_docs", "vault_documents", "document_id", "uploaded_by", "name"),
+    "draft": ("drafts", "drafts", "draft_id", "actor_id", "title"),
+    "review_grid": ("grids", "review_grids", "grid_id", "actor_id", "name"),
+    "conversation": ("conversations", "conversations", "conversation_id", "actor_id", "title"),
+}
+
+
+# 028. Reassignment places ORPHANS only: filed work is reached by grants, and an owner's
+# own unfiled work is never an admin's to take.
+UNOWNED_ONLY = ("only unfiled work with no owner is reassigned; filed work is reached by "
+                "grants, and an owner's own work is not reassigned")
+
+
+def _access_event(kind, resource_id, action, by_actor, reason, *, from_actor=None,
+                  to_actor=None, from_matter=None, to_matter=None) -> dict:
+    if kind not in REASSIGNABLE:
+        raise StoreError(f"{kind!r} is not reassignable; one of {sorted(REASSIGNABLE)}")
+    if action not in VAULT_ACCESS_ACTIONS:
+        raise StoreError(f"{action!r} is not an access change; one of {VAULT_ACCESS_ACTIONS}")
+    if not str(reason or "").strip():
+        raise StoreError("an access change needs a reason (028 access_events)")
+    return {"resource_kind": kind, "resource_id": str(resource_id), "action": action,
+            "by_actor": str(by_actor), "reason": str(reason),
+            "from_actor": from_actor, "to_actor": to_actor,
+            "from_matter": from_matter, "to_matter": to_matter, "at": _utcnow()}
+
+
 def _matter_scope(matter_id) -> str:
     """The matter a listing is scoped to, or refuse. 8b: NO CROSS-MATTER LISTING.
 
@@ -473,6 +551,9 @@ class MemoryBackend:
     # March is expired in October, and the same bytes produce a different action".
     document_checks: list = field(default_factory=list)
     vault_chunks: dict = field(default_factory=dict)    # document_id -> [row]
+    # 028. Append-only, like the tables: a revoke sets revoked_at, nothing is deleted.
+    memberships: list = field(default_factory=list)
+    access_events: list = field(default_factory=list)
     vault_tags: dict = field(default_factory=dict)      # document_id -> [row]
     matters: dict = field(default_factory=dict)         # matter_id -> row
     actors: dict = field(default_factory=dict)          # actor_id -> row
@@ -492,7 +573,10 @@ class MemoryBackend:
             raise StoreError("draft already exists")
         self.drafts[did] = {"draft_id": did, "kind": draft.get("kind") or "unknown",
                             "title": draft.get("title") or "",
-                            "updated_at": datetime.now(timezone.utc).isoformat()}
+                            "updated_at": datetime.now(timezone.utc).isoformat(),
+                            "actor_id": self.drafts.get(did, {}).get(
+                                "actor_id", draft.get("actor_id")),
+                            "matter_id": None}
         self.draft_versions.setdefault(did, [])
         return dict(self.drafts[did])
 
@@ -535,7 +619,8 @@ class MemoryBackend:
                          "title": latest.get("title") or draft.get("title") or "",
                          "updated_at": updated_at, "version": int(latest["version"]),
                          "blocking_count": count,
-                         "approved": bool(latest.get("approved_by")) and count == 0})
+                         "approved": bool(latest.get("approved_by")) and count == 0,
+                         "actor_id": draft.get("actor_id"), "matter_id": None})
         return sorted(rows, key=lambda row: (row["updated_at"], row["draft_id"]),
                       reverse=True)[:limit]
 
@@ -570,6 +655,9 @@ class MemoryBackend:
     def write_grid(self, grid: dict) -> dict:
         gid = grid["grid_id"]
         self.grids[gid] = {"grid_id": gid, "name": grid.get("name") or "",
+                           "actor_id": self.grids.get(gid, {}).get(
+                               "actor_id", grid.get("actor_id")),
+                           "matter_id": None,
                            "columns": [dict(c) for c in grid.get("columns") or ()],
                            "document_ids": list(grid.get("document_ids") or ()),
                            "cancelled_at": self.grids.get(gid, {}).get("cancelled_at"),
@@ -744,7 +832,7 @@ class MemoryBackend:
                   reverse=True)
         return [dict(r) for r in rows[:limit]]
 
-    def write_matter(self, matter: dict) -> dict:
+    def write_matter(self, matter: dict, *, owner: str | None = None) -> dict:
         mid = str(matter.get("matter_id") or "")
         name = str(matter.get("name") or "").strip()
         if not mid:
@@ -759,12 +847,111 @@ class MemoryBackend:
         row = {"matter_id": mid, "name": name,
                "client_ref": str(matter.get("client_ref") or ""),
                "closed_at": matter.get("closed_at")}
+        new = mid not in self.matters
         self.matters[mid] = row
+        if new and owner:
+            self.memberships.append(_membership(mid, owner, "owner", owner,
+                                                "created the matter"))
         return dict(row)
 
     def list_matters(self) -> list[dict]:
+        """Every matter, unfiltered: memory has no RLS. gateway/access filters by actor."""
         return [dict(r) for r in sorted(self.matters.values(),
                                         key=lambda r: r["name"].lower())]
+
+    # ── 028: matter grants ────────────────────────────────────────────────────
+    def _active_grant(self, matter_id, actor_id):
+        return next((m for m in self.memberships
+                     if m["matter_id"] == str(matter_id) and m["actor_id"] == str(actor_id)
+                     and m["revoked_at"] is None), None)
+
+    def matter_role(self, matter_id: str, actor_id: str) -> str | None:
+        actor = self.actors.get(str(actor_id or ""))
+        if actor is not None and actor.get("disabled_at") is not None:
+            return None
+        grant = self._active_grant(matter_id, actor_id)
+        return grant["role"] if grant else None
+
+    def matter_roles(self, actor_id: str) -> dict:
+        return {m["matter_id"]: m["role"] for m in self.memberships
+                if m["actor_id"] == str(actor_id) and m["revoked_at"] is None}
+
+    def grant_matter_access(self, *, matter_id: str, actor_id: str, role: str,
+                            granted_by: str, reason: str) -> dict:
+        _check_grant(role, reason)
+        if str(matter_id) not in self.matters:
+            raise StoreError("no such matter")
+        prior = self._active_grant(matter_id, actor_id)
+        if prior is not None and prior["role"] == role:
+            return dict(prior)
+        if prior is not None:
+            prior.update(revoked_at=_utcnow(), revoked_by=str(granted_by),
+                         revoke_reason=f"role changed to {role}: {reason}")
+        row = _membership(matter_id, actor_id, role, granted_by, reason)
+        self.memberships.append(row)
+        return dict(row)
+
+    def revoke_matter_access(self, *, matter_id: str, actor_id: str, revoked_by: str,
+                             reason: str) -> bool:
+        if not str(reason or "").strip():
+            raise StoreError("a revocation needs a reason (028 matter_memberships)")
+        grant = self._active_grant(matter_id, actor_id)
+        if grant is None:
+            return False
+        grant.update(revoked_at=_utcnow(), revoked_by=str(revoked_by),
+                     revoke_reason=str(reason))
+        return True
+
+    def list_matter_memberships(self, matter_id: str, *, include_revoked: bool = False) -> list[dict]:
+        return [dict(m) for m in self.memberships if m["matter_id"] == str(matter_id)
+                and (include_revoked or m["revoked_at"] is None)]
+
+    def share_vault_document(self, document_id: str, *, by_actor: str, reason: str,
+                             shared: bool = True) -> dict:
+        row = self.vault_docs.get(str(document_id or ""))
+        if row is None:
+            raise StoreError("no such vault document")
+        if row.get("matter_id") or row.get("uploaded_by") != str(by_actor):
+            raise StoreError("only the uploader shares an unfiled document")
+        event = _access_event("vault_document", document_id, "share" if shared else "unshare",
+                              by_actor, reason, from_actor=row.get("uploaded_by"))
+        row.update(shared_with_firm_at=_utcnow() if shared else None,
+                   shared_by=str(by_actor) if shared else None)
+        self.access_events.append(event)
+        return dict(row)
+
+    def list_unowned(self) -> dict:
+        out = {}
+        for kind, (attr, _t, idc, owner, name) in REASSIGNABLE.items():
+            out[kind] = [{"id": rid, "name": r.get(name) or ""}
+                         for rid, r in getattr(self, attr).items()
+                         if not r.get("matter_id") and not r.get(owner)
+                         and not r.get("deleted_at")]
+        return out
+
+    def reassign_work(self, kind: str, resource_id: str, *, by_actor: str, reason: str,
+                      to_actor: str | None = None, to_matter: str | None = None) -> dict:
+        if kind not in REASSIGNABLE:
+            raise StoreError(f"{kind!r} is not reassignable")
+        attr, _t, _idc, owner, _name = REASSIGNABLE[kind]
+        row = getattr(self, attr).get(str(resource_id or ""))
+        if row is None or row.get("matter_id") or row.get(owner):
+            raise StoreError(UNOWNED_ONLY)
+        if not (to_actor or to_matter):
+            raise StoreError("a reassignment names a new owner, a matter, or both")
+        if to_matter is not None and str(to_matter) not in self.matters:
+            raise StoreError("no such matter")
+        event = _access_event(kind, resource_id, "reassign", by_actor, reason,
+                              from_actor=row.get(owner), to_actor=to_actor,
+                              to_matter=to_matter)
+        if to_actor:
+            row[owner] = str(to_actor)
+        if to_matter:
+            row["matter_id"] = str(to_matter)
+            if kind == "vault_document":
+                row.update(shared_with_firm_at=None, shared_by=None)
+        self.access_events.append(event)
+        return dict(row)
 
     # ── V1: the vault ────────────────────────────────────────────────────────
     def write_vault_document(self, doc: dict) -> dict:
@@ -788,25 +975,35 @@ class MemoryBackend:
             raise StoreError(
                 "a DELETED document carries no text (020 "
                 "vault_documents_deleted_has_no_text)")
-        # Dedupe is per tenant: the same bytes twice is one document.
+        prior = self.vault_docs.get(did) or {}
+        # 028. The uploader is fixed at insert, exactly as Postgres never updates it.
+        uploaded_by = prior.get("uploaded_by", doc.get("uploaded_by"))
+        # Dedupe is per matter, or per uploader while unfiled (028).
         for other, row in self.vault_docs.items():
-            if other != did and row.get("sha256") == sha:
+            if other != did and row.get("sha256") == sha and _same_vault_scope(
+                    row, doc.get("matter_id"), uploaded_by):
                 raise DuplicateVaultDocument(
-                    f"these bytes are already in this tenant's vault as {other} (020 "
-                    f"vault_documents_tenant_sha)", document_id=other)
+                    f"these bytes are already in this vault scope as {other} (028 "
+                    f"vault_documents_matter_sha / owner_sha)", document_id=other)
         row = {"document_id": did, "matter_id": doc.get("matter_id"), "sha256": sha,
                "name": str(doc["name"]), "byte_count": int(doc.get("byte_count") or 0),
                "state": state, "doc_class": doc.get("doc_class"),
                "class_reason": doc.get("class_reason"),
                "text_chars": doc.get("text_chars"),
                "ocr_state": str(doc.get("ocr_state") or "NOT_NEEDED"),
-               "deleted_at": doc.get("deleted_at")}
+               "deleted_at": doc.get("deleted_at"), "uploaded_by": uploaded_by,
+               "shared_with_firm_at": prior.get("shared_with_firm_at"),
+               "shared_by": prior.get("shared_by")}
         self.vault_docs[did] = row
         return dict(row)
 
     def read_vault_document(self, document_id: str) -> dict | None:
         row = self.vault_docs.get(str(document_id or ""))
         return dict(row) if row else None
+
+    def vault_documents_by_sha256(self, sha256: str) -> list[dict]:
+        return [dict(r) for r in self.vault_docs.values()
+                if r.get("sha256") == sha256 and not r.get("deleted_at")]
 
     def list_vault_documents(self, *, matter_id: str) -> list[dict]:
         """One matter's documents. 8b: there is no cross-matter listing."""
@@ -821,7 +1018,8 @@ class MemoryBackend:
                        if r.get("matter_id") == matter_id and not r.get("deleted_at")
                        and r.get("state") != "DELETED" and query.lower() in r["name"].lower()),
                       key=lambda r: (r["name"].lower(), r["document_id"]))
-        fields = ("document_id", "sha256", "name", "state", "matter_id", "byte_count", "doc_class")
+        fields = ("document_id", "sha256", "name", "state", "matter_id", "byte_count", "doc_class",
+                  "uploaded_by", "shared_with_firm_at")
         return [{k: r.get(k) for k in fields} for r in rows[offset:offset + limit]]
 
     def write_vault_chunks(self, document_id: str, chunks: list) -> int:
@@ -851,7 +1049,9 @@ class MemoryBackend:
             for r in rows:
                 out.append(dict(r, name=doc.get("name") or "",
                                 doc_class=doc.get("doc_class") or "",
-                                matter_id=doc.get("matter_id")))
+                                matter_id=doc.get("matter_id"),
+                                uploaded_by=doc.get("uploaded_by"),
+                                shared_with_firm_at=doc.get("shared_with_firm_at")))
         return out
 
     def write_vault_tags(self, document_id: str, tags: list) -> int:
@@ -1380,9 +1580,14 @@ class PostgresBackend:
                 f"tenant_id must be a UUID, got {tenant_id!r}. The row-level security "
                 f"policies compare against app.tenant_id, so a backend without one would "
                 f"read nothing and write rows nobody can see.")
+        if actor_id and not _UUID.match(actor_id):
+            raise StoreError("actor_id must be a UUID: app.actor_id is cast to uuid by 028")
         self._url = url
         self.tenant_id = tenant_id
         self.actor_id = actor_id or tenant_id
+        # 028. What app.actor_id is set to: the authenticated actor, or '' for none, which
+        # sees no matter-bound or unfiled row. Never the tenant_id fallback above.
+        self._session_actor = actor_id or ""
         # A1. Optional: None means open-per-operation, which is the previous behaviour.
         self._pool = pool
 
@@ -1399,17 +1604,18 @@ class PostgresBackend:
         deployment that has not wired a pool is not silently changed.
         """
         if self._pool is not None:
-            with self._pool.connection(tenant_id=self.tenant_id) as conn:
+            with self._pool.connection(tenant_id=self.tenant_id,
+                                       actor_id=self._session_actor) as conn:
                 yield conn
             return
         import psycopg
+        from gateway.pool import set_identity
         conn = psycopg.connect(self._url, autocommit=True)
         try:
             # Before anything else. A statement issued ahead of this one is a statement the
             # policy evaluates with no tenant set, which returns nothing and looks like data
             # loss.
-            conn.execute("SELECT set_config('app.tenant_id', %s, false)",
-                         (self.tenant_id,))
+            set_identity(conn, self.tenant_id, self._session_actor)
             yield conn
         finally:
             conn.close()
@@ -1420,8 +1626,8 @@ class PostgresBackend:
             c.execute(
                 "INSERT INTO runs (run_id, tenant_id, actor_id, intent, status, "
                 "refusal_code, law_versions, critic_enabled, nonconformity, "
-                "nonconformity_note) "
-                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) "
+                "nonconformity_note, matter_id) "
+                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) "
                 "ON CONFLICT (run_id) DO UPDATE SET status = EXCLUDED.status, "
                 "refusal_code = EXCLUDED.refusal_code, "
                 "law_versions = EXCLUDED.law_versions, "
@@ -1431,7 +1637,8 @@ class PostgresBackend:
                 (rid, self.tenant_id, self.actor_id, run.get("intent", ""),
                  run.get("status", "PLANNED"), run.get("refusal_code"),
                  _json(run.get("law_versions")), _critic_enabled_now(),
-                 run.get("nonconformity"), run.get("nonconformity_note")))
+                 run.get("nonconformity"), run.get("nonconformity_note"),
+                 run.get("matter_id") or None))
             c.execute("DELETE FROM run_steps WHERE run_id = %s", (rid,))
             # Shaped on the way IN, the same as MemoryBackend: one normalisation for
             # both backends, or the two disagree about what a null cost means. The shared
@@ -1469,7 +1676,8 @@ class PostgresBackend:
         with self._conn() as c:
             r = c.execute("SELECT run_id, intent, status, refusal_code, result, "
                           "law_versions, failure_category, failure_reason, "
-                          "critic_enabled, nonconformity, nonconformity_note "
+                          "critic_enabled, nonconformity, nonconformity_note, "
+                          "actor_id, matter_id "
                           "FROM runs WHERE run_id = %s", (run_id,)).fetchone()
             if r is None:
                 return None
@@ -1481,7 +1689,9 @@ class PostgresBackend:
                    "failure_category": r[6], "failure_reason": r[7],
                    "critic_enabled": r[8],
                    "nonconformity": float(r[9]) if r[9] is not None else None,
-                   "nonconformity_note": r[10]}
+                   "nonconformity_note": r[10],
+                   "actor_id": str(r[11]) if r[11] else None,
+                   "matter_id": str(r[12]) if r[12] else None}
             out["steps"] = [
                 {"capability": s[0], "engine_capability": s[1], "status": s[2],
                  "model": s[3], "degraded": s[4], "provider": s[5], "region": s[6],
@@ -1770,12 +1980,13 @@ class PostgresBackend:
             with self._conn() as c:
                 c.execute(
                     "INSERT INTO conversations (conversation_id, tenant_id, title, "
-                    "matter_id) VALUES (%s,%s,%s,%s) "
+                    "matter_id, actor_id) VALUES (%s,%s,%s,%s,%s) "
                     "ON CONFLICT (conversation_id) DO UPDATE SET "
                     "title = EXCLUDED.title, matter_id = EXCLUDED.matter_id, "
                     "updated_at = now()",
                     (cid, self.tenant_id, conversation.get("title") or "",
-                     (str(conversation.get("matter_id") or "").strip() or None)))
+                     (str(conversation.get("matter_id") or "").strip() or None),
+                     self._session_actor or None))
         except psycopg.errors.IntegrityError as exc:
             raise StoreError(f"the database refused this conversation: "
                              f"{type(exc).__name__}") from None
@@ -1786,12 +1997,13 @@ class PostgresBackend:
             return None
         with self._conn() as c:
             r = c.execute("SELECT conversation_id, title, created_at, updated_at, "
-                          "matter_id FROM "
+                          "matter_id, actor_id FROM "
                           "conversations WHERE conversation_id = %s",
                           (conversation_id,)).fetchone()
         if r is None:
             return None
         return {"matter_id": str(r[4]) if r[4] else None,
+                "actor_id": str(r[5]) if r[5] else None,
                 "conversation_id": str(r[0]), "title": r[1],
                 "created_at": r[2].isoformat() if r[2] else None,
                 "updated_at": r[3].isoformat() if r[3] else None}
@@ -1807,32 +2019,218 @@ class PostgresBackend:
                  "created_at": r[2].isoformat() if r[2] else None,
                  "updated_at": r[3].isoformat() if r[3] else None} for r in rows]
 
-    def write_matter(self, matter: dict) -> dict:
+    def write_matter(self, matter: dict, *, owner: str | None = None) -> dict:
+        """Create or update one matter. A NEW matter gets its creator's owner grant in the
+        same transaction, so no matter ever exists that nobody can reach (028)."""
         import psycopg
+        import uuid as _uuid
+        mid = matter["matter_id"]
+        values = (str(matter.get("name") or "").strip(), matter.get("client_ref") or "",
+                  matter.get("closed_at"))
         try:
-            with self._conn() as c:
-                r = c.execute(
-                    "INSERT INTO matters (matter_id, tenant_id, name, client_ref, "
-                    "closed_at) VALUES (%s,%s,%s,%s,%s) "
-                    "ON CONFLICT (matter_id) DO UPDATE SET name = EXCLUDED.name, "
-                    "client_ref = EXCLUDED.client_ref, closed_at = EXCLUDED.closed_at "
-                    "RETURNING matter_id, name, client_ref, closed_at",
-                    (matter["matter_id"], self.tenant_id,
-                     str(matter.get("name") or "").strip(),
-                     matter.get("client_ref") or "",
-                     matter.get("closed_at"))).fetchone()
+            with self._conn() as c, c.transaction():
+                updated = c.execute(
+                    "UPDATE matters SET name = %s, client_ref = %s, closed_at = %s "
+                    "WHERE matter_id = %s", values + (mid,)).rowcount
+                if not updated:
+                    # No RETURNING: the new row is not readable until the grant exists.
+                    c.execute("INSERT INTO matters (matter_id, tenant_id, name, client_ref, "
+                              "closed_at) VALUES (%s,%s,%s,%s,%s)",
+                              (mid, self.tenant_id) + values)
+                    if owner:
+                        # 028 grant_bootstrap, transaction-local: the creator's OWN owner
+                        # grant on the matter just inserted. The policy admits nothing else
+                        # under this scope -- not another actor, not another role.
+                        c.execute("SELECT set_config('app.actor_scope', 'grant_bootstrap', true)")
+                        c.execute("INSERT INTO matter_memberships (membership_id, tenant_id, "
+                                  "matter_id, actor_id, role, granted_by, grant_reason) "
+                                  "VALUES (%s,%s,%s,%s,'owner',%s,'created the matter')",
+                                  (str(_uuid.uuid4()), self.tenant_id, mid, owner, owner))
+                        c.execute("SELECT set_config('app.actor_scope', '', true)")
+                r = c.execute("SELECT matter_id, name, client_ref, closed_at FROM matters "
+                              "WHERE matter_id = %s", (mid,)).fetchone()
         except psycopg.errors.IntegrityError as exc:
             raise StoreError(f"the database refused this matter: {type(exc).__name__} "
                              f"{str(exc).splitlines()[0][:150]}") from None
+        if r is None:
+            # Committed, but this actor holds no grant (no owner was given): report what
+            # was written rather than raise about a change that already happened.
+            return {"matter_id": mid, "name": values[0], "client_ref": values[1],
+                    "closed_at": values[2]}
         return {"matter_id": str(r[0]), "name": r[1], "client_ref": r[2],
                 "closed_at": r[3].isoformat() if r[3] else None}
 
     def list_matters(self) -> list[dict]:
+        """The matters this actor's policy shows: its own grants, or all for an admin."""
         with self._conn() as c:
             rows = c.execute("SELECT matter_id, name, client_ref, closed_at FROM matters "
                              "ORDER BY lower(name)").fetchall()
         return [{"matter_id": str(r[0]), "name": r[1], "client_ref": r[2],
                  "closed_at": r[3].isoformat() if r[3] else None} for r in rows]
+
+    # ── 028: matter grants ────────────────────────────────────────────────────
+    _MEMBERSHIP_COLS = ("membership_id, matter_id, actor_id, role, granted_by, granted_at, "
+                        "grant_reason, revoked_at, revoked_by, revoke_reason")
+
+    @staticmethod
+    def _membership_row(r) -> dict:
+        return {"membership_id": str(r[0]), "matter_id": str(r[1]), "actor_id": str(r[2]),
+                "role": r[3], "granted_by": str(r[4]), "granted_at": r[5].isoformat(),
+                "grant_reason": r[6], "revoked_at": r[7].isoformat() if r[7] else None,
+                "revoked_by": str(r[8]) if r[8] else None, "revoke_reason": r[9]}
+
+    def matter_role(self, matter_id: str, actor_id: str) -> str | None:
+        if not (_UUID.match(matter_id or "") and _UUID.match(actor_id or "")):
+            return None
+        with self._conn() as c:
+            r = c.execute("SELECT mm.role FROM matter_memberships mm JOIN actors a "
+                          "ON a.actor_id = mm.actor_id AND a.disabled_at IS NULL "
+                          "WHERE mm.matter_id = %s AND mm.actor_id = %s "
+                          "AND mm.revoked_at IS NULL", (matter_id, actor_id)).fetchone()
+        return r[0] if r else None
+
+    def matter_roles(self, actor_id: str) -> dict:
+        if not _UUID.match(actor_id or ""):
+            return {}
+        with self._conn() as c:
+            rows = c.execute("SELECT matter_id, role FROM matter_memberships "
+                             "WHERE actor_id = %s AND revoked_at IS NULL",
+                             (actor_id,)).fetchall()
+        return {str(r[0]): r[1] for r in rows}
+
+    def grant_matter_access(self, *, matter_id: str, actor_id: str, role: str,
+                            granted_by: str, reason: str) -> dict:
+        """Admin-only by POLICY (028 membership_insert), whatever the caller checked."""
+        import psycopg
+        import uuid as _uuid
+        _check_grant(role, reason)
+        try:
+            with self._conn() as c, c.transaction():
+                prior = c.execute(f"SELECT {self._MEMBERSHIP_COLS} FROM matter_memberships "
+                                  "WHERE matter_id = %s AND actor_id = %s AND revoked_at IS "
+                                  "NULL FOR UPDATE", (matter_id, actor_id)).fetchone()
+                if prior is not None and prior[3] == role:
+                    return self._membership_row(prior)
+                if prior is not None:
+                    c.execute("UPDATE matter_memberships SET revoked_at = now(), "
+                              "revoked_by = %s, revoke_reason = %s WHERE membership_id = %s",
+                              (granted_by, f"role changed to {role}: {reason}", prior[0]))
+                r = c.execute("INSERT INTO matter_memberships (membership_id, tenant_id, "
+                              "matter_id, actor_id, role, granted_by, grant_reason) "
+                              "VALUES (%s,%s,%s,%s,%s,%s,%s) "
+                              f"RETURNING {self._MEMBERSHIP_COLS}",
+                              (str(_uuid.uuid4()), self.tenant_id, matter_id, actor_id, role,
+                               granted_by, reason)).fetchone()
+        except psycopg.errors.InsufficientPrivilege:
+            raise StoreError("only an administrator may grant matter access") from None
+        except psycopg.errors.IntegrityError as exc:
+            raise StoreError(f"the database refused this grant: {type(exc).__name__}") from None
+        return self._membership_row(r)
+
+    def revoke_matter_access(self, *, matter_id: str, actor_id: str, revoked_by: str,
+                             reason: str) -> bool:
+        if not str(reason or "").strip():
+            raise StoreError("a revocation needs a reason (028 matter_memberships)")
+        with self._conn() as c:
+            n = c.execute("UPDATE matter_memberships SET revoked_at = now(), revoked_by = %s, "
+                          "revoke_reason = %s WHERE matter_id = %s AND actor_id = %s "
+                          "AND revoked_at IS NULL",
+                          (revoked_by, reason, matter_id, actor_id)).rowcount
+        return bool(n)
+
+    def list_matter_memberships(self, matter_id: str, *, include_revoked: bool = False) -> list[dict]:
+        if not _UUID.match(matter_id or ""):
+            return []
+        with self._conn() as c:
+            rows = c.execute(f"SELECT {self._MEMBERSHIP_COLS} FROM matter_memberships "
+                             "WHERE matter_id = %s AND (%s OR revoked_at IS NULL) "
+                             "ORDER BY granted_at", (matter_id, include_revoked)).fetchall()
+        return [self._membership_row(r) for r in rows]
+
+    def _record_access_event(self, c, event: dict) -> None:
+        import uuid as _uuid
+        c.execute("INSERT INTO access_events (event_id, tenant_id, resource_kind, resource_id, "
+                  "action, by_actor, from_actor, to_actor, from_matter, to_matter, reason) "
+                  "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+                  (str(_uuid.uuid4()), self.tenant_id, event["resource_kind"],
+                   event["resource_id"], event["action"], event["by_actor"],
+                   event["from_actor"], event["to_actor"], event["from_matter"],
+                   event["to_matter"], event["reason"]))
+
+    def share_vault_document(self, document_id: str, *, by_actor: str, reason: str,
+                             shared: bool = True) -> dict:
+        """The uploader's own act, under the ordinary policy: no scope."""
+        import psycopg
+        row = self.read_vault_document(document_id)
+        if row is None or row.get("matter_id") or row.get("uploaded_by") != str(by_actor):
+            raise StoreError("only the uploader shares an unfiled document")
+        event = _access_event("vault_document", document_id, "share" if shared else "unshare",
+                              by_actor, reason, from_actor=row.get("uploaded_by"))
+        try:
+            with self._conn() as c, c.transaction():
+                n = c.execute("UPDATE vault_documents SET shared_with_firm_at = "
+                              "CASE WHEN %s THEN now() END, shared_by = CASE WHEN %s THEN "
+                              "%s::uuid END WHERE document_id = %s",
+                              (shared, shared, by_actor, document_id)).rowcount
+                if not n:
+                    raise StoreError("this vault document cannot be changed by this actor")
+                self._record_access_event(c, event)
+        except psycopg.errors.IntegrityError as exc:
+            raise StoreError(f"the database refused this change: {type(exc).__name__}") from None
+        return self.read_vault_document(document_id) or {}
+
+    @contextmanager
+    def _reassigning(self):
+        """A transaction under 028's `reassign` scope, local to it. Used ONLY by list_unowned
+        and reassign_work, both behind admin-only verbs: work with no owner is visible to no
+        person's policy. The scope reaches the metadata row of UNFILED work and nothing else
+        -- no filed row, no chunk, message, version or cell."""
+        with self._conn() as c, c.transaction():
+            c.execute("SELECT set_config('app.actor_scope', 'reassign', true)")
+            yield c
+
+    def list_unowned(self) -> dict:
+        out = {}
+        with self._reassigning() as c:
+            for kind, (_a, table, idc, owner, name) in REASSIGNABLE.items():
+                gone = " AND deleted_at IS NULL" if kind == "vault_document" else ""
+                rows = c.execute(f"SELECT {idc}, {name} FROM {table} WHERE matter_id IS NULL "
+                                 f"AND {owner} IS NULL{gone} ORDER BY {idc} LIMIT 1000").fetchall()
+                out[kind] = [{"id": str(r[0]), "name": r[1] or ""} for r in rows]
+        return out
+
+    def reassign_work(self, kind: str, resource_id: str, *, by_actor: str, reason: str,
+                      to_actor: str | None = None, to_matter: str | None = None) -> dict:
+        import psycopg
+        if kind not in REASSIGNABLE:
+            raise StoreError(f"{kind!r} is not reassignable")
+        if not (to_actor or to_matter):
+            raise StoreError("a reassignment names a new owner, a matter, or both")
+        _a, table, idc, owner, _name = REASSIGNABLE[kind]
+        if not _UUID.match(resource_id or ""):
+            raise StoreError("no such item")
+        try:
+            with self._reassigning() as c:
+                r = c.execute(f"SELECT {owner} FROM {table} WHERE {idc} = %s "
+                              f"AND matter_id IS NULL AND {owner} IS NULL FOR UPDATE",
+                              (resource_id,)).fetchone()
+                if r is None:
+                    raise StoreError(UNOWNED_ONLY)
+                event = _access_event(kind, resource_id, "reassign", by_actor, reason,
+                                      from_actor=str(r[0]) if r[0] else None,
+                                      to_actor=to_actor, to_matter=to_matter)
+                unshare = (", shared_with_firm_at = NULL, shared_by = NULL"
+                           if kind == "vault_document" and to_matter else "")
+                # The event FIRST: 028's placedon_reassigning admits the changed row only
+                # where this transaction has already recorded why it changed.
+                self._record_access_event(c, event)
+                c.execute(f"UPDATE {table} SET {owner} = coalesce(%s::uuid, {owner}), "
+                          f"matter_id = coalesce(%s::uuid, matter_id){unshare} "
+                          f"WHERE {idc} = %s", (to_actor, to_matter, resource_id))
+        except psycopg.errors.IntegrityError as exc:
+            raise StoreError(f"the database refused this reassignment: {type(exc).__name__}") from None
+        return {"kind": kind, "id": resource_id, "owner": to_actor or event["from_actor"],
+                "matter_id": to_matter}
 
     # ── V1: the vault ────────────────────────────────────────────────────────
     def write_vault_document(self, doc: dict) -> dict:
@@ -1842,7 +2240,8 @@ class PostgresBackend:
                 c.execute(
                     "INSERT INTO vault_documents (document_id, tenant_id, matter_id, "
                     "sha256, name, byte_count, state, doc_class, class_reason, "
-                    "text_chars, ocr_state) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) "
+                    "text_chars, ocr_state, uploaded_by) "
+                    "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) "
                     "ON CONFLICT (document_id) DO UPDATE SET state = EXCLUDED.state, "
                     "doc_class = EXCLUDED.doc_class, "
                     "class_reason = EXCLUDED.class_reason, "
@@ -1855,18 +2254,23 @@ class PostgresBackend:
                      doc.get("name") or "", int(doc.get("byte_count") or 0),
                      doc.get("state") or "PENDING", doc.get("doc_class"),
                      doc.get("class_reason"), doc.get("text_chars"),
-                     doc.get("ocr_state") or "NOT_NEEDED"))
+                     doc.get("ocr_state") or "NOT_NEEDED",
+                     # 028. The SESSION's actor, never a field the caller supplied.
+                     self._session_actor or None))
         except psycopg.errors.IntegrityError as exc:
             constraint = getattr(getattr(exc, "diag", None), "constraint_name", None)
-            if constraint == "vault_documents_tenant_sha":
+            if constraint in ("vault_documents_matter_sha", "vault_documents_owner_sha"):
                 # The failed INSERT aborted its transaction, so look the holder up on a
-                # fresh connection. RLS scopes the read to this tenant, which is exactly
-                # the scope of the unique constraint that fired.
+                # fresh connection, in the same scope as the unique index that fired.
+                matter = (str(doc.get("matter_id") or "").strip() or None)
                 existing = None
                 try:
                     with self._conn() as c:
                         r = c.execute("SELECT document_id FROM vault_documents "
-                                      "WHERE sha256 = %s", (doc["sha256"],)).fetchone()
+                                      "WHERE sha256 = %s AND matter_id IS NOT DISTINCT FROM "
+                                      "%s::uuid AND (matter_id IS NOT NULL OR uploaded_by = "
+                                      "%s::uuid)", (doc["sha256"], matter,
+                                                    self._session_actor or None)).fetchone()
                     existing = str(r[0]) if r else None
                 except Exception:                                # noqa: BLE001
                     existing = None
@@ -1882,14 +2286,25 @@ class PostgresBackend:
         with self._conn() as c:
             r = c.execute(
                 "SELECT document_id, matter_id, sha256, name, byte_count, state, "
-                "doc_class, class_reason, text_chars, ocr_state, deleted_at "
+                "doc_class, class_reason, text_chars, ocr_state, deleted_at, uploaded_by, "
+                "shared_with_firm_at, shared_by "
                 "FROM vault_documents WHERE document_id = %s", (document_id,)).fetchone()
         return None if r is None else {
             "document_id": str(r[0]), "matter_id": str(r[1]) if r[1] else None,
             "sha256": r[2], "name": r[3], "byte_count": int(r[4]), "state": r[5],
             "doc_class": r[6], "class_reason": r[7],
             "text_chars": int(r[8]) if r[8] is not None else None, "ocr_state": r[9],
-            "deleted_at": r[10].isoformat() if r[10] else None}
+            "deleted_at": r[10].isoformat() if r[10] else None,
+            "uploaded_by": str(r[11]) if r[11] else None,
+            "shared_with_firm_at": r[12].isoformat() if r[12] else None,
+            "shared_by": str(r[13]) if r[13] else None}
+
+    def vault_documents_by_sha256(self, sha256: str) -> list[dict]:
+        """The live documents with these bytes that this actor's policy shows."""
+        with self._conn() as c:
+            rows = c.execute("SELECT document_id FROM vault_documents WHERE sha256 = %s "
+                             "AND deleted_at IS NULL", (sha256,)).fetchall()
+        return [d for d in (self.read_vault_document(str(r[0])) for r in rows) if d]
 
     def list_vault_documents(self, *, matter_id: str) -> list[dict]:
         want = _matter_scope(matter_id)
@@ -1903,7 +2318,8 @@ class PostgresBackend:
         """One bounded metadata query under tenant RLS, without N+1 reads."""
         with self._conn() as c:
             rows = c.execute(
-                "SELECT document_id, sha256, name, state, matter_id, byte_count, doc_class "
+                "SELECT document_id, sha256, name, state, matter_id, byte_count, doc_class, "
+                "uploaded_by, shared_with_firm_at "
                 "FROM vault_documents WHERE matter_id IS NOT DISTINCT FROM %s::uuid "
                 "AND deleted_at IS NULL AND state <> 'DELETED' "
                 "AND position(%s in lower(name)) > 0 "
@@ -1911,7 +2327,8 @@ class PostgresBackend:
                 (matter_id, query.lower(), limit, offset)).fetchall()
         return [{"document_id": str(r[0]), "sha256": r[1], "name": r[2], "state": r[3],
                  "matter_id": str(r[4]) if r[4] else None, "byte_count": int(r[5]),
-                 "doc_class": r[6]} for r in rows]
+                 "doc_class": r[6], "uploaded_by": str(r[7]) if r[7] else None,
+                 "shared_with_firm_at": r[8].isoformat() if r[8] else None} for r in rows]
 
     def write_vault_chunks(self, document_id: str, chunks: list) -> int:
         import psycopg
@@ -1932,13 +2349,15 @@ class PostgresBackend:
         with self._conn() as c:
             rows = c.execute(
                 "SELECT c.document_id, c.ordinal, c.text, d.name, d.doc_class, "
-                "       d.matter_id "
+                "       d.matter_id, d.uploaded_by, d.shared_with_firm_at "
                 "FROM vault_chunks c JOIN vault_documents d "
                 "  ON d.document_id = c.document_id "
                 "WHERE d.deleted_at IS NULL ORDER BY c.document_id, c.ordinal").fetchall()
         return [{"document_id": str(r[0]), "ordinal": int(r[1]), "text": r[2],
                  "name": r[3], "doc_class": r[4] or "",
-                 "matter_id": str(r[5]) if r[5] else None} for r in rows]
+                 "matter_id": str(r[5]) if r[5] else None,
+                 "uploaded_by": str(r[6]) if r[6] else None,
+                 "shared_with_firm_at": r[7].isoformat() if r[7] else None} for r in rows]
 
     def write_vault_tags(self, document_id: str, tags: list) -> int:
         import psycopg
@@ -2097,9 +2516,10 @@ class PostgresBackend:
             ordinal = c.execute("SELECT COALESCE(max(ordinal), -1) + 1 FROM messages "
                                 "WHERE conversation_id = %s", (cid,)).fetchone()[0]
             if queued is not None:
-                c.execute("INSERT INTO runs (run_id, tenant_id, actor_id, intent, status) "
-                          "VALUES (%s,%s,%s,%s,'PLANNED')",
-                          (queued["run_id"], self.tenant_id, self.actor_id, queued["intent"]))
+                c.execute("INSERT INTO runs (run_id, tenant_id, actor_id, intent, status, "
+                          "matter_id) VALUES (%s,%s,%s,%s,'PLANNED',%s)",
+                          (queued["run_id"], self.tenant_id, self.actor_id, queued["intent"],
+                           conversation.get("matter_id")))
             for offset, message in enumerate((user, assistant)):
                 message = dict(message, conversation_id=cid, ordinal=ordinal + offset)
                 _check_message(message)
@@ -2201,10 +2621,11 @@ class PostgresBackend:
         gid = grid["grid_id"]
         try:
             with self._conn() as c:
-                c.execute("INSERT INTO review_grids (grid_id, tenant_id, name) "
-                          "VALUES (%s,%s,%s) ON CONFLICT (grid_id) DO UPDATE SET "
+                c.execute("INSERT INTO review_grids (grid_id, tenant_id, name, actor_id) "
+                          "VALUES (%s,%s,%s,%s) ON CONFLICT (grid_id) DO UPDATE SET "
                           "name = EXCLUDED.name",
-                          (gid, self.tenant_id, grid.get("name") or ""))
+                          (gid, self.tenant_id, grid.get("name") or "",
+                           self._session_actor or None))
                 for i, col in enumerate(grid.get("columns") or ()):
                     c.execute(
                         "INSERT INTO review_grid_columns (grid_id, tenant_id, name, kind, "
@@ -2229,7 +2650,8 @@ class PostgresBackend:
             return None
         with self._conn() as c:
             g = c.execute("SELECT grid_id, name, cancelled_at, paused_budget, "
-                          "pause_reason, cells_not_dispatched FROM review_grids "
+                          "pause_reason, cells_not_dispatched, actor_id, matter_id "
+                          "FROM review_grids "
                           "WHERE grid_id = %s", (grid_id,)).fetchone()
             if g is None:
                 return None
@@ -2246,6 +2668,8 @@ class PostgresBackend:
                 "paused_budget": bool(g[3]),
                 "pause_reason": g[4] or "",
                 "cells_not_dispatched": int(g[5] or 0),
+                "actor_id": str(g[6]) if g[6] else None,
+                "matter_id": str(g[7]) if g[7] else None,
                 "columns": [{"name": r[0], "kind": r[1], "question": r[2]} for r in cols],
                 "document_ids": [r[0] for r in docs]}
 
@@ -2342,8 +2766,8 @@ class PostgresBackend:
             with self._conn() as c:
                 n = c.execute(
                     "INSERT INTO answer_cache (tenant_id, lookup_key, content_key, "
-                    "question, task, as_of, sources, citations, payload) VALUES "
-                    "(%s,%s,%s,%s,%s,%s,%s,%s,%s) "
+                    "question, task, as_of, sources, citations, payload, actor_id, "
+                    "matter_id) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) "
                     "ON CONFLICT (tenant_id, lookup_key) DO UPDATE SET "
                     "content_key = EXCLUDED.content_key, citations = EXCLUDED.citations, "
                     "payload = EXCLUDED.payload, created_at = now()",
@@ -2352,7 +2776,10 @@ class PostgresBackend:
                      entry.get("as_of") or "",
                      _json.dumps(list(entry.get("sources") or [])),
                      _json.dumps(list(entry.get("citations") or [])),
-                     _json.dumps(dict(entry.get("payload") or {})))).rowcount
+                     _json.dumps(dict(entry.get("payload") or {})),
+                     # 028. Owned by the session's actor, filed to the matter it was asked in.
+                     self._session_actor or None,
+                     str(entry.get("matter_id") or "").strip() or None)).rowcount
         except psycopg.errors.IntegrityError as exc:
             raise StoreError(f"the database refused this cache entry: "
                              f"{type(exc).__name__} "
@@ -2398,12 +2825,12 @@ class PostgresBackend:
         did = draft["draft_id"]
         try:
             with self._conn() as c:
-                c.execute("INSERT INTO drafts (draft_id, tenant_id, kind, title) "
-                          "VALUES (%s,%s,%s,%s) " + ("" if create_only else
+                c.execute("INSERT INTO drafts (draft_id, tenant_id, kind, title, actor_id) "
+                          "VALUES (%s,%s,%s,%s,%s) " + ("" if create_only else
                           "ON CONFLICT (draft_id) DO UPDATE SET "
                           "title = EXCLUDED.title, updated_at = now()"),
                           (did, self.tenant_id, draft.get("kind") or "unknown",
-                           draft.get("title") or ""))
+                           draft.get("title") or "", self._session_actor or None))
         except psycopg.errors.IntegrityError as exc:
             raise StoreError(f"the database refused this draft: {type(exc).__name__}") from None
         return self.read_draft(did) or {"draft_id": did}
@@ -2416,10 +2843,11 @@ class PostgresBackend:
         try:
             with self._conn() as c:
                 with c.transaction():
-                    c.execute("INSERT INTO drafts (draft_id, tenant_id, kind, title) "
-                              "VALUES (%s,%s,%s,%s)",
+                    c.execute("INSERT INTO drafts (draft_id, tenant_id, kind, title, "
+                              "actor_id) VALUES (%s,%s,%s,%s,%s)",
                               (draft["draft_id"], self.tenant_id,
-                               draft.get("kind") or "unknown", draft.get("title") or ""))
+                               draft.get("kind") or "unknown", draft.get("title") or "",
+                               self._session_actor or None))
                     _insert_draft_version(c, self.tenant_id, version, 1)
         except psycopg.errors.IntegrityError as exc:
             raise StoreError(f"the database refused draft creation: {type(exc).__name__}") from None
@@ -2429,9 +2857,11 @@ class PostgresBackend:
         if not _UUID.match(draft_id or ""):
             return None
         with self._conn() as c:
-            r = c.execute("SELECT draft_id, kind, title FROM drafts WHERE draft_id = %s",
-                          (draft_id,)).fetchone()
-        return None if r is None else {"draft_id": str(r[0]), "kind": r[1], "title": r[2]}
+            r = c.execute("SELECT draft_id, kind, title, actor_id, matter_id FROM drafts "
+                          "WHERE draft_id = %s", (draft_id,)).fetchone()
+        return None if r is None else {"draft_id": str(r[0]), "kind": r[1], "title": r[2],
+                                       "actor_id": str(r[3]) if r[3] else None,
+                                       "matter_id": str(r[4]) if r[4] else None}
 
     def list_drafts(self, *, limit: int, before_updated_at: str | None = None,
                     before_draft_id: str | None = None) -> list[dict]:
@@ -2444,7 +2874,8 @@ class PostgresBackend:
         with self._conn() as c:
             rows = c.execute(
                 "SELECT d.draft_id, d.kind, v.title, d.updated_at, v.version, "
-                "v.blocking_count, (v.approved_at IS NOT NULL) AS approved, v.body, v.slots "
+                "v.blocking_count, (v.approved_at IS NOT NULL) AS approved, v.body, v.slots, "
+                "d.actor_id, d.matter_id "
                 "FROM drafts d JOIN LATERAL ("
                 "  SELECT version, title, blocking_count, approved_at, body, slots FROM draft_versions "
                 "  WHERE draft_id = d.draft_id ORDER BY version DESC LIMIT 1"
@@ -2460,7 +2891,9 @@ class PostgresBackend:
             count = stored_review_count(r[7] or "", r[8] or [], int(r[5]))
             result.append({"draft_id": str(r[0]), "kind": r[1], "title": r[2],
                            "updated_at": r[3].isoformat(), "version": int(r[4]),
-                           "blocking_count": count, "approved": bool(r[6]) and count == 0})
+                           "blocking_count": count, "approved": bool(r[6]) and count == 0,
+                           "actor_id": str(r[9]) if r[9] else None,
+                           "matter_id": str(r[10]) if r[10] else None})
         return result
 
     def append_draft_version(self, version: dict) -> int:
@@ -3002,7 +3435,9 @@ def conformance(backend) -> list[tuple[bool, str]]:
     cid = str(_uuid.uuid4())
     # 8b: a conversation is filed to a matter, and the listing is scoped to one.
     _CONF_MATTER = str(_uuid.uuid4())
-    backend.write_matter({"matter_id": _CONF_MATTER, "name": f"conformance {_CONF_MATTER[:8]}"})
+    # 028: the conformance actor files work to a matter it owns, as matters.create grants.
+    backend.write_matter({"matter_id": _CONF_MATTER, "name": f"conformance {_CONF_MATTER[:8]}"},
+                         owner=getattr(backend, "_session_actor", None) or None)
     backend.write_conversation({"conversation_id": cid, "title": "board meeting",
                                 "matter_id": _CONF_MATTER})
     conv = backend.read_conversation(cid)
@@ -3262,15 +3697,20 @@ def conformance(backend) -> list[tuple[bool, str]]:
        f"...every version has every key on both backends ({sorted(vs[0])})")
     ck(vs[0]["blocking_count"] == 1 and vs[1]["blocking_count"] == 0,
        "...and the blocking count survives the round trip")
+    # Measured on THIS draft, not the tenant's whole inbox: scripts/rls_integration.py
+    # seeds a draft into the same tenant so its isolation checks never measure an empty
+    # table, and "the inbox holds exactly one draft" only ever held on an empty dict.
     inbox = backend.list_drafts(limit=10)
-    ck(len(inbox) == 1 and inbox[0]["draft_id"] == did
-       and inbox[0]["version"] == 2 and inbox[0]["blocking_count"] == 0
-       and inbox[0]["title"] == "Updated notice of AGM"
-       and "body" not in inbox[0],
+    mine = [d for d in inbox if str(d["draft_id"]) == did]
+    ck(len(mine) == 1 and mine[0]["version"] == 2 and mine[0]["blocking_count"] == 0
+       and mine[0]["title"] == "Updated notice of AGM"
+       and all("body" not in d for d in inbox),
        "the draft inbox returns latest metadata only and never returns document text")
-    ck(backend.list_drafts(limit=10, before_updated_at=inbox[0]["updated_at"],
-                           before_draft_id=inbox[0]["draft_id"]) == [],
-       "a keyset cursor after the only draft returns an empty page")
+    after = backend.list_drafts(limit=10, before_updated_at=mine[0]["updated_at"],
+                                before_draft_id=did) if mine else None
+    ck(after is not None and all((d["updated_at"], str(d["draft_id"]))
+                                 < (mine[0]["updated_at"], did) for d in after),
+       "a keyset cursor after a draft returns only drafts strictly before it")
     did2 = str(_uuid.uuid4())
     backend.write_draft({"draft_id": did2, "kind": "unknown", "title": "Second draft"})
     backend.append_draft_version({"draft_id": did2, "title": "Second draft", "body": "private text",
@@ -3400,7 +3840,8 @@ def conformance(backend) -> list[tuple[bool, str]]:
 
     # ── V1: the vault, on both backends ─────────────────────────────────────
     _vm = str(_uuid.uuid4())
-    backend.write_matter({"matter_id": _vm, "name": f"vault matter {_vm[:8]}"})
+    backend.write_matter({"matter_id": _vm, "name": f"vault matter {_vm[:8]}"},
+                         owner=getattr(backend, "_session_actor", None) or None)
     _vd = str(_uuid.uuid4())
     backend.write_vault_document({
         "document_id": _vd, "matter_id": _vm, "sha256": "a" * 64, "name": "NDA.pdf",
@@ -3503,8 +3944,10 @@ def conformance(backend) -> list[tuple[bool, str]]:
     # ── 8b: matters, and NO CROSS-MATTER LISTING ────────────────────────────
     _m1, _m2 = str(_uuid.uuid4()), str(_uuid.uuid4())
     backend.write_matter({"matter_id": _m1, "name": "Acme acquisition",
-                          "client_ref": "ACM-1"})
-    backend.write_matter({"matter_id": _m2, "name": "Beta dispute"})
+                          "client_ref": "ACM-1"},
+                         owner=getattr(backend, "_session_actor", None) or None)
+    backend.write_matter({"matter_id": _m2, "name": "Beta dispute"},
+                         owner=getattr(backend, "_session_actor", None) or None)
     _names = [m["name"] for m in backend.list_matters()]
     ck({"Acme acquisition", "Beta dispute"} <= set(_names)
        and _names == sorted(_names, key=str.lower),
@@ -3847,8 +4290,11 @@ def _test() -> None:
             "read_draft_versions", "write_cache_entry", "read_cache_entry",
             "bump_cache_stat", "read_cache_stats", "read_failure_counts",
             "read_labels", "write_actor", "read_actor", "create_invite",
-            "accept_invite", "write_matter", "list_matters",
-            "write_vault_document", "read_vault_document",
+            "accept_invite", "write_matter", "list_matters", "matter_role",
+            "matter_roles", "grant_matter_access", "revoke_matter_access",
+            "list_matter_memberships", "share_vault_document", "list_unowned",
+            "reassign_work",
+            "write_vault_document", "read_vault_document", "vault_documents_by_sha256",
             "list_vault_documents", "write_vault_chunks",
             "read_vault_chunks", "write_vault_tags", "read_vault_tags",
             "delete_vault_document", "vault_counts")

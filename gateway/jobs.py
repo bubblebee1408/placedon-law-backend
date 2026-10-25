@@ -380,8 +380,14 @@ class PostgresQueue:
 
     def _conn(self, *, autocommit: bool = True):
         import psycopg
+        from gateway.pool import set_identity
         conn = psycopg.connect(self._url, autocommit=autocommit)
-        conn.execute("SELECT set_config('app.tenant_id', %s, false)", (self.tenant_id,))
+        # 028's `queue` scope: the queue claims, fails and dead-letters jobs, and reconciles
+        # a dead job's own run. The policies admit this scope on `runs` and nothing else
+        # matter-bound, so it reaches no conversation, document, draft or grid. Whether the
+        # job's ACTOR may still use the matter is checked by the worker
+        # (gateway/access.job_allowed), not here.
+        set_identity(conn, self.tenant_id, "", "queue")
         return conn
 
     # Every SELECT returns these columns in this order, so _job reads one shape.
@@ -409,10 +415,18 @@ class PostgresQueue:
         job_id = str(uuid.uuid4())
         try:
             with (nullcontext(connection) if connection is not None else self._conn(autocommit=False)) as c:
+                if connection is not None:
+                    # A borrowed turn transaction runs as the PERSON. 028 lets only the
+                    # queue scope reach `jobs`, so the admission count and the insert take
+                    # it for this transaction, and the person's scope is restored below.
+                    prev = c.execute("SELECT coalesce(current_setting('app.actor_scope', true), ''), "
+                                     "set_config('app.actor_scope', 'queue', true)").fetchone()[0]
                 # Serialize admission per tenant across replicas; RLS scopes the count.
                 c.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", ("job-admission:" + self.tenant_id,))
                 pending = c.execute("SELECT count(*) FROM jobs WHERE status IN ('QUEUED','LEASED')").fetchone()[0]
                 if pending >= self.max_pending:
+                    if connection is not None:
+                        c.execute("SELECT set_config('app.actor_scope', %s, true)", (prev,))
                     raise QueueFull("The work queue is full. Retry shortly; no job was added.")
                 r = c.execute(
                     "INSERT INTO jobs (job_id, run_id, tenant_id, actor_id, intent, args, "
@@ -422,6 +436,8 @@ class PostgresQueue:
                      json.dumps(args), check_lane(lane))).fetchone()
                 # Delivered only on commit, including a borrowed turn transaction.
                 c.execute(f"NOTIFY {NOTIFY_CHANNEL}")
+                if connection is not None:
+                    c.execute("SELECT set_config('app.actor_scope', %s, true)", (prev,))
         except psycopg.errors.UniqueViolation:
             raise QueueError(
                 f"run {run_id} already has a job. A second job for one run is the double "

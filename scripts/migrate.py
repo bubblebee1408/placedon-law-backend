@@ -15,7 +15,14 @@ WHAT MAKES ``--apply`` SAFE (each refusal is a separate, named stop):
     ``FORCE ROW LEVEL SECURITY`` and object ownership land exactly as they do in production;
     a superuser silently bypasses RLS and would hide a policy bug until it reached prod.
   * **It takes a ``pg_dump`` backup first, or it does not apply at all.** No reachable backup
-    (pg_dump missing, or the dump came out empty) is a hard stop, not a warning.
+    (pg_dump missing, the dump came out empty, or ``pg_restore --list`` cannot read it back
+    with a data section for every table) is a hard stop, not a warning.
+  * **The backup is taken as a role that can read every row.** The app role cannot: every
+    tenant table is ``FORCE ROW LEVEL SECURITY``, and pg_dump refuses a table it can only
+    partly see. So a populated database needs ``--backup-url`` (or
+    ``$PLACEDON_BACKUP_DATABASE_URL``): a superuser or BYPASSRLS role on the SAME database,
+    used for pg_dump and nothing else. The migrations still run as the app role. Without
+    it, an empty database backs up as the app role and a populated one is refused by name.
   * **It refuses to proceed if a migration that was already applied has since been edited.**
     Each applied migration's file is re-hashed against the checksum recorded when it ran; a
     mismatch means the file on disk is no longer the SQL the database actually ran, and the
@@ -218,7 +225,36 @@ def cmd_plan(url: str, directory: Path) -> int:
     return 0
 
 
-def cmd_apply(url: str, directory: Path, backup_dir: Path) -> int:
+def same_database(a, b) -> bool:
+    """Two connections reach the same database on the same running server."""
+    q = ("SELECT (SELECT oid FROM pg_database WHERE datname = current_database()), "
+         "pg_postmaster_start_time(), current_database()")
+    return a.execute(q).fetchone() == b.execute(q).fetchone()
+
+
+def take_backup(pg_dump: str, dump_url: str, backup: Path, tables: list[str]) -> str | None:
+    """pg_dump to `backup`, then read it back. None when it is a backup; else why not."""
+    proc = subprocess.run([pg_dump, "--dbname", dump_url, "-Fc", "-f", str(backup)],
+                          capture_output=True, text=True)
+    if proc.returncode != 0 or not backup.exists() or backup.stat().st_size == 0:
+        why = proc.stderr.strip()[:400]
+        if "row-level security" in why:
+            why += ("\nThe app role cannot dump rows it cannot see. Pass --backup-url (or "
+                    "$PLACEDON_BACKUP_DATABASE_URL): a superuser or BYPASSRLS role on this "
+                    "same database, used only for the backup.")
+        return f"pg_dump failed or produced an empty backup.\n{why}"
+    listing = subprocess.run([str(Path(pg_dump).with_name("pg_restore")), "--list", str(backup)],
+                             capture_output=True, text=True)
+    if listing.returncode != 0:
+        return f"pg_restore cannot read the backup back: {listing.stderr.strip()[:300]}"
+    missing = [t for t in tables if f" TABLE DATA public {t} " not in listing.stdout]
+    if missing:
+        return f"the backup has no data section for {missing[:10]}"
+    return None
+
+
+def cmd_apply(url: str, directory: Path, backup_dir: Path,
+              backup_url: str | None = None) -> int:
     files = discover(directory)
     with _connect(url) as conn:
         user, db = who(conn)
@@ -246,17 +282,30 @@ def cmd_apply(url: str, directory: Path, backup_dir: Path) -> int:
                   "migration is applied; without pg_dump there is no backup, so nothing runs.",
                   file=sys.stderr)
             return 2
+        if backup_url:
+            with _connect(backup_url) as bconn:
+                if not same_database(conn, bconn):
+                    print("REFUSED: --backup-url does not reach the database being migrated; "
+                          "a backup of another database is not a backup of this one.",
+                          file=sys.stderr)
+                    return 2
+        tables = [r[0] for r in conn.execute(
+            "SELECT table_name FROM information_schema.tables "
+            "WHERE table_schema = 'public' AND table_type = 'BASE TABLE'").fetchall()]
         backup_dir.mkdir(parents=True, exist_ok=True)
-        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
         backup = backup_dir / f"{db}_{stamp}.dump"
-        print(f"backup: {pg_dump} -Fc {db} -> {backup}")
-        proc = subprocess.run([pg_dump, "--dbname", url, "-Fc", "-f", str(backup)],
-                              capture_output=True, text=True)
-        if proc.returncode != 0 or not backup.exists() or backup.stat().st_size == 0:
-            print(f"REFUSED: pg_dump failed or produced an empty backup; not applying.\n"
-                  f"{proc.stderr.strip()[:400]}", file=sys.stderr)
+        if backup.exists():   # never overwrite, or on refusal delete, an earlier backup
+            print(f"REFUSED: {backup} already exists; not overwriting a backup.", file=sys.stderr)
             return 2
-        print(f"backup ok: {backup.stat().st_size} bytes")
+        as_role = "the backup role" if backup_url else user
+        print(f"backup: {pg_dump} -Fc {db} as {as_role} -> {backup}")
+        refused = take_backup(pg_dump, backup_url or url, backup, tables)
+        if refused:
+            backup.unlink(missing_ok=True)   # a failed dump must not be mistaken for a backup
+            print(f"REFUSED: {refused}\nNot applying.", file=sys.stderr)
+            return 2
+        print(f"backup ok: {backup.stat().st_size} bytes, readable, data for {len(tables)} table(s)")
 
         # Apply, each in its own transaction, recording as it goes.
         conn.execute(SCHEMA_MIGRATIONS_DDL)
@@ -333,6 +382,9 @@ def _test() -> int:
     check("is_superuser(conn)" in src and "a superuser" in src, "apply checks for superuser")
     check(src.index("REFUSED: pg_dump not found") < src.index("conn.execute(SCHEMA_MIGRATIONS_DDL)"),
           "the backup refusal is reached before any migration is applied")
+    check(src.index("refused = take_backup(") < src.index("conn.execute(SCHEMA_MIGRATIONS_DDL)")
+          and src.index("same_database(conn, bconn)") < src.index("refused = take_backup("),
+          "the backup role is checked against the target, and the backup verified, before applying")
 
     print(f"\n{ok}/{ok + fail} passed")
     return 1 if fail else 0
@@ -429,6 +481,40 @@ def _self_test() -> int:
                 check([m.version for m in plan3.edited] == ["001"], "plan flags the edited migration")
             rc_edit = cmd_apply(app_url, mig, backups)
             check(rc_edit == 2, "apply REFUSES once an applied migration was edited")
+            (mig / "001_a.sql").write_text("CREATE TABLE a (id int PRIMARY KEY);")
+
+            # 6. a POPULATED database under FORCE ROW LEVEL SECURITY, as production is
+            (mig / "003_rls.sql").write_text(
+                "CREATE TABLE secret (id int PRIMARY KEY, t text);"
+                "ALTER TABLE secret ENABLE ROW LEVEL SECURITY;"
+                "ALTER TABLE secret FORCE ROW LEVEL SECURITY;"
+                "CREATE POLICY p ON secret USING (current_setting('app.k', true) = 'y');"
+                "SELECT set_config('app.k', 'y', true);"
+                "INSERT INTO secret VALUES (1, 'a row the app role cannot see without a tenant');")
+            check(cmd_apply(app_url, mig, backups) == 0, "a FORCE-RLS table with a row is applied")
+            (mig / "004_d.sql").write_text("CREATE TABLE d (id int PRIMARY KEY);")
+            rc_rls = cmd_apply(app_url, mig, backups)
+            with psycopg.connect(app_url, connect_timeout=10) as c:
+                check(rc_rls == 2 and "004" not in (read_recorded(c) or {}),
+                      "...then the app role's own backup is REFUSED and nothing applies: "
+                      "pg_dump cannot read rows RLS hides")
+            rc_other = cmd_apply(app_url, mig, backups,
+                                 backup_url=f"postgresql:///postgres?host={host}&user={admin_user}")
+            check(rc_other == 2, "a --backup-url on ANOTHER database is refused")
+            before = set(backups.glob("*.dump"))
+            rc_ok = cmd_apply(app_url, mig, backups, backup_url=super_url)
+            new = sorted(set(backups.glob("*.dump")) - before)
+            check(len(set(backups.glob("*.dump"))) == 3,
+                  "every successful apply kept its OWN backup: none overwritten or deleted")
+            with psycopg.connect(app_url, connect_timeout=10) as c:
+                check(rc_ok == 0 and "004" in (read_recorded(c) or {}),
+                      "with --backup-url on the same database: backed up, then applied as the app role")
+            pd = find_pg_dump()
+            listing = subprocess.run([str(Path(pd).with_name("pg_restore")), "--data-only",
+                                      "--table", "secret", "-f", "-", str(new[-1])],
+                                     capture_output=True, text=True).stdout if new else ""
+            check("a row the app role cannot see" in listing,
+                  "...and the backup HOLDS the row RLS hid from the app role")
 
         print(f"\n{ok}/{ok + fail} passed")
         return 1 if fail else 0
@@ -452,6 +538,9 @@ def main() -> int:
     ap.add_argument("--dir", default=str(DEFAULT_DIR), help="migrations directory")
     ap.add_argument("--backup-dir", default=str(ROOT / "backups"),
                     help="where --apply writes the pg_dump backup (gitignored; never committed)")
+    ap.add_argument("--backup-url",
+                    help="a superuser/BYPASSRLS libpq URI on the SAME database, used only for "
+                         "pg_dump (default $PLACEDON_BACKUP_DATABASE_URL)")
     args = ap.parse_args()
 
     if args.test:
@@ -469,7 +558,8 @@ def main() -> int:
         return 2
     if args.plan:
         return cmd_plan(url, directory)
-    return cmd_apply(url, directory, Path(args.backup_dir))
+    return cmd_apply(url, directory, Path(args.backup_dir),
+                     args.backup_url or os.environ.get("PLACEDON_BACKUP_DATABASE_URL"))
 
 
 if __name__ == "__main__":

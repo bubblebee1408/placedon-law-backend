@@ -64,7 +64,7 @@ class DocumentSearchIntentTests(unittest.TestCase):
             files = LocalFileStore(Path(directory))
             store = MemoryBackend()
             content = b"Payment is due within thirty days of invoice receipt."
-            store.write_vault_document({
+            store.write_vault_document({"uploaded_by": "unknown",
                 'document_id': 'payment-contract', 'name': 'agreement.txt',
                 'sha256': files.put(content), 'byte_count': len(content),
                 'state': 'INGESTED',

@@ -28,7 +28,7 @@ class DocumentEvidenceSimulation(unittest.TestCase):
     def document(self, text, **changes):
         data = text.encode('utf-8')
         did = str(uuid.uuid4())
-        self.store.write_vault_document({'document_id': did, 'sha256': self.files.put(data),
+        self.store.write_vault_document({"uploaded_by": "unknown", 'document_id': did, 'sha256': self.files.put(data),
             'name': 'agreement.txt', 'byte_count': len(data), 'state': 'INGESTED', **changes})
         return did
 
@@ -163,7 +163,7 @@ class DocumentEvidenceSimulation(unittest.TestCase):
 
     def test_cross_matter_document_is_denied_before_any_blob_read(self):
         matter = str(uuid.uuid4())
-        self.store.write_matter({'matter_id': matter, 'name': 'Private'})
+        self.store.write_matter({'matter_id': matter, 'name': 'Private'}, owner="unknown")
         did = self.document('Termination private.', matter_id=matter)
         self.ctx = replace(self.ctx, files=Mock(get=Mock(side_effect=AssertionError('cross-matter read'))))
         result = self.send([did])
