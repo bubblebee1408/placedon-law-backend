@@ -1154,6 +1154,19 @@ def _affirmed(value) -> bool:
     return isinstance(value, str) and value.strip().lower() in ("true", "yes")
 
 
+def _boolean(value, *, default: bool) -> bool | None:
+    """A BOOLEAN field as sent: JSON true/false, or the strings "true"/"false" a CLI or
+    form sends. Absent is `default`. Anything else is None -- the caller refuses it,
+    because guessing which way an ambiguous value meant is how a control fails open."""
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str) and value.strip().lower() in ("true", "false"):
+        return value.strip().lower() == "true"
+    return None
+
+
 def _decide(args: dict, ctx: Context, *, decision: str) -> dict:
     """One human decision on one item, stored as labelled data (PLAN_23 rule 5).
 
@@ -3450,7 +3463,7 @@ def _document_check(args: dict, ctx: Context) -> dict:
                         if c["result"] == dver.NOT_CHECKED)
     action = dval.act(validity, verification_status=verified["overall"],
                       not_checked=not_checked,
-                      renewable=bool(args.get("renewable")))
+                      renewable=_affirmed(args.get("renewable")))
 
     row = None
     if ctx.store is not None:
@@ -3796,7 +3809,7 @@ def _matters_members(args: dict, ctx: Context) -> dict:
     if refusal:
         return refusal
     return {"matter_id": matter_id, "memberships": ctx.store.list_matter_memberships(
-        matter_id, include_revoked=bool(args.get("include_revoked")))}
+        matter_id, include_revoked=_affirmed(args.get("include_revoked")))}
 
 
 def _matters_access_report(args: dict, ctx: Context) -> dict:
@@ -3834,7 +3847,10 @@ def _vault_share(args: dict, ctx: Context) -> dict:
     if row.get("matter_id") or str(row.get("uploaded_by") or "") != str(ctx.actor):
         return _refuse("FORBIDDEN", "Only the uploader can share an unfiled document. A "
                                     "filed document is shared by granting matter access.")
-    shared = args.get("shared") is not False
+    # `is not False` here re-shared on "false": a string is not the boolean False.
+    shared = _boolean(args.get("shared"), default=True)
+    if shared is None:
+        return _refuse("BAD_REQUEST", "shared must be true or false")
     try:
         out = ctx.store.share_vault_document(a["document_id"], by_actor=ctx.actor,
                                              reason=a["reason"], shared=shared)
