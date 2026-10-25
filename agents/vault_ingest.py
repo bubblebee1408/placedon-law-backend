@@ -125,7 +125,11 @@ def ingest(args: dict, *, files, store, extract, pages=None) -> Outcome:
                 "ocr_state": "NOT_NEEDED"})
             return Outcome(did, "CANNOT_READ", reason=paged.detail)
         failed_pages = tuple(paged.failed_pages)
-        text = "\n".join(paged.pages[k] for k in sorted(paged.pages))
+        # Rejoined with form feeds, empty pages kept, so the text that is chunked and tagged
+        # is the stored text: tag spans and text_chars index the same characters a citation
+        # re-read will see.
+        text = ("\f".join(paged.pages.get(n, "") for n in range(1, paged.page_count + 1))
+                if paged.page_count else "\n".join(paged.pages[k] for k in sorted(paged.pages)))
     else:
         text = str(extract(data, name) or "")
     if not text.strip():

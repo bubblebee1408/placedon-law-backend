@@ -120,6 +120,9 @@ def _pairs_no_duplicates(pairs):
     return result
 
 
+# An open question quotes nothing, so it may carry nothing a reader could take as a fact
+# or follow: no digit anywhere ("30days", "5th"), no link, no address, no markup, one line.
+_NOT_A_BARE_QUESTION = re.compile(r"\d|https?://|www\.|@|[<>]|[\r\n]", re.I)
 _NUMBER = re.compile(r"(?<!\w)(?:\d[\d,./:%-]*\d|\d)(?!\w)")
 
 
@@ -163,7 +166,7 @@ def parse(raw: str, evidence: SummaryEvidence) -> dict:
                 # An open question quotes nothing, so it may assert nothing either: it must
                 # BE a question, and carry no figure or date it could have invented.
                 valid = (valid and citations == [] and text.strip().endswith("?")
-                         and not _numbers(text))
+                         and not _NOT_A_BARE_QUESTION.search(text.strip()))
                 if not valid:
                     withheld += 1
                     continue

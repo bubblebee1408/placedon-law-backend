@@ -109,3 +109,59 @@ class QuoteLocation(unittest.TestCase):
         self.assertEqual(PAGED[q["start"]:q["end"]], quote)
         self.assertEqual((q["passage_start"], q["passage_end"]), (passage["start"], passage["end"]))
         self.assertEqual(q["page"], 2)
+
+
+class StoredTextAgreement(unittest.TestCase):
+    def test_tag_spans_point_into_the_stored_text_even_after_empty_pages(self):
+        import tempfile
+        from gateway import verbs
+        from gateway.filestore import LocalFileStore
+        from gateway.store import MemoryBackend
+        text = ("Intro text.\f\f\fThe term of this Agreement is five years from the Effective "
+                "Date, and either party may terminate it on ninety days' written notice.")
+        tmp = tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)
+        store, files = MemoryBackend(), LocalFileStore(tmp.name)
+        sha = files.put(text.encode()); did = str(uuid.uuid4())
+        store.write_vault_document({"document_id": did, "sha256": sha, "name": "x.pdf",
+                                    "byte_count": 1, "state": "PENDING", "uploaded_by": "a"})
+        ctx = verbs.Context(store=store, files=files, actor="a")
+        out = verbs._vault_ingest_job({"document_id": did, "sha256": sha, "name": "x.pdf"}, ctx)
+        self.assertEqual(out["failed_pages"], [2, 3])
+        tags = [t for t in store.read_vault_tags(did) if t.get("span_start") is not None]
+        self.assertTrue(tags, "the clause tagger found a tag to check")
+        for t in tags:
+            # clause_tags' own contract: the span may carry surrounding whitespace.
+            self.assertEqual(text[t["span_start"]:t["span_end"]].strip(), t["quote"])
+        self.assertEqual(store.read_vault_document(did)["text_chars"], len(text))
+
+    def test_a_partial_document_is_named_as_incomplete_when_a_matter_is_compiled(self):
+        from gateway import verbs
+        from gateway.store import MemoryBackend
+        store = MemoryBackend()
+        store.write_matter({"matter_id": "m1", "name": "Acme"}, owner="a")
+        for name, state in (("whole.pdf", "INGESTED"), ("annexure.pdf", "PARTIAL")):
+            store.write_vault_document({"document_id": str(uuid.uuid4()), "sha256": uuid.uuid4().hex * 2,
+                                        "name": name, "byte_count": 1, "state": state,
+                                        "matter_id": "m1", "uploaded_by": "a"})
+        out = verbs._vault_compile({"matter_id": "m1"}, verbs.Context(store=store, actor="a"))
+        self.assertEqual(out["incomplete"], ["annexure.pdf"])
+        self.assertIn("annexure.pdf", out["note"])
+
+
+class PartialWording(unittest.TestCase):
+    CLASS_REASON = ("invoice (4) and services_agreement (4) are within 2 points. That is not a "
+                    "classification. PARTIAL: page(s) 2 could not be read and are NOT in this "
+                    "document's text or index")
+
+    def test_the_reader_is_told_which_pages_and_nothing_of_the_classifier(self):
+        from gateway import verbs
+        note = verbs._partial_note(self.CLASS_REASON)
+        self.assertIn("2", note)
+        self.assertNotIn("services_agreement", note)
+        self.assertNotIn("classification", note)
+
+    def test_the_main_line_says_a_searched_document_was_only_partly_read(self):
+        ev = de.collect("payment schedule", {"d1": {"name": "sa-mixed.pdf", "text": PAGED,
+                                                    "partial": "Page(s) 2 could not be read."}})
+        self.assertIn("sa-mixed.pdf", de.description(ev))
+        self.assertIn("not searched", de.description(ev))

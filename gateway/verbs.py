@@ -1155,6 +1155,13 @@ def _affirmed(value) -> bool:
     return isinstance(value, str) and value.strip().lower() in ("true", "yes")
 
 
+def _partial_note(class_reason) -> str:
+    """The reader-facing half of a PARTIAL document's class_reason: which pages are missing.
+    The classifier's own reasoning before it is an operator's note, not the reader's."""
+    tail = str(class_reason or "").partition("PARTIAL: ")[2].strip()
+    return (tail[:1].upper() + tail[1:] + ".") if tail else "Some pages could not be read."
+
+
 def _boolean(value, *, default: bool) -> bool | None:
     """A BOOLEAN field as sent: JSON true/false, or the strings "true"/"false" a CLI or
     form sends. Absent is `default`. Anything else is None -- the caller refuses it,
@@ -2439,7 +2446,7 @@ def _resolve_conversation_documents(file_ids, ctx: Context, matter_id, *, eviden
                     doc["doc_class"], doc["class_reason"] = row.get("doc_class"), row.get("class_reason")
                     if row.get("state") == "PARTIAL":
                         # 029. Readable, and incomplete -- the reader is told which pages.
-                        doc["partial"] = str(row.get("class_reason") or "Some pages could not be read.")
+                        doc["partial"] = _partial_note(row.get("class_reason"))
                 except (OSError, ValueError, UnicodeError, FileStoreError):
                     doc["cannot_read"] = "The saved document could not be read or verified."
             resolved[fid] = doc
@@ -2662,7 +2669,8 @@ def _conversation_send(args: dict, ctx: Context) -> dict:
         sha256_by_id = {}
         for fid in raw_ids:
             row = ctx.store.read_vault_document(fid)
-            if not row or row.get("state") not in READABLE_VAULT_STATES or row.get("deleted_at"):
+            if (not row or not access.document_allowed(ctx, row)
+                    or row.get("state") not in READABLE_VAULT_STATES or row.get("deleted_at")):
                 return _refuse("DOCUMENT_UNAVAILABLE", "Save each selected file to the vault and wait until it is ready before summarizing.")
             sha256_by_id[fid] = row.get("sha256")
         from gateway import document_evidence as de
@@ -3571,12 +3579,17 @@ def _vault_compile(args: dict, ctx: Context) -> dict:
     for d in docs:
         out.append(dict(d, tags=ctx.store.read_vault_tags(d["document_id"])))
     unreadable = [d["name"] for d in docs if d.get("state") not in READABLE_VAULT_STATES]
+    # 029. Read, but not whole: pages without a text layer are missing from these.
+    incomplete = [d["name"] for d in docs if d.get("state") == "PARTIAL"]
     return {"matter_id": matter_id, "documents": out, "count": len(out),
-            "not_ingested": unreadable,
+            "not_ingested": unreadable, "incomplete": incomplete,
             "note": (f"{len(out)} document(s) filed to this matter. "
                      + (f"{len(unreadable)} could not be read and are listed by name, so "
-                        f"a bundle is never quietly short: {unreadable[:5]}"
-                        if unreadable else "Every one was read."))}
+                        f"a bundle is never quietly short: {unreadable[:5]}. "
+                        if unreadable else "")
+                     + (f"{len(incomplete)} were read except for pages with no text layer: "
+                        f"{incomplete[:5]}." if incomplete else "")
+                     + ("" if unreadable or incomplete else "Every one was read."))}
 
 
 def _vault_delete(args: dict, ctx: Context) -> dict:

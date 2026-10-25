@@ -65,8 +65,9 @@ _STOP = frozenset('a an the is are was were be being been to of and or for in on
                   'attached attachment agreement contract clause section'.split())
 
 
-# A PDF's pages arrive joined by form feeds (the frontend reads it page by page, as
-# pdftotext does). Text with none -- a .docx, a .txt -- has no pages, and says so.
+# A PDF's pages arrive SEPARATED by form feeds: N pages, N-1 breaks (the frontend reads
+# it page by page). Unlike pdftotext, which ends every page with one, a trailing \f here
+# means the last page had no text layer. Text with none -- a .docx, a .txt -- has no pages.
 PAGE_BREAK = '\f'
 PAGES_FROM_BREAKS = 'Page numbers come from the page breaks in the uploaded text layer; a page that had no text layer is not in it.'
 PAGES_UNKNOWN = 'Offsets count Unicode characters in extracted text, not original PDF pages or bytes.'
@@ -225,6 +226,8 @@ def collect(query: str, documents: dict, *, enabled: bool = True) -> DocumentEvi
     for doc in documents.values():
         if doc.get('partial') and not doc.get('cannot_read'):
             result['limitations'].append(f"{str(doc.get('name') or 'A document')[:200]}: {doc['partial']}")
+    result['partial_documents'] = [str(doc.get('name') or did)[:200] for did, doc in documents.items()
+                                   if doc.get('partial') and not doc.get('cannot_read')]
     if any(PAGE_BREAK in str(doc.get('text') or '') for doc in documents.values()):
         result['limitations'][2] = PAGES_FROM_BREAKS
     if not enabled:
@@ -237,6 +240,14 @@ def collect(query: str, documents: dict, *, enabled: bool = True) -> DocumentEvi
 
 
 def description(evidence: DocumentEvidence) -> str:
+    partial = evidence.get('partial_documents') or []
+    if partial and evidence['status'] in ('NO_MATCH', 'EXCERPTS_FOUND'):
+        return (_description(evidence) + ' ' + ', '.join(partial)
+                + ' had pages with no text layer; those pages were not searched.')
+    return _description(evidence)
+
+
+def _description(evidence: DocumentEvidence) -> str:
     if evidence['status'] == 'NOT_SEARCHED':
         return 'Your attachments were not searched. Enable your documents in Sources, then ask again.'
     if evidence['status'] == 'UNAVAILABLE':
