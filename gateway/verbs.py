@@ -1921,13 +1921,15 @@ def _envelope_for(task: str, result: dict, *, as_of: str, run_id=None,
     # the model never evaluated the law. Render it in the FAILED register (whose definition
     # includes "a dead provider") with its own message and no bodies, so a cold start can
     # never read as "nothing held answers this". The code rides the response as a sibling.
-    if result.get("code") == "NO_MODEL" and result.get("document_summary_refused"):
-        # Not a transient outage: no provider permitted for client documents is configured
-        # (summaries are Bedrock-only, India region). "Try again" would not help.
+    if isinstance(result.get("document_summary_unavailable"), dict):
+        # Not a transient outage, so no "try again": see _summary_unavailable.
+        reason = result["document_summary_unavailable"].get("reason")
         return ev.failed(task=task, as_of=as_of, run_id=run_id, trace_url=trace,
-                         text=("No permitted document-summary model is available in this "
-                               "deployment, so no summary was generated. Your document is "
-                               "unchanged. This is not a finding about the document or the law."))
+                         text=("Document summarization is unavailable in this deployment. "
+                               f"{SUMMARY_UNAVAILABLE_WHY.get(reason, '')} No summary was "
+                               "generated and your document is unchanged. Retrying will not "
+                               "help until an administrator restores access. This is not a "
+                               "finding about the document or the law."))
     if result.get("code") == "NO_MODEL":
         return ev.failed(task=task, as_of=as_of, run_id=run_id, trace_url=trace,
                          text="The model was unavailable — this is not a finding about the "
@@ -2369,7 +2371,7 @@ def _turn_metadata(metadata: dict, result: dict) -> dict:
     out = dict(metadata)
     if isinstance(result.get("sources"), dict):
         out["sources"] = result["sources"]
-    for key in ("document_summary", "document_evidence"):
+    for key in ("document_summary", "document_evidence", "document_summary_unavailable"):
         if isinstance(result.get(key), dict):
             out[key] = result[key]
     if isinstance(result.get("document_summary"), dict):
@@ -2472,6 +2474,34 @@ def _resolve_conversation_documents(file_ids, ctx: Context, matter_id, *, eviden
     return replace(ctx, documents=resolved), None
 
 
+SUMMARY_UNAVAILABLE_WHY = {
+    "NO_PERMITTED_PROVIDER": "No document-summary model permitted for client documents is "
+                             "configured (summaries may only use the India-region provider).",
+    "PROVIDER_REFUSED_ACCESS": "The permitted model provider refused access for this "
+                               "deployment's account.",
+}
+
+
+def _summary_unavailable(reason: str) -> dict:
+    """A known configuration or access block: the summary cannot run until an operator acts,
+    so it is not a retryable FAILED. Recorded on the turn's metadata (_turn_metadata), so a
+    reopened conversation shows the same state. No other provider is tried: client
+    documents may go only to the permitted one (PLAN_22 D3)."""
+    return {"status": "REFUSED", "code": "SUMMARY_UNAVAILABLE",
+            "document_summary_unavailable": {"reason": reason, "retryable": False},
+            "detail": "Document summarization is unavailable. No summary was generated."}
+
+
+def _summary_call_failure(error: Exception) -> dict:
+    """The provider call raised: an access refusal is unavailable; anything else (throttling,
+    timeouts, 5xx) is transient and stays a retryable FAILED."""
+    from checker.bedrock_model import ProviderNotReady
+    if isinstance(error, ProviderNotReady):
+        return _summary_unavailable("PROVIDER_REFUSED_ACCESS")
+    return {"status": "FAILED", "code": "SUMMARY_PROVIDER_FAILED",
+            "error": "The document summary could not be completed. Your document remains unchanged."}
+
+
 def _document_summary_job(args: dict, ctx: Context) -> dict:
     """One bounded summary attempt, reauthorizing and rereading selected vault files."""
     from gateway import document_summary as ds
@@ -2520,19 +2550,16 @@ def _document_summary_job(args: dict, ctx: Context) -> dict:
     if refusal:
         if refusal.get("code") == "NO_BUDGET":
             return refusal
-        return {"status": "REFUSED", "code": refusal.get("code", "NO_MODEL"),
-                "document_summary_refused": True,
-                "detail": "No permitted document-summary model is available. No summary was generated."}
+        return _summary_unavailable("NO_PERMITTED_PROVIDER")
     try:
         raw = served.call(model_prompt)
-    except Exception:
+    except Exception as error:
         # Provider adapters settle their reservation even when transport/usage is uncertain.
         ctx.last_steps.append({"capability": "document.summary", "status": "FAILED",
                                "provider": served.provider, "model": served.model,
-                               "region": served.region,
+                               "region": served.region, "error": type(error).__name__,
                                "cost_note": "Provider attempt failed; usage may be unknown and was accounted by its adapter."})
-        return {"status": "FAILED", "code": "SUMMARY_PROVIDER_FAILED",
-                "error": "The document summary could not be completed. Your document remains unchanged."}
+        return _summary_call_failure(error)
     try:
         summary = ds.parse(raw, evidence)
     except ds.SummaryError as error:
