@@ -283,7 +283,7 @@ def narrate(prompt: str, *, origin, model: str = PRIMARY, budget=None,
         # Unknown usage settles at the reservation, not 0.0 — an unknown cost is an
         # expensive one (backend/budget's own rule).
         actual = cost_inr(model, tin or 0, tout or 0) if tin is not None and tout is not None \
-            else res.amount_inr
+            else None
         try:
             settlement = budget.settle(rid, actual)
         except Exception as settlement_error:                      # noqa: BLE001
