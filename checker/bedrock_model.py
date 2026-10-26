@@ -167,6 +167,11 @@ def _text_of(response: dict) -> str:
 def _is_not_ready(exc: Exception) -> bool:
     """Does this Bedrock error mean the account/model access is pending, not a real failure?"""
     msg = str(exc).lower()
+    # "Operation not allowed" (HTTP 400 ValidationException) is what every bedrock-runtime
+    # call returned for hours on an account whose control-plane calls all succeeded: an
+    # account-level refusal, not something a retry fixes. AccessDenied likewise.
+    if type(exc).__name__ == "AccessDeniedException" or "operation not allowed" in msg:
+        return True
     return ("being verified" in msg or "not authorized to perform" in msg
             or "access to this operation" in msg or "don't have access to the model" in msg
             or "you don't have access" in msg)
@@ -196,9 +201,9 @@ def converse(prompt: str, *, system: str, model_id: str, runtime,
     except Exception as e:                                       # noqa: BLE001
         if _is_not_ready(e):
             raise ProviderNotReady(
-                f"Bedrock refused because the account or model access is not ready yet "
-                f"({type(e).__name__}: {str(e)[:160]}). This is a provider state, not a "
-                f"failure of the request.") from e
+                f"Bedrock refused access for this account or model "
+                f"({type(e).__name__}: {str(e)[:160]}). This is a provider access state, not "
+                f"a failure of the request.") from e
         if _is_throttle(e):
             raise Throttled(f"Bedrock throttled the request ({type(e).__name__})") from e
         raise BedrockUnavailable(f"Bedrock call failed ({type(e).__name__}: {str(e)[:160]})") from e
@@ -500,7 +505,7 @@ def _test() -> None:
                 _runtime=rt_v, _control=_FakeControl())
         check(False, "an account-verifying error must raise ProviderNotReady")
     except ProviderNotReady as e:
-        check("not ready" in str(e).lower(), f"account-verifying -> ProviderNotReady ({str(e)[:40]})")
+        check("refused access" in str(e).lower(), f"account-verifying -> ProviderNotReady ({str(e)[:40]})")
     except Exception as e:                                       # noqa: BLE001
         check(False, f"expected ProviderNotReady, got {type(e).__name__}")
 
