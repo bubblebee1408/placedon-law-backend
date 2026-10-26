@@ -221,8 +221,8 @@ def refuse_unconfirmed_region(origins) -> None:
         raise ModelRefused(
             f"this is a client document and the deployment region is "
             f"{DEPLOYMENT_REGION!r}, which nobody has confirmed as acceptable for client "
-            f"data (PLAN_22 D3). Set {ACCEPT_REGION_ENV}={DEPLOYMENT_REGION!r} to state "
-            f"that decision, or mark the document as test data. Nothing was sent.")
+            f"data (PLAN_22 D3). Until an operator records that decision, client text is not "
+            f"sent there. Nothing was sent.")
 
 
 def usage_of(data: dict) -> dict:
