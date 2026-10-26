@@ -618,7 +618,7 @@ class BudgetTracker:
         """
         if raw.get("corrupt"):
             return {"corrupt": True, "day": "", "month": "", "day_inr": 0.0,
-                    "month_inr": 0.0, "calls_today": 0, "calls_by_model": {},
+                    "month_inr": 0.0, "month_held_inr": 0.0, "calls_today": 0, "calls_by_model": {},
                     "spend_cap": False, "tenant_month_inr": {}, "user_day_inr": {},
                     "credit_exhausted": False, "reservations": {},
                     "reservation_claims": {}, "reservation_calls": {},
@@ -649,6 +649,10 @@ class BudgetTracker:
             # Counters reset when the calendar rolls over, not by a cron job nobody runs.
             "day_inr": float(raw.get("day_inr", 0.0)) if same_day else 0.0,
             "month_inr": float(raw.get("month_inr", 0.0)) if raw.get("month") == month_key else 0.0,
+            # The part of month_inr settled at the HOLD because the provider reported no
+            # usage: an upper-bound estimate kept so the cap stays safe, not a measured cost.
+            "month_held_inr": (float(raw.get("month_held_inr", 0.0))
+                               if raw.get("month") == month_key else 0.0),
             "calls_today": int(raw.get("calls_today", 0)) if same_day else 0,
             # Per MODEL, because a free tier's request limit is per model per project:
             # two Gemini models are two buckets of 20, not one shared 20. Day-scoped for
@@ -781,6 +785,8 @@ class BudgetTracker:
             "day_inr": s["day_inr"], "month_inr": s["month_inr"],
             "calls_today": s["calls_today"],
         }
+        if s["month_held_inr"]:
+            row["month_held_inr"] = s["month_held_inr"]
         if s["calls_by_model"]:
             row["calls_by_model"] = dict(s["calls_by_model"])
         if s["tenant_month_inr"]:
@@ -1021,6 +1027,12 @@ class BudgetTracker:
             "global": {"day_inr": s["day_inr"], "day_cap_inr": DAILY_CAP_INR,
                        "month_inr": s["month_inr"], "month_cap_inr": MONTHLY_CAP_INR,
                        "reserved_inr": reserved,
+                       # month_inr = measured + held. "measured" is priced from the
+                       # tokens the provider reported; "held" is the reservation kept when
+                       # it reported none (a failed call), an upper bound, not a bill.
+                       # Neither is a charge to a customer: this ledger bills no one.
+                       "month_measured_inr": round(s["month_inr"] - s["month_held_inr"], 4),
+                       "month_held_inr": s["month_held_inr"],
                        "remaining_month_inr": round(MONTHLY_CAP_INR - s["month_inr"]
                                                     - reserved, 2)},
             "tenant": None, "user": None,
@@ -1226,12 +1238,15 @@ class BudgetTracker:
             if model is not None and count:
                 by_model[model] = by_model.get(model, 0) + count
             settled = dict(state["settled_reservations"])
-            settled[reservation_id] = {"amount": amount, "calls": count, "model": model}
+            held_basis = actual_inr is None
+            settled[reservation_id] = {"amount": amount, "calls": count, "model": model,
+                                       "basis": "held" if held_basis else "measured"}
             result.update(settled=True, held=held, amount=amount, calls=count)
             return self._row(
                 state,
                 day_inr=round(state["day_inr"] + amount, 4),
                 month_inr=round(state["month_inr"] + amount, 4),
+                month_held_inr=round(state["month_held_inr"] + (amount if held_basis else 0.0), 4),
                 calls_today=state["calls_today"] + count,
                 calls_by_model=by_model,
                 reservations={k: v for k, v in state["reservations"].items()
@@ -1602,6 +1617,10 @@ if __name__ == "__main__":
     check("unknown provider usage commits the full held reservation",
           isinstance(unknown_cost, Verdict) and unknown_cost.spent_today > actual
           and unknown_cost.reserved == 0.0, True)
+    check("  ...and reports it as held at the estimate, not as a measured cost",
+          (t4.usage()["global"]["month_held_inr"], t4._state()["settled_reservations"]["r2"]["basis"],
+           t4._state()["settled_reservations"]["r0"]["basis"]),
+          (31.1116, "held", "measured"))
     unknown_unheld = attempt(lambda: t4.settle("not-held", None))
     check("unknown usage without a reservation refuses rather than recording zero",
           isinstance(unknown_unheld, Verdict) and not unknown_unheld.allowed, True)
