@@ -196,6 +196,26 @@ def _provider_not_ready():
     return ProviderNotReady
 
 
+# Which provider may serve each model task, declared per task -- never inferred from which
+# credentials happen to resolve. router.py's NARRATION table lists Bedrock above Azure, so
+# without this, adding AWS credentials silently moved research from Azure to Bedrock. Each
+# entry is the provider the call site's text is CLEARED for (public_only.clear_matter(...,
+# provider=...)), so a clearance and the route can no longer disagree. An unavailable
+# provider is a refusal, never a substitute. Changing an entry is a data-residency
+# decision (PLAN_22 D3): document summaries carry client documents and stay India-only.
+TASK_PROVIDERS: dict[str, tuple[str, ...]] = {
+    "ask": ("azure",),                  # research narration over the public corpus
+    "critic": ("azure",),               # public corpus sentences
+    "decompose": ("azure",),            # the user's question, cleared for azure
+    "intake.classify": ("azure",),      # the user's typed words, cleared for azure
+    "draft_prose": ("azure",),          # cleared for azure
+    "review_contract": ("azure",),      # cleared for azure; the adapter refuses client
+                                        # text on an unconfirmed region by default
+    "review_grid_cell": ("azure",),     # cleared for azure
+    "document_summary": ("bedrock",),   # client documents: India region only
+}
+
+
 def _served_or_refusal(origins, *, name: str, purpose: str, ctx: Context,
                        consequence: str | None = None,
                        timeout_seconds: int | None = None,
@@ -211,15 +231,18 @@ def _served_or_refusal(origins, *, name: str, purpose: str, ctx: Context,
         return Served(call=ctx.model_for(origins), provider="stub", model="stub",
                       region="n/a", degraded=False, requires_review=False,
                       est_cost_inr=0.0), None
+    declared = TASK_PROVIDERS.get(name)
+    if declared is None:
+        return None, _refuse("NO_MODEL", f"No provider is declared for model task {name!r}. No call was made.")
+    if allowed_providers is not None:
+        declared = tuple(p for p in declared if p in allowed_providers)
     budget = _ledger()
     if budget is None:
         return None, _refuse("NO_BUDGET", "The spending guard is unavailable. No model call was made; retry after the budget store is restored.")
     try:
         from checker import router as _r
-        provider_scope = None
-        if allowed_providers is not None:
-            provider_scope = tuple(provider for provider in available_providers()
-                                   if provider in allowed_providers)
+        provider_scope = tuple(provider for provider in available_providers()
+                               if provider in declared)
         return serve(origins, name=name, purpose=purpose, budget=budget,
                      consequence=consequence or _r.LOW,
                      timeout_seconds=timeout_seconds, retry_tries=retry_tries,
