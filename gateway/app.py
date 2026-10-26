@@ -151,6 +151,10 @@ def health_body(engine_body: dict, deployment: Deployment, queue=None,
 # credential is a liveness probe that lies during the outage you built it for -- and it
 # carries no tenant data: the engine's provenance and which store is behind it.
 PUBLIC_ROUTES = frozenset({HEALTH_PATH})
+# The end user's address, as named by the frontend server (see _public_client).
+CLIENT_ADDRESS_HEADER = "X-Placedon-Client-Address"
+PUBLIC_PER_MINUTE = 10      # per client, for the public (argon2-costed) verbs
+PUBLIC_BURST = 20
 
 
 FILES_DIR_ENV = "PLACEDON_FILES_DIR"
@@ -664,6 +668,37 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
         app.add_api_route(path, _route, methods=[verb.method],
                           name=f"v2:{verb.name}", summary=verb.summary)
 
+    # Public verbs (sign-in, invite acceptance) each cost an argon2 hash, so they get
+    # their own per-client bucket ahead of any work. ponytail: in-process; a multi-replica
+    # gateway needs this in the shared PostgresLimiter (keyed by client, not tenant).
+    app.state.public_limiter = limits_mod.Limiter(per_minute=PUBLIC_PER_MINUTE,
+                                                  burst=PUBLIC_BURST)
+
+    def _public_client(request: Request) -> tuple[str, str]:
+        """(client address for the lockout, rate-limit bucket) for a public request.
+
+        The forwarded address is believed ONLY from a key minted as a client-address proxy
+        (the frontend server). Everyone else -- no key, a wrong key, any other key -- is
+        the socket peer, whatever they put in the header. A proxy request whose header is
+        missing or is not exactly one IP address has no known client: "" (the lockout then
+        counts the email alone) and a bucket shared by that proxy's unaddressed traffic.
+        """
+        import ipaddress
+        peer = request.client.host if request.client else ""
+        raw = bearer(request.headers.get("authorization")) or request.headers.get("x-api-key")
+        try:
+            principal = app.state.keys.resolve(raw) if raw else None
+        except AuthError:
+            principal = None
+        if principal is None or not principal.client_address_proxy:
+            return peer, "peer:" + peer
+        claimed = (request.headers.get(CLIENT_ADDRESS_HEADER) or "").strip()
+        try:
+            address = str(ipaddress.ip_address(claimed))
+        except ValueError:
+            return "", "proxy:" + principal.key_id
+        return address, "client:" + address
+
     def _mount_public(verb):
         """PUBLIC_VERBS only (auth.login, invites.accept): no Bearer, no `may()` check,
         no tenant-bound `store` -- there is no tenant yet. Mounted separately from
@@ -675,6 +710,10 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
         path = rest_path(verb)
 
         async def _route(request: Request) -> Response:
+            client_ip, bucket = _public_client(request)
+            slow = app.state.public_limiter.check(bucket)
+            if slow is not None:
+                return _limit_response(slow)
             args = dict(request.path_params)
             if verb.method == "POST":
                 raw, over = await _read_body(request)
@@ -702,7 +741,7 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
                     status_code=400, media_type="application/json")
             ctx = Context(tenant="", actor="", store=None, clock=now,
                           auth=app.state.auth, backend_for=app.state.backend_for,
-                          client_ip=(request.client.host if request.client else ""))
+                          client_ip=client_ip)
             try:
                 out = await executor.run("__public__", verb.run, args, ctx, control=False)
             except Busy:
