@@ -158,9 +158,15 @@ def evidence(question: str) -> tuple[tuple[Source, public_only.Origin], ...]:
 def _prompt(sources, question: str) -> str:
     """Exactly the prompt `quoted_span.summarise` builds. Split out because the cascade
     needs the model call and the verification to be two steps, and `summarise` is both."""
+    # The question is the user's typed text and may carry client information, so it goes
+    # in its own delimited block: gateway/verbs._ask clears it as client text, and the
+    # Azure adapter's region rule applies to it like any client document.
+    from checker.prompt_safety import wrap_untrusted
     return (quoted_span.system_prompt(_SYSTEM) + "\n\n"
             + quoted_span.render_sources(sources) + "\n\n"
-            + (question or "Summarise these sources for a lawyer."))
+            + (("Answer the question in the block labelled 'the question'.\n"
+                + wrap_untrusted(question, "the question"))
+               if question else "Summarise these sources for a lawyer."))
 
 
 def _verifier(sources, origins, holder: dict):

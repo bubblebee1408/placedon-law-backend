@@ -216,6 +216,32 @@ TASK_PROVIDERS: dict[str, tuple[str, ...]] = {
 }
 
 
+def _typed_text_origin(text: str, *, name: str, task: str, ctx: Context):
+    """(clearance, None) or (None, NOT_PERMITTED refusal) for the user's own typed words.
+
+    Typed text -- a research question, a drafting request -- may carry client information,
+    so it is cleared as CLIENT text, and the region rule that applies to client documents
+    applies to it: while the task's provider is Azure in an unaccepted region
+    (azure_model.PLACEDON_ACCEPT_REGION unset), nothing is sent. Refused here, before a
+    route is chosen, so the reader is told "not permitted" rather than "outage". An
+    injected offline model (ctx.model_for) sends nothing anywhere, so it is not refused --
+    the same exemption _served_or_refusal makes.
+    """
+    from checker import azure_model, public_only, router
+    try:
+        origin = public_only.clear_matter(text, name=name, provider=router.AZURE)
+        if ctx.model_for is None and router.AZURE in TASK_PROVIDERS.get(task, ()):
+            azure_model.refuse_unconfirmed_region(origin)
+    except (public_only.NotPublic, azure_model.ModelRefused):
+        return None, _refuse(
+            "NOT_PERMITTED",
+            f"Not sent: what you type may contain client information, and this task's "
+            f"model is hosted in {azure_model.DEPLOYMENT_REGION}, which has not been "
+            f"accepted for client data (PLAN_22 D3). No model call was made. This is not "
+            f"a finding about the law.")
+    return origin, None
+
+
 def _served_or_refusal(origins, *, name: str, purpose: str, ctx: Context,
                        consequence: str | None = None,
                        timeout_seconds: int | None = None,
@@ -319,6 +345,16 @@ def _ask(args: dict, ctx: Context) -> dict:
     origins = tuple(o for _, o in ev)
     served, refusal = (None, None)
     if origins:
+        typed, blocked = _typed_text_origin(q, name="research question", task="ask", ctx=ctx)
+        if blocked:
+            blocked["run_id"] = _persist_run(
+                ctx, intent="research_question", status="REFUSED", refusal_code=blocked["code"],
+                steps=[{"capability": "intake", "status": "ANSWERED"},
+                       {"capability": "research", "status": "REFUSED"}],
+                propositions=[])
+            blocked["sources"] = _report
+            return blocked
+        origins = origins + (typed,)
         served, refusal = _served_or_refusal(origins, name="ask",
                                              purpose=router.NARRATION, ctx=ctx)
         if refusal:
@@ -333,7 +369,10 @@ def _ask(args: dict, ctx: Context) -> dict:
 
     try:
         out = rq.answer(q, model=served.call if served else None,
-                        available=args.get("available") or ("azure",))
+                        # A caller may NARROW the providers, never widen them past the
+                        # task's declaration: the cascade's lower tiers route on their own.
+                        available=tuple(p for p in (args.get("available") or TASK_PROVIDERS["ask"])
+                                        if p in TASK_PROVIDERS["ask"]))
     except _provider_not_ready() as e:                           # B1
         # PROVIDER_NOT_READY is its OWN typed state: the model provider (Bedrock) is not
         # ready yet -- the account is being verified, or model access is pending. That is
@@ -391,7 +430,8 @@ def _ask(args: dict, ctx: Context) -> dict:
                                       if getattr(s, "citation", None) else None),
                        "span_start": None, "span_end": None}
                       for s in (out.summary.sentences if out.summary else ())],
-        law_versions={o.path: o.blob for o in origins},
+        # Held law read -- not the cleared question (a client-text origin has no blob).
+        law_versions={o.path: o.blob for o in origins if o.basis != "MATTER"},
         # CAL-1. `entailed` is None on this path, so the score is not computed and the
         # note records which half is missing -- see `nonconformity_for`.
         traced=len(out.summary.traced) if out.summary else 0,
@@ -2314,6 +2354,13 @@ def _draft_prose(template: str, source: dict, ctx: Context) -> tuple[list, str]:
             if not origins:
                 return [], (f"{draft_prose.NO_PROSE_PREFIX}no citation in this run names "
                             f"the file it was read from, so nothing can be cleared")
+            question = str(source.get("question") or "").strip()
+            if question:
+                typed, blocked = _typed_text_origin(question, name="draft question",
+                                                    task="draft_prose", ctx=ctx)
+                if blocked:
+                    return [], f"{draft_prose.NO_PROSE_PREFIX}{blocked['detail']}"
+                origins = origins + (typed,)
         else:
             origins = (public_only.clear_matter(
                 draft_prose.matter_text(facts), name=f"{template} findings",
