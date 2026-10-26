@@ -76,5 +76,36 @@ class DuplicateUploadWording(unittest.TestCase):
         self.assertNotIn("workspace's vault", again["note"])
 
 
+class DuplicateWordingByScope(unittest.TestCase):
+    """Reproduced in review of #119: the duplicate note assumed every duplicate was the
+    caller's own unfiled upload."""
+    def setUp(self):
+        from gateway.filestore import LocalFileStore
+        from gateway.store import MemoryBackend
+        tmp = tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)
+        self.store, self.files = MemoryBackend(), LocalFileStore(tmp.name)
+        self.store.write_matter({"matter_id": "m1", "name": "Acme"}, owner="lawyer-a")
+        self.store.grant_matter_access(matter_id="m1", actor_id="lawyer-b", role="member",
+                                       granted_by="admin", reason="joined the deal team")
+
+    def ctx(self, actor):
+        return verbs.Context(store=self.store, files=self.files, actor=actor)
+
+    def test_a_colleagues_filed_copy_is_not_called_your_upload(self):
+        verbs._vault_upload({"name": "spa.txt", "text": "Synthetic SPA.", "matter_id": "m1"}, self.ctx("lawyer-a"))
+        again = verbs._vault_upload({"name": "spa-b.txt", "text": "Synthetic SPA.", "matter_id": "m1"}, self.ctx("lawyer-b"))
+        self.assertTrue(again["duplicate"])
+        self.assertNotIn("You already uploaded", again["note"])
+        self.assertIn("This matter already holds these bytes as 'spa.txt'", again["note"])
+
+    def test_re_uploading_a_deleted_unfiled_file_says_what_happened(self):
+        first = verbs._vault_upload({"name": "nda.txt", "text": "Synthetic NDA."}, self.ctx("lawyer-a"))
+        verbs._vault_delete({"document_id": first["document_id"]}, self.ctx("lawyer-a"))
+        again = verbs._vault_upload({"name": "nda.txt", "text": "Synthetic NDA."}, self.ctx("lawyer-a"))
+        self.assertEqual(again.get("code"), "CONFLICT")
+        self.assertNotIn("in this matter", again["detail"])
+        self.assertIn("deleted", again["detail"])
+
+
 if __name__ == "__main__":
     unittest.main()

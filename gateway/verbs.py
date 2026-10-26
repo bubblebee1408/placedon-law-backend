@@ -3024,12 +3024,20 @@ def _vault_upload(args: dict, ctx: Context) -> dict:
                         "name": existing.get("name") or name,
                         "state": existing.get("state") or "PENDING", "job_id": None,
                         "queue_error": None, "duplicate": True,
-                        # 028: duplicates are per uploader (unfiled) or per matter, never
-                        # across people, so this is the caller's own earlier copy.
-                        "note": (f"You already uploaded these bytes as "
-                                 f"'{existing.get('name') or name}'; that document is "
+                        # 028: duplicates are per matter (filed) or per uploader
+                        # (unfiled), never across people outside a shared matter.
+                        "note": ((f"This matter already holds these bytes as "
+                                  if existing.get("matter_id") else
+                                  f"You already uploaded these bytes as ")
+                                 + f"'{existing.get('name') or name}'; that document is "
                                  f"returned and nothing new was stored or queued.")}
-            return _refuse("CONFLICT", "These bytes are already stored in this matter.")
+            if existing and existing.get("state") == "DELETED":
+                return _refuse("CONFLICT", (
+                    f"These bytes were uploaded before as '{existing.get('name') or name}' "
+                    f"and that document was deleted. A deleted document cannot be replaced "
+                    f"by uploading identical bytes again; nothing was stored."))
+            return _refuse("CONFLICT", "These bytes are already stored here and cannot be "
+                                       "returned to you; nothing was stored.")
         # Bytes may now exist in Blob without a metadata row. Keep the response generic;
         # operators can use the exception class and database telemetry to diagnose it.
         logging.getLogger(__name__).error(
