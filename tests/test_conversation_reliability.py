@@ -293,10 +293,12 @@ class ConversationReliability(unittest.TestCase):
             with self.subTest(value=value), patch("checker.public_only.clear_matter", side_effect=public_only.NotPublic("test gate")) as cleared:
                 verbs._review_contract({"text": "private NDA contents", "test_data": value}, self.ctx)
                 self.assertIs(cleared.call_args.kwargs["test_data"], False)
+        # A request's own word marks nothing; only an in-process test context may.
         for value in (True, "fixture", "synthetic"):
-            with self.subTest(value=value), patch("checker.public_only.clear_matter", side_effect=public_only.NotPublic("test gate")) as cleared:
-                verbs._review_contract({"text": "synthetic NDA contents", "test_data": value}, self.ctx)
-                self.assertIs(cleared.call_args.kwargs["test_data"], True)
+            for ctx, want in ((self.ctx, False), (replace(self.ctx, synthetic_fixtures=True), True)):
+                with self.subTest(value=value, want=want), patch("checker.public_only.clear_matter", side_effect=public_only.NotPublic("test gate")) as cleared:
+                    verbs._review_contract({"text": "synthetic NDA contents", "test_data": value}, ctx)
+                    self.assertIs(cleared.call_args.kwargs["test_data"], want)
 
     def test_idempotent_retry_after_date_rollover_returns_original_turn(self):
         first = self.send(request_id="date-rollover-001", as_of="2026-10-10")

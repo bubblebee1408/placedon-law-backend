@@ -128,7 +128,7 @@ def _test() -> None:
     from agents import review_contract as _rc
     # A model is INJECTED: the gate reaches no network, and this asserts the CLI's
     # plumbing rather than a model's reading.
-    shared = Context(store=MemoryBackend(),
+    shared = Context(store=MemoryBackend(), synthetic_fixtures=True,
                      model_for=lambda origins: _rc.fixture_model(_rc.fixtures()[0]))
     fx = _rc.fixtures()[0]
     c1, o1 = run(["review-contract", "--text", fx.text, "--name", fx.id,

@@ -9,8 +9,8 @@ are the point:
                       `checker/ss/defects.py` is regex and arithmetic, and every rule in it
                       traces to a real ROC adjudication order.
 
-**No model means no residency question.** `review_contract` needs `test_data` because a
-client contract may not be sent to UAE North (PLAN_22 D3). Nothing here leaves the process,
+**No model means no residency question.** `review_contract` is refused for client text because
+a client contract may not be sent to UAE North (PLAN_22 D3). Nothing here leaves the process,
 so this verb takes no such flag -- and adding one "for symmetry" would teach a caller that
 ticking it is what makes a document safe to send, which is not what it means.
 

@@ -31,7 +31,7 @@ unchanged, because removing an injected instruction is repairing a source (CLAUD
 
 PLAN_22 D3: while the deployment region is unconfirmed, only fixtures and specimens go
 through the model path — never a real client contract. This adapter is local and calls no
-model, so it does not enforce that; `review_contract`'s `test_data` field does. Said here
+model, so it does not enforce that; `review_contract`'s region guard does. Said here
 so nobody reads "CLIENT adapter" as permission.
 
 Run: PYTHONPATH=. python3 checker/sources/client.py --test

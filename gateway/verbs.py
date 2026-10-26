@@ -133,6 +133,11 @@ class Context:
     # Principal.credential_hash so `auth.logout` can revoke exactly this session and no
     # other. Empty for an API-key principal: nothing today lets a key revoke itself here.
     credential_hash: str = ""
+    # Whether a document marked test_data may be treated as a synthetic fixture (exempt from
+    # the region rule). Set only by in-process callers -- the gate and the CLI self-test --
+    # and never by gateway/app.py or the worker, so no API or UI request can enable it:
+    # a request's own `test_data` was the caller's word, and sent real contracts abroad.
+    synthetic_fixtures: bool = False
     # The steps the last handler built, kept so the QUEUE path can reuse the very code the
     # request path runs instead of a second implementation of it. `_persist_run` fills it.
     # Without this the durable executor would have its own idea of what a run's steps are,
@@ -291,6 +296,15 @@ def _ask(args: dict, ctx: Context) -> dict:
     # instead of the held statute; STATUTE and UNSURE fall straight through to the
     # unchanged path below -- UNSURE is treated exactly like STATUTE on purpose, so an
     # ambiguous query never silently loses the statute search it would otherwise get.
+    allowed = args.get("available")
+    if allowed is not None and not (isinstance(allowed, (list, tuple))
+                                    and all(isinstance(p, str) for p in allowed)):
+        return _refuse("BAD_REQUEST", "available must be a list of provider names")
+    # A caller may NARROW the task's providers, never widen them, and an empty or
+    # disallowed list narrows to nothing -- a refusal, not the default route.
+    providers = TASK_PROVIDERS["ask"] if allowed is None else tuple(
+        p for p in TASK_PROVIDERS["ask"] if p in allowed)
+
     from checker import resource_route
     _route = resource_route.classify(q)
     if _route.resource == resource_route.CASE:
@@ -356,7 +370,8 @@ def _ask(args: dict, ctx: Context) -> dict:
             return blocked
         origins = origins + (typed,)
         served, refusal = _served_or_refusal(origins, name="ask",
-                                             purpose=router.NARRATION, ctx=ctx)
+                                             purpose=router.NARRATION, ctx=ctx,
+                                             allowed_providers=providers)
         if refusal:
             refusal["run_id"] = _persist_run(
                 ctx, intent="research_question", status="REFUSED",
@@ -369,10 +384,7 @@ def _ask(args: dict, ctx: Context) -> dict:
 
     try:
         out = rq.answer(q, model=served.call if served else None,
-                        # A caller may NARROW the providers, never widen them past the
-                        # task's declaration: the cascade's lower tiers route on their own.
-                        available=tuple(p for p in (args.get("available") or TASK_PROVIDERS["ask"])
-                                        if p in TASK_PROVIDERS["ask"]))
+                        available=providers)
     except _provider_not_ready() as e:                           # B1
         # PROVIDER_NOT_READY is its OWN typed state: the model provider (Bedrock) is not
         # ready yet -- the account is being verified, or model access is pending. That is
@@ -1063,8 +1075,9 @@ def _review_contract(args: dict, ctx: Context) -> dict:
     try:
         origin = public_only.clear_matter(
             text, name=name, provider="azure",
-            test_data=(_affirmed(args.get("test_data")) or
-                       args.get("test_data") in ("fixture", "synthetic")))
+            test_data=ctx.synthetic_fixtures and (
+                _affirmed(args.get("test_data")) or
+                args.get("test_data") in ("fixture", "synthetic")))
     except public_only.NotPublic as e:
         return _refuse("NOT_PERMITTED", str(e))
     # Residency is a decision about the DOCUMENT, so it is taken before a route is sought.
@@ -1635,7 +1648,8 @@ def _intake_origin(message: str):
     honest one: a lawyer's question is their client's business, not published text. That
     routes it through PLAN_22 D3's gate rather than around it -- only a provider in
     MATTER_PROVIDERS may receive it, and `refuse_unconfirmed_region` will refuse a
-    non-test_data matter document while the region is unconfirmed. Both of those are
+    matter document while the region is unconfirmed (only an in-process test context can
+    mark a synthetic fixture). Both of those are
     refusals we WANT: they end in a fallback to RESEARCH_QUESTION, never in a question for
     the user.
 
@@ -5669,9 +5683,8 @@ VERBS: tuple[Verb, ...] = (
           Field("name", STRING, False, describes="a label for the document"),
           Field("playbook", STRING, False, describes="repo-relative playbook path"),
           Field("test_data", STRING, False,
-                describes="set when the document is a fixture or specimen, not a client "
-                          "contract. Required to send one while the deployment region is "
-                          "unconfirmed (PLAN_22 D3)")),
+                describes="ignored on API requests: only an in-process test may mark a "
+                          "document as a synthetic fixture (PLAN_22 D3)")),
          "POST", read_only=True, run=_review_contract),
 
     Verb("runs.get", "One run's status and result, without its steps.",
@@ -5849,8 +5862,8 @@ VERBS: tuple[Verb, ...] = (
                 describes="the event key, when the task is EVENT_ASSESS"),
           Field("facts", OBJECT, False, describes="event facts"),
           Field("test_data", STRING, False,
-                describes="set when a contract is a fixture, not a client document "
-                          "(PLAN_22 D3)"),
+                describes="ignored on API requests: only an in-process test may mark a "
+                          "contract as a synthetic fixture (PLAN_22 D3)"),
           Field("matter_id", STRING, False,
                 describes="file this conversation to a matter. Without one it is not "
                           "filed, and no matter's listing will show it"),
@@ -6767,7 +6780,7 @@ def _test() -> None:
     # `_bodies_from_ask` read two keys (`out_of_scope_bodies`, `refusal`) that the `ask`
     # verb does not return -- so the FEMA branch was dead code and the spec's own named
     # case failed end to end.
-    _gctx = Context(store=_MB(), clock=lambda: "2026-10-01T00:00:00+00:00")
+    _gctx = Context(store=_MB(), clock=lambda: "2026-10-01T00:00:00+00:00", synthetic_fixtures=True)
     _gV = by_name()
 
     def _send(**kw):
@@ -6808,7 +6821,7 @@ def _test() -> None:
         would not hold the file_id and the turn would ask for clarification instead."""
         ctx = Context(store=_gctx.store, documents=_gctx.documents,
                       clock=lambda: "2026-10-01T00:00:00+00:00",
-                      model_for=lambda _o: (lambda _prompt: "{}"))
+                      model_for=lambda _o: (lambda _prompt: "{}"), synthetic_fixtures=True)
         return _gV["conversation.send"].run({"conversation_id": "c-gap", **kw}, ctx)
 
     # ── the spec's named case: CA2013 + FEMA -> PARTIAL, FEMA NOT_HELD ──────
@@ -7363,7 +7376,7 @@ def _test() -> None:
         # With it ON, a task that produces no cited statutory sentences SAYS the critic
         # did not run, rather than leaving a clean reply that reads as approval.
         _os.environ["CRITIC_ENABLED"] = "true"
-        _cvctx = Context(store=_MB(), clock=lambda: "2026-10-01T00:00:00+00:00")
+        _cvctx = Context(store=_MB(), clock=lambda: "2026-10-01T00:00:00+00:00", synthetic_fixtures=True)
         _rv = by_name()["conversation.send"].run(
             {"text": "Please review this contract.", "task_override": "REVIEW_CONTRACT",
              "test_data": "fixture"}, _cvctx)
@@ -7618,7 +7631,7 @@ def _test() -> None:
           "why one of them can be refused on residency while the other is not")
 
     # The email template, from a real review_contract run in the same thread.
-    _ectx = Context(store=_MB(), clock=lambda: "2026-10-01T00:00:00+00:00")
+    _ectx = Context(store=_MB(), clock=lambda: "2026-10-01T00:00:00+00:00", synthetic_fixtures=True)
     _rc = by_name()["conversation.send"].run(
         {"text": "Please review this contract against our standard.",
          "task_override": "REVIEW_CONTRACT", "test_data": "fixture"}, _ectx)
@@ -8955,7 +8968,7 @@ def _test() -> None:
     fx = _rc.fixtures()[0]
     # A model is INJECTED for every check below. The gate must reach no network: a suite
     # that calls Azure is a suite that fails on a plane and bills a student account.
-    c2 = Context(store=st, model_for=lambda origins: _rc.fixture_model(fx))
+    c2 = Context(store=st, model_for=lambda origins: _rc.fixture_model(fx), synthetic_fixtures=True)
     out = _review_contract({"text": fx.text, "name": fx.id, "test_data": True}, c2)
     check(out.get("run_id"), "review_contract returns the id of the run it wrote")
     _a = _ask({"question": "how many meetings of the Board must a company hold"},
@@ -8981,7 +8994,7 @@ def _test() -> None:
     # be recorded as VERIFIED. Derived by subtraction, the first version recorded all ten.
     # "Nothing extracted" is now a MODEL that finds nothing, not the absence of one:
     # the verbs serve a real route today, so absence of a model is a refusal instead.
-    nomodel = Context(store=MemoryBackend(),
+    nomodel = Context(store=MemoryBackend(), synthetic_fixtures=True,
                       model_for=lambda origins: (lambda prompt: "{}"))
     o_nm = _review_contract({"text": fx.text, "name": fx.id, "test_data": True},
                             nomodel)
@@ -9001,7 +9014,7 @@ def _test() -> None:
     check(all(p["source_ref"].startswith("playbook:") for p in stored["propositions"]),
           "...and naming the rule it came from")
     check(_review_contract({"text": fx.text, "test_data": True},
-                           Context(model_for=lambda o: _rc.fixture_model(fx))
+                           Context(model_for=lambda o: _rc.fixture_model(fx), synthetic_fixtures=True)
                            ).get("run_id") is None,
           "with NO store the verb still answers, and says the run id is None rather than "
           "handing back one that resolves to nothing")
@@ -9658,7 +9671,7 @@ def _live_smoke() -> int:
     check(p["status"] == "PARTIAL", f"held+unheld question is PARTIAL live ({p['status']})")
 
     # contract review -> NEEDS_LAWYER (DRAFT playbook), with a real model reading the clauses.
-    cctx = Context(store=MemoryBackend(), clock=lambda: "2026-10-01T00:00:00+00:00")
+    cctx = Context(store=MemoryBackend(), clock=lambda: "2026-10-01T00:00:00+00:00", synthetic_fixtures=True)
     up = v["documents.upload"].run(
         {"text": "1. The Receiving Party shall keep Confidential Information secret.",
          "name": "nda.docx"}, cctx)

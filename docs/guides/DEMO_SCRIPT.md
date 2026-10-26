@@ -5,8 +5,9 @@ deployed in UAE North, playbook `playbooks/nda_v1.json` (DRAFT). Every status an
 sentence below is what the system returned, twice, not what it is expected to return.
 
 Nothing in this script is a client document. All three contracts are fixtures built in
-`agents/review_contract.py`, and the `test_data` tick is the caller stating so — the model
-is in UAE North and PLAN_22 D3 does not permit a client contract there.
+`agents/review_contract.py`, sent from an in-process context that marks them synthetic
+(`Context.synthetic_fixtures`) — no API or UI request can. The model is in UAE North and
+PLAN_22 D3 does not permit a client contract there.
 
 ---
 

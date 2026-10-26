@@ -113,5 +113,105 @@ class ClientTextNeverReachesAzure(unittest.TestCase):
         self.assertEqual(self.leaked(), [])
 
 
+ACCEPTED = {azure_model.ACCEPT_REGION_ENV: azure_model.DEPLOYMENT_REGION}
+
+
+class _Recorder(ClientTextNeverReachesAzure):
+    """The harness alone: subclasses must not re-run the parent's tests."""
+
+
+for _n in [n for n in vars(ClientTextNeverReachesAzure) if n.startswith("test_")]:
+    setattr(_Recorder, _n, None)
+
+
+class TestDataIsNotARequestFlag(_Recorder):
+    """`test_data` used to exempt a document from the region rule on the caller's word: any
+    API or UI request could send a real contract to UAE North by saying "fixture". Only an
+    in-process test (Context.synthetic_fixtures) may now mark a document as synthetic."""
+
+    def http(self):
+        from fastapi.testclient import TestClient
+        from gateway.app import create_app
+        from gateway.auth import KeyStore
+        keys = KeyStore()
+        import uuid
+        key, _ = keys.mint(tenant_id=str(uuid.uuid4()), actor=str(uuid.uuid4()), role="lawyer")
+        client = TestClient(create_app(keys=keys, db_url=""))
+        return lambda path, body: client.post(path, json=body, headers={"Authorization": "Bearer " + key})
+
+    def test_no_request_value_of_test_data_sends_a_contract(self):
+        post = self.http()
+        for flag in (True, "yes", "true", "fixture", "synthetic"):
+            body = post("/v2/review-contract", {"text": DOCUMENT, "name": "services.txt", "test_data": flag}).json()
+            self.assertEqual(body.get("code"), "NOT_PERMITTED", (flag, body))
+            self.assertIn("UAE North", body.get("detail", ""), "refused by the region rule, not something else")
+        self.assertEqual(self.sent, [], "zero outbound requests")
+
+    def test_conversation_dispatch_cannot_mark_a_contract_as_test_data(self):
+        out = verbs.by_name()["conversation.send"].run(
+            {"conversation_id": "c1", "text": DOCUMENT, "task_override": "REVIEW_CONTRACT",
+             "test_data": "fixture"}, self.ctx)
+        self.assertEqual(self.sent, [], out)
+        self.assertIn("UAE North", str(out), "the region rule refused it")
+
+    def test_a_request_cannot_inject_a_model_or_the_fixture_switch(self):
+        post = self.http()
+        body = post("/v2/ask", {"question": QUESTION, "model_for": "stub",
+                                "synthetic_fixtures": True}).json()
+        self.assertEqual((body.get("code"), self.sent), ("NOT_PERMITTED", []), body)
+        body = post("/v2/review-contract", {"text": DOCUMENT, "test_data": "fixture", "model_for": "stub",
+                                            "synthetic_fixtures": True}).json()
+        self.assertEqual(body.get("code"), "NOT_PERMITTED", body)
+        self.assertIn("UAE North", body.get("detail", ""))
+        self.assertEqual(self.sent, [])
+
+    def test_an_in_process_test_may_still_send_a_synthetic_fixture(self):
+        from agents import review_contract as rc
+        fx = rc.fixtures()[0]
+        self.ctx.synthetic_fixtures = True
+        verbs._review_contract({"text": fx.text, "name": fx.id, "test_data": "fixture"}, self.ctx)
+        self.assertTrue(self.sent, "positive control: the permitted path reaches the adapter")
+        line = next(x for x in fx.text.splitlines() if len(x) > 40)[:60]
+        self.assertTrue(any(line in s for s in self.sent), "...carrying the fixture text")
+        self.sent.clear()
+        verbs._review_contract({"text": DOCUMENT, "name": "services.txt"}, self.ctx)
+        self.assertEqual(self.sent, [], "...and the switch alone does not exempt an unmarked document")
+
+
+class CallersMayOnlyNarrowProviders(_Recorder):
+    """`ask` took a caller's provider list, but an empty list fell back to the default and
+    the narrowing never reached the call that chose the provider."""
+
+    def ask(self, available):
+        with patch.dict(os.environ, ACCEPTED):
+            return verbs._ask({"question": QUESTION, "available": available}, self.ctx)
+
+    def test_empty_invalid_and_disallowed_lists_refuse_with_no_call(self):
+        for available in ([], ["bedrock"], ["no-such-provider"]):
+            out = self.ask(available)
+            self.assertEqual(out.get("code"), "NO_MODEL", (available, out))
+        self.assertEqual(self.sent, [], "no list restores the default route")
+
+    def test_the_narrowing_reaches_the_call_that_picks_the_provider(self):
+        seen = []
+        real = verbs._served_or_refusal
+
+        def spy(*a, **k):
+            seen.append(k.get("allowed_providers"))
+            return real(*a, **k)
+        with patch("gateway.verbs._served_or_refusal", side_effect=spy):
+            for available in ([], ["bedrock"], ["no-such-provider"], None):
+                self.ask(available)
+        self.assertEqual(seen, [(), (), (), ("azure",)])
+
+    def test_a_malformed_list_is_a_bad_request(self):
+        self.assertEqual(self.ask("azure").get("code"), "BAD_REQUEST")
+        self.assertEqual(self.sent, [])
+
+    def test_a_list_naming_the_declared_provider_still_works(self):
+        self.ask(["azure", "bedrock"])
+        self.assertTrue(self.sent, "positive control: narrowing to the declared provider")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -20,8 +20,9 @@ this runnable in the gate on a machine with no model and no database.
 
 ## Synthetic only
 
-The NDA below is invented, between two invented companies, and `test_data` is set on the
-review so `public_only.refuse_unconfirmed_region` does not refuse it (PLAN_22 D3). No
+The NDA below is invented, between two invented companies, and the demo's in-process
+context (`synthetic_fixtures=True`) lets its `test_data` mark stand, so the region guard
+does not refuse it (PLAN_22 D3). No
 client document is in this file and none should ever be: it is committed.
 
 Run: PYTHONPATH=. python3 scripts/demo_inhouse.py
@@ -85,7 +86,7 @@ def run(*, model_for=None) -> list[Step]:
     else:
         steps.append(Step("sign in", FAIL, "the role check did not hold"))
 
-    ctx = Context(store=MemoryBackend(), clock=lambda: "2026-10-02T09:00:00+05:30",
+    ctx = Context(store=MemoryBackend(), synthetic_fixtures=True, clock=lambda: "2026-10-02T09:00:00+05:30",
                   model_for=model_for)
 
     # ── 2. open a matter ────────────────────────────────────────────────────
