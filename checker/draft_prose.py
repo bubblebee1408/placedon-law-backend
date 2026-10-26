@@ -152,9 +152,11 @@ def build_prompt(template: str, result: dict) -> str:
         # checks a block's BYTES against a published file, and a quote is in its file while
         # a sentence we built around it is in no file at all. So the labels and the
         # question stay outside the delimiters -- our words and the user's, not a published
-        # file's -- and only the verbatim quote goes inside.
+        # file's -- and only the verbatim quote goes inside. The QUESTION is the user's own
+        # typed text, which may carry client information, so it goes in a block of its own,
+        # cleared as client text by gateway/verbs._draft_prose (region rule included).
         q = str((result or {}).get("question") or "").strip()
-        parts = [f"The question asked: {q}\n"] if q else []
+        parts = [f"The question asked:\n{wrap_untrusted(q, 'the question')}\n"] if q else []
         for label, quote in quoted_facts(result):
             parts.append(f"{label}\n{wrap_untrusted(quote, 'the cited provision')}\n")
         return head + "\n".join(parts) + tail

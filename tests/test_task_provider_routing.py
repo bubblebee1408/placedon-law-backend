@@ -77,6 +77,24 @@ class TaskProviderRouting(unittest.TestCase):
         self.assertEqual(verbs.TASK_PROVIDERS["document_summary"], (BR,), "summaries: India region only")
 
 
+class CallerCannotWidenProviders(unittest.TestCase):
+    def test_ask_available_input_is_narrowed_to_the_declared_providers(self):
+        from agents import research_question as rq
+        from gateway.store import MemoryBackend
+        q = "What notice is needed to call a board meeting under Section 173?"
+        srcs = tuple(s for s, _o in rq.evidence(q))
+        seen = {}
+        real = rq.answer
+
+        def spy(question, **kw):
+            seen["available"] = kw.get("available")
+            return real(question, **kw)
+        ctx = verbs.Context(store=MemoryBackend(), model_for=lambda _o: rq.quoting_model(srcs))
+        with patch.object(rq, "answer", side_effect=spy):
+            verbs._ask({"question": q, "available": ["gemini", "ollama", "bedrock", "azure"]}, ctx)
+        self.assertEqual(tuple(seen["available"]), ("azure",))
+
+
 class ProviderFailureStates(unittest.TestCase):
     """What the summary task does when its one provider fails. (Research's own failure
     handling is unchanged: it never reaches Bedrock now.)"""
