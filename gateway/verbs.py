@@ -5383,7 +5383,12 @@ def _auth_login(args: dict, ctx: Context) -> dict:
         return _refuse("NO_STORE", "no auth backend is configured")
 
     email_hash = hash_key(email.lower())
-    ip_hash = hash_key(ctx.client_ip or "")
+    # No known client address (the trusted proxy could not name one): count this attempt
+    # against the email only. A fixed placeholder would put every such sign-in into one
+    # shared bucket -- the whole team locked out by one person's typos. A random hash
+    # matches no other row, so the OR in recent_failures reduces to the email.
+    import secrets
+    ip_hash = hash_key(ctx.client_ip) if ctx.client_ip else secrets.token_hex(32)
     locked = accounts.check_lockout(ctx.auth, email_hash=email_hash, ip_hash=ip_hash)
     if locked is not None:
         return locked

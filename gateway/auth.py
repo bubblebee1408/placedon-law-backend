@@ -61,6 +61,10 @@ class Principal:
     # safety property key_id already relies on. Empty for an API-key principal: nothing
     # today lets a caller revoke a key through this field.
     credential_hash: str = ""
+    # A key held by the frontend server that sits in front of the public verbs. Only a
+    # request carrying such a key may name the end user's address (CLIENT_ADDRESS_HEADER);
+    # anyone else is counted by their own socket address, whatever header they send.
+    client_address_proxy: bool = False
 
     def __post_init__(self) -> None:
         from gateway.roles import ROLES
@@ -106,7 +110,8 @@ class KeyStore:
         self._expires: dict[str, float] = {}
 
     def mint(self, *, tenant_id: str, actor: str, label: str = "",
-             role: str = "viewer", ttl_seconds: float | None = None) -> tuple[str, Principal]:
+             role: str = "viewer", ttl_seconds: float | None = None,
+             client_address_proxy: bool = False) -> tuple[str, Principal]:
         """Create a key. The raw value is returned ONCE and never stored.
 
         There is no `add_existing(key)`. A caller-supplied key could be low entropy, and
@@ -115,7 +120,7 @@ class KeyStore:
         """
         raw = secrets.token_urlsafe(KEY_BYTES)
         p = Principal(tenant_id=tenant_id, actor=actor, key_id=key_id(raw), label=label,
-                      role=role)
+                      role=role, client_address_proxy=client_address_proxy)
         h = hash_key(raw)
         self._by_hash[h] = p
         if ttl_seconds is not None:
