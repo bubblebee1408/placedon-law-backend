@@ -155,6 +155,7 @@ class Queue(Protocol):
               capacity: int | None = None, reserve_interactive: int = 0) -> Job | None: ...
     def finish(self, job_id: str, status: str) -> None: ...
     def fail(self, job_id: str, reason: str, *, retryable: bool = True) -> Job: ...
+    def requeue_dead(self, run_id: str, *, connection=None) -> Job: ...
     def dead(self, limit: int = 100) -> list[Job]: ...
     def claim_counts(self, run_ids) -> dict: ...
     def request_cancel(self, run_id: str) -> bool: ...
@@ -295,6 +296,20 @@ class MemoryQueue:
             row["status"] = QUEUED
             row["not_before"] = self._now() + timedelta(
                 seconds=backoff_for(row["attempts"]))
+        return self._job(row)
+
+    @_locked
+    def requeue_dead(self, run_id: str, *, connection=None) -> Job:
+        """A DEAD job back to QUEUED with its attempts reset: the one way a person retries.
+
+        Only a DEAD job moves, so a job still QUEUED or LEASED is never given a second
+        chance to run while its first is live -- that would be double execution.
+        """
+        row = next((r for r in self.jobs.values() if r["run_id"] == run_id), None)
+        if row is None or row["status"] != DEAD:
+            raise QueueError(f"run {run_id} has no DEAD job to requeue")
+        row.update(status=QUEUED, attempts=0, dead_reason="", not_before=None,
+                   claimed_by=None, lease_expires_at=None, cancel_requested=False)
         return self._job(row)
 
     @_locked
@@ -543,6 +558,37 @@ class PostgresQueue:
             c.commit()
         if r is None:
             raise QueueError(f"no job {job_id!r}")
+        return self._job(r)
+
+    def requeue_dead(self, run_id: str, *, connection=None) -> Job:
+        """A DEAD job back to QUEUED with its attempts reset: the one way a person retries.
+
+        One guarded UPDATE (`status = 'DEAD'`), so two retries racing cannot both requeue,
+        and a QUEUED or LEASED job is never given a second run while its first is live.
+        With `connection`, it runs inside the caller's transaction under the queue scope,
+        exactly as `enqueue` does, and the person's scope is restored afterwards.
+        """
+        with (nullcontext(connection) if connection is not None else self._conn(autocommit=False)) as c:
+            if connection is not None:
+                prev = c.execute("SELECT coalesce(current_setting('app.actor_scope', true), ''), "
+                                 "set_config('app.actor_scope', 'queue', true)").fetchone()[0]
+            r = c.execute(
+                "UPDATE jobs SET status = 'QUEUED', attempts = 0, dead_reason = '', "
+                "not_before = NULL, claimed_by = NULL, lease_expires_at = NULL, "
+                "cancel_requested = false, updated_at = now() "
+                "WHERE run_id = %s AND status = 'DEAD' "
+                f"RETURNING {self._COLS}", (run_id,)).fetchone()
+            if r is not None:
+                c.execute(f"NOTIFY {NOTIFY_CHANNEL}")
+            # Restored on success only. If a statement above raised, the borrowed
+            # transaction is aborted and rolls back, which discards this transaction-local
+            # setting anyway; restoring it there would raise again and hide the real error.
+            if connection is not None:
+                c.execute("SELECT set_config('app.actor_scope', %s, true)", (prev,))
+            if connection is None:
+                c.commit()
+        if r is None:
+            raise QueueError(f"run {run_id} has no DEAD job to requeue")
         return self._job(r)
 
     def claim_counts(self, run_ids) -> dict:

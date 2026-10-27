@@ -159,6 +159,7 @@ REQUIRED: dict[str, str] = {
     "document.check": LAWYER,
     "vault.upload": LAWYER,
     "vault.delete": LAWYER,
+    "vault.retry": LAWYER,
     # Inviting and removing people is the one act this module's docstring names as
     # ADMIN-only, not LAWYER: "admin: everything a lawyer can, plus invite and remove
     # people."

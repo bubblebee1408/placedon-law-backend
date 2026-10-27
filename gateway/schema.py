@@ -137,7 +137,8 @@ def _test() -> None:
                     "025_draft_inbox_idx.sql",
                     "026_accounts.sql",
                     "027_gateway_rate_limits.sql",
-                    "028_matter_access.sql", "029_vault_partial.sql"],
+                    "028_matter_access.sql", "029_vault_partial.sql",
+                    "030_vault_failed.sql"],
           f"every migration exists, in order ({files})")
 
     # 026: sign-in, sessions, and the two (now three) cross-tenant reads auth needs.
