@@ -57,6 +57,11 @@ HOST = "127.0.0.1"
 DEFAULT_PORT = 8021
 ROOT = Path(__file__).resolve().parent.parent / "web" / "assistant"
 MAX_BODY = 256 * 1024         # serve_api.py's cap: a question is small
+# After refusing an oversized body, read and discard at most this much of it, for at most
+# DRAIN_SECONDS, before closing. Closing with unread bytes makes the kernel send a TCP RESET,
+# and the client then sees "connection reset" instead of the 413 it was sent.
+DRAIN_LIMIT = 8 * 1024 * 1024
+DRAIN_SECONDS = 5.0
 ROUTE = "/v1/ask"
 DOC_ROUTE = "/v1/ask/document"          # check one public test document -> a document turn
 DOC_LIST_ROUTE = "/v1/ask/documents"    # the list the page offers; the only way in
@@ -346,6 +351,12 @@ class Handler(BaseHTTPRequestHandler):
         except ClientGone:
             self.close_connection = True
             return
+        except BodyTooLarge as e:
+            self.close_connection = True
+            self._json(413, {"error": "payload_too_large",
+                             "detail": f"the body is {e.length} bytes; the limit is {MAX_BODY}"})
+            self._drain(e.length)
+            return
         except (ValueError, UnicodeDecodeError) as e:   # JSONDecodeError is a ValueError
             self._json(400, {"error": "bad_request", "detail": f"invalid JSON body: {e}"})
             return
@@ -377,7 +388,7 @@ class Handler(BaseHTTPRequestHandler):
         if length <= 0:
             return None
         if length > MAX_BODY:
-            raise ValueError("request body too large")
+            raise BodyTooLarge(length)
         try:
             raw = self.rfile.read(length)
         except ConnectionError as e:
@@ -386,6 +397,30 @@ class Handler(BaseHTTPRequestHandler):
             # the Cancel case, and _send's guard does not cover it.
             raise ClientGone() from e
         return json.loads(raw.decode("utf-8"))
+
+    def _drain(self, length: int) -> None:
+        """Discard the unread body, bounded, so the refusal reaches the client.
+
+        Bounded twice: at most DRAIN_LIMIT bytes and DRAIN_SECONDS of waiting, so a client
+        that keeps sending cannot hold this thread. Nothing read here is parsed or kept.
+        """
+        import time
+        remaining = min(length, DRAIN_LIMIT)
+        deadline = time.monotonic() + DRAIN_SECONDS
+        try:
+            while remaining > 0:
+                left = deadline - time.monotonic()
+                if left <= 0:
+                    break
+                # A TOTAL deadline: each wait is capped by what is left, so a client
+                # trickling a byte at a time cannot hold this thread past DRAIN_SECONDS.
+                self.connection.settimeout(left)
+                chunk = self.rfile.read1(min(65536, remaining))
+                if not chunk:
+                    break
+                remaining -= len(chunk)
+        except (ConnectionError, OSError):
+            pass
 
     def log_message(self, fmt: str, *args) -> None:
         # Method and path only, never the query or the body (the question lives there).
@@ -396,6 +431,14 @@ class Handler(BaseHTTPRequestHandler):
 
 class ClientGone(Exception):
     """The client disconnected before it could be answered. Not a failure of ours."""
+
+
+class BodyTooLarge(Exception):
+    """The Content-Length is over MAX_BODY. Answered with 413, never read or parsed."""
+
+    def __init__(self, length: int) -> None:
+        super().__init__(f"request body of {length} bytes is over the {MAX_BODY}-byte cap")
+        self.length = length
 
 
 class AskServer(ThreadingHTTPServer):
@@ -872,6 +915,52 @@ def _test() -> int:
               f"a body with no question is the api's own 400 ({st})")
         st, h, r = ask(port, b"x" * (300 * 1024))
         check(st in (400, 413) and "state" not in r, f"an oversized body is refused ({st})")
+        # A body far larger than the socket buffers. The server refuses it from the
+        # Content-Length header; if it then closed with the body unread, the kernel answered
+        # the still-sending client with a TCP RESET and the client never saw the refusal --
+        # this suite crashed with ConnectionResetError, intermittently, depending on how much
+        # of a 300 KB body the buffers had already swallowed. At 2 MiB it is not a race.
+        for _ in range(3):
+            st, h, r = ask(port, b"x" * (2 * 1024 * 1024))
+            if st != 413:
+                break
+        check(st == 413 and "state" not in r,
+              f"a body far beyond the cap still gets its 413, never a connection reset ({st})")
+        # The drain has a TOTAL deadline. A client that announces a huge body and then
+        # trickles it must not hold the server thread past DRAIN_SECONDS.
+        import time as _time
+        global DRAIN_SECONDS
+        saved_drain, DRAIN_SECONDS = DRAIN_SECONDS, 0.5
+        try:
+            slow = socket.create_connection((HOST, port), timeout=10)
+            slow.sendall(f"POST /v1/ask HTTP/1.1\r\nHost: {HOST}:{port}\r\n"
+                         f"Content-Type: application/json\r\n"
+                         f"Content-Length: {3 * 1024 * 1024}\r\n\r\n".encode())
+            t0, closed = _time.monotonic(), False
+            reply = b""
+            while _time.monotonic() - t0 < 5:
+                try:
+                    slow.sendall(b"x")
+                except OSError:
+                    closed = True
+                    break
+                slow.settimeout(0.2)
+                try:
+                    data = slow.recv(65536)
+                    if data == b"" and reply:
+                        closed = True
+                        break
+                    reply += data
+                except socket.timeout:
+                    pass
+            took = _time.monotonic() - t0
+            slow.close()
+        finally:
+            DRAIN_SECONDS = saved_drain
+        check(reply.startswith(b"HTTP/1.0 413") or reply.startswith(b"HTTP/1.1 413"),
+              f"a trickled oversized body is answered 413 ({reply[:20]!r})")
+        check(closed and took < 3,
+              f"...and the server stops draining at its total deadline ({took:.1f}s)")
 
         import checker.ask as ask_mod
         saved = ask_mod.answer
