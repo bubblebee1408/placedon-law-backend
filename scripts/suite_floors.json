@@ -338,7 +338,7 @@
     "scripts/review.py": 55,
     "scripts/review_brief.py": 10,
     "scripts/review_table_eval.py": 30,
-    "scripts/serve_api.py": 4,
+    "scripts/serve_api.py": 7,
     "scripts/serve_ask.py": 74,
     "scripts/serve_matrix.py": 14,
     "scripts/slice_s173.py": 12,

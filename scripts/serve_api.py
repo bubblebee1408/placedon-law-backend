@@ -28,6 +28,19 @@ HOST = "127.0.0.1"
 SELFTEST_TIMEOUT = 30
 DEFAULT_PORT = 8020
 MAX_BODY = 256 * 1024        # a company payload is small; cap to refuse abuse
+# After refusing an oversized body, read and discard at most DRAIN_LIMIT of it, for at most
+# DRAIN_SECONDS in total, before closing. Closing with unread bytes makes the kernel RESET a
+# client that is still sending, which then sees "connection reset" instead of the 413.
+DRAIN_LIMIT = 8 * 1024 * 1024
+DRAIN_SECONDS = 5.0
+
+
+class BodyTooLarge(Exception):
+    """The Content-Length is over MAX_BODY. Answered with 413, never read or parsed."""
+
+    def __init__(self, length: int) -> None:
+        super().__init__(f"request body of {length} bytes is over the {MAX_BODY}-byte cap")
+        self.length = length
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -52,7 +65,7 @@ class Handler(BaseHTTPRequestHandler):
         if length <= 0:
             return None
         if length > MAX_BODY:
-            raise ValueError("request body too large")
+            raise BodyTooLarge(length)
         raw = self.rfile.read(length)
         return json.loads(raw.decode("utf-8"))
 
@@ -60,9 +73,33 @@ class Handler(BaseHTTPRequestHandler):
         status, body = handle("GET", self.path, None, generated_at=self._now())
         self._respond(status, body)
 
+    def _drain(self, length: int) -> None:
+        """Discard the unread body, bounded by size and a TOTAL deadline. Nothing is kept."""
+        import time
+        remaining = min(length, DRAIN_LIMIT)
+        deadline = time.monotonic() + DRAIN_SECONDS
+        try:
+            while remaining > 0:
+                left = deadline - time.monotonic()
+                if left <= 0:
+                    break
+                self.connection.settimeout(left)
+                chunk = self.rfile.read1(min(65536, remaining))
+                if not chunk:
+                    break
+                remaining -= len(chunk)
+        except OSError:
+            pass
+
     def do_POST(self) -> None:
         try:
             body = self._read_body()
+        except BodyTooLarge as e:
+            self.close_connection = True
+            self._respond(413, {"error": "payload_too_large",
+                                "detail": f"the body is {e.length} bytes; the limit is {MAX_BODY}"})
+            self._drain(e.length)
+            return
         except (ValueError, json.JSONDecodeError) as e:
             self._respond(400, {"error": "bad_request", "detail": f"invalid JSON body: {e}"})
             return
@@ -135,6 +172,63 @@ def _test() -> int:
             check(False, "an invalid JSON body is refused")
         except urllib.error.HTTPError as e:
             check(e.code == 400, "an invalid JSON body returns 400")
+
+        # An oversized body is refused from its Content-Length. Closing with the body unread
+        # made the kernel RESET a client still sending, so it saw "connection reset" instead
+        # of the refusal (the same defect serve_ask.py had). At 2 MiB it is not a race.
+        import http.client
+        import socket
+        import time as _time
+
+        def post_raw(body: bytes):
+            conn = http.client.HTTPConnection(HOST, port, timeout=SELFTEST_TIMEOUT)
+            try:
+                conn.request("POST", "/v1/compliance-pack", body,
+                             {"Content-Type": "application/json"})
+                r = conn.getresponse()
+                return r.status, r.read()
+            except OSError as e:
+                return type(e).__name__, b""
+            finally:
+                conn.close()
+        st, _ = post_raw(b"x" * (2 * 1024 * 1024))
+        check(st == 413, f"a body far beyond the cap gets 413, never a connection reset ({st})")
+
+        # The drain has a TOTAL deadline: a client trickling a huge body cannot hold the thread.
+        global DRAIN_SECONDS
+        saved_drain, DRAIN_SECONDS = DRAIN_SECONDS, 0.5
+        try:
+            slow = socket.create_connection((HOST, port), timeout=10)
+            slow.sendall(f"POST /v1/compliance-pack HTTP/1.1\r\nHost: {HOST}:{port}\r\n"
+                         f"Content-Type: application/json\r\n"
+                         f"Content-Length: {3 * 1024 * 1024}\r\n\r\n".encode())
+            t0, closed, reply = _time.monotonic(), False, b""
+            while _time.monotonic() - t0 < 5:
+                try:
+                    slow.sendall(b"x")
+                except OSError:
+                    closed = True
+                    break
+                slow.settimeout(0.2)
+                try:
+                    data = slow.recv(65536)
+                    if data == b"" and reply:
+                        closed = True
+                        break
+                    reply += data
+                except socket.timeout:
+                    pass
+                except OSError:
+                    # A reset or broken pipe once the server has answered and stopped
+                    # draining IS the close this check waits for, not a failure.
+                    closed = True
+                    break
+            took = _time.monotonic() - t0
+            slow.close()
+        finally:
+            DRAIN_SECONDS = saved_drain
+        check(b" 413 " in reply[:20], f"a trickled oversized body is answered 413 ({reply[:20]!r})")
+        check(closed and took < 3, f"...and the drain stops at its total deadline ({took:.1f}s)")
     finally:
         srv.shutdown()
         srv.server_close()
