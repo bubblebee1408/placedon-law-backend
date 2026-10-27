@@ -74,6 +74,29 @@ def _now_iso(clock) -> str:
     return clock() if clock else time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
 
+VAULT_INGEST_INTENT = "vault_ingest"   # agents/vault_ingest.INTENT, named here to avoid importing the agent
+
+
+def _fail_bound(queue, store, job, reason: str, *, retryable: bool = True):
+    """`queue.fail`, and when that made a vault ingest job DEAD, the document FAILED (030).
+
+    Used only where `store` is bound to the job's own actor, so the document is changed by
+    the person who uploaded it. Without this a document whose ingest gave up stayed PENDING
+    ("queued; not searchable yet") although nothing would ever read it again.
+    """
+    dead = queue.fail(job.job_id, reason, retryable=retryable)
+    if dead.status == q.DEAD and job.intent == VAULT_INGEST_INTENT:
+        try:
+            store.fail_vault_document(job.run_id, dead.dead_reason or reason)
+        except Exception:                                         # noqa: BLE001
+            # The job is DEAD either way; `vault.status` still shows PENDING for this one
+            # document. Never let a store error here hide the job's own failure.
+            import logging
+            logging.getLogger(__name__).warning("vault_fail_mark_failed",
+                                                extra={"run_id": job.run_id})
+    return dead
+
+
 def _identity_failure(queue, job, error: str) -> Outcome:
     """Never mutate a possibly wrong actor's store to report a binding failure."""
     queue.fail(job.job_id, error, retryable=False)
@@ -185,7 +208,7 @@ def run_one(*, queue, store, handlers: dict[str, Callable], worker: str = "w1",
         store.set_run(job.run_id, status=FAILED, result=None)
         # A1. NOT retryable: a missing handler is a deployment that does not have the code,
         # and two more leases only learn the same thing. Straight to DEAD, with the reason.
-        queue.fail(job.job_id, f"no handler for intent {job.intent!r}", retryable=False)
+        _fail_bound(queue, store, job, f"no handler for intent {job.intent!r}", retryable=False)
         return Outcome(job.run_id, FAILED, error=f"no handler for intent {job.intent!r}")
 
     if job.cancel_requested:
@@ -210,7 +233,7 @@ def run_one(*, queue, store, handlers: dict[str, Callable], worker: str = "w1",
                       result={"error": f"{type(e).__name__}: the handler could not complete the request"})
         # A1. Retryable: a handler that raised may have hit a transport error. `fail` decides
         # retry-with-backoff or DEAD, so the policy is not restated here.
-        queue.fail(job.job_id, f"{type(e).__name__}: the handler could not complete the request")
+        _fail_bound(queue, store, job, f"{type(e).__name__}: the handler could not complete the request")
         return Outcome(job.run_id, FAILED, error=f"{type(e).__name__}: the handler could not complete the request")
 
     written = replayed = 0
@@ -241,8 +264,8 @@ def run_one(*, queue, store, handlers: dict[str, Callable], worker: str = "w1",
             store.set_run(job.run_id, status=FAILED, result={
                 "error": f"StepTimeout: {step.get('capability')} exceeded "
                          f"{timeout_seconds}s"})
-            queue.fail(job.job_id, f"StepTimeout: {step.get('capability')} exceeded "
-                                   f"{timeout_seconds}s")
+            _fail_bound(queue, store, job, f"StepTimeout: {step.get('capability')} exceeded "
+                                           f"{timeout_seconds}s")
             return Outcome(job.run_id, FAILED, None, written, replayed,
                            error=f"StepTimeout: {step.get('capability')}")
 
@@ -274,7 +297,7 @@ def run_one(*, queue, store, handlers: dict[str, Callable], worker: str = "w1",
     code = (result.get("code") or "NO_EVIDENCE") if final == REFUSED else None
     store.set_run(job.run_id, status=final, refusal_code=code, result=result)
     if final == FAILED:
-        queue.fail(job.job_id, "The handler could not complete the request")
+        _fail_bound(queue, store, job, "The handler could not complete the request")
     else:
         queue.finish(job.job_id, q.DONE)
     return Outcome(job.run_id, final, code, written, replayed)

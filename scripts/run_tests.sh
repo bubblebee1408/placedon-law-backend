@@ -486,6 +486,10 @@ extra+=("scripts/conversation_persist_integration.py --test")
 # crash cannot leave a PENDING document with no job. The OFFLINE guard runs here; the live
 # proof is `scripts/vault_upload_atomic_integration.py --run` against a throwaway DB.
 extra+=("scripts/vault_upload_atomic_integration.py --test")
+# 030: a vault document whose ingest gave up is FAILED, and vault.retry / a re-upload runs it
+# once. The OFFLINE guard runs here; the live proof is
+# `scripts/vault_failed_retry_integration.py --run` against a throwaway DB.
+extra+=("scripts/vault_failed_retry_integration.py --test")
 
 # A module that prints "9/10 passed" has failed, whatever its exit code says.
 # Eight modules once defined _test() without `raise SystemExit(1)`, so their

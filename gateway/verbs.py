@@ -3121,6 +3121,20 @@ def _vault_upload(args: dict, ctx: Context) -> dict:
             # A DELETED holder is not handed back: its text is gone and nothing can read it.
             existing = (ctx.store.read_vault_document(exc.document_id)
                         if exc.document_id else None)
+            if (existing and existing.get("state") == "FAILED"
+                    and access.document_allowed(ctx, existing, access.WRITE)):
+                # These bytes were just stored again, so a failure caused by missing bytes
+                # is repaired too. Same guards as vault.retry: no double processing.
+                refusal = _requeue_failed(existing, ctx)
+                if refusal:
+                    return refusal
+                return {"document_id": existing["document_id"], "sha256": sha,
+                        "name": existing.get("name") or name, "state": "PENDING",
+                        "job_id": None, "queue_error": None, "duplicate": True,
+                        "retried": True,
+                        "note": (f"'{existing.get('name') or name}' had failed to process; "
+                                 f"these bytes are queued to be read again. Nothing new was "
+                                 f"stored.")}
             if (existing and existing.get("state") != "DELETED"
                     and access.document_allowed(ctx, existing)):
                 return {"document_id": existing["document_id"], "sha256": sha,
@@ -3261,7 +3275,7 @@ def _vault_status(args: dict, ctx: Context) -> dict:
     counts = ctx.store.vault_counts()
     return dict(counts, note=(
         f"{counts['documents']} document(s). {counts['unsearchable']} cannot be searched "
-        f"-- they are PENDING or CANNOT_READ, and a search answers from the rest. "
+        f"-- they are PENDING, CANNOT_READ or FAILED, and a search answers from the rest. "
         f"{counts['deleted']} have been deleted; their rows remain and their bytes do "
         f"not."))
 
@@ -3737,6 +3751,64 @@ def _vault_delete(args: dict, ctx: Context) -> dict:
     return {"document_id": did, "deleted": bool(gone), "bytes_destroyed": False,
             "note": "The document is deleted from this workspace and its searchable chunks are removed. Shared stored bytes are retained until a retention job can safely purge them."}
 
+
+
+def _requeue_failed(row: dict, ctx: Context) -> dict | None:
+    """Put a FAILED document back to PENDING with its job requeued. None on success.
+
+    The one implementation behind `vault.retry` and a re-upload of the same bytes. The
+    store's guard (`state = 'FAILED'`) and the queue's (`status = 'DEAD'`) are what stop a
+    double retry from processing the document twice; this only maps their answers.
+    """
+    from gateway.jobs import QueueError, QueueFull
+    from gateway.store import RetryConflict
+    if ctx.queue is None:
+        return _refuse("NO_QUEUE", "No work queue is configured, so nothing could read "
+                                   "this document again.")
+    if ctx.files.get(row["sha256"]) is None:
+        return _refuse("BYTES_MISSING", "The stored file is missing, so retrying would fail "
+                                        "the same way. Upload the file again.")
+    try:
+        moved = ctx.store.retry_vault_document(row["document_id"], queue=ctx.queue)
+    except QueueFull:
+        return _refuse("BUSY", "The work queue is full. Retry shortly; nothing was changed.")
+    except (QueueError, RetryConflict):
+        return _refuse("CONFLICT", "This document's processing job could not be requeued; "
+                                   "nothing was changed.")
+    if not moved:
+        return _refuse("CONFLICT", "This document is no longer FAILED -- it may already "
+                                   "have been retried. Nothing was changed.")
+    return None
+
+
+def _vault_retry(args: dict, ctx: Context) -> dict:
+    """Read a FAILED document again. A WRITE verb; LAWYER, like vault.upload."""
+    refusal = _vault_ready(ctx)
+    if refusal:
+        return refusal
+    did = (args.get("document_id") or "").strip()
+    row = ctx.store.read_vault_document(did) if did else None
+    if row is None or not access.document_allowed(ctx, row):
+        return _refuse("NOT_FOUND", f"no vault document {did!r} for this tenant")
+    if not access.document_allowed(ctx, row, access.WRITE):
+        return _refuse("FORBIDDEN", "You can read this document but not retry it.")
+    if row.get("state") == "PENDING" and ctx.queue is not None:
+        # The worker marks the document FAILED in a second step after its job goes DEAD. A
+        # crash between the two leaves PENDING over a DEAD job; finish that step here, so
+        # the document is not stuck with no way to retry it.
+        job = ctx.queue.get(did)
+        if job is not None and job.status == "DEAD":
+            ctx.store.fail_vault_document(did, job.dead_reason or "processing stopped")
+            row = ctx.store.read_vault_document(did) or row
+    if row.get("state") != "FAILED":
+        return _refuse("CONFLICT", f"Only a FAILED document can be retried; this one is "
+                                   f"{row.get('state')}. Nothing was changed.")
+    refusal = _requeue_failed(row, ctx)
+    if refusal:
+        return refusal
+    return {"document_id": did, "name": row.get("name"), "state": "PENDING", "retried": True,
+            "note": "Queued to be read again. PENDING is not INGESTED: nothing is searchable "
+                    "until a worker has read it."}
 
 
 def _calendar_upcoming(args: dict, ctx: Context) -> dict:
@@ -5966,6 +6038,12 @@ VERBS: tuple[Verb, ...] = (
          (Field("matter_id", STRING, True, describes="the matter"),),
          "POST", read_only=True, mcp=False, run=_vault_compile),
 
+    Verb("vault.retry",
+         "Read a FAILED document again: back to PENDING with its job requeued. Refused for "
+         "any other state, so a retry can never process a document twice.",
+         (Field("document_id", STRING, True, describes="the FAILED document to read again"),),
+         "POST", read_only=False, run=_vault_retry),
+
     Verb("vault.delete",
          "Destroy a document's bytes and keep the record that it existed and was deleted.",
          (Field("document_id", STRING, True, describes="the document to destroy"),),
@@ -6356,14 +6434,14 @@ def _test() -> None:
                         "vault.upload", "vault.status", "vault.find", "vault.list",
                                             "vault.verify", "vault.summarize",
                                             "vault.research", "vault.compile",
-                                            "vault.delete"} | {
+                                            "vault.delete", "vault.retry"} | {
                         # 026: sign-in, sessions, invites.
                         "auth.login", "auth.logout", "auth.me",
                         "invites.create", "invites.accept"} | {
                         # 028: administering per-matter access.
                         "matters.grant", "matters.revoke", "matters.members",
                         "matters.access_report", "vault.share", "access.reassign"},
-          f"the sixty-two verbs are declared once ({sorted(names)})")
+          f"the sixty-three verbs are declared once ({sorted(names)})")
     # sources.* are READ-ONLY, so they reach MCP. That is the intended shape: an agent may
     # ask what a source permits and search what may be read, and there is no sources verb
     # that fetches, stores or spends. S3's Indian Kanoon connector will spend money, and
@@ -6378,7 +6456,7 @@ def _test() -> None:
                                  "runs.submit", "runs.cancel", "conversation.send",
                                  "review_table.create", "review_table.cancel",
                                  "draft.create", "draft.revise", "matters.create",
-                                 "vault.upload", "vault.delete",
+                                 "vault.upload", "vault.delete", "vault.retry",
                                  # T3 move 10. It WRITES: an append-only row in
                                  # `document_checks` recording a judgement a firm may rely
                                  # on. LAWYER in gateway/roles.py for the same reason.
@@ -6395,7 +6473,7 @@ def _test() -> None:
                                  # 028. Each changes who may reach a matter or a document.
                                  "matters.grant", "matters.revoke", "vault.share",
                                  "access.reassign"},
-          f"...and exactly twenty-two of them write ({sorted(write_verbs())})")
+          f"...and exactly twenty-three of them write ({sorted(write_verbs())})")
     check(f"{MCP_NAMESPACE}.conversation.send" not in {t.name for t in mcp},
           "conversation.send WRITES -- it creates a thread, appends messages and may "
           "enqueue work -- so mcp_tools() keeps it off MCP, by rule and not by the author "
@@ -8187,7 +8265,7 @@ def _test() -> None:
           "...while a WRITE verb is kept out of MCP by mcp_tools(), not by the author "
           "remembering to")
     check("widgets.delete" in write_verbs(hypo), "...and is named in write_verbs()")
-    check(len(VERBS) == 62 and "widgets.count" not in rest_spec(),
+    check(len(VERBS) == 63 and "widgets.count" not in rest_spec(),
           "...and the probe changed nothing in this module: the surfaces are generated "
           "from an argument, not from a global the test rebound")
 
@@ -9472,6 +9550,45 @@ def _test() -> None:
               f"a failing enqueue leaves no document and no run behind "
               f"({_d4b_broken.get('code')}, docs={len(_d4b_store2.vault_docs)}, "
               f"runs={len(_d4b_store2.runs)})")
+
+    # ── move 3c: retries exhausted -> FAILED, and a retry that cannot run twice ─
+    from gateway.worker import run_one as _d4c_run_one
+    with _d3tmp.TemporaryDirectory() as _d4cdir:
+        _d4c_store, _d4c_q = MemoryBackend(), _MQ2()
+        _d4c_ctx = Context(store=_d4c_store, queue=_d4c_q, files=_D3LFS(_d4cdir),
+                           clock=lambda: "2026-10-27T00:00:00Z")
+        _d4c_text = "Clause 5. Notices shall be in writing."
+        _d4c_up = _vault_upload({"name": "notice.txt", "text": _d4c_text}, _d4c_ctx)
+        _d4c_id = _d4c_up["document_id"]
+        # No handler is the non-retryable path: DEAD on the first attempt.
+        _d4c_run_one(queue=_d4c_q, store=_d4c_store, handlers={})
+        _d4c_row = _d4c_store.read_vault_document(_d4c_id)
+        check(_d4c_row["state"] == "FAILED" and _d4c_row.get("failure_reason"),
+              f"a document whose ingest job goes DEAD is FAILED, with the reason "
+              f"({_d4c_row['state']}, {str(_d4c_row.get('failure_reason'))[:50]})")
+        check(_d4c_store.vault_counts()["unsearchable"] == 1,
+              "...and counted as unsearchable, never as searchable")
+        _d4c_r1 = _vault_retry({"document_id": _d4c_id}, _d4c_ctx)
+        _d4c_job = _d4c_q.get(_d4c_id)
+        check(_d4c_r1.get("retried") and _d4c_store.read_vault_document(_d4c_id)["state"]
+              == "PENDING" and _d4c_job.status == "QUEUED" and _d4c_job.attempts == 0,
+              f"vault.retry puts it back to PENDING with its one job requeued "
+              f"({_d4c_r1.get('state')}, {_d4c_job.status}, attempts {_d4c_job.attempts})")
+        _d4c_r2 = _vault_retry({"document_id": _d4c_id}, _d4c_ctx)
+        check(_d4c_r2.get("code") == "CONFLICT" and _d4c_q.get(_d4c_id).status == "QUEUED",
+              f"a second retry is refused and changes nothing ({_d4c_r2.get('code')})")
+        _d4c_run_one(queue=_d4c_q, store=_d4c_store, handlers={})
+        _d4c_again = _vault_upload({"name": "notice (again).txt", "text": _d4c_text},
+                                   _d4c_ctx)
+        _d4c_jobs = [j for j in _d4c_q.jobs.values() if j["run_id"] == _d4c_id]
+        check(_d4c_again.get("retried") and _d4c_again.get("document_id") == _d4c_id
+              and len(_d4c_jobs) == 1 and _d4c_jobs[0]["status"] == "QUEUED",
+              f"uploading the same bytes again retries the FAILED document, still with ONE "
+              f"job ({_d4c_again.get('state')}, jobs={len(_d4c_jobs)})")
+        _d4c_ok = _vault_upload({"name": "fine.txt", "text": "Clause 6. Fine."}, _d4c_ctx)
+        _d4c_r3 = _vault_retry({"document_id": _d4c_ok["document_id"]}, _d4c_ctx)
+        check(_d4c_r3.get("code") == "CONFLICT",
+              f"retrying a document that has not failed is refused ({_d4c_r3.get('code')})")
 
     _d4_fresh = _MBT(store=_MMem(), today=_mdate(2026, 10, 5))
     _d4_gctx = Context(store=MemoryBackend(), queue=_MQ2(),

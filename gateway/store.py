@@ -55,6 +55,10 @@ class TurnConflict(StoreError):
     """An idempotency key or a conversation matter was reused inconsistently."""
 
 
+class RetryConflict(StoreError):
+    """A FAILED document whose run is not FAILED: nothing was retried or changed."""
+
+
 class DuplicateVaultDocument(StoreError):
     """The same content already has a tenant-scoped vault record.
 
@@ -115,6 +119,8 @@ class Backend(Protocol):
     def write_vault_tags(self, document_id: str, tags: list) -> int: ...
     def read_vault_tags(self, document_id: str) -> list[dict]: ...
     def delete_vault_document(self, document_id: str, *, now: str) -> bool: ...
+    def fail_vault_document(self, document_id: str, reason: str) -> bool: ...
+    def retry_vault_document(self, document_id: str, *, queue) -> bool: ...
     def vault_counts(self) -> dict: ...
     # T3 move 10 (023_document_checks.sql). APPEND-ONLY: one row per CHECK, never updated.
     def write_document_check(self, check: dict) -> dict: ...
@@ -315,7 +321,7 @@ CACHE_KEYS = ("lookup_key", "content_key", "question", "task", "as_of", "sources
 CACHE_STATS = ("hits", "misses", "stale")
 
 # V1. 020's state CHECK, named once so the dict and the database cannot disagree.
-VAULT_STATES = ("PENDING", "INGESTED", "PARTIAL", "CANNOT_READ", "DELETED")
+VAULT_STATES = ("PENDING", "INGESTED", "PARTIAL", "CANNOT_READ", "DELETED", "FAILED")
 # 029. Stored text a person may read and attach: complete, or complete except named pages.
 READABLE_VAULT_STATES = ("INGESTED", "PARTIAL")
 VAULT_OCR_STATES = ("NOT_NEEDED", "NEEDED", "BLOCKED", "DONE")
@@ -1003,7 +1009,7 @@ class MemoryBackend:
                "ocr_state": str(doc.get("ocr_state") or "NOT_NEEDED"),
                "deleted_at": doc.get("deleted_at"), "uploaded_by": uploaded_by,
                "shared_with_firm_at": prior.get("shared_with_firm_at"),
-               "shared_by": prior.get("shared_by")}
+               "shared_by": prior.get("shared_by"), "failure_reason": None}
         self.vault_docs[did] = row
         if run is not None:
             self.write_run(run)
@@ -1114,8 +1120,45 @@ class MemoryBackend:
         row["state"] = "DELETED"
         row["deleted_at"] = str(now)
         row["text_chars"] = None
+        row["failure_reason"] = None
         self.vault_chunks.pop(str(document_id), None)
         self.vault_tags.pop(str(document_id), None)
+        return True
+
+    def fail_vault_document(self, document_id: str, reason: str) -> bool:
+        """PENDING -> FAILED with the reason (030). Only a PENDING document moves."""
+        if not str(reason or "").strip():
+            raise StoreError("a FAILED document says why (030 vault_documents_failed_has_reason)")
+        row = self.vault_docs.get(str(document_id or ""))
+        if row is None or row.get("state") != "PENDING":
+            return False
+        row["state"], row["failure_reason"] = "FAILED", str(reason)
+        return True
+
+    def retry_vault_document(self, document_id: str, *, queue) -> bool:
+        """FAILED -> PENDING, its run back to PLANNED and its DEAD job requeued, as one unit.
+
+        False when the document is not FAILED (already retried, or never failed), so two
+        retries cannot both requeue. If the requeue raises, nothing has changed.
+        """
+        did = str(document_id or "")
+        row = self.vault_docs.get(did)
+        if row is None or row.get("state") != "FAILED":
+            return False
+        if (self.runs.get(did) or {}).get("status") != "FAILED":
+            raise RetryConflict("this document's run is not FAILED, so it was not retried")
+        prior_doc, prior_run = dict(row), dict(self.runs[did])
+        prior_steps = list(self.steps.get(did) or [])
+        row["state"], row["failure_reason"] = "PENDING", None
+        self.runs[did].update(status="PLANNED", refusal_code=None, result=None)
+        self.steps[did] = []
+        try:
+            queue.requeue_dead(did)
+        except Exception:
+            self.vault_docs[did] = prior_doc
+            self.runs[did] = prior_run
+            self.steps[did] = prior_steps
+            raise
         return True
 
     # ── T3 move 10: document_checks (023) ───────────────────────────────────
@@ -1190,7 +1233,7 @@ class MemoryBackend:
         return {"documents": len(live), "by_state": by_state,
                 "deleted": len(self.vault_docs) - len(live),
                 "unsearchable": sum(1 for r in live
-                                    if r["state"] in ("PENDING", "CANNOT_READ"))}
+                                    if r["state"] in ("PENDING", "CANNOT_READ", "FAILED"))}
 
     def find_turn(self, request_id: str, payload_digest: str) -> dict | None:
         with self._turn_lock:
@@ -2318,6 +2361,10 @@ class PostgresBackend:
                     "class_reason = EXCLUDED.class_reason, "
                     "text_chars = EXCLUDED.text_chars, ocr_state = EXCLUDED.ocr_state, "
                     "matter_id = EXCLUDED.matter_id, "
+                    # 030: a reason only while FAILED. A late ingest that finishes after
+                    # the document was marked FAILED clears it rather than break the CHECK.
+                    "failure_reason = CASE WHEN EXCLUDED.state = 'FAILED' "
+                    "THEN vault_documents.failure_reason ELSE NULL END, "
                     "ingested_at = CASE WHEN EXCLUDED.state IN ('INGESTED', 'PARTIAL') THEN now() "
                     "ELSE vault_documents.ingested_at END",
                     (doc["document_id"], self.tenant_id,
@@ -2367,7 +2414,7 @@ class PostgresBackend:
             r = c.execute(
                 "SELECT document_id, matter_id, sha256, name, byte_count, state, "
                 "doc_class, class_reason, text_chars, ocr_state, deleted_at, uploaded_by, "
-                "shared_with_firm_at, shared_by "
+                "shared_with_firm_at, shared_by, failure_reason "
                 "FROM vault_documents WHERE document_id = %s", (document_id,)).fetchone()
         return None if r is None else {
             "document_id": str(r[0]), "matter_id": str(r[1]) if r[1] else None,
@@ -2377,7 +2424,7 @@ class PostgresBackend:
             "deleted_at": r[10].isoformat() if r[10] else None,
             "uploaded_by": str(r[11]) if r[11] else None,
             "shared_with_firm_at": r[12].isoformat() if r[12] else None,
-            "shared_by": str(r[13]) if r[13] else None}
+            "shared_by": str(r[13]) if r[13] else None, "failure_reason": r[14]}
 
     def vault_documents_by_sha256(self, sha256: str) -> list[dict]:
         """The live documents with these bytes that this actor's policy shows."""
@@ -2470,7 +2517,8 @@ class PostgresBackend:
         with self._conn() as c:
             n = c.execute(
                 "UPDATE vault_documents SET state = 'DELETED', deleted_at = now(), "
-                "text_chars = NULL WHERE document_id = %s AND deleted_at IS NULL",
+                "text_chars = NULL, failure_reason = NULL "
+                "WHERE document_id = %s AND deleted_at IS NULL",
                 (document_id,)).rowcount
             if n:
                 c.execute("DELETE FROM vault_chunks WHERE document_id = %s",
@@ -2478,6 +2526,41 @@ class PostgresBackend:
                 c.execute("DELETE FROM vault_tags WHERE document_id = %s",
                           (document_id,))
         return bool(n)
+
+    def fail_vault_document(self, document_id: str, reason: str) -> bool:
+        """PENDING -> FAILED with the reason (030). One guarded statement."""
+        if not str(reason or "").strip():
+            raise StoreError("a FAILED document says why (030 vault_documents_failed_has_reason)")
+        with self._conn() as c:
+            n = c.execute("UPDATE vault_documents SET state = 'FAILED', failure_reason = %s "
+                          "WHERE document_id = %s AND state = 'PENDING'",
+                          (str(reason), document_id)).rowcount
+        return bool(n)
+
+    def retry_vault_document(self, document_id: str, *, queue) -> bool:
+        """FAILED -> PENDING, its run back to PLANNED and its DEAD job requeued, in ONE
+        transaction. The guard on the document (`state = 'FAILED'`) and on the job
+        (`status = 'DEAD'`) means a second, racing retry changes nothing."""
+        with self._conn() as c, c.transaction():
+            n = c.execute("UPDATE vault_documents SET state = 'PENDING', failure_reason = NULL "
+                          "WHERE document_id = %s AND state = 'FAILED'",
+                          (document_id,)).rowcount
+            if not n:
+                return False
+            reset = c.execute("UPDATE runs SET status = 'PLANNED', refusal_code = NULL, "
+                              "result = NULL, failure_category = NULL, failure_reason = NULL, "
+                              "finished_at = NULL WHERE run_id = %s AND status = 'FAILED'",
+                              (document_id,)).rowcount
+            if not reset:
+                # A run that is not FAILED (cancelled, say) is not this retry's to restart.
+                # Raising rolls the document back to FAILED too.
+                raise RetryConflict("this document's run is not FAILED, so it was not retried")
+            # The failed attempt's steps go, as `write_run` replaces a run's steps: they are
+            # keyed by capability, so a FAILED step left here would make the retry's own
+            # step a "replay" and the finished run would still show FAILED.
+            c.execute("DELETE FROM run_steps WHERE run_id = %s", (document_id,))
+            queue.requeue_dead(document_id, connection=c)
+        return True
 
     # ── T3 move 10: document_checks (023) ───────────────────────────────────
     def write_document_check(self, check: dict) -> dict:
@@ -2542,7 +2625,7 @@ class PostgresBackend:
         return {"documents": sum(by_state.values()), "by_state": by_state,
                 "deleted": int(gone),
                 "unsearchable": by_state.get("PENDING", 0)
-                + by_state.get("CANNOT_READ", 0)}
+                + by_state.get("CANNOT_READ", 0) + by_state.get("FAILED", 0)}
 
     @staticmethod
     def _turn_row(row) -> dict:
