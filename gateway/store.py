@@ -104,7 +104,8 @@ class Backend(Protocol):
     # 8b: matters (019_matters.sql).
     def write_matter(self, matter: dict, *, owner: str | None = None) -> dict: ...
     # V1: the vault (020_vault.sql).
-    def write_vault_document(self, doc: dict) -> dict: ...
+    def write_vault_document(self, doc: dict, *, run: dict | None = None,
+                             queue=None, queued: dict | None = None) -> dict: ...
     def read_vault_document(self, document_id: str) -> dict | None: ...
     def vault_documents_by_sha256(self, sha256: str) -> list[dict]: ...
     def list_vault_documents(self, *, matter_id: str) -> list[dict]: ...
@@ -957,8 +958,14 @@ class MemoryBackend:
         return dict(row)
 
     # ── V1: the vault ────────────────────────────────────────────────────────
-    def write_vault_document(self, doc: dict) -> dict:
-        """020's CHECKs restated, so the dict refuses exactly what Postgres refuses."""
+    def write_vault_document(self, doc: dict, *, run: dict | None = None,
+                             queue=None, queued: dict | None = None) -> dict:
+        """020's CHECKs restated, so the dict refuses exactly what Postgres refuses.
+
+        With `run` and `queue`/`queued`, the document, its run and its ingest job are one
+        unit: if the enqueue raises, the document and run are removed again, as Postgres
+        rolls the transaction back. A PENDING document with no job is never left behind.
+        """
         did = str(doc.get("document_id") or "")
         if not did:
             raise StoreError("a vault document needs a document_id")
@@ -998,6 +1005,21 @@ class MemoryBackend:
                "shared_with_firm_at": prior.get("shared_with_firm_at"),
                "shared_by": prior.get("shared_by")}
         self.vault_docs[did] = row
+        if run is not None:
+            self.write_run(run)
+        if queue is not None and queued is not None:
+            try:
+                job = queue.enqueue(**queued)
+            except Exception:
+                if prior:
+                    self.vault_docs[did] = prior
+                else:
+                    self.vault_docs.pop(did, None)
+                if run is not None:
+                    for table in (self.runs, self.steps, self.props):
+                        table.pop(run["id"], None)
+                raise
+            return {**row, "job_id": job.job_id}
         return dict(row)
 
     def read_vault_document(self, document_id: str) -> dict | None:
@@ -2274,10 +2296,18 @@ class PostgresBackend:
                 "matter_id": to_matter}
 
     # ── V1: the vault ────────────────────────────────────────────────────────
-    def write_vault_document(self, doc: dict) -> dict:
+    def write_vault_document(self, doc: dict, *, run: dict | None = None,
+                             queue=None, queued: dict | None = None) -> dict:
+        """Insert or update one vault document.
+
+        With `run` and `queue`/`queued`, the document row, its run row and its ingest job
+        commit in ONE transaction (the `reserve_turn` pattern). A full queue or a crash
+        between the writes leaves nothing, so no PENDING document can exist without a job.
+        """
         import psycopg
+        job = None
         try:
-            with self._conn() as c:
+            with self._conn() as c, c.transaction():
                 c.execute(
                     "INSERT INTO vault_documents (document_id, tenant_id, matter_id, "
                     "sha256, name, byte_count, state, doc_class, class_reason, "
@@ -2298,6 +2328,14 @@ class PostgresBackend:
                      doc.get("ocr_state") or "NOT_NEEDED",
                      # 028. The SESSION's actor, never a field the caller supplied.
                      self._session_actor or None))
+                if run is not None:
+                    c.execute("INSERT INTO runs (run_id, tenant_id, actor_id, intent, status, "
+                              "critic_enabled, matter_id) VALUES (%s,%s,%s,%s,'PLANNED',%s,%s)",
+                              (run["id"], self.tenant_id, self.actor_id,
+                               run["intent"], _critic_enabled_now(), run.get("matter_id")))
+                if queue is not None and queued is not None:
+                    # Same transaction: no worker sees a job without its document and run.
+                    job = queue.enqueue(**queued, connection=c)
         except psycopg.errors.IntegrityError as exc:
             constraint = getattr(getattr(exc, "diag", None), "constraint_name", None)
             if constraint in ("vault_documents_matter_sha", "vault_documents_owner_sha"):
@@ -2319,7 +2357,8 @@ class PostgresBackend:
                     "these bytes are already in this tenant's vault",
                     document_id=existing) from None
             raise StoreError("the database refused this vault document") from None
-        return self.read_vault_document(doc["document_id"]) or {}
+        out = self.read_vault_document(doc["document_id"]) or {}
+        return {**out, "job_id": job.job_id} if job is not None else out
 
     def read_vault_document(self, document_id: str) -> dict | None:
         if not _UUID.match(document_id or ""):
