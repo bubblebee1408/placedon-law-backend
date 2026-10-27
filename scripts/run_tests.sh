@@ -482,6 +482,10 @@ extra+=("scripts/migrate.py --test")
 # not defaulted to the tenant). The OFFLINE structural guard runs here; the live round-trip
 # is `scripts/conversation_persist_integration.py --run` against a throwaway DB.
 extra+=("scripts/conversation_persist_integration.py --test")
+# vault.upload registers document, run and job in ONE transaction, so a full queue or a
+# crash cannot leave a PENDING document with no job. The OFFLINE guard runs here; the live
+# proof is `scripts/vault_upload_atomic_integration.py --run` against a throwaway DB.
+extra+=("scripts/vault_upload_atomic_integration.py --test")
 
 # A module that prints "9/10 passed" has failed, whatever its exit code says.
 # Eight modules once defined _test() without `raise SystemExit(1)`, so their

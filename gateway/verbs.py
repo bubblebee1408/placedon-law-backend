@@ -3089,12 +3089,31 @@ def _vault_upload(args: dict, ctx: Context) -> dict:
             else "Vault storage is not configured for this operation. Contact your administrator.",
         )
     did = str(uuid.uuid4())
+    doc = {"document_id": did, "matter_id": matter, "uploaded_by": ctx.actor,
+           "sha256": sha, "name": name, "byte_count": len(data), "state": "PENDING"}
+    atomic = {}
+    if ctx.queue is not None:
+        from agents.vault_ingest import INTENT
+        from gateway.jobs import BULK as _LANE_BULK
+        # The document, its run (`jobs.run_id` references `runs`) and its ingest job are ONE
+        # unit. Written separately, a full queue or a crash between the writes left a
+        # PENDING document that no worker would ever read. A1: vault ingest goes on BULK,
+        # so it never takes a slot reserved for someone waiting.
+        atomic = {"run": {"id": did, "intent": INTENT, "status": "PLANNED",
+                          "actor_id": ctx.actor, "matter_id": matter, "refusal_code": None,
+                          "steps": [], "propositions": []},
+                  "queue": ctx.queue,
+                  "queued": {"run_id": did, "intent": INTENT, "lane": _LANE_BULK,
+                             "args": {"document_id": did, "sha256": sha, "name": name,
+                                      "matter_id": args.get("matter_id")}}}
     try:
-        ctx.store.write_vault_document({
-            "document_id": did, "matter_id": matter, "uploaded_by": ctx.actor,
-            "sha256": sha, "name": name, "byte_count": len(data), "state": "PENDING"})
+        registered = ctx.store.write_vault_document(doc, **atomic)
     except Exception as exc:                                     # noqa: BLE001
+        from gateway.jobs import QueueFull
         from gateway.store import DuplicateVaultDocument
+        if isinstance(exc, QueueFull):
+            return _refuse("BUSY", "The work queue is full, so the document was not "
+                                   "registered. Retry shortly.")
         if isinstance(exc, DuplicateVaultDocument):
             # The same bytes twice is one document, so attaching a file the vault already
             # holds hands back THAT document -- a refusal here left the composer saying
@@ -3125,48 +3144,22 @@ def _vault_upload(args: dict, ctx: Context) -> dict:
         # Bytes may now exist in Blob without a metadata row. Keep the response generic;
         # operators can use the exception class and database telemetry to diagnose it.
         logging.getLogger(__name__).error(
-            "vault_metadata_write_failed", extra={"exception_type": type(exc).__name__})
+            "vault_registration_failed", extra={"exception_type": type(exc).__name__})
         return _refuse(
             "STORAGE_UNAVAILABLE",
-            "The file could not be registered in the vault. Check the vault before retrying.",
+            "The file could not be registered in the vault, and nothing was registered. "
+            "Retry shortly.",
         )
-    queued, queue_error = None, ""
-    if ctx.queue is not None:
-        from agents.vault_ingest import INTENT
-        # The run row FIRST. `_runs_submit` says why and this verb did not listen: `jobs.run_id`
-        # references `runs(run_id)`, so on Postgres the enqueue below raised
-        # ForeignKeyViolation, the bare `except` turned it into `queued = None`, and the note
-        # then told the operator "No queue is configured" when one was configured and working.
-        # Nothing could be ingested on a real database. Found by running
-        # docs/guides/RUN_LOCALLY.md, not by a test -- every test used MemoryBackend, which
-        # has no foreign keys.
-        ctx.store.write({"id": did, "intent": INTENT, "status": "PLANNED",
-                         "actor_id": ctx.actor, "matter_id": matter,
-                         "refusal_code": None, "steps": [], "propositions": []})
-        try:
-            # A1. BULK: vault ingest and OCR are wanted eventually, and must never take a
-            # slot reserved for someone waiting.
-            from gateway.jobs import BULK as _LANE_BULK
-            queued = ctx.queue.enqueue(run_id=did, intent=INTENT, lane=_LANE_BULK,
-                                       args={"document_id": did, "sha256": sha,
-                                             "name": name,
-                                             "matter_id": args.get("matter_id")}).job_id
-        except Exception as e:                                   # noqa: BLE001
-            queued, queue_error = None, f"{type(e).__name__}: {str(e)[:140]}"
-    if queued:
+    if atomic:
+        queued = (registered or {}).get("job_id")
         note = ("stored and queued for ingestion. PENDING is not INGESTED: nothing "
                 "is searchable until a worker has read it.")
-    elif queue_error:
-        # A queue that answered with an error is not an absent queue, and the operator needs
-        # the difference: one is a deployment that was never wired, the other is a bug.
-        note = (f"stored, but the ingest job could NOT be queued ({queue_error}). It will "
-                f"stay PENDING until the queue accepts it. This is a failure, not a "
-                f"deployment without a queue.")
     else:
+        queued = None
         note = ("stored. No queue is configured, so nothing will ingest it and it "
                 "will stay PENDING -- said plainly rather than left to look done.")
     return {"document_id": did, "sha256": sha, "name": name, "state": "PENDING", "job_id": queued,
-            "queue_error": queue_error or None, "note": note}
+            "queue_error": None, "note": note}
 
 
 def _vault_ingest_job(args: dict, ctx: Context) -> dict:
@@ -9448,6 +9441,37 @@ def _test() -> None:
         check("No queue is configured" not in str(_d4_up.get("note") or ""),
               f"...and the note does not say 'no queue' when one answered "
               f"({str(_d4_up.get('note'))[:60]})")
+
+        # ── move 3b: document, run and job are ONE unit ─────────────────────
+        # A full queue was caught and reported in a note, leaving a PENDING document no
+        # worker would read. Now nothing is registered, and the caller is told to retry.
+        # The Postgres transaction is proved by scripts/vault_upload_atomic_integration.py.
+        _d4b_store = MemoryBackend()
+        _d4b_full = _MQ2(max_pending=1)
+        _d4b_ctx = Context(store=_d4b_store, queue=_d4b_full, files=_D3LFS(_d4dir),
+                           clock=lambda: "2026-10-27T00:00:00Z")
+        _vault_upload({"name": "first.txt", "text": "Clause 1. Governed by Indian law."},
+                      _d4b_ctx)
+        _d4b_busy = _vault_upload({"name": "second.txt",
+                                   "text": "Clause 2. Courts at Mumbai."}, _d4b_ctx)
+        _d4b_names = [r.get("name") for r in _d4b_store.vault_docs.values()]
+        check(_d4b_busy.get("code") == "BUSY" and "second.txt" not in _d4b_names,
+              f"a full queue refuses BUSY and registers no document "
+              f"({_d4b_busy.get('code')}, {_d4b_names})")
+
+        class _D4bBroken(_MQ2):
+            def enqueue(self, **kw):
+                raise RuntimeError("queue unreachable")
+        _d4b_store2 = MemoryBackend()
+        _d4b_broken = _vault_upload({"name": "x.txt", "text": "Clause 3. Notice period."},
+                                    Context(store=_d4b_store2, queue=_D4bBroken(),
+                                            files=_D3LFS(_d4dir),
+                                            clock=lambda: "2026-10-27T00:00:00Z"))
+        check(_d4b_broken.get("code") == "STORAGE_UNAVAILABLE"
+              and not _d4b_store2.vault_docs and not _d4b_store2.runs,
+              f"a failing enqueue leaves no document and no run behind "
+              f"({_d4b_broken.get('code')}, docs={len(_d4b_store2.vault_docs)}, "
+              f"runs={len(_d4b_store2.runs)})")
 
     _d4_fresh = _MBT(store=_MMem(), today=_mdate(2026, 10, 5))
     _d4_gctx = Context(store=MemoryBackend(), queue=_MQ2(),
