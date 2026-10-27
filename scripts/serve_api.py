@@ -218,6 +218,11 @@ def _test() -> int:
                     reply += data
                 except socket.timeout:
                     pass
+                except OSError:
+                    # A reset or broken pipe once the server has answered and stopped
+                    # draining IS the close this check waits for, not a failure.
+                    closed = True
+                    break
             took = _time.monotonic() - t0
             slow.close()
         finally:
