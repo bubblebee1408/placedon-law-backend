@@ -7,11 +7,15 @@ returned only as quoted data; even text that resembles an instruction stays verb
 from __future__ import annotations
 
 import bisect
+import functools
 import hashlib
 import math
 import re
 import unicodedata
-from typing import Literal, TypedDict
+from collections import Counter
+from typing import Literal, NotRequired, TypedDict
+
+from gateway.english_stem import stem as _porter2
 
 MAX_DOCUMENT_CHARS = 200_000
 MAX_TOTAL_CHARS = 500_000
@@ -20,6 +24,16 @@ MAX_TOTAL_BYTES = MAX_TOTAL_CHARS * 4
 MAX_PASSAGES = 8
 MAX_PASSAGE_CHARS = 1200
 MAX_DOCUMENTS = 20
+
+# Question-mode ranking (RETRIEVAL_LOOP DECISION §2). Module-level so the evaluation harness
+# can override them; a reader never sees a score.
+K1 = 1.2            # BM25 term-frequency saturation (Robertson & Zaragoza 2009)
+B = 0.4             # BM25 length normalisation (tuned on CUAD dev 0-50: +0.021 MRR over 0.75)
+ALPHA = 0.6         # keep passages scoring at least ALPHA x this query's top score (dev-tuned)
+COMMON_SHARE = 0.5  # a term in more than this share of passages is "common"
+W_HISTORY = 0.5     # weight of previous-question terms in a follow-up (Lin et al. 2020, weight ours)
+STEMMING = True
+HISTORY_LIMITATION = 'This question was read together with your previous question in this conversation.'
 
 
 class EvidencePassage(TypedDict):
@@ -55,6 +69,8 @@ class DocumentEvidence(TypedDict):
     documents: list[EvidenceDocument]
     passages: list[EvidencePassage]
     limitations: list[str]
+    # Present only when this follow-up was read together with the previous user question.
+    history_query: NotRequired[str]
 
 
 _OVERVIEW = re.compile(r'^\s*(?:(?:please|can you|could you|give me)\s+)*(?:summari[sz]e\b|give\s+(?:me\s+)?(?:a\s+)?(?:summary|overview)\b)', re.I)
@@ -62,7 +78,12 @@ _STOP = frozenset('a an the is are was were be being been to of and or for in on
                   'with from that this these those it its my our your their what which '
                   'where when how who why can could would should does do did please '
                   'tell me find show say says about document documents file files '
-                  'attached attachment agreement contract clause section'.split())
+                  'attached attachment agreement contract clause section '
+                  'shall such herein hereof hereto hereunder thereof therein thereto will also '
+                  'any there whether related regarding concerning'.split())
+# A follow-up that leans on the previous question: "And how long is that?", "What about ...".
+_FOLLOW_UP = re.compile(r'^\s*(?:and|also|so|then|what about|how about|what if|is that|is it|does that|'
+                        r'does it|do they|can (?:it|that|they)|and if)\b', re.I)
 
 
 # A PDF's pages arrive SEPARATED by form feeds: N pages, N-1 breaks (the frontend reads
@@ -84,18 +105,94 @@ def is_overview(query: str) -> bool:
     return bool(_OVERVIEW.search(query))
 
 
-def _terms(text: str) -> set[str]:
-    # Python's \w drops combining marks, splitting Indian-script words into letters.
-    words, token = set(), []
+@functools.lru_cache(maxsize=65536)
+def _index_form(word: str) -> str:
+    """The form a word is matched by: NFC, then Porter2 for plain English words only."""
+    word = unicodedata.normalize('NFC', word)
+    if STEMMING and word.isascii() and word.isalpha():
+        return _porter2(word)
+    return word
+
+
+def _tokens(text: str) -> list[str]:
+    """Index tokens with repeats kept (BM25 needs term frequency). Never used for offsets."""
+    words, token = [], []
     for char in text.casefold() + ' ':
         if char.isalnum() or unicodedata.category(char).startswith('M'):
             token.append(char)
         elif token:
             word = ''.join(token)
             if len(word) > 1 and word not in _STOP:
-                words.add(word)
+                words.append(_index_form(word))
             token.clear()
     return words
+
+
+def _rank(searched, weights: dict[str, float], df: Counter, n: int, avgdl: float):
+    """Pass 2: BM25-score every passage; keep the best MAX_PASSAGES as (rank, passage, terms)."""
+    terms = sorted(weights)  # fixed summation order: bit-identical scores across runs
+    idf = {t: math.log(1 + (n - df[t] + 0.5) / (df[t] + 0.5)) for t in terms}
+    candidates = []
+    for position, did, raw, row, sha in searched:
+        for ordinal, (start, end) in enumerate(_spans(raw)):
+            tf = Counter(_tokens(raw[start:end]))
+            matched = [t for t in terms if t in tf]
+            if not matched:
+                continue
+            norm = K1 * (1 - B + B * sum(tf.values()) / avgdl) if avgdl else K1
+            score = sum(weights[t] * idf[t] * tf[t] * (K1 + 1) / (tf[t] + norm) for t in matched)
+            if score <= 0:
+                continue
+            rank = (-score, ordinal, position)
+            if len(candidates) == MAX_PASSAGES and rank >= candidates[-1][:3]:
+                continue
+            passage: EvidencePassage = {'id': f'doc-{position + 1}-{start}-{end}',
+                'document_id': did, 'name': row['name'], 'sha256': sha,
+                'start': start, 'end': end, 'text': raw[start:end], 'page': page_of(raw, start)}
+            if len(candidates) == MAX_PASSAGES:
+                candidates.pop()
+            bisect.insort(candidates, (*rank, passage, frozenset(matched)),
+                          key=lambda candidate: candidate[:3])
+    return candidates
+
+
+def _all_common(weights, candidates, df: Counter, n: int) -> bool:
+    """True when every query term that matched anything appears in most passages."""
+    matched = {t for c in candidates for t in c[4] if weights.get(t) == 1.0}
+    return bool(matched) and all(df[t] > n * COMMON_SHARE for t in matched)
+
+
+def _question_passages(query: str, searched, previous_query: str | None):
+    """BM25 over this call's passages, then a cut relative to the top score (DECISION §2.3-2.5).
+
+    Returns (passages, history_used). Scores never leave this function.
+    """
+    df, n, total = Counter(), 0, 0
+    for _, _, raw, row, _ in searched:                 # pass 1: statistics only
+        for start, end in _spans(raw):
+            toks = _tokens(raw[start:end])
+            n += 1
+            total += len(toks)
+            df.update(set(toks))
+            row['total_passages'] += 1
+    avgdl = total / n if n else 0.0
+    weights = {t: 1.0 for t in set(_tokens(query))}
+    candidates = _rank(searched, weights, df, n, avgdl) if weights else []
+    history = False
+    if previous_query and (_FOLLOW_UP.match(query) or not weights or not candidates
+                           or _all_common(weights, candidates, df, n)):
+        extra = {t: W_HISTORY for t in set(_tokens(previous_query)) - weights.keys()}
+        if extra:
+            weights = {**weights, **extra}
+            candidates = _rank(searched, weights, df, n, avgdl)
+            history = True
+    if not candidates:
+        return [], history
+    # A rare-term guard was specified too; on CUAD dev it changed nothing the relative cut
+    # did not already do, so it was removed (EVAL_retrieval.md, Phase 1).
+    top = -candidates[0][0]
+    kept = [c for i, c in enumerate(candidates) if i == 0 or -c[0] >= ALPHA * top]
+    return [c[3] for c in kept], history
 
 
 def _spans(text: str):
@@ -127,8 +224,13 @@ def _spans(text: str):
                 start += 1
 
 
-def collect(query: str, documents: dict, *, enabled: bool = True) -> DocumentEvidence:
-    """Rank lexical matches locally; a match establishes presence, never legal truth."""
+def collect(query: str, documents: dict, *, enabled: bool = True,
+            previous_query: str | None = None) -> DocumentEvidence:
+    """Rank lexical matches locally; a match establishes presence, never legal truth.
+
+    `previous_query` is the previous USER question in this conversation (never an answer);
+    it is used only when this question leans on it, and the result then says so.
+    """
     overview = is_overview(query)
     result: DocumentEvidence = {
         'schema': 'document_evidence.v1', 'mode': 'overview' if overview else 'question',
@@ -143,10 +245,9 @@ def collect(query: str, documents: dict, *, enabled: bool = True) -> DocumentEvi
     }
     if overview:
         result['limitations'].append('Distributed excerpts are not a complete summary; terms, exceptions and schedules between excerpts may be omitted.')
-    candidates = []
     overview_documents = []
+    searched = []
     total_chars = 0
-    query_terms = _terms(query)
     for position, (did, doc) in enumerate(documents.items()):
         raw = doc.get('text')
         row: EvidenceDocument = {'document_id': did, 'name': str(doc.get('name') or did)[:512],
@@ -173,27 +274,13 @@ def collect(query: str, documents: dict, *, enabled: bool = True) -> DocumentEvi
             row['total_passages'] = sum(1 for _ in _spans(raw))
             overview_documents.append((position, did, raw, row))
             continue
-        for ordinal, (start, end) in enumerate(_spans(raw)):
-            row['total_passages'] += 1
-            snippet = raw[start:end]
-            terms = _terms(snippet)
-            overlap = len(query_terms & terms)
-            if not overview and not overlap:
-                continue
-            # Ranking orders excerpts only. It is never a confidence or legal verdict.
-            score = overlap / math.sqrt(max(1, len(terms)))
-            rank = (-score, ordinal, position)
-            if len(candidates) == MAX_PASSAGES and rank >= candidates[-1][:3]:
-                continue
-            passage: EvidencePassage = {'id': f'doc-{position + 1}-{start}-{end}',
-                'document_id': did, 'name': row['name'], 'sha256': sha,
-                'start': start, 'end': end, 'text': snippet, 'page': page_of(raw, start)}
-            # Only the eight best records stay resident, even for hundreds of thousands
-            # of tiny paragraphs. Ranking is identical to the previous stable full sort.
-            if len(candidates) == MAX_PASSAGES:
-                candidates.pop()
-            bisect.insort(candidates, (*rank, passage), key=lambda candidate: candidate[:3])
-    result['passages'] = [item[3] for item in candidates]
+        searched.append((position, did, raw, row, sha))
+    if searched:
+        # Ranking orders excerpts only. It is never a confidence or legal verdict.
+        result['passages'], history = _question_passages(query, searched, previous_query)
+        if history:
+            result['history_query'] = str(previous_query)[:500]
+            result['limitations'].append(HISTORY_LIMITATION)
     if overview:
         # Fair round-robin budget, then evenly spaced source spans per document.
         # Counts and at most eight selected offsets stay resident; no full span list.
