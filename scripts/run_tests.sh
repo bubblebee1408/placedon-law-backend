@@ -306,6 +306,8 @@ extra+=("scripts/harness_selftest.py --test")
 extra+=("scripts/gate_lock.py --test")
 # B1: Claude on Bedrock, the CLIENT-data provider. Keyless/no-network — a fake Converse client.
 extra+=("checker/bedrock_model.py --test")
+# Porter2 stemmer for document excerpt ranking (RETRIEVAL_LOOP L4).
+extra+=("gateway/english_stem.py --test")
 # F3 + F2: jurisdiction resolver and the multi-body research supervisor.
 extra+=("checker/jurisdiction.py --test" "agents/multi_supervisor.py --test")
 # Source picker: which sources a question searches, and whether each can be switched on.
