@@ -4,6 +4,7 @@ import hashlib
 from pathlib import Path
 import tempfile
 import tracemalloc
+import unicodedata
 import unittest
 from unittest.mock import Mock, patch
 import uuid
@@ -249,3 +250,138 @@ class DocumentEvidenceSimulation(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class QuestionRanking(unittest.TestCase):
+    """BM25 + relative cut + history expansion (RETRIEVAL_LOOP DECISION §2, §7). Synthetic text only."""
+
+    FILLER = ('Administrative arrangements for steering meetings apply within a reasonable period, '
+              'and each coordinator reports within the agreed period.')
+
+    def eight_pages(self):
+        pages = [self.FILLER] * 8
+        pages[2] = 'Fees. The Client shall pay a monthly fee of INR 4,50,000 within fifteen days. ' + self.FILLER
+        pages[5] = "Termination. Either party may terminate by giving sixty days' written notice. " + self.FILLER
+        return {'c': {'name': 'contract.pdf', 'text': '\f'.join(pages)}}
+
+    def collect(self, query, docs, **kw):
+        from gateway import document_evidence as de
+        return de.collect(query, docs, **kw)
+
+    def pages(self, got):
+        return [p['page'] for p in got['passages']]
+
+    def test_common_word_does_not_pull_in_filler_pages(self):
+        # Regression: all 8 pages came back because filler pages share the word "period".
+        got = self.collect('What notice period does the termination clause require?', self.eight_pages())
+        self.assertEqual(self.pages(got), [6])
+
+    def test_inflections_match_via_stemming(self):
+        docs = {'c': {'name': 'c', 'text': 'Termination of this arrangement needs board approval.'}}
+        self.assertEqual(self.collect('When can we terminate?', docs)['status'], 'EXCERPTS_FOUND')
+
+    def test_general_and_generate_do_not_merge(self):
+        docs = {'c': {'name': 'c', 'text': 'The software may generate reports each quarter.'}}
+        self.assertEqual(self.collect('general meeting', docs)['status'], 'NO_MATCH')
+
+    def test_cutoff_keeps_two_strong_clauses(self):
+        docs = {'c': {'name': 'c', 'text': '\n\n'.join([
+            'Termination for cause: a party may end this on material breach.',
+            'Termination for convenience: either side may end this on ninety days notice.',
+            self.FILLER, self.FILLER, self.FILLER])}}
+        got = self.collect('termination', docs)
+        self.assertEqual(len(got['passages']), 2)
+        self.assertTrue(all('Termination' in p['text'] for p in got['passages']))
+
+    def test_common_only_query_is_not_reported_as_no_match(self):
+        docs = {'c': {'name': 'c', 'text': '\n\n'.join([self.FILLER] * 6)}}
+        got = self.collect('What is the period?', docs)
+        self.assertEqual(got['status'], 'EXCERPTS_FOUND')
+
+    def test_reworded_question_returns_no_wrong_page(self):
+        # A wording gap phase 1 cannot bridge: no match, or the right page only -- never filler.
+        got = self.collect('When may this be brought to an end before it expires?', self.eight_pages())
+        self.assertIn(self.pages(got), ([], [6]))
+
+    def test_no_shared_term_is_still_no_match(self):
+        got = self.collect('When can this be brought to an end before it expires?', self.eight_pages())
+        self.assertEqual(got['status'], 'NO_MATCH')
+        self.assertIn('no match does not establish absence', ' '.join(got['limitations']))
+
+    def test_indic_nfc_equivalent_forms_match_and_offsets_are_original(self):
+        # U+095B (ज़ as one code point) is composition-excluded: NFC turns it into ज + nukta.
+        single = '\u095b\u092e\u093e\u0928\u0924'
+        pair = '\u091c\u093c\u092e\u093e\u0928\u0924'
+        self.assertNotEqual(single, pair)
+        self.assertEqual(unicodedata.normalize('NFC', single), unicodedata.normalize('NFC', pair))
+        text = f'पहला अनुच्छेद।\n\n{single} की शर्तें यहाँ हैं।'
+        got = self.collect(f'{pair} क्या है?', {'c': {'name': 'c', 'text': text}})
+        self.assertEqual(len(got['passages']), 1)
+        p = got['passages'][0]
+        self.assertEqual(p['text'], text[p['start']:p['end']])
+        self.assertIn(single, p['text'], 'the quote keeps the stored form, not the normalised one')
+
+    def test_passage_keys_never_include_a_score(self):
+        from gateway.document_evidence import EvidencePassage
+        got = self.collect('termination notice', self.eight_pages())
+        for p in got['passages']:
+            self.assertEqual(set(p), set(EvidencePassage.__annotations__))
+
+    def test_followup_expands_from_previous_question(self):
+        from gateway.document_evidence import HISTORY_LIMITATION
+        got = self.collect('And how long is that?', self.eight_pages(),
+                           previous_query='What does the termination clause say?')
+        self.assertEqual(self.pages(got), [6])
+        self.assertEqual(got['history_query'], 'What does the termination clause say?')
+        self.assertIn(HISTORY_LIMITATION, got['limitations'])
+
+    def test_clear_new_question_ignores_history(self):
+        got = self.collect('What is the monthly fee?', self.eight_pages(),
+                           previous_query='What does the termination clause say?')
+        self.assertEqual(self.pages(got), [3])
+        self.assertNotIn('history_query', got)
+
+    def test_question_mode_bounded_memory(self):
+        documents = {'one': {'name': 'one.txt', 'text': 'a notice\n\n' * 20_000},
+                     'two': {'name': 'two.txt', 'text': 'b period\n\n' * 20_000}}
+        tracemalloc.start()
+        try:
+            got = self.collect('What notice period applies?', documents)
+            _, peak = tracemalloc.get_traced_memory()
+        finally:
+            tracemalloc.stop()
+        self.assertLess(peak, 8 * 1024 * 1024)
+        self.assertLessEqual(len(got['passages']), 8)
+
+    def test_ranking_is_deterministic(self):
+        docs = self.eight_pages()
+        first = self.collect('fee termination notice period', docs)
+        second = self.collect('fee termination notice period', docs)
+        self.assertEqual(first, second)
+
+
+class FollowUpHistoryWiring(unittest.TestCase):
+    """verbs passes the previous USER question to collect(); assistant text is never used."""
+    # The simulation's fixture, borrowed without re-running its tests.
+    setUp = DocumentEvidenceSimulation.setUp
+    document = DocumentEvidenceSimulation.document
+    send = DocumentEvidenceSimulation.send
+    evidence = DocumentEvidenceSimulation.evidence
+
+    def test_history_is_previous_user_message_not_assistant(self):
+        pages = [QuestionRanking.FILLER] * 8
+        pages[5] = "Termination. Either party may terminate by giving sixty days' written notice. " + QuestionRanking.FILLER
+        did = self.document('\f'.join(pages))
+        first = self.send([did], text='What does the termination clause say?', task_override='RESEARCH_QUESTION')
+        cid = first['conversation_id']
+        follow = self.send([did], text='And how long is that?', conversation_id=cid, task_override='RESEARCH_QUESTION')
+        got = self.evidence(follow)
+        self.assertEqual([p['page'] for p in got['passages']], [6])
+        self.assertEqual(got['history_query'], 'What does the termination clause say?')
+        users = [m['text'] for m in self.store.read_messages(cid) if m['role'] == 'user']
+        self.assertEqual(users, ['What does the termination clause say?', 'And how long is that?'])
+
+    def test_first_question_has_no_history(self):
+        did = self.document('Termination requires sixty days notice.')
+        got = self.evidence(self.send([did], text='And how long is that?', task_override='RESEARCH_QUESTION'))
+        self.assertNotIn('history_query', got)

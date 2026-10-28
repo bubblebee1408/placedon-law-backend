@@ -2901,6 +2901,23 @@ def _conversation_send(args: dict, ctx: Context) -> dict:
                 "envelope": env, "metadata": metadata}
 
 
+def _previous_user_text(store, cid: str, reply_id: str) -> str | None:
+    """The user question before the one `reply_id` answers; never an assistant message.
+
+    Document excerpts read a follow-up ("And how long is that?") together with it
+    (document_evidence.collect previous_query). One turn back only.
+    """
+    messages = store.read_messages(cid) or []
+    reply = next((m for m in messages if m.get("message_id") == reply_id), None)
+    if reply is None:
+        return None
+    users = [m for m in messages if m.get("role") == "user" and m.get("ordinal", 0) < reply.get("ordinal", 0)]
+    if len(users) < 2:
+        return None
+    previous = users[-2].get("text")
+    return previous if isinstance(previous, str) and previous.strip() else None
+
+
 def _dispatch_conversation(args, ctx, *, cid, text, raw_ids, as_of, task, classification,
                            reply_id, metadata, files):
     from agents import intake
@@ -2909,7 +2926,8 @@ def _dispatch_conversation(args, ctx, *, cid, text, raw_ids, as_of, task, classi
     if raw_ids and task == "RESEARCH_QUESTION":
         from gateway import document_evidence as de
         evidence = de.collect(text, ctx.documents,
-                              enabled=args.get("sources") is None or "vault" in args["sources"])
+                              enabled=args.get("sources") is None or "vault" in args["sources"],
+                              previous_query=_previous_user_text(store, cid, reply_id))
         metadata = dict(metadata, document_evidence=evidence)
         env = ev.build(status=ev.PARTIAL, task=task, as_of=as_of,
             text_blocks=[{"text": de.description(evidence), "citation_ids": []}],
