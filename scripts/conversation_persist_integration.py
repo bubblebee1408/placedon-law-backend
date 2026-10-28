@@ -98,7 +98,10 @@ def _run() -> int:
         cid = r.json().get("conversation_id") if r.status_code == 200 else None
         check(bool(cid), "...with a conversation id")
         with psycopg.connect(app_url, connect_timeout=10) as c:
+            # 028: rows are visible to their actor (and the matter's members), so the
+            # check reads AS the actor that wrote them, the scope the product reads in.
             c.execute("SELECT set_config('app.tenant_id', %s, false)", (T,))
+            c.execute("SELECT set_config('app.actor_id', %s, false)", (A,))
             row = c.execute("SELECT actor_id FROM conversations WHERE conversation_id=%s",
                             (cid,)).fetchone() if cid else None
             check(row is not None and str(row[0]) == A,
@@ -124,7 +127,10 @@ def _run() -> int:
         check(bool(r2.get("conversation_id")),
               "the same question again also persists and returns a conversation")
         with psycopg.connect(app_url, connect_timeout=10) as c:
+            # 028: rows are visible to their actor (and the matter's members), so the
+            # check reads AS the actor that wrote them, the scope the product reads in.
             c.execute("SELECT set_config('app.tenant_id', %s, false)", (T,))
+            c.execute("SELECT set_config('app.actor_id', %s, false)", (A,))
             rids, mrids = run_ids(c), msg_run_ids(c)
             check(len(mrids) >= 2 and all(m in rids for m in mrids),
                   f"every message's run_id resolves to a run ({len(mrids)} msgs with a run, "
