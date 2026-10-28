@@ -208,8 +208,17 @@ def _provider_not_ready():
 # provider=...)), so a clearance and the route can no longer disagree. An unavailable
 # provider is a refusal, never a substitute. Changing an entry is a data-residency
 # decision (PLAN_22 D3): document summaries carry client documents and stay India-only.
+# Tasks that may use the on-device model. Not a public_only.MATTER_PROVIDERS entry on
+# purpose: that set is global, and adding "ollama" there let any caller (contract review)
+# hand client text to an Ollama URL nobody checked. Here the only path is
+# gateway/models.serve, which calls loopback alone and never a `:cloud` model.
+ON_DEVICE_TASKS = frozenset({"ask"})
+
 TASK_PROVIDERS: dict[str, tuple[str, ...]] = {
-    "ask": ("azure",),                  # research narration over the public corpus
+    # Owner decision 2026-10-28: the typed question goes to India (Bedrock) or stays on
+    # this machine (on-device Ollama). Azure UAE never answered it: refuse_unconfirmed_region
+    # refused every typed question there, so Ask could not answer at all.
+    "ask": ("bedrock", "ollama"),       # research narration; the question is client text
     "critic": ("azure",),               # public corpus sentences
     "decompose": ("azure",),            # the user's question, cleared for azure
     "intake.classify": ("azure",),      # the user's typed words, cleared for azure
@@ -234,7 +243,9 @@ def _typed_text_origin(text: str, *, name: str, task: str, ctx: Context):
     """
     from checker import azure_model, public_only, router
     try:
-        origin = public_only.clear_matter(text, name=name, provider=router.AZURE)
+        # Cleared for the task's own first provider, so the clearance and the route agree.
+        provider = TASK_PROVIDERS.get(task, (router.AZURE,))[0]
+        origin = public_only.clear_matter(text, name=name, provider=provider)
         if ctx.model_for is None and router.AZURE in TASK_PROVIDERS.get(task, ()):
             azure_model.refuse_unconfirmed_region(origin)
     except (public_only.NotPublic, azure_model.ModelRefused):
@@ -383,8 +394,12 @@ def _ask(args: dict, ctx: Context) -> dict:
             return refusal
 
     try:
+        from gateway import models as _models
+        # The provider serve() chose, not the declared list (a test stub keeps the list): rq re-routes over `available`
+        # to record which model answered, and the declared list would record Bedrock.
         out = rq.answer(q, model=served.call if served else None,
-                        available=providers)
+                        available=((served.provider,) if served and served.provider
+                                   in _models.SERVEABLE else providers))
     except _provider_not_ready() as e:                           # B1
         # PROVIDER_NOT_READY is its OWN typed state: the model provider (Bedrock) is not
         # ready yet -- the account is being verified, or model access is pending. That is

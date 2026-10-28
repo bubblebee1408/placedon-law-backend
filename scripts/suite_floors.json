@@ -156,7 +156,7 @@
     "checker/obligation_citations.py": 7,
     "checker/obligations.py": 126,
     "checker/observation_store.py": 20,
-    "checker/ollama_runner.py": 20,
+    "checker/ollama_runner.py": 27,
     "checker/ontology.py": 20,
     "checker/operation_store.py": 61,
     "checker/operations.py": 55,
