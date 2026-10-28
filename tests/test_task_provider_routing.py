@@ -18,10 +18,11 @@ from gateway import verbs
 AZ, BR, OL = router.AZURE, router.BEDROCK, router.OLLAMA
 
 
-def serve_with(available, name, purpose, consequence=router.LOW):
+def serve_with(available, name, purpose, consequence=router.LOW, accept_azure=False):
     """Run the REAL router and serve() with stubbed adapters; return (provider|None, refusal)."""
     stub = lambda **_: (lambda prompt: "stub")                  # noqa: E731
     with patch("gateway.verbs._ledger", return_value=_Budget()), \
+         patch("checker.azure_model.region_accepted", return_value=accept_azure), \
          patch("gateway.models.available_providers", return_value=available), \
          patch("checker.bedrock_model.as_text_model", side_effect=stub), \
          patch("checker.azure_model.as_text_model", side_effect=stub), \
@@ -90,6 +91,38 @@ class TaskProviderRouting(unittest.TestCase):
         self.assertEqual(verbs.ON_DEVICE_TASKS, {"ask"}, "only Ask may use the on-device model")
         self.assertNotIn(OL, MATTER_PROVIDERS, "never a global grant: contract review stays refused")
         self.assertEqual(verbs.TASK_PROVIDERS["document_summary"], (BR,), "summaries: India region only")
+
+
+class AzureOptIn(unittest.TestCase):
+    """Azure may serve Ask and summaries only after the operator accepts its region."""
+
+    def test_accepted_region_serves_ask_and_summaries_on_azure(self):
+        self.assertEqual(serve_with((AZ, OL), "ask", router.NARRATION, accept_azure=True), (AZ, None))
+        self.assertEqual(serve_with((AZ,), "document_summary", router.EXTRACTION, router.HIGH,
+                                    accept_azure=True), (AZ, None))
+
+    def test_bedrock_still_comes_first_when_azure_is_accepted(self):
+        self.assertEqual(serve_with((AZ, BR, OL), "ask", router.NARRATION, accept_azure=True), (BR, None))
+        self.assertEqual(serve_with((AZ, BR), "document_summary", router.EXTRACTION, router.HIGH,
+                                    accept_azure=True), (BR, None))
+
+    def test_unaccepted_region_leaves_the_declared_routes_unchanged(self):
+        with patch("checker.azure_model.region_accepted", return_value=False):
+            for task in verbs.TASK_PROVIDERS:
+                self.assertEqual(verbs.task_providers(task), verbs.TASK_PROVIDERS[task], task)
+        self.assertEqual(serve_with((AZ, OL), "ask", router.NARRATION), (OL, None))
+
+    def test_acceptance_widens_only_the_opt_in_tasks(self):
+        with patch("checker.azure_model.region_accepted", return_value=True):
+            for task in set(verbs.TASK_PROVIDERS) - verbs.AZURE_OPT_IN_TASKS:
+                self.assertEqual(verbs.task_providers(task), verbs.TASK_PROVIDERS[task], task)
+            self.assertEqual(verbs.task_providers("ask"), (BR, AZ, OL))
+            self.assertEqual(verbs.task_providers("document_summary"), (BR, AZ))
+
+    def test_summary_job_routes_through_the_opt_in(self):
+        src = Path(verbs.__file__).read_text()
+        self.assertIn('allowed_providers=task_providers("document_summary")', src)
+        self.assertNotIn("allowed_providers=(router.BEDROCK,)", src)
 
 
 class CallerCannotWidenProviders(unittest.TestCase):
