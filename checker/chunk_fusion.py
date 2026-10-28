@@ -130,9 +130,15 @@ def embed_section(section: str):
     paths = [c.path for c in chunks]
     key = (MODEL_NAME, section, _corpus_sha(section), _CHUNK_CHARS, len(paths))
 
+    import numpy as np
+
     cache = _disk_cache()
     hit = cache.get(section)
-    if hit and hit.get("key") == key and hit.get("paths") == paths:
+    # A cached matrix with a NaN or inf in it is a MISS. One written while the encoder
+    # misbehaved (seen 2026-10-28: 16 NaN rows for s.2, produced once under GPU memory
+    # pressure) was otherwise served on every later run, on CPU too, as "deterministic".
+    if (hit and hit.get("key") == key and hit.get("paths") == paths
+            and np.isfinite(hit["matrix"]).all()):
         return paths, hit["matrix"]
 
     if not chunks:
@@ -142,6 +148,13 @@ def embed_section(section: str):
     mat = model.encode([_embed_text(c) for c in chunks], batch_size=16,
                        convert_to_numpy=True, normalize_embeddings=True,
                        show_progress_bar=False)
+    if not np.isfinite(mat).all():
+        # Never cached and never ranked: a NaN cosine sorts arbitrarily and would read
+        # as a ranking. Refused loudly instead, like every other dense unavailability.
+        bad = int((~np.isfinite(mat)).any(axis=1).sum())
+        raise ChunkFusionUnavailable(
+            f"the dense encoder returned non-finite vectors for {bad} of {len(chunks)} "
+            f"chunks of s.{section}; nothing was cached")
     cache[section] = {"key": key, "paths": paths, "matrix": mat}
     _flush(cache)
     return paths, mat
@@ -464,6 +477,38 @@ def _test() -> None:
     check(mat is not None and len(paths) == mat.shape[0],
           "every chunk of s.96 has exactly one embedding row")
     check(_CACHE.exists(), "the chunk embedding matrix is persisted to disk")
+
+    # A poisoned cache entry (NaN rows) is recomputed, never served.
+    import numpy as np
+    cache = _disk_cache()
+    poisoned = mat.copy()
+    poisoned[0, :] = np.nan
+    cache["96"] = dict(cache["96"], matrix=poisoned)
+    _flush(cache)
+    paths2, mat2 = embed_section("96")
+    check(np.isfinite(mat2).all() and np.isfinite(_disk_cache()["96"]["matrix"]).all(),
+          "a cached matrix with NaN rows is recomputed and replaced, never served")
+
+    # An encoder that returns non-finite vectors is refused, and nothing is cached.
+    real_model = _dense._model
+
+    class _NaNModel:
+        def encode(self, texts, **kw):
+            out = np.ones((len(texts), mat.shape[1]), dtype=np.float32)
+            out[0, :] = np.nan
+            return out
+    cache.pop("96", None)
+    _dense._model = lambda: _NaNModel()
+    try:
+        embed_section("96")
+        refused = False
+    except ChunkFusionUnavailable:
+        refused = True
+    finally:
+        _dense._model = real_model
+    check(refused and "96" not in _disk_cache(),
+          "an encoder returning NaN is refused, and nothing is cached")
+    embed_section("96")                         # leave a good cache behind
 
     # selectors satisfy retrieval_eval's contract
     for sel, name in ((dense_select, "dense_select"), (fusion_select, "fusion_select")):

@@ -44,7 +44,7 @@
     "checker/calibration_contract.py": 17,
     "checker/cascade.py": 16,
     "checker/chunk_fusion.py": {
-      "floor": 29,
+      "floor": 31,
       "requires": "sentence_transformers",
       "unavailable_floor": 16
     },
