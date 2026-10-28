@@ -26,6 +26,22 @@ class DocumentSummaryTests(unittest.TestCase):
         self.assertEqual(got["status"], "SUMMARY_DRAFT_READY")
         self.assertTrue(any("not legal advice" in x for x in got["limitations"]))
 
+    def test_one_surrounding_json_fence_is_accepted_and_still_validated(self):
+        got = ds.parse("```json\n" + self.model() + "\n```", self.evidence)
+        self.assertEqual(got["status"], "SUMMARY_DRAFT_READY")
+        bad = ds.parse("```\n" + self.model(quote="Payment is due within 90 days.") + "\n```", self.evidence)
+        self.assertEqual(bad["withheld_items"], 1)
+
+    def test_text_around_a_fence_is_still_refused(self):
+        for raw in ("Here is the summary:\n```json\n" + self.model() + "\n```",
+                    "```json\n" + self.model() + "\n```\nHope this helps.",
+                    "```json\n" + self.model() + "\n```\n```json\n" + self.model() + "\n```"):
+            with self.assertRaises(ds.SummaryError):
+                ds.parse(raw, self.evidence)
+
+    def test_prompt_states_the_item_limit(self):
+        self.assertIn(f"at most {ds.MAX_SUMMARY_ITEMS} items", ds.prompt(self.evidence))
+
     def test_unknown_passage_is_withheld(self):
         got = ds.parse(self.model(pid="invented"), self.evidence)
         self.assertEqual(got["withheld_items"], 1)

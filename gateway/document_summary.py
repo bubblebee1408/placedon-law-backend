@@ -107,7 +107,8 @@ def prompt(evidence: SummaryEvidence) -> str:
         "risks (provisions a reviewing lawyer should look at closely), questions (what a reviewing lawyer would need to ask "
         "because the passages do NOT state it). "
         "Every item needs at least one exact quotation and its supplied passage ID, except questions items: a question is "
-        "phrased as a question ending in '?', states no figure or date, and has an empty citations list. Return JSON only, matching this schema: "
+        "phrased as a question ending in '?', states no figure or date, and has an empty citations list. "
+        f"Return at most {MAX_SUMMARY_ITEMS} items in total across all sections. Return JSON only, matching this schema: "
         + schema + "\n\nDOCUMENT PASSAGES (all extracted text within stated bounds):\n\n" + "\n\n".join(blocks))
 
 
@@ -130,10 +131,18 @@ def _numbers(text: str) -> set[str]:
     return {match.group(0).replace(",", "") for match in _NUMBER.finditer(text)}
 
 
+# One markdown code fence around the whole reply. Llama 3.3 70B on Azure adds it even when
+# told "JSON only" (measured 2026-10-28); the JSON inside is still validated in full.
+_FENCED = re.compile(r"\A\s*```(?:json)?[ \t]*\n(.*)\n[ \t]*```\s*\Z", re.S | re.I)
+
+
 def parse(raw: str, evidence: SummaryEvidence) -> dict:
     """Validate bounded JSON, exact quote locators and conservative numeric support."""
     if not isinstance(raw, str) or len(raw.encode("utf-8", "replace")) > MAX_SUMMARY_RESPONSE_BYTES:
         raise SummaryError("INVALID_SUMMARY", "The summary response exceeded its size limit.")
+    fenced = _FENCED.match(raw)
+    if fenced:
+        raw = fenced.group(1)
     try:
         value = json.loads(raw, object_pairs_hook=_pairs_no_duplicates,
                            parse_constant=lambda _: (_ for _ in ()).throw(ValueError("invalid number")))

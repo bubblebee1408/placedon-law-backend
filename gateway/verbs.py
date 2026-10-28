@@ -229,6 +229,21 @@ TASK_PROVIDERS: dict[str, tuple[str, ...]] = {
     "document_summary": ("bedrock",),   # client documents: India region only
 }
 
+# Client-text tasks that may ALSO use Azure, but only after the operator accepts its region
+# (PLACEDON_ACCEPT_REGION names azure_model.DEPLOYMENT_REGION). Unset, these routes are
+# exactly TASK_PROVIDERS. Owner decision 2026-10-28: Bedrock is blocked on the free AWS plan.
+AZURE_OPT_IN_TASKS = frozenset({"ask", "document_summary"})
+
+
+def task_providers(task: str) -> tuple[str, ...]:
+    """TASK_PROVIDERS[task], with Azure placed after Bedrock when its region is accepted."""
+    from checker import azure_model
+    declared = TASK_PROVIDERS.get(task, ())
+    if task not in AZURE_OPT_IN_TASKS or "azure" in declared or not azure_model.region_accepted():
+        return declared
+    head = tuple(p for p in declared if p == "bedrock")
+    return head + ("azure",) + tuple(p for p in declared if p != "bedrock")
+
 
 def _typed_text_origin(text: str, *, name: str, task: str, ctx: Context):
     """(clearance, None) or (None, NOT_PERMITTED refusal) for the user's own typed words.
@@ -273,7 +288,7 @@ def _served_or_refusal(origins, *, name: str, purpose: str, ctx: Context,
         return Served(call=ctx.model_for(origins), provider="stub", model="stub",
                       region="n/a", degraded=False, requires_review=False,
                       est_cost_inr=0.0), None
-    declared = TASK_PROVIDERS.get(name)
+    declared = task_providers(name) if name in TASK_PROVIDERS else None
     if declared is None:
         return None, _refuse("NO_MODEL", f"No provider is declared for model task {name!r}. No call was made.")
     if allowed_providers is not None:
@@ -285,6 +300,10 @@ def _served_or_refusal(origins, *, name: str, purpose: str, ctx: Context,
         from checker import router as _r
         provider_scope = tuple(provider for provider in available_providers()
                                if provider in declared)
+        if name in AZURE_OPT_IN_TASKS and _r.BEDROCK in provider_scope:
+            # Azure is a fallback for these tasks, never a peer: the router's EXTRACTION
+            # table ranks Azure above Bedrock, which would move summaries out of India.
+            provider_scope = tuple(p for p in provider_scope if p != _r.AZURE)
         return serve(origins, name=name, purpose=purpose, budget=budget,
                      consequence=consequence or _r.LOW,
                      timeout_seconds=timeout_seconds, retry_tries=retry_tries,
@@ -313,8 +332,8 @@ def _ask(args: dict, ctx: Context) -> dict:
         return _refuse("BAD_REQUEST", "available must be a list of provider names")
     # A caller may NARROW the task's providers, never widen them, and an empty or
     # disallowed list narrows to nothing -- a refusal, not the default route.
-    providers = TASK_PROVIDERS["ask"] if allowed is None else tuple(
-        p for p in TASK_PROVIDERS["ask"] if p in allowed)
+    providers = task_providers("ask") if allowed is None else tuple(
+        p for p in task_providers("ask") if p in allowed)
 
     from checker import resource_route
     _route = resource_route.classify(q)
@@ -2645,7 +2664,7 @@ def _document_summary_job(args: dict, ctx: Context) -> dict:
     served, refusal = _served_or_refusal((origin,), name="document_summary",
         purpose=router.EXTRACTION, consequence=router.HIGH, ctx=ctx,
         timeout_seconds=25, retry_tries=1,
-        allowed_providers=(router.BEDROCK,))
+        allowed_providers=task_providers("document_summary"))
     if refusal:
         if refusal.get("code") == "NO_BUDGET":
             return refusal
