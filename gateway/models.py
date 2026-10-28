@@ -86,6 +86,10 @@ class Served:
             return None, ("UNPRICED: no call was made on this step, so there is nothing to "
                           "price.")
         last = self.usage[-1]
+        if last.get("on_device"):
+            # Not billed to anyone: no provider invoice exists for this call. Zero is the
+            # billed cost, and the note says it is the laptop's own compute, not "free".
+            return 0.0, "on-device model: no billed provider; runs on this machine's compute"
         return price_inr(last.get("deployment") or self.model,
                          tokens_in=last.get("tokens_in"),
                          tokens_out=last.get("tokens_out"))
@@ -105,13 +109,58 @@ class Served:
 # PLAN_22 §3 records that the founder has no Anthropic credit. Asking the router for a
 # route among providers we cannot call would produce a correct route we then refuse --
 # which is what happened on 29-09-2026, reported as NO_MODEL while Azure sat available.
-SERVEABLE = frozenset({router.AZURE, router.BEDROCK})  # B1: Bedrock is the CLIENT-data provider
+SERVEABLE = frozenset({router.AZURE, router.BEDROCK,   # B1: Bedrock is the CLIENT-data provider
+                       router.OLLAMA})                 # on-device only, see _local_endpoint
+
+# Where an on-device answer was produced. Recorded on the step like any other region.
+ON_DEVICE = "on-device"
+# Operator narrowing: a comma list of providers this gateway may call. It can only REMOVE
+# providers (e.g. `ollama` while Bedrock is blocked on the free AWS plan), never add one.
+PROVIDERS_ENV = "PLACEDON_MODEL_PROVIDERS"
+_LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
+
+
+def _operator_allows(provider: str) -> bool:
+    import os
+    raw = os.environ.get(PROVIDERS_ENV, "").strip()
+    return not raw or provider in {p.strip() for p in raw.split(",")}
 
 
 def available_providers(credit_exhausted=None) -> tuple[str, ...]:
     """What router.py offers, narrowed to what this gateway can actually call."""
     return tuple(p for p in router.providers_available(credit_exhausted=credit_exhausted)
-                 if p in SERVEABLE)
+                 if p in SERVEABLE and _operator_allows(p))
+
+
+def _on_device_timeout() -> int:
+    """Seconds to wait for the on-device model. A laptop generates a few tokens a second, so
+    the cloud-sized 120 s default refuses answers that were nearly done (seen 2026-10-28 on
+    an 8 GB Mac). OLLAMA_TIMEOUT_S raises it; a bad value falls back to the default."""
+    import os
+    from checker import ollama_runner
+    raw = os.environ.get("OLLAMA_TIMEOUT_S", "").strip()
+    return int(raw) if raw.isdigit() and int(raw) > 0 else ollama_runner.DEFAULT_TIMEOUT_S
+
+
+def _local_endpoint() -> str:
+    """OLLAMA_BASE_URL, only if it is this machine. Anything else is not 'local'."""
+    import os
+    url = os.environ.get("OLLAMA_BASE_URL", "").strip()
+    # scheme://host[:port][/path] -- parsed by hand: this module opens no URL machinery of
+    # its own (its self-test asserts it), it only decides whether the host is this machine.
+    import re
+    scheme, _, rest = url.partition("://")
+    netloc = re.split(r"[/?#\\]", rest, maxsplit=1)[0]
+    if scheme.lower() != "http" or "@" in netloc:
+        netloc = ""          # userinfo or a non-http scheme: never treated as this machine
+    host = (netloc[1:netloc.index("]")] if netloc.startswith("[") and "]" in netloc
+            else netloc.rsplit(":", 1)[0] if netloc.count(":") == 1 else netloc).lower()
+    if host not in _LOOPBACK_HOSTS:
+        raise NotServed(NO_MODEL,
+                        f"the on-device route needs OLLAMA_BASE_URL on loopback; got "
+                        f"{host or 'nothing'}. A remote Ollama is not on-device, so no call "
+                        f"was made.")
+    return url
 
 
 def serve(origins, *, name: str, purpose: str, consequence: str = router.LOW,
@@ -172,6 +221,22 @@ def serve(origins, *, name: str, purpose: str, consequence: str = router.LOW,
                                                   timeout_seconds=timeout_seconds))
         call = bedrock_model.with_backoff(inner, sleep=sleep or time.sleep,
                                           tries=retry_tries)
+    elif route.provider == router.OLLAMA:
+        # On-device: the prompt goes to loopback only, and router.route already refused a
+        # `:cloud` model (which would leave the machine through the same localhost URL).
+        from checker import ollama_runner
+        region = ON_DEVICE
+        if transport is not None:
+            call = transport
+        else:
+            runner = ollama_runner.OllamaRunner(
+                route.model, base_url=_local_endpoint(),
+                timeout_s=timeout_seconds or _on_device_timeout())
+
+            def call(prompt, _r=runner, _m=route.model):
+                out = _r(prompt)
+                usage.append({"deployment": _m, "on_device": True})
+                return out
     else:
         # Azure UAE: test-only for CLIENT data -- azure_model.refuse_unconfirmed_region blocks
         # a client document here -- and the public-text fallback when Bedrock is unavailable.

@@ -15,7 +15,7 @@ from unittest.mock import patch
 from checker import router
 from gateway import verbs
 
-AZ, BR = router.AZURE, router.BEDROCK
+AZ, BR, OL = router.AZURE, router.BEDROCK, router.OLLAMA
 
 
 def serve_with(available, name, purpose, consequence=router.LOW):
@@ -24,7 +24,9 @@ def serve_with(available, name, purpose, consequence=router.LOW):
     with patch("gateway.verbs._ledger", return_value=_Budget()), \
          patch("gateway.models.available_providers", return_value=available), \
          patch("checker.bedrock_model.as_text_model", side_effect=stub), \
-         patch("checker.azure_model.as_text_model", side_effect=stub):
+         patch("checker.azure_model.as_text_model", side_effect=stub), \
+         patch.dict("os.environ", {"OLLAMA_MODEL": "llama3:latest",
+                                   "OLLAMA_BASE_URL": "http://127.0.0.1:11434"}):
         served, refusal = verbs._served_or_refusal((), name=name, purpose=purpose,
                                                    consequence=consequence, ctx=verbs.Context())
     return (served.provider if served else None), refusal
@@ -44,13 +46,23 @@ class TaskProviderRouting(unittest.TestCase):
         self.assertTrue(names, "found the call sites")
         self.assertEqual(names - set(verbs.TASK_PROVIDERS), set(), "a model call with no declared provider")
 
-    def test_both_providers_configured_research_stays_on_azure_summary_on_bedrock(self):
-        self.assertEqual(serve_with((AZ, BR), "ask", router.NARRATION), (AZ, None))
+    def test_both_providers_configured_research_on_bedrock_summary_on_bedrock(self):
+        # Ask carries the user's typed question, so it goes to India, never Azure UAE.
+        self.assertEqual(serve_with((AZ, BR), "ask", router.NARRATION), (BR, None))
         self.assertEqual(serve_with((AZ, BR), "draft_prose", router.NARRATION), (AZ, None))
         self.assertEqual(serve_with((AZ, BR), "document_summary", router.EXTRACTION, router.HIGH), (BR, None))
 
-    def test_missing_azure_credentials_refuse_research_rather_than_moving_it_to_bedrock(self):
-        provider, refusal = serve_with((BR,), "ask", router.NARRATION)
+    def test_azure_alone_never_serves_ask(self):
+        provider, refusal = serve_with((AZ,), "ask", router.NARRATION)
+        self.assertIsNone(provider)
+        self.assertEqual(refusal["code"], "NO_MODEL")
+
+    def test_ask_falls_back_to_the_on_device_model_last(self):
+        self.assertEqual(serve_with((OL,), "ask", router.NARRATION), (OL, None))
+        self.assertEqual(serve_with((BR, OL), "ask", router.NARRATION), (BR, None))
+
+    def test_azure_tasks_never_reach_the_on_device_model(self):
+        provider, refusal = serve_with((OL,), "draft_prose", router.NARRATION)
         self.assertIsNone(provider)
         self.assertEqual(refusal["code"], "NO_MODEL")
 
@@ -73,7 +85,10 @@ class TaskProviderRouting(unittest.TestCase):
     def test_client_document_tasks_never_list_a_provider_outside_the_matter_set(self):
         from checker.public_only import MATTER_PROVIDERS
         for name, providers in verbs.TASK_PROVIDERS.items():
-            self.assertTrue(set(providers) <= MATTER_PROVIDERS, name)
+            allowed = MATTER_PROVIDERS | ({OL} if name in verbs.ON_DEVICE_TASKS else set())
+            self.assertTrue(set(providers) <= allowed, name)
+        self.assertEqual(verbs.ON_DEVICE_TASKS, {"ask"}, "only Ask may use the on-device model")
+        self.assertNotIn(OL, MATTER_PROVIDERS, "never a global grant: contract review stays refused")
         self.assertEqual(verbs.TASK_PROVIDERS["document_summary"], (BR,), "summaries: India region only")
 
 
@@ -92,7 +107,7 @@ class CallerCannotWidenProviders(unittest.TestCase):
         ctx = verbs.Context(store=MemoryBackend(), model_for=lambda _o: rq.quoting_model(srcs))
         with patch.object(rq, "answer", side_effect=spy):
             verbs._ask({"question": q, "available": ["gemini", "ollama", "bedrock", "azure"]}, ctx)
-        self.assertEqual(tuple(seen["available"]), ("azure",))
+        self.assertEqual(tuple(seen["available"]), ("bedrock", "ollama"), "gemini and azure dropped")
 
 
 class ProviderFailureStates(unittest.TestCase):
@@ -134,3 +149,92 @@ class ProviderFailureStates(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class OnDeviceRoute(unittest.TestCase):
+    """The on-device provider is only ever this machine, and only an operator's named model."""
+
+    def _serve(self, env):
+        from gateway import models
+        with patch.dict("os.environ", env, clear=False):
+            return models.serve((), name="ask", purpose=router.NARRATION, available=(OL,))
+
+    def test_loopback_endpoint_is_served_on_device_at_zero_billed_cost(self):
+        from gateway import models
+        env = {"OLLAMA_MODEL": "llama3:latest", "OLLAMA_BASE_URL": "http://127.0.0.1:11434"}
+        with patch("checker.ollama_runner.OllamaRunner.__call__", return_value="text"):
+            served = self._serve(env)
+            self.assertEqual((served.provider, served.region), (OL, models.ON_DEVICE))
+            self.assertEqual(served.call("p"), "text")
+        cost, note = served.cost()
+        self.assertEqual(cost, 0.0)
+        self.assertIn("on-device", note)
+        self.assertTrue(served.degraded, "the on-device row is never the first choice")
+
+    def test_remote_endpoint_is_refused_before_any_call(self):
+        from gateway import models
+        for url in ("http://10.0.0.5:11434", "https://ollama.example.com", "",
+                    "http://evil.com?@127.0.0.1", "http://evil.com#@localhost:1",
+                    "http://127.0.0.1@evil.com", "http://localhost.evil.com",
+                    "https://127.0.0.1:11434"):
+            with self.subTest(url=url), self.assertRaises(models.NotServed):
+                self._serve({"OLLAMA_MODEL": "llama3:latest", "OLLAMA_BASE_URL": url})
+
+    def test_cloud_model_is_refused_even_on_loopback(self):
+        from gateway import models
+        with self.assertRaises(models.NotServed):
+            self._serve({"OLLAMA_MODEL": "kimi-k2.6:cloud",
+                         "OLLAMA_BASE_URL": "http://127.0.0.1:11434"})
+
+    def test_operator_can_narrow_providers_but_never_widen(self):
+        from gateway import models
+        with patch("checker.router.providers_available", return_value=(BR, OL)):
+            with patch.dict("os.environ", {models.PROVIDERS_ENV: "ollama"}):
+                self.assertEqual(models.available_providers(), (OL,))
+            with patch.dict("os.environ", {models.PROVIDERS_ENV: "ollama,gemini"}):
+                self.assertEqual(models.available_providers(), (OL,), "gemini is not added")
+            with patch.dict("os.environ", {models.PROVIDERS_ENV: ""}):
+                self.assertEqual(models.available_providers(), (BR, OL))
+
+
+class ExclusionAppliesToResolvedModel(unittest.TestCase):
+    def test_an_excluded_local_model_is_not_handed_back(self):
+        with patch.dict("os.environ", {"OLLAMA_MODEL": "llama3:latest"}):
+            task = router.Task("narrate", router.TEXT, router.LOW, purpose=router.NARRATION)
+            with self.assertRaises(router.NoRoute):
+                router.route(task, available=(OL,), exclude_models=frozenset({"llama3:latest"}))
+
+
+class RecordedProviderIsTheOneThatServed(unittest.TestCase):
+    def test_on_device_answer_is_not_recorded_as_bedrock(self):
+        from agents import research_question as rq
+        from gateway import models
+        from gateway.store import MemoryBackend
+        seen = {}
+        real = rq.answer
+
+        def spy(question, **kw):
+            seen["available"] = kw.get("available")
+            return real(question, **kw)
+        served = models.Served(call=lambda p: "", provider=OL, model="llama3:latest",
+                               region=models.ON_DEVICE, degraded=True, requires_review=False,
+                               est_cost_inr=0.0)
+        with patch.object(rq, "answer", side_effect=spy), \
+             patch("gateway.verbs._typed_text_origin",
+                   side_effect=lambda q, **_: (__import__("checker.public_only", fromlist=["x"])
+                                               .clear_matter(q, name="q", provider="bedrock"),
+                                               None)), \
+             patch("gateway.verbs._served_or_refusal", return_value=(served, None)):
+            verbs._ask({"question": "What notice is needed to call a board meeting under "
+                                    "Section 173?"}, verbs.Context(store=MemoryBackend()))
+        self.assertEqual(tuple(seen["available"]), (OL,))
+
+
+class OnDeviceTimeout(unittest.TestCase):
+    def test_timeout_comes_from_env_and_bad_values_fall_back(self):
+        from gateway import models
+        from checker import ollama_runner
+        for raw, want in (("600", 600), ("", ollama_runner.DEFAULT_TIMEOUT_S),
+                          ("abc", ollama_runner.DEFAULT_TIMEOUT_S), ("0", ollama_runner.DEFAULT_TIMEOUT_S)):
+            with self.subTest(raw=raw), patch.dict("os.environ", {"OLLAMA_TIMEOUT_S": raw}):
+                self.assertEqual(models._on_device_timeout(), want)

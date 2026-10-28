@@ -82,7 +82,11 @@ class NotLocal(NotConfigured):
 
 
 def is_local(model: str) -> bool:
-    return bool(model) and not model.endswith(CLOUD_SUFFIX)
+    # Both cloud tag shapes Ollama has shipped (`name:cloud` and `name:120b-cloud`), in any
+    # case. A name test cannot see a Modelfile that proxies elsewhere; that stays an
+    # operator's responsibility and is why OLLAMA_MODEL has no default.
+    tag = model.strip().lower()
+    return bool(tag) and not (tag.endswith(CLOUD_SUFFIX) or tag.endswith("-cloud"))
 
 
 def local_model() -> str:
@@ -146,6 +150,18 @@ def _sha(s: str) -> str:
     return hashlib.sha256(s.encode("utf-8")).hexdigest()
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """A model endpoint has no reason to redirect; following one could move the prompt."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise urllib.error.URLError(f"refused a {code} redirect from the model endpoint")
+
+
+# No proxy (HTTP_PROXY would otherwise carry a loopback call off this machine) and no
+# redirects: the host that was checked is the host that is connected to.
+_DIRECT = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect)
+
+
 class OllamaRunner:
     """A callable conforming to model_adapter's `Callable[[str], str]`.
 
@@ -182,7 +198,7 @@ class OllamaRunner:
             data=json.dumps(payload).encode("utf-8"),
             headers={"Content-Type": "application/json"}, method="POST")
         try:
-            with urllib.request.urlopen(req, timeout=self.timeout_s) as r:
+            with _DIRECT.open(req, timeout=self.timeout_s) as r:
                 return json.loads(r.read().decode("utf-8"))
         except (urllib.error.URLError, OSError, TimeoutError) as e:
             raise ModelUnavailable(
@@ -293,6 +309,16 @@ def _test() -> None:
             passed += 1; print(f"  [PASS] {label}")
         else:
             failed += 1; print(f"  [FAIL] {label}")
+
+    # ── "local" means on this machine: every cloud tag shape is refused ──
+    for tag in ("kimi-k2.6:cloud", "qwen3-coder:480b-cloud", "GPT-OSS:120B-CLOUD", " x:Cloud "):
+        check(not is_local(tag), f"{tag!r} is a cloud model, not local")
+    check(is_local("llama3:latest") and is_local("gemma3:1b"), "pulled models are local")
+    check(not any(isinstance(h, urllib.request.ProxyHandler) and h.proxies
+                  for h in _DIRECT.handlers),
+          "the model call ignores HTTP_PROXY, so a loopback call cannot be carried away")
+    check(any(isinstance(h, _NoRedirect) for h in _DIRECT.handlers),
+          "...and refuses redirects, so the checked host is the connected host")
 
     # ── configuration refuses rather than defaulting ──
     try:

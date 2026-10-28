@@ -312,10 +312,17 @@ _PREFERENCE = {
          "the second free-tier bucket -- the 20/day limit is PER MODEL, so this is another "
          "20, not the same 20 -- and the one actually answering on 28-09-2026 while "
          "gemini-3.6-flash returned 503 six times running"),
-        # and then nothing. There is deliberately NO Ollama row here: the laptop holds
-        # 8.6 GB (PLAN_22 §3), so a local narration is an 8B model or an out-of-memory
-        # error, and an 8B restating Indian corporate law is worse than a refusal a reader
-        # can act on. NoRoute is the end of this chain, by decision.
+        # LAST resort, added 2026-10-28 by owner decision: with no cloud provider callable
+        # (Bedrock blocked on the free AWS plan, Azure UAE not accepted for typed text),
+        # every Ask was refused. An on-device model keeps the question on this machine,
+        # and narration is the job where model choice is least load-bearing: review()
+        # drops any sentence whose proposition is not in the cited evidence. Served
+        # degraded, behind every cloud row. gateway/models.serve only calls it on a
+        # loopback endpoint, so a deployed gateway with no local Ollama fails closed.
+        (OLLAMA, OPERATOR_NAMED,
+         "on-device fallback (owner decision 2026-10-28): the question never leaves this "
+         "machine. UNMEASURED on Indian corporate law; served degraded, and review() "
+         "drops any sentence the cited evidence does not support"),
     ],
 }
 
@@ -423,6 +430,12 @@ def route(task: Task, *, available: tuple[str, ...],
                 model = ollama_runner.local_model()
             except ollama_runner.NotConfigured as e:
                 refusals.append(f"{OLLAMA}: {e}")
+                first = False
+                continue
+            if model in exclude_models:
+                # Checked on the RESOLVED name: the table row is a placeholder, so an
+                # exclusion of the real model would otherwise never match and a caller
+                # retrying past a dead daemon would be handed the same route forever.
                 first = False
                 continue
         est = estimate_inr(provider, model, task)
@@ -669,18 +682,31 @@ def _test() -> None:
     check(_narr == [(ANTHROPIC, NARRATE),
                     (BEDROCK, "claude-haiku-4-5"), (BEDROCK, "claude-sonnet-5"),
                     (AZURE, AZURE_LLAMA_70B),
-                    (AZURE, AZURE_GPT5_MINI), (GEMINI, FLASH), (GEMINI, FLASH_LITE)],
-          f"the narration chain is Anthropic, Azure 70B, Azure gpt-5-mini, then Gemini as "
-          f"backup: PLAN_22 §3's 'backup only' made executable ({_narr})")
-    check(OLLAMA not in [p for p, _m in _narr],
-          "...and the laptop is NOT in it: 8.6 GB means an 8B model, and an 8B restating "
-          "Indian corporate law is worse than a refusal a reader can act on")
+                    (AZURE, AZURE_GPT5_MINI), (GEMINI, FLASH), (GEMINI, FLASH_LITE),
+                    (OLLAMA, OPERATOR_NAMED)],
+          f"the narration chain is Anthropic, Bedrock India, Azure, Gemini as backup, then "
+          f"the on-device model LAST (owner decision 2026-10-28) ({_narr})")
+    import os as _o
+    _saved_model = _o.environ.pop("OLLAMA_MODEL", None)
     try:
         route(Task("narrate", TEXT, LOW, purpose=NARRATION), available=(OLLAMA,))
-        check(False, "with only the laptop, narration refuses")
+        check(False, "with only Ollama and no operator-named model, narration refuses")
     except NoRoute:
-        check(True, "...so with ONLY Ollama available, narration REFUSES -- the chain ends "
-                    "in NoRoute by decision, which is what PLAN_22's '-> refuse' means")
+        check(True, "...with ONLY Ollama and no OLLAMA_MODEL named, narration REFUSES: there "
+                    "is no default local model, so nothing is picked for the operator")
+    finally:
+        if _saved_model is not None:
+            _o.environ["OLLAMA_MODEL"] = _saved_model
+    _o.environ["OLLAMA_MODEL"] = "llama3:latest"
+    try:
+        _r = route(Task("narrate", TEXT, LOW, purpose=NARRATION), available=(OLLAMA,))
+        check(_r.provider == OLLAMA and _r.model == "llama3:latest" and _r.degraded,
+              "...and with an operator-named local model it is served, degraded")
+    finally:
+        if _saved_model is None:
+            _o.environ.pop("OLLAMA_MODEL", None)
+        else:
+            _o.environ["OLLAMA_MODEL"] = _saved_model
 
     # ── the free-model fallbacks (28-09-2026) ────────────────────────────────
     import os as _os
