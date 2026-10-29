@@ -159,7 +159,6 @@ The gateway is built with `gateway.app.create_app(keys=...)`. The frontend repos
 ├── reports/            generated measurement outputs
 ├── web/assistant/      static prototype of the Ask screen + its JSON fixtures
 ├── addin/              Word task-pane add-in prototype (dev HTTPS proxy)
-├── ci/                 the CI workflow, held as tests.yml.pending (see ci/README.md)
 ├── ops/                launchd plist for the worker
 ├── docs/               every document, by kind (see docs/README.md)
 └── .claude/            agent configuration: agents/, commands/ (/start, /build, /fix, ...), memory/, plans/
