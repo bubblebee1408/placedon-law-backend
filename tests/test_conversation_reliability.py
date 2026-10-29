@@ -187,6 +187,22 @@ class ConversationReliability(unittest.TestCase):
         self.assertEqual(result["envelope"]["status"], "NEEDS_CLARIFICATION")
         self.assertEqual(len(self.queue.jobs), 1)
 
+    def test_followup_that_names_its_subject_is_researched_on_its_own_words(self):
+        # Regression: every follow-up starting "And ..." was sent back for clarification, even
+        # "And what happens if that quorum is not present at the meeting?".
+        first = self.send()
+        result = self.send(text="And what happens if that quorum is not present at the meeting?",
+                           conversation_id=first["conversation_id"])
+        self.assertNotEqual((result.get("envelope") or {}).get("status"), "NEEDS_CLARIFICATION")
+        self.assertEqual(len(self.queue.jobs), 2, "queued as research, like a first question")
+
+    def test_named_subject_rule_is_narrow(self):
+        self.assertTrue(verbs._names_own_subject("And what happens if that quorum is not present at the meeting?"))
+        self.assertTrue(verbs._names_own_subject("Also, what is the notice period for a board meeting?"))
+        for vague in ("Does that apply to it?", "And what about that?", "Can it be done?", "Explain that please",
+                      "And how?", "What about this one then?"):
+            self.assertFalse(verbs._names_own_subject(vague), vague)
+
     def test_vault_picker_reports_not_searched_when_ungrounded(self):
         from checker import source_picker
         report = verbs._sources_report(["held", "vault"], source_picker.resolve(["held", "vault"]), (), QUESTION, self.ctx)
