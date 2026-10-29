@@ -127,3 +127,20 @@ class DraftReviewIntegrity(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DraftVersionDates(unittest.TestCase):
+    """A version carries the moment it was saved -- never an invented date."""
+
+    def test_saved_version_is_dated_when_it_was_saved(self):
+        # Regression: read_draft_versions did not return created_at, and _draft_history then
+        # stamped every version "2026-01-01T00:00:00+00:00".
+        from datetime import datetime, timezone
+        ctx = Context(store=MemoryBackend())
+        before = datetime.now(timezone.utc)
+        made = _draft_create({"title": "Board note", "body": "The Board met.", "slots": []}, ctx)
+        stored = ctx.store.read_draft_versions(made["draft_id"])[0]
+        when = datetime.fromisoformat(stored["created_at"])
+        self.assertGreaterEqual(when, before.replace(microsecond=0))
+        listed = _draft_versions({"draft_id": made["draft_id"]}, ctx)
+        self.assertNotIn("2026-01-01T00:00:00", str(listed))

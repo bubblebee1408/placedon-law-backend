@@ -651,8 +651,11 @@ class MemoryBackend:
         row = _shaped(dict(version, version=n), DRAFT_VERSION_KEYS)
         row["slots"] = list(version.get("slots") or [])
         row["citations"] = list(version.get("citations") or [])
-        rows.append(row)
         from datetime import datetime, timezone
+        # 012 stamps created_at DEFAULT now(); the memory backend must too, or every version
+        # read back undated and was shown as 2026-01-01.
+        row["created_at"] = version.get("created_at") or datetime.now(timezone.utc).isoformat()
+        rows.append(row)
         self.drafts[did]["updated_at"] = datetime.now(timezone.utc).isoformat()
         self.drafts[did]["title"] = row.get("title") or self.drafts[did]["title"]
         return n
@@ -3086,12 +3089,15 @@ class PostgresBackend:
         with self._conn() as c:
             rows = c.execute(
                 "SELECT draft_id, version, title, body, slots, citations, "
-                "blocking_count, approved_by, approved_at FROM draft_versions "
+                "blocking_count, approved_by, approved_at, created_at FROM draft_versions "
                 "WHERE draft_id = %s ORDER BY version", (draft_id,)).fetchall()
+        # created_at was not selected, so every version read back undated and
+        # verbs._draft_history stamped it 2026-01-01.
         return [{"draft_id": str(r[0]), "version": r[1], "title": r[2], "body": r[3],
                  "slots": list(r[4] or []), "citations": list(r[5] or []),
                  "blocking_count": r[6], "approved_by": r[7],
-                 "approved_at": r[8].isoformat() if r[8] else None} for r in rows]
+                 "approved_at": r[8].isoformat() if r[8] else None,
+                 "created_at": r[9].isoformat() if r[9] else None} for r in rows]
 
     def next_ordinal(self, conversation_id: str) -> int:
         if not _UUID.match(conversation_id or ""):
