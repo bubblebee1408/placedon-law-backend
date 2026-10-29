@@ -2703,6 +2703,24 @@ def _document_summary_job(args: dict, ctx: Context) -> dict:
 CONVERSATION_UNAVAILABLE = "This conversation is unavailable."
 
 
+# Words a follow-up leans on rather than names: cues, pronouns and question scaffolding.
+_FOLLOW_UP_FILLER = frozenset(
+    "and also what about how does do did is are was were can could would should will that this "
+    "it its they them those these there then so if when which who whom whose why where the a an "
+    "of to in on for at by with from be been being has have had not any some please explain "
+    "expand summarise summarize tell me more happens happen".split())
+
+
+def _names_own_subject(text: str) -> bool:
+    """A follow-up that names its own subject ("And what happens if that quorum is not present
+    at the meeting?") is researched on its own words. Only one that leans on the previous answer
+    for its subject ("Does that apply to it?") is asked to name it: prior assistant answers are
+    never evidence, so they are never used to fill the gap.
+    """
+    words = [w for w in re.findall(r"[a-z]+", text.casefold()) if len(w) > 2 and w not in _FOLLOW_UP_FILLER]
+    return len(set(words)) >= 2
+
+
 def _conversation_send(args: dict, ctx: Context) -> dict:
     """Validate, reserve one idempotent message pair, then dispatch bounded work."""
     import hashlib
@@ -2837,7 +2855,8 @@ def _conversation_send(args: dict, ctx: Context) -> dict:
         classification = {"task": task, "decided_by": "rules", "reason": "document is unavailable or ambiguous",
             "question": "Select one readable document to review. An unavailable document cannot be replaced by the instruction text."}
     elif conv and not raw_ids and task == "RESEARCH_QUESTION" and re.match(
-            r"^\s*(?:(?:and|also)\b|what about (?:that|this|it)\b|(?:can|does|is|would|should) (?:it|that|this)\b|(?:explain|expand|summari[sz]e) (?:it|that|this)\b)", text, re.I):
+            r"^\s*(?:(?:and|also)\b|what about (?:that|this|it)\b|(?:can|does|is|would|should) (?:it|that|this)\b|(?:explain|expand|summari[sz]e) (?:it|that|this)\b)", text, re.I) \
+            and not _names_own_subject(text):
         task = intake.NEEDS_CLARIFICATION
         classification = {"task": task, "decided_by": "rules", "reason": "ambiguous follow-up",
             "question": "Please name the provision, document or issue in this follow-up. Prior assistant answers are not treated as legal evidence."}
