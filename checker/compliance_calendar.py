@@ -32,6 +32,7 @@ Run: PYTHONPATH=. python3 checker/compliance_calendar.py --test
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import date, timedelta
 
@@ -42,6 +43,7 @@ __all__ = ["HORIZON_DAYS", "DUE", "UNKNOWN", "Entry", "Calendar", "upcoming",
 HORIZON_DAYS = 90
 
 DUE = "DUE"
+OVERDUE = "OVERDUE"   # dated, and the date has already passed as of `as_of`
 UNKNOWN = "UNKNOWN"
 
 MISSING_ANCHOR = "missing_anchor"
@@ -99,6 +101,30 @@ def _iso(d) -> str:
     return d.isoformat() if isinstance(d, date) else str(d)
 
 
+# The statutory words each anchor is counted FROM. A provision can state several intervals
+# (s.96(1): fifteen months between AGMs, nine months for the first, six months from the close
+# of the financial year), and derived_date reads the FIRST interval in whatever text it gets,
+# so the whole section dated the AGM fifteen months from the year end. Only the interval that
+# governs this anchor's words may be used. An anchor with no entry here keeps the old reading.
+ANCHOR_PHRASES = {
+    "financial_year_end": re.compile(r"from\s+the\s+date\s+of\s+closing\s+of\s+the\s+financial\s+year\b", re.I),
+}
+
+
+def governing_text(text: str, anchor_label: str) -> str:
+    """The part of `text` whose interval governs `anchor_label`: from the interval nearest
+    before the anchor's statutory words, through those words. The whole text when the anchor
+    has no known phrase or the phrase is absent -- never a guessed clause."""
+    from checker import derived_date as dd
+    phrase = ANCHOR_PHRASES.get(anchor_label)
+    flat = re.sub(r"\s+", " ", text or "")
+    hit = phrase.search(flat) if phrase else None
+    if not hit:
+        return text
+    starts = [m.start() for m in dd._INTERVAL.finditer(flat, 0, hit.start())]
+    return flat[starts[-1]:hit.end()] if starts else text
+
+
 def upcoming(rows, *, anchors, source_texts, as_of, horizon_days: int = HORIZON_DAYS,
              intervals=None) -> Calendar:
     """The calendar. `rows` are `obligations.Row`-shaped; nothing here calls a model.
@@ -137,7 +163,11 @@ def upcoming(rows, *, anchors, source_texts, as_of, horizon_days: int = HORIZON_
 
         if state == ob.DOES_NOT_APPLY:
             continue                      # not a gap; it is simply not this company's duty
-        if state in (ob.APPLIES_UNDETERMINED, ob.CANNOT_DETERMINE):
+        # Only CANNOT_DETERMINE means "we cannot say this duty applies". APPLIES_UNDETERMINED
+        # is defined in checker/obligations.py as "the duty attaches; we cannot say whether it
+        # is met" -- its deadline exists either way, so it is dated like any applying duty.
+        # Treating both alike left every applying-but-unproven duty (the AGM included) undated.
+        if state == ob.CANNOT_DETERMINE:
             unk(MISSING_FACT,
                 f"the obligation itself is {state} for want of a fact, so a date would be "
                 f"a date for a duty we cannot say applies")
@@ -159,7 +189,7 @@ def upcoming(rows, *, anchors, source_texts, as_of, horizon_days: int = HORIZON_
             continue
         try:
             derived = dd.derive(anchor=anchors[label], anchor_label=label,
-                                source_text=text, citation=prov)
+                                source_text=governing_text(text, label), citation=prov)
         except dd.IntervalNotInSource:
             # derived_date refuses to invent an interval, and this is that refusal
             # surfacing as a calendar entry rather than as a crash or a default.
@@ -168,13 +198,19 @@ def upcoming(rows, *, anchors, source_texts, as_of, horizon_days: int = HORIZON_
                 "is never assumed")
             continue
         when = derived.result
-        if as_of <= when <= end:
+        if when < as_of:
+            # A passed deadline is the most urgent row, never a silent count: it was folded
+            # into out_of_window, so an overdue AGM vanished from the calendar.
+            due.append(Entry(obligation_id=oid, duty=duty, provision=prov, state=OVERDUE,
+                             due=_iso(when), anchor_label=label,
+                             quote=str(derived.interval_text or "")))
+        elif when <= end:
             due.append(Entry(obligation_id=oid, duty=duty, provision=prov, state=DUE,
                              due=_iso(when), anchor_label=label,
                              quote=str(derived.interval_text or "")))
         else:
             outside += 1
-    due.sort(key=lambda e: (e.due, e.obligation_id))
+    due.sort(key=lambda e: (e.due, e.obligation_id))   # oldest (overdue) first
     unknown_sorted = tuple(sorted(unknown, key=lambda e: e.obligation_id))
     return Calendar(as_of=_iso(as_of), horizon_days=horizon_days, due=tuple(due),
                     unknown=unknown_sorted, out_of_window=outside)
@@ -221,6 +257,35 @@ def _test() -> int:
           "...and names the fact it counted from")
     check(not cal.unknown, "...with nothing unknown")
 
+    # ── a PASSED deadline is listed first as OVERDUE, never a silent count ──
+    late = upcoming([row("96"), row("173")], anchors={"financial_year_end": date(2026, 3, 31)},
+                    source_texts={"96": TEXT, "173": TEXT},
+                    intervals={"96": "financial_year_end", "173": "financial_year_end"},
+                    as_of=AS_OF)
+    check(len(late.due) == 2 and all(e.state == OVERDUE for e in late.due)
+          and late.due[0].due == "2026-09-30" and late.out_of_window == 0,
+          "six months from 31 March 2026 is 30 September 2026, before 2 October: OVERDUE, "
+          "listed, and not folded into out_of_window "
+          f"({[(e.state, e.due) for e in late.due]}, out={late.out_of_window})")
+
+    # ── the interval that governs the ANCHOR, not the first one in the section ──
+    S96 = ("Every company other than a One Person Company shall in each year hold in addition "
+           "to any other meetings, a general meeting as its annual general meeting and shall "
+           "specify the meeting as such in the notices calling it, and not more than fifteen "
+           "months shall elapse between the date of one annual general meeting of a company and "
+           "that of the next: Provided that in case of the first annual general meeting, it shall "
+           "be held within a period of nine months from the date of closing of the first "
+           "financial year of the company and in any other case, within a period of six months, "
+           "from the date of closing of the financial year:")
+    agm = upcoming([row("96")], anchors={"financial_year_end": date(2026, 6, 30)},
+                   source_texts={"96": S96}, intervals={"96": "financial_year_end"}, as_of=AS_OF)
+    check(len(agm.due) == 1 and agm.due[0].due == "2026-12-30" and "six months" in agm.due[0].quote,
+          "s.96(1): the AGM runs six months from the close of the financial year, not the "
+          "fifteen-month gap stated first in the section "
+          f"({[(e.due, e.quote) for e in agm.due]})")
+    check(governing_text(S96, "unknown_anchor") == S96,
+          "an anchor with no known statutory phrase keeps the whole text: no guessed clause")
+
     # ── NEVER a guessed date ───────────────────────────────────────────────
     no_anchor = upcoming([row("96")], anchors={}, source_texts={"96": TEXT},
                          intervals={"96": "financial_year_end"}, as_of=AS_OF)
@@ -246,17 +311,24 @@ def _test() -> int:
     check("never assumed" in bad_text.unknown[0].reason,
           "...saying so in words")
 
-    undet = upcoming([row("149", ob.APPLIES_UNDETERMINED, missing=("listed",))],
+    undet = upcoming([row("149", ob.CANNOT_DETERMINE, missing=("listed",))],
                      anchors=ANCH, source_texts={"149": TEXT},
                      intervals={"149": "financial_year_end"}, as_of=AS_OF)
     check(not undet.due and undet.unknown[0].reason.startswith(MISSING_FACT),
-          "an obligation that is UNDETERMINED is not dated: a date for a duty we cannot "
-          "say applies is worse than no date")
+          "an obligation whose applicability CANNOT BE DETERMINED is not dated: a date for "
+          "a duty we cannot say applies is worse than no date")
     check(undet.unknown[0].missing == ("listed",),
           "...and the fact it needs is carried through from the obligation row")
+    attaches = upcoming([row("96", ob.APPLIES_UNDETERMINED, missing=("date of this AGM",))],
+                        anchors=ANCH, source_texts={"96": TEXT},
+                        intervals={"96": "financial_year_end"}, as_of=AS_OF)
+    check(not any(e.obligation_id == "96" and e.reason.startswith(MISSING_FACT)
+                  for e in attaches.unknown),
+          "an obligation that APPLIES but whose compliance is unproven is dated: the duty "
+          "attaches (obligations.APPLIES_UNDETERMINED), so its deadline exists")
 
     # ── THE RULE: an UNKNOWN entry is never dropped ────────────────────────
-    mixed = upcoming([row("96"), row("149", ob.APPLIES_UNDETERMINED, ("listed",)),
+    mixed = upcoming([row("96"), row("149", ob.CANNOT_DETERMINE, ("listed",)),
                       row("173")],
                      anchors=ANCH, source_texts={"96": TEXT, "173": TEXT},
                      intervals={"96": "financial_year_end"}, as_of=AS_OF)
