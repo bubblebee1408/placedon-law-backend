@@ -4628,6 +4628,65 @@ def _review_table_export(args: dict, ctx: Context) -> dict:
                      "file cannot run as a formula in a spreadsheet.")}
 
 
+def _review_table_list(args: dict, ctx: Context) -> dict:
+    """The firm's review tables this actor may read, newest first. Names, dates, state and
+    counts only: no question text and no cell value, so the list leaks nothing a table's
+    own page would not. Paged with an opaque cursor, the same shape as draft.list."""
+    import base64
+    import json
+    import uuid
+    from datetime import datetime
+    if ctx.store is None:
+        return _refuse("NO_STORE", "no store is configured")
+    try:
+        limit = int(str(args.get("limit") or "20"))
+    except (TypeError, ValueError):
+        return _refuse("BAD_REQUEST", "limit must be an integer from 1 to 50")
+    if limit < 1 or limit > 50:
+        return _refuse("BAD_REQUEST", "limit must be an integer from 1 to 50")
+    before_created_at = before_grid_id = None
+    cursor = str(args.get("cursor") or "").strip()
+    if cursor:
+        try:
+            payload = json.loads(base64.urlsafe_b64decode(cursor + "=" * (-len(cursor) % 4)))
+            if not isinstance(payload, dict) or set(payload) != {"created_at", "grid_id"}:
+                raise ValueError("unexpected cursor shape")
+            before_created_at = str(payload["created_at"])
+            if datetime.fromisoformat(before_created_at.replace("Z", "+00:00")).tzinfo is None:
+                raise ValueError("timestamp must include a timezone")
+            before_grid_id = str(payload["grid_id"])
+            if str(uuid.UUID(before_grid_id)) != before_grid_id:
+                raise ValueError("grid id is not canonical")
+        except (ValueError, TypeError, json.JSONDecodeError) as exc:
+            return _refuse("BAD_REQUEST", f"invalid review table cursor: {exc}")
+    rows = ctx.store.list_grids(limit=limit + 1, before_created_at=before_created_at,
+                                before_grid_id=before_grid_id)
+    # 028. Postgres filters by policy (tenant, then matter or owner); this applies the same
+    # rule `review_table.status` applies, so the list never names a table its page refuses.
+    rows = [r for r in rows if access.row_allowed(ctx, r)]
+    page = rows[:limit]
+    next_cursor = None
+    if len(rows) > limit and page:
+        packed = json.dumps({"created_at": page[-1]["created_at"],
+                             "grid_id": page[-1]["grid_id"]},
+                            separators=(",", ":")).encode("utf-8")
+        next_cursor = base64.urlsafe_b64encode(packed).decode("ascii").rstrip("=")
+    tables = []
+    for r in page:
+        state = ("CANCELLED" if r["cancelled_at"] else
+                 "PAUSED_BUDGET" if r["paused_budget"] else
+                 "COMPLETE" if r["cells"] and not r["pending"] else "RUNNING")
+        tables.append({"grid_id": r["grid_id"], "name": r["name"],
+                       "created_at": r["created_at"], "created_by": r["actor_id"],
+                       "mine": bool(r["actor_id"]) and str(r["actor_id"]) == str(ctx.actor or ""),
+                       "matter_id": r["matter_id"], "table_state": state,
+                       "documents": r["documents"], "columns": r["columns"],
+                       "cells": r["cells"], "cells_pending": r["pending"]})
+    return {"tables": tables, "next_cursor": next_cursor,
+            "note": ("Review tables you may open, newest first. Names and counts only; "
+                     "open one with review_table.status to read its answers.")}
+
+
 def _load_grid(ctx: Context, grid_id: str):
     """(Table, cancelled) from the store, or (None, False)."""
     from checker import review_grid as rg
@@ -6278,6 +6337,13 @@ VERBS: tuple[Verb, ...] = (
          (Field("grid_id", STRING, True, describes="the table"),),
          "POST", read_only=True, run=_review_table_export),
 
+    Verb("review_table.list",
+         "The review tables you may open, newest first: name, when and by whom it was "
+         "started, its state, and its document, column and cell counts. No answers.",
+         (Field("limit", STRING, False, describes="page size, 1 to 50; default 20"),
+          Field("cursor", STRING, False, describes="opaque cursor from the previous page")),
+         "POST", read_only=True, mcp=False, run=_review_table_list),
+
     Verb("draft.create",
          "Start a draft at version 1. A MODEL_SUGGESTION or UNKNOWN slot blocks approval.",
          (Field("title", STRING, True, describes="the document's title"),
@@ -6510,7 +6576,7 @@ def _test() -> None:
                     "intake.classify", "conversation.send", "conversation.list",
                     "conversation.get", "citation.get", "review_table.create",
                     "review_table.status", "review_table.export",
-                    "review_table.cancel", "draft.create",
+                    "review_table.cancel", "review_table.list", "draft.create",
                     "draft.revise", "draft.status", "draft.list", "draft.versions", "draft.diff",
                     "draft.export", "matters.create", "matters.list",
                     "calendar.upcoming", "usage.status", "jobs.dead",
@@ -6528,7 +6594,7 @@ def _test() -> None:
                         # 028: administering per-matter access.
                         "matters.grant", "matters.revoke", "matters.members",
                         "matters.access_report", "vault.share", "access.reassign"},
-          f"the sixty-three verbs are declared once ({sorted(names)})")
+          f"the sixty-four verbs are declared once ({sorted(names)})")
     # sources.* are READ-ONLY, so they reach MCP. That is the intended shape: an agent may
     # ask what a source permits and search what may be read, and there is no sources verb
     # that fetches, stores or spends. S3's Indian Kanoon connector will spend money, and
@@ -7922,6 +7988,46 @@ def _test() -> None:
     check(_hV["review_table.status"].run({"grid_id": "nope"}, _hctx)["code"] == "NOT_FOUND",
           "an unknown grid is NOT_FOUND, never an empty table")
 
+    # ── review_table.list: the firm's tables, not this browser's ───────────
+    _lv = _hV["review_table.list"]
+    check(_lv.read_only and not _lv.mcp and "review_table.list" not in write_verbs(),
+          "review_table.list is read-only and kept off MCP, like matters.list: table names "
+          "can name a client")
+    _ls = _lv.run({}, _hctx)
+    _mine = [t for t in _ls["tables"] if t["grid_id"] == _gid]
+    check(len(_mine) == 1 and _mine[0]["name"] == "NDA diligence"
+          and _mine[0]["table_state"] == "RUNNING" and _mine[0]["mine"]
+          and (_mine[0]["documents"], _mine[0]["columns"], _mine[0]["cells"],
+               _mine[0]["cells_pending"]) == (2, 2, 4, 4)
+          and _mine[0]["created_at"] and _mine[0]["created_by"] == _hctx.actor,
+          f"list names the table, its state, its counts and who started it ({_mine})")
+    check("Which law governs" not in str(_ls) and "India" not in str(_ls),
+          "...and carries no question text and no answer")
+    _colleague = Context(store=_hctx.store, queue=_hctx.queue,
+                         actor="00000000-0000-0000-0000-00000000c0c0",
+                         tenant=_hctx.tenant)
+    check(_gid not in {t["grid_id"] for t in _lv.run({}, _colleague)["tables"]},
+          "a colleague with no grant on an unfiled table does not see it listed -- the "
+          "same rule review_table.status applies (028)")
+    check(_hV["review_table.status"].run({"grid_id": _gid}, _colleague)["code"]
+          == "NOT_FOUND", "...and its page refuses them too, so list and page agree")
+    _firm_b = Context(store=_MB(), queue=_MQ2(), actor=_hctx.actor, tenant="firm-b")
+    check(_lv.run({}, _firm_b)["tables"] == [],
+          "another firm's store lists none of this firm's tables (Postgres: "
+          "scripts/review_table_list_integration.py proves it under row-level security)")
+    for _g2 in ("Lease basics", "Third table"):
+        _hV["review_table.create"].run(
+            {"name": _g2, "document_ids": [_d1], "columns": _cols[:1]}, _hctx)
+    _p1 = _lv.run({"limit": "2"}, _hctx)
+    _p2 = _lv.run({"limit": "2", "cursor": _p1["next_cursor"]}, _hctx)
+    check([t["name"] for t in _p1["tables"]] == ["Third table", "Lease basics"]
+          and _p1["next_cursor"] and [t["name"] for t in _p2["tables"]] == ["NDA diligence"]
+          and _p2["next_cursor"] is None,
+          f"newest first, paged by an opaque cursor ({[t['name'] for t in _p1['tables']]})")
+    for _bad in ({"limit": "0"}, {"limit": "51"}, {"limit": "x"}, {"cursor": "not-a-cursor"}):
+        check(_lv.run(_bad, _hctx).get("code") == "BAD_REQUEST", f"list refuses {_bad}")
+    check(_lv.run({}, Context())["code"] == "NO_STORE", "list with no store is refused")
+
     # Answer two cells, one FOUND and one NOT_FOUND. One priced, one UNPRICED, so the
     # running total below has both kinds to deal with.
     _hctx.store.write_grid_cell({"grid_id": _gid, "document_id": _d1,
@@ -8288,7 +8394,9 @@ def _test() -> None:
                      "research.cases", "research.web",
                      # 028. Who holds access to which matter names the firm's clients and
                      # its people; administration, not an agent task.
-                     "matters.members", "matters.access_report"},
+                     "matters.members", "matters.access_report",
+                     # A table's name can name the client; same reason as matters.list.
+                     "review_table.list"},
           f"...and the verbs that opt out are the ones that should: client and draft lists, the "
           f"firm's SPEND, and "
           f"every read of the VAULT -- which is the client's documents themselves. "
@@ -8352,7 +8460,7 @@ def _test() -> None:
           "...while a WRITE verb is kept out of MCP by mcp_tools(), not by the author "
           "remembering to")
     check("widgets.delete" in write_verbs(hypo), "...and is named in write_verbs()")
-    check(len(VERBS) == 63 and "widgets.count" not in rest_spec(),
+    check(len(VERBS) == 64 and "widgets.count" not in rest_spec(),
           "...and the probe changed nothing in this module: the surfaces are generated "
           "from an argument, not from a global the test rebound")
 
