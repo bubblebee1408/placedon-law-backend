@@ -57,6 +57,7 @@ from checker.ollama_runner import ModelUnavailable as OllamaUnavailable
 from checker.ollama_runner import OllamaRunner
 from checker.tier_rules import HELD
 from checker.lawyer_summary import STATUTE, Call, Source, Summary, check_blocks
+from checker import answer_relevance
 from checker.retrieve import ROUTE_ABSTAIN
 from checker.sarvam_model import html_to_text
 from checker.structural_retrieve import structural_retrieve
@@ -88,6 +89,7 @@ class Outcome:
     provisions: tuple[str, ...] = ()
     route: router.Route | None = None
     dropped: int = 0
+    unaddressed: tuple[str, ...] = ()   # topic labels the cited sections do not address
 
     @property
     def served(self) -> str:
@@ -96,7 +98,7 @@ class Outcome:
     def to_dict(self) -> dict:
         return dict(status=self.status, question=self.question, code=self.code,
                     reason=self.reason, provisions=list(self.provisions),
-                    dropped=self.dropped,
+                    dropped=self.dropped, unaddressed=list(self.unaddressed),
                     model=f"{self.route.provider}/{self.route.model}" if self.route else None,
                     degraded=bool(self.route and self.route.degraded))
 
@@ -440,8 +442,22 @@ def _outcome(question, result, names, holder) -> Outcome:
     if result.status == mc.PARTIAL and not dropped:
         reason = ("every sentence traced, and the answer reaches a body of law this "
                   "corpus does not fully hold")
+    # Relevance. Every quote byte-matches its section; that does not make the section the
+    # one the question asked about (a board-quorum question once came back ANSWERED from
+    # s.96). Deterministic, no model: a matched topic none of whose sections is cited is
+    # not answered. An unmatched question is untouched.
+    gap = ()
+    if summary is not None:
+        cited = {answer_relevance.section_number(summary.sources[c.source_index].source_id)
+                 for s in summary.traced for c in s.citations
+                 if 0 <= c.source_index < len(summary.sources)}
+        gap = answer_relevance.unaddressed(question, cited)
+    if gap:
+        reason = answer_relevance.reason(gap) + ("" if status == ANSWERED else f" ({reason})")
+        status = PARTIAL
     return Outcome(status, question, None, reason, summary=summary, provisions=names,
-                   route=route, dropped=dropped)
+                   route=route, dropped=dropped,
+                   unaddressed=tuple(t.label for t in gap))
 
 
 # ── the ten fixtures ─────────────────────────────────────────────────────────
@@ -590,6 +606,29 @@ def _test() -> None:
           f"{o_half.dropped} dropped)")
     check("five lakh" not in o_half.served,
           "...the dropped sentence is not served")
+
+    # ── relevance: a genuine quote from the WRONG section is not ANSWERED ────
+    # Seen live: a board-quorum question answered from an off-topic section, every quote
+    # exact, marked ANSWERED. Board quorum is s.174; s.103 is general-meeting quorum.
+    qq = "What is the quorum for a board meeting?"
+    qsrcs = {s.source_id: s for s, _ in evidence(qq)}
+
+    def quoting(sid):
+        txt = " ".join(qsrcs[sid].text.split())[:150]
+        return lambda _p: (f"{quoted_span.SENTENCE_TAG} {txt}\n"
+                           f"{quoted_span.QUOTE_TAG} {txt}\n")
+    check({"Companies Act 2013, s.174", "Companies Act 2013, s.103"} <= set(qsrcs),
+          f"the board-quorum question retrieves s.174 and s.103 ({sorted(qsrcs)})")
+    o_off = answer(qq, model=quoting("Companies Act 2013, s.103"), available=("gemini",))
+    check(o_off.status == PARTIAL and o_off.unaddressed == ("board meeting quorum",)
+          and "don't address board meeting quorum" in o_off.reason,
+          f"board quorum answered only from s.103 is PARTIAL, with the reason "
+          f"({o_off.status}, {o_off.unaddressed})")
+    check(o_off.to_dict()["unaddressed"] == ["board meeting quorum"],
+          "...and the gap travels in to_dict")
+    o_on = answer(qq, model=quoting("Companies Act 2013, s.174"), available=("gemini",))
+    check(o_on.status == ANSWERED and o_on.unaddressed == (),
+          f"...the same question answered from s.174 is unchanged ({o_on.status})")
     # ── the cascade: deterministic -> small -> large (PLAN_23 O3) ───────────
     good = " ".join(srcs[0].text.split())[:150]
     honest_text = (f"{quoted_span.SENTENCE_TAG} {good}\n"

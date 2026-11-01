@@ -2275,9 +2275,14 @@ def _envelope_for(task: str, result: dict, *, as_of: str, run_id=None,
                 "so nothing generated is shown.")
     blocks = [{"text": str(text), "citation_ids": [c["id"] for c in citations]}] \
         if str(text).strip() else []
+    if result.get("unaddressed") and result.get("reason"):
+        # The relevance gate (checker/answer_relevance.py) said the cited sections are about
+        # something else. Right after the answer, never before it: clients read block 0 as the
+        # cited answer, and the PARTIAL status already marks it.
+        blocks.insert(1, {"text": str(result["reason"]), "citation_ids": []})
     if _law_as_of_date(result):
-        # After the answer, never before it: clients read block 0 as the cited answer.
-        blocks.insert(1, {"text": _law_as_of_block(result["law_as_of"]), "citation_ids": []})
+        # After the answer (and any relevance note), never before it.
+        blocks.insert(len(blocks), {"text": _law_as_of_block(result["law_as_of"]), "citation_ids": []})
     blocks += _finding_blocks(task, result)
     if dropped:
         # Stated, not silent. A dropped citation changes what the reader is looking at.
@@ -9195,6 +9200,38 @@ def _test() -> None:
           f"bytes change necessarily gives a different run row, which is the whole of "
           f"'two runs on different corpora are distinguishable' "
           f"({_t1_first[:12]}…)")
+    # ── relevance gate, through the whole Ask path ─────────────────────────
+    # Every quote exact, every section the wrong one: a board-quorum question answered from
+    # s.103 (general-meeting quorum) must not be ANSWERED -- not in the result, not in the
+    # stored run, not in the envelope. Answered from s.174 it is unchanged.
+    _rg_q = "What is the quorum for a board meeting?"
+    _rg_src = {s.source_id: s for s, _o in _t1_rq.evidence(_rg_q)}
+
+    def _rg_ctx(_sid, _store):
+        return Context(store=_store, model_for=lambda _o: _t1_rq.quoting_model((_rg_src[_sid],)))
+
+    _rg_store = _MB()
+    _rg_off = _ask({"question": _rg_q}, _rg_ctx("Companies Act 2013, s.103", _rg_store))
+    _rg_env = _envelope_for("RESEARCH_QUESTION", _rg_off, as_of="2026-11-01", ctx=Context(),
+                            question=_rg_q)
+    check(_rg_off.get("status") == "PARTIAL"
+          and _rg_off.get("unaddressed") == ["board meeting quorum"]
+          and (_rg_store.read_run(_rg_off.get("run_id")) or {}).get("status") == "PARTIAL",
+          f"ask: board quorum answered only from s.103 is PARTIAL, and so is the stored run "
+          f"({_rg_off.get('status')}, {_rg_off.get('unaddressed')})")
+    check(_rg_env["status"] == "PARTIAL"
+          and _rg_env["text_blocks"][0]["citation_ids"]
+          and "don't address board meeting quorum" in _rg_env["text_blocks"][1]["text"],
+          f"...and the envelope is PARTIAL, keeps the cited answer in block 0, and says why next "
+          f"({_rg_env['status']}: {[b['text'][:40] for b in _rg_env['text_blocks'][:2]]})")
+    _rg_on = _ask({"question": _rg_q}, _rg_ctx("Companies Act 2013, s.174", _MB()))
+    _rg_env_on = _envelope_for("RESEARCH_QUESTION", _rg_on, as_of="2026-11-01", ctx=Context(),
+                               question=_rg_q)
+    check(_rg_on.get("status") == "ANSWERED" and _rg_env_on["status"] == "ANSWERED"
+          and not _rg_on.get("unaddressed"),
+          f"...the same question answered from s.174 is unchanged "
+          f"({_rg_on.get('status')}/{_rg_env_on['status']})")
+
     _t1_llp = "What does the LLP Act 2008 say about designated partners?"
     _t1_refused = _MB()
     # A DECLINING stand-in, not the quoting one: the real model refused this out-of-held-scope
