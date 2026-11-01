@@ -108,6 +108,7 @@ REQUIRED: dict[str, str] = {
     "intake.classify": VIEWER,
     "review_document": VIEWER,
     "review_table.export": VIEWER,
+    "review_table.list": VIEWER,
     "review_table.status": VIEWER,
     "runs.get": VIEWER,
     "runs.trace": VIEWER,
