@@ -150,6 +150,10 @@ class Origin:
     # caller sets is weak evidence on its own, which is why it is recorded on the Origin
     # and asserted at the point of sending rather than trusted here.
     test_data: bool = False
+    # PUBLIC_CORPUS only: the date a Companies Act section was rebuilt to (YYYY-MM-DD), or "".
+    # Rebuilt text is not a substring of the file, but it is derived from nothing else:
+    # `as_of.readable_as_of` over the committed record. Clearing re-runs that derivation.
+    as_of: str = ""
 
 
 def _git(args: list[str]) -> tuple[int, str]:
@@ -243,13 +247,33 @@ def _readable(path: Path) -> str:
     return _norm(" ".join(parts + stripped))
 
 
-def clear_text(text: str, *, path, git=None) -> Origin:
+def _rebuilt(path: Path, as_of: str) -> str:
+    """The section in `path` as it stood on `as_of`, re-derived from the committed file."""
+    from datetime import date
+    from checker.as_of import readable_as_of
+    try:
+        r = readable_as_of(json.loads(path.read_text()), date.fromisoformat(as_of))
+    except (ValueError, TypeError, AttributeError):
+        return ""
+    return _norm(r.text or "")
+
+
+def clear_text(text: str, *, path, git=None, as_of: str = "") -> Origin:
     """Establish that `text` is text this repository publishes, at `path`, or refuse.
 
     `clear_file` alone would let a caller name a corpus file and send something else. This
     is the half that makes the name mean anything.
+
+    `as_of` widens "publishes" by exactly one deterministic derivation: the section rebuilt
+    to that date from the same committed record (Ask "as of" a past date). Every word of it
+    is either in the file's text or quoted in the file's own footnote.
     """
     origin = clear_file(path, git=git)
+    if as_of:
+        needle = _norm(text)
+        if needle and needle in _rebuilt(ROOT / origin.path, as_of):
+            from dataclasses import replace
+            return replace(origin, as_of=as_of)
     needle = _norm(text)
     if not needle:
         # Empty text clears trivially against any file, which would make an Origin
@@ -278,7 +302,7 @@ def verify(text: str, origin: Origin, *, git=None) -> Origin:
             f"to a free-tier model without naming the published file it came from.")
     if origin.basis != PUBLIC_CORPUS:
         raise NotPublic(f"unknown basis {origin.basis!r}; the only basis is {PUBLIC_CORPUS}")
-    return clear_text(text, path=ROOT / origin.path, git=git)
+    return clear_text(text, path=ROOT / origin.path, git=git, as_of=origin.as_of)
 
 
 def untrusted_blocks(prompt: str) -> tuple[str, ...]:
@@ -407,7 +431,7 @@ def verify_prompt(prompt: str, origins) -> tuple[str, ...]:
                     if not _norm(block) or _norm(block) not in _norm(o.text):
                         raise NotPublic("not part of the matter document named")
                 else:
-                    clear_text(block, path=ROOT / o.path)
+                    clear_text(block, path=ROOT / o.path, as_of=o.as_of)
                 break
             except NotPublic:
                 continue
@@ -521,6 +545,24 @@ def _test() -> None:
     check(clear_text(sample, path=act).basis == PUBLIC_CORPUS,
           "a section body read out of the corpus JSON clears, though its newlines are "
           "escaped in the file on disk")
+
+    # ── as_of: a section rebuilt to a past date clears by re-deriving it ─────
+    from datetime import date as _date
+    from checker.as_of import readable_as_of
+    from checker.prompt_safety import wrap_untrusted as _wrap
+    s173 = ROOT / "corpus/companies_act/49099.json"
+    old = readable_as_of(json.loads(s173.read_text()), _date(2017, 1, 1)).text
+    check("not in corpus" in refused(lambda: clear_text(old, path=s173)),
+          "a section rebuilt to 2017 is not a substring of the file, so plain clearing refuses it")
+    o17 = clear_text(old, path=s173, as_of="2017-01-01")
+    check(o17.as_of == "2017-01-01", "...and clears when the date it was rebuilt to is named")
+    check(len(verify_prompt(_wrap(old, "s.173"), o17)) == 1,
+          "...and verify_prompt re-derives it from the Origin's own date")
+    check("is in none of the" in refused(lambda: verify_prompt(
+        _wrap(old + " The Board also resolved to acquire Beta Ltd.", "s.173"), o17)),
+        "...while client text appended to rebuilt text is still refused")
+    check("not in corpus" in refused(lambda: clear_text(old, path=s173, as_of="2019-01-01")),
+          "...and text rebuilt to one date does not clear under another")
 
     # ── verify(): a hand-built Origin buys nothing ───────────────────────────
     check(verify(body, o).blob == o.blob, "verify() re-establishes a real clearance")

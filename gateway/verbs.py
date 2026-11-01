@@ -343,6 +343,12 @@ def _ask_answer(args: dict, ctx: Context) -> dict:
     if not q:
         return _refuse("BAD_REQUEST", "question is required")
     _progress.mark(_progress.UNDERSTANDING)
+    # A past date reads each section as it stood then (checker/as_of.py), behind a flag.
+    law_date, refusal = _law_date(args.get("as_of"), ctx)
+    if refusal:
+        return refusal
+    if law_date and _affirmed(args.get("decompose")):
+        return _refuse("BAD_REQUEST", "decompose cannot be combined with a past as_of yet")
 
     # The RESOURCE router (not `checker/router.py`, which picks the MODEL). A conservative,
     # deterministic, no-model-call text classifier: CASE routes to judgment discovery
@@ -377,7 +383,8 @@ def _ask_answer(args: dict, ctx: Context) -> dict:
     # answer is an answer about one company, and the key does not carry the facts, so a hit
     # would serve one company's answer to a question asked about another.
     hit, cache_key = (None, None)
-    if ctx.store is not None and not user_facts:
+    # Never for a past date: the cache gate re-verifies against today's text.
+    if ctx.store is not None and not user_facts and law_date is None:
         hit, cache_key = _cache_lookup(q, "RESEARCH_QUESTION", args.get("sources"), ctx)
     if hit is not None:
         return hit
@@ -391,7 +398,7 @@ def _ask_answer(args: dict, ctx: Context) -> dict:
     _held_searched = _sp.HELD_ID in _resolved.searchable
     if _held_searched:
         _progress.mark(_progress.SEARCHING)
-    ev = rq.evidence(q) if _held_searched else ()
+    ev = rq.evidence(q, as_of=law_date) if _held_searched else ()
     # The per-source report is built once, from the retrieval that actually ran, and travels
     # on EVERY return path -- including a NO_MODEL refusal -- so "which sources were searched"
     # is answered even when no model was available to phrase the answer.
@@ -411,6 +418,28 @@ def _ask_answer(args: dict, ctx: Context) -> dict:
                     "held statute, so nothing was read. This is not a finding that no "
                     "obligation exists. Each picked source's state is in `sources`."),
                 "run_id": rid, "sources": _report}
+    law_as_of = None
+    if law_date is not None:
+        sections = rq.law_as_of(q, law_date)
+        law_as_of = {"date": law_date.isoformat(),
+                     "rebuilt": any(x["rebuilt"] for x in sections),
+                     "sections": sections}
+        if sections and not ev:
+            # Retrieval found the provisions; none has recoverable wording on that date.
+            why = " ".join(f"{x['provision']}: {x['note'] or 'not yet in the Act on that date.'}"
+                           for x in sections)
+            return {"status": "REFUSED", "code": "AS_OF_NOT_RECOVERABLE",
+                    "detail": (f"The wording of {', '.join(x['provision'] for x in sections)} "
+                               f"as it stood on {_long_date(law_date)} cannot be recovered "
+                               f"from India Code's amendment notes, so no answer is given "
+                               f"for that date. {why}"),
+                    "law_as_of": law_as_of, "sources": _report,
+                    "run_id": _persist_run(
+                        ctx, intent="research_question", status="REFUSED",
+                        refusal_code="AS_OF_NOT_RECOVERABLE",
+                        steps=[{"capability": "intake", "status": "ANSWERED"},
+                               {"capability": "research", "status": "REFUSED"}],
+                        propositions=[])}
     origins = tuple(o for _, o in ev)
     served, refusal = (None, None)
     if origins:
@@ -444,7 +473,8 @@ def _ask_answer(args: dict, ctx: Context) -> dict:
         _progress.mark(_progress.WRITING)
         out = rq.answer(q, model=served.call if served else None,
                         available=((served.provider,) if served and served.provider
-                                   in _models.SERVEABLE else providers))
+                                   in _models.SERVEABLE else providers),
+                        as_of=law_date)
     except _provider_not_ready() as e:                           # B1
         # PROVIDER_NOT_READY is its OWN typed state: the model provider (Bedrock) is not
         # ready yet -- the account is being verified, or model access is pending. That is
@@ -510,6 +540,11 @@ def _ask_answer(args: dict, ctx: Context) -> dict:
         traced=len(out.summary.traced) if out.summary else 0,
         sentences=len(out.summary.sentences) if out.summary else 0)
     d["sources"] = _report
+    if law_as_of is not None:
+        d["law_as_of"] = law_as_of
+        if d.get("status") == "ANSWERED" and any(
+                x["fidelity"] == "PARTIAL" for x in law_as_of["sections"]):
+            d["status"] = "PARTIAL"     # part of the wording on that date is not known
     _cache_store(cache_key, q, "RESEARCH_QUESTION", args.get("sources"), d, ctx)
     return d
 
@@ -1938,6 +1973,49 @@ def _today(ctx: Context) -> str:
     return date.today().isoformat()
 
 
+# Ask "as of" a past date. OFF by default: rebuilt wording is not yet independently verified
+# (CLAUDE.md, Verification status), so it stays off until the Legal Lead has reviewed a
+# sample of past-date answers. Off means exactly the old refusal.
+ASK_AS_OF_ENV = "PLACEDON_ASK_AS_OF"
+AS_OF_OFF = "This conversation reads current law only. Ask without as_of."
+AS_OF_TASK_ONLY = ("Past dates apply only to research questions about the Companies Act. "
+                   "Ask without as_of for this task.")
+
+
+def _as_of_enabled() -> bool:
+    import os
+    return (os.getenv(ASK_AS_OF_ENV) or "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def _law_date(raw, ctx: Context):
+    """(a past `date` | None for current law, refusal | None). One rule for every caller."""
+    from datetime import date
+    from checker.as_of import COMMENCEMENT
+    raw = (raw or "").strip() if isinstance(raw, str) else raw
+    if not raw or raw == _today(ctx):
+        return None, None
+    if not isinstance(raw, str):
+        return None, _refuse("BAD_REQUEST", "as_of must be a valid YYYY-MM-DD date")
+    try:
+        asked = date.fromisoformat(raw)
+    except ValueError:
+        return None, _refuse("BAD_REQUEST", "as_of must be a valid YYYY-MM-DD date")
+    if not _as_of_enabled():
+        return None, _refuse("AS_OF_UNSUPPORTED", AS_OF_OFF)
+    if asked < COMMENCEMENT:
+        return None, _refuse("AS_OF_OUT_OF_RANGE", (
+            "Past dates start at 1 April 2014, when most of the Companies Act 2013 came into "
+            "force. Before that the Companies Act 1956 applied, and we do not hold it."))
+    if asked > date.fromisoformat(_today(ctx)):
+        return None, _refuse("AS_OF_OUT_OF_RANGE",
+                             "That date is in the future. Pick a date up to today.")
+    return asked, None
+
+
+def _long_date(d) -> str:
+    return f"{d.day} {d:%B %Y}"
+
+
 def _bodies_from_events(result: dict) -> list:
     """events.assess findings -> envelope bodies. The mapping, in one place."""
     from gateway import envelope as ev
@@ -2183,7 +2261,8 @@ def _envelope_for(task: str, result: dict, *, as_of: str, run_id=None,
     # say exactly that -- never "nothing on point was found", which belongs to NO_EVIDENCE.
     nothing_traced = result.get("code") == "NOTHING_TRACED"
     if nothing_traced:
-        citations = _provision_citations(result.get("provisions") or [])
+        citations = _provision_citations(result.get("provisions") or [],
+                                         _law_as_of_date(result))
         dropped = []
     # `abstained_reason` before `note`: when `ask` abstains (e.g. the held corpus was not
     # picked) it carries the reason there, and dropping it left the envelope saying "See the
@@ -2196,6 +2275,9 @@ def _envelope_for(task: str, result: dict, *, as_of: str, run_id=None,
                 "so nothing generated is shown.")
     blocks = [{"text": str(text), "citation_ids": [c["id"] for c in citations]}] \
         if str(text).strip() else []
+    if _law_as_of_date(result):
+        # After the answer, never before it: clients read block 0 as the cited answer.
+        blocks.insert(1, {"text": _law_as_of_block(result["law_as_of"]), "citation_ids": []})
     blocks += _finding_blocks(task, result)
     if dropped:
         # Stated, not silent. A dropped citation changes what the reader is looking at.
@@ -2293,7 +2375,7 @@ def _split_provision(source_id: str) -> tuple[str, str]:
     return source_id.strip(), ""
 
 
-def _provision_citations(provisions) -> list:
+def _provision_citations(provisions, as_of: str | None = None) -> list:
     """Retrieved provisions as openable citations, for the NOTHING_TRACED path.
 
     Each quotes a VERBATIM leading span of its section, so `citation.get` re-reads and serves
@@ -2304,7 +2386,6 @@ def _provision_citations(provisions) -> list:
     """
     from gateway import envelope as ev
     from checker import section_index
-    from checker.sarvam_model import html_to_text
     out: list = []
     for name in provisions:
         instrument, provision = _split_provision(name)
@@ -2313,7 +2394,7 @@ def _provision_citations(provisions) -> list:
         rec = section_index.section_by_number(provision.removeprefix("s."))
         if not rec:
             continue
-        quote = html_to_text(rec.get("content") or "")[:200].strip()
+        quote = _section_text(rec, as_of)[:200].strip()
         if not quote:
             continue
         try:
@@ -2327,13 +2408,23 @@ def _provision_citations(provisions) -> list:
     return out
 
 
-def verify_citation(c: dict) -> tuple[bool, str]:
+def verify_citation(c: dict, as_of: str | None = None) -> tuple[bool, str]:
     """Re-read the section this citation names and confirm the quote is still in it."""
-    ok, why, _text = _reread(c)
+    ok, why, _text = _reread(c, as_of)
     return ok, why
 
 
-def _reread(c: dict) -> tuple[bool, str, str | None]:
+def _section_text(rec: dict, as_of: str | None) -> str:
+    """The readable section: today's, or as it stood on `as_of` (rebuilt, unknown parts masked)."""
+    from checker.sarvam_model import html_to_text
+    if not as_of:
+        return html_to_text(rec.get("content") or "")
+    from datetime import date
+    from checker.as_of import readable_as_of
+    return readable_as_of(rec, date.fromisoformat(as_of)).text or ""
+
+
+def _reread(c: dict, as_of: str | None = None) -> tuple[bool, str, str | None]:
     """`verify_citation`, plus the readable section text it verified the quote AGAINST.
 
     The text is returned only when the quote byte-matches it. A section whose file changed,
@@ -2351,9 +2442,11 @@ def _reread(c: dict) -> tuple[bool, str, str | None]:
       the section is gone      the corpus no longer holds what the answer cited
       the file changed         sha256 differs from the one recorded at answer time
       the quote is absent      the words are not in the section they are attributed to
+
+    `as_of` (YYYY-MM-DD): the quote is checked against the section AS IT STOOD THEN, rebuilt
+    the same way the answer's evidence was, so a past-date quote is not "no longer matching".
     """
     from checker import section_index
-    from checker.sarvam_model import html_to_text
 
     number = (c.get("provision") or "").removeprefix("s.").strip()
     if not number:
@@ -2367,12 +2460,14 @@ def _reread(c: dict) -> tuple[bool, str, str | None]:
                        f"file now hashes to {str(rec.get('sha256'))[:12]}..., the citation "
                        f"records {str(c.get('sha256'))[:12]}.... The quote is not "
                        f"re-verified against text we did not read"), None
-    text = html_to_text(rec.get("content") or "")
+    text = _section_text(rec, as_of)
+    when = f"as it stood on {as_of}" if as_of else "as the corpus holds it today"
     if not (c.get("quote") or "") or c["quote"] not in text:
-        return False, (f"the quote is NOT present in s.{number} as the corpus holds it "
-                       f"today, so nothing may rest on it"), None
-    return True, (f"re-read from corpus/companies_act/{rec['section_id']}.json and the "
-                  f"quote byte-matches"), text
+        return False, (f"the quote is NOT present in s.{number} {when}, so nothing may "
+                       f"rest on it"), None
+    return True, (f"re-read from corpus/companies_act/{rec['section_id']}.json "
+                  + (f"rebuilt to {as_of} " if as_of else "")
+                  + "and the quote byte-matches"), text
 
 
 def _citations_from_summary(summary, pairs, *, index_out: dict | None = None) -> list:
@@ -2454,7 +2549,31 @@ def _citations_for(task: str, result: dict) -> tuple[list, list]:
     raw = result.get("citations") or []
     if not raw:
         return [], []
-    return ev.drop_unquoted(raw, verify=lambda c: verify_citation(c)[0])
+    as_of = _law_as_of_date(result)
+    return ev.drop_unquoted(raw, verify=lambda c: verify_citation(c, as_of)[0])
+
+
+def _law_as_of_date(result: dict) -> str | None:
+    """The past date an answer's law was read as at, or None for current law."""
+    law = result.get("law_as_of") if isinstance(result, dict) else None
+    return law.get("date") if isinstance(law, dict) and law.get("date") else None
+
+
+def _law_as_of_block(law: dict) -> str:
+    """What the reader is told about a past-date answer, in words."""
+    from datetime import date
+    out = f"Law as it stood on {_long_date(date.fromisoformat(law['date']))}."
+    if law.get("rebuilt"):
+        out += (" Wording that has since changed was rebuilt from India Code's amendment "
+                "notes. That rebuilt wording has not yet been independently checked against "
+                "the amending Acts.")
+    for x in law.get("sections") or ():
+        if x.get("fidelity") == "PARTIAL":
+            out += (f" Part of {x['provision']} on that date is not known: the source does not "
+                    f"give the earlier wording for: " + "; ".join(x.get("unknown") or ()))
+        elif x.get("fidelity") == "ABSTAIN":
+            out += f" {x['provision']} was left out: its wording on that date cannot be recovered."
+    return out
 
 
 def _draft_prose(template: str, source: dict, ctx: Context) -> tuple[list, str]:
@@ -2580,7 +2699,8 @@ def _turn_metadata(metadata: dict, result: dict) -> dict:
     out = dict(metadata)
     if isinstance(result.get("sources"), dict):
         out["sources"] = result["sources"]
-    for key in ("document_summary", "document_evidence", "document_summary_unavailable"):
+    for key in ("document_summary", "document_evidence", "document_summary_unavailable",
+                "law_as_of"):
         if isinstance(result.get(key), dict):
             out[key] = result[key]
     if isinstance(result.get("document_summary"), dict):
@@ -2865,8 +2985,9 @@ def _conversation_send(args: dict, ctx: Context) -> dict:
     except TurnConflict:
         return _refuse("IDEMPOTENCY_CONFLICT", "This request ID already belongs to different input.")
 
-    if as_of != _today(ctx):
-        return _refuse("AS_OF_UNSUPPORTED", "This conversation reads current law only. Ask without as_of.")
+    _past, refusal = _law_date(as_of, ctx)
+    if refusal:
+        return refusal
 
     cid = (args.get("conversation_id") or "").strip() or str(uuid.uuid4())
     conv = store.read_conversation(cid)
@@ -2951,6 +3072,11 @@ def _conversation_send(args: dict, ctx: Context) -> dict:
         task = intake.NEEDS_CLARIFICATION
         classification = {"task": task, "decided_by": "rules", "reason": "ambiguous follow-up",
             "question": "Please name the provision, document or issue in this follow-up. Prior assistant answers are not treated as legal evidence."}
+    if _past is not None and (task != "RESEARCH_QUESTION" or document_research):
+        # Only a research question reads the Act as it stood on a date. Every other task
+        # (reviews, drafts, document reading, clarification) reads today's law or no law, so
+        # stamping it with a past date would be today's answer wearing an old one.
+        return _refuse("AS_OF_UNSUPPORTED", AS_OF_TASK_ONLY)
     if (not document_research or document_summary) and TASK_INTENT.get(task) and ctx.queue is not None:
         try:
             limit = max(1, int(os.environ.get("PLACEDON_CONVERSATION_QUEUE_LIMIT", "100")))
@@ -3149,7 +3275,9 @@ def _task_args(task: str, text: str, file_ids, ctx: Context, args: dict,
         # Thread the picked sources through to `ask`, so a conversation turn honours the
         # @-sources chip. Omitted when absent so the verb applies its own default.
         picked = args.get("sources")
-        return {"question": text, **({"sources": picked} if picked else {})}
+        past = (args.get("as_of") or "").strip()
+        return {"question": text, **({"sources": picked} if picked else {}),
+                **({"as_of": past} if past and past != _today(ctx) else {})}
     if task == "EVENT_ASSESS":
         return {"event": (args.get("event") or "commercial_contract"),
                 "facts": args.get("facts") or {}}
@@ -4443,11 +4571,20 @@ def _citation_get(args: dict, ctx: Context) -> dict:
                        "message that made it, so the tenant's own policy governs the read")
     if not access.row_allowed(ctx, ctx.store.read_conversation(conv_id)):
         return _refuse("NOT_FOUND", f"no citation {cid!r} in that conversation")
+    asked = (args.get("as_of") or "").strip() or None
+    if asked is not None:
+        _d, refusal = _law_date(asked, ctx)
+        if refusal:
+            return refusal
+        asked = _d.isoformat() if _d else None
     for msg in ctx.store.read_messages(conv_id):
         for c in (msg.get("envelope") or {}).get("citations", ()):
             if c.get("id") != cid:
                 continue
-            ok, why, text = _reread(c)
+            # The date the ANSWER was read as at wins: it is what the quote was matched
+            # against. `as_of` from the caller covers a message stored without one.
+            law_date = _law_as_of_date(msg.get("metadata") or {}) or asked
+            ok, why, text = _reread(c, law_date)
             # The whole section, so the panel can show the quote IN its context. Only when
             # it re-verified: `text` is then the very text the quote was matched against,
             # and `start`/`end` are the first byte-exact occurrence, found here rather than
@@ -4458,6 +4595,9 @@ def _citation_get(args: dict, ctx: Context) -> dict:
                 section = {"text": text, "start": start, "end": start + len(c["quote"])}
             return {"citation": c, "message_id": msg["message_id"],
                     "reverified": ok, "reverified_note": why, "section": section,
+                    **({"law_as_of": dict((msg.get("metadata") or {}).get("law_as_of")
+                                          or {"date": law_date, "rebuilt": False})}
+                       if law_date else {}),
                     "note": ("The quote was re-read from the corpus just now, not trusted "
                              "from the stored answer. reverified=false means nothing may "
                              "rest on it, whatever the stored envelope says.")}
@@ -5942,7 +6082,11 @@ VERBS: tuple[Verb, ...] = (
                 describes="source ids to search, from sources.list (e.g. ['held']). "
                           "Retrieval searches ONLY these. Default = the held corpus plus "
                           "your vault. An unavailable pick (KEY_MISSING / NOT_ACQUIRED / "
-                          "BLOCKED) is named, never silently dropped. Only HELD can VERIFY")),
+                          "BLOCKED) is named, never silently dropped. Only HELD can VERIFY"),
+          Field("as_of", STRING, False,
+                describes="YYYY-MM-DD from 2014-04-01 to today: read each section as it "
+                          "stood on that date, rebuilt from India Code's amendment notes. "
+                          "Off unless PLACEDON_ASK_AS_OF is set (AS_OF_UNSUPPORTED)")),
          "POST", read_only=True, run=_ask),
 
     Verb("research.multi",
@@ -6411,7 +6555,10 @@ VERBS: tuple[Verb, ...] = (
          (Field("citation_id", STRING, True, describes="the citation's id"),
           Field("conversation_id", STRING, True,
                 describes="the thread it was cited in, so the tenant's own policy governs "
-                          "the read")),
+                          "the read"),
+          Field("as_of", STRING, False,
+                describes="YYYY-MM-DD: re-verify against the section as it stood then. "
+                          "An answer given for a past date always uses its own date")),
          "POST", read_only=True, run=_citation_get),
 
     Verb("review_table.create",
