@@ -245,6 +245,7 @@ suites=(
   checker/ground_span.py
   checker/lexical_rank.py
   checker/retrieval_eval.py
+  checker/section_eval.py
   checker/chunk_retrieval.py
   checker/corpus_retrieval.py
   checker/cross_section_eval.py
