@@ -244,7 +244,11 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
                     limiter_close()
             finally:
                 executor.close()
-    app = FastAPI(title="Placedon gateway", docs_url=None, redoc_url=None, lifespan=lifespan)
+    # The API schema lists every route and field. Off unless a developer opts in locally:
+    # FastAPI serves it before any auth runs, so on a deployment it is a free map.
+    openapi_url = "/openapi.json" if os.environ.get("PLACEDON_OPENAPI") == "1" else None
+    app = FastAPI(title="Placedon gateway", docs_url=None, redoc_url=None,
+                  openapi_url=openapi_url, lifespan=lifespan)
     app.state.admission = executor
     memory_lock = threading.Lock()
     app.state.deployment = dep
@@ -1065,6 +1069,22 @@ def _test() -> None:
     app = create_app(clock=lambda: GEN, keys=keys, db_url="")
     client = TestClient(app, headers={"Authorization": f"Bearer {KEY}"})
     anon = TestClient(app)
+
+    # ── the API schema is not served unless PLACEDON_OPENAPI=1 ───────────────
+    for path in ("/openapi.json", "/docs", "/redoc"):
+        check(anon.get(path).status_code == 404,
+              f"{path} is 404 by default -- no unauthenticated route map")
+    _prev_openapi = os.environ.get("PLACEDON_OPENAPI")
+    os.environ["PLACEDON_OPENAPI"] = "1"
+    try:
+        check(TestClient(create_app(clock=lambda: GEN, keys=keys, db_url=""))
+              .get("/openapi.json").status_code == 200,
+              "...and served when a developer opts in with PLACEDON_OPENAPI=1")
+    finally:
+        if _prev_openapi is None:
+            os.environ.pop("PLACEDON_OPENAPI", None)
+        else:
+            os.environ["PLACEDON_OPENAPI"] = _prev_openapi
 
     # ── every /v1 route, byte for byte ──────────────────────────────────────
     differed = []

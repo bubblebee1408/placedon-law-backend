@@ -262,7 +262,7 @@
     "gateway/access.py": 14,
     "gateway/accounts.py": 18,
     "gateway/admission.py": 6,
-    "gateway/app.py": 166,
+    "gateway/app.py": 170,
     "gateway/audit.py": 19,
     "gateway/auth.py": 38,
     "gateway/circuit.py": 22,
