@@ -317,9 +317,11 @@ def _served_or_refusal(origins, *, name: str, purpose: str, ctx: Context,
 def _ask(args: dict, ctx: Context) -> dict:
     from agents import research_question as rq
     from checker import router
+    from gateway import progress as _progress
     q = (args.get("question") or "").strip()
     if not q:
         return _refuse("BAD_REQUEST", "question is required")
+    _progress.mark(_progress.UNDERSTANDING)
 
     # The RESOURCE router (not `checker/router.py`, which picks the MODEL). A conservative,
     # deterministic, no-model-call text classifier: CASE routes to judgment discovery
@@ -366,6 +368,8 @@ def _ask(args: dict, ctx: Context) -> dict:
     _picked = args.get("sources")
     _resolved = _sp.resolve(_picked)
     _held_searched = _sp.HELD_ID in _resolved.searchable
+    if _held_searched:
+        _progress.mark(_progress.SEARCHING)
     ev = rq.evidence(q) if _held_searched else ()
     # The per-source report is built once, from the retrieval that actually ran, and travels
     # on EVERY return path -- including a NO_MODEL refusal -- so "which sources were searched"
@@ -416,6 +420,7 @@ def _ask(args: dict, ctx: Context) -> dict:
         from gateway import models as _models
         # The provider serve() chose, not the declared list (a test stub keeps the list): rq re-routes over `available`
         # to record which model answered, and the declared list would record Bedrock.
+        _progress.mark(_progress.WRITING)
         out = rq.answer(q, model=served.call if served else None,
                         available=((served.provider,) if served and served.provider
                                    in _models.SERVEABLE else providers))
@@ -439,6 +444,7 @@ def _ask(args: dict, ctx: Context) -> dict:
         return {"status": "FAILED", "error": f"{type(e).__name__}: the provider request could not finish",
                 "run_id": rid, "sources": _report}
 
+    _progress.mark(_progress.CHECKING)
     d = out.to_dict()
     # The traced spans, as citations. `to_dict()` carries the provision NAMES and not the
     # spans, so the conversation layer had nothing to build citations[] from and shipped it
@@ -4259,6 +4265,16 @@ def _conversation_list(args: dict, ctx: Context) -> dict:
                                                           limit=min(limit, 200))}
 
 
+def _with_progress(message: dict, ctx: Context) -> dict:
+    """A pending turn, with its run's live progress when the worker has recorded any.
+
+    Optional and display only (031, gateway/progress.py). Read through the caller's own
+    store, so the runs row-level security decides who sees it, as for the run itself.
+    """
+    progress = ctx.store.read_run_progress(message["run_id"])
+    return dict(message, progress=progress) if progress else message
+
+
 def _reconcile_message(message: dict, ctx: Context) -> dict:
     if message.get("role") != "assistant" or message.get("envelope") is not None:
         return message
@@ -4286,10 +4302,10 @@ def _reconcile_message(message: dict, ctx: Context) -> dict:
     if ctx.queue is not None:
         job = ctx.queue.get(message["run_id"])
         if job is not None and job.status in ("QUEUED", "LEASED"):
-            return message
+            return _with_progress(message, ctx)
     run = ctx.store.read(message["run_id"])
     if not run or run.get("status") in ("PLANNED", "RUNNING"):
-        return message
+        return _with_progress(message, ctx)
     metadata = message.get("metadata") or {"schema": "conversation_turn.v1", "artifacts": [], "files": []}
     result = dict(run.get("result") or {})
     if run.get("status") == "FAILED":

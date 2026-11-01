@@ -52,6 +52,8 @@ def _run() -> int:
     admin_url = f"postgresql:///postgres?host={HOST}&user={ADMIN}"
     app_url = f"postgresql:///{scratch}?host={HOST}&user={APP}"
     T, A = str(uuid.uuid4()), str(uuid.uuid4())
+    L = str(uuid.uuid4())                            # Part C: a lawyer in this firm
+    T2, A2 = str(uuid.uuid4()), str(uuid.uuid4())   # Part C: another firm
     ok = fail = 0
 
     def check(cond, label):
@@ -81,6 +83,12 @@ def _run() -> int:
                 c.execute("SELECT set_config('app.tenant_id', %s, false)", (T,))
                 c.execute("INSERT INTO tenants (tenant_id, name) VALUES (%s,'r019')", (T,))
                 c.execute("INSERT INTO actors (actor_id, tenant_id, label) VALUES (%s,%s,'r019')", (A, T))
+                c.execute("INSERT INTO actors (actor_id, tenant_id, label, role) "
+                          "VALUES (%s,%s,'lawyer','lawyer')", (L, T))
+                c.execute("SELECT set_config('app.tenant_id', %s, false)", (T2,))
+                c.execute("INSERT INTO tenants (tenant_id, name) VALUES (%s,'other firm')", (T2,))
+                c.execute("INSERT INTO actors (actor_id, tenant_id, label, role) "
+                          "VALUES (%s,%s,'other','lawyer')", (A2, T2))
         except Exception as e:                                       # noqa: BLE001
             print(f"SKIP: cannot provision a scratch database ({type(e).__name__}: "
                   f"{str(e)[:120]}).")
@@ -135,6 +143,50 @@ def _run() -> int:
             check(len(mrids) >= 2 and all(m in rids for m in mrids),
                   f"every message's run_id resolves to a run ({len(mrids)} msgs with a run, "
                   f"{len(rids)} runs) — never a dangling reference")
+
+        # ── Part C (031): live progress on a pending turn, and only for its own firm ──
+        from gateway import progress
+        from gateway.jobs import PostgresQueue
+        from gateway.verbs import _conversation_get
+        from gateway.worker import postgres_job_bindings, run_one
+        qa = PostgresQueue(app_url, tenant_id=T, actor_id=L)
+        bl = PostgresBackend(app_url, tenant_id=T, actor_id=L)
+        cctx = Context(tenant=T, actor=L, role="lawyer", store=bl, queue=qa, clock=lambda: TODAY)
+        sent = _conversation_send({"text": Q, "request_id": uuid.uuid4().hex}, cctx)
+        rid, conv = sent.get("run_id"), sent.get("conversation_id")
+        other = PostgresBackend(app_url, tenant_id=T2, actor_id=A2)
+        octx = Context(tenant=T2, actor=A2, role="lawyer", store=other,
+                       queue=PostgresQueue(app_url, tenant_id=T2, actor_id=A2),
+                       clock=lambda: TODAY)
+        seen = {}
+
+        def handler(_args):
+            progress.mark(progress.UNDERSTANDING)
+            progress.mark(progress.SEARCHING)
+            seen["own"] = _conversation_get({"conversation_id": conv}, cctx)
+            seen["other_read"] = other.read_run_progress(rid)
+            other.set_run_progress(rid, {"current": "forged", "done": []})
+            seen["other_get"] = _conversation_get({"conversation_id": conv}, octx)
+            return [], {"status": "PARTIAL", "answer": "Limited evidence."}
+
+        bind = postgres_job_bindings(app_url, tenant_id=T)
+        run_one(queue=qa, store=bl, handlers={}, worker="w", bind_job=lambda job: (bind(job)[0], {
+            "research_question": handler}))
+        own = ((seen.get("own") or {}).get("messages") or [{}, {}])[1].get("progress")
+        check(own == {"current": progress.SEARCHING, "done": [progress.UNDERSTANDING]},
+              f"the pending turn shows its live progress to its own firm ({own})")
+        check(seen.get("other_read") is None,
+              "another firm cannot read the run's progress (runs RLS)")
+        check((seen.get("other_get") or {}).get("code") == "NOT_FOUND",
+              f"...nor the conversation it belongs to ({(seen.get('other_get') or {}).get('code')})")
+        with psycopg.connect(app_url, connect_timeout=10) as c:
+            c.execute("SELECT set_config('app.tenant_id', %s, false)", (T,))
+            c.execute("SELECT set_config('app.actor_id', %s, false)", (L,))
+            row = c.execute("SELECT status, progress FROM runs WHERE run_id = %s",
+                            (rid,)).fetchone()
+        check(row is not None and row[0] == "PARTIAL"
+              and (row[1] or {}).get("current") == progress.SEARCHING,
+              f"...cannot overwrite it, and the run still finishes normally ({row})")
 
         print(f"\n{ok}/{ok + fail} passed")
         return 1 if fail else 0

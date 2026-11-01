@@ -20,6 +20,7 @@ def main():
     suite.addTests(unittest.defaultTestLoader.discover(str(root / "tests"), pattern="test_review_grid_budget_boundary.py"))
     suite.addTests(unittest.defaultTestLoader.discover(str(root / "tests"), pattern="test_document_summary.py"))
     suite.addTests(unittest.defaultTestLoader.discover(str(root / "tests"), pattern="test_document_summary_flow.py"))
+    suite.addTests(unittest.defaultTestLoader.discover(str(root / "tests"), pattern="test_run_progress.py"))
     result = unittest.TextTestRunner(verbosity=1).run(suite)
     failed = len(result.failures) + len(result.errors)
     passed = result.testsRun - failed - len(result.skipped)

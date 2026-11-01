@@ -40,6 +40,7 @@ from dataclasses import dataclass
 from typing import Callable
 
 from gateway import jobs as q
+from gateway import progress
 from gateway.store import step_key
 
 # Terminal run statuses this worker writes. Imported names would pull agents.state into the
@@ -227,7 +228,8 @@ def run_one(*, queue, store, handlers: dict[str, Callable], worker: str = "w1",
 
     started = monotonic()
     try:
-        steps, result = handler(job.args)
+        with progress.recording(store, job.run_id):
+            steps, result = handler(job.args)
     except Exception as e:                                        # noqa: BLE001
         store.set_run(job.run_id, status=FAILED,
                       result={"error": f"{type(e).__name__}: the handler could not complete the request"})
