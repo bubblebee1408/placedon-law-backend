@@ -13,7 +13,8 @@ This is the master spec's best idea (§4.3), with three corrections:
     answers/day, not the spec's 50. **That figure is Haiku's and only Haiku's.** It is a token
     COUNT as much as a price, and a count does not travel between tokenizers: the same words
     through a 4.7+ tokenizer are ~1.35x more tokens, so on DEFAULT_MODEL the same answer costs
-    ~₹3.95 and the ceiling is ~29/day. `typical_call_inr()` is the figure to quote, because it
+    ~₹2.89 and the ceiling is ~40/day (~₹3.95 and ~29/day before the Sonnet 5 rate fix of
+    2026-11-01, see PRICING). `typical_call_inr()` is the figure to quote, because it
     re-measures the same WORDS through whichever tokenizer is actually being billed.
 
   * **Persistence.** The spec's tracker holds counters on `self`. On serverless every invocation
@@ -63,12 +64,12 @@ USD_INR = 95.23                                      # 2026-08-06
 # Anthropic pricing, USD per million tokens. LIST price, deliberately — see below.
 PRICING: dict[str, tuple[float, float]] = {
     "claude-haiku-4-5": (1.00, 5.00),
-    "claude-sonnet-5":  (3.00, 15.00),
+    "claude-sonnet-5":  (2.20, 11.00),   # $2/$10 list x 1.10 regional premium -- see below
     "claude-opus-5":    (5.00, 25.00),
 }
 
 # B1 — Claude on Amazon Bedrock (ap-south-1). Bedrock bills Claude per token at the SAME
-# USD/1M figures as Anthropic's list above (Haiku 4.5 $1/$5, Sonnet $3/$15), so the table is
+# USD/1M figures as Anthropic's list above (Haiku 4.5 $1/$5; Sonnet 5: see the 2026-11-01 note below), so the table is
 # reused rather than forked — one price path, one place to edit. Source: the AWS Bedrock
 # pricing page, https://aws.amazon.com/bedrock/pricing/ , read 2026-10-07. An ap-south-1
 # regional on-demand figure could not be machine-verified from that page (it is JS-rendered
@@ -77,12 +78,25 @@ PRICING: dict[str, tuple[float, float]] = {
 # which is safe under the rule above: a budget guard may only ever be wrong in the expensive
 # direction. If Bedrock ap-south-1 ever prices ABOVE the list, this must be raised to match.
 
-# Sonnet 5 carries introductory pricing of $2.00/$10.00 through 2026-08-31 — today it actually
-# costs ₹1.94/answer, not the ₹2.91 this table computes. The list price is kept anyway, on the
-# rule that **a budget guard must only ever be wrong in the expensive direction**. Encoding the
-# discount would make every estimate too low, and on 2026-09-01 the cap would silently start
-# admitting calls it should refuse. Over-estimating costs us headroom; under-estimating costs us
-# the guarantee. So the ₹1.94 is a discount we receive without spending against it.
+# Sonnet 5 launched at an introductory $2.00/$10.00 through 2026-08-31, scheduled to rise to
+# $3.00/$15.00, and this table carried the $3/$15 on the rule that **a budget guard must only
+# ever be wrong in the expensive direction**. That rise was CANCELLED: Anthropic's pricing page,
+# https://platform.claude.com/docs/en/about-claude/pricing , read 2026-11-01, footnote 3: "The
+# $2/$10 per million input/output token pricing for Claude Sonnet 5, announced at launch as
+# introductory pricing through August 31, 2026, is now the standard price. The previously
+# scheduled increase to $3/$15 ... will not occur." So $3/$15 was a rate that never took effect,
+# and every Sonnet 5 estimate was ~50% high.
+#
+# The entry is $2.20/$11.00, not the bare $2/$10, and the same rule is why. The same page says
+# "Regional and multi-region endpoints include a 10 percent premium over global endpoints" for
+# Haiku 4.5 / Sonnet 4.5 / Opus 4.5 "and all future models", and the Sonnet 5 route here is
+# Bedrock's India geo profile (`in.anthropic.claude-sonnet-5`, checker/bedrock_model.py) -- a
+# regional endpoint. The B1 paragraph above, which says Bedrock bills at the SAME figures as
+# the list, predates that note. List x 1.10 is the ceiling for both routes: exact for Bedrock
+# India if AWS applies the premium to the list, 10% high (the safe side) for the first-party
+# API. Still UNVERIFIED against a Bedrock ap-south-1 console figure.
+# NOT changed here, and flagged: Haiku 4.5's $1/$5 is the global list and is ~10% LOW for the
+# same regional route.
 DEFAULT_MODEL = "claude-sonnet-5"
 
 # ── BUD-3: tokens per page, per model (PLAN_16 §5.5) ─────────────────────────
@@ -1953,8 +1967,10 @@ if __name__ == "__main__":
     check("  ...so a 4.7+ model costs more than the old hard-coded token count implied",
           attempt(lambda: typical_call_inr("claude-sonnet-5")
                   > 1.30 * cost_inr("claude-sonnet-5", 6_700, 700)), True)
+    # Lowered 3.90 -> 2.85 on 2026-11-01, on purpose and said here: Sonnet 5's $3/$15 was a
+    # scheduled rise that was cancelled, and the entry is now $2.20/$11 (see PRICING).
     check("  ...and an absolute floor, so the whole table cannot be scaled down quietly",
-          attempt(lambda: typical_call_inr("claude-sonnet-5") >= 3.90), True)
+          attempt(lambda: typical_call_inr("claude-sonnet-5") >= 2.85), True)
     check("the Haiku figure the docstring MEASURED is preserved to the paisa",
           attempt(lambda: round(typical_call_inr("claude-haiku-4-5"), 2)), 0.97)
     check("  ...which is where the ~120 answers/day ceiling comes from",
@@ -1966,12 +1982,12 @@ if __name__ == "__main__":
           attempt(lambda: round(MONTHLY_CAP_INR, 2)))
     near = Mem()
     near.d = {"day": "2026-08-08", "month": "2026-08", "day_inr": 0.0,
-              "month_inr": MONTHLY_CAP_INR - 3.50, "calls_today": 0}
+              "month_inr": MONTHLY_CAP_INR - 2.50, "calls_today": 0}
     check("a default-estimate call that only FITS at pre-4.7 rates is now refused",
           BudgetTracker(near, today=date(2026, 8, 8)).can_make_call(model="claude-sonnet-5").allowed,
           False)
     check("  ...and it fitted under the old 6,700-token default, which is the defect",
-          MONTHLY_CAP_INR - 3.50 + cost_inr("claude-sonnet-5", 6_700, 700) <= MONTHLY_CAP_INR, True)
+          MONTHLY_CAP_INR - 2.50 + cost_inr("claude-sonnet-5", 6_700, 700) <= MONTHLY_CAP_INR, True)
 
     check("giving one token count without the other is refused, not zero-filled",
           refused(lambda: BudgetTracker(Mem(), today=date(2026, 8, 8)).can_make_call(
