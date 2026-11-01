@@ -497,6 +497,10 @@ extra+=("scripts/vault_failed_retry_integration.py --test")
 # 032: the company profile. The OFFLINE guard runs here; the live cross-firm proof is
 # `scripts/company_profile_integration.py --run` against a throwaway DB.
 extra+=("scripts/company_profile_integration.py --test" "gateway/company_profile.py --test")
+# 033: one sign-in per email across firms. The OFFLINE guard runs here; the live proof
+# (fail-safe refusal on existing duplicates, cross-firm accept refused) is
+# `scripts/login_email_integration.py --run` against throwaway DBs.
+extra+=("scripts/login_email_integration.py --test")
 
 # A module that prints "9/10 passed" has failed, whatever its exit code says.
 # Eight modules once defined _test() without `raise SystemExit(1)`, so their
