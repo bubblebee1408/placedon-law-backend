@@ -141,6 +141,7 @@ suites=(
   checker/feeds/ibbi.py
   checker/legal_retrieval.py
   checker/text_search.py
+  checker/answer_relevance.py
   checker/evidence_pack.py
   checker/retrieve.py
   checker/model_adapter.py
