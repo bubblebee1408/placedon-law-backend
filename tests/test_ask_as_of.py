@@ -161,6 +161,45 @@ class AskAsOf(unittest.TestCase):
         self.assertEqual(first["envelope"]["as_of"], "2014-04-01")
         self.assertEqual(bad["code"], "BAD_REQUEST")
 
+    # ── only research questions take a past date ───────────────────────────
+    def test_other_tasks_refuse_a_past_date(self):
+        with patch.dict("os.environ", ON):
+            review = verbs._conversation_send(
+                {"text": "Check these minutes.", "request_id": str(uuid.uuid4()),
+                 "task_override": "REVIEW_DOCUMENT", "as_of": "2014-04-01"}, self.ctx(S173))
+            draft = verbs._conversation_send(
+                {"text": "Draft a memo.", "request_id": str(uuid.uuid4()),
+                 "task_override": "DRAFT", "as_of": "2017-01-01"}, self.ctx(S173))
+        for got in (review, draft):
+            self.assertEqual((got["status"], got["code"]), ("REFUSED", "AS_OF_UNSUPPORTED"))
+            self.assertIn("only to research questions", got["detail"])
+
+    # ── wholesale replacement: nothing but placeholders is nothing ─────────
+    def test_section_replaced_wholesale_is_not_recoverable(self):
+        q = "What does section 185 say about loans to directors?"
+        self.assertTrue(any(s.source_id.endswith("s.185") for s, _ in rq.evidence(q)))
+        self.assertFalse(any(s.source_id.endswith("s.185")
+                             for s, _ in rq.evidence(q, as_of=date(2017, 1, 1))))
+        with patch.dict("os.environ", ON):
+            got = verbs._ask({"question": q, "as_of": "2017-01-01"}, self.ctx(q, date(2017, 1, 1)))
+        self.assertEqual(got.get("code"), "AS_OF_NOT_RECOVERABLE", got)
+        self.assertIn("s.185", got["detail"])
+
+    def test_a_placeholder_is_never_a_quotation(self):
+        sources = tuple(s for s, _ in rq.evidence(S149, as_of=date(2017, 1, 1)))
+        self.assertTrue(sources[0].undetermined, "masked spans are marked for the verifier")
+        # A model that quotes our placeholder: whatever the verifier makes of the sentence,
+        # no citation may carry the placeholder as if it were statute.
+        liar = f"{quoted_span.SENTENCE_TAG} {UNRECOVERABLE}\n{quoted_span.QUOTE_TAG} {UNRECOVERABLE}\n"
+        ctx = verbs.Context(store=self.store, clock=lambda: TODAY, actor="lawyer-1",
+                            model_for=lambda _o: (lambda _p: liar))
+        with patch.dict("os.environ", ON):
+            got = verbs._conversation_send({"text": S149, "request_id": str(uuid.uuid4()),
+                                            "as_of": "2017-01-01"}, ctx)
+        self.assertFalse(any(UNRECOVERABLE[:20] in c["quote"] for c in got["envelope"]["citations"]))
+        provision = verbs._provision_citations(["Companies Act 2013, s.149"], "2017-01-01")
+        self.assertFalse(any(UNRECOVERABLE[:20] in c["quote"] for c in provision))
+
     # ── firm isolation ──────────────────────────────────────────────────────
     def test_past_date_does_not_open_another_persons_or_firms_citation(self):
         with patch.dict("os.environ", ON):

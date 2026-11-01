@@ -1978,6 +1978,8 @@ def _today(ctx: Context) -> str:
 # sample of past-date answers. Off means exactly the old refusal.
 ASK_AS_OF_ENV = "PLACEDON_ASK_AS_OF"
 AS_OF_OFF = "This conversation reads current law only. Ask without as_of."
+AS_OF_TASK_ONLY = ("Past dates apply only to research questions about the Companies Act. "
+                   "Ask without as_of for this task.")
 
 
 def _as_of_enabled() -> bool:
@@ -3070,6 +3072,11 @@ def _conversation_send(args: dict, ctx: Context) -> dict:
         task = intake.NEEDS_CLARIFICATION
         classification = {"task": task, "decided_by": "rules", "reason": "ambiguous follow-up",
             "question": "Please name the provision, document or issue in this follow-up. Prior assistant answers are not treated as legal evidence."}
+    if _past is not None and (task != "RESEARCH_QUESTION" or document_research):
+        # Only a research question reads the Act as it stood on a date. Every other task
+        # (reviews, drafts, document reading, clarification) reads today's law or no law, so
+        # stamping it with a past date would be today's answer wearing an old one.
+        return _refuse("AS_OF_UNSUPPORTED", AS_OF_TASK_ONLY)
     if (not document_research or document_summary) and TASK_INTENT.get(task) and ctx.queue is not None:
         try:
             limit = max(1, int(os.environ.get("PLACEDON_CONVERSATION_QUEUE_LIMIT", "100")))
