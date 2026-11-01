@@ -6023,6 +6023,12 @@ def _invites_create(args: dict, ctx: Context) -> dict:
     # only fail at accept, after the invitee chose a password.
     if ctx.store.find_actor_by_email(email):
         return _refuse("CONFLICT", "An account with this email already exists in this firm.")
+    # One sign-in per email across ALL firms (033): a second one would make auth.login
+    # refuse both, so another firm could lock this person out. Which firm is not said.
+    if ctx.auth is not None and any(r.get("tenant_id") != ctx.tenant
+                                    for r in ctx.auth.find_logins(email)):
+        return _refuse("CONFLICT", "This email already has a sign-in with another "
+                                   "organisation. Please invite a different email.")
     raw_token, token_hash = accounts.mint_token()
     try:
         row = ctx.store.create_invite({
@@ -10178,6 +10184,19 @@ def _test() -> None:
                                    _acc_ctx())["status"] == "REFUSED",
           "...and a role that is not one of the three")
     _inv_token = _inv["token"]
+
+    # 033: an email that already signs in at ANOTHER firm cannot be invited here -- a
+    # second sign-in would make auth.login refuse both. The refusal names no firm.
+    class _OtherFirmAuth:
+        def find_logins(self, email):
+            return [{"actor_id": "x", "tenant_id": "bbbbbbbb-0000-0000-0000-000000000002"}]
+
+    _xfirm = _V["invites.create"].run({"email": "victim@othe.example", "role": _VIEWER},
+                                      _acc_ctx(auth=_OtherFirmAuth()))
+    check(_xfirm.get("code") == "CONFLICT" and "bbbbbbbb" not in str(_xfirm)
+          and not _xfirm.get("token"),
+          f"invites.create refuses an email that signs in at another firm, naming no firm "
+          f"({_xfirm})")
 
     # invites.accept: PUBLIC shape (no ctx.store up front). Role and email come from the
     # INVITE, never from this request, which supplied neither.
