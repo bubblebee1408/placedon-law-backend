@@ -466,7 +466,9 @@ def main(argv=None) -> int:
     # gateway started from the same environment read the same directory rather than two.
     from gateway.app import default_file_store
     files = default_file_store()
-    ctx = Context(store=store, queue=queue, files=files)
+    # The tenant too: model calls from this context are charged to it, and a context with
+    # no tenant is refused by the budget (backend/budget.py `attributed`).
+    ctx = Context(tenant=store.tenant_id, store=store, queue=queue, files=files)
     bind_job = postgres_job_bindings(url, tenant_id=store.tenant_id, files=files) if url else None
     report = serve(queue=queue, store=store, handlers=queue_handlers(ctx),
                    bind_job=bind_job, worker=f"launchd-{__import__('os').getpid()}",
