@@ -60,7 +60,8 @@ jobs:
           for s in scripts/vault_upload_atomic_integration.py \
                    scripts/vault_failed_retry_integration.py \
                    scripts/conversation_persist_integration.py \
-                   scripts/review_table_list_integration.py; do
+                   scripts/review_table_list_integration.py \
+                   scripts/company_profile_integration.py; do
             echo "::group::$s --run"
             out=$(PYTHONPATH=. python "$s" --run 2>&1) || { echo "$out"; exit 1; }
             echo "$out"

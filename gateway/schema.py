@@ -138,7 +138,8 @@ def _test() -> None:
                     "026_accounts.sql",
                     "027_gateway_rate_limits.sql",
                     "028_matter_access.sql", "029_vault_partial.sql",
-                    "030_vault_failed.sql", "031_run_progress.sql"],
+                    "030_vault_failed.sql", "031_run_progress.sql",
+                    "032_company_profile.sql"],
           f"every migration exists, in order ({files})")
 
     # 026: sign-in, sessions, and the two (now three) cross-tenant reads auth needs.
@@ -358,7 +359,9 @@ def _test() -> None:
                      "sessions", "gateway_rate_limits",
                      # 028. Who may use which matter, and every reassignment of unfiled
                      # work: both name a firm's people and its clients.
-                     "matter_memberships", "access_events"},
+                     "matter_memberships", "access_events",
+                     # 032. The firm's company profile: its CIN, office and class.
+                     "company_profile_facts"},
           f"every other table is tenant-scoped, DERIVED from having a tenant_id ({sorted(scoped)})")
 
     limiter_sql = (MIGRATIONS / "027_gateway_rate_limits.sql").read_text(encoding="utf-8")

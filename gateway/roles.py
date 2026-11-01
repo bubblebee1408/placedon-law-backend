@@ -140,6 +140,10 @@ REQUIRED: dict[str, str] = {
     # A viewer may read a contract review someone else ran; running one spends money and
     # writes a run, so it is a lawyer's act.
     "company_facts.extract": LAWYER,
+    # 032: any person in the firm reads the profile `ask` already uses; setting it
+    # is a lawyer's confirmation, like signing off a fact.
+    "company_profile.get": VIEWER,
+    "company_profile.set": LAWYER,
     "conversation.send": LAWYER,
     "documents.upload": LAWYER,
     "draft.create": LAWYER,

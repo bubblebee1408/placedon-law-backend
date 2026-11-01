@@ -142,6 +142,9 @@ class Backend(Protocol):
     def share_vault_document(self, document_id: str, *, by_actor: str, reason: str,
                              shared: bool = True) -> dict: ...
     def list_unowned(self) -> dict: ...
+    # 032: the firm's company profile. Current facts only; set supersedes, never deletes.
+    def read_company_profile(self) -> list[dict]: ...
+    def set_company_profile(self, rows: list[dict], *, by_actor: str, reason: str) -> list[dict]: ...
     def reassign_work(self, kind: str, resource_id: str, *, by_actor: str, reason: str,
                       to_actor: str | None = None, to_matter: str | None = None) -> dict: ...
     def reserve_turn(self, conversation: dict, user: dict, assistant: dict, *,
@@ -605,6 +608,30 @@ class MemoryBackend:
     login_attempts: list = field(default_factory=list)
     cache: dict = field(default_factory=dict)           # lookup_key -> row
     cache_stats: dict = field(default_factory=dict)     # day -> {hits, misses, stale}
+    # 032. Append-only: a change supersedes the current row and appends a new one.
+    company_profile: list = field(default_factory=list)
+
+    def read_company_profile(self) -> list[dict]:
+        return [dict(r) for r in self.company_profile if r["superseded_at"] is None]
+
+    def set_company_profile(self, rows: list[dict], *, by_actor: str, reason: str) -> list[dict]:
+        import uuid
+        from gateway.company_profile import same_fact
+        if not str(reason or "").strip():
+            raise StoreError("a company profile change needs a reason (032)")
+        now = _utcnow()
+        current = [r for r in self.company_profile if r["superseded_at"] is None]
+        keep = [r for r in current if any(same_fact(r, n) for n in rows)]
+        for r in current:
+            if r not in keep:
+                r.update(superseded_at=now, superseded_by=str(by_actor))
+        for n in rows:
+            if not any(same_fact(k, n) for k in keep):
+                self.company_profile.append(dict(
+                    n, fact_id=str(uuid.uuid4()), confirmed_by=str(by_actor),
+                    confirmed_at=now, reason=str(reason), superseded_at=None,
+                    superseded_by=None))
+        return self.read_company_profile()
 
     # ── H3: drafts ───────────────────────────────────────────────────────────
     def write_draft(self, draft: dict, *, create_only: bool = False) -> dict:
@@ -2367,6 +2394,52 @@ class PostgresBackend:
         except psycopg.errors.IntegrityError as exc:
             raise StoreError(f"the database refused this change: {type(exc).__name__}") from None
         return self.read_vault_document(document_id) or {}
+
+    _PROFILE_COLS = ("fact_id, field, value, basis, source_label, quoted_span, uploaded_on, "
+                     "confirmed_by, confirmed_at, reason")
+
+    def _profile_rows(self, c) -> list[dict]:
+        cols = [k.strip() for k in self._PROFILE_COLS.split(",")]
+        rows = c.execute(f"SELECT {self._PROFILE_COLS} FROM company_profile_facts "
+                         f"WHERE superseded_at IS NULL ORDER BY field").fetchall()
+        return [{k: (str(v) if k in ("fact_id", "confirmed_by") else v)
+                 for k, v in zip(cols, r)} for r in rows]
+
+    def read_company_profile(self) -> list[dict]:
+        with self._conn() as c:
+            return self._profile_rows(c)
+
+    def set_company_profile(self, rows: list[dict], *, by_actor: str, reason: str) -> list[dict]:
+        """One transaction: supersede what changed, insert what is new, keep the rest."""
+        import uuid
+        import psycopg
+        from gateway.company_profile import same_fact
+        if not str(reason or "").strip():
+            raise StoreError("a company profile change needs a reason (032)")
+        try:
+            with self._conn() as c, c.transaction():
+                # Serialise concurrent saves within this firm; another firm is untouched.
+                c.execute("SELECT pg_advisory_xact_lock(hashtext(%s))",
+                          (f"company_profile:{self.tenant_id}",))
+                current = self._profile_rows(c)
+                keep = [r for r in current if any(same_fact(r, n) for n in rows)]
+                gone = [r["fact_id"] for r in current if r not in keep]
+                if gone:
+                    c.execute("UPDATE company_profile_facts SET superseded_at = now(), "
+                              "superseded_by = %s WHERE fact_id = ANY(%s::uuid[])",
+                              (by_actor, gone))
+                for n in rows:
+                    if any(same_fact(k, n) for k in keep):
+                        continue
+                    c.execute("INSERT INTO company_profile_facts (fact_id, tenant_id, field, "
+                              "value, basis, source_label, quoted_span, uploaded_on, "
+                              "confirmed_by, reason) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+                              (str(uuid.uuid4()), self.tenant_id, n["field"], n["value"],
+                               n["basis"], n["source_label"], n.get("quoted_span") or "",
+                               n.get("uploaded_on"), by_actor, reason))
+                return self._profile_rows(c)
+        except psycopg.Error as exc:
+            raise StoreError(f"the database refused this change: {type(exc).__name__}") from None
 
     @contextmanager
     def _reassigning(self):
