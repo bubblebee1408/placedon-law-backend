@@ -315,6 +315,27 @@ def _served_or_refusal(origins, *, name: str, purpose: str, ctx: Context,
 
 
 def _ask(args: dict, ctx: Context) -> dict:
+    """`ask`, with the firm's stored company profile shown when the caller sent no facts.
+
+    The profile facts are attached AFTER the answer, so they never enter the answer cache
+    (whose key does not carry facts) and a cache hit still shows the current profile. Like
+    facts sent with the request, they are recorded and shown and do not steer the answer.
+    """
+    d = _ask_answer(args, ctx)
+    if args.get("company_facts") is not None or d.get("status") == "REFUSED":
+        return d
+    facts = _profile_facts(ctx)
+    if not facts:
+        return d
+    return dict(d, user_facts=[f.to_dict() for f in facts],
+                user_facts_from=PROFILE_SOURCE,
+                user_facts_note=(
+                    "From your company profile, as confirmed there. Shown so you can see "
+                    "what we hold; they did not change this answer, which is read from "
+                    "the held Act. No company fact is ever VERIFIED."))
+
+
+def _ask_answer(args: dict, ctx: Context) -> dict:
     from agents import research_question as rq
     from checker import router
     from gateway import progress as _progress
@@ -1566,10 +1587,19 @@ def _events_assess(args: dict, ctx: Context) -> dict:
     # Company facts (PLAN_26 S2-alt): typed by the user, or read from a master-data page
     # they uploaded. ONLY THE CONFIRMED ONES REACH THE TABLE, and the rest are reported.
     from checker.sources import company_facts as cf
-    facts, refusal = _company_facts(args.get("company_facts"))
+    from_profile = args.get("company_facts") is None
+    if from_profile:
+        facts, refusal = _profile_facts(ctx), None
+    else:
+        facts, refusal = _company_facts(args.get("company_facts"))
     if refusal:
         return refusal
     used, recorded, pending = cf.for_event_table(facts)
+    if from_profile:
+        # The request's own `facts` win over the stored profile: a person who says
+        # "assume unlisted" for this one question has not changed the company.
+        overridden = sorted(set(used) & set(raw_facts))
+        used = {k: v for k, v in used.items() if k not in raw_facts}
     clash = sorted(set(used) & set(raw_facts))
     if clash:
         # A contradiction is refused, not resolved by precedence. A silent winner would
@@ -1587,10 +1617,13 @@ def _events_assess(args: dict, ctx: Context) -> dict:
     if facts:
         d["company_facts"] = {
             "used": [f.to_dict() for f in cf.confirmed(facts)
-                     if f.field in cf.EVENT_TABLE_FIELDS],
+                     if f.field in cf.EVENT_TABLE_FIELDS and f.field in used],
             "recorded_not_read": [f.to_dict() for f in recorded],
             "pending_confirmation": [f.to_dict() for f in pending],
         }
+        if from_profile:
+            d["company_facts"]["from"] = PROFILE_SOURCE
+            d["company_facts"]["overridden_by_request"] = overridden
     d["note"] = ("The event table says which bodies of law a transaction ENGAGES. It has "
                  "not been reviewed by a lawyer. No section, figure or deadline is stated "
                  "for any body that is not held. A company fact is never VERIFIED: it is "
@@ -1632,6 +1665,58 @@ def _company_facts(raw: object) -> tuple[list, dict | None]:
             return [], _refuse("BAD_REQUEST", f"company_facts[{i}]: {e}")
         out.append(fact)
     return out, None
+
+
+PROFILE_SOURCE = "company_profile"
+
+
+def _profile_facts(ctx: Context) -> list:
+    """The firm's stored, confirmed company facts, or [] when none are stored or the store
+    predates 032. Read failures are not hidden as "no profile" silently: they are logged."""
+    if ctx.store is None or not hasattr(ctx.store, "read_company_profile"):
+        return []
+    from gateway import company_profile as cp
+    try:
+        return cp.as_company_facts(ctx.store.read_company_profile())
+    except Exception as e:                                       # noqa: BLE001
+        import logging
+        logging.getLogger(__name__).warning("company profile unreadable: %s", type(e).__name__)
+        return []
+
+
+def _company_profile_get(args: dict, ctx: Context) -> dict:
+    """The firm's company profile: each confirmed fact with where it came from."""
+    from gateway import company_profile as cp
+    if ctx.store is None:
+        return _refuse("NO_STORE", "the company profile is durable; it needs a store")
+    rows = ctx.store.read_company_profile()
+    return {"facts": [cp.public(r) for r in rows], "fields": list(cp.FIELDS),
+            "note": ("One profile per firm. Each fact is what a person in your firm "
+                     "confirmed, typed by hand or read from an MCA master-data page you "
+                     "uploaded. None is VERIFIED against the MCA register.")}
+
+
+def _company_profile_set(args: dict, ctx: Context) -> dict:
+    """Replace the firm's company profile with these confirmed facts.
+
+    A fact left out is superseded (kept, marked replaced); an unchanged fact keeps who
+    confirmed it and when. Nothing is deleted.
+    """
+    from gateway import company_profile as cp
+    if ctx.store is None:
+        return _refuse("NO_STORE", "the company profile is durable; it needs a store")
+    refusal, a = _access_args(args, "reason")
+    if refusal:
+        return refusal
+    rows, err = cp.parse(args.get("facts"))
+    if err:
+        return _refuse("BAD_REQUEST", err)
+    from gateway.store import StoreError
+    try:
+        stored = ctx.store.set_company_profile(rows, by_actor=ctx.actor, reason=a["reason"])
+    except StoreError as e:
+        return _refuse("CONFLICT", f"the profile was not saved: {e}")
+    return {"status": "SAVED", "facts": [cp.public(r) for r in stored]}
 
 
 def _company_facts_extract(args: dict, ctx: Context) -> dict:
@@ -6035,6 +6120,24 @@ VERBS: tuple[Verb, ...] = (
                           "source label every fact carries")),
          "POST", read_only=True, run=_company_facts_extract),
 
+    # 032. One profile per firm (docs/architecture/COMPANY_PROFILE.md). `ask` and
+    # `events.assess` read it when a request carries no company_facts of its own.
+    Verb("company_profile.get",
+         "Your firm's company profile: each confirmed company fact, with where it came from "
+         "and who confirmed it.",
+         (),
+         "POST", read_only=True, mcp=False, run=_company_profile_get),
+
+    Verb("company_profile.set",
+         "Save your firm's company profile. Confirmed facts only; a fact left out is "
+         "superseded, never deleted. Recorded with a reason.",
+         (Field("facts", ARRAY, True,
+                describes="the whole profile, as [{field, value, basis, quoted_span, "
+                          "source_label, confirmed: true}] in the company_facts vocabulary, "
+                          "plus company_class (private, public or opc)"),
+          Field("reason", STRING, True, describes="why, recorded with the change")),
+         "POST", read_only=False, run=_company_profile_set),
+
     Verb("intake.classify",
          "Which of six fixed tasks a request is, with two alternatives and a reason -- or "
          "a one-sentence question when it is genuinely open. Decided by code wherever code "
@@ -6593,8 +6696,10 @@ def _test() -> None:
                         "invites.create", "invites.accept"} | {
                         # 028: administering per-matter access.
                         "matters.grant", "matters.revoke", "matters.members",
-                        "matters.access_report", "vault.share", "access.reassign"},
-          f"the sixty-four verbs are declared once ({sorted(names)})")
+                        "matters.access_report", "vault.share", "access.reassign"} | {
+                        # 032: the firm's company profile.
+                        "company_profile.get", "company_profile.set"},
+          f"the sixty-six verbs are declared once ({sorted(names)})")
     # sources.* are READ-ONLY, so they reach MCP. That is the intended shape: an agent may
     # ask what a source permits and search what may be read, and there is no sources verb
     # that fetches, stores or spends. S3's Indian Kanoon connector will spend money, and
@@ -6625,8 +6730,10 @@ def _test() -> None:
                                  "invites.accept",
                                  # 028. Each changes who may reach a matter or a document.
                                  "matters.grant", "matters.revoke", "vault.share",
-                                 "access.reassign"},
-          f"...and exactly twenty-three of them write ({sorted(write_verbs())})")
+                                 "access.reassign",
+                                 # 032. Saves the firm's confirmed company facts.
+                                 "company_profile.set"},
+          f"...and exactly twenty-four of them write ({sorted(write_verbs())})")
     check(f"{MCP_NAMESPACE}.conversation.send" not in {t.name for t in mcp},
           "conversation.send WRITES -- it creates a thread, appends messages and may "
           "enqueue work -- so mcp_tools() keeps it off MCP, by rule and not by the author "
@@ -8396,7 +8503,10 @@ def _test() -> None:
                      # its people; administration, not an agent task.
                      "matters.members", "matters.access_report",
                      # A table's name can name the client; same reason as matters.list.
-                     "review_table.list"},
+                     "review_table.list",
+                     # 032. The firm's CIN, office and class: company data, and no agent
+                     # task needs it that `ask` does not already attach.
+                     "company_profile.get"},
           f"...and the verbs that opt out are the ones that should: client and draft lists, the "
           f"firm's SPEND, and "
           f"every read of the VAULT -- which is the client's documents themselves. "
@@ -8460,7 +8570,7 @@ def _test() -> None:
           "...while a WRITE verb is kept out of MCP by mcp_tools(), not by the author "
           "remembering to")
     check("widgets.delete" in write_verbs(hypo), "...and is named in write_verbs()")
-    check(len(VERBS) == 64 and "widgets.count" not in rest_spec(),
+    check(len(VERBS) == 66 and "widgets.count" not in rest_spec(),
           "...and the probe changed nothing in this module: the surfaces are generated "
           "from an argument, not from a global the test rebound")
 

@@ -492,6 +492,9 @@ extra+=("scripts/vault_upload_atomic_integration.py --test")
 # once. The OFFLINE guard runs here; the live proof is
 # `scripts/vault_failed_retry_integration.py --run` against a throwaway DB.
 extra+=("scripts/vault_failed_retry_integration.py --test")
+# 032: the company profile. The OFFLINE guard runs here; the live cross-firm proof is
+# `scripts/company_profile_integration.py --run` against a throwaway DB.
+extra+=("scripts/company_profile_integration.py --test" "gateway/company_profile.py --test")
 
 # A module that prints "9/10 passed" has failed, whatever its exit code says.
 # Eight modules once defined _test() without `raise SystemExit(1)`, so their

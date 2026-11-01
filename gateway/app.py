@@ -1543,8 +1543,10 @@ def _test() -> None:
                                  "invites.accept",
                                  # 028: who may reach a matter or a document.
                                  "matters.grant", "matters.revoke", "vault.share",
-                                 "access.reassign"},
-          f"twenty-three write verbs today, and each is named ({sorted(write_verbs())})")
+                                 "access.reassign",
+                                 # 032: the firm's company profile.
+                                 "company_profile.set"},
+          f"twenty-four write verbs today, and each is named ({sorted(write_verbs())})")
 
     # ── auth: a key is required everywhere except liveness ──────────────────
     check(anon.get(HEALTH_PATH).status_code == 200,

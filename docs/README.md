@@ -35,6 +35,7 @@ deleted. See [CONTRIBUTING.md](../CONTRIBUTING.md#documents).
 | [PLATFORM_FEATURES_AND_INTEGRATIONS.md](architecture/PLATFORM_FEATURES_AND_INTEGRATIONS.md) | Integrations and the multi-agent design |
 | [COMPLIANCE_MECHANICS.md](architecture/COMPLIANCE_MECHANICS.md) | Engine reference: how an obligation is decided |
 | [LEGAL_REFERENCE_NAMESPACE.md](architecture/LEGAL_REFERENCE_NAMESPACE.md) | Instrument-qualified references; why a section number is never an identity |
+| [COMPANY_PROFILE.md](architecture/COMPANY_PROFILE.md) | The firm's saved company profile: schema, verbs, provenance, isolation, what reads it |
 | [RELIABILITY_CONTRACTS.md](architecture/RELIABILITY_CONTRACTS.md) | What each component promises and how that is checked |
 | [MVP_SECTIONS.md](architecture/MVP_SECTIONS.md) | The hand-verified MVP section mappings |
 | [MODEL_PLAN.md](architecture/MODEL_PLAN.md) | What we run, train and refuse (read PLAN_22 for current decisions) |
