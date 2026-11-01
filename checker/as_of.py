@@ -166,6 +166,38 @@ def section_as_of(record: dict, target: date) -> Reconstruction:
     return Reconstruction(sid, target, fidelity, text, in_force, pending, sorted(unknown), note)
 
 
+# Stands in for a span whose wording on the target date the source does not give. Visible on
+# purpose: an answer may say "this part is not recoverable", never quote today's words as then.
+UNRECOVERABLE = "[wording in force on this date is not recoverable from the source]"
+
+
+def readable_as_of(record: dict, target: date) -> Reconstruction:
+    """`section_as_of`, as plain text a reader (or a model) may be shown.
+
+    A PARTIAL reconstruction still holds TODAY's wording inside each unknown span, because
+    nothing better was recoverable. Shown as it is, a quote of it would present current law
+    as the law of `target`. So each unknown span that can be located is replaced by
+    UNRECOVERABLE before markup is stripped. Deterministic: `public_only` re-runs this on
+    the committed file to clear the text, and `citation.get` re-runs it to re-verify.
+    """
+    from dataclasses import replace
+    from checker.sarvam_model import html_to_text
+    r = section_as_of(record, target)
+    if r.text is None:
+        return r
+    text = r.text
+    for marker in r.unknown_spans:
+        span = _find_span(text, marker)
+        if span is None:
+            # Today's wording is in there somewhere and we cannot say where, so no part of
+            # this section can be shown as the law of `target`.
+            return replace(r, fidelity="ABSTAIN", text=None, note=(
+                f"Marker {marker} cannot be located in the source text, so the wording in "
+                f"force on {target} cannot be separated from today's. {r.note}").strip())
+        text = text[:span[0]] + UNRECOVERABLE + text[span[2]:]
+    return replace(r, text=html_to_text(text))
+
+
 # --- self-test against the real ingested corpus ------------------------------
 
 def _test() -> None:
@@ -239,6 +271,25 @@ def _test() -> None:
           "...but a bracket far from its marker is not adopted")
     check(_find_span("<sup>1</sup>[unclosed", 1) is None,
           "an unclosed span is still refused rather than guessed")
+
+    # readable_as_of: the text a reader is shown. An unknown span never keeps today's words.
+    from checker.sarvam_model import html_to_text
+    s173 = json.loads((d / "49099.json").read_text())   # proviso inserted w.e.f. 7-5-2018
+    proviso = "Provided further that where there is quorum in a meeting through physical presence"
+    r17, r19 = readable_as_of(s173, date(2017, 1, 1)), readable_as_of(s173, date(2019, 1, 1))
+    check(r17.fidelity == r19.fidelity == "EXACT", "s.173: exact both sides of 7-5-2018")
+    check(proviso not in " ".join(r17.text.split()) and proviso in " ".join(r19.text.split()),
+          "s.173: the 2018 proviso is absent in 2017 and present in 2019")
+    check(r19.text == html_to_text(s173["content"]), "with nothing pending, the text is today's")
+    s96 = json.loads((d / "1287.json").read_text())      # SD-003: the span cannot be located
+    r96 = readable_as_of(s96, date(2017, 1, 1))
+    check(r96.fidelity == "ABSTAIN" and r96.text is None and "cannot be located" in r96.note,
+          "s.96 before 13-6-2018: an unlocatable unknown span withholds the whole section")
+    s149 = json.loads((d / "49078.json").read_text())
+    r149 = readable_as_of(s149, date(2017, 1, 1))
+    check(r149.fidelity == "PARTIAL" and UNRECOVERABLE in r149.text,
+          "s.149 in 2017: PARTIAL, and each unknown span is masked, not shown as today's")
+    check(readable_as_of(s2, date(2013, 1, 1)).text is None, "pre-commencement: no text at all")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:
