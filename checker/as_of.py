@@ -195,7 +195,29 @@ def readable_as_of(record: dict, target: date) -> Reconstruction:
                 f"Marker {marker} cannot be located in the source text, so the wording in "
                 f"force on {target} cannot be separated from today's. {r.note}").strip())
         text = text[:span[0]] + UNRECOVERABLE + text[span[2]:]
-    return replace(r, text=html_to_text(text))
+    readable = html_to_text(text)
+    if not re.search(r"[A-Za-z]{3,}", readable.replace(UNRECOVERABLE, "")):
+        # Masking left nothing of the source but placeholders and numbering (a section
+        # replaced wholesale, e.g. s.185 before 7-5-2018): nothing on that date is known.
+        return replace(r, fidelity="ABSTAIN", text=None, note=(
+            f"No wording of this section in force on {target} survives in the source: every "
+            f"part of it has since been replaced without the earlier text being quoted. "
+            f"{r.note}").strip())
+    return replace(r, text=readable)
+
+
+def placeholder_spans(text: str) -> tuple[tuple[int, int], ...]:
+    """Where UNRECOVERABLE sits in `text`: ranges the verifier must refuse to trace to."""
+    return tuple((m.start(), m.end()) for m in re.finditer(re.escape(UNRECOVERABLE), text or ""))
+
+
+_WINDOW = 16
+
+
+def quotes_placeholder(quote: str) -> bool:
+    """Does `quote` carry any part of UNRECOVERABLE? Our own words are never a quotation."""
+    q = quote or ""
+    return any(UNRECOVERABLE[i:i + _WINDOW] in q for i in range(len(UNRECOVERABLE) - _WINDOW + 1))
 
 
 # --- self-test against the real ingested corpus ------------------------------
@@ -290,6 +312,17 @@ def _test() -> None:
     check(r149.fidelity == "PARTIAL" and UNRECOVERABLE in r149.text,
           "s.149 in 2017: PARTIAL, and each unknown span is masked, not shown as today's")
     check(readable_as_of(s2, date(2013, 1, 1)).text is None, "pre-commencement: no text at all")
+    from checker import section_index
+    s185 = section_index.section_by_number("185")
+    r185 = readable_as_of(s185, date(2017, 1, 1))
+    check(r185.fidelity == "ABSTAIN" and r185.text is None and "No wording" in r185.note,
+          "s.185 in 2017 (replaced wholesale, earlier text not quoted): ABSTAIN, no placeholder-only text")
+    check(placeholder_spans(r149.text) and all(r149.text[a:b] == UNRECOVERABLE
+                                               for a, b in placeholder_spans(r149.text)),
+          "placeholder_spans finds every masked span")
+    check(quotes_placeholder("is not recoverable from the source") and
+          not quotes_placeholder("Every company shall hold"),
+          "quotes_placeholder catches any piece of our placeholder, and nothing else")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:

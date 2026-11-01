@@ -204,6 +204,10 @@ def citation(*, id: str, instrument: str, provision: str, source: str, fetched_a
         raise EnvelopeError(f"{id}: sha256 must be 64 lowercase hex, got {sha256!r}")
     if not (quote or "").strip():
         raise EnvelopeError(f"{id}: a citation with no quote is not a citation")
+    from checker.as_of import quotes_placeholder
+    if quotes_placeholder(quote):
+        raise EnvelopeError(f"{id}: the quote carries our 'not recoverable' placeholder, "
+                            f"which is not statute and is never a quotation")
     out = {"id": id, "instrument": instrument, "provision": provision, "source": source,
            "fetched_at": fetched_at, "sha256": sha256, "quote": quote}
     if in_force_from is not None:
@@ -492,6 +496,14 @@ def _test() -> int:
         check(False, "a citation with no quote is refused")
     except EnvelopeError:
         check(True, "a citation with no quote at all is refused at construction")
+    try:
+        from checker.as_of import UNRECOVERABLE
+        citation(id="x", instrument="i", provision="p", source="s", fetched_at="t",
+                 sha256=H, quote=f"(1) {UNRECOVERABLE}")
+        check(False, "a quote of the as-of placeholder is refused")
+    except EnvelopeError:
+        check(True, "a quote carrying the as-of 'not recoverable' placeholder is refused at "
+                    "construction: our own words are never a quotation")
 
     # ── a text block may not cite what is not there ─────────────────────────
     try:

@@ -149,7 +149,10 @@ def evidence(question: str, *, as_of=None) -> tuple[tuple[Source, public_only.Or
         # HELD. This is `corpus/companies_act/` read through `structural_retrieve` -- the one
         # tier that may make a claim VERIFIED. Stated rather than defaulted: move 7 made
         # `Source.tier` required precisely so a future connector cannot inherit this.
-        out.append((Source(f"Companies Act 2013, s.{number}", STATUTE, text, HELD),
+        # A masked span is our placeholder, not statute: a sentence quoting it is refused.
+        from checker.as_of import placeholder_spans
+        out.append((Source(f"Companies Act 2013, s.{number}", STATUTE, text, HELD,
+                           undetermined=placeholder_spans(text) if as_of else ()),
                     origin))
     return tuple(out)
 
