@@ -391,7 +391,13 @@ def _test() -> int:
             return _BudgetVerdict(False, "offline", "ledger unavailable")
 
     cleanup_budget = CleanupFailureBudget(_Mem(), today=_date(2026, 10, 5))
-    cleanup_budget.record_call(DAILY_CAP_INR * 0.90)
+    # Leave room for ONE worker's reservation and not two, so the second is refused and the
+    # first has to be released. Derived from the price, not a fixed fraction of the cap: at
+    # 0.90 the fixture silently stopped forcing a release when Sonnet 5's price fell.
+    from backend.budget import DEFAULT_MODEL as _DM, cost_inr as _cost
+    _one = _cost(_DM, WORKER_INPUT_TOKENS * MAX_WORKER_ATTEMPTS,
+                 WORKER_MAX_TOKENS * MAX_WORKER_ATTEMPTS)
+    cleanup_budget.record_call(DAILY_CAP_INR - 1.5 * _one)
     cleanup_verdict = validate(plan_of(2), budget=cleanup_budget)
     check(not cleanup_verdict.ok and bool(cleanup_verdict.detail.get("cleanup_failures"))
           and "reconciliation" in cleanup_verdict.reason,
