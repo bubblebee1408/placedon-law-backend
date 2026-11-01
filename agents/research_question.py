@@ -101,7 +101,7 @@ class Outcome:
                     degraded=bool(self.route and self.route.degraded))
 
 
-def evidence(question: str) -> tuple[tuple[Source, public_only.Origin], ...]:
+def evidence(question: str, *, as_of=None) -> tuple[tuple[Source, public_only.Origin], ...]:
     """The sections this question reaches, each with its public-corpus clearance.
 
     Empty when retrieval abstained. A near-miss provision is NOT offered in its place:
@@ -117,30 +117,31 @@ def evidence(question: str) -> tuple[tuple[Source, public_only.Origin], ...]:
     quoting verbatim. The rule was right and the evidence unit was wrong: the source is
     the provision, and the quote is the passage inside it. The chunks still decide WHICH
     sections; they are no longer what the model is shown.
+
+    `as_of` (a `date`): each section is shown as it stood on that date, rebuilt by
+    `checker/as_of.readable_as_of`. A section with no recoverable wording on that date
+    (not yet in the Act, or an amendment that cannot be located) is left out, exactly like
+    an unindexed one; `law_as_of` says which and why.
     """
-    chunks, route, _withheld = structural_retrieve(question)
-    if route == ROUTE_ABSTAIN:
-        return ()
-    out, seen = [], set()
-    for c in chunks:
-        if c.section in seen:
-            continue
-        seen.add(c.section)
+    out = []
+    for number, rec in _retrieved(question):
         if len(out) >= MAX_PROVISIONS:
             break
-        rec = section_index.section_by_number(c.section)
-        if not rec:
-            continue        # an unindexed section is not evidence; it is a gap
         path = CORPUS / f"{rec['section_id']}.json"
         # The corpus stores provisions as HTML. Nobody should be shown markup, and a
         # quote of it would carry `<span style=...>` into the answer, so it is stripped
         # here -- `public_only._readable` accepts the stripped form as a quotation of
         # the same file, which is what lets both be true at once.
-        text = html_to_text(rec.get("content") or "")
-        if not text:
+        if as_of is None:
+            text = html_to_text(rec.get("content") or "")
+        else:
+            from checker.as_of import readable_as_of
+            text = readable_as_of(rec, as_of).text or ""
+        if not text.strip():
             continue
         try:
-            origin = public_only.clear_text(text, path=path)
+            origin = public_only.clear_text(text, path=path,
+                                            as_of=as_of.isoformat() if as_of else "")
         except public_only.NotPublic:
             # The section text does not match the committed corpus file. That is a
             # corpus problem, not something to route around by sending it anyway.
@@ -148,9 +149,48 @@ def evidence(question: str) -> tuple[tuple[Source, public_only.Origin], ...]:
         # HELD. This is `corpus/companies_act/` read through `structural_retrieve` -- the one
         # tier that may make a claim VERIFIED. Stated rather than defaulted: move 7 made
         # `Source.tier` required precisely so a future connector cannot inherit this.
-        out.append((Source(f"Companies Act 2013, s.{c.section}", STATUTE, text, HELD),
+        out.append((Source(f"Companies Act 2013, s.{number}", STATUTE, text, HELD),
                     origin))
     return tuple(out)
+
+
+def _retrieved(question: str):
+    """(section number, corpus record) for each distinct indexed section retrieval reached."""
+    chunks, route, _withheld = structural_retrieve(question)
+    if route == ROUTE_ABSTAIN:
+        return
+    seen = set()
+    for c in chunks:
+        if c.section in seen:
+            continue
+        seen.add(c.section)
+        rec = section_index.section_by_number(c.section)
+        if rec:             # an unindexed section is not evidence; it is a gap
+            yield c.section, rec
+
+
+def law_as_of(question: str, as_of) -> list[dict]:
+    """Per retrieved section, how far its wording on `as_of` is known. Same walk as `evidence`.
+
+    fidelity EXACT (all known), PARTIAL (`unknown` names the amendments whose earlier wording
+    the source does not give) or ABSTAIN (nothing shown: `note` says why). `rebuilt` is
+    True when at least one later amendment was rolled back to reach that date.
+    """
+    from checker.as_of import readable_as_of
+    from checker.amendment import parse_footnote
+    out, kept = [], 0
+    for number, rec in _retrieved(question):
+        if kept >= MAX_PROVISIONS:
+            break
+        r = readable_as_of(rec, as_of)
+        notes = {a.marker: a.raw for a in parse_footnote(rec.get("footnote") or "")}
+        if r.text and r.text.strip():
+            kept += 1
+        out.append({"provision": f"s.{number}", "fidelity": r.fidelity,
+                    "rebuilt": bool(r.not_yet_in_force),
+                    "unknown": [notes.get(m, f"amendment {m}") for m in r.unknown_spans],
+                    "note": r.note})
+    return out
 
 
 # ── the cascade (PLAN_23 layer 5, O3) ────────────────────────────────────────
@@ -264,7 +304,8 @@ def _tier_callable(sources, question, *, route0, model, available, budget, busy:
 
 
 def answer(question: str, *, model=None, available=None, budget=None,
-           stages=None, event_key: str | None = None, facts: dict | None = None) -> Outcome:
+           stages=None, event_key: str | None = None, facts: dict | None = None,
+           as_of=None) -> Outcome:
     """One question, to one of ANSWERED / PARTIAL / REFUSED, through the verified cascade.
 
     PLAN_23 O3: deterministic -> small -> large, escalating ONLY when L0 rejects. `model` is
@@ -282,7 +323,7 @@ def answer(question: str, *, model=None, available=None, budget=None,
                        scope.refusal_for(key) if key else
                        "this question is about a body of law that is not held")
 
-    ev = evidence(question)
+    ev = evidence(question, as_of=as_of)
     if not ev:
         return Outcome(REFUSED, question, NO_EVIDENCE,
                        "retrieval abstained: the question cited nothing this corpus "
