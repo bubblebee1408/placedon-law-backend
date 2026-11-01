@@ -124,6 +124,17 @@ BODY_TF_HALF = 2.0        # occurrences at which half the tf bonus is earned
 # 3 more junk provisions across rows that already leaked -- no new leaking row.
 MIN_COVER = 0.25
 SCORE_FLOOR = 0.45
+# Title-match ranking (2026-11-01). When EVERY content word of a section's official heading
+# is in the question, the heading is the question's subject and not an incidental match --
+# "notice period for a general meeting" covers all of "Notice of meeting" (s.101) but not
+# "Annual general meeting" (s.96), which used to win on shared words. The bonus is that
+# heading's share of the query's IDF mass, times this. A topic hint from
+# checker/topic_hints.json adds HINT_BONUS. Both REORDER only: the floors above are applied
+# to the score WITHOUT them, so neither can admit a section the search would have refused.
+# Measured on checker/section_eval.py; RANKING_HINTS=False reproduces the old ranking.
+TITLE_FULL_BONUS = 0.3
+HINT_BONUS = 0.5
+RANKING_HINTS = True
 SNIPPET_CHARS = 150
 
 # --------------------------------------------------------------------------------------------
@@ -135,7 +146,7 @@ SNIPPET_CHARS = 150
 # --------------------------------------------------------------------------------------------
 _STOP_ENGLISH = """
 a an the and or of to in for on by with as at from is are be been being was were am do does did
-can could will would should must not no nor it its this that these those there here what which
+can could will would should must not no nor it its often this that these those there here what which
 who whom whose when where why how if then than so but also only own same very have has had he she
 they them his her their i we you your my our me us about into out up down over under between
 each any all both few more most less least other another such some
@@ -330,8 +341,12 @@ def _score(rec: dict, terms: list[str], phrases: list[tuple[str, float]], qmass:
     score = (evidence / qmass
              + gain * TITLE_PHRASE_BONUS * title_phrase
              + BODY_PHRASE_BONUS * body_phrase)
+    title_terms = rec["title_mass_terms"]
+    full_title = bool(title_terms) and all(t in terms for t in title_terms)
+    title_bonus = TITLE_FULL_BONUS * _mass(title_terms) / qmass if full_title else 0.0
     cover = _mass(dict.fromkeys(title_hits + body_hits)) / qmass
-    return {"score": score, "cover": cover, "title_hits": title_hits,
+    return {"score": score, "title_bonus": title_bonus, "cover": cover,
+            "title_hits": title_hits,
             "body_hits": body_hits, "phrase": matched_phrase.strip()}
 
 
@@ -398,6 +413,31 @@ def _abbrev() -> tuple[tuple[str, str], ...]:
     return _ABBREV_CACHE
 
 
+_HINTS_PATH = Path(__file__).resolve().parent / "topic_hints.json"
+
+
+@lru_cache(maxsize=1)
+def _hints() -> dict:
+    """checker/topic_hints.json, patterns compiled. DRAFT pending Legal Lead approval."""
+    d = json.loads(_HINTS_PATH.read_text(encoding="utf-8"))
+    words = tuple((re.compile(w["pattern"], re.I), w["adds"]) for w in d["words"])
+    topics = tuple(
+        (tuple(re.compile(p, re.I) for p in t["all"]),
+         tuple(re.compile(p, re.I) for p in t.get("none", ())),
+         frozenset(t["sections"]))
+        for t in d["topics"])
+    return {"words": words, "topics": topics, "raw": d}
+
+
+def hinted_sections(query: str) -> frozenset[str]:
+    """Sections a topic hint points this question at (every `all` matches, no `none` does)."""
+    out: set[str] = set()
+    for need, never, sections in _hints()["topics"]:
+        if all(p.search(query) for p in need) and not any(p.search(query) for p in never):
+            out |= sections
+    return frozenset(out)
+
+
 def expand_query(query: str) -> tuple[str, tuple[tuple[str, str], ...]]:
     """(query with abbreviations expanded, what was expanded).
 
@@ -425,6 +465,14 @@ def expand_query(query: str) -> tuple[str, tuple[tuple[str, str], ...]]:
         if re.search(rf"(?<![A-Za-z]){re.escape(ab)}(?![A-Za-z])", out):
             out = f"{out} {exp}"
             used.append((ab, exp))
+    if RANKING_HINTS:
+        # Draft word hints (topic_hints.json), matched on the user's own words only and
+        # reported exactly like an abbreviation, so the reader can see what was added.
+        for pattern, adds in _hints()["words"]:
+            m = pattern.search(query)
+            if m:
+                out = f"{out} {adds}"
+                used.append((m.group(0), adds))
     return out, tuple(used)
 
 
@@ -454,12 +502,17 @@ def search(query: str, *, top_k: int = 5) -> list[dict]:
     if qmass <= 0:
         return []
     phrases = _phrases(tokens)
+    hinted = hinted_sections(query) if RANKING_HINTS else frozenset()
 
     ranked = []
     for rec in _records():
         scored = _score(rec, terms, phrases, qmass)
+        # Floors judge the plain score: the ranking bonuses below reorder, never admit.
         if scored["cover"] < MIN_COVER or scored["score"] < SCORE_FLOOR:
             continue
+        if RANKING_HINTS:
+            scored["score"] += scored.get("title_bonus", 0.0)   # absent from swapped-in scorers
+            scored["score"] += HINT_BONUS if rec["section_number"] in hinted else 0.0
         ranked.append((scored, rec))
     # Section number breaks ties only, so equally-scored sections come back in a stable order.
     ranked.sort(key=lambda pair: (-pair[0]["score"], pair[1]["section_number"]))

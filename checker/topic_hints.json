@@ -1,0 +1,42 @@
+{
+ "schema": "placedon.topic_hints/0",
+ "status": "DRAFT -- pending Legal Lead approval. Written by engineering from the section headings and text in corpus/companies_act on 2026-11-01. Not reviewed by a lawyer. These change which sections an answer cites; they never change what a section says.",
+ "note": "Two kinds of hint, both read by checker/text_search.py. `words`: a question word the Act's headings never use, and the heading word it means; the added word is shown to the reader exactly like an abbreviation expansion. `topics`: when every `all` pattern matches the question and no `none` pattern does, the listed sections are moved up the ranking. A topic hint only REORDERS what the search already found -- it never admits a section that did not clear the search's own floors, so it cannot turn silence into a guess. Patterns are case-insensitive regular expressions. Every section number here is asserted to exist in corpus/companies_act/_index.json by checker/text_search.py's self-test. Abbreviations (AGM, EGM, RPT, KMP ...) live in checker/abbrev.json, not here.",
+ "words": [
+  {"pattern": "\\bcsr\\b", "adds": "corporate social responsibility", "provision": "s.135",
+   "why": "s.135 heading is 'Corporate Social Responsibility'; CSR is not in abbrev.json"},
+  {"pattern": "\\bmeets?\\b", "adds": "meeting", "provision": "s.173",
+   "why": "'how often must the board meet' -- the headings say 'Meetings of Board'"},
+  {"pattern": "\\bresign(s|ed)?\\b", "adds": "resignation", "provision": "s.168",
+   "why": "s.168 heading is 'Resignation of director'"},
+  {"pattern": "\\bdisqualif(y|ies|ied)\\b", "adds": "disqualification", "provision": "s.164",
+   "why": "s.164 heading is 'Disqualifications for appointment of director'"}
+ ],
+ "topics": [
+  {"key": "independent_director", "all": ["\\bindependent directors?\\b"], "none": ["data ?bank"],
+   "sections": ["149"],
+   "why": "s.149(4)-(6) say how many independent directors a company needs and who may be one; s.150 (selection, data bank) only names the subject in its heading"},
+  {"key": "board_quorum", "all": ["\\bquorum\\b", "\\bboard\\b|\\bdirectors?\\b"],
+   "none": ["general meeting|\\bagm\\b|\\begm\\b|\\bmembers?\\b|\\bshareholders?\\b"],
+   "sections": ["174"],
+   "why": "s.174 'Quorum for meetings of Board'"},
+  {"key": "general_meeting_quorum",
+   "all": ["\\bquorum\\b", "general meeting|\\bagm\\b|\\begm\\b|\\bmembers?\\b|\\bshareholders?\\b"],
+   "none": ["\\bboard\\b|\\bdirectors?\\b"],
+   "sections": ["103"],
+   "why": "s.103 'Quorum for meetings' -- general meetings of members; an AGM question otherwise ranks s.96 on the expanded words"},
+  {"key": "general_meeting_notice",
+   "all": ["\\bnotice\\b", "general meeting|\\bagm\\b|\\begm\\b|shareholders'? meeting|members'? meeting"],
+   "none": ["\\bquorum\\b", "special notice"],
+   "sections": ["101"],
+   "why": "s.101 'Notice of meeting' -- the twenty-one days' notice of a general meeting"},
+  {"key": "board_meeting_frequency",
+   "all": ["\\bboard\\b", "\\bmeet", "how many|how often|frequen|\\bgap\\b|\\binterval\\b|minimum number|first (board )?meeting|in a (calendar |financial )?year|each year|every year|days between"],
+   "none": ["\\bquorum\\b"],
+   "sections": ["173"],
+   "why": "s.173(1): first Board meeting within thirty days, at least four a year, no more than one hundred and twenty days between two"},
+  {"key": "minutes", "all": ["\\bminutes\\b|minute[- ]books?"], "none": ["\\binspect", "\\bcop(y|ies)\\b"],
+   "sections": ["118"],
+   "why": "s.118 'Minutes of proceedings of general meeting, meeting of Board of Directors and other meeting ...' -- keeping and signing minutes; inspection and copies are s.119"}
+ ]
+}
