@@ -194,6 +194,20 @@ def _ledger():
         return None
 
 
+def _ledger_for(ctx: "Context"):
+    """`_ledger()` bound to the caller's firm and person, or None.
+
+    Every model call that starts at the gateway goes through this, so each hold, gate and
+    settlement is charged to `ctx.tenant` and capped by TENANT_MONTHLY_CAP_INR. A context
+    with no tenant gets a tracker that REFUSES to spend rather than one that spends
+    unattributed (see `BudgetTracker.attributed`). A test double without `attributed` is
+    passed through unchanged.
+    """
+    ledger = _ledger()
+    bind = getattr(ledger, "attributed", None)
+    return bind(ctx.tenant, ctx.actor) if callable(bind) else ledger
+
+
 def _provider_not_ready():
     """The typed access-pending exception (B1), imported lazily so verbs.py never pulls
     bedrock_model -- or boto3 -- in at module load; the keyless gate imports neither."""
@@ -293,7 +307,7 @@ def _served_or_refusal(origins, *, name: str, purpose: str, ctx: Context,
         return None, _refuse("NO_MODEL", f"No provider is declared for model task {name!r}. No call was made.")
     if allowed_providers is not None:
         declared = tuple(p for p in declared if p in allowed_providers)
-    budget = _ledger()
+    budget = _ledger_for(ctx)
     if budget is None:
         return None, _refuse("NO_BUDGET", "The spending guard is unavailable. No model call was made; retry after the budget store is restored.")
     try:
@@ -699,7 +713,7 @@ def _research_multi(args: dict, ctx: Context) -> dict:
     _worker = ms._held_researcher() if _held else (lambda _t: "")
     outcome = ms.research(question, as_of=as_of, worker=_worker,
                           verify=ms._byte_match_verify, merge=ms._code_merge,
-                          budget=_ledger(),
+                          budget=_ledger_for(ctx),
                           # This serving path still uses the deterministic held-corpus
                           # stand-in above; no provider call occurs. If it is replaced with
                           # a model worker, wire provider-reported usage here rather than
@@ -3719,7 +3733,7 @@ def _runs_preview(args: dict, ctx: Context) -> dict:
         return _refuse("BAD_REQUEST", "every worker must be an object with agent and task")
 
     plan = mp.MultiPlan(goal, workers)
-    ledger = _ledger()
+    ledger = _ledger_for(ctx)
     verdict = mp.validate(plan, budget=ledger)
 
     quoted = 0.0
@@ -4681,7 +4695,7 @@ def _review_table_create(args: dict, ctx: Context) -> dict:
                        f"separate run and a separate model call, so this is a bill and a "
                        f"queue depth, not just a big table. Narrow the documents or the "
                        f"columns, or raise the cap deliberately.")
-    ledger = _ledger()
+    ledger = _ledger_for(ctx)
     if ledger is None:
         return _refuse("NO_BUDGET", "budget ledger unavailable; no table was saved or cell enqueued")
     verdict = ledger.can_make_call()
@@ -5520,7 +5534,7 @@ def _review_grid_cell(args: dict, ctx: Context) -> dict:
             return
         settled["attempted"] = True
         try:
-            ledger = _ledger()
+            ledger = _ledger_for(ctx)
             if ledger is None:
                 raise SettlementFailed("budget ledger unavailable")
             verdict = ledger.settle(rid, actual_inr)
@@ -7521,7 +7535,7 @@ def _test() -> None:
 
     # ── READING, which nothing produced ────────────────────────────────────
     from gateway.jobs import MemoryQueue as _MQ
-    _qctx = Context(store=_MB(), queue=_MQ(), clock=lambda: "2026-10-01T00:00:00+00:00")
+    _qctx = Context(tenant="gate-firm", store=_MB(), queue=_MQ(), clock=lambda: "2026-10-01T00:00:00+00:00")
     _qu = by_name()["documents.upload"].run(
         {"text": "MINUTES OF THE BOARD MEETING.", "name": "minutes.pdf"}, _qctx)
     _qr = by_name()["conversation.send"].run(
@@ -8165,7 +8179,9 @@ def _test() -> None:
     # ══ H4: review_table.create / .status / .export ══════════════════════════
     from checker import review_grid as _rg
     from gateway.jobs import MemoryQueue as _MQ2
-    _hctx = Context(store=_MB(), queue=_MQ2(),
+    # A tenant, because review_table.create reserves each cell against the firm's cap and
+    # a context naming no firm is refused (backend/budget.py `attributed`).
+    _hctx = Context(tenant="gate-firm", store=_MB(), queue=_MQ2(),
                     clock=lambda: "2026-10-01T00:00:00+00:00")
     _hV = by_name()
     _d1 = _hV["documents.upload"].run(
@@ -8207,7 +8223,7 @@ def _test() -> None:
           "...and says why a big table is a bill and a queue depth, not just a big table")
     _before = len(_MQ2().__dict__.get("jobs", []) or [])
     _q3 = _MQ2()
-    _hctx3 = Context(store=_MB(), queue=_q3, clock=lambda: "2026-10-01T00:00:00+00:00")
+    _hctx3 = Context(tenant="gate-firm", store=_MB(), queue=_q3, clock=lambda: "2026-10-01T00:00:00+00:00")
     _hV["review_table.create"].run(
         {"name": "too big", "document_ids": [("%064x" % i) for i in range(101)],
          "columns": _cols * 3}, _hctx3)
@@ -8217,7 +8233,7 @@ def _test() -> None:
     check(MAX_GRID_CELLS == 500, f"the cap is a declared number ({MAX_GRID_CELLS})")
     _exact = _hV["review_table.create"].run(
         {"name": "at the cap", "document_ids": [("%064x" % i) for i in range(250)],
-         "columns": _cols}, Context(store=_MB(), queue=_MQ2(), documents={
+         "columns": _cols}, Context(tenant="gate-firm", store=_MB(), queue=_MQ2(), documents={
              ("%064x" % i): {"text": "synthetic"} for i in range(250)}))
     check(_exact.get("cells") == 500, f"a grid exactly AT the cap is allowed ({_exact.get('cells')})")
 
@@ -8231,11 +8247,11 @@ def _test() -> None:
                        ({"name": "n", "document_ids": [_d1],
                          "columns": [{"name": "c", "kind": "text", "question": ""}]},
                         "a column with no question")):
-        _r = _hV["review_table.create"].run(_bad, Context(store=_MB(), queue=_MQ2()))
+        _r = _hV["review_table.create"].run(_bad, Context(tenant="gate-firm", store=_MB(), queue=_MQ2()))
         check(_r.get("status") == "REFUSED", f"create refuses {_why} ({_r.get('code')})")
     check(_hV["review_table.create"].run(
               {"name": "n", "document_ids": [_d1], "columns": _cols},
-              Context())["code"] == "NO_STORE",
+              Context(tenant="gate-firm"))["code"] == "NO_STORE",
           "create with no store is refused: a review table is durable work")
 
     # ── status: PENDING is not a finding ────────────────────────────────────
@@ -8397,7 +8413,7 @@ def _test() -> None:
             return None
         return answer
 
-    _e2e = Context(store=_MB(), queue=_Q(), clock=lambda: "2026-10-01T10:00:00+05:30",
+    _e2e = Context(tenant="gate-firm", store=_MB(), queue=_Q(), clock=lambda: "2026-10-01T10:00:00+05:30",
                    model_for=_answerer)
     for _sha, _txt in _DOCS.items():
         _e2e.documents[_sha] = {"sha256": _sha, "name": f"{_sha[:4]}.txt",
@@ -8453,7 +8469,7 @@ def _test() -> None:
             return _parse_cell_reply("The agreement is governed by Indian law, clause 14.")
         return answer
 
-    _pctx = Context(store=_MB(), queue=_Q(), clock=lambda: "2026-10-01T10:00:00+05:30",
+    _pctx = Context(tenant="gate-firm", store=_MB(), queue=_Q(), clock=lambda: "2026-10-01T10:00:00+05:30",
                     model_for=_prose_model)
     _pd = list(_DOCS)[0]
     _pctx.documents[_pd] = {"sha256": _pd, "name": "p.txt", "text": _DOCS[_pd],
@@ -8545,7 +8561,7 @@ def _test() -> None:
           "...with findings and absences both legible")
 
     # A transport error is the ONLY way to FAILED.
-    _ft = Context(store=_MB(), queue=_Q(), clock=lambda: "2026-10-01T10:00:00+05:30",
+    _ft = Context(tenant="gate-firm", store=_MB(), queue=_Q(), clock=lambda: "2026-10-01T10:00:00+05:30",
                   documents={"a" * 64: {"text": "synthetic"}},  # 028: the caller's own upload
                   model_for=lambda _o: (lambda *_a: (_ for _ in ()).throw(
                       TimeoutError("the provider did not respond"))))
@@ -8565,7 +8581,7 @@ def _test() -> None:
           "...and it exports as COULD NOT RUN, never as NOT FOUND")
 
     # ══ cancel mid-run: nothing left running, no double execution ════════════
-    _cc = Context(store=_MB(), queue=_Q(), clock=lambda: "2026-10-01T10:00:00+05:30",
+    _cc = Context(tenant="gate-firm", store=_MB(), queue=_Q(), clock=lambda: "2026-10-01T10:00:00+05:30",
                   model_for=_answerer)
     _cc.documents.update(_e2e.documents)
     _cg = _eV["review_table.create"].run(
@@ -8856,7 +8872,7 @@ def _test() -> None:
                            for i in range(3)]
             # 1. PREVIEW
             _pv = _runs_preview({"goal": "answer in three parts",
-                                 "workers": _t5_workers}, Context())
+                                 "workers": _t5_workers}, Context(tenant="gate-firm"))
             check(_pv["would_run"] is True,
                   f"a preview of a sound plan says it would run ({_pv['would_run']})")
             check(_pv["agents"] == ["research_question"]
@@ -8914,7 +8930,7 @@ def _test() -> None:
     # ── a preview REFUSES as a product state, not as an error ───────────────
     _pv_bad = _runs_preview({"goal": "too many", "workers":
                              [{"agent": "research_question", "task": f"q{i}"}
-                              for i in range(_t5mp.MAX_WORKERS + 1)]}, Context())
+                              for i in range(_t5mp.MAX_WORKERS + 1)]}, Context(tenant="gate-firm"))
     check(_pv_bad["would_run"] is False
           and _pv_bad["refusal_code"] == _t5mp.TOO_MANY_WORKERS,
           f"a plan over the cap previews as `would_run: false` with the code, NOT as a 4xx "
@@ -8924,10 +8940,10 @@ def _test() -> None:
           f"...and quotes NO price, because a price for work that will not happen is a "
           f"number with no referent ({_pv_bad['quoted_inr']})")
     check(_runs_preview({"goal": "x", "workers": [{"agent": "nope", "task": "t"}]},
-                        Context())["refusal_code"] == _t5mp.UNKNOWN_AGENT,
+                        Context(tenant="gate-firm"))["refusal_code"] == _t5mp.UNKNOWN_AGENT,
           "an unregistered agent previews as UNKNOWN_AGENT")
     check(_runs_preview({"goal": "x", "workers": "not a list"},
-                        Context()).get("code") == "BAD_REQUEST",
+                        Context(tenant="gate-firm")).get("code") == "BAD_REQUEST",
           "a malformed `workers` is a BAD_REQUEST refusal, since there is no plan to preview")
     # ── move 8 (T3): document.verify, one line per check ────────────────────
     # The done-when: "a re-saved signed PDF reports MODIFIED. The overall result is COMPLETE
@@ -9450,7 +9466,7 @@ def _test() -> None:
     from checker.ss import defects as _ss2
 
     qstore, qq = _MB2(), _MQ()
-    qctx = Context(store=qstore, queue=qq)
+    qctx = Context(tenant="gate-firm", store=qstore, queue=qq)
     sub = _runs_submit({"intent": "review_document",
                         "args": {"text": _ss2.CLEAN, "meeting_date": "2026-05-12",
                                  "entry_date": "2026-06-30"}}, qctx)
@@ -9496,7 +9512,7 @@ def _test() -> None:
 
     # ── cancel: a request, honoured at a boundary ───────────────────────────
     cq, cs = _MQ(), _MB2()
-    cctx = Context(store=cs, queue=cq)
+    cctx = Context(tenant="gate-firm", store=cs, queue=cq)
     csub = _runs_submit({"intent": "review_document", "args": {"text": _ss2.CLEAN}}, cctx)
     crid = csub["run_id"]
     cancelled = _runs_cancel({"run_id": crid}, cctx)
@@ -9691,7 +9707,7 @@ def _test() -> None:
     _mtracker.record_call(max(0.0, _MDAILY - _mper * 2.5))
 
     from gateway.jobs import MemoryQueue as _MQ2
-    _mctx = Context(store=MemoryBackend(), queue=_MQ2(),
+    _mctx = Context(tenant="gate-firm", store=MemoryBackend(), queue=_MQ2(),
                     clock=lambda: "2026-10-05T00:00:00Z",
                     # 028: the caller's own uploads, so the hashes are theirs to read.
                     documents={h * 64: {"text": "synthetic"} for h in "abc"})
@@ -9747,7 +9763,7 @@ def _test() -> None:
           f"({_mstatus.get('table_state')})")
 
     # A table that did NOT pause says so, so the field is not simply always true.
-    _mctx2 = Context(store=MemoryBackend(), queue=_MQ2(),
+    _mctx2 = Context(tenant="gate-firm", store=MemoryBackend(), queue=_MQ2(),
                      documents={"d" * 64: {"text": "synthetic"}},  # 028: the caller's own upload
                      clock=lambda: "2026-10-05T00:00:00Z")
     _mfresh = _MBT(store=_MMem(), today=_mdate(2026, 10, 5))
@@ -9869,7 +9885,7 @@ def _test() -> None:
     # "Not dispatched because there is no worker" and "dispatched, waiting its turn" are
     # both PENDING, and the difference is the whole of whether anything will ever happen.
     # A silent PENDING is a table that looks busy and is not.
-    _d3_nq = Context(store=MemoryBackend(), clock=lambda: "2026-10-05T00:00:00Z",
+    _d3_nq = Context(tenant="gate-firm", store=MemoryBackend(), clock=lambda: "2026-10-05T00:00:00Z",
                      documents={"e" * 64: {"text": "synthetic"}})  # 028: own upload
     _d3_fresh = _MBT(store=_MMem(), today=_mdate(2026, 10, 5))
     _mreal2 = globals()["_ledger"]
@@ -9898,7 +9914,7 @@ def _test() -> None:
 
     # With a queue and no worker: dispatched, and nothing has claimed them.
     _d3_q = _MQ2()
-    _d3_wq = Context(store=MemoryBackend(), queue=_d3_q,
+    _d3_wq = Context(tenant="gate-firm", store=MemoryBackend(), queue=_d3_q,
                      documents={"f" * 64: {"text": "synthetic"}},  # 028: the caller's own upload
                      clock=lambda: "2026-10-05T00:00:00Z")
     _d3_fresh2 = _MBT(store=_MMem(), today=_mdate(2026, 10, 5))
@@ -9953,7 +9969,7 @@ def _test() -> None:
     with _d3tmp.TemporaryDirectory() as _d3dir:
         _d3_files = _D3LFS(_d3dir)
         _d3_store = MemoryBackend()
-        _d3_ctx = Context(store=_d3_store, queue=_MQ2(), files=_d3_files,
+        _d3_ctx = Context(tenant="gate-firm", store=_d3_store, queue=_MQ2(), files=_d3_files,
                           clock=lambda: "2026-10-05T00:00:00Z")
         _d3_up = _vault_upload({"name": "nda.txt",
                                 "text": "This Agreement is governed by the laws of India."},
@@ -9994,7 +10010,7 @@ def _test() -> None:
     # Found by following docs/guides/RUN_LOCALLY.md against live Postgres.
     _d4_store = MemoryBackend()
     with _d3tmp.TemporaryDirectory() as _d4dir:
-        _d4_ctx = Context(store=_d4_store, queue=_MQ2(), files=_D3LFS(_d4dir),
+        _d4_ctx = Context(tenant="gate-firm", store=_d4_store, queue=_MQ2(), files=_D3LFS(_d4dir),
                           clock=lambda: "2026-10-05T00:00:00Z")
         _d4_up = _vault_upload({"name": "a.txt", "text": "Governed by the laws of India."},
                                _d4_ctx)
@@ -10015,7 +10031,7 @@ def _test() -> None:
         # The Postgres transaction is proved by scripts/vault_upload_atomic_integration.py.
         _d4b_store = MemoryBackend()
         _d4b_full = _MQ2(max_pending=1)
-        _d4b_ctx = Context(store=_d4b_store, queue=_d4b_full, files=_D3LFS(_d4dir),
+        _d4b_ctx = Context(tenant="gate-firm", store=_d4b_store, queue=_d4b_full, files=_D3LFS(_d4dir),
                            clock=lambda: "2026-10-27T00:00:00Z")
         _vault_upload({"name": "first.txt", "text": "Clause 1. Governed by Indian law."},
                       _d4b_ctx)
@@ -10031,7 +10047,7 @@ def _test() -> None:
                 raise RuntimeError("queue unreachable")
         _d4b_store2 = MemoryBackend()
         _d4b_broken = _vault_upload({"name": "x.txt", "text": "Clause 3. Notice period."},
-                                    Context(store=_d4b_store2, queue=_D4bBroken(),
+                                    Context(tenant="gate-firm", store=_d4b_store2, queue=_D4bBroken(),
                                             files=_D3LFS(_d4dir),
                                             clock=lambda: "2026-10-27T00:00:00Z"))
         check(_d4b_broken.get("code") == "STORAGE_UNAVAILABLE"
@@ -10044,7 +10060,7 @@ def _test() -> None:
     from gateway.worker import run_one as _d4c_run_one
     with _d3tmp.TemporaryDirectory() as _d4cdir:
         _d4c_store, _d4c_q = MemoryBackend(), _MQ2()
-        _d4c_ctx = Context(store=_d4c_store, queue=_d4c_q, files=_D3LFS(_d4cdir),
+        _d4c_ctx = Context(tenant="gate-firm", store=_d4c_store, queue=_d4c_q, files=_D3LFS(_d4cdir),
                            clock=lambda: "2026-10-27T00:00:00Z")
         _d4c_text = "Clause 5. Notices shall be in writing."
         _d4c_up = _vault_upload({"name": "notice.txt", "text": _d4c_text}, _d4c_ctx)
@@ -10080,7 +10096,7 @@ def _test() -> None:
               f"retrying a document that has not failed is refused ({_d4c_r3.get('code')})")
 
     _d4_fresh = _MBT(store=_MMem(), today=_mdate(2026, 10, 5))
-    _d4_gctx = Context(store=MemoryBackend(), queue=_MQ2(),
+    _d4_gctx = Context(tenant="gate-firm", store=MemoryBackend(), queue=_MQ2(),
                        documents={"a1" * 32: {"text": "synthetic"}},  # 028: the caller's own upload
                        clock=lambda: "2026-10-05T00:00:00Z")
     _mreal3 = globals()["_ledger"]

@@ -29,6 +29,7 @@ class ReviewGridBudgetBoundaryTests(unittest.TestCase):
     def test_available_ledger_reaches_scheduler(self):
         from agents.review_grid import Scheduled
         ledger = Mock()
+        ledger.attributed.return_value = ledger  # the gateway binds the caller's firm
         ledger.can_make_call.return_value = SimpleNamespace(allowed=True)
         with patch('gateway.verbs._ledger', return_value=ledger), patch(
                 'agents.review_grid.schedule', return_value=Scheduled('grid')) as schedule:
@@ -36,6 +37,7 @@ class ReviewGridBudgetBoundaryTests(unittest.TestCase):
         self.assertIn('grid_id', result)
         self.store.write_grid.assert_called_once()
         self.assertIs(schedule.call_args.kwargs['budget'], ledger)
+        ledger.attributed.assert_called_once()
 
     def test_missing_settlement_ledger_withholds_cell(self):
         with patch('gateway.verbs._ledger', return_value=None):
@@ -47,6 +49,7 @@ class ReviewGridBudgetBoundaryTests(unittest.TestCase):
 
     def test_refused_settlement_is_not_retried_at_zero(self):
         ledger = Mock()
+        ledger.attributed.return_value = ledger  # the gateway binds the caller's firm
         ledger.settle.return_value = SimpleNamespace(allowed=False)
         with patch('gateway.verbs._ledger', return_value=ledger):
             result = _review_grid_cell(self.cell_args, self.ctx)
@@ -56,6 +59,7 @@ class ReviewGridBudgetBoundaryTests(unittest.TestCase):
 
     def test_settlement_exception_withholds_cell(self):
         ledger = Mock()
+        ledger.attributed.return_value = ledger  # the gateway binds the caller's firm
         ledger.settle.side_effect = OSError('ledger unavailable')
         with patch('gateway.verbs._ledger', return_value=ledger):
             result = _review_grid_cell(self.cell_args, self.ctx)
@@ -65,6 +69,7 @@ class ReviewGridBudgetBoundaryTests(unittest.TestCase):
 
     def test_successful_settlement_allows_publish(self):
         ledger = Mock()
+        ledger.attributed.return_value = ledger  # the gateway binds the caller's firm
         ledger.settle.return_value = SimpleNamespace(allowed=True)
         with patch('gateway.verbs._ledger', return_value=ledger):
             result = _review_grid_cell(self.cell_args, self.ctx)
@@ -75,6 +80,7 @@ class ReviewGridBudgetBoundaryTests(unittest.TestCase):
 
     def test_unknown_provider_usage_settles_full_hold(self):
         ledger = Mock()
+        ledger.attributed.return_value = ledger  # the gateway binds the caller's firm
         ledger.settle.return_value = SimpleNamespace(allowed=True)
         self.ctx.model_for = None
         def answerer(_ctx, debits):

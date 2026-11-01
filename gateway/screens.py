@@ -254,7 +254,7 @@ def _test() -> int:
     # ── result fields: checked by RUNNING the verb, not by a second list ────
     from gateway.verbs import Context
     from gateway.store import MemoryBackend
-    ctx = Context(store=MemoryBackend(), clock=lambda: "2026-10-02T10:00:00+05:30")
+    ctx = Context(tenant="gate-firm", store=MemoryBackend(), clock=lambda: "2026-10-02T10:00:00+05:30")
     doc = table["documents.upload"].run({"text": "Governed by the laws of India.",
                                          "name": "a.txt"}, ctx)
     did = doc["document_id"]
