@@ -153,6 +153,8 @@ class Backend(Protocol):
     def write_grid(self, grid: dict) -> dict: ...
     def read_grid(self, grid_id: str) -> dict | None: ...
     def read_grid_cells(self, grid_id: str) -> list[dict]: ...
+    def list_grids(self, *, limit: int, before_created_at: str | None = None,
+                   before_grid_id: str | None = None) -> list[dict]: ...
     def pause_grid(self, grid_id: str, *, reason: str, not_dispatched: int) -> bool:
         """Record that the budget paused this table. False when there is no such grid.
 
@@ -191,6 +193,32 @@ class Backend(Protocol):
                     before_draft_id: str | None = None) -> list[dict]: ...
     def append_draft_version(self, version: dict) -> int: ...
     def read_draft_versions(self, draft_id: str) -> list[dict]: ...
+
+
+def _now_iso() -> str:
+    from datetime import datetime, timezone
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _check_grid_page(limit: int, before_created_at, before_grid_id) -> None:
+    """The same refusals on both backends, so a bad page fails alike on each."""
+    if limit < 1 or limit > 51:
+        raise StoreError("review table list page size must be from 1 to 51")
+    if (before_created_at is None) != (before_grid_id is None):
+        raise StoreError("a review table cursor needs both created_at and grid_id")
+    if before_grid_id is not None and not _UUID.match(before_grid_id):
+        raise StoreError("a review table cursor has an invalid grid_id")
+
+
+def _grid_summary(g: dict, *, columns: int, documents: int, cells: int,
+                  pending: int) -> dict:
+    """One row of `list_grids`, identical in shape on both backends."""
+    return {"grid_id": g["grid_id"], "name": g.get("name") or "",
+            "created_at": g["created_at"], "cancelled_at": g.get("cancelled_at"),
+            "paused_budget": bool(g.get("paused_budget")),
+            "actor_id": g.get("actor_id"), "matter_id": g.get("matter_id"),
+            "columns": columns, "documents": documents, "cells": cells,
+            "pending": pending}
 
 
 # ── in memory ────────────────────────────────────────────────────────────────
@@ -674,6 +702,9 @@ class MemoryBackend:
                            "columns": [dict(c) for c in grid.get("columns") or ()],
                            "document_ids": list(grid.get("document_ids") or ()),
                            "cancelled_at": self.grids.get(gid, {}).get("cancelled_at"),
+                           # 011's DEFAULT now(), kept across a re-write as Postgres keeps it.
+                           "created_at": self.grids.get(gid, {}).get("created_at")
+                           or grid.get("created_at") or _now_iso(),
                            # 022's three columns, defaulted the way the migration defaults
                            # them: a grid nobody paused reads "never paused".
                            "paused_budget": self.grids.get(gid, {}).get(
@@ -703,6 +734,22 @@ class MemoryBackend:
 
     def read_grid_cells(self, grid_id: str) -> list[dict]:
         return [dict(r) for r in self.grid_cells.get(grid_id, {}).values()]
+
+    def list_grids(self, *, limit: int, before_created_at: str | None = None,
+                   before_grid_id: str | None = None) -> list[dict]:
+        """Newest first, metadata and counts only: no question text, no cell values."""
+        _check_grid_page(limit, before_created_at, before_grid_id)
+        rows = []
+        for gid, g in self.grids.items():
+            if before_created_at is not None and (g["created_at"], gid) >= (
+                    before_created_at, before_grid_id):
+                continue
+            cells = list(self.grid_cells.get(gid, {}).values())
+            rows.append(_grid_summary(g, columns=len(g["columns"]),
+                                      documents=len(g["document_ids"]), cells=len(cells),
+                                      pending=sum(c["state"] == "PENDING" for c in cells)))
+        return sorted(rows, key=lambda r: (r["created_at"], r["grid_id"]),
+                      reverse=True)[:limit]
 
     def pause_grid(self, grid_id: str, *, reason: str, not_dispatched: int) -> bool:
         """Record that the budget paused this table. False when there is no such grid.
@@ -2860,6 +2907,33 @@ class PostgresBackend:
                          "cost_note": r[9]}, GRID_CELL_KEYS)
                 for r in rows]
 
+    def list_grids(self, *, limit: int, before_created_at: str | None = None,
+                   before_grid_id: str | None = None) -> list[dict]:
+        _check_grid_page(limit, before_created_at, before_grid_id)
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT g.grid_id, g.name, g.created_at, g.cancelled_at, g.paused_budget, "
+                "g.actor_id, g.matter_id, "
+                "(SELECT count(*) FROM review_grid_columns k WHERE k.grid_id = g.grid_id), "
+                "x.documents, x.cells, x.pending "
+                "FROM review_grids g CROSS JOIN LATERAL ("
+                "  SELECT count(DISTINCT document_id) AS documents, count(*) AS cells, "
+                "  count(*) FILTER (WHERE state = 'PENDING') AS pending "
+                "  FROM review_grid_cells c WHERE c.grid_id = g.grid_id) x "
+                "WHERE (%s::timestamptz IS NULL OR (g.created_at, g.grid_id) < "
+                "(%s::timestamptz, %s::uuid)) "
+                "ORDER BY g.created_at DESC, g.grid_id DESC LIMIT %s",
+                (before_created_at, before_created_at, before_grid_id, limit)).fetchall()
+        return [_grid_summary(
+                    {"grid_id": str(r[0]), "name": r[1], "created_at": r[2].isoformat(),
+                     "cancelled_at": r[3].isoformat() if r[3] else None,
+                     "paused_budget": bool(r[4]),
+                     "actor_id": str(r[5]) if r[5] else None,
+                     "matter_id": str(r[6]) if r[6] else None},
+                    columns=int(r[7]), documents=int(r[8]), cells=int(r[9]),
+                    pending=int(r[10]))
+                for r in rows]
+
     def pause_grid(self, grid_id: str, *, reason: str, not_dispatched: int) -> bool:
         """Record that the budget paused this table. False when there is no such grid.
 
@@ -3727,6 +3801,40 @@ def conformance(backend) -> list[tuple[bool, str]]:
     ck(sorted(g["document_ids"]) == sorted([DOC_A, DOC_B]), "...and its documents")
     ck(backend.read_grid(str(_uuid.uuid4())) is None,
        "...and an unknown grid reads as None, not an empty one")
+    # review_table.list: the firm's tables, newest first, counts and no contents.
+    listed = [r for r in backend.list_grids(limit=51) if r["grid_id"] == gid]
+    ck(len(listed) == 1 and listed[0]["name"] == "NDA diligence"
+       and (listed[0]["columns"], listed[0]["documents"], listed[0]["cells"],
+            listed[0]["pending"]) == (2, 2, 4, 4)
+       and listed[0]["created_at"] and listed[0]["cancelled_at"] is None,
+       "list_grids names the grid with its column, document, cell and pending counts")
+    ck(set(listed[0] if listed else ()) == {
+           "grid_id", "name", "created_at", "cancelled_at", "paused_budget", "actor_id",
+           "matter_id", "columns", "documents", "cells", "pending"},
+       "...and carries no question text and no cell value, on either backend")
+    gid2 = str(_uuid.uuid4())
+    backend.write_grid({"grid_id": gid2, "name": "Lease review",
+                        "columns": [{"name": "rent", "kind": "amount",
+                                     "question": "What is the monthly rent?"}],
+                        "document_ids": [DOC_A]})
+    order = [r["grid_id"] for r in backend.list_grids(limit=51)
+             if r["grid_id"] in (gid, gid2)]
+    ck(order == [gid2, gid], "...newest first")
+    first = backend.list_grids(limit=1)
+    ck(len(first) == 1 and first[0]["grid_id"] == gid2, "...and a page stops at its limit")
+    after = backend.list_grids(limit=51, before_created_at=first[0]["created_at"],
+                               before_grid_id=gid2)
+    ck(gid2 not in {r["grid_id"] for r in after} and gid in {r["grid_id"] for r in after},
+       "...and the cursor continues strictly after the last row it returned")
+    for bad in ({"limit": 0}, {"limit": 52},
+                {"limit": 5, "before_created_at": "2026-01-01T00:00:00+00:00"},
+                {"limit": 5, "before_created_at": "2026-01-01T00:00:00+00:00",
+                 "before_grid_id": "nope"}):
+        try:
+            backend.list_grids(**bad)
+            ck(False, f"list_grids refuses {bad}")
+        except StoreError:
+            ck(True, f"list_grids refuses {bad} on both backends alike")
     cells = backend.read_grid_cells(gid)
     ck(len(cells) == 4 and {c["state"] for c in cells} == {"PENDING"},
        f"creating a grid materialises every cell as PENDING ({len(cells)}) -- a missing "
@@ -4473,7 +4581,7 @@ def _test() -> None:
             "write_decision", "read_decisions", "write_cascade", "read_cascades",
             "write_conversation", "read_conversation", "list_conversations",
             "append_message", "read_messages", "set_message_envelope", "next_ordinal",
-            "write_grid", "read_grid", "read_grid_cells", "write_grid_cell",
+            "write_grid", "read_grid", "read_grid_cells", "list_grids", "write_grid_cell",
             "cancel_grid", "write_draft", "read_draft", "list_drafts", "append_draft_version",
             "read_draft_versions", "write_cache_entry", "read_cache_entry",
             "bump_cache_stat", "read_cache_stats", "read_failure_counts",
