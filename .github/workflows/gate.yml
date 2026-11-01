@@ -59,6 +59,7 @@ jobs:
           set -euo pipefail
           for s in scripts/vault_upload_atomic_integration.py \
                    scripts/vault_failed_retry_integration.py \
+                   scripts/vault_ingest_authz_integration.py \
                    scripts/conversation_persist_integration.py \
                    scripts/review_table_list_integration.py \
                    scripts/company_profile_integration.py; do
