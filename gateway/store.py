@@ -98,6 +98,9 @@ class Backend(Protocol):
     def revoke_session(self, token_hash: str) -> bool: ...
     def append_step(self, run_id: str, step: dict, *, key: str) -> bool: ...
     def set_run(self, run_id: str, *, status: str, refusal_code=None, result=None) -> None: ...
+    # 031: live progress of a RUNNING run, display only (gateway/progress.py).
+    def set_run_progress(self, run_id: str, progress: dict) -> None: ...
+    def read_run_progress(self, run_id: str) -> dict | None: ...
     def read_failure_counts(self) -> list[dict]: ...
     def write_cascade(self, record: dict, *, run_id: str | None = None) -> dict: ...
     def read_cascades(self, *, run_id: str | None = None, limit: int = 1000) -> list[dict]: ...
@@ -1461,6 +1464,15 @@ class MemoryBackend:
                                result if result is not None else row.get("result"))
         row["failure_category"], row["failure_reason"] = cat, why
 
+    def set_run_progress(self, run_id: str, progress: dict) -> None:
+        row = self.runs.get(run_id)
+        if row is not None and row.get("status") == "RUNNING":
+            row["progress"] = dict(progress)
+
+    def read_run_progress(self, run_id: str) -> dict | None:
+        row = self.runs.get(run_id)
+        return dict(row["progress"]) if row and row.get("progress") else None
+
     # ── 8a: users, roles and invites ─────────────────────────────────────────
     def write_actor(self, actor: dict) -> dict:
         """Create or update a user. 018's CHECKs restated, so the dict refuses what
@@ -1865,6 +1877,27 @@ class PostgresBackend:
                 (status, refusal_code,
                  None if result is None else _json.dumps(result), cat, why,
                  status in ("ANSWERED", "PARTIAL", "REFUSED", "FAILED"), run_id))
+
+    # 031. Only while RUNNING: a late write must not decorate a finished run. Both go
+    # through the session's own RLS, like every other runs read and write here.
+    def set_run_progress(self, run_id: str, progress: dict) -> None:
+        import json as _json
+        with self._conn() as c:
+            c.execute("UPDATE runs SET progress = %s::jsonb "
+                      "WHERE run_id = %s AND status = 'RUNNING'",
+                      (_json.dumps(progress), run_id))
+
+    def read_run_progress(self, run_id: str) -> dict | None:
+        import psycopg
+        if not _UUID.match(run_id or ""):
+            return None
+        try:
+            with self._conn() as c:
+                r = c.execute("SELECT progress FROM runs WHERE run_id = %s",
+                              (run_id,)).fetchone()
+        except psycopg.errors.UndefinedColumn:
+            return None   # 031 not applied yet: no progress, the turn still shows waiting
+        return r[0] if r and r[0] else None
 
     # ── 8a: users, roles and invites ─────────────────────────────────────────
     def write_actor(self, actor: dict) -> dict:
