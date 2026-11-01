@@ -126,11 +126,26 @@ def section_number(source_id: str) -> str:
 
 
 def unaddressed(question: str, cited: set[str] | frozenset[str]) -> tuple[Topic, ...]:
-    """Matched topics none of whose sections is among `cited` (bare section numbers)."""
+    """Matched topics the answer's ACTUAL citations (bare section numbers) do not address.
+
+    Only cited sections are evidence; a section the question names but the answer does not
+    cite counts for nothing. A named section changes which citations count:
+      * the question names a section IN the topic's set ("board quorum? compare s.174 and
+        s.96") -- the user anchored the topic there, so that set must be cited; citing only
+        the other named section (s.96) does not address it;
+      * the question names sections outside the set ("the CSR disclosure in s.134") -- a
+        citation of one of those named sections counts as on topic, even though the map
+        files CSR under s.135.
+    """
     from checker.legal_retrieval import resolve
     named = {h.ref.number for h in resolve(question or "")}
-    on_point = set(cited) | named
-    return tuple(t for t in matched(question) if not (t.sections & on_point))
+    cited = set(cited)
+    out = []
+    for t in matched(question):
+        on_point = t.sections if (named & t.sections) else (t.sections | named)
+        if not (cited & on_point):
+            out.append(t)
+    return tuple(out)
 
 
 def reason(topics: tuple[Topic, ...]) -> str:
@@ -162,7 +177,21 @@ def _test() -> None:
     check(unaddressed("Who signs the share certificate?", {"96"}) == (),
           "a question matching no topic is never gated")
     check(unaddressed("What is the quorum under section 96?", {"96"}) == (),
-          "a section the user names explicitly counts as on point")
+          "a section the user names explicitly, AND the answer cites, counts as on point")
+    QC = "What is the quorum for a board meeting? Compare section 174 and section 96."
+    check([t.key for t in unaddressed(QC, {"96"})] == ["board_quorum"],
+          "board quorum naming s.174 and s.96, answered only from s.96 -> unaddressed: a "
+          "named-but-uncited s.174 is not evidence")
+    check(unaddressed(QC, {"174"}) == () and unaddressed(QC, {"174", "96"}) == (),
+          "...and answered from s.174 it is addressed")
+    QS = "Give me the exact CSR disclosure quote from section 134."
+    check(unaddressed(QS, {"134"}) == (),
+          "CSR question that explicitly asks for s.134, answered from s.134 -> on point")
+    check([t.key for t in unaddressed(QS, {"96"})] == ["csr"],
+          "...but answered from s.96 it is not")
+    check([t.key for t in unaddressed("What is the quorum for a board meeting under "
+                                      "section 96?", set())] == ["board_quorum"],
+          "a named section the answer does not cite counts for nothing")
     check([t.key for t in matched("What is the quorum for an AGM?")] == ["gm_quorum"],
           "AGM quorum -> s.103 topic, not board quorum")
     check(matched("Quorum for board meetings and for the AGM?") == (),

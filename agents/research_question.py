@@ -629,6 +629,19 @@ def _test() -> None:
     o_on = answer(qq, model=quoting("Companies Act 2013, s.174"), available=("gemini",))
     check(o_on.status == ANSWERED and o_on.unaddressed == (),
           f"...the same question answered from s.174 is unchanged ({o_on.status})")
+    # Review finding: naming a section must not stand in for citing it.
+    qc = "What is the quorum for a board meeting? Compare section 174 and section 96."
+    qsrcs = {s.source_id: s for s, _ in evidence(qc)}
+    o_nm = answer(qc, model=quoting("Companies Act 2013, s.96"), available=("gemini",))
+    check(o_nm.status == PARTIAL and o_nm.unaddressed == ("board meeting quorum",),
+          f"board quorum naming s.174 and s.96, answered only from s.96, is PARTIAL -- the "
+          f"named-but-uncited s.174 is not evidence ({o_nm.status})")
+    qs = "Give me the exact CSR disclosure quote from section 134."
+    qsrcs = {s.source_id: s for s, _ in evidence(qs)}
+    o_134 = answer(qs, model=quoting("Companies Act 2013, s.134"), available=("gemini",))
+    check(o_134.status == ANSWERED and o_134.unaddressed == (),
+          f"a CSR question explicitly asking for s.134, answered from s.134, is ANSWERED "
+          f"({o_134.status})")
     # ── the cascade: deterministic -> small -> large (PLAN_23 O3) ───────────
     good = " ".join(srcs[0].text.split())[:150]
     honest_text = (f"{quoted_span.SENTENCE_TAG} {good}\n"
