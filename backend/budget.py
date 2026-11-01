@@ -531,6 +531,26 @@ class Reservation:
         return self.verdict.allowed
 
 
+# Context defaults ("unknown") and the empty tenant of a public verb are not identities.
+_UNATTRIBUTED = frozenset({"", "unknown"})
+
+
+def _who(value: str | None) -> str | None:
+    """A tenant/user id, or None when the value names nobody."""
+    if value is None:
+        return None
+    value = str(value).strip()
+    return None if value in _UNATTRIBUTED else value
+
+
+def _scoped_reserved(s: dict, field: str, who: str) -> float:
+    """Outstanding holds charged to one tenant or user, so concurrent calls cannot each pass
+    a scoped cap that has seen none of the others -- the same reason the global gate counts
+    `_reserved_total`."""
+    return sum(amount for rid, amount in s["reservations"].items()
+               if s["reservation_calls"].get(rid, {}).get(field) == who)
+
+
 def _reserved_total(reservations: Mapping[str, float]) -> float:
     return round(sum(reservations.values()), 4)
 
@@ -612,7 +632,9 @@ class FileStore:
 
 
 class BudgetTracker:
-    def __init__(self, store: Store | None = None, *, today: date | None = None) -> None:
+    def __init__(self, store: Store | None = None, *, today: date | None = None,
+                 tenant_id: str | None = None, user_id: str | None = None,
+                 require_tenant: bool = False) -> None:
         # `store or FileStore()` swapped any FALSY store for the default file. A store
         # that defines __len__ and happens to be empty is falsy, which is ordinary for a
         # dict- or UserDict-backed one -- and in the serverless deployment this module's
@@ -621,6 +643,22 @@ class BudgetTracker:
         # direction, with no sound. Identity, not truthiness.
         self.store = store if store is not None else FileStore()
         self._today = today or date.today()
+        # Default attribution for every gate, hold, settlement and record on this tracker.
+        # An unbound tracker (the default) is the OPERATOR path: offline scripts, evals and
+        # the CLI spend against the global caps only, exactly as before. The gateway never
+        # uses one: it calls `attributed()`, which also sets `require_tenant`, so a model
+        # call that reaches the ledger without a firm is refused rather than charged to
+        # nobody -- an unattributed call is invisible to TENANT_MONTHLY_CAP_INR.
+        self._tenant_id = _who(tenant_id)
+        self._user_id = _who(user_id)
+        self._require_tenant = require_tenant
+
+    def attributed(self, tenant_id: str | None, user_id: str | None = None) -> "BudgetTracker":
+        """A tracker on the SAME store that charges every call to this tenant (and user) and
+        refuses any gate or hold when the tenant is missing. A new object, not a mutation:
+        the unbound tracker the caller holds keeps its operator semantics."""
+        return BudgetTracker(self.store, today=self._today, tenant_id=tenant_id,
+                             user_id=user_id, require_tenant=True)
 
     # ── state ────────────────────────────────────────────────────────────
     def _normalise(self, raw: dict) -> dict:
@@ -656,10 +694,12 @@ class BudgetTracker:
                 except (TypeError, ValueError, OverflowError):
                     count = 1
                 model = info.get("model") if isinstance(info, dict) else None
-                reservation_calls[str(rid)] = {
-                    "count": count,
-                    "model": str(model) if model is not None else None,
-                }
+                entry = {"count": count, "model": str(model) if model is not None else None}
+                for scope in ("tenant", "user"):
+                    who = info.get(scope) if isinstance(info, dict) else None
+                    if who is not None:
+                        entry[scope] = str(who)
+                reservation_calls[str(rid)] = entry
         return {
             "corrupt": False,
             "day": day_key,
@@ -884,6 +924,13 @@ class BudgetTracker:
         if estimated_inr is None:
             estimated_inr = (typical_call_inr(model) if input_tokens is None else
                              cost_inr(model, input_tokens, output_tokens))
+        tenant_id = _who(tenant_id) or self._tenant_id
+        user_id = _who(user_id) or self._user_id
+        if self._require_tenant and tenant_id is None:
+            return Verdict(False, "budget",
+                           "no firm is attached to this model call, so it cannot be charged "
+                           "against a firm's monthly share; refused rather than spent "
+                           "unattributed", 0.0, 0.0)
 
         # `reserve()` supplies the state read inside its atomic transaction. Public callers
         # omit this and get a normal point-in-time estimate, never an admission guarantee.
@@ -922,10 +969,11 @@ class BudgetTracker:
         # P2. Scoped caps, AFTER the global ones: if the global cap is exhausted no tenant
         # can spend anyway, so reporting a tenant cap first would name the smaller problem.
         # Each is skipped when the caller does not say who is spending -- an unattributed
-        # call is checked against the global caps alone, which is what every existing caller
-        # does today and is wrong only in the direction of the old behaviour.
+        # call is checked against the global caps alone. That is the operator path only:
+        # the gateway's tracker is `attributed()` and refuses an unattributed call above.
         if tenant_id is not None:
-            used = s["tenant_month_inr"].get(tenant_id, 0.0)
+            used = (s["tenant_month_inr"].get(tenant_id, 0.0)
+                    + _scoped_reserved(s, "tenant", tenant_id))
             if used + estimated_inr > TENANT_MONTHLY_CAP_INR:
                 return Verdict(False, "budget",
                                f"tenant {tenant_id} has used ₹{used:.2f} of its "
@@ -935,7 +983,8 @@ class BudgetTracker:
                                s["day_inr"], s["month_inr"], reserved)
 
         if user_id is not None:
-            used = s["user_day_inr"].get(user_id, 0.0)
+            used = (s["user_day_inr"].get(user_id, 0.0)
+                    + _scoped_reserved(s, "user", user_id))
             if used + estimated_inr > USER_DAILY_CAP_INR:
                 return Verdict(False, "budget",
                                f"user {user_id} has used ₹{used:.2f} of their "
@@ -996,6 +1045,10 @@ class BudgetTracker:
             raise ValueError(f"actual cost must be >= 0, got {actual_inr}")
         if self._state()["corrupt"]:
             return self._unrecordable(actual_inr)
+        # Never refused for want of a tenant: this money is already spent, and dropping the
+        # record would hide it from every cap.
+        tenant_id = _who(tenant_id) or self._tenant_id
+        user_id = _who(user_id) or self._user_id
 
         def _by_model(st: dict) -> dict:
             if model is None:
@@ -1151,7 +1204,8 @@ class BudgetTracker:
                 cache_ttl: str = DEFAULT_CACHE_TTL, batch: bool = False,
                 reservation_id: str | None = None, request_count: int = 1,
                 per_model_cap: int | None = None,
-                amount_inr: float | None = None) -> Reservation:
+                amount_inr: float | None = None,
+                tenant_id: str | None = None, user_id: str | None = None) -> Reservation:
         """Hold the worst-case cost of one call against the caps before making it.
 
         A refused reservation writes NOTHING: a gate that charged for the calls it turned
@@ -1177,6 +1231,14 @@ class BudgetTracker:
             cache_read_input_tokens=cache_read_input_tokens,
             cache_ttl=cache_ttl, batch=batch)
         rid = reservation_id or uuid.uuid4().hex[:12]
+        tenant_id = _who(tenant_id) or self._tenant_id
+        user_id = _who(user_id) or self._user_id
+        # Carried on the hold so `settle()` charges the same tenant/user the gate checked.
+        call_info: dict = {"count": request_count, "model": model}
+        if tenant_id is not None:
+            call_info["tenant"] = tenant_id
+        if user_id is not None:
+            call_info["user"] = user_id
         if not isinstance(self.store, AtomicStore):
             state = self._state()
             return Reservation(None, worst, Verdict(
@@ -1189,6 +1251,7 @@ class BudgetTracker:
         def reserve_if_affordable(raw: dict) -> dict:
             state = self._normalise(raw)
             verdict = self.can_make_call(worst, model=model, per_model_cap=per_model_cap,
+                                         tenant_id=tenant_id, user_id=user_id,
                                          _snapshot=state, _additional_requests=request_count)
             result["verdict"] = verdict
             if not verdict.allowed:
@@ -1200,8 +1263,7 @@ class BudgetTracker:
             return self._row(
                 state,
                 reservations={**state["reservations"], rid: worst},
-                reservation_calls={**state["reservation_calls"], rid: {
-                    "count": request_count, "model": model}})
+                reservation_calls={**state["reservation_calls"], rid: call_info})
 
         try:
             self.store.update(reserve_if_affordable)
@@ -1268,6 +1330,14 @@ class BudgetTracker:
                 reservation_id, {"count": 1, "model": None})
             count = call_info["count"] if actual_calls is None else actual_calls
             model = call_info["model"]
+            tenant = call_info.get("tenant") or self._tenant_id
+            user = call_info.get("user") or self._user_id
+            tenant_month = dict(state["tenant_month_inr"])
+            if tenant is not None:
+                tenant_month[tenant] = round(tenant_month.get(tenant, 0.0) + amount, 4)
+            user_day = dict(state["user_day_inr"])
+            if user is not None:
+                user_day[user] = round(user_day.get(user, 0.0) + amount, 4)
             by_model = dict(state["calls_by_model"])
             if model is not None and count:
                 by_model[model] = by_model.get(model, 0) + count
@@ -1283,6 +1353,8 @@ class BudgetTracker:
                 month_held_inr=round(state["month_held_inr"] + (amount if held_basis else 0.0), 4),
                 calls_today=state["calls_today"] + count,
                 calls_by_model=by_model,
+                tenant_month_inr=tenant_month,
+                user_day_inr=user_day,
                 reservations={k: v for k, v in state["reservations"].items()
                               if k != reservation_id},
                 reservation_claims={k: v for k, v in state["reservation_claims"].items()
@@ -2268,6 +2340,46 @@ if __name__ == "__main__":
     check("  ...and its recorder attributes to the SAME tenant, so the pair cannot drift",
           t.usage(tenant_id="firm-a")["tenant"]["month_inr"], 5.0)
     check("  ...and the same user", t.usage(user_id="u1")["user"]["day_inr"], 5.0)
+
+    # ── attributed(): the gateway's tracker charges and caps every hold per tenant ──
+    # The audit finding: reserve() could not take a tenant and no gateway caller passed
+    # one, so TENANT_MONTHLY_CAP_INR never bound and one firm could drain the month.
+    store = Mem()
+    day = fill_tenant(store, "firm-a", TENANT_MONTHLY_CAP_INR - 0.5)
+    base = BudgetTracker(store=store, today=day)
+    res_a = base.attributed("firm-a", "u1").reserve(input_tokens=0, max_tokens=0,
+                                                    amount_inr=1.0)
+    check("an attributed reserve() for a tenant at its cap is REFUSED", res_a.id, None)
+    check("  ...naming the tenant's cap", "monthly cap" in res_a.verdict.reason, True)
+    res_b = base.attributed("firm-b", "u2").reserve(input_tokens=0, max_tokens=0,
+                                                    amount_inr=1.0)
+    check("  ...while tenant B on the SAME ledger still reserves", res_b.id is not None, True)
+    check("  ...and its hold carries the tenant",
+          base._state()["reservation_calls"][res_b.id].get("tenant"), "firm-b")
+    base.attributed("firm-b").settle(res_b.id, 2.0)
+    check("  ...and settling charges tenant B's bucket from the hold",
+          base.usage(tenant_id="firm-b")["tenant"]["month_inr"], 2.0)
+    check("  ...and the user's day too", base.usage(user_id="u2")["user"]["day_inr"], 2.0)
+
+    for who in (None, "", "unknown"):
+        bound = tracker().attributed(who)
+        check(f"an attributed tracker with no tenant ({who!r}) refuses the gate",
+              bound.can_make_call(0.0).allowed, False)
+        check("  ...and refuses the hold, writing nothing",
+              bound.reserve(input_tokens=10, max_tokens=10).id, None)
+    check("an UNBOUND tracker (operator scripts) still reserves unattributed",
+          tracker().reserve(input_tokens=10, max_tokens=10).id is not None, True)
+
+    # Outstanding holds count against the tenant, or N concurrent holds each pass a cap
+    # that has seen none of the others.
+    store = Mem()
+    day = fill_tenant(store, "firm-c", TENANT_MONTHLY_CAP_INR - 10)
+    held = BudgetTracker(store=store, today=day).attributed("firm-c")
+    first = held.reserve(input_tokens=0, max_tokens=0, amount_inr=6.0)
+    check("a tenant's hold near its cap is admitted", first.id is not None, True)
+    second = held.reserve(input_tokens=0, max_tokens=0, amount_inr=6.0)
+    check("  ...and a second hold that would breach it is refused before settlement",
+          second.id, None)
 
     print(f"\n{total - failures}/{total} passed")
     raise SystemExit(1 if failures else 0)
