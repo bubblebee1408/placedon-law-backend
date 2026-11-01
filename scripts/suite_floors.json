@@ -212,6 +212,7 @@
     "checker/sarvam_model.py": 140,
     "checker/scope.py": 20,
     "checker/scoped_retraction.py": 26,
+    "checker/section_eval.py": 21,
     "checker/section_index.py": 26,
     "checker/session.py": 17,
     "checker/shadow.py": 18,
