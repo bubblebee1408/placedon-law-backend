@@ -102,6 +102,21 @@ class CompanyProfile(unittest.TestCase):
         q = {"question": "What is the quorum for a board meeting?", "sources": ["vault"]}
         self.assertNotIn("user_facts", V["ask"].run(q, self.ctx))
 
+    def test_conversation_event_turn_keeps_the_profile_attribution(self):
+        # Codex on #149 (P2): the stored fact that added SEBI bodies must ride the turn.
+        self.save([LISTED])
+        out = V["conversation.send"].run(
+            {"text": "We are allotting shares next week.", "event": "share_allotment"},
+            self.ctx)
+        self.assertIn("SEBI_LODR", [b["body_id"] for b in out["envelope"]["bodies"]])
+        for where in (out["company_facts"], out["metadata"]["company_facts"]):
+            self.assertEqual(where["from"], "company_profile")
+            self.assertEqual([f["field"] for f in where["used"]], ["listed"])
+            self.assertEqual(where["overridden_by_request"], [])
+        saved = V["conversation.get"].run({"conversation_id": out["conversation_id"]}, self.ctx)
+        reply = [m for m in saved["messages"] if m["message_id"] == out["message_id"]][0]
+        self.assertEqual(reply["metadata"]["company_facts"]["from"], "company_profile")
+
     def test_ask_shows_the_profile_without_caching_it(self):
         q = {"question": "What is the quorum for a board meeting?", "sources": ["vault"]}
         self.assertNotIn("user_facts", V["ask"].run(q, self.ctx))

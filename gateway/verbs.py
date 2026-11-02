@@ -2731,8 +2731,10 @@ def _turn_metadata(metadata: dict, result: dict) -> dict:
     out = dict(metadata)
     if isinstance(result.get("sources"), dict):
         out["sources"] = result["sources"]
+    # company_facts: which stored or sent facts an EVENT_ASSESS turn used, so the saved
+    # message still says why a body (e.g. SEBI for a listed firm) was engaged.
     for key in ("document_summary", "document_evidence", "document_summary_unavailable",
-                "law_as_of"):
+                "law_as_of", "company_facts"):
         if isinstance(result.get(key), dict):
             out[key] = result[key]
     if isinstance(result.get("document_summary"), dict):
@@ -2760,6 +2762,8 @@ def _turn_response(message: dict) -> dict:
         out["document_evidence"] = metadata["document_evidence"]
     if metadata.get("document_summary"):
         out["document_summary"] = metadata["document_summary"]
+    if metadata.get("company_facts"):
+        out["company_facts"] = metadata["company_facts"]
     if metadata.get("document_summary_pending"):
         out["note"] = "Preparing a structured summary from the selected documents."
     for artifact in metadata.get("artifacts") or []:
@@ -3273,6 +3277,8 @@ def _dispatch_conversation(args, ctx, *, cid, text, raw_ids, as_of, task, classi
     # not part of the legal answer, and it matches the shape the `ask` verb already returns.
     if result.get("sources"):
         out["sources"] = result["sources"]
+    if metadata.get("company_facts"):
+        out["company_facts"] = metadata["company_facts"]
     # The refusal/failure code rides the RESPONSE, a sibling of the versioned envelope (which
     # has no field for it) -- so a client can tell NO_MODEL / NOTHING_TRACED / NO_EVIDENCE
     # apart machine-readably without re-deriving it from prose. Same shape as `sources`.
