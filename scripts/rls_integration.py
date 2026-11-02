@@ -299,7 +299,22 @@ LAST_RUN: str | None = (
     "the same 2 fail), they are the conformance list asserting the inbox holds EXACTLY ONE "
     "draft while this script's own seed puts a draft in the same tenant -- the empty-table "
     "fault the cache statistics had. They now measure only the draft they wrote. The STORE "
-    "was right throughout; the script was not edited, the conformance check was.")
+    "was right throughout; the script was not edited, the conformance check was. "
+    "2026-11-02, 030-033: 001-033 applied TOGETHER to a fresh throwaway database "
+    "(placedon_throwaway_rls033) on PostgreSQL 18.6 (Postgres.app, its own temporary "
+    "cluster on localhost:55433, not the shared server), asserted as placedon_app "
+    "(NOSUPERUSER, NOBYPASSRLS): 419 checks, 0 failures, exit 0. On main before this change "
+    "the run CRASHED: the list stopped at 029, and the store now writes 030's "
+    "vault_documents.failure_reason, so the conformance list raised UndefinedColumn. "
+    "`company_profile_facts` (032) is the TWENTY-SEVENTH tenant-scoped table, proved the way "
+    "the rest are, plus writes: tenant A's supersede of B's fact touches 0 rows and its "
+    "INSERT into B's profile is refused by row-level security whether it names its own "
+    "person or B's. 031's runs.progress: A reads none of B's and its UPDATE touches 0 rows. "
+    "033: the second sign-in account this section used to seed for the cross-tenant "
+    "ambiguity is now REFUSED by actors_login_email_global_idx -- as placedon_app from "
+    "inside tenant A, where B's row is invisible, and in other letter case -- so "
+    "auth_find_login returns ONE row where it returned two; an actor with no password "
+    "is still allowed.")
 
 TENANT_TABLES = ("actors", "api_keys", "documents", "audit_log",
                  "runs", "run_steps", "propositions", "decisions", "jobs",
@@ -338,7 +353,11 @@ TENANT_TABLES = ("actors", "api_keys", "documents", "audit_log",
                  # DEFINER function is not a row this loop's SELECTs would ever reach.
                  # The leak this loop guards against would be another firm's live
                  # sign-in sessions becoming readable by an ordinary query.
-                 "sessions")
+                 "sessions",
+                 # 032: the company profile. The leak would be another firm's own company
+                 # facts -- its CIN, its registered office, whether it is listed -- and
+                 # which of its people confirmed them.
+                 "company_profile_facts")
 
 
 class RlsFailure(AssertionError):
@@ -466,6 +485,15 @@ def _seed(cur, tenant, actor, tag: str) -> None:
                 "VALUES (%s,%s,%s,'review_contract','ANSWERED')", (rid, tenant, actor))
     cur.execute("INSERT INTO run_steps (run_id, ordinal, tenant_id, capability, status) "
                 "VALUES (%s,0,%s,'intake','ANSWERED')", (rid, tenant))
+    # 031: live progress on the run. The leak would be which step another firm's
+    # question is on; proved in the 031-033 section below.
+    cur.execute("UPDATE runs SET progress = %s::jsonb WHERE run_id = %s",
+                (json.dumps({"current": f"{tag}-step", "done": ["intake"]}), rid))
+    # 032: one confirmed company fact, typed by this tenant's own person.
+    cur.execute("INSERT INTO company_profile_facts (fact_id, tenant_id, field, value, "
+                "basis, source_label, confirmed_by, reason) "
+                "VALUES (%s,%s,'name',%s,'USER_FACT','typed by the user',%s,'seed')",
+                (uuid.uuid4(), tenant, f"{tag} private limited", actor))
     cur.execute("INSERT INTO propositions (proposition_id, run_id, tenant_id, ordinal, "
                 "status) VALUES (%s,%s,%s,0,'VERIFIED')", (uuid.uuid4(), rid, tenant))
     # A human decision. This is the row whose leak would matter most: it carries a named
@@ -716,6 +744,7 @@ class _SeededQueue:
 def run(url: str) -> int:
     """Apply the migrations as admin, then prove isolation as a NON-SUPERUSER. Exit code."""
     import uuid
+    import psycopg as _psycopg
     a, b = uuid.uuid4(), uuid.uuid4()
     actor_a, actor_b = uuid.uuid4(), uuid.uuid4()
     failures: list[str] = []
@@ -760,7 +789,9 @@ def run(url: str) -> int:
                   # intentional. Both now apply, in order.
                   "025_draft_inbox_idx.sql", "026_accounts.sql",
                   "027_gateway_rate_limits.sql", "028_matter_access.sql",
-                  "029_vault_partial.sql"):
+                  "029_vault_partial.sql", "030_vault_failed.sql",
+                  "031_run_progress.sql", "032_company_profile.sql",
+                  "033_login_email_unique.sql"):
             cur.execute(sql(f))
             print(f"  applied {f}")
         _ensure_app_role(cur)
@@ -974,6 +1005,65 @@ def run(url: str) -> int:
     still = ba.read_run(shared_id)
     note(still and still["status"] == "ANSWERED" and still["intent"] == "ask",
          "...and tenant A's run is untouched by the attempt")
+
+    # ── 031-033: tenant A can neither read nor WRITE tenant B's new rows ─────
+    # The generic loop above proves SELECT isolation on every tenant table, 032's
+    # company_profile_facts included. A write is a separate path -- an UPDATE's USING
+    # hides the row, an INSERT's WITH CHECK refuses it -- so each new tenant write is
+    # tried here as the application role from inside tenant A, then read back as admin.
+    print()
+    with _connect(url) as admin:
+        run_b = admin.execute("SELECT run_id, progress FROM runs WHERE tenant_id = %s "
+                              "AND progress IS NOT NULL", (b,)).fetchone()
+        fact_b = admin.execute("SELECT fact_id FROM company_profile_facts WHERE "
+                               "tenant_id = %s AND superseded_at IS NULL", (b,)).fetchone()
+    with _connect(app_url) as app:
+        c = app.cursor()
+        _probe(c, str(a), "runs")
+        seen = c.execute("SELECT progress FROM runs WHERE run_id = %s",
+                         (run_b[0],)).fetchall()
+        hit = c.execute("UPDATE runs SET progress = '{\"current\": \"tampered\"}'::jsonb "
+                        "WHERE run_id = %s", (run_b[0],)).rowcount
+    note(run_b is not None and seen == [] and hit == 0,
+         f"031: tenant A reads none of tenant B's run progress ({len(seen)}) and its "
+         f"UPDATE of it touches {hit} row(s)")
+
+    with _connect(app_url) as app:
+        c = app.cursor()
+        _probe(c, str(a), "company_profile_facts")
+        hit = c.execute("UPDATE company_profile_facts SET superseded_at = now(), "
+                        "superseded_by = %s WHERE fact_id = %s",
+                        (actor_a, fact_b[0])).rowcount
+        refused = []
+        for who in (actor_a, actor_b):
+            try:
+                c.execute("INSERT INTO company_profile_facts (fact_id, tenant_id, field, "
+                          "value, basis, source_label, confirmed_by, reason) VALUES "
+                          "(%s,%s,'cin','U00000MH2026PTC000000','USER_FACT','typed',%s,"
+                          "'forged')", (uuid.uuid4(), b, who))
+                refused.append(False)
+            except _psycopg.Error as e:                          # noqa: BLE001
+                refused.append("row-level security" in str(e).lower())
+        try:
+            c.execute("INSERT INTO company_profile_facts (fact_id, tenant_id, field, value, "
+                      "basis, source_label, confirmed_by, reason) VALUES "
+                      "(%s,%s,'cin','U00000MH2026PTC000001','USER_FACT','typed',%s,'own')",
+                      (uuid.uuid4(), a, actor_a))
+            own_ok = True
+        except _psycopg.Error:                                   # noqa: BLE001
+            own_ok = False
+    with _connect(url) as admin:
+        b_rows = admin.execute("SELECT count(*), count(*) FILTER (WHERE superseded_at "
+                               "IS NULL) FROM company_profile_facts WHERE tenant_id = %s",
+                               (b,)).fetchone()
+    note(fact_b is not None and hit == 0,
+         f"032: tenant A's supersede of tenant B's company fact touches {hit} row(s)")
+    note(refused == [True, True],
+         f"032: tenant A cannot INSERT a fact into tenant B's profile, as itself or "
+         f"naming B's person -- the database refuses both ({refused})")
+    note(own_ok and b_rows == (1, 1),
+         f"032: ...while A writing its OWN profile succeeds, and tenant B still holds "
+         f"exactly its one current fact {tuple(b_rows)}")
 
     # ── the database refuses a billed provider claiming a call was free ─────
     print()
@@ -1202,9 +1292,44 @@ def run(url: str) -> int:
                     "WHERE actor_id=%s", ("solo@example.com", _pw_shape, actor_a))
         cur.execute("UPDATE actors SET email=%s, password_hash=%s WHERE actor_id=%s",
                     (_shared_email, _pw_shape, actor_b))
-        actor_a2 = uuid.uuid4()
-        cur.execute("INSERT INTO actors (actor_id, tenant_id, label, email, password_hash) "
-                    "VALUES (%s,%s,'amb-a2',%s,%s)", (actor_a2, a, _shared_email, _pw_shape))
+
+    # 033: one sign-in per email ACROSS firms. Before 033 this section seeded a second
+    # sign-in account for the same email in tenant A and proved auth_find_login returned
+    # both. That account can no longer exist, and the proof is that the database refuses
+    # it -- as the application role, from inside tenant A, where tenant B's row is
+    # INVISIBLE. A unique index is checked against every row, not the rows a policy shows,
+    # which is exactly why it works across firms where an application-side lookup could not.
+    for label, email in (("the same email", _shared_email),
+                         ("the same email in other letter case", _shared_email.upper())):
+        with _connect(app_url) as app:
+            c = app.cursor()
+            _probe(c, str(a), "actors")
+            hidden = c.execute("SELECT count(*) FROM actors WHERE lower(email) = %s",
+                               (_shared_email,)).fetchone()[0]
+            try:
+                c.execute("INSERT INTO actors (actor_id, tenant_id, label, email, "
+                          "password_hash) VALUES (%s,%s,'amb-a2',%s,%s)",
+                          (uuid.uuid4(), a, email, _pw_shape))
+                refused = ""
+            except _psycopg.errors.UniqueViolation as e:
+                refused = e.diag.constraint_name or ""
+        note(hidden == 0 and refused == "actors_login_email_global_idx",
+             f"033: tenant A cannot create a sign-in account for {label} that signs in at "
+             f"tenant B, though B's row is invisible to it ({hidden} visible) -- refused "
+             f"by {refused or 'NOTHING'}")
+    # The index is partial on purpose: an actor that cannot sign in (no password) is not
+    # constrained, so the refusal above is the sign-in rule and not a blanket email rule.
+    with _connect(app_url) as app:
+        c = app.cursor()
+        _probe(c, str(a), "actors")
+        try:
+            c.execute("INSERT INTO actors (actor_id, tenant_id, label, email) "
+                      "VALUES (%s,%s,'no-password',%s)", (uuid.uuid4(), a, _shared_email))
+            ok = True
+        except _psycopg.Error:                                   # noqa: BLE001
+            ok = False
+    note(ok, "033: ...while an actor with that email and NO password (cannot sign in) is "
+             "still allowed -- the index is exactly the sign-in set auth_find_login reads")
 
     with _connect(app_url) as app:
         c = app.cursor()
@@ -1223,11 +1348,11 @@ def run(url: str) -> int:
 
         amb = c.execute("SELECT actor_id, tenant_id FROM auth_find_login(%s)",
                         (_shared_email,)).fetchall()
-        note(len(amb) == 2 and {str(r2[1]) for r2 in amb} == {str(a), str(b)},
-             f"auth_find_login: an email shared by TWO REAL TENANTS returns BOTH rows, "
-             f"naming both tenant ids -- the cross-tenant ambiguity (Decision 7) that "
-             f"gateway/verbs.py's MemoryBackend-based suite cannot represent with only "
-             f"one tenant at a time ({[(str(r2[0])[:8], str(r2[1])[:8]) for r2 in amb]})")
+        note(len(amb) == 1 and str(amb[0][0]) == str(actor_b) and str(amb[0][1]) == str(b),
+             f"auth_find_login: after 033 refused the second account, the email resolves "
+             f"to exactly ONE sign-in, tenant B's -- the cross-tenant ambiguity "
+             f"(Decision 7) can no longer be created "
+             f"({[(str(r2[0])[:8], str(r2[1])[:8]) for r2 in amb]})")
 
         unknown = c.execute("SELECT actor_id FROM auth_find_login(%s)",
                             ("no-such-person@example.com",)).fetchall()
