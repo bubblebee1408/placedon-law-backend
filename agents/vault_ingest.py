@@ -151,12 +151,16 @@ def ingest(args: dict, *, files, store, extract, pages=None) -> Outcome:
     note = why if not failed_pages else (
         f"{why}. PARTIAL: page(s) {', '.join(str(n) for n in failed_pages)} could not be "
         f"read and are NOT in this document's text or index")
-    store.write_vault_document({
+    written = store.write_vault_document({
         "document_id": did, "matter_id": args.get("matter_id"), "sha256": sha,
         "name": name, "byte_count": len(data), "state": state,
         "doc_class": doc_class, "class_reason": note, "text_chars": len(text),
         # A page that could not be read still needs reading: NEEDED, not NOT_NEEDED.
-        "ocr_state": "NEEDED" if failed_pages else "NOT_NEEDED"})
+        "ocr_state": "NEEDED" if failed_pages else "NOT_NEEDED"}) or {}
+    if written.get("deleted_at"):
+        # Deleted while this ingest ran. The store kept it deleted; say so, and store no text.
+        return Outcome(did, "DELETED", reason="deleted while it was being read; nothing "
+                                              "was stored")
     store.write_vault_chunks(did, chunks)
     store.write_vault_tags(did, tags)
     return Outcome(did, state, doc_class, len(chunks), len(tags), len(text),

@@ -427,6 +427,14 @@ def _membership(matter_id, actor_id, role, granted_by, reason) -> dict:
             "revoked_by": None, "revoke_reason": None}
 
 
+def _lock_live_vault_document(c, document_id: str) -> bool:
+    """Lock the document row unless it is deleted. Held until the caller's transaction
+    ends, so `delete_vault_document` (which locks the same row) runs wholly before or
+    wholly after a chunk/tag rewrite: a deleted document's text is never stored again."""
+    return c.execute("SELECT 1 FROM vault_documents WHERE document_id = %s "
+                     "AND deleted_at IS NULL FOR UPDATE", (document_id,)).fetchone() is not None
+
+
 def _same_vault_scope(row: dict, matter_id, uploaded_by) -> bool:
     """028's two partial unique indexes: one per matter, one per uploader while unfiled."""
     matter_id = str(matter_id or "").strip() or None
@@ -1072,6 +1080,10 @@ class MemoryBackend:
                 "a DELETED document carries no text (020 "
                 "vault_documents_deleted_has_no_text)")
         prior = self.vault_docs.get(did) or {}
+        if prior.get("deleted_at"):
+            # A late ingest's final write never revives a deleted document (Postgres:
+            # the ON CONFLICT ... WHERE deleted_at IS NULL in the same statement).
+            return dict(prior)
         # 028. The uploader is fixed at insert, exactly as Postgres never updates it.
         uploaded_by = prior.get("uploaded_by", doc.get("uploaded_by"))
         # Dedupe is per matter, or per uploader while unfiled (028).
@@ -1137,6 +1149,8 @@ class MemoryBackend:
         did = str(document_id or "")
         if did not in self.vault_docs:
             raise StoreError(f"no vault document {did!r} to chunk")
+        if self.vault_docs[did].get("deleted_at"):
+            return 0
         rows = []
         for i, text in enumerate(chunks or ()):
             if not str(text or "").strip():
@@ -1169,6 +1183,8 @@ class MemoryBackend:
         did = str(document_id or "")
         if did not in self.vault_docs:
             raise StoreError(f"no vault document {did!r} to tag")
+        if self.vault_docs[did].get("deleted_at"):
+            return 0
         rows = []
         for t in tags or ():
             quote = str((t or {}).get("quote") or "")
@@ -2522,7 +2538,11 @@ class PostgresBackend:
                     "failure_reason = CASE WHEN EXCLUDED.state = 'FAILED' "
                     "THEN vault_documents.failure_reason ELSE NULL END, "
                     "ingested_at = CASE WHEN EXCLUDED.state IN ('INGESTED', 'PARTIAL') THEN now() "
-                    "ELSE vault_documents.ingested_at END",
+                    "ELSE vault_documents.ingested_at END "
+                    # A document deleted while its ingest ran stays deleted: the conflict
+                    # row is locked and this re-checked on its latest version, so the
+                    # ingest's final write cannot flip it back to INGESTED.
+                    "WHERE vault_documents.deleted_at IS NULL",
                     (doc["document_id"], self.tenant_id,
                      (str(doc.get("matter_id") or "").strip() or None), doc["sha256"],
                      doc.get("name") or "", int(doc.get("byte_count") or 0),
@@ -2616,7 +2636,9 @@ class PostgresBackend:
     def write_vault_chunks(self, document_id: str, chunks: list) -> int:
         import psycopg
         try:
-            with self._conn() as c:
+            with self._conn() as c, c.transaction():
+                if not _lock_live_vault_document(c, document_id):
+                    return 0
                 c.execute("DELETE FROM vault_chunks WHERE document_id = %s",
                           (document_id,))
                 for i, text in enumerate(chunks or ()):
@@ -2645,7 +2667,9 @@ class PostgresBackend:
     def write_vault_tags(self, document_id: str, tags: list) -> int:
         import psycopg
         try:
-            with self._conn() as c:
+            with self._conn() as c, c.transaction():
+                if not _lock_live_vault_document(c, document_id):
+                    return 0
                 c.execute("DELETE FROM vault_tags WHERE document_id = %s", (document_id,))
                 for t in tags or ():
                     c.execute(
@@ -4323,6 +4347,24 @@ def conformance(backend) -> list[tuple[bool, str]]:
        "...and it is absent from the matter's listing")
     ck(not backend.delete_vault_document(_vd, now="2026-10-02T00:00:00+00:00"),
        "deleting it again returns False rather than claiming to be the first")
+    # An ingest that read the row BEFORE the delete finishes AFTER it, with exactly the
+    # writes agents/vault_ingest makes. None of them may bring the document back.
+    _late = backend.write_vault_document({
+        "document_id": _vd, "matter_id": _vm, "sha256": "a" * 64, "name": "NDA.pdf",
+        "byte_count": 2048, "state": "INGESTED", "doc_class": "nda",
+        "class_reason": "nda on 6 points", "text_chars": 1200}) or {}
+    _late_chunks = backend.write_vault_chunks(_vd, ["2. Term\n\nThe term is five years."])
+    _late_tags = backend.write_vault_tags(_vd, [
+        {"tag": "Term", "quote": "The term is five years."}])
+    _after = backend.read_vault_document(_vd) or {}
+    ck(_after.get("state") == "DELETED" and _after.get("deleted_at")
+       and _after.get("text_chars") is None and _late.get("state") == "DELETED",
+       f"**a late ingest's final write does not revive a DELETED document** "
+       f"({_after.get('state')}, returned {_late.get('state')})")
+    ck(_late_chunks == 0 and _late_tags == 0
+       and not [c for c in backend.read_vault_chunks() if c["document_id"] == _vd]
+       and not backend.read_vault_tags(_vd),
+       f"...nor store its text again as chunks or tags ({_late_chunks}, {_late_tags})")
 
     # ── 8b: matters, and NO CROSS-MATTER LISTING ────────────────────────────
     _m1, _m2 = str(_uuid.uuid4()), str(_uuid.uuid4())
