@@ -72,3 +72,18 @@ jobs:
               echo "::error::$s did not run against the database"; exit 1
             fi
           done
+      - name: Row-level security proof (scripts/rls_integration.py)
+        # Migrations applied as the superuser; every visibility assertion runs as
+        # placedon_app. --run refuses any database not named placedon_throwaway_*.
+        env:
+          PLACEDON_ADMIN_DATABASE_URL: postgresql://localhost/placedon_throwaway_rls?user=postgres
+          PLACEDON_DATABASE_URL: postgresql://localhost/placedon_throwaway_rls?user=placedon_app
+        run: |
+          set -euo pipefail
+          psql -h localhost -U postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE placedon_throwaway_rls"
+          out=$(PYTHONPATH=. python scripts/rls_integration.py --run 2>&1) || { echo "$out"; exit 1; }
+          echo "$out"
+          if grep -q '^  REFUSED:' <<<"$out" || ! grep -qE '^[0-9]+/[0-9]+ passed' <<<"$out"; then
+            echo "::error::rls_integration.py did not run against the database"; exit 1
+          fi
+          psql -h localhost -U postgres -c "DROP DATABASE placedon_throwaway_rls WITH (FORCE)"
