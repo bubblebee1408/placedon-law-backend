@@ -593,7 +593,7 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
             ctx = Context(tenant=principal.tenant_id, actor=principal.actor, role=principal.role,
                           store=store, documents=documents_for(principal.tenant_id, principal.actor), clock=now,
                           files=app.state.files, queue=tenant_queue,
-                          credential_hash=principal.credential_hash)
+                          credential_hash=principal.credential_hash, auth=app.state.auth)
             args = dict(request.path_params)
             if verb.method == "POST":
                 raw, over = await _read_body(request)
