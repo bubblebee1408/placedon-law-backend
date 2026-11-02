@@ -1476,6 +1476,11 @@ QUEUED_INTENTS: dict[str, str] = {
 # Everything else runs store-less so it cannot write a second run.
 STORE_WRITING_INTENTS = frozenset({"review_grid_cell", "vault_ingest", "document_summary"})
 
+# Intents only the server enqueues. `vault.upload` queues `vault_ingest` with the row it
+# just wrote; a client that could submit one could name any content hash, and the file
+# store is content-addressed and shared, so a hash alone would read anyone's file.
+INTERNAL_INTENTS = frozenset({"vault_ingest"})
+
 
 def queue_handlers(ctx: "Context") -> dict:
     """{intent: handler(args) -> (steps, result)} for gateway/worker.py.
@@ -1522,10 +1527,10 @@ def _runs_submit(args: dict, ctx: Context) -> dict:
     import uuid
 
     intent = (args.get("intent") or "").strip()
-    if intent not in QUEUED_INTENTS:
+    if intent not in QUEUED_INTENTS or intent in INTERNAL_INTENTS:
         return _refuse("BAD_REQUEST",
                        f"{intent!r} is not an intent a run may be submitted for; one of "
-                       f"{sorted(QUEUED_INTENTS)}. An intent nobody declared is not an "
+                       f"{sorted(set(QUEUED_INTENTS) - INTERNAL_INTENTS)}. An intent nobody declared is not an "
                        f"intent with an empty plan.")
     payload = args.get("args")
     if payload is None:
@@ -3514,7 +3519,17 @@ def _vault_ingest_job(args: dict, ctx: Context) -> dict:
                           pages={n: t for n, t in enumerate(texts, 1) if t.strip()},
                           failed_pages=failed)
 
-    paged = PAGE_BREAK.encode() in (ctx.files.get(str(args.get("sha256") or "")) or b"")
+    # The job's args name a document; everything else comes from that document's row, read
+    # under this job actor's RLS. Never the args' sha256 (the file store would serve any
+    # file by hash), matter_id (it would refile the row) or a deleted document.
+    did = str(args.get("document_id") or "")
+    row = ctx.store.read_vault_document(did) if did else None
+    if (row is None or row.get("deleted_at") or row.get("state") == "DELETED"
+            or not access.document_allowed(ctx, row, access.WRITE)):
+        return _refuse("NOT_FOUND", "This document is unavailable to you; nothing was read.")
+    args = {"document_id": row["document_id"], "sha256": row["sha256"],
+            "name": row.get("name") or "", "matter_id": row.get("matter_id")}
+    paged = PAGE_BREAK.encode() in (ctx.files.get(args["sha256"]) or b"")
     outcome = ingest(args, files=ctx.files, store=ctx.store,
                      extract=lambda data, name: data.decode("utf-8", "replace"),
                      pages=pages if paged else None)
