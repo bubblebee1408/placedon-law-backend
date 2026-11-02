@@ -54,7 +54,9 @@ def rank(role: str) -> int:
 
 
 # 028. The only reads an administrator alone may make: who holds access to which matter.
-ADMIN_READS = frozenset({"matters.members", "matters.access_report"})
+ADMIN_READS = frozenset({"matters.members", "matters.access_report",
+                         # 036: the firm's people and its pending invites.
+                         "people.list", "invites.list"})
 
 # The two verbs app.py serves with NO Bearer token: _principal() and may() are both
 # skipped for these, so they must never be handed a role they would bypass anyway. Kept
@@ -169,6 +171,11 @@ REQUIRED: dict[str, str] = {
     # ADMIN-only, not LAWYER: "admin: everything a lawyer can, plus invite and remove
     # people."
     "invites.create": ADMIN,
+    # 036. Seeing the firm's people and pending invites, and withdrawing one, is the same
+    # job as inviting: an admin's.
+    "invites.list": ADMIN,
+    "invites.cancel": ADMIN,
+    "people.list": ADMIN,
     # 028. Administering who may use which matter is an admin's job. Sharing your OWN
     # unfiled document is a lawyer's.
     "matters.grant": ADMIN,
@@ -295,6 +302,11 @@ def _test() -> int:
           "access to which matter is administration, and nothing else is admin-only")
     check(ADMIN_READS <= reads and all(REQUIRED[r] == ADMIN for r in ADMIN_READS),
           "...and every ADMIN_READ is a real read verb that really is ADMIN")
+    team = ("people.list", "invites.list", "invites.cancel")
+    check(all(may(ADMIN, v) for v in team)
+          and not any(may(r, v) for r in (VIEWER, LAWYER) for v in team),
+          "036: only an admin may list the firm's people or its pending invites, or cancel "
+          "one; a lawyer and a viewer are refused all three")
 
     print(f"\n{ok}/{ok + fail} passed")
     return 1 if fail else 0

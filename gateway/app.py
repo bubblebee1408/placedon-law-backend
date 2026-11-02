@@ -1561,12 +1561,14 @@ def _test() -> None:
                                  # the single place "every write verb" is enumerated.
                                  "auth.login", "auth.logout", "invites.create",
                                  "invites.accept",
+                                 # 036: withdraw an unused invite.
+                                 "invites.cancel",
                                  # 028: who may reach a matter or a document.
                                  "matters.grant", "matters.revoke", "vault.share",
                                  "access.reassign",
                                  # 032: the firm's company profile.
                                  "company_profile.set"},
-          f"twenty-four write verbs today, and each is named ({sorted(write_verbs())})")
+          f"twenty-five write verbs today, and each is named ({sorted(write_verbs())})")
 
     # ── auth: a key is required everywhere except liveness ──────────────────
     check(anon.get(HEALTH_PATH).status_code == 200,
@@ -2077,6 +2079,17 @@ def _test() -> None:
                            ).status_code == 403,
           "...and the normal role check still applies to a SESSION principal, exactly "
           "as it does to an API key -- a lawyer session may not create an invite")
+    # 036: the Team page's three verbs, over HTTP. Admin reads; lawyer and viewer refused.
+    pending = acct.post("/v2/invites/list", json={})
+    check(pending.status_code == 200 and "token" not in pending.text
+          and acct.post("/v2/people/list", json={}).status_code == 200,
+          f"an admin lists people and pending invites over HTTP, and no token comes back "
+          f"({pending.json()})")
+    check(all(c.post(f"/v2/{path}", json=body).status_code == 403
+              for c in (viewer_client, sess_client)
+              for path, body in (("people/list", {}), ("invites/list", {}),
+                                 ("invites/cancel", {"invite_id": "x"}))),
+          "...while a VIEWER key and a LAWYER session get 403 on all three")
 
     logout = sess_client.post("/v2/auth/logout", json={})
     check(logout.status_code == 200 and logout.json().get("revoked") is True,
