@@ -54,6 +54,7 @@ from gateway.admission import BoundedExecutor, Busy, await_work
 from gateway import audit as audit_mod                       # noqa: E402
 from gateway.auth import (AuthError, KeyStore, Principal,     # noqa: E402
                           SESSION_LABEL, bearer, hash_key, key_id as _key_id)
+from gateway.accounts import is_token_shaped                  # noqa: E402
 from gateway.store import (AuthLookup, MEMORY, POSTGRES,       # noqa: E402
                            MemoryBackend, PostgresBackend, database_url)
 
@@ -468,7 +469,9 @@ def create_app(*, deployment: Deployment | None = None, clock=None, handler=None
             return app.state.keys.resolve(raw)
         except AuthError:
             pass
-        if not raw or app.state.auth is None:
+        # Shape before the database: a value mint_token could never have produced is
+        # refused here, so junk Bearer values cannot each open a DB connection.
+        if app.state.auth is None or not is_token_shaped(raw):
             raise AuthError("no API key presented")
         token_hash = hash_key(raw)
         row = app.state.auth.resolve_session(token_hash)
@@ -2085,6 +2088,22 @@ def _test() -> None:
           "...and the SAME session token is refused immediately afterward")
     check(acct.post("/v2/auth/logout", json={}).json().get("code") == "BAD_REQUEST",
           "an API key cannot be \"logged out\" through this verb -- it is not a session")
+
+    # A junk Bearer value is refused by shape, before any session lookup (no DB connection).
+    _lookups = []
+    _real_resolve = acct_app.state.auth.resolve_session
+    acct_app.state.auth.resolve_session = lambda th: _lookups.append(th) or _real_resolve(th)
+    for junk in ("not-a-real-key", "x" * 5000, session_token + "A"):
+        r = TestClient(acct_app, headers={"Authorization": f"Bearer {junk}"}).post(
+            "/v2/auth/me", json={})
+        check(r.status_code == 401, f"a junk bearer value is a 401 ({len(junk)} chars)")
+    check(_lookups == [], "...and none of them reached the session lookup (no DB connection)")
+    r = TestClient(acct_app, headers={"Authorization": "Bearer " + "A" * 43}).post(
+        "/v2/auth/me", json={})
+    check(r.status_code == 401 and len(_lookups) == 1,
+          "a token-SHAPED unknown value is still looked up, and still a 401 -- the same "
+          "refusal, so shape vs lookup is not distinguishable from outside")
+    acct_app.state.auth.resolve_session = _real_resolve
 
     garbage = TestClient(acct_app, headers={"Authorization": "Bearer not-a-real-key"})
     garbage_login = garbage.post(
