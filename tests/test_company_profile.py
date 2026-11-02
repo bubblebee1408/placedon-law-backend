@@ -83,6 +83,25 @@ class CompanyProfile(unittest.TestCase):
         self.assertEqual(override["company_facts"]["overridden_by_request"], ["listed"])
         self.assertEqual(override["company_facts"]["used"], [])
 
+    def test_events_assess_refuses_when_the_profile_cannot_be_read(self):
+        # Codex on #149 (P1): a failed read is not "no profile". Assessing without the
+        # stored facts would silently drop bodies (SEBI_LODR for a listed firm).
+        self.save([LISTED])
+
+        def broken():
+            raise ConnectionError("db down")
+        self.store.read_company_profile = broken
+        out = V["events.assess"].run({"event": "share_allotment"}, self.ctx)
+        self.assertEqual(out["status"], "REFUSED")
+        self.assertEqual(out["code"], "STORAGE_UNAVAILABLE")
+        # Facts sent with the request do not need the profile, so they still assess.
+        sent = V["events.assess"].run(
+            {"event": "share_allotment", "company_facts": [LISTED]}, self.ctx)
+        self.assertIn("SEBI_LODR", sent["body_ids"])
+        # `ask` only SHOWS the profile (it never steers the answer), so it still answers.
+        q = {"question": "What is the quorum for a board meeting?", "sources": ["vault"]}
+        self.assertNotIn("user_facts", V["ask"].run(q, self.ctx))
+
     def test_ask_shows_the_profile_without_caching_it(self):
         q = {"question": "What is the quorum for a board meeting?", "sources": ["vault"]}
         self.assertNotIn("user_facts", V["ask"].run(q, self.ctx))

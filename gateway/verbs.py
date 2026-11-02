@@ -1644,6 +1644,13 @@ def _events_assess(args: dict, ctx: Context) -> dict:
     from_profile = args.get("company_facts") is None
     if from_profile:
         facts, refusal = _profile_facts(ctx), None
+        if facts is None:
+            # Refused, not assessed without it: a listed firm's assessment would silently
+            # lose its SEBI bodies, and nothing in the result would say why.
+            return _refuse("STORAGE_UNAVAILABLE",
+                           "Your company profile could not be read just now, so this "
+                           "assessment was not made without it. Try again, or send the "
+                           "facts with the request.")
     else:
         facts, refusal = _company_facts(args.get("company_facts"))
     if refusal:
@@ -1724,9 +1731,10 @@ def _company_facts(raw: object) -> tuple[list, dict | None]:
 PROFILE_SOURCE = "company_profile"
 
 
-def _profile_facts(ctx: Context) -> list:
-    """The firm's stored, confirmed company facts, or [] when none are stored or the store
-    predates 032. Read failures are not hidden as "no profile" silently: they are logged."""
+def _profile_facts(ctx: Context) -> list | None:
+    """The firm's stored, confirmed company facts, [] when none are stored or the store
+    predates 032, and None when the read FAILED -- logged, and never the same as "no
+    profile": events.assess refuses on None, ask (which only shows the facts) shows none."""
     if ctx.store is None or not hasattr(ctx.store, "read_company_profile"):
         return []
     from gateway import company_profile as cp
@@ -1735,7 +1743,7 @@ def _profile_facts(ctx: Context) -> list:
     except Exception as e:                                       # noqa: BLE001
         import logging
         logging.getLogger(__name__).warning("company profile unreadable: %s", type(e).__name__)
-        return []
+        return None
 
 
 def _company_profile_get(args: dict, ctx: Context) -> dict:
