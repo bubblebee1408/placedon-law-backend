@@ -739,6 +739,10 @@ class MemoryBackend:
                            "matter_id": None,
                            "columns": [dict(c) for c in grid.get("columns") or ()],
                            "document_ids": list(grid.get("document_ids") or ()),
+                           # 034. Merged over any earlier write, as Postgres's `||` does.
+                           "document_names": {**self.grids.get(gid, {}).get(
+                               "document_names", {}),
+                               **dict(grid.get("document_names") or {})},
                            "cancelled_at": self.grids.get(gid, {}).get("cancelled_at"),
                            # 011's DEFAULT now(), kept across a re-write as Postgres keeps it.
                            "created_at": self.grids.get(gid, {}).get("created_at")
@@ -2964,11 +2968,14 @@ class PostgresBackend:
         gid = grid["grid_id"]
         try:
             with self._conn() as c:
-                c.execute("INSERT INTO review_grids (grid_id, tenant_id, name, actor_id) "
-                          "VALUES (%s,%s,%s,%s) ON CONFLICT (grid_id) DO UPDATE SET "
-                          "name = EXCLUDED.name",
+                c.execute("INSERT INTO review_grids (grid_id, tenant_id, name, actor_id, "
+                          "document_names) VALUES (%s,%s,%s,%s,%s) "
+                          "ON CONFLICT (grid_id) DO UPDATE SET name = EXCLUDED.name, "
+                          "document_names = review_grids.document_names || "
+                          "EXCLUDED.document_names",
                           (gid, self.tenant_id, grid.get("name") or "",
-                           self._session_actor or None))
+                           self._session_actor or None,
+                           _json(dict(grid.get("document_names") or {}))))
                 for i, col in enumerate(grid.get("columns") or ()):
                     c.execute(
                         "INSERT INTO review_grid_columns (grid_id, tenant_id, name, kind, "
@@ -2993,8 +3000,8 @@ class PostgresBackend:
             return None
         with self._conn() as c:
             g = c.execute("SELECT grid_id, name, cancelled_at, paused_budget, "
-                          "pause_reason, cells_not_dispatched, actor_id, matter_id "
-                          "FROM review_grids "
+                          "pause_reason, cells_not_dispatched, actor_id, matter_id, "
+                          "document_names FROM review_grids "
                           "WHERE grid_id = %s", (grid_id,)).fetchone()
             if g is None:
                 return None
@@ -3013,6 +3020,7 @@ class PostgresBackend:
                 "cells_not_dispatched": int(g[5] or 0),
                 "actor_id": str(g[6]) if g[6] else None,
                 "matter_id": str(g[7]) if g[7] else None,
+                "document_names": dict(g[8] or {}),
                 "columns": [{"name": r[0], "kind": r[1], "question": r[2]} for r in cols],
                 "document_ids": [r[0] for r in docs]}
 
@@ -3931,6 +3939,14 @@ def conformance(backend) -> list[tuple[bool, str]]:
     ck(sorted(g["document_ids"]) == sorted([DOC_A, DOC_B]), "...and its documents")
     ck(backend.read_grid(str(_uuid.uuid4())) is None,
        "...and an unknown grid reads as None, not an empty one")
+    ck(g["document_names"] == {}, "034: a grid written with no file names reads {}")
+    gid_n = str(_uuid.uuid4())
+    backend.write_grid({"grid_id": gid_n, "name": "Named",
+                        "columns": [{"name": "c", "kind": "text", "question": "Which?"}],
+                        "document_ids": [DOC_A, DOC_B],
+                        "document_names": {DOC_A: "nda.pdf", DOC_B: "lease.docx"}})
+    ck(backend.read_grid(gid_n)["document_names"] == {DOC_A: "nda.pdf", DOC_B: "lease.docx"},
+       "034: ...and one written with file names reads them back, on both backends")
     # review_table.list: the firm's tables, newest first, counts and no contents.
     listed = [r for r in backend.list_grids(limit=51) if r["grid_id"] == gid]
     ck(len(listed) == 1 and listed[0]["name"] == "NDA diligence"

@@ -4654,6 +4654,27 @@ MAX_GRID_CELLS = 500
 _CONTENT_HASH = __import__("re").compile(r"[0-9a-f]{64}")
 
 
+MAX_DOCUMENT_NAME = 255
+
+
+def _grid_document_names(ctx: Context, document_ids: list) -> dict:
+    """034. {sha256: file name} for a new grid, read from this process's uploads or the
+    vault document this actor may read. Never from the caller: a name is what the firm
+    stored, not what a request claims. A hash with no readable name is left out."""
+    names: dict = {}
+    for raw in document_ids:
+        d = raw.strip()
+        name = str((ctx.documents.get(d) or {}).get("name") or "").strip()
+        # Same order as access.content_allowed: this process's upload, else the vault.
+        if d not in ctx.documents and ctx.store is not None:
+            rows = [r for r in ctx.store.vault_documents_by_sha256(d)
+                    if access.document_allowed(ctx, r)]
+            name = str((rows[0] if rows else {}).get("name") or "").strip()
+        if name:
+            names[d] = name[:MAX_DOCUMENT_NAME]
+    return names
+
+
 def _review_table_create(args: dict, ctx: Context) -> dict:
     """Define a grid and enqueue one job per cell. Refuses above the cell cap.
 
@@ -4733,7 +4754,8 @@ def _review_table_create(args: dict, ctx: Context) -> dict:
     store.write_grid({"grid_id": grid_id, "name": name, "actor_id": ctx.actor,
                       "columns": [{"name": c.name, "kind": c.kind,
                                    "question": c.question} for c in columns],
-                      "document_ids": list(raw_docs)})
+                      "document_ids": list(raw_docs),
+                      "document_names": _grid_document_names(ctx, raw_docs)})
 
     sched = rgr.Scheduled(grid_id)
     if ctx.queue is not None:
@@ -4789,6 +4811,8 @@ def _review_table_status(args: dict, ctx: Context) -> dict:
     # the moment the cap is raised, and calling it an error would put transport language on
     # a deployment's spending decision.
     grid_row = ctx.store.read_grid(grid_id) or {}
+    # 034: the file names stored at create; {} for a table made before then.
+    out["document_names"] = dict(grid_row.get("document_names") or {})
     paused = bool(grid_row.get("paused_budget"))
     not_dispatched = int(grid_row.get("cells_not_dispatched") or 0)
     out["paused_budget"] = paused
@@ -4872,7 +4896,8 @@ def _review_table_export(args: dict, ctx: Context) -> dict:
     table, cancelled = _load_grid(ctx, grid_id)
     if table is None:
         return _refuse("NOT_FOUND", f"no review table {grid_id!r} for this tenant")
-    names = {d: str((ctx.documents.get(d) or {}).get("name") or d)
+    stored = (ctx.store.read_grid(grid_id) or {}).get("document_names") or {}
+    names = {d: str(stored.get(d) or (ctx.documents.get(d) or {}).get("name") or d)
              for d in table.document_ids}
     t = table.tally()
     return {"grid_id": grid_id, "filename": f"{table.name[:40] or 'review-table'}.csv",
@@ -8283,6 +8308,40 @@ def _test() -> None:
     check(len(_st["cells_detail"]) == 4, "...and every cell is listed")
     check(_hV["review_table.status"].run({"grid_id": "nope"}, _hctx)["code"] == "NOT_FOUND",
           "an unknown grid is NOT_FOUND, never an empty table")
+
+    # ── 034: each document's file NAME is stored with the table ─────────────
+    check(_st.get("document_names") == {_d1: "nda.txt", _d2: "supply.txt"},
+          f"status names each document by the file name it was created with "
+          f"({_st.get('document_names')})")
+    _vsha = "c" * 64
+    _vstore = _MB()
+    _vctx = Context(tenant="gate-firm", store=_vstore, queue=_MQ2(),
+                    clock=lambda: "2026-10-01T00:00:00+00:00")
+    _vstore.write_vault_document({"document_id": "00000000-0000-0000-0000-0000000000f1",
+                                  "sha256": _vsha, "name": "  Lease 2024.pdf ",
+                                  "uploaded_by": _vctx.actor})
+    _vg = _hV["review_table.create"].run(
+        {"name": "lease", "document_ids": [_vsha],
+         "columns": [{"name": "rent", "kind": "amount", "question": "What is the rent?"}]},
+        _vctx)["grid_id"]
+    check(_vstore.read_grid(_vg).get("document_names") == {_vsha: "Lease 2024.pdf"},
+          "a vault document's name is read from the vault at create time and STORED on the "
+          "table, so reopening it in another browser still shows the file name")
+    # A later page load: a fresh context with nothing uploaded in this process.
+    _reopen = Context(tenant="gate-firm", store=_vstore, queue=_MQ2(), actor=_vctx.actor)
+    check(_hV["review_table.status"].run({"grid_id": _vg}, _reopen)
+          .get("document_names") == {_vsha: "Lease 2024.pdf"},
+          "...and status returns it from the store, not from this process's uploads")
+    check("Lease 2024.pdf" in _hV["review_table.export"].run({"grid_id": _vg}, _reopen)["csv"],
+          "...and the CSV uses the stored name rather than the sha256")
+    _old = "00000000-0000-0000-0000-0000000000f2"
+    _vstore.write_grid({"grid_id": _old, "name": "made before 034", "actor_id": _vctx.actor,
+                        "columns": [{"name": "rent", "kind": "amount",
+                                     "question": "What is the rent?"}],
+                        "document_ids": [_vsha]})
+    check(_hV["review_table.status"].run({"grid_id": _old}, _reopen)
+          .get("document_names") == {},
+          "a table stored with no names reads an EMPTY map, so the page falls back as before")
 
     # ── review_table.list: the firm's tables, not this browser's ───────────
     _lv = _hV["review_table.list"]
