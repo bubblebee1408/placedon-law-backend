@@ -31,12 +31,18 @@ import datetime as _dt
 import functools
 import re
 
-__all__ = ["GENERIC_LOGIN_FAILURE_CODE", "LOGIN_LOCKOUT_MAX", "LOGIN_LOCKOUT_WINDOW_SECONDS",
+__all__ = ["GENERIC_LOGIN_FAILURE_CODE", "LOGIN_LOCKOUT_MAX", "LOGIN_LOCKOUT_IP_MAX",
+           "LOGIN_LOCKOUT_WINDOW_SECONDS",
            "SESSION_TTL_SECONDS", "INVITE_TTL_SECONDS", "generic_failure", "verify_login",
            "check_lockout", "mint_token"]
 
-# 5 failures per email-OR-IP in 15 minutes -- DECISION_ACCOUNTS.md Decision 6, verbatim.
+# 5 failures per EMAIL in 15 minutes -- DECISION_ACCOUNTS.md Decision 6, unchanged.
 LOGIN_LOCKOUT_MAX = 5
+# Per client ADDRESS the line is higher, so one office behind one NAT address is not locked
+# out by one person's typos (OWASP Authentication / Credential Stuffing Prevention cheat
+# sheets: throttle per account AND per source, the source limit looser). 30 still stops one
+# address cycling through emails: six accounts' worth of guesses, then it waits.
+LOGIN_LOCKOUT_IP_MAX = 30
 LOGIN_LOCKOUT_WINDOW_SECONDS = 15 * 60
 
 # Session lifetime: 7 days (founder's call 2026-10-15 -- longer, so testing doesn't force a
@@ -83,15 +89,17 @@ def verify_login(row: dict | None, password: str) -> bool:
 
 def check_lockout(auth, *, email_hash: str, ip_hash: str,
                   now: _dt.datetime | None = None) -> dict | None:
-    """A LOCKED_OUT refusal, or None. Counts failures for EITHER the email or the IP, in
-    the last LOGIN_LOCKOUT_WINDOW_SECONDS, across every tenant -- `login_attempts` has no
-    tenant column, by design (DECISION_ACCOUNTS.md Decision 5): brute-force defence must
-    span tenants and run before any tenant is known.
+    """A LOCKED_OUT refusal, or None. Counts failures for the email and for the IP
+    SEPARATELY, in the last LOGIN_LOCKOUT_WINDOW_SECONDS, across every tenant --
+    `login_attempts` has no tenant column, by design (DECISION_ACCOUNTS.md Decision 5):
+    brute-force defence must span tenants and run before any tenant is known. Locked when
+    the email reaches LOGIN_LOCKOUT_MAX or the IP reaches LOGIN_LOCKOUT_IP_MAX; the
+    refusal is the same either way, so it does not say which one tripped.
     """
     now = now or _dt.datetime.now(_dt.timezone.utc)
     since = now - _dt.timedelta(seconds=LOGIN_LOCKOUT_WINDOW_SECONDS)
-    failures = auth.recent_failures(email_hash=email_hash, ip_hash=ip_hash, since=since)
-    if failures < LOGIN_LOCKOUT_MAX:
+    by_email, by_ip = auth.recent_failures(email_hash=email_hash, ip_hash=ip_hash, since=since)
+    if by_email < LOGIN_LOCKOUT_MAX and by_ip < LOGIN_LOCKOUT_IP_MAX:
         return None
     return {"status": "REFUSED", "code": "LOCKED_OUT",
             "detail": "too many failed sign-in attempts. Try again shortly.",
@@ -160,8 +168,8 @@ def _test() -> int:
 
     # ── lockout ───────────────────────────────────────────────────────────────
     class _StubAuth:
-        def __init__(self, failures: int):
-            self._failures = failures
+        def __init__(self, failures: int, by_ip: int | None = None):
+            self._failures = (failures, failures if by_ip is None else by_ip)
 
         def recent_failures(self, *, email_hash, ip_hash, since):
             return self._failures
@@ -179,6 +187,19 @@ def _test() -> int:
     check(out2 is not None and out2["code"] == "LOCKED_OUT",
           "...and MORE failures stays locked out rather than overflowing into something else")
 
+    check(check_lockout(_StubAuth(0, LOGIN_LOCKOUT_IP_MAX - 1), email_hash="e", ip_hash="i")
+          is None,
+          f"{LOGIN_LOCKOUT_IP_MAX - 1} failures from one ADDRESS (an office NAT), none for this "
+          "email: not locked out -- the address line is higher than the email line")
+    check(LOGIN_LOCKOUT_IP_MAX > LOGIN_LOCKOUT_MAX,
+          "...and that holds by construction: the per-address line is above the per-email one")
+    by_ip = check_lockout(_StubAuth(0, LOGIN_LOCKOUT_IP_MAX), email_hash="e", ip_hash="i")
+    check(by_ip is not None and by_ip == out,
+          f"{LOGIN_LOCKOUT_IP_MAX} failures from one address: LOCKED_OUT, with a refusal "
+          "identical to the per-email one (it does not say which line tripped)")
+    check(check_lockout(_StubAuth(LOGIN_LOCKOUT_MAX, 0), email_hash="e", ip_hash="i") is not None,
+          "an email at its line is locked even from a fresh address (rotating IPs buys nothing)")
+
     class _WindowAuth:
         """Proves the WINDOW, not just the count, is threaded through."""
         def __init__(self):
@@ -186,7 +207,7 @@ def _test() -> int:
 
         def recent_failures(self, *, email_hash, ip_hash, since):
             self.seen_since = since
-            return 0
+            return 0, 0
 
     probe = _WindowAuth()
     now = _dt.datetime(2026, 1, 1, tzinfo=_dt.timezone.utc)

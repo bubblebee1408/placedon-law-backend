@@ -2127,6 +2127,44 @@ def _test() -> None:
           "a garbage Authorization header neither helps nor hurts a PUBLIC verb -- "
           "_mount_public never reads it")
 
+    # ── the DEPLOYMENT key names the end user's address for the lockout ──────
+    # Production authenticates the frontend with the env-provisioned service key. Before
+    # this, that key was not a client-address proxy, so every sign-in counted against the
+    # frontend's egress address and five wrong passwords from anyone locked out everyone.
+    import secrets as _secrets
+    from gateway.auth import SERVICE_ACTOR_ENV, SERVICE_KEY_ENV, SERVICE_TENANT_ENV
+    svc_key = _secrets.token_urlsafe(32)
+    svc_keys = KeyStore.from_service_environment(
+        {SERVICE_KEY_ENV: svc_key, SERVICE_TENANT_ENV: T, SERVICE_ACTOR_ENV: A})
+    svc_admin, _ = svc_keys.mint(tenant_id=T, actor=A, label="gate", role="admin")
+    svc_app = create_app(clock=lambda: GEN, keys=svc_keys, db_url="")
+    svc_inv = TestClient(svc_app, headers={"Authorization": f"Bearer {svc_admin}"}).post(
+        "/v2/invites/create", json={"email": "colleague@example.com", "role": "lawyer"})
+    TestClient(svc_app).post("/v2/invites/accept",
+                             json={"token": svc_inv.json()["token"],
+                                   "password": "a-strong-enough-password"})
+    frontend = TestClient(svc_app, headers={"Authorization": f"Bearer {svc_key}"})
+
+    def _svc_login(email, password, address):
+        return frontend.post("/v2/auth/login", json={"email": email, "password": password},
+                             headers={CLIENT_ADDRESS_HEADER: address}).json()
+
+    for _ in range(6):
+        _svc_login("typo@example.com", "wrong-every-time", "198.51.100.7")
+    from gateway.auth import hash_key as _hk
+    check(svc_app.state.auth._memory.login_attempts[-1]["ip_hash"] == _hk("198.51.100.7"),
+          "a sign-in through the deployment key is counted against the END USER's address "
+          "the frontend forwarded, not the frontend server's own")
+    check(_svc_login("typo@example.com", "wrong-every-time", "198.51.100.7").get("code")
+          == "LOCKED_OUT",
+          "through the deployment key, the account with the wrong passwords is locked out")
+    check(_svc_login("colleague@example.com", "a-strong-enough-password",
+                     "198.51.100.7").get("status") == "ok",
+          "...but a colleague behind the SAME office address still signs in (address line 30)")
+    check(_svc_login("colleague@example.com", "a-strong-enough-password",
+                     "198.51.100.8").get("status") == "ok",
+          "...and so does anyone at another address: the lockout is not global")
+
     print(f"\n{ok}/{ok + fail} passed")
     if fail:
         raise SystemExit(1)
