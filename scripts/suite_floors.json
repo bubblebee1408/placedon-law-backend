@@ -281,7 +281,7 @@
     "gateway/roles.py": 19,
     "gateway/schema.py": 113,
     "gateway/screens.py": 125,
-    "gateway/store.py": 282,
+    "gateway/store.py": 284,
     "gateway/verbs.py": 647,
     "gateway/worker.py": 47,
     "scripts/acquire_cuad.py": 14,
