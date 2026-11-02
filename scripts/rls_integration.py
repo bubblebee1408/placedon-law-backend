@@ -800,7 +800,8 @@ def run(url: str) -> int:
                   "027_gateway_rate_limits.sql", "028_matter_access.sql",
                   "029_vault_partial.sql", "030_vault_failed.sql",
                   "031_run_progress.sql", "032_company_profile.sql",
-                  "033_login_email_unique.sql", "034_grid_document_names.sql"):
+                  "033_login_email_unique.sql", "034_grid_document_names.sql",
+                  "036_invite_cancel.sql"):
             cur.execute(sql(f))
             print(f"  applied {f}")
         _ensure_app_role(cur)
@@ -1132,6 +1133,36 @@ def run(url: str) -> int:
     for ok_, label in conformance(PostgresBackend(app_url, tenant_id=str(a),
                                                   actor_id=str(actor_a))):
         note(ok_, f"[postgres] {label}")
+
+    # ── 036: firm A's admin cannot see or cancel firm B's invites or people ──
+    print()
+    with _connect(url) as admin:
+        b_invite = str(admin.execute("SELECT invite_id FROM invites WHERE tenant_id = %s "
+                                     "AND email LIKE 'bravo%%' LIMIT 1", (b,)).fetchone()[0])
+    pa = PostgresBackend(app_url, tenant_id=str(a), actor_id=str(actor_a))
+    note(pa.cancel_invite(b_invite, cancelled_by=str(actor_a)) is False,
+         "036: tenant A's cancel_invite with tenant B's REAL invite id matches no row")
+    with _connect(url) as admin:
+        still = admin.execute("SELECT cancelled_at FROM invites WHERE invite_id = %s",
+                              (b_invite,)).fetchone()[0]
+    note(still is None, "...and B's invite is untouched (cancelled_at still NULL)")
+    a_pending = pa.list_pending_invites()
+    note(a_pending and not any(i["email"].startswith("bravo") for i in a_pending)
+         and b_invite not in {i["invite_id"] for i in a_pending},
+         f"...and A's pending list holds A's invites and none of B's "
+         f"({[i['email'] for i in a_pending]})")
+    with _connect(url) as admin:
+        # A person in B with an email, so the check below cannot pass on an empty set.
+        admin.execute("INSERT INTO actors (actor_id, tenant_id, label, role, email) "
+                      "VALUES (%s,%s,'B person','lawyer','bperson-036@example.com')",
+                      (uuid.uuid4(), b))
+    a_people = pa.list_actors()
+    with _connect(url) as admin:
+        b_emails = {r[0] for r in admin.execute(
+            "SELECT email FROM actors WHERE tenant_id = %s AND email IS NOT NULL",
+            (b,)).fetchall()}
+    note(b_emails and not ({p["email"] for p in a_people} & b_emails),
+         f"...and A's people list names none of B's people ({len(b_emails)} in B)")
 
     # ── and the SAME queue contract (PLAN_23 O2) ────────────────────────────
     # The gate runs this against a dict. Here it runs against SELECT ... FOR UPDATE SKIP
