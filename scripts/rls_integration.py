@@ -1,4 +1,4 @@
-"""Row-level security, proved against a REAL Postgres. Deliberately outside the gate.
+"""Row-level security, proved against a REAL Postgres. Outside scripts/run_tests.sh; run by CI.
 
 ## Why this is not in scripts/run_tests.sh
 
@@ -10,6 +10,13 @@ test -- or it makes the whole gate conditional on infrastructure. So it stays ou
 declares ENABLE and FORCE row level security and a policy. Static checks catch a migration
 that forgot the discipline. Only this file catches a server where the discipline does not
 hold.
+
+CI DOES run it, as a separate step of .github/workflows/gate.yml after run_tests.sh, against
+the job's own PostgreSQL 16 service: the superuser `postgres` applies the migrations
+(PLACEDON_ADMIN_DATABASE_URL) and every visibility assertion connects as `placedon_app`,
+which the workflow creates NOSUPERUSER NOBYPASSRLS. That step fails unless the run exits 0
+AND prints its "N/M passed" line, so a refused or skipped run cannot read as green. The
+offline argument above is about run_tests.sh, which still never names this file.
 
 ## STATUS: RUN — 2026-09-29, PostgreSQL 18.6, 59 checks, 0 failures
 
@@ -748,9 +755,11 @@ def run(url: str) -> int:
     a, b = uuid.uuid4(), uuid.uuid4()
     actor_a, actor_b = uuid.uuid4(), uuid.uuid4()
     failures: list[str] = []
+    checked = [0]
 
     def note(ok: bool, label: str) -> None:
         print(f"  [{'PASS' if ok else 'FAIL'}] {label}")
+        checked[0] += 1
         if not ok:
             failures.append(label)
 
@@ -1462,6 +1471,8 @@ def run(url: str) -> int:
              "of one")
 
     print()
+    # The count line .github/workflows/gate.yml requires: no line, no green check.
+    print(f"{checked[0] - len(failures)}/{checked[0]} passed")
     if failures:
         print(f"{len(failures)} FAILED — tenant isolation is NOT proved on this server.")
         print("Do not edit this script to make it pass. Report it.")
