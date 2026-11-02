@@ -13,7 +13,8 @@ On a THROWAWAY database, through the real verbs, queue and worker, with two firm
     B's search -- the job reads the bytes recorded on B's own row;
   * a lawyer whose matter grant was revoked cannot pull that matter's document into their
     own unfiled document the same way;
-  * a DELETED document is not brought back by an ingest job;
+  * a DELETED document is not brought back by an ingest job, including one deleted
+    while its ingest is already running;
   * a filed document is not moved out of its matter by a job that omits matter_id;
   * the normal upload -> ingest path still reaches INGESTED.
 
@@ -41,6 +42,7 @@ APP = os.environ.get("PLACEDON_PG_APP", "placedon_app")
 SECRET_A = "Clause 4. ZEPHYRQUARTZ settlement figure is confidential to firm A."
 SECRET_M = "Clause 6. OBLONGMARROW privileged advice on the matter."
 SECRET_D = "Clause 2. VELLUMTHRUSH terms, since deleted at the client's request."
+SECRET_R = "Clause 3. MARBLEWREN terms, deleted while they were still being read."
 
 
 def _checker():
@@ -216,6 +218,39 @@ def _run() -> int:
                   and not hits(A1, "VELLUMTHRUSH"),
                   f"an ingest job does not bring a DELETED document back "
                   f"({row.get('state')}, chunks={d_chunks})")
+
+            # 4b. Deleted WHILE its ingest is running: the job has already re-read the row
+            # (still live), the person deletes it, then the ingest's final writes land.
+            # The bytes are read after the row, so the delete happens on that read.
+            up_r = _vault_upload({"name": "r.txt", "text": SECRET_R}, ctx(A1))
+
+            class _DeleteOnRead:
+                def __init__(self, inner):
+                    self.inner, self.fired = inner, False
+
+                def __getattr__(self, name):
+                    return getattr(self.inner, name)
+
+                def get(self, sha):
+                    if sha == up_r["sha256"] and not self.fired:
+                        self.fired = True
+                        _vault_delete({"document_id": up_r["document_id"]}, ctx(A1))
+                    return self.inner.get(sha)
+
+            racing = _DeleteOnRead(files)
+            wq = q.PostgresQueue(app_url, tenant_id=TA, actor_id=A1)
+            sql("UPDATE jobs SET not_before = NULL WHERE status = 'QUEUED'")
+            run_one(queue=wq, store=store(A1), handlers={}, worker="w",
+                    bind_job=postgres_job_bindings(app_url, tenant_id=TA, files=racing))
+            row = store(A1).read_vault_document(up_r["document_id"]) or {}
+            r_chunks = sql("SELECT count(*) FROM vault_chunks WHERE document_id = %s",
+                           (up_r["document_id"],))[0][0]
+            check(racing.fired and row.get("state") == "DELETED" and row.get("deleted_at")
+                  and row.get("text_chars") is None and r_chunks == 0
+                  and not hits(A1, "MARBLEWREN"),
+                  f"a document deleted MID-INGEST stays DELETED: the ingest's final write "
+                  f"does not flip it back ({row.get('state')}, chunks={r_chunks}, "
+                  f"delete fired={racing.fired})")
 
             # 5. A job that omits matter_id does not unfile a filed document.
             forge(A1, {"document_id": up_m["document_id"], "sha256": sha_m, "name": "m"})
