@@ -801,6 +801,7 @@ def run(url: str) -> int:
                   "029_vault_partial.sql", "030_vault_failed.sql",
                   "031_run_progress.sql", "032_company_profile.sql",
                   "033_login_email_unique.sql", "034_grid_document_names.sql",
+                  "035_model_spend.sql",
                   "036_invite_cancel.sql"):
             cur.execute(sql(f))
             print(f"  applied {f}")

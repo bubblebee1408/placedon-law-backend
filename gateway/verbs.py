@@ -188,8 +188,8 @@ def _ledger():
     model calls when this returns None; injected offline models do not use the ledger.
     """
     try:
-        from backend.budget import BudgetTracker
-        return BudgetTracker()
+        from backend.budget import default_tracker
+        return default_tracker()
     except (OSError, ValueError):
         return None
 
