@@ -64,7 +64,7 @@ python3 scripts/check_deps.py                           # exit 0 = ready
 | `requirements-gateway.txt` | the gateway's Postgres store |
 
 Environment variables are read where they are used. The main ones are
-`PLACEDON_DATABASE_URL` (`gateway/store.py`; unset means in-memory) and the model-provider
+`PLACEDON_DATABASE_URL` (`gateway/store/auth_lookup.py`; unset means in-memory) and the model-provider
 settings read by `checker/azure_model.py` (e.g. `PLACEDON_ACCEPT_REGION`). **Never commit a key.**
 
 ### Staging gateway credentials and vault storage
