@@ -14,8 +14,9 @@ from backend.budget import BudgetTracker, FileStore
 
 
 class CapNumbers(unittest.TestCase):
-    def test_firm_daily_cap_is_a_quarter_of_the_global_daily_cap(self):
-        self.assertEqual(budget.TENANT_DAILY_CAP_INR, round(budget.DAILY_CAP_INR * 0.25, 2))
+    def test_firm_daily_cap_is_half_of_the_global_daily_cap(self):
+        self.assertEqual(budget.TENANT_DAILY_SHARE, 0.5)
+        self.assertEqual(budget.TENANT_DAILY_CAP_INR, round(budget.DAILY_CAP_INR * 0.5, 2))
 
     def test_user_daily_default_does_not_exceed_the_firm_cap(self):
         self.assertLessEqual(budget.USER_DAILY_CAP_INR, budget.TENANT_DAILY_CAP_INR)
@@ -48,6 +49,18 @@ class FirmAndUserCaps(unittest.TestCase):
         self.assertIsNone(refused.id)
         self.assertIn("daily", refused.verdict.reason)
         self.assertIsNotNone(self.hold("firm-b", "u1", 1.0))
+
+    def test_a_full_multi_worker_research_plan_fits_one_firms_day(self):
+        from agents import multi_plan as mp
+        worst = budget.cost_inr(budget.DEFAULT_MODEL, mp.WORKER_INPUT_TOKENS * mp.MAX_WORKER_ATTEMPTS,
+                                mp.WORKER_MAX_TOKENS * mp.MAX_WORKER_ATTEMPTS)
+        ledger = self.tracker.attributed("firm-a", "u1")
+        held = [ledger.reserve(input_tokens=mp.WORKER_INPUT_TOKENS * mp.MAX_WORKER_ATTEMPTS,
+                               max_tokens=mp.WORKER_MAX_TOKENS * mp.MAX_WORKER_ATTEMPTS,
+                               request_count=mp.MAX_WORKER_ATTEMPTS).id
+                for _ in range(mp.MAX_WORKERS)]
+        self.assertLess(worst * mp.MAX_WORKERS, budget.TENANT_DAILY_CAP_INR)
+        self.assertTrue(all(held), f"{mp.MAX_WORKERS} holds of ₹{worst} for one person")
 
     def test_user_daily_cap_binds_inside_the_firm(self):
         with patch.object(budget, "USER_DAILY_CAP_INR", 3.0):

@@ -91,12 +91,13 @@ def _run() -> int:
             return 0
         check(bypass is False, "connected as the app role, which cannot bypass RLS")
 
-        # ── a firm's daily share under a race: 40 holds of ₹1 from 40 people ──
+        # ── a firm's daily share under a race: more ₹1 holds than it allows, from as many people ──
         firm_a = str(uuid.uuid4())
-        got = race([(firm_a, str(uuid.uuid4()), 1.0) for _ in range(40)])
+        tries = int(B.TENANT_DAILY_CAP_INR) + 20
+        got = race([(firm_a, str(uuid.uuid4()), 1.0) for _ in range(tries)])
         admitted = sum(r.id is not None for r in got)
         check(admitted == int(B.TENANT_DAILY_CAP_INR),
-              f"40 concurrent ₹1 holds for one firm: {admitted} admitted, the firm's share "
+              f"{tries} concurrent ₹1 holds for one firm: {admitted} admitted, the firm's share "
               f"₹{B.TENANT_DAILY_CAP_INR} allows {int(B.TENANT_DAILY_CAP_INR)}")
         check(counter(f"tenant:{firm_a}") <= B.TENANT_DAILY_CAP_INR,
               f"...and the firm's day never passed its cap ({counter(f'tenant:{firm_a}')})")

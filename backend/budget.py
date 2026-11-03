@@ -72,10 +72,12 @@ def _cap_from_env(name: str, default: float, *, env: Mapping[str, str] | None = 
     return value
 
 
-# Each firm's share of the global DAILY cap (QUESTIONS.md, spend-cap finding): 25%, so one
-# noisy firm cannot shut the other firms out of the day. ₹116.67 x 0.25 = ₹29.17.
+# Each firm's share of the global DAILY cap (QUESTIONS.md, spend-cap finding), so one noisy
+# firm cannot shut the other firms out of the day. 50%, founder-approved 2026-11-03 for #159:
+# ₹116.67 x 0.5 = ₹58.33, which fits a full 8-worker research plan (₹35.20 on Sonnet 5).
+TENANT_DAILY_SHARE = 0.5
 TENANT_DAILY_CAP_INR = _cap_from_env("PLACEDON_TENANT_DAILY_CAP_INR",
-                                     round(DAILY_CAP_INR * 0.25, 2))
+                                     round(DAILY_CAP_INR * TENANT_DAILY_SHARE, 2))
 
 # Per person, per day. Defaults to the firm's daily share: the old ₹150 sat ABOVE the global
 # daily cap of ₹116.67, so one person could use up the whole deployment's day.
@@ -2358,10 +2360,10 @@ if __name__ == "__main__":
 
     # ── the per-firm daily share and the per-user cap both BIND ──────────────
     # QUESTIONS.md spend-cap finding: the old ₹150/day user cap sat above the ₹116.67 global
-    # day, so one person could use up the deployment's day. Now firm = 25% of the day and
+    # day, so one person could use up the deployment's day. Now firm = 50% of the day and
     # the user default = the firm's share, so neither is shadowed.
-    check("the firm's daily share is 25% of the global day",
-          TENANT_DAILY_CAP_INR, round(DAILY_CAP_INR * 0.25, 2))
+    check("the firm's daily share is 50% of the global day",
+          TENANT_DAILY_CAP_INR, round(DAILY_CAP_INR * 0.5, 2))
     check("  ...and the user's daily default does not exceed it",
           USER_DAILY_CAP_INR <= TENANT_DAILY_CAP_INR < DAILY_CAP_INR, True)
     t = tracker()
