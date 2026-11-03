@@ -1,0 +1,30 @@
+# Proves the one-command local stack still comes up from a clean clone: `make dev` builds
+# the image, starts Postgres, applies every migration as placedon_app, starts the gateway and
+# worker, and fails unless /v1/health reports postgres, a job queue and a vault.
+name: devstack
+
+on:
+  pull_request:
+    paths: [compose.yaml, Dockerfile, .dockerignore, Makefile, .env.example, "ops/**",
+            "gateway/migrations/**", "requirements*.txt", scripts/migrate.py,
+            .github/workflows/devstack.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  devstack:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: make dev
+        run: make dev
+      - name: make migrate is idempotent on a migrated database
+        run: make migrate
+      - name: Logs on failure
+        if: failure()
+        run: docker compose logs --no-color
+      - name: Stop
+        if: always()
+        run: docker compose down -v

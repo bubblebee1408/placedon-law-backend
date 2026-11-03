@@ -27,13 +27,13 @@ jobs:
       postgres:
         image: postgres:16
         env:
-          POSTGRES_PASSWORD: ci-only-not-a-secret
+          POSTGRES_PASSWORD: local-only-not-a-secret
         ports: ["5432:5432"]
         options: >-
           --health-cmd "pg_isready -U postgres"
           --health-interval 5s --health-timeout 5s --health-retries 20
     env:
-      PGPASSWORD: ci-only-not-a-secret
+      PGPASSWORD: local-only-not-a-secret
       PLACEDON_PGHOST: localhost
       PLACEDON_PG_ADMIN: postgres
       PLACEDON_PG_APP: placedon_app
@@ -49,42 +49,7 @@ jobs:
       - name: Repository gate
         run: bash scripts/run_tests.sh
       - name: Application role (NOSUPERUSER NOBYPASSRLS, as in production)
-        run: |
-          psql -h localhost -U postgres -v ON_ERROR_STOP=1 -c \
-            "CREATE ROLE placedon_app LOGIN PASSWORD 'ci-only-not-a-secret' NOSUPERUSER NOBYPASSRLS"
-      - name: Live-database regressions
-        # A provisioning failure prints SKIP and exits 0 locally, by design. Here it would
-        # be a green check over nothing, so SKIP or a missing "N/M passed" line fails.
-        run: |
-          set -euo pipefail
-          for s in scripts/vault_upload_atomic_integration.py \
-                   scripts/vault_failed_retry_integration.py \
-                   scripts/vault_ingest_authz_integration.py \
-                   scripts/conversation_persist_integration.py \
-                   scripts/review_table_list_integration.py \
-                   scripts/company_profile_integration.py \
-                   scripts/login_email_integration.py \
-                   scripts/spend_ledger_integration.py; do
-            echo "::group::$s --run"
-            out=$(PYTHONPATH=. python "$s" --run 2>&1) || { echo "$out"; exit 1; }
-            echo "$out"
-            echo "::endgroup::"
-            if grep -q '^SKIP' <<<"$out" || ! grep -qE '[0-9]+/[0-9]+ passed' <<<"$out"; then
-              echo "::error::$s did not run against the database"; exit 1
-            fi
-          done
-      - name: Row-level security proof (scripts/rls_integration.py)
-        # Migrations applied as the superuser; every visibility assertion runs as
-        # placedon_app. --run refuses any database not named placedon_throwaway_*.
-        env:
-          PLACEDON_ADMIN_DATABASE_URL: postgresql://localhost/placedon_throwaway_rls?user=postgres
-          PLACEDON_DATABASE_URL: postgresql://localhost/placedon_throwaway_rls?user=placedon_app
-        run: |
-          set -euo pipefail
-          psql -h localhost -U postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE placedon_throwaway_rls"
-          out=$(PYTHONPATH=. python scripts/rls_integration.py --run 2>&1) || { echo "$out"; exit 1; }
-          echo "$out"
-          if grep -q '^  REFUSED:' <<<"$out" || ! grep -qE '^[0-9]+/[0-9]+ passed' <<<"$out"; then
-            echo "::error::rls_integration.py did not run against the database"; exit 1
-          fi
-          psql -h localhost -U postgres -c "DROP DATABASE placedon_throwaway_rls WITH (FORCE)"
+        # The same file the local stack runs (compose.yaml), so CI and a laptop agree.
+        run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f ops/dev/initdb/10-app-role.sql
+      - name: Live-database regressions and the row-level security proof
+        run: bash scripts/db_regressions.sh
