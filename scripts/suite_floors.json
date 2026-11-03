@@ -309,6 +309,7 @@
     "scripts/conversation_persist_integration.py": 2,
     "scripts/conversation_regression_checks.py": 192,
     "scripts/date_properties.py": 29,
+    "scripts/deploy_workflow_check.py": 14,
     "scripts/demo.py": 17,
     "scripts/demo_e2e.py": 12,
     "scripts/demo_inhouse.py": 7,
