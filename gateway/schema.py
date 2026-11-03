@@ -141,6 +141,7 @@ def _test() -> None:
                     "030_vault_failed.sql", "031_run_progress.sql",
                     "032_company_profile.sql", "033_login_email_unique.sql",
                     "034_grid_document_names.sql",
+                    "035_model_spend.sql",
                     "036_invite_cancel.sql"],
           f"every migration exists, in order ({files})")
 
@@ -158,6 +159,14 @@ def _test() -> None:
     check("CREATE POLICY global_access ON login_attempts USING (true)" in accounts_sql,
           "...and it still gets an explicit USING (true) policy: 'no row restriction, on "
           "purpose', not a forgotten one")
+    # 035: the spend ledger is shared across firms on purpose, as login_attempts is.
+    spend_sql = (MIGRATIONS / "035_model_spend.sql").read_text(encoding="utf-8")
+    for tbl in ("model_spend", "model_spend_holds"):
+        check(tbl in tables() and tbl not in tenant_scoped(),
+              f"{tbl} has no tenant_id column, so it is deliberately global")
+        check(declares("FORCE", tbl, spend_sql)
+              and f"CREATE POLICY global_access ON {tbl} USING (true)" in spend_sql,
+              f"...and {tbl} is FORCE-bound with an explicit USING (true) policy")
     for fn in ("auth_find_login", "auth_resolve_session", "invite_find_by_token"):
         anchor = f"CREATE OR REPLACE FUNCTION {fn}"
         check(anchor in accounts_sql

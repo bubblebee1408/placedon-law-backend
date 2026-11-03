@@ -501,6 +501,9 @@ extra+=("scripts/company_profile_integration.py --test" "gateway/company_profile
 # (fail-safe refusal on existing duplicates, cross-firm accept refused) is
 # `scripts/login_email_integration.py --run` against throwaway DBs.
 extra+=("scripts/login_email_integration.py --test")
+# 035: the shared spend ledger. The OFFLINE guard runs here; the live proof (concurrent holds
+# never pass a cap, refunds on settle) is `scripts/spend_ledger_integration.py --run`.
+extra+=("scripts/spend_ledger_integration.py --test")
 
 # A module that prints "9/10 passed" has failed, whatever its exit code says.
 # Eight modules once defined _test() without `raise SystemExit(1)`, so their

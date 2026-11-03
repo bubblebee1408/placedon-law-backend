@@ -19,8 +19,9 @@ This is the master spec's best idea (§4.3), with three corrections:
 
   * **Persistence.** The spec's tracker holds counters on `self`. On serverless every invocation
     may be a fresh process, so an in-memory tracker resets to zero on each request and enforces
-    nothing. This one persists to a JSON file, and `Store` is an interface so the same logic runs
-    against Supabase or Redis when there is more than one instance.
+    nothing. With a database configured `default_tracker()` returns the Postgres ledger
+    (backend/budget_pg.py, migration 035), shared by every instance; without one this class
+    persists to a local JSON file, which is right for one process on one disk only.
 
 Exhaustion is not an error. The product degrades to template mode and says so — never a silent
 failure, never a guess.
@@ -50,15 +51,37 @@ DAILY_CAP_INR = round(MONTHLY_CAP_INR / 30, 2)      # ₹116.67 — derived, not
 # relied on: raising MONTHLY_CAP_INR without touching this leaves the ratio silently changed.
 TENANT_MONTHLY_CAP_INR = 700.0
 
-# ⚠ CURRENTLY UNREACHABLE, and left at the specified value on purpose.
-#
-# ₹150/day sits ABOVE the derived global daily cap of ₹116.67, so the global cap always binds
-# first and this one can never refuse a call. It is implemented, recorded and reported anyway,
-# because the alternative -- quietly lowering it to fit, or quietly raising DAILY_CAP_INR to
-# make it bite -- would be changing a spend limit nobody asked to change. `_test()` asserts the
-# shadowing, so whoever raises DAILY_CAP_INR past ₹150 is told by a failing test that this cap
-# has come alive rather than discovering it from a refused call.
-USER_DAILY_CAP_INR = 150.0
+
+
+def _cap_from_env(name: str, default: float, *, env: Mapping[str, str] | None = None) -> float:
+    """A cap in rupees from the environment, or `default` when unset or blank.
+
+    A value that is not a finite, non-negative number RAISES. A cap that silently fell back
+    to its default on a typo would be a spend limit nobody set; raising at import makes
+    `_ledger()` return None and the gateway refuse model calls (NO_BUDGET) until it is fixed.
+    """
+    raw = (os.environ if env is None else env).get(name, "").strip()
+    if not raw:
+        return default
+    try:
+        value = float(raw)
+    except ValueError:
+        raise ValueError(f"{name}={raw!r} is not a number of rupees") from None
+    if not math.isfinite(value) or value < 0:
+        raise ValueError(f"{name}={raw!r} must be a finite, non-negative number of rupees")
+    return value
+
+
+# Each firm's share of the global DAILY cap (QUESTIONS.md, spend-cap finding), so one noisy
+# firm cannot shut the other firms out of the day. 50%, founder-approved 2026-11-03 for #159:
+# ₹116.67 x 0.5 = ₹58.33, which fits a full 8-worker research plan (₹35.20 on Sonnet 5).
+TENANT_DAILY_SHARE = 0.5
+TENANT_DAILY_CAP_INR = _cap_from_env("PLACEDON_TENANT_DAILY_CAP_INR",
+                                     round(DAILY_CAP_INR * TENANT_DAILY_SHARE, 2))
+
+# Per person, per day. Defaults to the firm's daily share: the old ₹150 sat ABOVE the global
+# daily cap of ₹116.67, so one person could use up the whole deployment's day.
+USER_DAILY_CAP_INR = _cap_from_env("PLACEDON_USER_DAILY_CAP_INR", TENANT_DAILY_CAP_INR)
 USD_INR = 95.23                                      # 2026-08-06
 
 # Anthropic pricing, USD per million tokens. LIST price, deliberately — see below.
@@ -672,7 +695,8 @@ class BudgetTracker:
             return {"corrupt": True, "day": "", "month": "", "day_inr": 0.0,
                     "month_inr": 0.0, "month_held_inr": 0.0, "month_unresolved_inr": 0.0,
                     "calls_today": 0, "calls_by_model": {},
-                    "spend_cap": False, "tenant_month_inr": {}, "user_day_inr": {},
+                    "spend_cap": False, "tenant_month_inr": {}, "tenant_day_inr": {},
+                    "user_day_inr": {},
                     "credit_exhausted": False, "reservations": {},
                     "reservation_claims": {}, "reservation_calls": {},
                     "settled_reservations": {}}
@@ -736,6 +760,10 @@ class BudgetTracker:
             "user_day_inr": ({str(k): float(v) for k, v in
                               (raw.get("user_day_inr") or {}).items()}
                              if same_day else {}),
+            # The firm's DAY, checked against TENANT_DAILY_CAP_INR.
+            "tenant_day_inr": ({str(k): float(v) for k, v in
+                                (raw.get("tenant_day_inr") or {}).items()}
+                               if same_day else {}),
             # Scoped to the month, so it clears itself exactly when the provider's cap does.
             "spend_cap": raw.get("spend_cap_month") == month_key,
             # Scoped to the DAY, unlike the spend cap above, because the two clear on
@@ -864,6 +892,8 @@ class BudgetTracker:
             row["tenant_month_inr"] = dict(s["tenant_month_inr"])
         if s["user_day_inr"]:
             row["user_day_inr"] = dict(s["user_day_inr"])
+        if s["tenant_day_inr"]:
+            row["tenant_day_inr"] = dict(s["tenant_day_inr"])
         if s["spend_cap"]:
             row["spend_cap_month"] = s["month"]
         if s["credit_exhausted"]:
@@ -884,7 +914,7 @@ class BudgetTracker:
                 row.pop(field, None)
         if not row.get("calls_by_model"):
             row.pop("calls_by_model", None)
-        for scoped in ("tenant_month_inr", "user_day_inr"):
+        for scoped in ("tenant_month_inr", "tenant_day_inr", "user_day_inr"):
             if not row.get(scoped):
                 row.pop(scoped, None)
         return row
@@ -981,6 +1011,14 @@ class BudgetTracker:
                                f"still has ₹{MONTHLY_CAP_INR - s['month_inr']:.2f}, so this "
                                f"is this tenant's limit and not the deployment's.",
                                s["day_inr"], s["month_inr"], reserved)
+            used = (s["tenant_day_inr"].get(tenant_id, 0.0)
+                    + _scoped_reserved(s, "tenant", tenant_id))
+            if used + estimated_inr > TENANT_DAILY_CAP_INR:
+                return Verdict(False, "budget",
+                               f"tenant {tenant_id} has used ₹{used:.2f} of its "
+                               f"₹{TENANT_DAILY_CAP_INR:.2f} daily share. It resets tomorrow; "
+                               f"this is this tenant's limit and not the deployment's.",
+                               s["day_inr"], s["month_inr"], reserved)
 
         if user_id is not None:
             used = (s["user_day_inr"].get(user_id, 0.0)
@@ -988,7 +1026,7 @@ class BudgetTracker:
             if used + estimated_inr > USER_DAILY_CAP_INR:
                 return Verdict(False, "budget",
                                f"user {user_id} has used ₹{used:.2f} of their "
-                               f"₹{USER_DAILY_CAP_INR:.0f} daily cap.",
+                               f"₹{USER_DAILY_CAP_INR:.2f} daily cap.",
                                s["day_inr"], s["month_inr"], reserved)
 
         # Counted, not priced. This is the only gate a ₹0.00 call can fail, and it is
@@ -1065,6 +1103,7 @@ class BudgetTracker:
             day_inr=round(st["day_inr"] + actual_inr, 4),
             month_inr=round(st["month_inr"] + actual_inr, 4),
             tenant_month_inr=_scoped(st, "tenant_month_inr", tenant_id),
+            tenant_day_inr=_scoped(st, "tenant_day_inr", tenant_id),
             user_day_inr=_scoped(st, "user_day_inr", user_id),
             calls_by_model=_by_model(st),
             calls_today=st["calls_today"] + 1))
@@ -1127,9 +1166,12 @@ class BudgetTracker:
         }
         if tenant_id is not None:
             spent = s["tenant_month_inr"].get(tenant_id, 0.0)
+            day_spent = s["tenant_day_inr"].get(tenant_id, 0.0)
             out["tenant"] = {"tenant_id": tenant_id, "month_inr": spent,
                              "month_cap_inr": TENANT_MONTHLY_CAP_INR,
-                             "remaining_inr": round(TENANT_MONTHLY_CAP_INR - spent, 2)}
+                             "remaining_inr": round(TENANT_MONTHLY_CAP_INR - spent, 2),
+                             "day_inr": day_spent, "day_cap_inr": TENANT_DAILY_CAP_INR,
+                             "remaining_day_inr": round(TENANT_DAILY_CAP_INR - day_spent, 2)}
         if user_id is not None:
             spent = s["user_day_inr"].get(user_id, 0.0)
             out["user"] = {"user_id": user_id, "day_inr": spent,
@@ -1137,12 +1179,13 @@ class BudgetTracker:
                            "remaining_inr": round(USER_DAILY_CAP_INR - spent, 2),
                            # Reported, because a caller reading remaining_inr would otherwise
                            # believe this cap is what will stop them.
-                           "cap_binds": USER_DAILY_CAP_INR < DAILY_CAP_INR,
-                           "note": ("" if USER_DAILY_CAP_INR < DAILY_CAP_INR else
-                                    f"the per-user daily cap of ₹{USER_DAILY_CAP_INR:.0f} is "
-                                    f"above the global daily cap of ₹{DAILY_CAP_INR:.2f}, so "
-                                    f"the global one always binds first and this cap cannot "
-                                    f"currently refuse a call")}
+                           "cap_binds": USER_DAILY_CAP_INR <= min(DAILY_CAP_INR,
+                                                                  TENANT_DAILY_CAP_INR),
+                           "note": ("" if USER_DAILY_CAP_INR <= min(DAILY_CAP_INR,
+                                                                    TENANT_DAILY_CAP_INR) else
+                                    f"the per-user daily cap of ₹{USER_DAILY_CAP_INR:.2f} is "
+                                    f"above the firm's daily share or the global daily cap, so "
+                                    f"one of those always binds first")}
         return out
 
     def record_credit_exhausted(self) -> bool:
@@ -1239,6 +1282,14 @@ class BudgetTracker:
             call_info["tenant"] = tenant_id
         if user_id is not None:
             call_info["user"] = user_id
+        return self._hold(worst=worst, rid=rid, model=model, tenant_id=tenant_id,
+                          user_id=user_id, call_info=call_info, request_count=request_count,
+                          per_model_cap=per_model_cap)
+
+    def _hold(self, *, worst: float, rid: str, model: str, tenant_id: str | None,
+              user_id: str | None, call_info: dict, request_count: int,
+              per_model_cap: int | None) -> Reservation:
+        """The storage half of `reserve()`: admit and record one hold, or write nothing."""
         if not isinstance(self.store, AtomicStore):
             state = self._state()
             return Reservation(None, worst, Verdict(
@@ -1296,6 +1347,11 @@ class BudgetTracker:
             raise ValueError("actual_calls must be a non-negative integer or None")
         if not reservation_id:
             raise ValueError("reservation_id must be non-empty")
+        return self._settle(reservation_id, actual_inr, actual_calls)
+
+    def _settle(self, reservation_id: str, actual_inr: float | None,
+                actual_calls: int | None) -> Verdict:
+        """The storage half of `settle()`, after its arguments are validated."""
         before = self._state()
         if before["corrupt"]:
             if actual_inr is None:
@@ -1335,6 +1391,9 @@ class BudgetTracker:
             tenant_month = dict(state["tenant_month_inr"])
             if tenant is not None:
                 tenant_month[tenant] = round(tenant_month.get(tenant, 0.0) + amount, 4)
+            tenant_day = dict(state["tenant_day_inr"])
+            if tenant is not None:
+                tenant_day[tenant] = round(tenant_day.get(tenant, 0.0) + amount, 4)
             user_day = dict(state["user_day_inr"])
             if user is not None:
                 user_day[user] = round(user_day.get(user, 0.0) + amount, 4)
@@ -1354,6 +1413,7 @@ class BudgetTracker:
                 calls_today=state["calls_today"] + count,
                 calls_by_model=by_model,
                 tenant_month_inr=tenant_month,
+                tenant_day_inr=tenant_day,
                 user_day_inr=user_day,
                 reservations={k: v for k, v in state["reservations"].items()
                               if k != reservation_id},
@@ -1409,6 +1469,21 @@ class BudgetTracker:
 
 
 # Env override for a manual kill switch (spec §12, adopted).
+def default_tracker() -> BudgetTracker:
+    """The ledger this process should spend against.
+
+    With PLACEDON_DATABASE_URL set (App Service, the worker, any multi-instance deploy) it
+    is the shared Postgres ledger (migration 035), so a restart or a second instance cannot
+    reset or split the caps. Without one (a laptop, the offline gate) it is the local JSON
+    file, which is only correct for one process on one disk.
+    """
+    url = os.environ.get("PLACEDON_DATABASE_URL", "").strip()
+    if url:
+        from backend.budget_pg import PostgresBudget
+        return PostgresBudget(url)
+    return BudgetTracker()
+
+
 def forced_mode() -> Mode | None:
     v = os.getenv("LLM_MODE")
     return v if v in ("normal", "budget", "offline") else None  # type: ignore[return-value]
@@ -2283,23 +2358,25 @@ if __name__ == "__main__":
           "by its own empty bucket",
           v.allowed is False and "monthly cap reached" in v.reason, True)
 
-    # ── the per-user cap is implemented, recorded, and currently SHADOWED ─────
-    check("the per-user daily cap is above the global daily cap, so it cannot bind",
-          USER_DAILY_CAP_INR > DAILY_CAP_INR, True)
+    # ── the per-firm daily share and the per-user cap both BIND ──────────────
+    # QUESTIONS.md spend-cap finding: the old ₹150/day user cap sat above the ₹116.67 global
+    # day, so one person could use up the deployment's day. Now firm = 50% of the day and
+    # the user default = the firm's share, so neither is shadowed.
+    check("the firm's daily share is 50% of the global day",
+          TENANT_DAILY_CAP_INR, round(DAILY_CAP_INR * 0.5, 2))
+    check("  ...and the user's daily default does not exceed it",
+          USER_DAILY_CAP_INR <= TENANT_DAILY_CAP_INR < DAILY_CAP_INR, True)
     t = tracker()
-    v = t.can_make_call(USER_DAILY_CAP_INR + 1, user_id="u1")
-    check("  ...and a call that would breach it is refused by the GLOBAL daily cap first",
-          v.allowed is False and "daily cap reached" in v.reason, True)
-    check("  ...which usage() reports rather than leaving a reader to infer",
-          t.usage(user_id="u1")["user"]["cap_binds"], False)
-    check("  ...with a note saying why",
-          "always binds first" in t.usage(user_id="u1")["user"]["note"], True)
-    # The cap itself is still correct arithmetic, shown by driving it directly. If anyone
-    # raises DAILY_CAP_INR past ₹150 the shadowing checks above fail and say so.
+    v = t.can_make_call(TENANT_DAILY_CAP_INR + 1, tenant_id="firm-a")
+    check("  ...and a firm call over its share is refused by the FIRM's daily cap",
+          v.allowed is False and "daily share" in v.reason, True)
+    check("  ...which usage() reports as binding", t.usage(user_id="u1")["user"]["cap_binds"],
+          True)
     t = tracker()
     t.record_call(USER_DAILY_CAP_INR - 0.5, user_id="u1")
-    check("  ...and the cap's own arithmetic is right: at ₹149.50 spent, ₹1 more breaches it",
-          t._state()["user_day_inr"]["u1"] + 1.0 > USER_DAILY_CAP_INR, True)
+    v = t.can_make_call(1.0, user_id="u1")
+    check("  ...and a person ₹0.50 under their cap is refused ₹1 more by their OWN cap",
+          v.allowed is False and "user u1" in v.reason, True)
 
     # ── spend is attributed, and rolls over on the right clock ───────────────
     t = tracker()

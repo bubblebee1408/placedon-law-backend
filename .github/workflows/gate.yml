@@ -63,7 +63,8 @@ jobs:
                    scripts/conversation_persist_integration.py \
                    scripts/review_table_list_integration.py \
                    scripts/company_profile_integration.py \
-                   scripts/login_email_integration.py; do
+                   scripts/login_email_integration.py \
+                   scripts/spend_ledger_integration.py; do
             echo "::group::$s --run"
             out=$(PYTHONPATH=. python "$s" --run 2>&1) || { echo "$out"; exit 1; }
             echo "$out"

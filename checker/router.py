@@ -482,9 +482,9 @@ def providers_available(*, credit_exhausted=None) -> tuple[str, ...]:
     from checker import anthropic_model, azure_model, gemini_model, ollama_runner
     if credit_exhausted is None:
         def credit_exhausted() -> bool:
-            from backend.budget import BudgetTracker
             try:
-                return BudgetTracker().credit_exhausted()
+                from backend.budget import default_tracker
+                return default_tracker().credit_exhausted()
             except (OSError, ValueError):
                 # An unreadable ledger is not evidence the balance is empty. Fail toward
                 # offering the provider: the worst case is one wasted 400 that records

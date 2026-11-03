@@ -23,6 +23,7 @@ def main():
     suite.addTests(unittest.defaultTestLoader.discover(str(root / "tests"), pattern="test_run_progress.py"))
     suite.addTests(unittest.defaultTestLoader.discover(str(root / "tests"), pattern="test_company_profile.py"))
     suite.addTests(unittest.defaultTestLoader.discover(str(root / "tests"), pattern="test_ask_as_of.py"))
+    suite.addTests(unittest.defaultTestLoader.discover(str(root / "tests"), pattern="test_spend_caps.py"))
     result = unittest.TextTestRunner(verbosity=1).run(suite)
     failed = len(result.failures) + len(result.errors)
     passed = result.testsRun - failed - len(result.skipped)
