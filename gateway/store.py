@@ -43,6 +43,22 @@ MEMORY = "in-memory"
 POSTGRES = "postgres"
 
 URL_ENV = "PLACEDON_DATABASE_URL"
+# What invites.list may show. Never token_hash: the hash of a live token is what a
+# stolen database dump would be matched against.
+_PENDING_INVITE_COLS = ("invite_id", "email", "role", "invited_by", "created_at",
+                        "expires_at")
+
+
+def _when(value):
+    """An expires_at, whatever form it was stored in, as an aware datetime."""
+    from datetime import datetime, timezone
+    if isinstance(value, datetime):
+        d = value
+    else:
+        d = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
+
+
 _UUID = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-"
                    r"[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
 
@@ -90,6 +106,9 @@ class Backend(Protocol):
     def find_actor_by_email(self, email: str) -> dict | None: ...
     def read_invite(self, token_hash: str) -> dict | None: ...
     def list_actors(self) -> list[dict]: ...
+    # 036: pending invites, and cancelling one (the row stays, marked).
+    def list_pending_invites(self) -> list[dict]: ...
+    def cancel_invite(self, invite_id: str, *, cancelled_by: str) -> bool: ...
     # 026: sessions. Tenant-scoped CREATE and REVOKE, run once a tenant is known
     # (DECISION_ACCOUNTS.md Decision 4). The cross-tenant RESOLVE-by-hash is deliberately
     # NOT here: it is the one tenant-blind read, done by AuthLookup via
@@ -1592,9 +1611,12 @@ class MemoryBackend:
                     raise StoreError(
                         f"{email!r} already has an account in this tenant (018 "
                         f"actors_tenant_email_idx)")
+        from datetime import datetime, timezone
+        joined = (self.actors.get(aid) or {}).get("created_at") or \
+            datetime.now(timezone.utc).isoformat()
         row = {"actor_id": aid, "label": str(actor.get("label") or ""), "role": role,
                "email": email, "password_hash": pw,
-               "disabled_at": actor.get("disabled_at")}
+               "disabled_at": actor.get("disabled_at"), "created_at": joined}
         self.actors[aid] = row
         return dict(row)
 
@@ -1618,16 +1640,25 @@ class MemoryBackend:
                 "an invite must expire. One with no horizon is a credential, and a "
                 "credential sitting in an inbox for a year is the one that gets used by "
                 "whoever buys the laptop")
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc)
         for row in self.invites.values():
-            if row.get("accepted_at") is None and \
+            if row.get("accepted_at") is None and row.get("cancelled_at") is None and \
                     str(row.get("email") or "").lower() == email.lower():
+                if _when(row["expires_at"]) <= now:
+                    # An expired invite is retired by the new one, as on Postgres.
+                    row["cancelled_at"] = now.isoformat()
+                    row["cancelled_by"] = str(invite.get("invited_by") or "")
+                    continue
                 raise StoreError(
-                    f"{email!r} already has a live invite (018 invites_live_per_email_idx)")
+                    f"{email!r} already has a live invite (036 invites_live_per_email_idx)")
         row = {"invite_id": str(invite.get("invite_id") or ""), "email": email,
                "role": invite["role"], "token_hash": th,
                "invited_by": str(invite.get("invited_by") or ""),
+               "created_at": now.isoformat(),
                "expires_at": str(invite["expires_at"]),
-               "accepted_at": None, "accepted_by": None}
+               "accepted_at": None, "accepted_by": None,
+               "cancelled_at": None, "cancelled_by": None}
         self.invites[row["invite_id"]] = row
         return dict(row)
 
@@ -1647,6 +1678,8 @@ class MemoryBackend:
                 continue
             if row.get("accepted_at") is not None:
                 return None                      # single use, and it is already used
+            if row.get("cancelled_at") is not None:
+                return None                      # an admin withdrew it (036)
             if str(row.get("expires_at") or "") <= str(now):
                 return None
             if actor is not None:
@@ -1676,7 +1709,32 @@ class MemoryBackend:
     def list_actors(self) -> list[dict]:
         """Every person with an email, without their password hash."""
         return [{k: v for k, v in row.items() if k != "password_hash"}
-                for row in self.actors.values() if row.get("email")]
+                for row in sorted(self.actors.values(),
+                                  key=lambda r: str(r.get("email") or "").lower())
+                if row.get("email")]
+
+    def list_pending_invites(self) -> list[dict]:
+        """Invites still usable: not accepted, not cancelled, not expired. Newest first.
+        Never the token hash."""
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc)
+        rows = [r for r in self.invites.values()
+                if r.get("accepted_at") is None and r.get("cancelled_at") is None
+                and _when(r["expires_at"]) > now]
+        rows.sort(key=lambda r: str(r.get("created_at") or ""), reverse=True)
+        return [{k: r.get(k) for k in _PENDING_INVITE_COLS} for r in rows]
+
+    def cancel_invite(self, invite_id: str, *, cancelled_by: str) -> bool:
+        """Withdraw an unused invite. The row stays, marked. False if there is no such
+        unused invite in this tenant."""
+        from datetime import datetime, timezone
+        row = self.invites.get(str(invite_id or ""))
+        if row is None or row.get("accepted_at") is not None \
+                or row.get("cancelled_at") is not None:
+            return False
+        row["cancelled_at"] = datetime.now(timezone.utc).isoformat()
+        row["cancelled_by"] = str(cancelled_by)
+        return True
 
     def create_session(self, session: dict) -> dict:
         """026's CHECKs, restated: the hash is sha256-shaped, and it expires."""
@@ -2028,7 +2086,14 @@ class PostgresBackend:
     def create_invite(self, invite: dict) -> dict:
         import psycopg
         try:
-            with self._conn() as c:
+            with self._conn() as c, c.transaction():
+                # An EXPIRED unused invite still holds this email's slot in
+                # invites_live_per_email_idx (a partial index cannot say "not expired"),
+                # so re-inviting after the 7 days would be refused forever. Retire it.
+                c.execute("UPDATE invites SET cancelled_at = now(), cancelled_by = %s "
+                          "WHERE lower(email) = lower(%s) AND accepted_at IS NULL "
+                          "AND cancelled_at IS NULL AND expires_at <= now()",
+                          (invite["invited_by"], invite["email"]))
                 r = c.execute(
                     "INSERT INTO invites (invite_id, tenant_id, email, role, token_hash, "
                     "invited_by, expires_at) VALUES (%s,%s,%s,%s,%s,%s,%s) "
@@ -2066,7 +2131,7 @@ class PostgresBackend:
                 # unknown, used or expired token creates no account and gets the same None
                 # the memory backend gives. The row lock keeps two accepts from both passing.
                 if c.execute("SELECT 1 FROM invites WHERE token_hash = %s AND accepted_at IS NULL "
-                             "AND expires_at > now() FOR UPDATE",
+                             "AND cancelled_at IS NULL AND expires_at > now() FOR UPDATE",
                              (str(token_hash or ""),)).fetchone() is None:
                     raise _Spent()
                 if actor is not None:
@@ -2079,7 +2144,8 @@ class PostgresBackend:
                          actor.get("password_hash")))
                 r = c.execute(
                     "UPDATE invites SET accepted_at = now(), accepted_by = %s "
-                    "WHERE token_hash = %s AND accepted_at IS NULL AND expires_at > now() "
+                    "WHERE token_hash = %s AND accepted_at IS NULL AND cancelled_at IS NULL "
+                    "AND expires_at > now() "
                     "RETURNING invite_id, email, role, token_hash, invited_by, expires_at, "
                     "accepted_at, accepted_by",
                     (actor_id, str(token_hash or ""))).fetchone()
@@ -2143,10 +2209,33 @@ class PostgresBackend:
 
     def list_actors(self) -> list[dict]:
         with self._conn() as c:
-            rows = c.execute("SELECT actor_id, label, role, email, disabled_at FROM actors "
-                             "WHERE email IS NOT NULL ORDER BY lower(email)").fetchall()
+            rows = c.execute("SELECT actor_id, label, role, email, disabled_at, created_at "
+                             "FROM actors WHERE email IS NOT NULL "
+                             "ORDER BY lower(email)").fetchall()
         return [{"actor_id": str(r[0]), "label": r[1], "role": r[2], "email": r[3],
-                 "disabled_at": r[4].isoformat() if r[4] else None} for r in rows]
+                 "disabled_at": r[4].isoformat() if r[4] else None,
+                 "created_at": r[5].isoformat()} for r in rows]
+
+    def list_pending_invites(self) -> list[dict]:
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT invite_id, email, role, invited_by, created_at, expires_at "
+                "FROM invites WHERE accepted_at IS NULL AND cancelled_at IS NULL "
+                "AND expires_at > now() ORDER BY created_at DESC").fetchall()
+        return [{"invite_id": str(r[0]), "email": r[1], "role": r[2],
+                 "invited_by": str(r[3]), "created_at": r[4].isoformat(),
+                 "expires_at": r[5].isoformat()} for r in rows]
+
+    def cancel_invite(self, invite_id: str, *, cancelled_by: str) -> bool:
+        """Scoped to THIS tenant by RLS: another firm's invite id matches no row."""
+        if not _UUID.match(str(invite_id or "")):
+            return False
+        with self._conn() as c:
+            r = c.execute(
+                "UPDATE invites SET cancelled_at = now(), cancelled_by = %s "
+                "WHERE invite_id = %s AND accepted_at IS NULL AND cancelled_at IS NULL "
+                "RETURNING invite_id", (cancelled_by, invite_id)).fetchone()
+        return r is not None
 
     def read_labels(self) -> list[dict]:
         with self._conn() as c:
@@ -4519,6 +4608,62 @@ def conformance(backend) -> list[tuple[bool, str]]:
        "...and an unknown token gets the SAME answer as a used or expired one, so a "
        "token cannot be probed to learn which it was")
 
+    # ── 036: pending invites, cancel (marks, never deletes), on both backends ─
+    _ptok = _hl.sha256(b"pending-token-036").hexdigest()
+    _pid = str(_uuid.uuid4())
+    backend.create_invite({"invite_id": _pid, "email": "pending036@example.com",
+                           "role": "viewer", "token_hash": _ptok, "invited_by": _ad,
+                           "expires_at": "2099-01-01T00:00:00+00:00"})
+    _pend = {i["invite_id"]: i for i in backend.list_pending_invites()}
+    ck(_pid in _pend and _pend[_pid]["email"] == "pending036@example.com"
+       and _pend[_pid]["role"] == "viewer" and bool(_pend[_pid].get("created_at")),
+       "036: a live invite is listed as pending, with its email, role and when it was made")
+    ck(all("token_hash" not in i and "token" not in i for i in _pend.values()),
+       "...and NO pending row carries the token or its hash")
+    ck(_iid not in _pend and not any(i["email"] in ("atomic@example.com", "old@example.com")
+                                     for i in _pend.values()),
+       "...and accepted and expired invites are not pending")
+    ck(backend.cancel_invite(_pid, cancelled_by=_ad) is True,
+       "an admin cancels a pending invite")
+    ck(_pid not in {i["invite_id"] for i in backend.list_pending_invites()},
+       "...and it leaves the pending list")
+    ck(backend.cancel_invite(_pid, cancelled_by=_ad) is False,
+       "...and cancelling it again changes nothing (False)")
+    ck(backend.accept_invite(_ptok, actor_id=str(_uuid.uuid4()),
+                             now="2026-10-02T00:00:00+00:00",
+                             actor={"label": "x", "role": "viewer",
+                                    "email": "pending036@example.com"}) is None,
+       "**a CANCELLED invite cannot be accepted**, and gets the same None as a used one")
+    ck(backend.cancel_invite(_iid, cancelled_by=_ad) is False,
+       "an ACCEPTED invite cannot be cancelled")
+    ck(backend.cancel_invite(str(_uuid.uuid4()), cancelled_by=_ad) is False
+       and backend.cancel_invite("not-a-uuid", cancelled_by=_ad) is False,
+       "an unknown or malformed invite id cancels nothing, and does not raise")
+    _rtok = _hl.sha256(b"reinvite-036").hexdigest()
+    try:
+        backend.create_invite({"invite_id": str(_uuid.uuid4()),
+                               "email": "pending036@example.com", "role": "lawyer",
+                               "token_hash": _rtok, "invited_by": _ad,
+                               "expires_at": "2099-01-01T00:00:00+00:00"})
+        ck(True, "cancelling an invite frees the email for a fresh one")
+    except StoreError:
+        ck(False, "cancelling an invite frees the email for a fresh one")
+    # The invite from the expiry check above is still unused; re-inviting that email must
+    # retire it, not fail on invites_live_per_email_idx forever.
+    try:
+        backend.create_invite({"invite_id": str(_uuid.uuid4()), "email": "old@example.com",
+                               "role": "viewer",
+                               "token_hash": _hl.sha256(b"reinvite-expired").hexdigest(),
+                               "invited_by": _ad,
+                               "expires_at": "2099-01-01T00:00:00+00:00"})
+        ck(True, "an EXPIRED unused invite does not block re-inviting that email")
+    except StoreError:
+        ck(False, "an EXPIRED unused invite does not block re-inviting that email")
+    _people = {a["actor_id"]: a for a in backend.list_actors()}
+    ck(_ad in _people and bool(_people[_ad].get("created_at"))
+       and all("password_hash" not in a for a in _people.values()),
+       "list_actors gives when each person joined, and never a password hash")
+
     # ── O9: the answer cache, on both backends ──────────────────────────────
     _LK, _CK = "a" * 64, "b" * 64
     _CIT = [{"id": "c1", "provision": "s.96", "sha256": "c" * 64, "quote": "a quote"}]
@@ -4750,7 +4895,7 @@ def _test() -> None:
             "read_draft_versions", "write_cache_entry", "read_cache_entry",
             "bump_cache_stat", "read_cache_stats", "read_failure_counts",
             "read_labels", "write_actor", "read_actor", "create_invite",
-            "accept_invite", "write_matter", "list_matters", "matter_role",
+            "accept_invite", "list_pending_invites", "cancel_invite", "write_matter", "list_matters", "matter_role",
             "matter_roles", "grant_matter_access", "revoke_matter_access",
             "list_matter_memberships", "share_vault_document", "list_unowned",
             "reassign_work",

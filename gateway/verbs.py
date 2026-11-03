@@ -6122,6 +6122,48 @@ def _invites_accept(args: dict, ctx: Context) -> dict:
             "tenant_id": invite["tenant_id"], "role": invite["role"]}
 
 
+# ── 036: the firm's people and its pending invites (Team page) ───────────────
+# All three are ADMIN (gateway/roles.py) and read or write ONLY through ctx.store, which
+# is bound to the caller's tenant: on Postgres, RLS (tenant_isolation on actors and
+# invites) is what keeps another firm's rows out, whatever id is passed.
+
+def _people_list(args: dict, ctx: Context) -> dict:
+    """Everyone in this firm who signs in by email: name, email, role, when they joined.
+    Never a password hash or a session."""
+    if ctx.store is None:
+        return _refuse("NO_STORE", "no store is configured")
+    return {"people": [{"actor_id": a["actor_id"], "name": a.get("label") or "",
+                        "email": a.get("email"), "role": a.get("role") or "viewer",
+                        "joined_at": a.get("created_at"),
+                        "disabled": a.get("disabled_at") is not None}
+                       for a in ctx.store.list_actors()]}
+
+
+def _invites_list(args: dict, ctx: Context) -> dict:
+    """Invites not yet accepted, cancelled or expired. Never the token or its hash: the
+    raw token was shown once at invites.create and exists nowhere else."""
+    if ctx.store is None:
+        return _refuse("NO_STORE", "no store is configured")
+    return {"invites": [{k: i.get(k) for k in ("invite_id", "email", "role", "invited_by",
+                                                "created_at", "expires_at")}
+                        for i in ctx.store.list_pending_invites()]}
+
+
+def _invites_cancel(args: dict, ctx: Context) -> dict:
+    """Withdraw an unused invite. The row is marked, never deleted; accepting it afterwards
+    gets the same INVALID_INVITE as any other unusable token."""
+    if ctx.store is None:
+        return _refuse("NO_STORE", "no store is configured")
+    invite_id = str(args.get("invite_id") or "").strip()
+    if not invite_id:
+        return _refuse("BAD_REQUEST", "invite_id required")
+    if not ctx.store.cancel_invite(invite_id, cancelled_by=ctx.actor):
+        # Unknown, another firm's, already used or already cancelled: one answer, so an id
+        # cannot be probed to learn which.
+        return _refuse("NOT_FOUND", "There is no pending invite with that id in this firm.")
+    return {"status": "cancelled", "invite_id": invite_id}
+
+
 # ── the table ────────────────────────────────────────────────────────────────
 
 VERBS: tuple[Verb, ...] = (
@@ -6765,6 +6807,22 @@ VERBS: tuple[Verb, ...] = (
           Field("password", STRING, True,
                 describes="the new account's password, at least 12 characters")),
          "POST", read_only=False, mcp=False, run=_invites_accept),
+
+    Verb("people.list",
+         "ADMIN: everyone in this firm who signs in -- name, email, role, when they "
+         "joined. No passwords or sessions.",
+         (), "POST", read_only=True, mcp=False, run=_people_list),
+
+    Verb("invites.list",
+         "ADMIN: invites in this firm not yet accepted, cancelled or expired. Never the "
+         "invite token.",
+         (), "POST", read_only=True, mcp=False, run=_invites_list),
+
+    Verb("invites.cancel",
+         "ADMIN: withdraw an unused invite. It is marked cancelled, not deleted, and can no "
+         "longer be accepted.",
+         (Field("invite_id", STRING, True, describes="the invite to withdraw"),),
+         "POST", read_only=False, mcp=False, run=_invites_cancel),
 )
 
 
@@ -6906,12 +6964,14 @@ def _test() -> None:
                         # 026: sign-in, sessions, invites.
                         "auth.login", "auth.logout", "auth.me",
                         "invites.create", "invites.accept"} | {
+                        # 036: the Team page's people and pending invites.
+                        "people.list", "invites.list", "invites.cancel"} | {
                         # 028: administering per-matter access.
                         "matters.grant", "matters.revoke", "matters.members",
                         "matters.access_report", "vault.share", "access.reassign"} | {
                         # 032: the firm's company profile.
                         "company_profile.get", "company_profile.set"},
-          f"the sixty-six verbs are declared once ({sorted(names)})")
+          f"the sixty-nine verbs are declared once ({sorted(names)})")
     # sources.* are READ-ONLY, so they reach MCP. That is the intended shape: an agent may
     # ask what a source permits and search what may be read, and there is no sources verb
     # that fetches, stores or spends. S3's Indian Kanoon connector will spend money, and
@@ -6940,12 +7000,14 @@ def _test() -> None:
                                  # no role to check and no business in an agent's toolbox.
                                  "auth.login", "auth.logout", "invites.create",
                                  "invites.accept",
+                                 # 036. Withdraws an invite (marks it; never deletes).
+                                 "invites.cancel",
                                  # 028. Each changes who may reach a matter or a document.
                                  "matters.grant", "matters.revoke", "vault.share",
                                  "access.reassign",
                                  # 032. Saves the firm's confirmed company facts.
                                  "company_profile.set"},
-          f"...and exactly twenty-four of them write ({sorted(write_verbs())})")
+          f"...and exactly twenty-five of them write ({sorted(write_verbs())})")
     check(f"{MCP_NAMESPACE}.conversation.send" not in {t.name for t in mcp},
           "conversation.send WRITES -- it creates a thread, appends messages and may "
           "enqueue work -- so mcp_tools() keeps it off MCP, by rule and not by the author "
@@ -8750,6 +8812,8 @@ def _test() -> None:
                      # 028. Who holds access to which matter names the firm's clients and
                      # its people; administration, not an agent task.
                      "matters.members", "matters.access_report",
+                     # 036. The firm's staff list and who is being invited: administration.
+                     "people.list", "invites.list",
                      # A table's name can name the client; same reason as matters.list.
                      "review_table.list",
                      # 032. The firm's CIN, office and class: company data, and no agent
@@ -8818,7 +8882,7 @@ def _test() -> None:
           "...while a WRITE verb is kept out of MCP by mcp_tools(), not by the author "
           "remembering to")
     check("widgets.delete" in write_verbs(hypo), "...and is named in write_verbs()")
-    check(len(VERBS) == 66 and "widgets.count" not in rest_spec(),
+    check(len(VERBS) == 69 and "widgets.count" not in rest_spec(),
           "...and the probe changed nothing in this module: the surfaces are generated "
           "from an argument, not from a global the test rebound")
 
@@ -10282,6 +10346,67 @@ def _test() -> None:
     check(_short.get("code") == "BAD_REQUEST", f"a short password is refused ({_short})")
     check(_acc_auth.find_invite(_hashk(_inv2["token"])).get("accepted_at") is None,
           "...and a REFUSED accept does not spend the invite")
+
+    # ── 036: people.list, invites.list, invites.cancel ──────────────────────
+    _plist = _V["invites.list"].run({}, _acc_ctx())
+    _pmine = {i["email"]: i for i in _plist.get("invites", [])}
+    check("second@firm.example" in _pmine and "lawyer@firm.example" not in _pmine,
+          f"invites.list shows the unused invite and not the accepted one ({_plist})")
+    check("token" not in str(_plist)
+          and _inv2["token"] not in str(_plist)
+          and _hashk(_inv2["token"]) not in str(_plist),
+          "...and NEVER the raw token or its hash")
+    _people = _V["people.list"].run({}, _acc_ctx())
+    _pe = {p["email"]: p for p in _people.get("people", [])}
+    check(_pe.get("lawyer@firm.example", {}).get("role") == _LAWYER
+          and "joined_at" in _pe.get("lawyer@firm.example", {})
+          and "password" not in str(_people) and "scrypt$" not in str(_people),
+          f"people.list names each person, their role and when they joined, and no "
+          f"password hash ({_people})")
+    _c_id = _pmine["second@firm.example"]["invite_id"]
+    check(_V["invites.cancel"].run({"invite_id": _c_id}, _acc_ctx()).get("status")
+          == "cancelled", "invites.cancel withdraws an unused invite")
+    check(_c_id in _acc_mem.invites and _acc_mem.invites[_c_id]["cancelled_at"],
+          "...and the row is MARKED cancelled, not deleted")
+    check("second@firm.example" not in str(_V["invites.list"].run({}, _acc_ctx())),
+          "...and it leaves the pending list")
+    _c_accept = _V["invites.accept"].run(
+        {"token": _inv2["token"], "password": "a-strong-enough-password"}, _pub_ctx)
+    _c_unknown = _V["invites.accept"].run(
+        {"token": "no-such-token-036", "password": "a-strong-enough-password"}, _pub_ctx)
+    check(_c_accept == _c_unknown and _c_accept.get("code") == "INVALID_INVITE",
+          f"**accepting a CANCELLED invite fails with the same generic INVALID_INVITE as an "
+          f"unknown token** ({_c_accept})")
+    check(_V["invites.cancel"].run({"invite_id": _c_id}, _acc_ctx()).get("code")
+          == "NOT_FOUND"
+          and _V["invites.cancel"].run({}, _acc_ctx()).get("code") == "BAD_REQUEST",
+          "cancelling twice is NOT_FOUND, and no id is BAD_REQUEST")
+
+    # Cross-tenant. Firm B is its OWN store, as each tenant gets its own RLS-bound backend
+    # in production (proved on Postgres in scripts/rls_integration.py). Firm A's admin
+    # passes B's real invite id and gets the same NOT_FOUND as a made-up one.
+    _firm_b = _MB()
+    _firm_b.tenant_id = "bbbbbbbb-0000-0000-0000-000000000002"
+    _firm_b.write_actor({"actor_id": "b-admin", "label": "B admin", "role": "admin",
+                         "email": "admin@firm-b.example"})
+    _b_inv = _firm_b.create_invite({"invite_id": str(_uuid_mod.uuid4()),
+                                    "email": "joiner@firm-b.example", "role": _VIEWER,
+                                    "token_hash": "b" * 64, "invited_by": "b-admin",
+                                    "expires_at": _future(3600)})
+    _x_cancel = _V["invites.cancel"].run({"invite_id": _b_inv["invite_id"]}, _acc_ctx())
+    check(_x_cancel.get("code") == "NOT_FOUND"
+          and _firm_b.invites[_b_inv["invite_id"]]["cancelled_at"] is None,
+          f"firm A's admin CANNOT cancel firm B's invite, even with its real id "
+          f"({_x_cancel})")
+    check("firm-b" not in str(_V["invites.list"].run({}, _acc_ctx()))
+          and "firm-b" not in str(_V["people.list"].run({}, _acc_ctx())),
+          "...and firm A's lists show none of firm B's invites or people")
+    _b_ctx = _acc_ctx(tenant=_firm_b.tenant_id, actor="b-admin", store=_firm_b)
+    check([p["email"] for p in _V["people.list"].run({}, _b_ctx)["people"]]
+          == ["admin@firm-b.example"]
+          and [i["email"] for i in _V["invites.list"].run({}, _b_ctx)["invites"]]
+          == ["joiner@firm-b.example"],
+          "...while firm B's admin sees exactly firm B's")
 
     # auth.login
     _login = _V["auth.login"].run(

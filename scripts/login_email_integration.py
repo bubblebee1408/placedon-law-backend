@@ -105,7 +105,9 @@ def _run() -> int:
     try:
         try:
             provision(dirty, 32)
-            provision(clean, 33)
+            # Every migration, not just through 033: the store under test is written
+            # against the latest schema (036 added invites.cancelled_at).
+            provision(clean, 999)
         except Exception as e:                                       # noqa: BLE001
             print(f"SKIP: cannot provision a scratch database ({type(e).__name__}: "
                   f"{str(e)[:120]}).")
