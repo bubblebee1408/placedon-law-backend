@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import datetime as _dt
 import functools
+import re
 
 __all__ = ["GENERIC_LOGIN_FAILURE_CODE", "LOGIN_LOCKOUT_MAX", "LOGIN_LOCKOUT_WINDOW_SECONDS",
            "SESSION_TTL_SECONDS", "INVITE_TTL_SECONDS", "generic_failure", "verify_login",
@@ -106,6 +107,18 @@ def mint_token() -> tuple[str, str]:
     from gateway.auth import hash_key
     raw = secrets.token_urlsafe(32)
     return raw, hash_key(raw)
+
+
+# The exact shape mint_token produces: token_urlsafe(32) is always 43 urlsafe-base64 chars.
+_TOKEN_SHAPE = re.compile(r"[A-Za-z0-9_-]{43}")
+
+
+def is_token_shaped(raw: str | None) -> bool:
+    """Could `raw` be a session token mint_token issued? A cheap check run BEFORE the
+    session lookup, so a junk Bearer value is refused without opening a database
+    connection (OWASP Denial of Service cheat sheet: cheap checks first). Shape only --
+    passing it proves nothing; the lookup still decides."""
+    return bool(raw) and _TOKEN_SHAPE.fullmatch(raw) is not None
 
 
 def _test() -> int:
@@ -192,6 +205,13 @@ def _test() -> int:
     check(len(raw1) >= 40, f"a minted token is long ({len(raw1)} chars of urlsafe base64)")
     check(len(hash1) == 64 and all(c in "0123456789abcdef" for c in hash1),
           "...stored as a 64-char lowercase hex sha256, matching 026's CHECK constraint")
+    check(all(is_token_shaped(mint_token()[0]) for _ in range(200)),
+          "every minted token passes the shape check (200 mints)")
+    check(not any(is_token_shaped(junk) for junk in (
+              None, "", "not-a-real-key", raw1[:-1], raw1 + "A", raw1[:-1] + "=",
+              raw1[:-1] + "/", raw1[:-1] + "\n", "x" * 4096)),
+          "junk, one char short or long, padding, non-urlsafe chars, a trailing newline and "
+          "an oversized value are all refused by shape")
 
     print(f"\n{ok}/{ok + fail} passed")
     return 1 if fail else 0
