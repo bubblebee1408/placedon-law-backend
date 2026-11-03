@@ -16,7 +16,7 @@ names what is specific to it.
 
 | Layer | Component | Files | What it guarantees |
 |---|---|---|---|
-| L1 Surface | REST `/v2`, MCP, CLI, web `/app` | `gateway/verbs.py`, `gateway/app.py`, `gateway/cli.py`, `checker/mcp/` | One verb entry → all three surfaces; write verbs never on MCP |
+| L1 Surface | REST `/v2`, MCP, CLI, web `/app` | `gateway/verbs/`, `gateway/app.py`, `gateway/cli.py`, `checker/mcp/` | One verb entry → all three surfaces; write verbs never on MCP |
 | L2 Gate | Auth, tenant, role, limits, audit | `gateway/auth.py`, `roles.py`, `limits.py`, `audit.py` | Key → tenant; FORCE RLS on every tenant table; metadata-only, hash-chained audit |
 | L3 Plan | Intake → fixed plan | `agents/intake.py`, `agents/plans.py` | A model may **pick** a plan from the table; it can never invent steps |
 | L4 Run | Durable queue + workers | `gateway/jobs.py`, `gateway/worker.py`, `agents/runtime.py`, `agents/state.py` | SKIP LOCKED, idempotent steps, 3 attempts → dead letter, saga cancel |

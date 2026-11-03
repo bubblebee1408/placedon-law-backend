@@ -362,7 +362,8 @@ def _test() -> int:
     root = _pl.Path(__file__).resolve().parent.parent
     offenders, importers = [], []
     for path in list((root / "gateway").glob("*.py")) + list((root / "agents").glob("*.py")) \
-            + list((root / "checker").glob("*.py")):
+            + list((root / "checker").glob("*.py")) \
+            + list((root / "gateway" / "verbs").glob("*.py")):
         if path.name == "calibration.py":
             continue
         try:
@@ -371,7 +372,8 @@ def _test() -> int:
             continue
         for node in _ast.walk(tree):
             if isinstance(node, _ast.ImportFrom) and "calibration" in (node.module or ""):
-                importers.append(path.name)
+                # gateway/verbs/ is one module split into files: any of them is "verbs.py".
+                importers.append("verbs.py" if path.parent.name == "verbs" else path.name)
                 for alias in node.names:
                     if alias.name in DECIDING_API:
                         offenders.append(f"{path.name}:{alias.name}")

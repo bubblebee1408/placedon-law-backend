@@ -130,7 +130,7 @@ def _test() -> None:
           "the module list has no duplicates -- git ls-files prints a conflicted path "
           "once per stage, and the map must not list or count it three times")
     check("`checker/scope.py`" in text, "the scope register is listed")
-    check("`gateway/verbs.py`" in text, "the verb table is listed")
+    check("`gateway/verbs/registry.py`" in text, "the verb table is listed")
     check("R0 legal core" in text, "ring labels come from checker/rings.py")
     check(text == render(files), "the output is deterministic")
     check(first_line(ROOT / "checker" / "scope.py") != "(no docstring)",

@@ -37,7 +37,7 @@ Themis is a separate branch and plugs in through `law_versions` (§6). It never 
 
 | Process | Code | Owns | Scales by |
 |---|---|---|---|
-| API | `gateway/app.py`, `gateway/verbs.py` | auth, validation, enqueue, read results; never slow work | more instances |
+| API | `gateway/app.py`, `gateway/verbs/` | auth, validation, enqueue, read results; never slow work | more instances |
 | Worker | `gateway/worker.py` | executes queued jobs: ingest, OCR, extract, cells, agents, drafts | more workers |
 | PostgreSQL | `gateway/migrations/` | all state: data, queue, ledger, audit | managed instance |
 | File store | vault FileStore | raw file bytes, encrypted, per-tenant prefix | object storage |
@@ -48,7 +48,7 @@ Postgres.
 
 ### 3.2 One verb table, three surfaces
 
-`gateway/verbs.py` declares every action once. REST, MCP tools and the CLI are generated from it,
+`gateway/verbs/` declares every action once. REST, MCP tools and the CLI are generated from it,
 with a parity test. Write verbs are never exposed on MCP.
 
 ### 3.3 Rings (the firewall)

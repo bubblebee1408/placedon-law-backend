@@ -43,7 +43,7 @@ class ClientTextNeverReachesAzure(unittest.TestCase):
                     "usage": {"prompt_tokens": 10, "completion_tokens": 2}}
         env = {"AZURE_AI_API_KEY": "test-key", "AZURE_AI_ENDPOINT": "https://example.services.ai.azure.com"}
         for p in (patch.dict(os.environ, env), patch("checker.azure_model._call", side_effect=record),
-                  patch("gateway.verbs._ledger", return_value=_Budget()),
+                  patch("gateway.verbs.model_access._ledger", return_value=_Budget()),
                   patch("gateway.models.available_providers", return_value=(router.AZURE,))):
             p.start()
             self.addCleanup(p.stop)
@@ -199,7 +199,7 @@ class CallersMayOnlyNarrowProviders(_Recorder):
         def spy(*a, **k):
             seen.append(k.get("allowed_providers"))
             return real(*a, **k)
-        with patch("gateway.verbs._served_or_refusal", side_effect=spy):
+        with patch("gateway.verbs.model_access._served_or_refusal", side_effect=spy):
             for available in ([], ["bedrock"], ["no-such-provider"], None):
                 self.ask(available)
         self.assertEqual(seen, [(), (), (), ("azure",)])

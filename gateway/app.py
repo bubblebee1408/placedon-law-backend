@@ -1410,13 +1410,13 @@ def _test() -> None:
     from backend.budget import BudgetTracker as _mb_budget, FileStore as _mb_file_store
     from gateway import verbs as _mb_verbs
     with _mb_tmp.TemporaryDirectory() as _mb_dir:
-        _mb_ledger = _mb_verbs._ledger
-        _mb_verbs._ledger = lambda: _mb_budget(_mb_file_store(
+        _mb_ledger = _mb_verbs.model_access._ledger
+        _mb_verbs.model_access._ledger = lambda: _mb_budget(_mb_file_store(
             _mb_path(_mb_dir) / "budget.json"))
         try:
             _mb = client.post("/v2/research/multi", json={"question": _MB_Q})
         finally:
-            _mb_verbs._ledger = _mb_ledger
+            _mb_verbs.model_access._ledger = _mb_ledger
     check(_mb.status_code == 200, f"/v2/research/multi takes a multi-body question ({_mb.status_code})")
     _mbj = json.loads(_mb.content)
     check(_mbj.get("status") == "PARTIAL",

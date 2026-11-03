@@ -1,7 +1,7 @@
 # Company profile — entered once, reused
 
 Status: built (migration 032). Code: `gateway/company_profile.py`, `gateway/store.py`
-(`read_company_profile`, `set_company_profile`), `gateway/verbs.py` (`company_profile.get`,
+(`read_company_profile`, `set_company_profile`), `gateway/verbs/company.py` (`company_profile.get`,
 `company_profile.set`, `_profile_facts`). Proof: `tests/test_company_profile.py`,
 `scripts/company_profile_integration.py --run`.
 

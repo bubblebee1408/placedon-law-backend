@@ -20,7 +20,7 @@ class ReviewGridBudgetBoundaryTests(unittest.TestCase):
                           'kind': 'text', 'question': 'When?', 'reservation_id': 'held'}
 
     def test_missing_ledger_prevents_create_and_enqueue(self):
-        with patch('gateway.verbs._ledger', return_value=None):
+        with patch('gateway.verbs.model_access._ledger', return_value=None):
             result = _review_table_create(self.create_args, self.ctx)
         self.assertEqual(result['code'], 'NO_BUDGET')
         self.store.write_grid.assert_not_called()
@@ -31,7 +31,7 @@ class ReviewGridBudgetBoundaryTests(unittest.TestCase):
         ledger = Mock()
         ledger.attributed.return_value = ledger  # the gateway binds the caller's firm
         ledger.can_make_call.return_value = SimpleNamespace(allowed=True)
-        with patch('gateway.verbs._ledger', return_value=ledger), patch(
+        with patch('gateway.verbs.model_access._ledger', return_value=ledger), patch(
                 'agents.review_grid.schedule', return_value=Scheduled('grid')) as schedule:
             result = _review_table_create(self.create_args, self.ctx)
         self.assertIn('grid_id', result)
@@ -40,7 +40,7 @@ class ReviewGridBudgetBoundaryTests(unittest.TestCase):
         ledger.attributed.assert_called_once()
 
     def test_missing_settlement_ledger_withholds_cell(self):
-        with patch('gateway.verbs._ledger', return_value=None):
+        with patch('gateway.verbs.model_access._ledger', return_value=None):
             result = _review_grid_cell(self.cell_args, self.ctx)
         self.assertEqual(result['code'], 'BUDGET_RECONCILIATION_REQUIRED')
         self.assertFalse(result['reservation_settled'])
@@ -51,7 +51,7 @@ class ReviewGridBudgetBoundaryTests(unittest.TestCase):
         ledger = Mock()
         ledger.attributed.return_value = ledger  # the gateway binds the caller's firm
         ledger.settle.return_value = SimpleNamespace(allowed=False)
-        with patch('gateway.verbs._ledger', return_value=ledger):
+        with patch('gateway.verbs.model_access._ledger', return_value=ledger):
             result = _review_grid_cell(self.cell_args, self.ctx)
         self.assertEqual(result['code'], 'BUDGET_RECONCILIATION_REQUIRED')
         ledger.settle.assert_called_once()
@@ -61,7 +61,7 @@ class ReviewGridBudgetBoundaryTests(unittest.TestCase):
         ledger = Mock()
         ledger.attributed.return_value = ledger  # the gateway binds the caller's firm
         ledger.settle.side_effect = OSError('ledger unavailable')
-        with patch('gateway.verbs._ledger', return_value=ledger):
+        with patch('gateway.verbs.model_access._ledger', return_value=ledger):
             result = _review_grid_cell(self.cell_args, self.ctx)
         self.assertEqual(result['code'], 'BUDGET_RECONCILIATION_REQUIRED')
         ledger.settle.assert_called_once()
@@ -71,7 +71,7 @@ class ReviewGridBudgetBoundaryTests(unittest.TestCase):
         ledger = Mock()
         ledger.attributed.return_value = ledger  # the gateway binds the caller's firm
         ledger.settle.return_value = SimpleNamespace(allowed=True)
-        with patch('gateway.verbs._ledger', return_value=ledger):
+        with patch('gateway.verbs.model_access._ledger', return_value=ledger):
             result = _review_grid_cell(self.cell_args, self.ctx)
         self.assertEqual(result['status'], 'ANSWERED')
         self.assertTrue(result['reservation_settled'])
@@ -86,15 +86,15 @@ class ReviewGridBudgetBoundaryTests(unittest.TestCase):
         def answerer(_ctx, debits):
             debits.append({'provider': 'azure', 'cost_inr': None, 'cost_note': 'UNPRICED'})
             return lambda *_: ('thirty days', 'Payment in thirty days.')
-        with patch('gateway.verbs._ledger', return_value=ledger), patch(
-                'gateway.verbs._cell_answerer', side_effect=answerer):
+        with patch('gateway.verbs.model_access._ledger', return_value=ledger), patch(
+                'gateway.verbs.review_table._cell_answerer', side_effect=answerer):
             result = _review_grid_cell(self.cell_args, self.ctx)
         self.assertTrue(result['reservation_settled'])
         ledger.settle.assert_called_once_with('held', None)
 
     def test_malformed_job_reports_actual_settlement_failure(self):
         args = {**self.cell_args, 'question': ''}
-        with patch('gateway.verbs._ledger', return_value=None):
+        with patch('gateway.verbs.model_access._ledger', return_value=None):
             result = _review_grid_cell(args, self.ctx)
         self.assertEqual(result['code'], 'BUDGET_RECONCILIATION_REQUIRED')
         self.assertFalse(result['reservation_settled'])

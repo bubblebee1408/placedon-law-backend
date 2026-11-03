@@ -297,7 +297,7 @@ def _test() -> int:
     print("review_table_eval")
 
     # ── EVALUATION ONLY: the served path must not import this ───────────────
-    served = [ROOT / "checker" / "api.py", ROOT / "gateway" / "verbs.py",
+    served = [ROOT / "checker" / "api.py", *sorted((ROOT / "gateway" / "verbs").glob("*.py")),
               ROOT / "gateway" / "app.py", ROOT / "gateway" / "envelope.py",
               ROOT / "checker" / "review_grid.py", ROOT / "agents" / "review_grid.py"]
     # Parsed, not grepped. The first version searched the text for the module name and
