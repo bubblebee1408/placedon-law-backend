@@ -16,7 +16,7 @@ migrate: .env        ## apply pending migrations (backup first) and the local bo
 	docker compose run --rm migrate
 
 test: .env           ## the repository gate, exactly as CI runs it (keyless, no database)
-	docker compose run --rm --no-deps gateway bash scripts/run_tests.sh
+	docker compose run --rm gate
 
 test-db: .env        ## the live-database regressions and the RLS proof, as CI runs them
 	docker compose run --rm regressions

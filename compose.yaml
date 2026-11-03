@@ -66,6 +66,15 @@ services:
     depends_on:
       migrate: {condition: service_completed_successfully}
 
+  # `make test`: the repository gate with CI's environment (none of the app settings above;
+  # a vault or service key in the environment changes what some checks expect).
+  gate:
+    image: placedon-backend-dev
+    build: .
+    profiles: [tools]
+    command: ["bash", "scripts/run_tests.sh"]
+    volumes: [".:/app"]
+
   # `make test-db`: the live-database regressions. They create and drop databases, so they
   # refuse any server that is not local; sharing db's network makes it `localhost` here.
   regressions:
