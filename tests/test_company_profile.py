@@ -83,6 +83,40 @@ class CompanyProfile(unittest.TestCase):
         self.assertEqual(override["company_facts"]["overridden_by_request"], ["listed"])
         self.assertEqual(override["company_facts"]["used"], [])
 
+    def test_events_assess_refuses_when_the_profile_cannot_be_read(self):
+        # Codex on #149 (P1): a failed read is not "no profile". Assessing without the
+        # stored facts would silently drop bodies (SEBI_LODR for a listed firm).
+        self.save([LISTED])
+
+        def broken():
+            raise ConnectionError("db down")
+        self.store.read_company_profile = broken
+        out = V["events.assess"].run({"event": "share_allotment"}, self.ctx)
+        self.assertEqual(out["status"], "REFUSED")
+        self.assertEqual(out["code"], "STORAGE_UNAVAILABLE")
+        # Facts sent with the request do not need the profile, so they still assess.
+        sent = V["events.assess"].run(
+            {"event": "share_allotment", "company_facts": [LISTED]}, self.ctx)
+        self.assertIn("SEBI_LODR", sent["body_ids"])
+        # `ask` only SHOWS the profile (it never steers the answer), so it still answers.
+        q = {"question": "What is the quorum for a board meeting?", "sources": ["vault"]}
+        self.assertNotIn("user_facts", V["ask"].run(q, self.ctx))
+
+    def test_conversation_event_turn_keeps_the_profile_attribution(self):
+        # Codex on #149 (P2): the stored fact that added SEBI bodies must ride the turn.
+        self.save([LISTED])
+        out = V["conversation.send"].run(
+            {"text": "We are allotting shares next week.", "event": "share_allotment"},
+            self.ctx)
+        self.assertIn("SEBI_LODR", [b["body_id"] for b in out["envelope"]["bodies"]])
+        for where in (out["company_facts"], out["metadata"]["company_facts"]):
+            self.assertEqual(where["from"], "company_profile")
+            self.assertEqual([f["field"] for f in where["used"]], ["listed"])
+            self.assertEqual(where["overridden_by_request"], [])
+        saved = V["conversation.get"].run({"conversation_id": out["conversation_id"]}, self.ctx)
+        reply = [m for m in saved["messages"] if m["message_id"] == out["message_id"]][0]
+        self.assertEqual(reply["metadata"]["company_facts"]["from"], "company_profile")
+
     def test_ask_shows_the_profile_without_caching_it(self):
         q = {"question": "What is the quorum for a board meeting?", "sources": ["vault"]}
         self.assertNotIn("user_facts", V["ask"].run(q, self.ctx))
