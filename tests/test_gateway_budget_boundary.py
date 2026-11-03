@@ -11,7 +11,7 @@ from gateway.verbs import Context, _served_or_refusal
 
 class GatewayBudgetBoundaryTests(unittest.TestCase):
     def test_missing_ledger_refuses_before_provider_selection(self):
-        with patch('gateway.verbs._ledger', return_value=None), patch('gateway.models.serve') as serve:
+        with patch('gateway.verbs.model_access._ledger', return_value=None), patch('gateway.models.serve') as serve:
             served, refusal = _served_or_refusal((), name='ask', purpose='NARRATION', ctx=Context())
         self.assertIsNone(served)
         self.assertEqual(refusal['code'], 'NO_BUDGET')
@@ -19,7 +19,7 @@ class GatewayBudgetBoundaryTests(unittest.TestCase):
 
     def test_available_guard_is_passed_to_model_router(self):
         guard, model = object(), object()
-        with patch('gateway.verbs._ledger', return_value=guard), patch('gateway.models.serve', return_value=model) as serve:
+        with patch('gateway.verbs.model_access._ledger', return_value=guard), patch('gateway.models.serve', return_value=model) as serve:
             served, refusal = _served_or_refusal((), name='ask', purpose='NARRATION', ctx=Context())
         self.assertIs(served, model)
         self.assertIsNone(refusal)
@@ -27,7 +27,7 @@ class GatewayBudgetBoundaryTests(unittest.TestCase):
 
     def test_injected_offline_model_does_not_open_real_budget_or_provider(self):
         model = Mock(return_value='test')
-        with patch('gateway.verbs._ledger') as ledger, patch('gateway.models.serve') as serve:
+        with patch('gateway.verbs.model_access._ledger') as ledger, patch('gateway.models.serve') as serve:
             served, refusal = _served_or_refusal((), name='ask', purpose='NARRATION', ctx=Context(model_for=lambda _: model))
         self.assertIsNone(refusal)
         self.assertEqual(served.call('prompt'), 'test')
@@ -53,7 +53,7 @@ class TenantSpendCapTests(unittest.TestCase):
 
     def _serve(self, ctx):
         """The ledger `serve()` would gate and reserve on, for this request context."""
-        with patch("gateway.verbs._ledger",
+        with patch("gateway.verbs.model_access._ledger",
                    return_value=BudgetTracker(self.store, today=self.today)), \
                 patch("gateway.models.serve", return_value=object()) as serve:
             _served_or_refusal((), name="ask", purpose="NARRATION", ctx=ctx)

@@ -23,6 +23,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `checker/amendment.py` | R0 legal core | Parse India Code amendment footnotes into structured records. |
 | `checker/annotation.py` |  | The gold set: how lawyer labour becomes training data without becoming opinion. |
 | `checker/answer_cache.py` |  | Serve an answer again only when the law it rests on has not moved. |
+| `checker/answer_relevance.py` |  | Does the answer cite the provision the question is about? |
 | `checker/anthropic_model.py` |  | The concrete model callable: Anthropic, wired into the existing gates. |
 | `checker/api.py` |  | The JSON API over the compliance engine. Zero dependencies, pure and testable. |
 | `checker/archive_guard.py` |  | Refuse an archive that would cost more to open than it claims to be. |
@@ -76,8 +77,8 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `checker/document_date.py` |  | The date a document declares on its own face — or nothing, said plainly. |
 | `checker/document_extract.py` |  | Grounding an extractor's proposals in the document it claims to have read. |
 | `checker/draft_prose.py` |  | The connecting prose for a draft, written by a model from the run's findings alone. |
-| `checker/draft_templates.py` |  | Two drafts, built from a run that already happened. The model may join sentences, not make them. |
-| `checker/draft_versions.py` |  | Every save is a version, and any two versions diff exactly. |
+| `checker/draft_templates.py` |  | Build research memos and client notes from completed runs. |
+| `checker/draft_versions.py` |  | Immutable draft versions, provenance-aware review gates, diffs and text/DOCX export. |
 | `checker/drafting.py` |  | Controlled drafting: a document assembled from typed slots, never written free-hand. |
 | `checker/entail_baseline.py` | R0 legal core | Deterministic entailment baseline. No model. |
 | `checker/entail_binding.py` | R0 legal core | E4: check that a claim binds its quantity to the obligation the source does. |
@@ -120,6 +121,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `checker/grounding_policy.py` |  | Strict grounding: what a citation proves, and what it does not. |
 | `checker/instrument_registry.py` | R0 legal core | Which instruments are on record at all, and which of them a person has read. |
 | `checker/interval.py` |  | Honest error bars, in the standard library. |
+| `checker/judgment_dense.py` |  | Dense retrieval over judgment BODIES, backed by a precomputed Voyage index. |
 | `checker/jurisdiction.py` |  | F3 — which body of law, and whose: Central, a State, or both. Triage, not a finding. |
 | `checker/lattice.py` |  | Ordinal state algebra — one implementation of "the worst thing wins". |
 | `checker/law_versions.py` |  | Which law answered: the corpus by content, and the instruments that amended it. |
@@ -165,6 +167,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `checker/provenance.py` | R0 legal core | Evidence states and source records. |
 | `checker/provenance_slots.py` |  | Typed provenance for every value that reaches a document. |
 | `checker/public_only.py` |  | The one gate between this repository's text and a third-party free-tier model. |
+| `checker/public_web.py` |  | Bounded, opt-in public web research through Exa's server-side Answer API. |
 | `checker/quote_mutations.py` |  | Break a real statutory quote in six specific ways, so a verifier can be measured. |
 | `checker/quoted_span.py` |  | Attribution without a Citations API: the model quotes, and we go and find the quote. |
 | `checker/reasoning.py` |  | The model contract: what a model may propose, and what happens when it doesn't. |
@@ -172,6 +175,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `checker/release.py` |  | The one gate between "we hold this" and "a user may see it". |
 | `checker/release_record.py` |  | Provenance for a benchmark run, and the release snapshot that preserves it. |
 | `checker/reranker.py` |  | A learned reranker that can be read — M4, the "perceptron". |
+| `checker/resource_route.py` |  | A conservative, DETERMINISTIC resource router: STATUTE vs CASE vs UNSURE. |
 | `checker/resubmission.py` |  | Replacements for proposals a reviewer sent back. Proposes; changes nothing. |
 | `checker/retrieval_eval.py` |  | A retrieval eval set for structural chunk selection — with an honest boundary. |
 | `checker/retrieval_metrics.py` |  | Ranking metrics, as pure functions, with the denominators written down. |
@@ -197,6 +201,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `checker/sarvam_selftest.py` |  | Self-test for checker/sarvam_model.py -- run through `python3 checker/sarvam_model.py`. |
 | `checker/scope.py` |  | What body of law this engine claims to cover, and what it actually holds. |
 | `checker/scoped_retraction.py` |  | Apply exactly the pairs a reviewer named, and nothing else. |
+| `checker/section_eval.py` |  | Does Ask's search land on the right section? A fixed question set, before and after. |
 | `checker/section_index.py` |  | Look up a Companies Act section by its NUMBER. |
 | `checker/session.py` |  | The ephemeral session: where a client document lives, and where it does not. |
 | `checker/shadow.py` |  | Shadow mode: measure a model's proposals without any of them reaching a user. |
@@ -212,6 +217,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `checker/sources/evidence.py` | R2 feeds | One result from one source, with everything needed to distrust it correctly. |
 | `checker/sources/held.py` | R2 feeds | HELD: our own hash-stamped corpus. The only tier that can make an answer VERIFIED. |
 | `checker/sources/indiankanoon.py` | R2 feeds | Indian Kanoon: a skeleton waiting for its key. LICENSED tier — it can never VERIFY. |
+| `checker/sources/judgment_index.py` | R2 feeds | A slim, in-repo index of eCourts judgments, for DISCOVERY by a generic query. |
 | `checker/sources/judgments_open.py` | R2 feeds | eCourts judgments from the AWS Open Data buckets. Keyless, LICENSED, never VERIFIED. |
 | `checker/sources/mca_fixture.py` | R2 feeds | A synthetic MCA "Company Master Data" PDF, written by hand, for testing the parser. |
 | `checker/sources/mca_master_data.py` | R2 feeds | Read an MCA "Company Master Data" page the USER downloaded and uploaded to us. |
@@ -229,6 +235,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `checker/timeline.py` |  | Amendment timeline for a Companies Act section. |
 | `checker/trust.py` |  | X.509 chain validation against the Indian government's own root certificates. |
 | `checker/vault_search.py` |  | BM25 over a vault's chunks, per tenant, with each chunk told where it came from. |
+| `checker/voyage_dense.py` |  | Dense retrieval over the Companies Act, backed by a precomputed Voyage index. |
 | `checker/voyage_model.py` |  | Voyage AI: a legal embedding model and a reranker, wired as retrieval CANDIDATES. |
 | `checker/witness_span.py` |  | Resolve an amendment span's boundary from the instrument that created it. |
 
@@ -240,7 +247,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `agents/intake.py` | R3 inference | Layer 1: which of six fixed tasks a request is, decided in code wherever code can. |
 | `agents/multi_plan.py` | R3 inference | MA1: what a supervisor may propose, and the four reasons code refuses it. |
 | `agents/multi_runner.py` | R3 inference | MA1: run a validated plan. Read-only workers fan out; ONE writer merges. |
-| `agents/multi_supervisor.py` | R3 inference | F2 — the supervisor: one researcher per (body of law, State), run in parallel, synthesised. |
+| `agents/multi_supervisor.py` | R3 inference | F2 — the supervisor: one researcher per (body of law, State), synthesised by code. |
 | `agents/plans.py` | R3 inference | Intent -> a fixed step list, written in code. A model may pick, never invent. |
 | `agents/research_question.py` | R3 inference | research_question, end to end: a question about the Companies Act, answered or refused. |
 | `agents/review_contract.py` | R3 inference | review_contract, end to end: a contract against a company playbook, and what it will not say. |
@@ -255,6 +262,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | File | Ring | Purpose |
 |---|---|---|
 | `gateway/__init__.py` | R2 feeds | The gateway: auth, tenancy, audit, and the HTTP surface (PLAN_18 §2.1). |
+| `gateway/access.py` | R2 feeds | Who may use which matter. The ONE check every verb and the worker call (028). |
 | `gateway/accounts.py` | R2 feeds | The business logic behind `auth.login` and `invites.accept`: generic failure, lockout, |
 | `gateway/admission.py` | R2 feeds | Bounded synchronous work, with reserved capacity for status/cancel reads. |
 | `gateway/app.py` | R2 feeds | The HTTP gateway. /v1 is the engine, forwarded and not reinterpreted. |
@@ -262,7 +270,11 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `gateway/auth.py` | R2 feeds | API keys, stored hashed, resolving to (tenant, actor). |
 | `gateway/circuit.py` | R2 feeds | A per-provider circuit breaker. An open breaker is a TRANSPORT failure, never a finding. |
 | `gateway/cli.py` | R2 feeds | `placedon` -- the third surface, generated from the same verb table as the other two. |
+| `gateway/company_profile.py` | R2 feeds | The firm's company profile: confirmed company facts, entered once and reused. |
 | `gateway/document_cache.py` | R2 feeds | Bounded, expiring process cache for legacy upload references. |
+| `gateway/document_evidence.py` | R2 feeds | Bounded, local excerpt retrieval for explicitly attached conversation documents. |
+| `gateway/document_summary.py` | R2 feeds | Bounded structured summaries tied to exact, selected document passages. |
+| `gateway/english_stem.py` | R2 feeds | Snowball English (Porter2) stemmer, stdlib only, for document excerpt ranking. |
 | `gateway/envelope.py` | R2 feeds | One answer envelope, versioned, validated against the schema file beside it. |
 | `gateway/filestore.py` | R2 feeds | Where a vault's bytes live. Local and Azure Blob are supported; S3 stays blocked. |
 | `gateway/jobs.py` | R2 feeds | The durable job queue. One contract, two backends, one conformance suite. |
@@ -271,11 +283,11 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `gateway/models.py` | R2 feeds | Turning a router decision into a callable, or into a NAMED refusal. |
 | `gateway/passwords.py` | R2 feeds | Password hashing with `hashlib.scrypt`. No new dependency, and no plaintext anywhere. |
 | `gateway/pool.py` | R2 feeds | A bounded Postgres connection pool. Every checkout sets the tenant, with no exception. |
+| `gateway/progress.py` | R2 feeds | Live progress for a queued run: which step is running now, which are done. |
 | `gateway/roles.py` | R2 feeds | Who may call what. Three roles, one table, and no verb without an entry. |
 | `gateway/schema.py` | R2 feeds | The migrations, checked statically, because the live check cannot be in the gate. |
 | `gateway/screens.py` | R2 feeds | Which verb each screen calls, and which fields it shows. Checked, not described. |
 | `gateway/store.py` | R2 feeds | Two backends, one interface, and one conformance suite that both must pass. |
-| `gateway/verbs.py` | R2 feeds | One verb table. Three surfaces generated from it, and a test that they cannot drift. |
 | `gateway/worker.py` | R2 feeds | The durable executor. One job, one step at a time, resumable and cancellable. |
 
 ## backend/: model cost and budget
@@ -284,6 +296,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 |---|---|---|
 | `backend/azure_pricing.py` |  | What an Azure call actually costs, or an honest admission that we do not know. |
 | `backend/budget.py` |  | Runtime budget enforcement — the check that runs before every LLM call. |
+| `backend/budget_pg.py` |  | The spend ledger on Postgres (migration 035), for any deployment with a database. |
 | `backend/services/llm.py` |  | The only file that talks to Anthropic. Every paid call goes through here. |
 
 ## eval/: gold set and evaluation harnesses
@@ -321,13 +334,17 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/batch1_review.py` |  | The Batch 1 review screen. Presents proposed decisions; approves nothing. |
 | `scripts/benchmark_refreeze_request.py` |  | What a benchmark re-freeze would change. Writes nothing; asks for a decision. |
 | `scripts/build_companies_act_matters.py` |  | Build the Companies Act 2013 matters dataset from the open judgment METADATA. |
+| `scripts/build_judgment_index.py` |  | Build the slim judgment index that `checker/sources/judgment_index.py` searches at runtime. |
+| `scripts/build_judgment_voyage_index.py` |  | Build the Voyage dense index that `checker/judgment_dense.py` searches at runtime. |
 | `scripts/build_section_index.py` |  | Build the section_number -> section_id index for the Companies Act corpus. |
+| `scripts/build_voyage_index.py` |  | Build the Voyage dense index that `checker/voyage_dense.py` searches at runtime. |
 | `scripts/cache_report.py` |  | The answer cache's hit rate, and what the number does not include. |
 | `scripts/calibration_report.py` |  | What the lawyer labels can and cannot support, per (task, body of law). |
 | `scripts/cascade_report.py` |  | What the cascade actually cost, from recorded runs. Never from an assumption. |
 | `scripts/chaos_test.py` |  | Break things on purpose, and require every run to end in a NAMED state. |
 | `scripts/check_deps.py` |  | Are the pinned dependencies importable? Exit 0 if yes. |
 | `scripts/check_doc_refs.py` |  | Every path an ACTIVE document cites must exist on disk. |
+| `scripts/company_profile_integration.py` |  | 032: the company profile on real Postgres, as the restricted app role. |
 | `scripts/concurrency_test.py` |  | Fifty at once: nothing runs twice, no tenant reads another's rows, and p95 is recorded. |
 | `scripts/conversation_http_checks.py` |  | Deterministic overload, body-cap and file-race regressions; no model or network calls. |
 | `scripts/conversation_persist_integration.py` |  | R-019 regression: conversation.send must persist on Postgres, not FK-fail. |
@@ -337,6 +354,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/demo.py` |  | One command: walk the whole product on synthetic data, and say pass or fail. |
 | `scripts/demo_e2e.py` |  | The whole product, end to end, against the real gateway. PASS / BLOCKED / FAIL. |
 | `scripts/demo_inhouse.py` |  | The in-house lawyer's day, end to end, on synthetic data. |
+| `scripts/eval_document_retrieval.py` |  | Evaluate document excerpt retrieval (gateway.document_evidence.collect) on CUAD + a synthetic suite. |
 | `scripts/failure_report.py` |  | Weekly counts of why runs did not answer. |
 | `scripts/find_commencement.py` |  | Find which notification commenced a given section of an amending Act. |
 | `scripts/gate_lock.py` |  | Hold the gate's single-run lock, so two overlapping gates cannot clobber each other. |
@@ -347,6 +365,8 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/index_codebase.py` |  | Build the agent search index over code and memory. |
 | `scripts/ingest_act.py` |  | Ingest one Central Act from India Code, for any Act in the register below. |
 | `scripts/ingest_companies_act.py` |  | Ingest the Companies Act 2013. Thin wrapper over `scripts/ingest_act.py`. |
+| `scripts/limiter_integration.py` |  | Real-Postgres proof for the shared limiter, restricted to a named scratch database. |
+| `scripts/login_email_integration.py` |  | 033: one sign-in per email across every firm, on real Postgres as the app role. |
 | `scripts/merge_repo_map.py` |  | Git merge driver for docs/REPO_MAP.md: regenerate, never hand-merge. |
 | `scripts/merge_suite_floors.py` |  | Git merge driver for scripts/suite_floors.json: the MAX floor per suite, never a lower. |
 | `scripts/merge_tasks.py` |  | Git merge driver for research/TASKS.md: a three-way merge, with conflicts unioned by row. |
@@ -372,7 +392,8 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/review.py` |  | The review terminal: the 30 open items, one at a time, beside the gazette. |
 | `scripts/review_brief.py` |  | Assemble the evidence a reviewer needs, for every queued item, in one document. |
 | `scripts/review_table_eval.py` |  | Per-column precision, recall and false-NOT_FOUND rate for review grids, on CUAD. |
-| `scripts/rls_integration.py` |  | Row-level security, proved against a REAL Postgres. Deliberately outside the gate. |
+| `scripts/review_table_list_integration.py` |  | review_table.list on Postgres: the firm's tables, and only the ones this person may open. |
+| `scripts/rls_integration.py` |  | Row-level security, proved against a REAL Postgres. Outside scripts/run_tests.sh; run by CI. |
 | `scripts/scan_testdocs.py` |  | Run the SS defect scanner against the REAL document corpus. |
 | `scripts/search_memory.py` |  | Agent retrieval over code and memory. The read half of `index_codebase.py`. |
 | `scripts/seed_admission.py` |  | Seed admission records and the review queue from what the repo actually knows. |
@@ -382,13 +403,17 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/slice_s173.py` |  | The Section 173 vertical slice, end to end. Board meetings for one company-year. |
 | `scripts/slice_s96.py` |  | The Section 96 vertical slice, end to end. |
 | `scripts/smoke_adapters.py` |  | Live smoke test for the Voyage and Sarvam adapters -- the first real calls. |
+| `scripts/spend_ledger_integration.py` |  | 035: the shared spend ledger, on real Postgres as the app role. |
 | `scripts/suite_floors.py` |  | A suite may gain checks. It may not quietly lose them. |
 | `scripts/sweep_folder.py` |  | Run an instrument backwards across a folder of documents. |
 | `scripts/text_layer_census.py` |  | Per-page text-layer census of the public test corpus. MEASURED, and narrow. |
 | `scripts/themis_mcp.py` |  | Serve Themis to an MCP client over stdio. |
 | `scripts/themis_slice.py` |  | The THEMIS V0 vertical slice, end to end, on real data. |
+| `scripts/vault_failed_retry_integration.py` |  | Regression: a vault document whose ingest gives up is FAILED, and a retry runs it ONCE. |
+| `scripts/vault_ingest_authz_integration.py` |  | Regression: a vault ingest job reads only the bytes of the document it writes to. |
 | `scripts/vault_load_test.py` |  | Two thousand documents through the real ingest path, timed. |
 | `scripts/vault_retrieval_bakeoff.py` |  | Does giving a chunk its context actually help? Measured, before and after. |
+| `scripts/vault_upload_atomic_integration.py` |  | Regression: a vault upload never leaves a PENDING document without an ingest job. |
 | `scripts/verifier_error_rates.py` |  | How often does a verifier accept a quote that has been broken? Measured, per check. |
 | `scripts/verify_against_pdf.py` |  | Cross-validate the ingested corpus against an INDEPENDENT rendering of the same Act. |
 | `scripts/verify_document.py` |  | Is this document real? |
@@ -397,4 +422,4 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/watch_gazette.py` |  | Run the Gazette watcher once: what did the Gazette publish since we last looked? |
 | `scripts/watch_ofac.py` |  | Poll OFAC's SDN list and report what CHANGED since the last trustworthy poll. |
 
-357 modules listed.
+382 modules listed.

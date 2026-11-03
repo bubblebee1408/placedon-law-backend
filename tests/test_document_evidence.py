@@ -243,7 +243,7 @@ class DocumentEvidenceSimulation(unittest.TestCase):
         for text, name, count, expected in cases:
             with self.subTest(expected=expected):
                 ids = [self.document(f'Content {expected} {index}.', name=name) for index in range(count)]
-                with patch('gateway.verbs._dispatch_conversation', side_effect=lambda *a, **k: {'task': k['task']}):
+                with patch('gateway.verbs.conversation._dispatch_conversation', side_effect=lambda *a, **k: {'task': k['task']}):
                     result = self.send(ids, text=text)
                 self.assertEqual(result['task'], expected)
 

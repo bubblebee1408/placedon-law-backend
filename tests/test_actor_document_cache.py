@@ -63,7 +63,7 @@ class UploadHttpIsolation(unittest.TestCase):
         def probe(ids, ctx, matter, **kw):
             observed.append((ctx.actor, ctx.documents.get(ids[0])))
             return None, {'status': 'REFUSED', 'code': 'TEST_ONLY'}
-        with TestClient(app) as client, patch.object(verbs, '_resolve_conversation_documents', probe):
+        with TestClient(app) as client, patch.object(verbs.documents, '_resolve_conversation_documents', probe):
             ra = client.post('/v2/documents/upload', headers={'Authorization': f'Bearer {ka}'},
                 json={'name': 'private-alice.txt', 'text': 'Synthetic confidential clause.'})
             self.assertEqual(ra.status_code, 200)

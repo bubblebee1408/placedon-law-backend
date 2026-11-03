@@ -34,8 +34,8 @@ This is from `git show` on `claude/harvey-india-platform-analysis-d2mmqi`, head 
 
 | Area | Modules (lines) | State in its own words |
 |---|---|---|
-| Gateway | `gateway/verbs.py` (911), `store.py` (588), `auth.py`, `audit.py`, migrations 001–005 | One verb table generating three surfaces. RLS proved on PostgreSQL 18.6: 53 checks, 0 failures (commit `b0b7a51`) |
-| Verbs | `ask`, `review_contract`, `review_document`, `runs.get`, `runs.trace`, `runs.approve`, `runs.reject`, `documents.upload` | from `gateway/verbs.py` |
+| Gateway | `gateway/verbs/` (911 lines, then one file `verbs.py`), `store.py` (588), `auth.py`, `audit.py`, migrations 001–005 | One verb table generating three surfaces. RLS proved on PostgreSQL 18.6: 53 checks, 0 failures (commit `b0b7a51`) |
+| Verbs | `ask`, `review_contract`, `review_document`, `runs.get`, `runs.trace`, `runs.approve`, `runs.reject`, `documents.upload` | from `gateway/verbs/` |
 | Agents | `agents/plans.py` (237), `runtime.py` (290), `review_document.py` (335), `research_question.py`, `review_contract.py` | A run resumes to an identical trace (`bd4eaa2`) |
 | Models | `checker/router.py` (781), `azure_model.py`, `public_only.py` (674), `quoted_span.py` (355) | Azure is the only host for matter documents; the free tier sees only published text |
 | Contracts | `checker/clauses.py` (324), `checker/playbook.py` (503) | A company standard as data; findings cannot read as legal advice |

@@ -45,7 +45,7 @@ file 01. Where it rests on a line of code, the line is in `.claude/loops/…_D_C
 ╚════════════════════════════════════════════════════════════════════════════════════╝
 ```
 
-The surfaces exist in the orchestration snapshot: `gateway/verbs.py` (verb table and parity
+The surfaces exist in the orchestration snapshot: `gateway/verbs/` (verb table and parity
 test), `addin/` (Word add-in), and row-level security in `gateway/migrations/` (FORCE in `001_core.sql`).
 
 **Read it as three loops turning at different speeds:**
@@ -148,7 +148,7 @@ shown only beside law that is held. For each body, the forums and their public r
 | # | Defect | Where | Consequence today |
 |---|---|---|---|
 | F1 | worker maps FAILED/PARTIAL → ANSWERED | `gateway/worker.py:146-147` | failed runs look like answers |
-| F2 | `s.citation` vs `Sentence.citations` | `gateway/verbs.py:215-216` | no `ask` answer has a source; approve returns NOT_FOUND; recall has nothing to join |
+| F2 | `s.citation` vs `Sentence.citations` | the snapshot's `verbs.py:215-216` (now `gateway/verbs/`) | no `ask` answer has a source; approve returns NOT_FOUND; recall has nothing to join |
 | F5 | no as_of filter before the model | `agents/research_question.py` | the docs claim the most important protection and the code does not have it |
 | F7 | `public_only` shells out to git | `checker/public_only.py:156-195` | any container deploy refuses every `ask`, with a false reason |
 | — | migration 006 used on two branches | `t0/finish` vs the orchestration branch | the next merge breaks `schema.py`'s pinned list |

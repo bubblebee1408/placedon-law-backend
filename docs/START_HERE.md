@@ -57,7 +57,7 @@ the job queue and storage. A model is never on the decision path.
 ```
 client (web app, MCP, CLI)
   │
-  ▼  gateway/          app.py (HTTP), verbs.py (one verb table → REST, MCP and CLI),
+  ▼  gateway/          app.py (HTTP), verbs/ (one verb table → REST, MCP and CLI),
   │                    auth.py (hashed keys → tenant), audit.py (hash-chained metadata),
   │                    store.py and migrations/ (Postgres, FORCE RLS on every tenant table)
   │
@@ -107,7 +107,7 @@ forecast). A probability can never reach a legal decision.
 
 | You want to… | Start in | And never forget |
 |---|---|---|
-| Add an API, MCP or CLI action | `gateway/verbs.py` (§9) | One entry generates all three surfaces; write verbs stay off MCP |
+| Add an API, MCP or CLI action | `gateway/verbs/` (§9) | One entry generates all three surfaces; write verbs stay off MCP |
 | Add a task the product can do | `agents/plans.py`, then a new `agents/<intent>.py` | Plans are fixed step lists; a model may pick, never invent |
 | Add a body of law | `checker/scope.py`, then an `ingest_*`/`acquire_*` script | Promotion to held needs acquisition, hashing, cross-check and a lawyer spot-check |
 | Add an outside source | `checker/sources/` plus a record in `terms.py` | No record, no fetch; never work around robots rules or a WAF |
@@ -192,12 +192,17 @@ make test-db    # live-database regressions + the row-level security proof, as C
 
 ## 9. Add a verb (an API, MCP and CLI action at once)
 
-1. Write the handler `def _my_verb(args: dict, ctx: Context) -> dict` in `gateway/verbs.py`.
+1. Write the handler `def _my_verb(args: dict, ctx: Context) -> dict` in the file of
+   `gateway/verbs/` for its domain (`vault.py`, `drafts.py`, `review_table.py`, ...; the list,
+   one line each, is in `gateway/verbs/__init__.py`), importing what it uses from the owning
+   module (`from gateway.verbs.core import Context, _refuse`). If other code imports it from
+   `gateway.verbs`, add it to the re-exports in `gateway/verbs/__init__.py`. In tests, patch a
+   name where it is looked up: `gateway.verbs.model_access._ledger`, not `gateway.verbs._ledger`.
 2. Add a `Verb(name="area.action", summary=..., inputs=(Field(...), ...), run=_my_verb)` to
-   the `VERBS` table. `read_only=True` for reads; a write verb is never exported to MCP, and
+   the `VERBS` table in `gateway/verbs/registry.py`. `read_only=True` for reads; a write verb is never exported to MCP, and
    `mcp=False` keeps a read off MCP too.
 3. Give it a role in `gateway/roles.py` (`REQUIRED`) if it needs more than `viewer`.
-4. Add checks to the `_test()` in `gateway/verbs.py` (and `gateway/app.py` for HTTP
+4. Add checks to the `_test()` in `gateway/verbs/selftest.py` (and `gateway/app.py` for HTTP
    behaviour). The parity test fails if REST, MCP and the CLI disagree.
 5. `make test`, then try it: `make shell` → `PYTHONPATH=. python3 gateway/cli.py --help`.
 

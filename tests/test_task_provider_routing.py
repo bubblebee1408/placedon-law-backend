@@ -21,7 +21,7 @@ AZ, BR, OL = router.AZURE, router.BEDROCK, router.OLLAMA
 def serve_with(available, name, purpose, consequence=router.LOW, accept_azure=False):
     """Run the REAL router and serve() with stubbed adapters; return (provider|None, refusal)."""
     stub = lambda **_: (lambda prompt: "stub")                  # noqa: E731
-    with patch("gateway.verbs._ledger", return_value=_Budget()), \
+    with patch("gateway.verbs.model_access._ledger", return_value=_Budget()), \
          patch("checker.azure_model.region_accepted", return_value=accept_azure), \
          patch("gateway.models.available_providers", return_value=available), \
          patch("checker.bedrock_model.as_text_model", side_effect=stub), \
@@ -42,7 +42,7 @@ class _Budget:
 
 class TaskProviderRouting(unittest.TestCase):
     def test_every_model_call_site_declares_its_providers(self):
-        src = Path(verbs.__file__).read_text()
+        src = "".join(p.read_text() for p in sorted(Path(verbs.__file__).parent.glob("*.py")))
         names = set(re.findall(r'_served_or_refusal\([^)]*?name="([^"]+)"', src, re.S))
         self.assertTrue(names, "found the call sites")
         self.assertEqual(names - set(verbs.TASK_PROVIDERS), set(), "a model call with no declared provider")
@@ -76,7 +76,7 @@ class TaskProviderRouting(unittest.TestCase):
         self.assertEqual(serve_with((), "ask", router.NARRATION)[1]["code"], "NO_MODEL")
 
     def test_an_undeclared_task_is_refused_before_any_provider_is_chosen(self):
-        with patch("gateway.models.serve") as serve, patch("gateway.verbs._ledger", return_value=_Budget()):
+        with patch("gateway.models.serve") as serve, patch("gateway.verbs.model_access._ledger", return_value=_Budget()):
             served, refusal = verbs._served_or_refusal((), name="something_new", purpose=router.NARRATION,
                                                        ctx=verbs.Context())
         self.assertIsNone(served)
@@ -120,7 +120,7 @@ class AzureOptIn(unittest.TestCase):
             self.assertEqual(verbs.task_providers("document_summary"), (BR, AZ))
 
     def test_summary_job_routes_through_the_opt_in(self):
-        src = Path(verbs.__file__).read_text()
+        src = "".join(p.read_text() for p in sorted(Path(verbs.__file__).parent.glob("*.py")))
         self.assertIn('allowed_providers=task_providers("document_summary")', src)
         self.assertNotIn("allowed_providers=(router.BEDROCK,)", src)
 
@@ -253,11 +253,11 @@ class RecordedProviderIsTheOneThatServed(unittest.TestCase):
                                region=models.ON_DEVICE, degraded=True, requires_review=False,
                                est_cost_inr=0.0)
         with patch.object(rq, "answer", side_effect=spy), \
-             patch("gateway.verbs._typed_text_origin",
+             patch("gateway.verbs.model_access._typed_text_origin",
                    side_effect=lambda q, **_: (__import__("checker.public_only", fromlist=["x"])
                                                .clear_matter(q, name="q", provider="bedrock"),
                                                None)), \
-             patch("gateway.verbs._served_or_refusal", return_value=(served, None)):
+             patch("gateway.verbs.model_access._served_or_refusal", return_value=(served, None)):
             verbs._ask({"question": "What notice is needed to call a board meeting under "
                                     "Section 173?"}, verbs.Context(store=MemoryBackend()))
         self.assertEqual(tuple(seen["available"]), (OL,))

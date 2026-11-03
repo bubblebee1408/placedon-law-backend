@@ -92,7 +92,7 @@ what is missing.
 |---|---|---|
 | F28 | REST API `/v1` (engine) and `/v2` (gateway verbs) | BUILT |
 | F29 | MCP server — Placedon inside Claude, ChatGPT, Copilot | BUILT (read-only tools, `checker/mcp/`) |
-| F30 | CLI generated from the same verb table | BUILT (`gateway/verbs.py`) |
+| F30 | CLI generated from the same verb table | BUILT (`gateway/verbs/registry.py`) |
 | F31 | Connectors — SharePoint, OneDrive, Google Drive, Outlook/Gmail | TODO (customer OAuth consent) |
 | F32 | Licensed legal databases (§5) | NEEDS PERMISSION, per publisher |
 | F33 | Webhooks out (run finished, law changed) | TODO |
@@ -125,7 +125,7 @@ what is missing.
 
 Three facts make this one system rather than many:
 
-1. **One verb table** (`gateway/verbs.py`) generates the REST routes, the MCP tools and the CLI.
+1. **One verb table** (`gateway/verbs/registry.py`) generates the REST routes, the MCP tools and the CLI.
    A new feature is one entry; all three surfaces get it, with a parity test.
 2. **One source interface** (`checker/sources/`). Government sites, licensed publishers, the
    client's own documents and the web all return `Evidence` rows carrying a **tier**. Only HELD
@@ -348,7 +348,7 @@ under a user licence is OPEN, per publisher.
 | `space.create/invite/share` | — (write) | `placedon space-create` etc. | Spaces | TODO (T8) |
 | `ops.summary` | — | `placedon ops-summary` | Command Center numbers | TODO (T7) |
 
-CLI names are generated, not chosen: `gateway/verbs.py:cli_command` turns `runs.get` into
+CLI names are generated, not chosen: `cli_command` in `gateway/verbs/core.py` turns `runs.get` into
 `placedon runs-get`, and each field becomes a `--flag`. Rules: write verbs never appear on MCP (`mcp_tools()` refuses to generate them); some read verbs
 are also off MCP on purpose (client lists, matters). Every call is audited with tenant, user,
 verb and cost, never document text.

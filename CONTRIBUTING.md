@@ -26,8 +26,12 @@ working procedure that follows from them.
   standard-library Python on purpose.
 - **Respect the rings** (`checker/rings.py`). Ring 0 (legal core) may never import Ring 2
   (feeds, gateway, sources) or Ring 3 (agents, forecast). An AST walk in the gate enforces this.
-- **Gateway changes:** add a verb in `gateway/verbs.py`. One entry generates REST, MCP and
-  the CLI, and a parity test holds the three together. Write verbs stay off MCP.
+- **Gateway changes:** add a verb in `gateway/verbs/`: the handler in the file for its domain,
+  the entry in the `VERBS` table in `gateway/verbs/registry.py`. One entry generates REST, MCP
+  and the CLI, and a parity test holds the three together. Write verbs stay off MCP. Import what
+  a handler uses from its owning module (`from gateway.verbs.core import Context, _refuse`).
+  In a test, patch a name where it is looked up (`gateway.verbs.model_access._ledger`), not
+  the re-export in `gateway.verbs`.
 - **Database changes:** add `gateway/migrations/NNN_*.sql`. Every tenant table gets FORCE
   row-level security. Run `scripts/rls_integration.py --run` against a real Postgres.
 - **Legal content:** never invent a rule, a threshold, a section or a date. If evidence is

@@ -104,7 +104,7 @@ class ConversationReliability(unittest.TestCase):
         draft_id = str(uuid.uuid4())
         fake = replace(verbs.by_name()["draft.create"], run=lambda a, c: {"status": "ANSWERED", "draft_id": draft_id, "version": 1})
         real = verbs.by_name()
-        with patch("gateway.verbs.by_name", return_value={**real, "draft.create": fake}):
+        with patch("gateway.verbs.registry.by_name", return_value={**real, "draft.create": fake}):
             result = self.send(text="Prepare a draft", task_override="DRAFT", request_id="draft-request-01")
         self.assertEqual(result["metadata"]["artifacts"], [{"type": "draft", "id": draft_id, "version": 1}])
         replay = self.send(text="Prepare a draft", task_override="DRAFT", request_id="draft-request-01")

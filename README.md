@@ -38,7 +38,7 @@ decide; a lawyer verifies.
 | Surface | Where | Auth | Routes |
 |---|---|---|---|
 | `/v1`, the engine | `checker/api.py` (`handle`, pure function) | none | `GET /v1/health` · `POST /v1/compliance-pack` · `POST /v1/document-check` · `GET /v1/company/{cin}/events` · `GET /v1/company/{cin}/events/{event_id}` · `GET /v1/instruments/{fragment}/affected` |
-| `/v2`, the gateway verbs | `gateway/verbs.py` → `gateway/app.py` | API key → tenant | generated from one verb table, which also produces the MCP tools (`checker/mcp/`) and the CLI (`gateway/cli.py`) |
+| `/v2`, the gateway verbs | `gateway/verbs/` → `gateway/app.py` | API key → tenant | generated from one verb table, which also produces the MCP tools (`checker/mcp/`) and the CLI (`gateway/cli.py`) |
 
 The gateway forwards `/v1` **byte for byte**, and its suite asserts this. To list the live
 `/v2` verbs, run `PYTHONPATH=. python3 gateway/cli.py --help`. Do not trust a list copied

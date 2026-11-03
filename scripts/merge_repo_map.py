@@ -56,7 +56,7 @@ def _test() -> None:
         check(rc == 0, "the driver exits 0 (resolved)")
         check("<<<<<<<" not in body and ">>>>>>>" not in body,
               "the conflict markers are gone -- the input was discarded, not merged")
-        check("`gateway/verbs.py`" in body and "modules listed" in body,
+        check("`gateway/verbs/registry.py`" in body and "modules listed" in body,
               "a real regenerated map was written")
         check(body == repo_map.render(repo_map.tracked_python()),
               "the output equals a fresh generation, so the gate's staleness check passes")
