@@ -1,0 +1,181 @@
+# Deploy main to production (Azure App Service placedon-api-hyd), from GitHub, not a laptop.
+#
+# Manual only (Actions → deploy → Run workflow, on main), and gated by the `production`
+# environment, whose required reviewer must approve before any step runs. Mirrors the
+# laptop runbook step for step: build a zip of the git checkout, back up the database,
+# apply pending migrations, deploy the zip, wait for /v1/health to name the commit.
+#
+# One-time owner setup (Azure app registration with a federated credential, the
+# `production` environment, the secrets below): docs/deploy/AZURE.md. Until those secrets
+# exist the first step fails by name and nothing touches Azure.
+name: deploy
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write     # OIDC token for azure/login; no Azure password is stored anywhere
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false   # never kill a deploy halfway through a migration
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 45
+    env:
+      RG: placedon-prod
+      APP: placedon-api-hyd
+      PG_SERVER: placedon-pg-uae
+      PG_HOST: placedon-pg-uae.postgres.database.azure.com
+      PG_DB: placedon
+      PG_APP_USER: placedon_app
+      HEALTH_URL: https://placedon-api-hyd.azurewebsites.net/v1/health
+      FW_RULE: gha-deploy-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Refuse unless configured, and only from main
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          PG_ADMIN_USER: ${{ secrets.PG_ADMIN_USER }}
+          PG_ADMIN_PASSWORD: ${{ secrets.PG_ADMIN_PASSWORD }}
+          PG_APP_PASSWORD: ${{ secrets.PG_APP_PASSWORD }}
+        run: |
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "::error::deploys run from main only (this run is on $GITHUB_REF)"; exit 1
+          fi
+          missing=""
+          for s in AZURE_CLIENT_ID AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID \
+                   PG_ADMIN_USER PG_ADMIN_PASSWORD PG_APP_PASSWORD; do
+            [ -n "${!s}" ] || missing="$missing $s"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::not configured, nothing was deployed. Missing secrets:$missing (see docs/deploy/AZURE.md)"
+            exit 1
+          fi
+
+      - name: Check out the commit, with its .git (the engine names its commit from it)
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false   # the zip ships .git; it must hold no token
+
+      - name: Build the bundle
+        run: |
+          set -euo pipefail
+          echo "SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+          git remote remove origin
+          cp ops/azure/startup.sh startup.sh
+          # Untracked files the engine must not count as changes to its commit.
+          printf 'startup.sh\nantenv/\n' >> .git/info/exclude
+          test -z "$(git status --porcelain)" || { git status --porcelain; echo "::error::bundle is not clean"; exit 1; }
+          zip -qry "$RUNNER_TEMP/bundle.zip" .
+          ls -l "$RUNNER_TEMP/bundle.zip"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Migration tools (psycopg as pinned; pg_dump from the runner image)
+        run: |
+          python -m pip install --disable-pip-version-check -q "$(grep '^psycopg' requirements-gateway.txt)"
+          pg_dump --version
+
+      - name: Azure login (OIDC, federated credential; no stored password)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # The database admits only the web app's outbound addresses. A GitHub runner's address
+      # changes every run, so open exactly this runner's IP for this run, and always close it.
+      - name: Open a temporary Postgres firewall rule for this runner
+        id: fw
+        run: |
+          set -euo pipefail
+          IP=$(curl -4 -fsS --max-time 15 https://api.ipify.org)
+          echo "runner IP $IP, rule $FW_RULE"
+          az postgres flexible-server firewall-rule create -g "$RG" --server-name "$PG_SERVER" \
+            --name "$FW_RULE" --start-ip-address "$IP" --end-ip-address "$IP" -o none
+
+      - name: Back up, then apply pending migrations
+        env:
+          PG_ADMIN_USER: ${{ secrets.PG_ADMIN_USER }}
+          PG_ADMIN_PASSWORD: ${{ secrets.PG_ADMIN_PASSWORD }}
+          PG_APP_PASSWORD: ${{ secrets.PG_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          q() { python -c 'import sys,urllib.parse;print(urllib.parse.quote(sys.argv[1],safe=""))' "$1"; }
+          # Migrations run as placedon_app (scripts/migrate.py refuses a superuser, so RLS and
+          # ownership land as in production). The backup runs as the admin, the only role that
+          # can read rows RLS hides from the app role.
+          APP_URL="postgresql://$PG_APP_USER:$(q "$PG_APP_PASSWORD")@$PG_HOST:5432/$PG_DB?sslmode=require"
+          ADMIN_URL="postgresql://$(q "$PG_ADMIN_USER"):$(q "$PG_ADMIN_PASSWORD")@$PG_HOST:5432/$PG_DB?sslmode=require"
+          python scripts/migrate.py --plan --url "$APP_URL"
+          python scripts/migrate.py --apply --url "$APP_URL" --backup-url "$ADMIN_URL" \
+            --backup-dir "$RUNNER_TEMP/backups"
+
+      - name: Keep the backup in Azure Blob (optional, when BACKUP_STORAGE_ACCOUNT is set)
+        if: vars.BACKUP_STORAGE_ACCOUNT != ''
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          for f in "$RUNNER_TEMP"/backups/*.dump; do
+            az storage blob upload --auth-mode login --account-name "${{ vars.BACKUP_STORAGE_ACCOUNT }}" \
+              --container-name "${{ vars.BACKUP_CONTAINER || 'db-backups' }}" \
+              --name "$SHA/$(basename "$f")" --file "$f" -o none
+            echo "kept $(basename "$f")"
+          done
+
+      - name: Close the temporary firewall rule
+        if: always() && steps.fw.outcome != 'skipped'
+        run: |
+          az postgres flexible-server firewall-rule delete -g "$RG" --server-name "$PG_SERVER" \
+            --name "$FW_RULE" --yes -o none || true
+          if az postgres flexible-server firewall-rule show -g "$RG" --server-name "$PG_SERVER" \
+               --name "$FW_RULE" -o none 2>/dev/null; then
+            echo "::error::firewall rule $FW_RULE is STILL OPEN on $PG_SERVER. Delete it by hand now."
+            exit 1
+          fi
+          echo "firewall rule $FW_RULE removed"
+
+      - name: Deploy the zip
+        # Never change App Service settings during a deploy: Azure restarts and cancels it.
+        run: |
+          az webapp deploy -g "$RG" -n "$APP" --src-path "$RUNNER_TEMP/bundle.zip" \
+            --type zip --async true -o none
+
+      - name: Wait for /v1/health to report this commit
+        run: |
+          python - <<'PY'
+          import json, os, sys, time, urllib.request
+          url, sha = os.environ["HEALTH_URL"], os.environ["SHA"]
+          last, deadline = None, time.monotonic() + 15 * 60
+          while time.monotonic() < deadline:
+              try:
+                  with urllib.request.urlopen(url, timeout=15) as r:
+                      last = json.load(r)
+              except Exception as e:  # cold start, restart in progress
+                  last = {"error": str(e)}
+              live = last.get("checker_commit") or ""
+              if len(live) >= 7 and sha.startswith(live):
+                  problems = []
+                  if last.get("store", {}).get("kind") != "postgres":
+                      problems.append(f"store {last.get('store')}")
+                  if last.get("files", {}).get("kind") != "azure-blob":
+                      problems.append(f"files {last.get('files')}")
+                  q = last.get("queue")
+                  if not q or "error" in q:
+                      problems.append(f"queue {q}")
+                  if problems:
+                      sys.exit(f"::error::{sha[:7]} is live but miswired: {'; '.join(problems)}")
+                  print(f"LIVE: {sha} (store postgres, files azure-blob, queue {q})")
+                  sys.exit(0)
+              time.sleep(15)
+          sys.exit(f"::error::health did not report {sha[:7]} within 15 minutes; last: "
+                   f"{json.dumps(last)[:500]}")
+          PY
