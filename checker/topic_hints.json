@@ -13,9 +13,9 @@
    "why": "s.164 heading is 'Disqualifications for appointment of director'"}
  ],
  "topics": [
-  {"key": "independent_director", "all": ["\\bindependent directors?\\b"], "none": ["data ?bank"],
+  {"key": "independent_director", "all": ["\\bindependent directors?\\b"], "none": ["data ?bank", "\\bselect", "\\bchos(e|en)\\b|\\bchoos"],
    "sections": ["149"],
-   "why": "s.149(4)-(6) say how many independent directors a company needs and who may be one; s.150 (selection, data bank) only names the subject in its heading"},
+   "why": "s.149(4)-(6) say how many independent directors a company needs and who may be one; s.150 (selection, data bank) only names the subject in its heading; selection questions are s.150's, so they are excluded"},
   {"key": "board_quorum", "all": ["\\bquorum\\b", "\\bboard\\b|\\bdirectors?\\b"],
    "none": ["general meeting|\\bagm\\b|\\begm\\b|\\bmembers?\\b|\\bshareholders?\\b"],
    "sections": ["174"],
@@ -35,8 +35,8 @@
    "none": ["\\bquorum\\b"],
    "sections": ["173"],
    "why": "s.173(1): first Board meeting within thirty days, at least four a year, no more than one hundred and twenty days between two"},
-  {"key": "minutes", "all": ["\\bminutes\\b|minute[- ]books?"], "none": ["\\binspect", "\\bcop(y|ies)\\b"],
+  {"key": "minutes", "all": ["\\bminutes\\b|minute[- ]books?"], "none": ["\\binspect", "\\bcop(y|ies)\\b", "\\b(view|see|obtain|access|get|furnish)\\b"],
    "sections": ["118"],
-   "why": "s.118 'Minutes of proceedings of general meeting, meeting of Board of Directors and other meeting ...' -- keeping and signing minutes; inspection and copies are s.119"}
+   "why": "s.118 'Minutes of proceedings of general meeting, meeting of Board of Directors and other meeting ...' -- keeping and signing minutes; inspection, copies and other access wording (view, obtain ...) are s.119, so they are excluded"}
  ]
 }

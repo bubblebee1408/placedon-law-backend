@@ -60,6 +60,11 @@ CASES: tuple[tuple[str, str], ...] = (
     ("What disqualifies a person from being appointed a director?", "164"),
     ("Who must sign the minutes of a board meeting?", "118"),
     ("Can members inspect the minute books of general meetings?", "119"),
+    # Codex review on PR #147: access wording without "inspect"/"copy", and selection
+    ("Can members view the minutes of general meetings?", "119"),
+    ("How can members obtain minutes of a general meeting?", "119"),
+    ("Who selects an independent director?", "150"),
+    ("How are independent directors chosen?", "150"),
     ("Who can requisition an EGM?", "100"),
     # other everyday subjects, so a fix for the above cannot quietly break them
     ("Can a member appoint a proxy to attend a general meeting?", "105"),
