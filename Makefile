@@ -19,8 +19,7 @@ test: .env           ## the repository gate, exactly as CI runs it (keyless, no 
 	docker compose run --rm --no-deps gateway bash scripts/run_tests.sh
 
 test-db: .env        ## the live-database regressions and the RLS proof, as CI runs them
-	docker compose up -d --wait db
-	docker compose run --rm --no-deps gateway bash scripts/db_regressions.sh
+	docker compose run --rm regressions
 
 smoke:               ## /v1/health reports postgres, a queue and a vault
 	docker compose exec -T gateway python ops/dev/smoke.py
