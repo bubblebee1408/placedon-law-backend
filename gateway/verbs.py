@@ -5987,7 +5987,7 @@ def _auth_login(args: dict, ctx: Context) -> dict:
     # No known client address (the trusted proxy could not name one): count this attempt
     # against the email only. A fixed placeholder would put every such sign-in into one
     # shared bucket -- the whole team locked out by one person's typos. A random hash
-    # matches no other row, so the OR in recent_failures reduces to the email.
+    # matches no other row, so only the per-email count can ever reach its line.
     import secrets
     ip_hash = hash_key(ctx.client_ip) if ctx.client_ip else secrets.token_hex(32)
     locked = accounts.check_lockout(ctx.auth, email_hash=email_hash, ip_hash=ip_hash)
@@ -10496,6 +10496,12 @@ def _test() -> None:
           f"({_locked})")
     check(_locked.get("retry_after") == _accounts_mod.LOGIN_LOCKOUT_WINDOW_SECONDS,
           "...carrying retry_after")
+    _colleague = _V["auth.login"].run(
+        {"email": "lawyer@firm.example", "password": "a-strong-enough-password"}, _pub_ctx)
+    check(_colleague.get("status") == "ok",
+          f"...but a COLLEAGUE signing in from the same address is not locked out: the "
+          f"address line ({_accounts_mod.LOGIN_LOCKOUT_IP_MAX}) is above the email line "
+          f"({_colleague.get('code')})")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:

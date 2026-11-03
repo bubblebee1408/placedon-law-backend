@@ -3617,8 +3617,12 @@ class AuthLookup:
             c.execute("INSERT INTO login_attempts (email_hash, ip_hash, ok) "
                      "VALUES (%s,%s,%s)", (email_hash, ip_hash, bool(ok)))
 
-    def recent_failures(self, *, email_hash: str, ip_hash: str, since) -> int:
-        """How many FAILED attempts for this email OR this IP, at or after `since`.
+    def recent_failures(self, *, email_hash: str, ip_hash: str, since) -> tuple[int, int]:
+        """(failures for this email, failures for this IP), each counted at or after `since`.
+
+        Two counts, not one OR-ed count, because the lockout holds them to different lines
+        (gateway/accounts.py): an office behind one address must not inherit one person's
+        per-email lockout.
 
         `since` is a timezone-aware `datetime`, never a formatted string: two different
         ISO-8601 renderings (microseconds present or not, 'Z' vs '+00:00') do not compare
@@ -3626,15 +3630,18 @@ class AuthLookup:
         lockout window is evaluated.
         """
         if self._memory is not None:
-            return sum(1 for row in self._memory.login_attempts
-                       if not row["ok"] and row["at"] >= since
-                       and (row["email_hash"] == email_hash or row["ip_hash"] == ip_hash))
+            failed = [row for row in self._memory.login_attempts
+                      if not row["ok"] and row["at"] >= since]
+            return (sum(1 for row in failed if row["email_hash"] == email_hash),
+                    sum(1 for row in failed if row["ip_hash"] == ip_hash))
         with self._pg() as c:
             r = c.execute(
-                "SELECT count(*) FROM login_attempts WHERE NOT ok AND at >= %s "
+                "SELECT count(*) FILTER (WHERE email_hash = %s), "
+                "count(*) FILTER (WHERE ip_hash = %s) "
+                "FROM login_attempts WHERE NOT ok AND at >= %s "
                 "AND (email_hash = %s OR ip_hash = %s)",
-                (since, email_hash, ip_hash)).fetchone()
-        return int(r[0])
+                (email_hash, ip_hash, since, email_hash, ip_hash)).fetchone()
+        return int(r[0]), int(r[1])
 
 
 def conformance(backend) -> list[tuple[bool, str]]:
