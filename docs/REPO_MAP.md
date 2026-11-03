@@ -287,7 +287,36 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `gateway/roles.py` | R2 feeds | Who may call what. Three roles, one table, and no verb without an entry. |
 | `gateway/schema.py` | R2 feeds | The migrations, checked statically, because the live check cannot be in the gate. |
 | `gateway/screens.py` | R2 feeds | Which verb each screen calls, and which fields it shows. Checked, not described. |
-| `gateway/store.py` | R2 feeds | Two backends, one interface, and one conformance suite that both must pass. |
+| `gateway/store/__init__.py` | R2 feeds | Two backends, one interface, and one conformance suite that both must pass. |
+| `gateway/store/__main__.py` | R2 feeds | Run the store suite: PYTHONPATH=. python3 gateway/store/__main__.py |
+| `gateway/store/auth_lookup.py` | R2 feeds | Choosing a backend (`database_url`, `select`) and `AuthLookup`, the cross-tenant sign-in reads. |
+| `gateway/store/conformance.py` | R2 feeds | The contract, `conformance(backend)`, run against BOTH backends: here in the gate against |
+| `gateway/store/core.py` | R2 feeds | Shared by both backends: the errors, the `Backend` protocol, the row shapes and the checks that |
+| `gateway/store/memory.py` | R2 feeds | `MemoryBackend`: the in-memory store the gate runs on. |
+| `gateway/store/postgres.py` | R2 feeds | `PostgresBackend`: the store a deployment runs on, with FORCE row-level security. |
+| `gateway/store/selftest.py` | R2 feeds | The gate suite for the store. Run: PYTHONPATH=. python3 gateway/store/__main__.py |
+| `gateway/verbs/__init__.py` | R2 feeds | One verb table. Three surfaces generated from it, and a test that they cannot drift. |
+| `gateway/verbs/__main__.py` | R2 feeds | Run the gateway/verbs suite: PYTHONPATH=. python3 gateway/verbs/__main__.py [--live] |
+| `gateway/verbs/admin.py` | R2 feeds | Operator views: dead jobs and usage. |
+| `gateway/verbs/answers.py` | R2 feeds | Turning a run into an answer: bodies of law, the envelope, findings and citations. |
+| `gateway/verbs/ask.py` | R2 feeds | ask: the research question path, and its bounded decomposition (O5). |
+| `gateway/verbs/ask_layers.py` | R2 feeds | Layers around ask: the critic (layer 7) and the answer cache (O9). |
+| `gateway/verbs/company.py` | R2 feeds | events.assess, company facts and the company profile, the compliance calendar. |
+| `gateway/verbs/conversation.py` | R2 feeds | The conversation layer (C2): intake, task routing, as_of, send/get/list. |
+| `gateway/verbs/core.py` | R2 feeds | Field, Verb and Context; the REST/MCP/CLI name derivations; small shared helpers (dates, as_of, access arguments). |
+| `gateway/verbs/documents.py` | R2 feeds | documents.upload, document summaries, document.verify and document.check. |
+| `gateway/verbs/drafts.py` | R2 feeds | Drafts (H3): create, revise, versions, diff, export, list; draft prose. |
+| `gateway/verbs/matters.py` | R2 feeds | Matters, and administering matter access (028). |
+| `gateway/verbs/model_access.py` | R2 feeds | Budget ledger and model-provider routing: which provider may serve which task. |
+| `gateway/verbs/people.py` | R2 feeds | Sign-in, sessions and invites (026); the firm's people and pending invites (036). |
+| `gateway/verbs/registry.py` | R2 feeds | The verb table (VERBS) and the three surfaces generated from it. |
+| `gateway/verbs/research.py` | R2 feeds | research.multi (F2), the sources report, sources.list/search, research.cases/web, forecast (Lane B). |
+| `gateway/verbs/review.py` | R2 feeds | review.contract and review.document. |
+| `gateway/verbs/review_table.py` | R2 feeds | Review tables (H4): create, status, export, list, cancel, and the per-cell job. |
+| `gateway/verbs/run_records.py` | R2 feeds | Writing a run record (_persist_run) and the law versions it pins. |
+| `gateway/verbs/runs.py` | R2 feeds | Runs: runs.get/trace/approve/reject/submit/cancel/preview, and the durable queue path (O2). |
+| `gateway/verbs/selftest.py` | R2 feeds | The gate suite (`_test`) and the opt-in live smoke. Run: PYTHONPATH=. python3 gateway/verbs/__main__.py [--live] |
+| `gateway/verbs/vault.py` | R2 feeds | The vault (V1): upload, ingest, list, find, verify, delete, retry, summarize/research/compile. |
 | `gateway/worker.py` | R2 feeds | The durable executor. One job, one step at a time, resumable and cancellable. |
 
 ## backend/: model cost and budget
@@ -422,4 +451,4 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/watch_gazette.py` |  | Run the Gazette watcher once: what did the Gazette publish since we last looked? |
 | `scripts/watch_ofac.py` |  | Poll OFAC's SDN list and report what CHANGED since the last trustworthy poll. |
 
-382 modules listed.
+411 modules listed.

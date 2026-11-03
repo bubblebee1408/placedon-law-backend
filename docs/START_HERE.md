@@ -59,7 +59,7 @@ client (web app, MCP, CLI)
   │
   ▼  gateway/          app.py (HTTP), verbs/ (one verb table → REST, MCP and CLI),
   │                    auth.py (hashed keys → tenant), audit.py (hash-chained metadata),
-  │                    store.py and migrations/ (Postgres, FORCE RLS on every tenant table)
+  │                    store/ and migrations/ (Postgres, FORCE RLS on every tenant table)
   │
   ▼  agents/           plans.py (intent → fixed step list), runtime.py (persisted steps,
   │                    bounded correction), one file per intent: research_question.py,
