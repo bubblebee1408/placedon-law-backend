@@ -125,7 +125,9 @@ def _test() -> int:
     check(v is not None and v.read_only and not v.mcp,
           "review_table.list is declared, read-only and off MCP")
     gate = (ROOT / ".github" / "workflows" / "gate.yml").read_text()
-    check("scripts/review_table_list_integration.py" in gate,
+    regressions = (ROOT / "scripts" / "db_regressions.sh").read_text()
+    check("scripts/db_regressions.sh" in gate
+          and "scripts/review_table_list_integration.py" in regressions,
           "...and CI runs this script against a real database")
     print(f"\n{ok}/{ok + fail} passed")
     return 1 if fail else 0

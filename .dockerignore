@@ -1,0 +1,3 @@
+# The image needs only the requirements files; the source is bind-mounted.
+*
+!requirements*.txt

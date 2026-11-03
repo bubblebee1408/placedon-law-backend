@@ -1,0 +1,72 @@
+# Local stack: Postgres 16 + migrations + the gateway + its job worker.  Run `make dev`.
+#
+#   db       Postgres 16; ops/dev/initdb creates placedon_app (as CI does) and the database.
+#   migrate  one-shot: scripts/migrate.py as placedon_app, then ops/dev/bootstrap.sql.
+#   gateway  http://localhost:8000  (ops/asgi.py: the gateway with its Postgres job queue)
+#   worker   drains the local tenant's job queue (uploads, review tables)
+#
+# Every password here is a local throwaway. Nothing in this file reaches production.
+name: placedon
+
+x-app: &app
+  build: .
+  image: placedon-backend-dev
+  env_file: .env
+  environment: &app-env
+    PLACEDON_DATABASE_URL: postgresql://placedon_app:local-only-not-a-secret@db:5432/placedon
+    PLACEDON_FILES_DIR: /vault
+    # For scripts/db_regressions.sh (`make test-db`), as in .github/workflows/gate.yml.
+    PLACEDON_PGHOST: db
+    PLACEDON_PG_ADMIN: postgres
+    PLACEDON_PG_APP: placedon_app
+    PGPASSWORD: local-only-not-a-secret
+  volumes:
+    - .:/app
+    - vault:/vault
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_PASSWORD: local-only-not-a-secret
+    ports: ["127.0.0.1:${PLACEDON_DB_PORT:-55432}:5432"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./ops/dev/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      # TCP, not the socket: the init-time server listens on the socket only, so this
+      # stays unhealthy until initdb/ has run and the real server is up.
+      test: ["CMD", "pg_isready", "-h", "localhost", "-U", "postgres", "-d", "placedon"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  migrate:
+    <<: *app
+    command: ["sh", "ops/dev/migrate.sh"]
+    volumes:
+      - .:/app
+      - backups:/backups
+    depends_on:
+      db: {condition: service_healthy}
+
+  gateway:
+    <<: *app
+    command: ["python", "-m", "uvicorn", "ops.asgi:app", "--host", "0.0.0.0", "--port", "8000"]
+    ports: ["127.0.0.1:${PLACEDON_GATEWAY_PORT:-8000}:8000"]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+
+  worker:
+    <<: *app
+    command: ["python", "-m", "gateway.worker", "--serve"]
+    environment:
+      <<: *app-env
+      PLACEDON_WORKER_TENANT_ID: ${PLACEDON_GATEWAY_TENANT_ID:?run make dev, which writes .env}
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+
+volumes:
+  pgdata:
+  vault:
+  backups:
