@@ -1,0 +1,33 @@
+{
+ "section_id": "R99A",
+ "ref": "RULE:SEBI_LODR_2015:R99A",
+ "kind": "regulation",
+ "number": "99A",
+ "heading": "Exemption from enforcement of the regulations in special cases",
+ "heading_raw": "Exemption from enforcement of the regulations in special cases.",
+ "chapter": {
+  "number": "XIA",
+  "title": "POWER TO RELAX STRICT ENFORCEMENT OF THE REGULATIONS"
+ },
+ "omitted": false,
+ "content": "99A. (1) The Board may, exempt any person or class of persons from the operation of all or\nany of the provisions of these regulations for a period as may be specified but not exceeding\ntwelve months, for furthering innovation 649[***] relating to testing new products, processes,\nservices, business models, etc. in live environment of regulatory sandbox in the securities\nmarkets.\n(2) Any exemption granted by the Board under sub-regulation (1) shall be subject to the\napplicant satisfying such conditions as may be specified by the Board including conditions to\nbe complied with on a continuous basis.\nExplanation. — For the purposes of these regulations, \"regulatory sandbox\" means a live\ntesting environment where new products, processes, services, business models, etc. may be\ndeployed on a limited set of eligible customers for a specified period of time, for furthering\ninnovation in the securities market, subject to such conditions as may be specified by the\nBoard.]",
+ "footnotes": [
+  {
+   "number": "649",
+   "page": 155,
+   "placed_by": "marker",
+   "text": "649 The words “in technological aspects” omitted by the SEBI (Regulatory Sandbox) (Amendment) Regulations,\n2021, w.e.f. 3.8.2021."
+  }
+ ],
+ "page_start": 155,
+ "page_end": 156,
+ "sha256": "6c9fa75e44c6b5c9b314cbb29b5a7bb90003cbf022acf29d78b78d3f4bcfddd7",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

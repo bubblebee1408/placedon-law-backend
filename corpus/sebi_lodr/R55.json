@@ -1,0 +1,33 @@
+{
+ "section_id": "R55",
+ "ref": "RULE:SEBI_LODR_2015:R55",
+ "kind": "regulation",
+ "number": "55",
+ "heading": "Credit Rating",
+ "heading_raw": "Credit Rating.",
+ "chapter": {
+  "number": "V",
+  "title": "OBLIGATIONS OF LISTED ENTITY WHICH HAS LISTED ITS NON- CONVERTIBLE 459[***] SECURITIES 460[***]"
+ },
+ "omitted": false,
+ "content": "55. Each rating obtained by the listed entity with respect to non-convertible 524[***]\nsecurities shall be reviewed at least once a year by a credit rating agency registered by\nthe Board.",
+ "footnotes": [
+  {
+   "number": "524",
+   "page": 103,
+   "placed_by": "marker",
+   "text": "524 The word “debt” omitted by the SEBI (Listing Obligations and Disclosure Requirements) (Fifth Amendment)\nRegulations, 2021 w.e.f. 7.9.2021."
+  }
+ ],
+ "page_start": 103,
+ "page_end": 103,
+ "sha256": "779bfe677fee60e4a85ef0b83aec608f1bc71e06ed21b109de484124c4f18d7e",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

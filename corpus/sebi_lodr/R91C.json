@@ -1,0 +1,33 @@
+{
+ "section_id": "R91C",
+ "ref": "RULE:SEBI_LODR_2015:R91C",
+ "kind": "regulation",
+ "number": "91C",
+ "heading": "Disclosures by a Not for Profit Organization",
+ "heading_raw": "Disclosures by a Not for Profit Organization.",
+ "chapter": {
+  "number": "IXA",
+  "title": "OBLIGATIONS OF SOCIAL ENTERPRISES"
+ },
+ "omitted": false,
+ "content": "91C. 634[(1) A Not for Profit Organization registered on the Social Stock Exchange(s),\nincluding a Not for Profit Organization whose designated securities are listed on the\nSocial Stock Exchange(s), shall be required to make annual disclosures to the Social\nStock Exchange(s) on –\n(i) financial aspects, as may be specified by the Board, by October 31st of each year or\nbefore the due date of filing of income tax return as prescribed under the provisions of\nthe Income-tax Act, 1961, whichever is later, or within such other period as may be\nspecified by the Board; and\n(ii) non-financial aspects, as may be specified by the Board, within a period of 60 days\nfrom the end of the financial year or within such other period as may be specified by the\nBoard.]\n(2) In addition to the disclosures referred in sub-regulation (1), the Social Stock\nExchange(s) may specify matters that shall be disclosed by the Not for Profit\nOrganization on an annual basis.",
+ "footnotes": [
+  {
+   "number": "634",
+   "page": 148,
+   "placed_by": "marker",
+   "text": "634 Substituted by the Securities and Exchange Board of India (Listing Obligations and Disclosure Requirements)\n(Third Amendment) Regulations, 2025 w.e.f. 08.09.2025. Prior to the substitution, the sub-regulation (1) read as\nfollows-\n“(1) A Not for Profit Organization registered on the Social Stock Exchange(s), including a Not for\nProfit Organization whose designated securities are listed on the Social Stock Exchange(s), shall be\nrequired to make annual disclosures to the Social Stock Exchange(s) on matters specified by the Board,\nwithin 60 days from the end of the financial year or within such period as may be specified by the Board.”"
+  }
+ ],
+ "page_start": 148,
+ "page_end": 148,
+ "sha256": "8a4b591a1e6ac7a3b20144d745f1b5595f0e66e4c67be2b6ab23318331a43d86",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

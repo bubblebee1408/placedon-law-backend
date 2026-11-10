@@ -1,0 +1,42 @@
+{
+ "section_id": "SCHEDULE_VI",
+ "ref": null,
+ "kind": "schedule",
+ "number": "VI",
+ "heading": "MANNER OF DEALING WITH UNCLAIMED SHARES",
+ "heading_raw": "SCHEDULE VI: MANNER OF DEALING WITH UNCLAIMED SHARES",
+ "chapter": null,
+ "omitted": false,
+ "content": "[See Regulation 39(4)]\nA. The listed entity may delegate the following procedural requirements to a 781[registrar\nto an issue and share transfer agent].\nB. Reminders to be sent\n(1) The listed entity shall send at least three reminders at the address as mentioned\nbelow:\n(a) For shares in physical form, reminders shall be sent to the address given in\nthe application form as well as last available address as per listed entity’s\nrecord.\n(b) For shares in demat form, reminders shall be sent to the address captured in\ndepository’s database or address given in the application form, in case of\napplication made in physical form.\nC. Procedure in case of non receipt of response to reminders\n(1) For shares in demat form, the unclaimed shares shall be credited to a demat\nsuspense account with one of the Depository Participants, opened by the listed\nentity for this purpose.\n(2) For shares in physical form, the listed entity shall transfer all the shares into one\nfolio in the name of “Unclaimed Suspense Account” and shall dematerialise the\nshares held in the Unclaimed Suspense Account with one of the Depository\nParticipants.\n(3) The listed entity shall maintain details of shareholding of each individual allottee\nwhose shares are credited to such demat suspense account or unclaimed suspense\naccount, as applicable.\n(4) The demat suspense account or unclaimed suspense account, as applicable shall\nbe held by the listed entity purely on behalf of the allottees who are entitled to the\nshares and the shares held in such suspense account shall not be transferred in any\nmanner whatsoever except for the purpose of allotting the shares to the allottee as\nand when he/she approaches the listed entity.\nProvided that all such shares, in respect of which unpaid or unclaimed dividend has\nbeen transferred under Section 124 (5) of the Companies Act, 2013, shall also be\ntransferred by the listed entity in accordance with Section 124 (6) of the Companies\nAct, 2013 and rules made thereunder.\nD. Procedure in case of claim by allottee\n(1) As and when the allottee approaches the listed entity, the listed entity shall, after\nproper verification of the identity of the allottee either credit the shares lying in\nthe Unclaimed Suspense Account or demat suspense account, as applicable, to the\ndemat account of the allottee to the extent of the allottee’s entitlement 782[***]\nE. 783[***] Dealing with Corporate Benefits (in terms of securities accruing)\nand Voting Rights on such Unclaimed Shares\n(1) Any corporate benefits in terms of securities accruing on such shares viz. bonus\nshares, split etc., shall also be credited to such demat suspense account or\nunclaimed suspense account, as applicable for a period of seven years and\nthereafter shall be transferred by the listed entity in accordance with provisions\nof Section 124(5) read with Section 124 (6) of the Companies Act, 2013 and rules\nmade thereunder.\n(2) The voting rights on such unclaimed shares shall remain frozen till the rightful\nowner claims the shares.",
+ "footnotes": [
+  {
+   "number": "781",
+   "page": 198,
+   "placed_by": "marker",
+   "text": "781 Substituted for “share transfer agent” by the SEBI (Listing Obligations and Disclosure Requirements) (Sixth\nAmendment) Regulations, 2025 w.e.f. 16.12.2025."
+  },
+  {
+   "number": "782",
+   "page": 198,
+   "placed_by": "marker",
+   "text": "782 The words “, or deliver the physical certificates after re-materialising the same, depending on what has been\nopted for by the allottee:” omitted by the SEBI (Listing Obligations and Disclosure Requirements) (Amendment)\nRegulations, 2022, w.e.f. 24.1.2022."
+  },
+  {
+   "number": "783",
+   "page": 199,
+   "placed_by": "marker",
+   "text": "783 Omitted by the SEBI (Listing Obligations and Disclosure Requirements) (Amendment) Regulations, 2022,\nw.e.f. 24.1.2022. Prior to the omission, the proviso read as under, -\n“Provided that the rematerialising of the physical certificates shall be done only in case where the shares\nwere originally issued in physical form.”"
+  }
+ ],
+ "page_start": 198,
+ "page_end": 199,
+ "sha256": "43e32cb72e2a376dca9d54e2162761038292276998279f044319671c7bbfc0cb",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

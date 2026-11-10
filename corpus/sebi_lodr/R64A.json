@@ -1,0 +1,26 @@
+{
+ "section_id": "R64A",
+ "ref": "RULE:SEBI_LODR_2015:R64A",
+ "kind": "regulation",
+ "number": "64A",
+ "heading": "Applicability",
+ "heading_raw": "Applicability",
+ "chapter": {
+  "number": "VIA",
+  "title": "FRAMEWORK FOR VOLUNTARY DELISTING OF NON-CONVERTIBLE DEBT SECURITIES OR NON-CONVERTBLE REDEEMABLE PREFERENCE SHARES AND OBLIGATIONS OF THE LISTED ENTITY ON SUCH DELISTING"
+ },
+ "omitted": false,
+ "content": "64A. Applicability\n(1) The provisions of this Chapter shall be applicable to voluntary delisting of all\nlisted non-convertible debt securities or non-convertible redeemable preference\nshares from all or any of the stock exchanges where such non-convertible debt\nsecurities or non-convertible redeemable preference shares are listed except\nwhere:\n(a) a listed entity that has outstanding listed non-convertible debt securities or\nnon-convertible redeemable preference shares issued by way of a public\nissue; or\n(b) a listed entity has more than two-hundred securities holders excluding\nqualified institutional buyers in any International Securities\nIdentification Number relating to listed non-convertible debt securities or\nnon-convertible redeemable preference shares;\n(c) non-convertible debt securities or non-convertible redeemable preference\nshares have been delisted by the stock exchanges as a consequence of\nany penalty or action initiated against the listed entity or on any grounds\nas specified under rule 21 of the Securities Contracts (Regulation) Rules,\n1957;\n(d) non-convertible debt securities or non-convertible redeemable preference\nshares have been delisted by the stock exchanges pursuant to redemption\nof such securities or shares;\n(e) non-convertible debt securities or non-convertible redeemable preference\nshares have been delisted pursuant to a resolution plan as per Section 31\nof the Insolvency Code.\n(2) In case of delisting pursuant to a resolution plan as per the provisions of the\nInsolvency Code, the details of delisting of non-convertible debt securities or\nnon-convertible redeemable preference shares shall be disclosed to the stock\nexchanges where such securities or shares are listed within one working day of\nthe approval of the resolution plan under the Insolvency Code.\n(3) The provisions of regulation 59 of these regulations shall not be applicable to the\nvoluntary delisting of non-convertible debt securities or non-convertible\nredeemable preference shares under this Chapter.",
+ "footnotes": [],
+ "page_start": 133,
+ "page_end": 133,
+ "sha256": "e895caec0a5391d6382e611141d5adc3d905746df5ad19cdcd3f2ee0e57ff0ea",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

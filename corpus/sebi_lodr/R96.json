@@ -1,0 +1,26 @@
+{
+ "section_id": "R96",
+ "ref": "RULE:SEBI_LODR_2015:R96",
+ "kind": "regulation",
+ "number": "96",
+ "heading": "Grievance Redressal",
+ "heading_raw": "Grievance Redressal.",
+ "chapter": {
+  "number": "X",
+  "title": "DUTIES AND OBLIGATIONS OF THE RECOGNISED STOCK EXCHANGE(S)"
+ },
+ "omitted": false,
+ "content": "96. The recognised stock exchange(s) shall redress/facilitate redressal of complaints of\nholders of listed securities from time to time.",
+ "footnotes": [],
+ "page_start": 153,
+ "page_end": 153,
+ "sha256": "a8613e000b4aa6ec5db668888ae66e826b8167883fd29df75c50ce6cf8844f08",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

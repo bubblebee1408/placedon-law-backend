@@ -1,0 +1,33 @@
+{
+ "section_id": "R67",
+ "ref": "RULE:SEBI_LODR_2015:R67",
+ "kind": "regulation",
+ "number": "67",
+ "heading": "General Obligations of listed entity",
+ "heading_raw": "General Obligations of listed entity.",
+ "chapter": {
+  "number": "VII",
+  "title": "OBLIGATIONS OF LISTED ENTITY WHICH HAS LISTED ITS INDIAN DEPOSITORY RECEIPTS"
+ },
+ "omitted": false,
+ "content": "67. (1) All correspondences filed with the stock exchange(s) and those sent to the IDR\nHolders shall be in English.\n(2) The listed entity shall comply, at all times, with the rules/regulations/laws of the country\nof origin.\n(3) The listed entity shall undertake that the competent Courts, Tribunals and regulatory\nauthorities in India shall have jurisdiction in the event of any dispute, either with the stock\nexchange or any investor, concerning the India Depository Receipts offered or subscribed\nor bought in India.\n(4) The listed entity shall forward, on a continuous basis, any information requested by the\nstock exchange, in the interest of investors from time to time.\n(5) 630[All claims, differences or disputes between the listed entity and its investor arising out\nof or in relation to the activities of the listed entity in the securities market shall be\nsubmitted to a dispute resolution mechanism that includes mediation and/or conciliation\nand/or arbitration, in accordance with the procedure specified by the Board.]",
+ "footnotes": [
+  {
+   "number": "630",
+   "page": 138,
+   "placed_by": "marker",
+   "text": "630 Substituted by the Securities and Exchange Board of India (Alternative Dispute Resolution Mechanism)\n(Amendment) Regulations, 2023, w.e.f. 04-07-2023. Before the substitution, sub-regulation (5) read as follows:\n(5) In case of any claim, difference or dispute under the provisions of this chapter and other provisions\nof these regulations applicable to the listed entity, the same shall be referred to and decided by arbitration\nas provided in the bye-laws and regulations of the stock exchange(s)."
+  }
+ ],
+ "page_start": 138,
+ "page_end": 139,
+ "sha256": "dcc8e400a634ee343cf4478bdfd13c5082fcc7cbbecab7656aea6e99286f38dc",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

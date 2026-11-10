@@ -1,0 +1,69 @@
+{
+ "section_id": "R56",
+ "ref": "RULE:SEBI_LODR_2015:R56",
+ "kind": "regulation",
+ "number": "56",
+ "heading": "Documents and Intimation to Debenture Trustees",
+ "heading_raw": "Documents and Intimation to Debenture Trustees.",
+ "chapter": {
+  "number": "V",
+  "title": "OBLIGATIONS OF LISTED ENTITY WHICH HAS LISTED ITS NON- CONVERTIBLE 459[***] SECURITIES 460[***]"
+ },
+ "omitted": false,
+ "content": "56. (1) The listed entity 525[shall, as soon as possible, and in any case not later than twenty-\nfour hours from the occurrence of the event or receipt of information, unless otherwise\nspecified, forward the following to the debenture trustee]:\n(a) a copy of the annual report at the same time as it is issued along with a copy of\ncertificate from the listed entity's auditors in respect of utilisation of funds during\nthe implementation period of the project for which the funds have been raised:\nProvided that in the case of debentures or preference shares issued for financing\nworking capital or general corporate purposes or for capital raising purposes the\ncopy of the auditor's certificate may be submitted at the end of each financial year\ntill the funds have been fully utilised or the purpose for which these funds were\nintended has been achieved.\n(b) a copy of all notices, resolutions and circulars relating to-\n(i) new issue of non convertible debt securities at the same time as they are sent\nto shareholders/ holders of non convertible debt securities;\n(ii) the meetings of holders of non-convertible debt securities at the same time as\nthey are sent to the holders of non convertible debt securities or advertised in\nthe media including those relating to proceedings of the meetings;\n(c) intimations regarding :\n(i) any revision in the rating;\n(ii) any default in timely payment of interest or redemption or both in respect of\nthe non convertible debt securities;\n(iii) failure to create charge on the assets;\n526[(iv) all covenants of the issue (including side letters, accelerated payment clause,\netc.)]\n527[(d) a half-yearly certificate regarding maintenance of hundred percent 528[security cover or\nhigher security cover] as per the terms of offer document/ Information Memorandum and/or\nDebenture Trust Deed, including compliance with all the covenants, in respect of listed non-\nconvertible debt securities, by the statutory auditor, along with the 529[financial results, in the\nmanner and format as specified by the Board]:\nProvided that the submission of 530[this] certificate is not applicable where bonds are\nsecured by a Government guarantee.]\n531[(1A) The listed entity shall also disclose to the Debenture Trustee at the same time as it\nhas intimated to the stock exchange, all material events and/or information as disclosed under\nregulation 51of these regulations in so far as it relates to the interest, principal, issue and terms\nof non-convertible debt securities, rating, creation of charge on the assets, notices, resolutions\nand meetings of holders of non-convertible debt securities.]\n(2) The listed entity shall forward to the debenture trustee any such information sought and\nprovide access to relevant books of accounts as required by the debenture trustee.\n(3) The listed entity may, subject to the consent of the debenture trustee, send the information\nstipulated in sub-regulation (1), in electronic form/fax.",
+ "footnotes": [
+  {
+   "number": "525",
+   "page": 103,
+   "placed_by": "marker",
+   "text": "525 Substituted for the words “shall forward the following to the debenture trustee promptly” by the Securities\nand Exchange Board of India (Listing Obligations and Disclosure Requirements) (Fourth Amendment)\nRegulations, 2025, w.e.f. October 27, 2025."
+  },
+  {
+   "number": "526",
+   "page": 103,
+   "placed_by": "marker",
+   "text": "526 Inserted by the SEBI (Listing Obligations and Disclosure Requirements) (Third Amendment) Regulations,\n2020, w.e.f. October 08, 2020."
+  },
+  {
+   "number": "527",
+   "page": 103,
+   "placed_by": "marker",
+   "text": "527 Substituted by the SEBI (Listing Obligations and Disclosure Requirements) (Third Amendment) Regulations,\n2020, w.e.f. October 08, 2020. Prior to the substitution, clause (d) read as follows:\n“a half-yearly certificate regarding maintenance of hundred percent. asset cover in respect of listed\nnon convertible debt securities, by either a practicing company secretary or a practicing chartered\naccountant, along with the half yearly financial results:\nProvided that submission of such half yearly certificates is not applicable in cases where a listed entity\nis a bank or non banking financial companies registered with Reserve Bank of India or where bonds\nare secured by a Government guarantee.”"
+  },
+  {
+   "number": "528",
+   "page": 103,
+   "placed_by": "marker",
+   "text": "528 Substituted for the words “asset cover or higher asset cover” by the Securities and Exchange Board of India\n(Listing Obligations and Disclosure Requirements) (Third Amendment) Regulations, 2022 w.e.f. 11.4.2022."
+  },
+  {
+   "number": "529",
+   "page": 104,
+   "placed_by": "marker",
+   "text": "529 Substituted for the words “half-yearly financial results” by the SEBI (Listing Obligations and Disclosure\nRequirements) (Fifth Amendment) Regulations, 2021 w.e.f. 7.9.2021."
+  },
+  {
+   "number": "530",
+   "page": 104,
+   "placed_by": "marker",
+   "text": "530 Substituted for the words “half yearly” by the SEBI (Listing Obligations and Disclosure Requirements) (Fifth\nAmendment) Regulations, 2021 w.e.f. 7.9.2021."
+  },
+  {
+   "number": "531",
+   "page": 104,
+   "placed_by": "marker",
+   "text": "531 Inserted by the SEBI (Listing Obligations and Disclosure Requirements) (Fifth Amendment) Regulations,\n2021 w.e.f. 7.9.2021."
+  }
+ ],
+ "page_start": 103,
+ "page_end": 104,
+ "sha256": "0819db89371e75ddef65500306cade54a2a596d171aea8b7465b344205611012",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

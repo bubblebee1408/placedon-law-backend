@@ -1,0 +1,26 @@
+{
+ "section_id": "R82",
+ "ref": "RULE:SEBI_LODR_2015:R82",
+ "kind": "regulation",
+ "number": "82",
+ "heading": "Intimation and filings with stock exchange(s)",
+ "heading_raw": "Intimation and filings with stock exchange(s).",
+ "chapter": {
+  "number": "VIII",
+  "title": "OBLIGATIONS OF LISTED ENTITY WHICH HAS LISTED ITS SECURITISED DEBT INSTRUMENTS"
+ },
+ "omitted": false,
+ "content": "82. (1) The listed entity shall intimate the Stock exchange, of its intention to issue new\nsecuritized debt instruments either through a public issue or on private placement basis\n(if it proposes to list such privately placed debt securities on the Stock exchange) prior\nto issuing such securities.\n(2) The listed entity shall intimate to the stock exchange(s), at least two working days in\nadvance, excluding the date of the intimation and date of the meeting, regarding the\nmeeting of its board of trustees, at which the recommendation or declaration of issue of\nsecuritized debt instruments or any other matter affecting the rights or interests of holders\nof securitized debt instruments is proposed to be considered.\n(3) The listed entity shall submit such statements, reports or information including financial\ninformation pertaining to Schemes to stock exchange within seven days from the end of\nthe month/ actual payment date, either by itself or through the servicer, on a monthly basis\nin the format as specified by the Board from time to time:\nProvided that where periodicity of the receivables is not monthly, reporting shall be made\nfor the relevant periods.\n(4) The listed entity shall provide the stock exchange, either by itself or through the servicer,\nloan level information, without disclosing particulars of individual borrowers, in manner\nspecified by stock exchange.",
+ "footnotes": [],
+ "page_start": 142,
+ "page_end": 142,
+ "sha256": "4e993149e0a797eb71ec5419911fce7ba2fcaa3f0c1c7d5a2395614d04251da4",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

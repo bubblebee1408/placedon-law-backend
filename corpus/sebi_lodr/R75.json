@@ -1,0 +1,26 @@
+{
+ "section_id": "R75",
+ "ref": "RULE:SEBI_LODR_2015:R75",
+ "kind": "regulation",
+ "number": "75",
+ "heading": "Advertisements in Newspapers",
+ "heading_raw": "Advertisements in Newspapers.",
+ "chapter": {
+  "number": "VII",
+  "title": "OBLIGATIONS OF LISTED ENTITY WHICH HAS LISTED ITS INDIAN DEPOSITORY RECEIPTS"
+ },
+ "omitted": false,
+ "content": "75. (1)The listed entity shall publish the following information in the newspaper :\n(a) periodical financial results required to be disclosed;\n(b) Notices given to its IDR Holders by advertisement;\n(2) The information specified in sub-regulation (1) shall be issued in at one English national\ndaily newspaper circulating in the whole or substantially the whole of India and in one\nHindi national daily newspaper in India.",
+ "footnotes": [],
+ "page_start": 140,
+ "page_end": 140,
+ "sha256": "b88fe0707d635e0e5330875847742d9110ea75f66e080b1b708c912edf575db8",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

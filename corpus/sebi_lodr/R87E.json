@@ -1,0 +1,26 @@
+{
+ "section_id": "R87E",
+ "ref": "RULE:SEBI_LODR_2015:R87E",
+ "kind": "regulation",
+ "number": "87E",
+ "heading": "Record Date",
+ "heading_raw": "Record Date.",
+ "chapter": {
+  "number": "VIIIA",
+  "title": "OBLIGATIONS OF LISTED ENTITY WHICH HAS LISTED ITS SECURITY RECEIPTS"
+ },
+ "omitted": false,
+ "content": "87E. (1) The listed entity shall fix a record date for payment to holders of security receipts or\nfor such other purposes as specified by the stock exchange(s).\n(2) The listed entity shall give notice in advance of at least seven working days (excluding the\ndate of intimation and the record date) to the stock exchange(s) of the record date or of as\nmany days as the stock exchange may agree to or require specifying the purpose of the record\ndate.]",
+ "footnotes": [],
+ "page_start": 146,
+ "page_end": 147,
+ "sha256": "282cce1f7bbe8bbf3854726496cebdead01679b2e4e9d40d197679d748023954",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

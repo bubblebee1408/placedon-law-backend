@@ -1,0 +1,33 @@
+{
+ "section_id": "R59A",
+ "ref": "RULE:SEBI_LODR_2015:R59A",
+ "kind": "regulation",
+ "number": "59A",
+ "heading": "Draft Scheme of Arrangement and Scheme of Arrangement",
+ "heading_raw": "546[Draft Scheme of Arrangement and Scheme of Arrangement.",
+ "chapter": {
+  "number": "V",
+  "title": "OBLIGATIONS OF LISTED ENTITY WHICH HAS LISTED ITS NON- CONVERTIBLE 459[***] SECURITIES 460[***]"
+ },
+ "omitted": false,
+ "content": "59A. (1) Without prejudice to the provisions of regulation 11, the listed entity that has listed non-\nconvertible debt securities or non-convertible redeemable preference shares, intends to\nundertake a scheme of arrangement or is involved in a scheme of arrangement under\nsections 230-234 and section 66 of the Companies Act, 2013, shall file the draft scheme of\narrangement with the stock exchange(s), along with a non-refundable fee as specified in\nSchedule XI, for obtaining the No-objection letter, before filing of such scheme with the\nNational Company Law Tribunal, in terms of the requirements specified by the Board or\nstock exchange(s) from time to time.\n(2) The listed entity shall not file any scheme of arrangement under sections 230-234 and\nsection 66 of the Companies Act, 2013, with the National Company Law Tribunal unless\nit has obtained a No-objection letter from the stock exchange(s).\n(3) The listed entity shall place the No-objection letter of the stock exchange(s) before the\nNational Company Law Tribunal at the time of seeking approval for the scheme of\narrangement in the manner as may be specified by the Board from time to time:\nProvided that the validity of the No-objection letter of the stock exchange(s) shall be six\nmonths from the date of issuance, within which the draft scheme of arrangement shall be\nfiled by the listed entity with the National Company Law Tribunal.\n(4) Upon sanction of the Scheme by the National Company Law Tribunal, the listed entity\nshall submit such documents, to the stock exchange(s), as may be specified by the Board\nand/ or stock exchange(s) from time to time.\n(5) The listed entity shall ensure compliance with such other requirements as may be specified\nby the Board from time to time.\n(6) The requirements as specified under this regulation and under regulation 94A of these\nregulations shall not apply to a restructuring proposal approved as part of a resolution plan\nby the National Company Law Tribunal under section 31 of the Insolvency Code, subject\nto the details being disclosed to the recognized stock exchanges within one day of the\nresolution plan being approved.]",
+ "footnotes": [
+  {
+   "number": "546",
+   "page": 106,
+   "placed_by": "marker",
+   "text": "546 Inserted by the Securities and Exchange Board of India (Listing Obligations and Disclosure Requirements)\n(Sixth Amendment) Regulations, 2022 w.e.f. 14.11.2022."
+  }
+ ],
+ "page_start": 106,
+ "page_end": 107,
+ "sha256": "5e86ffe41a4d93b073e4ec41f791c5a0455541eb13f37e3fd187bda07fbf6ac9",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

@@ -1,0 +1,51 @@
+{
+ "section_id": "R49",
+ "ref": "RULE:SEBI_LODR_2015:R49",
+ "kind": "regulation",
+ "number": "49",
+ "heading": "Applicability",
+ "heading_raw": "Applicability.",
+ "chapter": {
+  "number": "V",
+  "title": "OBLIGATIONS OF LISTED ENTITY WHICH HAS LISTED ITS NON- CONVERTIBLE 459[***] SECURITIES 460[***]"
+ },
+ "omitted": false,
+ "content": "49. 461[(1)The provisions of this chapter shall apply only to a listed entity which has listed\nits non-convertible securities on a recognised stock exchange in accordance with\nSecurities and Exchange Board of India (Issue and Listing of Non-Convertible\nSecurities) Regulations, 2021.]\n462(2)[***]\n463[Explanation (1) - For the purpose of this chapter, if the listed entity has listed its non-\nconvertible redeemable preference shares, perpetual non-cumulative preference shares or\ninstruments of nature similar to perpetual non-cumulative preference shares, the reference to\n“interest” in this chapter shall be read as “dividend”.]\n464[Explanation (2) - For the purpose of this chapter, “default” shall mean non-payment of\ninterest/dividend or principal amount in full on the pre-agreed date and shall be recognized at\nthe first instance of delay in servicing of any interest/dividend or principal amount.]",
+ "footnotes": [
+  {
+   "number": "461",
+   "page": 93,
+   "placed_by": "marker",
+   "text": "461 Substituted by the SEBI (Listing Obligations and Disclosure Requirements) (Fifth Amendment) Regulations,\n2021 w.e.f. 7.9.2021. Before substitution, sub-regulation (1) read as follows:\n“(1) The provisions of this chapter shall apply only to a listed entity which has listed its ‘Non-convertible\nDebt Securities’ and/or ‘Non-Convertible Redeemable Preference Shares’ on a recognised stock\nexchange in accordance with Securities and Exchange Board of India (Issue and Listing of Debt\nSecurities) Regulations, 2008 or Securities and Exchange Board of India (Issue and Listing of Non-\nConvertible Redeemable Preference Shares) Regulations, 2013 respectively.”"
+  },
+  {
+   "number": "462",
+   "page": 93,
+   "placed_by": "marker",
+   "text": "462 Omitted by the SEBI (Listing Obligations and Disclosure Requirements) (Fifth Amendment) Regulations,\n2021 w.e.f. 7.9.2021. Before omission, sub-regulation (2) read as follows:\n“The provisions of this chapter shall also be applicable to “perpetual debt instrument” and \"perpetual\nnon-cumulative preference share” listed by banks.”"
+  },
+  {
+   "number": "463",
+   "page": 93,
+   "placed_by": "marker",
+   "text": "463 Substituted by the SEBI (Listing Obligations and Disclosure Requirements) (Fifth Amendment) Regulations,\n2021 w.e.f. 7.9.2021. Before substitution, Explanation (1) read as follows:\n“Explanation (1).- For the purpose of this chapter, “Bank\" means any bank included in the Second\nSchedule to the Reserve Bank of India Act, 1934.”"
+  },
+  {
+   "number": "464",
+   "page": 93,
+   "placed_by": "marker",
+   "text": "464 Substituted by the SEBI (Listing Obligations and Disclosure Requirements) (Fifth Amendment) Regulations,\n2021 w.e.f. 7.9.2021. Before substitution, Explanation (2) read as follows:\n“Explanation (2).- For the purpose of this chapter, if the listed entity has listed its non-convertible\nredeemable preference shares:\n(i) The reference to “interest” may also read as dividend;\n(ii) The provisions concerning debenture trustees and security creation (or asset cover or charge on\nassets) shall not be applicable for “non-convertible redeemable preference shares”.”"
+  }
+ ],
+ "page_start": 93,
+ "page_end": 94,
+ "sha256": "8b5b45ed12c3330c1835c3d8e4f87d1aea72a8f10ccf215d113e7162564d88bf",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

@@ -1,0 +1,75 @@
+{
+ "section_id": "R58",
+ "ref": "RULE:SEBI_LODR_2015:R58",
+ "kind": "regulation",
+ "number": "58",
+ "heading": "Documents and information to holders of non - convertible *** securities ***",
+ "heading_raw": "Documents and information to holders of non - convertible 533[***] securities 534[***]",
+ "chapter": {
+  "number": "V",
+  "title": "OBLIGATIONS OF LISTED ENTITY WHICH HAS LISTED ITS NON- CONVERTIBLE 459[***] SECURITIES 460[***]"
+ },
+ "omitted": false,
+ "content": "58. (1) The listed entity shall send the following documents:\n(a) 535[Soft copies of the full annual reports to all the holders of non-convertible\nsecurities who have registered their email address(es) either with the listed entity or\nwith any depository];\n536[(b) A letter providing the web-link including the exact path where complete details of\nthe Annual Report is available, which may at the option of the listed entity, also\ninclude a static Quick Response Code, to those holder(s) of non-convertible\nsecurities that have not registered their respective email addresses.]\n(c) Hard copies of full annual reports to those holders of non convertible 537[***]\nsecurities 538[***], who request for the same.\n(d) 539[***]\n540[(1A) The listed entity shall send the documents referred to in sub-regulation (1), within the\ntimelines specified in Section 136 of Companies Act, 2013 and rules made thereunder or\nthe provisions of the statute under which such listed entity is constituted:\nProvided that in the absence of any timeline in the statute, the documents shall be sent\non or before the date of dispatch of the same to its shareholders or the date of submission to\nthe Central Government or the State Government, as the case may be.]\n(2) The listed entity shall send the notice of all meetings of holders of non convertible debt\nsecurities and holders of non-convertible redeemable preference shares specifically stating\nthat the provisions for appointment of proxy as mentioned in Section 105 of the Companies\nAct, 2013, shall be applicable for such meeting.\n(3) The listed entity shall send proxy forms to holders of non convertible debt securities and\nnon-convertible redeemable preference shares which shall be worded in such a manner that\nholders of these securities may vote either for or against each resolution.",
+ "footnotes": [
+  {
+   "number": "533",
+   "page": 104,
+   "placed_by": "marker",
+   "text": "533 The word “debt” omitted by the SEBI (Listing Obligations and Disclosure Requirements) (Fourth\nAmendment) Regulations, 2021, w.e.f. 13.8.2021."
+  },
+  {
+   "number": "534",
+   "page": 104,
+   "placed_by": "marker",
+   "text": "534 The words “and non-convertible preference shares” omitted by the SEBI (Listing Obligations and Disclosure\nRequirements) (Fourth Amendment) Regulations, 2021, w.e.f. 13.8.2021."
+  },
+  {
+   "number": "535",
+   "page": 105,
+   "placed_by": "marker",
+   "text": "535 Substituted for “Soft copies of full annual reports to all the holders of non convertible preference share who\nhave registered their email address(es) for the purpose” by the SEBI (Listing Obligations and Disclosure\nRequirements) (Fourth Amendment) Regulations, 2021, w.e.f. 13.8.2021."
+  },
+  {
+   "number": "536",
+   "page": 105,
+   "placed_by": "marker",
+   "text": "536 Substituted by the Securities and Exchange Board of India (Listing Obligations and Disclosure Requirements)\n(Fifth Amendment) Regulations, 2025 w.e.f. 19.11.2025. Prior to the substitution, the clause read as under-\n“(b) Hard copy of statement containing the salient features of all the documents, as specified in Section\n136 of Companies Act, 2013 and rules made thereunder to those holders of non convertible securities\nwho have not so registered;”"
+  },
+  {
+   "number": "537",
+   "page": 105,
+   "placed_by": "marker",
+   "text": "537 The word “debt” omitted by the SEBI (Listing Obligations and Disclosure Requirements) (Fourth\nAmendment) Regulations, 2021, w.e.f. 13.8.2021."
+  },
+  {
+   "number": "538",
+   "page": 105,
+   "placed_by": "marker",
+   "text": "538 The words “and non-convertible preference shares” omitted by the SEBI (Listing Obligations and Disclosure\nRequirements) (Fourth Amendment) Regulations, 2021, w.e.f. 13.8.2021."
+  },
+  {
+   "number": "539",
+   "page": 105,
+   "placed_by": "marker",
+   "text": "539 Omitted by the SEBI (Listing Obligations and Disclosure Requirements) (Fourth Amendment) Regulations,\n2021, w.e.f. 13.8.2021. Prior to the omission, clause (d) read as follows:\n“Half yearly communication as specified in sub-regulation (4) and (5) of regulation 52, to holders of\nnon convertible debt securities and non convertible preference shares;”"
+  },
+  {
+   "number": "540",
+   "page": 105,
+   "placed_by": "marker",
+   "text": "540 Inserted by the Securities and Exchange Board of India (Listing Obligations and Disclosure Requirements)\n(Fifth Amendment) Regulations, 2025 w.e.f. 19.11.2025."
+  }
+ ],
+ "page_start": 104,
+ "page_end": 105,
+ "sha256": "248698d400a981355999dfe6f73861ff92780bdbd43aaa5af291508db183dcc2",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

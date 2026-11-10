@@ -1,0 +1,33 @@
+{
+ "section_id": "R62N",
+ "ref": "RULE:SEBI_LODR_2015:R62N",
+ "kind": "regulation",
+ "number": "62N",
+ "heading": "Obligations with respect to independent directors",
+ "heading_raw": "Obligations with respect to independent directors.",
+ "chapter": {
+  "number": "VA",
+  "title": "CORPORATE GOVERNANCE NORMS FOR A LISTED ENTITY WHICH HAS LISTED ITS NON-CONVERTIBLE DEBT SECURITIES"
+ },
+ "omitted": false,
+ "content": "62N. (1) No person shall be appointed as an alternate director for an independent\ndirector of a HVDLE.\n(2) The maximum tenure of independent directors shall be in accordance with the\nCompanies Act, 2013 and rules made thereunder.\n(3) The appointment, re-appointment or removal of an independent director of a\nHVDLE, shall be subject to the approval of shareholders by way of a special\nresolution:\nProvided that where a special resolution for the appointment of an independent director\nfails to get the requisite majority of votes but the votes cast in favour of the resolution\nexceed the votes cast against the resolution and the votes cast by the public\nshareholders in favour of the resolution exceed the votes cast against the resolution,\nthen the appointment of such an independent director shall be deemed to have been\nmade under sub-regulation (3):\nProvided further that an independent director appointed under the first proviso shall be\nremoved only if the votes cast in favour of the resolution proposing the removal exceed\nthe votes cast against the resolution and the votes cast by the public shareholders in\nfavour of the resolution exceed the votes cast against the resolution.\n(4) The independent directors of the HVDLE shall hold at least one meeting in a\nfinancial year, without the presence of non-independent directors and members of the\nmanagement and all the independent directors shall strive to be present at such\nmeeting.\n(5) The independent directors in the meeting referred in sub-regulation (4) shall, inter\nalia-\na) review the performance of non-independent directors and the board of directors\nas a whole;\nb) review the performance of the chairperson of the HVDLE, taking into account\nthe views of executive directors and non-executive directors;\nc) assess the quality, quantity and timeliness of flow of information between the\nmanagement of the HVDLE and the board of directors that is necessary for the\nboard of directors to effectively and reasonably perform their duties.\n(6) An independent director shall be held liable, only in respect of such acts of\nomission or commission by the HVDLE which had occurred with his/her knowledge,\nattributable through processes of board of directors, and with his/ her consent or\nconnivance or where he/ she had not acted diligently with respect to the provisions\ncontained in these regulations.\n(7) 611[***]\n(8) The HVDLE shall familiarise the independent directors through various\nprogrammes about the HVDLE, including the following:\na) nature of the industry in which the HVDLE operates;\nb) business model of the HVDLE;\nc) roles, rights, responsibilities of independent directors; and\nd) any other relevant information.\n(9) Every independent director shall, at the first meeting of the board in which he\nparticipates as a director and thereafter at the first meeting of the board in every\nfinancial year or whenever there is any change in the circumstances which may affect\nhis status as an independent director, submit a declaration that he meets the criteria of\nindependence as provided in clause (b) of sub-regulation (1) of regulation 62D and\nthat he is not aware of any circumstance or situation, which exist or may be reasonably\nanticipated, that could impair or impact his ability to discharge his duties with an\nobjective independent judgment and without any external influence.\n(10) The board of directors of the HVDLE shall take on record the declaration and\nconfirmation submitted by the independent director under sub-regulation (9) after\nundertaking due assessment of the veracity of the same.\n(11) The HVDLE shall undertake Directors and Officers insurance (“D and O\ninsurance”) for all its independent directors for such sum assured and for such risks as\nmay be determined by its board of directors\n(12) No independent director, who resigns from a HVDLE, shall be appointed as an\nexecutive / whole time director on the board of the HVDLE, its holding, subsidiary or\nassociate company or on the board of a company belonging to its promoter group,\nunless a period of one year has elapsed from the date of resignation as an independent\ndirector.",
+ "footnotes": [
+  {
+   "number": "611",
+   "page": 126,
+   "placed_by": "marker",
+   "text": "611 Omitted vide vide the Securities and Exchange Board of India (Listing Obligations and Disclosure\nRequirements) (Amendment) Regulations, 2026 w.e.f. 22.1.2026. Prior to its omission, sub-regulation (7) read\nas under:\n“(2) “An independent director who resigns or is removed from the board of directors of the HVDLE shall be\nreplaced by a new independent director by the HVDLE not later than three months from the date of such\nvacancy:\nProvided that where the HVDLE fulfils the requirement of independent directors in its board of directors\nwithout filling the vacancy created by such resignation or removal, the requirement of replacement by a new\nindependent director shall not apply.”"
+  }
+ ],
+ "page_start": 125,
+ "page_end": 127,
+ "sha256": "b6305cbcb8eac95a0867d23486f19847156c15b1f84e61649020728444208b02",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

@@ -1,0 +1,26 @@
+{
+ "section_id": "R91D",
+ "ref": "RULE:SEBI_LODR_2015:R91D",
+ "kind": "regulation",
+ "number": "91D",
+ "heading": "Intimations and disclosures by Social Enterprise of events or information to Social Stock Exchange(s) or Stock Exchange(s)",
+ "heading_raw": "Intimations and disclosures by Social Enterprise of events or information to Social Stock Exchange(s) or Stock Exchange(s)",
+ "chapter": {
+  "number": "IXA",
+  "title": "OBLIGATIONS OF SOCIAL ENTERPRISES"
+ },
+ "omitted": false,
+ "content": "91D. (1) A Social Enterprise whose designated securities are listed on the Social\nStock Exchange(s) or the Stock Exchange(s), as the case may be, shall frame a policy\nfor determination of materiality, duly approved by its board or management, as the case\nmay be, which shall be disclosed on the Social Stock Exchange(s) or the Stock\nExchange(s).\n(2) The board and management of the Social Enterprise shall authorize one or more of\nits Key Managerial Personnel for the purpose of determining materiality of an event or\ninformation and for the purpose of making disclosures to the Social Stock Exchange(s)\nor the Stock Exchange(s), as the case may be, under this regulation and the contact\ndetails of such personnel shall also be disclosed to the Social Stock Exchange(s) or the\nStock Exchange(s).\n(3) A Social Enterprise whose designated securities are listed on the Social Stock\nExchange(s) or the Stock Exchange(s), as the case may be, shall disclose to the Social\nStock Exchange(s) or the Stock Exchange(s) where it is registered or has listed its\nspecified securities, as the case may be, any event that may have a material impact on\nthe planned achievement of outputs or outcomes.\n(4) The disclosure referred in sub-regulation (3) shall be made as soon as reasonably\npossible but not later than seven days or within such period as may be specified by the\nBoard, from the occurrence of the event and shall comprise details of the event including\nthe potential impact of the event and the steps being taken by the Social Enterprise to\naddress the same.\n(5) The Social Enterprise shall provide updates on a regular basis along with relevant\nexplanations in respect of the disclosures required in sub-regulation (3) till the time the\nconcerned event remains material.\n(6)The Social Enterprise shall provide specific and adequate reply to all queries raised\nby the Social Stock Exchange(s) or the Stock Exchange(s), as the case may be, with\nrespect to any events or information:\nProvided that the Social Stock Exchange(s) or the Stock Exchange(s), as the case may\nbe, shall disseminate the information and clarification as soon as reasonably practicable.\n(7)The Social Enterprise may suo moto confirm or deny any reported event or\ninformation to Social Stock Exchange(s) or the Stock Exchange(s), as the case may be.\n(8)The Social Enterprise shall disclose on its website all such events or information\nwhich have been disclosed to the Social Stock Exchange(s) or the Stock Exchange(s),\nas the case may be, under this regulation.",
+ "footnotes": [],
+ "page_start": 148,
+ "page_end": 149,
+ "sha256": "539db23b29264b0c449e186e473e5ec78f57b25a610c57c43bc97f174fb8ca7f",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

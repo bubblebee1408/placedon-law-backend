@@ -1,0 +1,57 @@
+{
+ "section_id": "R19",
+ "ref": "RULE:SEBI_LODR_2015:R19",
+ "kind": "regulation",
+ "number": "19",
+ "heading": "Nomination and remuneration committee",
+ "heading_raw": "Nomination and remuneration committee.",
+ "chapter": {
+  "number": "IV",
+  "title": "OBLIGATIONS OF 76[A] LISTED ENTITY WHICH HAS LISTED ITS SPECIFIED SECURITIES 77[AND NON-CONVERTIBLE DEBT SECURITIES]"
+ },
+ "omitted": false,
+ "content": "19. (1) The board of directors shall constitute the nomination and remuneration committee\nas follows:\n(a) the committee shall comprise of at least three directors ;\n(b) all directors of the committee shall be non-executive directors; and\n(c) at least 181[two-thirds] of the directors shall be independent directors 182[***].\n(2) The Chairperson of the nomination and remuneration committee shall be an independent\ndirector:\nProvided that the chairperson of the listed entity, whether executive or non-executive,\nmay be appointed as a member of the Nomination and Remuneration Committee and shall\nnot chair such Committee.\n183[(2A) The quorum for a meeting of the nomination and remuneration committee shall\nbe either two members or one third of the members of the committee, whichever is\ngreater, including at least one independent director in attendance.]\n(3) The Chairperson of the nomination and remuneration committee may be present at the\nannual general meeting, to answer the shareholders' queries; however, it shall be up to\nthe chairperson to decide who shall answer the queries.\n184[(3A) The nomination and remuneration committee shall meet at least once in a\n185[financial] year.]\n(4) The role of the nomination and remuneration committee shall be as specified as in Part D\nof the Schedule II.",
+ "footnotes": [
+  {
+   "number": "181",
+   "page": 36,
+   "placed_by": "marker",
+   "text": "181 Substituted by the SEBI (Listing Obligations and Disclosure Requirements) (Third Amendment) Regulations,\n2021 read with the corrigendum, w.e.f. 1.1.2022 for the words “fifty percent”."
+  },
+  {
+   "number": "182",
+   "page": 36,
+   "placed_by": "marker",
+   "text": "182 The words and symbol “[and in case of a listed entity having outstanding SR equity shares, two thirds of the\nnomination and remuneration committee shall comprise of independent directors]“ omitted by the SEBI (Listing\nObligations and Disclosure Requirements) (Third Amendment) Regulations, 2021 read with the corrigendum,\nw.e.f. 1.1.2022."
+  },
+  {
+   "number": "183",
+   "page": 37,
+   "placed_by": "marker",
+   "text": "183 Inserted by the SEBI (Listing Obligations and Disclosure Requirements) (Amendment) Regulations, 2018,\nw.e.f. 1.4.2019."
+  },
+  {
+   "number": "184",
+   "page": 37,
+   "placed_by": "marker",
+   "text": "184 Inserted by the SEBI (Listing Obligations and Disclosure Requirements) (Amendment) Regulations, 2018,\nw.e.f. 1.4.2019."
+  },
+  {
+   "number": "185",
+   "page": 37,
+   "placed_by": "marker",
+   "text": "185 Inserted by the Securities and Exchange Board of India (Listing Obligations and Disclosure Requirements)\n(Third Amendment) Regulations, 2024 w.e.f. 13.12.2024."
+  }
+ ],
+ "page_start": 36,
+ "page_end": 37,
+ "sha256": "42a1b48371ba98690c7e70e62275b633b96c00f6111b9d49d1771eb0c9d34e26",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

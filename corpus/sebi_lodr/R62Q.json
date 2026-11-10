@@ -1,0 +1,39 @@
+{
+ "section_id": "R62Q",
+ "ref": "RULE:SEBI_LODR_2015:R62Q",
+ "kind": "regulation",
+ "number": "62Q",
+ "heading": "Other corporate governance requirements",
+ "heading_raw": "Other corporate governance requirements.",
+ "chapter": {
+  "number": "VA",
+  "title": "CORPORATE GOVERNANCE NORMS FOR A LISTED ENTITY WHICH HAS LISTED ITS NON-CONVERTIBLE DEBT SECURITIES"
+ },
+ "omitted": false,
+ "content": "62Q. (1) The HVDLE may, at its discretion, comply with requirements as specified in\nPart E of Schedule II, if applicable.\n(2) 613[(a) the HVDLE shall submit, to the recognized stock exchange(s), a periodic\ncompliance report on corporate governance in the format and within the timelines,\nas may be specified by the Board from time to time.]\n(b) 614[***]\n(c) Details of cyber security incidents or breaches or loss of data or documents\nshall be disclosed along with the report mentioned in clause (a) of this sub-\nregulation, as may be specified.\n(d) The report mentioned in clause (a) of sub-regulation (2) shall be signed either\nby the compliance officer or the chief executive officer of the HVDLE.\n(3) HVDLEs may provide in the annual report, a Business Responsibility and\nSustainability Report on the environmental, social and governance disclosures as\nspecified in clause (f) of the sub-regulation (2) of the regulation 34, in the format\nas may be specified by the Board from time to time.]",
+ "footnotes": [
+  {
+   "number": "613",
+   "page": 129,
+   "placed_by": "marker",
+   "text": "613 Substituted vide the Securities and Exchange Board of India (Listing Obligations and Disclosure\nRequirements) (Amendment) Regulations, 2026 w.e.f. 22.1.2026. Prior to its substitution, clause (a) read as\nunder:\n“(a) The HVDLE shall submit a periodic compliance report on corporate governance in the format as\nspecified by the Board from time to time to the recognized stock exchange(s) within twenty one days from the\nend of the period.”"
+  },
+  {
+   "number": "614",
+   "page": 129,
+   "placed_by": "marker",
+   "text": "614 Omitted vide the Securities and Exchange Board of India (Listing Obligations and Disclosure Requirements)\n(Amendment) Regulations, 2026 w.e.f. 22.1.2026. Prior to its omission, clause (b) read as under:\n“(b) Details of all material transactions with related parties shall be disclosed along with the report\nmentioned in clause (a) of this sub-regulation.”"
+  }
+ ],
+ "page_start": 129,
+ "page_end": 131,
+ "sha256": "a4e1b66d0958ea373b3aae676d190513f67b685edf2c2e9ea83c96dedee52360",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

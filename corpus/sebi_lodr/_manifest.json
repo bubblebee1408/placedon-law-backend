@@ -1,0 +1,376 @@
+{
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use.",
+ "section_ids": [
+  "R1",
+  "R2",
+  "R3",
+  "R4",
+  "R5",
+  "R6",
+  "R7",
+  "R8",
+  "R9",
+  "R10",
+  "R11",
+  "R12",
+  "R13",
+  "R14",
+  "R15",
+  "R16",
+  "R17",
+  "R17A",
+  "R18",
+  "R19",
+  "R20",
+  "R21",
+  "R22",
+  "R23",
+  "R24",
+  "R24A",
+  "R25",
+  "R26",
+  "R26A",
+  "R27",
+  "R28",
+  "R29",
+  "R30",
+  "R30A",
+  "R31",
+  "R31A",
+  "R31B",
+  "R32",
+  "R33",
+  "R34",
+  "R35",
+  "R36",
+  "R37",
+  "R37A",
+  "R38",
+  "R39",
+  "R40",
+  "R41",
+  "R42",
+  "R43",
+  "R44",
+  "R45",
+  "R46",
+  "R47",
+  "R48",
+  "R49",
+  "R50",
+  "R51",
+  "R52",
+  "R53",
+  "R54",
+  "R55",
+  "R56",
+  "R57",
+  "R58",
+  "R59",
+  "R59A",
+  "R60",
+  "R61",
+  "R61A",
+  "R62",
+  "R62A",
+  "R62B",
+  "R62C",
+  "R62D",
+  "R62E",
+  "R62F",
+  "R62G",
+  "R62H",
+  "R62I",
+  "R62J",
+  "R62K",
+  "R62L",
+  "R62M",
+  "R62N",
+  "R62O",
+  "R62P",
+  "R62Q",
+  "R63",
+  "R64",
+  "R64A",
+  "R64B",
+  "R64C",
+  "R64D",
+  "R64E",
+  "R64F",
+  "R64G",
+  "R64H",
+  "R64I",
+  "R65",
+  "R66",
+  "R67",
+  "R68",
+  "R69",
+  "R70",
+  "R71",
+  "R72",
+  "R73",
+  "R74",
+  "R75",
+  "R76",
+  "R77",
+  "R78",
+  "R79",
+  "R80",
+  "R81",
+  "R82",
+  "R83",
+  "R84",
+  "R85",
+  "R86",
+  "R87",
+  "R87A",
+  "R87B",
+  "R87C",
+  "R87D",
+  "R87E",
+  "R88",
+  "R89",
+  "R90",
+  "R91",
+  "R91A",
+  "R91B",
+  "R91C",
+  "R91D",
+  "R91E",
+  "R91F",
+  "R92",
+  "R93",
+  "R94",
+  "R94A",
+  "R95",
+  "R96",
+  "R97",
+  "R98",
+  "R99",
+  "R99A",
+  "R100",
+  "R101",
+  "R102",
+  "R103",
+  "SCHEDULE_I",
+  "SCHEDULE_II",
+  "SCHEDULE_III",
+  "SCHEDULE_IV",
+  "SCHEDULE_V",
+  "SCHEDULE_VI",
+  "SCHEDULE_VII",
+  "SCHEDULE_VIII",
+  "SCHEDULE_IX",
+  "SCHEDULE_X"
+ ],
+ "count": 161,
+ "regulations": 151,
+ "schedules": 10,
+ "last_regulation": "103",
+ "omitted": [
+  "SCHEDULE VIII"
+ ],
+ "pages": 230,
+ "footnotes": 790,
+ "footnotes_placed_by_page_fallback": 3,
+ "footnote_numbers_absent_from_source": [
+  "449",
+  "687"
+ ],
+ "chapters": [
+  {
+   "number": "I",
+   "title": "PRELIMINARY",
+   "header": "CHAPTER I",
+   "page": 1,
+   "footnotes": []
+  },
+  {
+   "number": "II",
+   "title": "PRINCIPLES GOVERNING DISCLOSURES AND OBLIGATIONS OF LISTED ENTITY",
+   "header": "CHAPTER II",
+   "page": 11,
+   "footnotes": []
+  },
+  {
+   "number": "III",
+   "title": "COMMON OBLIGATIONS OF LISTED ENTITIES",
+   "header": "CHAPTER III",
+   "page": 16,
+   "footnotes": []
+  },
+  {
+   "number": "IV",
+   "title": "OBLIGATIONS OF 76[A] LISTED ENTITY WHICH HAS LISTED ITS SPECIFIED SECURITIES 77[AND NON-CONVERTIBLE DEBT SECURITIES]",
+   "header": "CHAPTER IV",
+   "page": 21,
+   "footnotes": [
+    {
+     "number": "76",
+     "page": 21,
+     "placed_by": "marker",
+     "text": "76 Inserted by the SEBI (Listing Obligations and Disclosure Requirements) (Fifth Amendment) Regulations,\n2021 w.e.f. 7.9.2021."
+    },
+    {
+     "number": "77",
+     "page": 21,
+     "placed_by": "marker",
+     "text": "77 Inserted by the SEBI (Listing Obligations and Disclosure Requirements) (Fifth Amendment) Regulations,\n2021 w.e.f. 7.9.2021."
+    }
+   ]
+  },
+  {
+   "number": "V",
+   "title": "OBLIGATIONS OF LISTED ENTITY WHICH HAS LISTED ITS NON- CONVERTIBLE 459[***] SECURITIES 460[***]",
+   "header": "CHAPTER V",
+   "page": 93,
+   "footnotes": [
+    {
+     "number": "459",
+     "page": 93,
+     "placed_by": "marker",
+     "text": "459 Omitted the word “DEBT” by the SEBI (Listing Obligations and Disclosure Requirements) (Fifth\nAmendment) Regulations, 2021 w.e.f. 7.9.2021."
+    },
+    {
+     "number": "460",
+     "page": 93,
+     "placed_by": "marker",
+     "text": "460 Omitted the words “NON-CONVERTIBLE REDEEMABLE PREFERENCE SHARES OR BOTH” by the SEBI\n(Listing Obligations and Disclosure Requirements) (Fifth Amendment) Regulations, 2021 w.e.f. 7.9.2021."
+    }
+   ]
+  },
+  {
+   "number": "VA",
+   "title": "CORPORATE GOVERNANCE NORMS FOR A LISTED ENTITY WHICH HAS LISTED ITS NON-CONVERTIBLE DEBT SECURITIES",
+   "header": "567[CHAPTER VA",
+   "page": 112,
+   "footnotes": [
+    {
+     "number": "567",
+     "page": 112,
+     "placed_by": "marker",
+     "text": "567 Inserted by the Securities and Exchange Board of India (Listing Obligations and Disclosure Requirements)\n(Amendment) Regulations, 2025 w.e.f 28.03.2025."
+    }
+   ]
+  },
+  {
+   "number": "VI",
+   "title": "OBLIGATIONS OF LISTED ENTITY WHICH HAS LISTED ITS SPECIFIED SECURITIES AND EITHER NON-CONVERTIBLE DEBT SECURITIES OR NON- CONVERTBLE REDEEMABLE PREFERENCE SHARES OR BOTH",
+   "header": "CHAPTER VI",
+   "page": 131,
+   "footnotes": []
+  },
+  {
+   "number": "VIA",
+   "title": "FRAMEWORK FOR VOLUNTARY DELISTING OF NON-CONVERTIBLE DEBT SECURITIES OR NON-CONVERTBLE REDEEMABLE PREFERENCE SHARES AND OBLIGATIONS OF THE LISTED ENTITY ON SUCH DELISTING",
+   "header": "629[CHAPTER VIA",
+   "page": 133,
+   "footnotes": [
+    {
+     "number": "629",
+     "page": 133,
+     "placed_by": "marker",
+     "text": "629 Inserted by the Securities and Exchange Board of India (Listing Obligations and Disclosure Requirements)\n(Third Amendment) Regulations, 2023 w.e.f. 23.08.2023."
+    }
+   ]
+  },
+  {
+   "number": "VII",
+   "title": "OBLIGATIONS OF LISTED ENTITY WHICH HAS LISTED ITS INDIAN DEPOSITORY RECEIPTS",
+   "header": "CHAPTER VII",
+   "page": 138,
+   "footnotes": []
+  },
+  {
+   "number": "VIII",
+   "title": "OBLIGATIONS OF LISTED ENTITY WHICH HAS LISTED ITS SECURITISED DEBT INSTRUMENTS",
+   "header": "CHAPTER VIII",
+   "page": 142,
+   "footnotes": []
+  },
+  {
+   "number": "VIIIA",
+   "title": "OBLIGATIONS OF LISTED ENTITY WHICH HAS LISTED ITS SECURITY RECEIPTS",
+   "header": "632[CHAPTER VIII A",
+   "page": 145,
+   "footnotes": [
+    {
+     "number": "632",
+     "page": 145,
+     "placed_by": "marker",
+     "text": "632 Inserted by the SEBI (Listing Obligations and Disclosure Requirements) (Fifth Amendment) Regulations,\n2018, w.e.f. 06.09.2018."
+    }
+   ]
+  },
+  {
+   "number": "IX",
+   "title": "OBLIGATIONS OF LISTED ENTITY WHICH HAS LISTED ITS MUTUAL FUND UNITS",
+   "header": "CHAPTER IX",
+   "page": 147,
+   "footnotes": []
+  },
+  {
+   "number": "IXA",
+   "title": "OBLIGATIONS OF SOCIAL ENTERPRISES",
+   "header": "633[CHAPTER IX-A",
+   "page": 148,
+   "footnotes": [
+    {
+     "number": "633",
+     "page": 148,
+     "placed_by": "marker",
+     "text": "633 Inserted by the Securities and Exchange Board of India (Listing Obligations and Disclosure Requirements)\n(Fifth Amendment) Regulations, 2022 w.e.f. 25.7.2022."
+    }
+   ]
+  },
+  {
+   "number": "X",
+   "title": "DUTIES AND OBLIGATIONS OF THE RECOGNISED STOCK EXCHANGE(S)",
+   "header": "CHAPTER X",
+   "page": 151,
+   "footnotes": []
+  },
+  {
+   "number": "XI",
+   "title": "PROCEDURE FOR ACTION IN CASE OF DEFAULT",
+   "header": "CHAPTER XI",
+   "page": 154,
+   "footnotes": []
+  },
+  {
+   "number": "XIA",
+   "title": "POWER TO RELAX STRICT ENFORCEMENT OF THE REGULATIONS",
+   "header": "648[CHAPTER XI-A",
+   "page": 155,
+   "footnotes": [
+    {
+     "number": "648",
+     "page": 155,
+     "placed_by": "marker",
+     "text": "648 Inserted by the SEBI (Regulatory Sandbox) (Amendment) Regulation, w.e.f. 17-04-2020."
+    }
+   ]
+  },
+  {
+   "number": "XII",
+   "title": "MISCELLANEOUS",
+   "header": "CHAPTER XII",
+   "page": 156,
+   "footnotes": []
+  }
+ ],
+ "preamble": "SECURITIES AND EXCHANGE BOARD OF INDIA (LISTING OBLIGATIONS\nAND DISCLOSURE REQUIREMENTS) REGULATIONS, 2015\n[Amended up to July 14, 2026]\nNo. SEBI/LAD-NRO/GN/2015-16/013 In exercise of the powers conferred by section 11,\nsub-section (2) of section 11A and section 30 of the Securities and Exchange Board of India\nAct, 1992 (15 of 1992) read with section 31 of the Securities Contracts (Regulation) Act, 1956\n(42 of 1956), the Securities and Exchange Board of India hereby makes the following\nRegulations, namely:—",
+ "rejected_number_candidates": [],
+ "flat_text_not_used": {
+  "path": "corpus/rules/sebi_lodr_2015.txt",
+  "sha256": "e7c028077cae9179e05a8523f2529328dcab4af02910816c1162f6d863b35a6a",
+  "reason": "truncated: 129 page-lines of the PDF's 230 (ends in regulation 62Q; regulations 63-103 and all Schedules absent) and drops quoted defined terms. Left untouched; see the script docstring."
+ }
+}

@@ -1,0 +1,33 @@
+{
+ "section_id": "R62G",
+ "ref": "RULE:SEBI_LODR_2015:R62G",
+ "kind": "regulation",
+ "number": "62G",
+ "heading": "Nomination and remuneration committee",
+ "heading_raw": "Nomination and remuneration committee.",
+ "chapter": {
+  "number": "VA",
+  "title": "CORPORATE GOVERNANCE NORMS FOR A LISTED ENTITY WHICH HAS LISTED ITS NON-CONVERTIBLE DEBT SECURITIES"
+ },
+ "omitted": false,
+ "content": "62G. (1) The board of directors shall ensure that the functions of the nomination and\nremuneration committee as specified in Part D of the Schedule II are either discharged\nby the board of directors or, a nomination and remuneration committee is constituted\nas follows:\n(a) the committee shall comprise of at least three directors;\n(b) all directors of the committee shall be non-executive directors; and\n(c) at least two-thirds of the directors shall be independent directors.\n(2) The chairperson of nomination and remuneration committee shall be an\nindependent director:\nProvided that the chairperson of the HVDLE, whether executive or non-executive,\nmay be appointed as a member of the nomination and remuneration committee and\nshall not chair such committee.\n(3) The quorum for a meeting of the nomination and remuneration committee shall be\neither two members or one third of the members of the committee, whichever is\ngreater, including at least one independent director.\n(4) The chairperson of the nomination and remuneration committee may be present at\nthe annual general meeting, to answer the shareholders' queries.\n(5) Notwithstanding anything contained in sub-regulation (4), it shall be the discretion\nof the chairperson to decide as to who may answer the queries.\n(6) The nomination and remuneration committee shall meet at least once in a\n592[financial] year.\n(7) In case of entities that are not companies or body corporates incorporated under\nthe Companies Act, 2013 or set up under the public private partnership model/\nstructure, function of the nomination and remuneration committee as specified\nunder Part D of Schedule II may be ensured as per the provisions of their respective\nstatutes or in terms of the public private partnership model/ structure.",
+ "footnotes": [
+  {
+   "number": "592",
+   "page": 120,
+   "placed_by": "marker",
+   "text": "592 ibid"
+  }
+ ],
+ "page_start": 120,
+ "page_end": 120,
+ "sha256": "c0535e9de0634bf90509c2bba0c9a64af7d4125015fd1793edf9e8b6802aaade",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

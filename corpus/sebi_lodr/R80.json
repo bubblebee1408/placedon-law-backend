@@ -1,0 +1,26 @@
+{
+ "section_id": "R80",
+ "ref": "RULE:SEBI_LODR_2015:R80",
+ "kind": "regulation",
+ "number": "80",
+ "heading": "Delisting of Indian Depository Receipt",
+ "heading_raw": "Delisting of Indian Depository Receipt.",
+ "chapter": {
+  "number": "VII",
+  "title": "OBLIGATIONS OF LISTED ENTITY WHICH HAS LISTED ITS INDIAN DEPOSITORY RECEIPTS"
+ },
+ "omitted": false,
+ "content": "80. (1) The listed entity shall, if it decides to delist Indian Depository Receipts, give fair\nand reasonable treatment to IDR holders.\n(2) The listed entity shall comply with such norms and conditions for delisting Indian\nDepository Receipts as specified by the Board or stock exchange in this regard.\n(3) The listed entity shall, in case underlying equity shares are delisted, shall delist and\ncancel the Indian Depository Receipts.",
+ "footnotes": [],
+ "page_start": 141,
+ "page_end": 142,
+ "sha256": "04a174739888de56f464e841eccd9ff681b71e6cc8f3c61642aa78c5092fec48",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

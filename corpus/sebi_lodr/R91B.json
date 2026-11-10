@@ -1,0 +1,26 @@
+{
+ "section_id": "R91B",
+ "ref": "RULE:SEBI_LODR_2015:R91B",
+ "kind": "regulation",
+ "number": "91B",
+ "heading": "Disclosures by a For Profit Social Enterprise",
+ "heading_raw": "Disclosures by a For Profit Social Enterprise.",
+ "chapter": {
+  "number": "IXA",
+  "title": "OBLIGATIONS OF SOCIAL ENTERPRISES"
+ },
+ "omitted": false,
+ "content": "91B. A For Profit Social Enterprise whose designated securities are listed on the Stock\nExchange(s) shall comply with the disclosure requirements contained in these\nregulations with respect to issuers whose specified securities are listed on the Main\nBoard or the SME Exchange or the Innovators Growth Platform, as the case may be.",
+ "footnotes": [],
+ "page_start": 148,
+ "page_end": 148,
+ "sha256": "602680fa3d0681a34f511ecb9a59e78123e9f257181e9845f057b09610e3c537",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

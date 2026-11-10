@@ -1,0 +1,81 @@
+{
+ "section_id": "R42",
+ "ref": "RULE:SEBI_LODR_2015:R42",
+ "kind": "regulation",
+ "number": "42",
+ "heading": "Record Date or Date of closure of transfer books",
+ "heading_raw": "Record Date or Date of closure of transfer books.",
+ "chapter": {
+  "number": "IV",
+  "title": "OBLIGATIONS OF 76[A] LISTED ENTITY WHICH HAS LISTED ITS SPECIFIED SECURITIES 77[AND NON-CONVERTIBLE DEBT SECURITIES]"
+ },
+ "omitted": false,
+ "content": "42. (1) The listed entity shall intimate the record date 421[for the following events to all the\nstock exchange(s) where it is listed or where stock derivatives are available on the stock\nof the listed entity or where listed entity’s stock form part of an index on which\nderivatives are available:]\n(a) declaration of dividend;\n(b) issue of right or bonus shares;\n(c) issue of shares for conversion of debentures or any other convertible security;\n(d) shares arising out of rights attached to debentures or any other convertible security\n(e) 422[corporate actions like mergers, de-mergers, splits, etc;]\n(f) such other purposes as may be specified by the stock exchange(s).\n(2) The listed entity shall give notice in advance of atleast 423[three] working days (excluding\nthe date of intimation and the record date) to stock exchange(s) of record date specifying\nthe purpose of the record date:\n424[Provided that in the case of 425[corporate actions through schemes of arrangement\ncovered under regulation 37], the listed entity shall give notice in advance of atleast\n426[seven] working days (excluding the date of intimation and the record date).]\n(3) 427[***]\n(4) The listed entity shall ensure the time gap of at least 428[five working] days between two\nrecord dates.\n(5) 429[***]",
+ "footnotes": [
+  {
+   "number": "421",
+   "page": 84,
+   "placed_by": "marker",
+   "text": "421 Substituted by the SEBI (Listing Obligations and Disclosure Requirements) (Second Amendment)\nRegulations, 2020, w.e.f. 05.08.2020. Prior to its substitution, sub-regulation (1) read as follows,-\n“The listed entity shall intimate the record date to all the stock exchange(s) where it is listed for the following\npurposes:”"
+  },
+  {
+   "number": "422",
+   "page": 85,
+   "placed_by": "marker",
+   "text": "422 Substituted by the SEBI (Listing Obligations and Disclosure Requirements) (Second Amendment)\nRegulations, 2020, w.e.f. 05.08.2020. Prior to its substitution, clause (e) read as follows,-\n“corporate actions like mergers, de-mergers, splits and bonus shares, where stock derivatives are available on\nthe stock of listed entity or where listed entity's stocks form part of an index on which derivatives are available;”"
+  },
+  {
+   "number": "423",
+   "page": 85,
+   "placed_by": "marker",
+   "text": "423 Substituted for the word “seven” by the Securities and Exchange Board of India (Listing Obligations and\nDisclosure Requirements) (Third Amendment) Regulations, 2024 w.e.f. 13.12.2024."
+  },
+  {
+   "number": "424",
+   "page": 85,
+   "placed_by": "marker",
+   "text": "424 Inserted by the SEBI (Listing Obligations and Disclosure Requirements) (Fifth Amendment) Regulations,\n2019, w.e.f. 26.12.2019."
+  },
+  {
+   "number": "425",
+   "page": 85,
+   "placed_by": "marker",
+   "text": "425 Substituted for the words “rights issues” by the Securities and Exchange Board of India (Listing Obligations\nand Disclosure Requirements) (Third Amendment) Regulations, 2024 w.e.f. 13.12.2024."
+  },
+  {
+   "number": "426",
+   "page": 85,
+   "placed_by": "marker",
+   "text": "426 Substituted for the word “three” by the Securities and Exchange Board of India (Listing Obligations and\nDisclosure Requirements) (Third Amendment) Regulations, 2024 w.e.f. 13.12.2024."
+  },
+  {
+   "number": "427",
+   "page": 85,
+   "placed_by": "marker",
+   "text": "427 Omitted by the Securities and Exchange Board of India (Listing Obligations and Disclosure Requirements)\n(Third Amendment) Regulations, 2024 w.e.f. 13.12.2024. Prior to the Omission, the sub-regulation read as\nunder-\n“(3) The listed entity shall recommend or declare all dividend and/or cash bonuses at least five working days\n(excluding the date of intimation and the record date) before the record date fixed for the purpose.”"
+  },
+  {
+   "number": "428",
+   "page": 85,
+   "placed_by": "marker",
+   "text": "428 Substituted for the word “thirty” by the Securities and Exchange Board of India (Listing Obligations and\nDisclosure Requirements) (Third Amendment) Regulations, 2024 w.e.f. 13.12.2024."
+  },
+  {
+   "number": "429",
+   "page": 85,
+   "placed_by": "marker",
+   "text": "429 Omitted by the Securities and Exchange Board of India (Listing Obligations and Disclosure Requirements)\n(Third Amendment) Regulations, 2024 w.e.f. 13.12.2024. Prior to the Omission, the sub-regulation read as\nunder-\n“(5) For securities held in physical form, the listed entity may, announce dates of closure of its transfer books\nin place of record date for complying with requirements as specified in sub-regulations (1) to (4):\nProvided that the listed entity shall ensure that there is a time gap of atleast thirty days between two\ndates of closure of its transfer books.”"
+  }
+ ],
+ "page_start": 84,
+ "page_end": 85,
+ "sha256": "8396e0719c0ad4df286a18146185c6b0de5b3c146737dafd0c8dbde077a57f93",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

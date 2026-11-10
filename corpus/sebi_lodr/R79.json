@@ -1,0 +1,26 @@
+{
+ "section_id": "R79",
+ "ref": "RULE:SEBI_LODR_2015:R79",
+ "kind": "regulation",
+ "number": "79",
+ "heading": "Voting",
+ "heading_raw": "Voting.",
+ "chapter": {
+  "number": "VII",
+  "title": "OBLIGATIONS OF LISTED ENTITY WHICH HAS LISTED ITS INDIAN DEPOSITORY RECEIPTS"
+ },
+ "omitted": false,
+ "content": "79. (1) The listed entity shall, either directly or through an agent, send out proxy forms to\nIDR Holders in all cases mentioning that a security holder may vote either for or against\neach resolution.\n(2) Voting rights of the IDR Holders shall be exercised in accordance with the depository\nagreement.",
+ "footnotes": [],
+ "page_start": 141,
+ "page_end": 141,
+ "sha256": "f51d87745af9e2c54804a5937e666931bc7943469e03453bc9e2a5adba8951f3",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

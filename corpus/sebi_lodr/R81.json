@@ -1,0 +1,33 @@
+{
+ "section_id": "R81",
+ "ref": "RULE:SEBI_LODR_2015:R81",
+ "kind": "regulation",
+ "number": "81",
+ "heading": "Applicability",
+ "heading_raw": "Applicability.",
+ "chapter": {
+  "number": "VIII",
+  "title": "OBLIGATIONS OF LISTED ENTITY WHICH HAS LISTED ITS SECURITISED DEBT INSTRUMENTS"
+ },
+ "omitted": false,
+ "content": "81. (1) The provisions of this chapter shall apply to Special Purpose Distinct Entity issuing\nsecuritised debt instruments and trustees of Special Purpose Distinct Entity shall ensure\ncompliance with each of the provisions of these regulations.\n(2) The expressions \"asset pool\", \"clean up call option\", \"credit enhancement\", \"debt or\nreceivables\", \"investor\", \"liquidity provider\", \"obligor\", \"originator\", \"regulated activity\",\n\"scheme\", \"securitization\", \"securitized debt instrument\", \"servicer\", \"special purpose distinct\nentity\", \"sponsor\" and \"trustee\" shall have the same meaning as assigned to them under\n[Securities and Exchange Board of India (Issue and Listing of Securitised Debt Instruments\nand Security Receipts) Regulations, 2008]631;",
+ "footnotes": [
+  {
+   "number": "631",
+   "page": 142,
+   "placed_by": "marker",
+   "text": "631 Substituted by the SEBI (Listing Obligations and Disclosure Requirements) (Fifth Amendment) Regulations,\n2018, w.e.f. 06.09.2018. Prior to this, it read as “Securities and Exchange Board of India (Public Offer and\nListing of Securitised Debt Instruments) Regulations, 2008”."
+  }
+ ],
+ "page_start": 142,
+ "page_end": 142,
+ "sha256": "de3c5907d9fa68897f3c549525e6157bec5d8b4af0d470ef7a02ac82dd176c74",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

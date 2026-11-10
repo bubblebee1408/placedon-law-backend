@@ -1,0 +1,63 @@
+{
+ "section_id": "R32",
+ "ref": "RULE:SEBI_LODR_2015:R32",
+ "kind": "regulation",
+ "number": "32",
+ "heading": "Statement of deviation(s) or variation(s)",
+ "heading_raw": "Statement of deviation(s) or variation(s).",
+ "chapter": {
+  "number": "IV",
+  "title": "OBLIGATIONS OF 76[A] LISTED ENTITY WHICH HAS LISTED ITS SPECIFIED SECURITIES 77[AND NON-CONVERTIBLE DEBT SECURITIES]"
+ },
+ "omitted": false,
+ "content": "32. (1) The listed entity shall submit to the stock exchange the following statement(s) on a\nquarterly basis for public issue, rights issue, preferential issue etc. ,-\n(a) indicating deviations, if any, in the use of proceeds from the objects stated in the\noffer document or explanatory statement to the notice for the general meeting, as\napplicable;\n(b) indicating category wise variation (capital expenditure, sales and marketing,\nworking capital etc.) between projected utilisation of funds made by it in its offer\ndocument or explanatory statement to the notice for the general meeting, as\napplicable and the actual utilisation of funds.\n(2) The statement(s) specified in sub-regulation (1), shall be continued to be given till such\ntime the issue proceeds have been fully utilised or the purpose for which these proceeds\nwere raised has been achieved.\n(3) The statement(s) specified in sub-regulation (1), shall be placed before the audit\ncommittee for review and after such review, shall be submitted to the stock exchange(s).\n(4) The listed entity shall furnish an explanation for the variation specified in sub-regulation\n(1), in the directors’ report in the annual report.\n(5) The listed entity shall prepare an annual statement of funds utilized for purposes other than\nthose stated in the offer document/prospectus/notice, certified by the statutory auditors of\nthe listed entity, and place it before the audit committee till such time the full money raised\nthrough the issue has been fully utilized.\n(6) Where the listed entity has appointed a monitoring agency to monitor utilisation of\nproceeds of a 349[public issue or rights issue or preferential issue or qualified institutions\nplacement], the listed entity shall submit to the stock exchange(s) any comments or report\nreceived from the monitoring agency 350[within forty-five days from the end of each\nquarter].\n(7) Where the listed entity has appointed a monitoring agency to monitor the utilisation of\nproceeds of a 351[public issue or rights issue or preferential issue or qualified institutions\nplacement], the monitoring report of such agency shall be placed before the audit\ncommittee on 352[a quarterly basis], promptly upon its receipt.\nExplanation,—353[For the purpose of sub-regulations (6) and (7), “monitoring agency”\nshall mean the monitoring agency as specified in the Securities and Exchange Board of\nIndia (Issue of Capital and Disclosure Requirements) Regulations, 2018.]\n354[(7A) Where an entity has raised funds through preferential allotment or qualified\ninstitutions placement, the listed entity shall disclose every year, the utilization of such funds\nduring that year in its Annual Report until such funds are fully utilized.]\n(8) For the purpose of this regulation, any reference to “quarterly/quarter” in case of listed\nentity which have listed their specified securities on SME Exchange shall respectively be\nread as “half yearly/half year”.",
+ "footnotes": [
+  {
+   "number": "349",
+   "page": 69,
+   "placed_by": "marker",
+   "text": "349 Substituted for the words “public or rights issue” by the Securities and Exchange Board of India (Listing\nObligations and Disclosure Requirements) (Sixth Amendment) Regulations, 2022 w.e.f. 14.11.2022."
+  },
+  {
+   "number": "350",
+   "page": 70,
+   "placed_by": "marker",
+   "text": "350 Inserted by the SEBI (Listing Obligations and Disclosure Requirements) (Second Amendment) Regulations,\n2021 w.e.f. 5.5.2021."
+  },
+  {
+   "number": "351",
+   "page": 70,
+   "placed_by": "marker",
+   "text": "351 Substituted for the words “public or rights issue” by the Securities and Exchange Board of India (Listing\nObligations and Disclosure Requirements) (Sixth Amendment) Regulations, 2022 w.e.f. 14.11.2022."
+  },
+  {
+   "number": "352",
+   "page": 70,
+   "placed_by": "marker",
+   "text": "352 Substituted for the words “an annual basis” by the SEBI (Listing Obligations and Disclosure Requirements)\n(Amendment) Regulations, 2022 w.e.f. 24.1.2022."
+  },
+  {
+   "number": "353",
+   "page": 70,
+   "placed_by": "marker",
+   "text": "353 Substituted by the SEBI (Listing Obligations and Disclosure Requirements) (Second Amendment) Regulations,\n2021 w.e.f. 5.5.2021. Prior to the substitution, the Explanation read as follows:\n“For the purpose of this sub-regulation, “monitoring agency” shall mean the monitoring agency\nspecified in regulation 16 of the Securities and Exchange Board of India (Issue of Capital and\nDisclosure Requirements) Regulations, 2009.”"
+  },
+  {
+   "number": "354",
+   "page": 70,
+   "placed_by": "marker",
+   "text": "354 Inserted by the SEBI (Listing Obligations and Disclosure Requirements) (Amendment) Regulations, 2018,\nw.e.f. 1.4.2019."
+  }
+ ],
+ "page_start": 69,
+ "page_end": 70,
+ "sha256": "1594caa4c7e96f13768835c3ca1f1199898d951a72eab7c426fef5b3de95bfed",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

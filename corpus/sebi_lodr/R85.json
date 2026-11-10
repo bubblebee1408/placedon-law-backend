@@ -1,0 +1,26 @@
+{
+ "section_id": "R85",
+ "ref": "RULE:SEBI_LODR_2015:R85",
+ "kind": "regulation",
+ "number": "85",
+ "heading": "Information to Investors",
+ "heading_raw": "Information to Investors.",
+ "chapter": {
+  "number": "VIII",
+  "title": "OBLIGATIONS OF LISTED ENTITY WHICH HAS LISTED ITS SECURITISED DEBT INSTRUMENTS"
+ },
+ "omitted": false,
+ "content": "85. (1) The listed entity shall provide either by itself or through the servicer, loan level\ninformation without disclosing particulars of individual borrower to its investors.\n(2) The listed entity shall provide information regarding revision in rating as a result of credit\nrating done periodically in terms of regulation 84 above to its investors.\n(3) The information at sub-regulation (1) and (2) may be sent to investors in electronic\nform/fax if so consented by the investors.\n(4) The listed entity shall display the email address of the grievance redressal division and\nother relevant details prominently on its website and in the various materials / pamphlets/\nadvertisement campaigns initiated by it for creating investor awareness.",
+ "footnotes": [],
+ "page_start": 143,
+ "page_end": 143,
+ "sha256": "670abc878b59d0e2b5ad6fd6b5af24630d0d1efbc1fb06a2b04a66b69b489701",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

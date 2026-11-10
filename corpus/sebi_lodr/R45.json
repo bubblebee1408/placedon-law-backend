@@ -1,0 +1,33 @@
+{
+ "section_id": "R45",
+ "ref": "RULE:SEBI_LODR_2015:R45",
+ "kind": "regulation",
+ "number": "45",
+ "heading": "Change in name of the listed entity",
+ "heading_raw": "Change in name of the listed entity.",
+ "chapter": {
+  "number": "IV",
+  "title": "OBLIGATIONS OF 76[A] LISTED ENTITY WHICH HAS LISTED ITS SPECIFIED SECURITIES 77[AND NON-CONVERTIBLE DEBT SECURITIES]"
+ },
+ "omitted": false,
+ "content": "45. (1) The listed entity shall be allowed to change its name subject to compliance with\nthe following conditions:\n(a) a time period of at least one year has elapsed from the last name change;\n(b) at least fifty percent. of the total revenue in the preceding one year period has been\naccounted for by the new activity suggested by the new name; or\n(c) the amount invested in the new activity/project is atleast fifty percent. of the assets\nof the listed entity:\nProvided that if any listed entity has changed its activities which are not reflected in its name,\nit shall change its name in line with its activities within a period of six months from the change\nof activities in compliance of provisions as applicable to change of name prescribed under\nCompanies Act, 2013.\nExplanation.- For the purpose of this regulation, -\n(i) 'assets' of the listed entity means the sum of fixed assets, advances, works in\nProgress / Inventories, investments, trade receivables, cash & cash equivalents;\n(ii) ‘advances’ shall include only those amounts extended to contractors and\nsuppliers towards execution of project, specific to new activity as reflected in the\nnew name.\n(2) On satisfaction of conditions at sub-regulation (1), the listed entity shall file an application for\nname availability with Registrar of Companies.\n(3) 442[ Upon compliance with the conditions for change of name laid down in Companies Act,\n2013 and rules made thereunder, the listed entity, in the explanatory statement to the notice\nseeking shareholders’ approval for change in name, shall include a certificate from a\npracticing chartered accountant stating compliance with conditions provided in sub-\nregulation (1).]",
+ "footnotes": [
+  {
+   "number": "442",
+   "page": 88,
+   "placed_by": "marker",
+   "text": "442 Substituted by the SEBI (Listing Obligations and Disclosure Requirements) (Second Amendment)\nRegulations, 2021 w.e.f. 5.5.2021. Prior to the substitution, sub-regulation (3) read as follows:\n“On receipt of confirmation regarding name availability from Registrar of Companies, before filing the\nrequest for change of name with the Registrar of Companies in terms of provisions laid down in\nCompanies Act, 2013 and rules made thereunder, the listed entity shall seek approval from Stock\nExchange by submitting a certificate from chartered accountant stating compliance with conditions at\nsub-regulation (1).”"
+  }
+ ],
+ "page_start": 87,
+ "page_end": 88,
+ "sha256": "71d3cdd0e551703c8d5ca0b3bf593b7e88e70aa1d44840fe5f0dbc6a0b52def1",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

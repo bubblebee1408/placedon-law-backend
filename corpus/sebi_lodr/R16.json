@@ -1,0 +1,105 @@
+{
+ "section_id": "R16",
+ "ref": "RULE:SEBI_LODR_2015:R16",
+ "kind": "regulation",
+ "number": "16",
+ "heading": "Definitions",
+ "heading_raw": "Definitions.",
+ "chapter": {
+  "number": "IV",
+  "title": "OBLIGATIONS OF 76[A] LISTED ENTITY WHICH HAS LISTED ITS SPECIFIED SECURITIES 77[AND NON-CONVERTIBLE DEBT SECURITIES]"
+ },
+ "omitted": false,
+ "content": "16. (1) For the purpose of this chapter , unless the context otherwise requires -\n(a) \"control\" shall have the same meaning as assigned to it under the Securities and\nExchange Board of India (Substantial Acquisition of Shares and Takeovers)\nRegulations, 2011;\n(b) \"independent director\" means a non-executive director, other than a nominee\ndirector of the listed entity:\n(i) who, in the opinion of the board of directors, is a person of integrity and\npossesses relevant expertise and experience;\n(ii) who is or was not a promoter of the listed entity or its holding, subsidiary\nor associate company 121[or member of the promoter group of the listed\nentity];\n(iii) who is not related to promoters or directors in the listed entity, its holding,\nsubsidiary or associate company;\n(iv) who, apart from receiving director's remuneration, has or had no material\npecuniary relationship with the listed entity, its holding, subsidiary or\nassociate company, or their promoters, or directors, during the 122[three]\nimmediately preceding financial years or during the current financial year;\n(v) none of whose relatives—\n123[ (A) is holding securities of or interest in the listed entity, its\nholding, subsidiary or associate company during the three immediately\npreceding financial years or during the current financial year of face\nvalue in excess of fifty lakh rupees or two percent of the paid-up capital\nof the listed entity, its holding, subsidiary or associate company,\nrespectively, or such higher sum as may be specified;\n(B) is indebted to the listed entity, its holding, subsidiary or associate\ncompany or their promoters or directors, in excess of such amount as\nmay be specified during the three immediately preceding financial\nyears or during the current financial year;\n(C) has given a guarantee or provided any security in connection with\nthe indebtedness of any third person to the listed entity, its holding,\nsubsidiary or associate company or their promoters or directors, for\nsuch amount as may be specified during the three immediately\npreceding financial years or during the current financial year; or\n(D) has any other pecuniary transaction or relationship with the listed\nentity, its holding, subsidiary or associate company amounting to two\npercent or more of its gross turnover or total income:\nProvided that the pecuniary relationship or transaction with the listed\nentity, its holding, subsidiary or associate company or their promoters,\nor directors in relation to points (A) to (D) above shall not exceed two\npercent of its gross turnover or total income or fifty lakh rupees or such\nhigher amount as may be specified from time to time, whichever is\nlower.]\n(vi) who, neither himself 124[“/herself], nor whose relative(s) —\n(A) holds or has held the position of a key managerial personnel or is or\nhas been an employee of the listed entity or its holding, subsidiary or\nassociate company 125[or any company belonging to the promoter\ngroup of the listed entity,] in any of the three financial years\nimmediately preceding the financial year in which he is proposed to\nbe appointed:\n126[Provided that in case of a relative, who is an employee other than\nkey managerial personnel, the restriction under this clause shall not\napply for his / her employment.]\n(B) is or has been an employee or proprietor or a partner, in any of the\nthree financial years immediately preceding the financial year in\nwhich he is proposed to be appointed, of —\n(1) a firm of auditors or company secretaries in practice or cost\nauditors of the listed entity or its holding, subsidiary or associate\ncompany; or\n(2) any legal or a consulting firm that has or had any transaction with\nthe listed entity, its holding, subsidiary or associate company\namounting to ten per cent or more of the gross turnover of such\nfirm;\n(C) holds together with his relatives two per cent or more of the total\nvoting power of the listed entity; or\n(D) is a chief executive or director, by whatever name called, of any non-\nprofit organisation that receives twenty-five per cent or more of its\nreceipts or corpus from the listed entity, any of its promoters, directors\nor its holding, subsidiary or associate company or that holds two per\ncent or more of the total voting power of the listed entity;\n(E) is a material supplier, service provider or customer or a lessor or lessee\nof the listed entity;\n(vii) who is not less than 21 years of age.\n127[(viii) who is not a non-independent director of another company on the\nboard of which any non-independent director of the listed entity is an\nindependent director:]\n128[Explanation- In case of a ‘high value debt listed entity’:\n(a) which is a body corporate, mandated to constitute its board of directors\nin a specific manner in accordance with the law under which it is\nestablished, the non- executive directors on its board shall be treated as\nindependent directors;\n(b) which is a Trust, mandated to constitute its ‘board of trustees’ in\naccordance with the law under which it is established, the non-employee\ntrustees on its board shall be treated as independent directors.]\n(c) “material subsidiary” shall mean a subsidiary, whose 129[turnover] or net worth\nexceeds 130[ten] percent of the consolidated 131[turnover] or net worth\nrespectively, of the listed entity and its subsidiaries in the immediately\npreceding accounting year.\nExplanation.- The listed entity shall formulate a policy for determining ‘material’\nsubsidiary.\n132[(d) “senior management” shall mean the officers and personnel of the listed entity\nwho are members of its core management team, excluding the Board of Directors, and\nshall also comprise all the members of the management one level below the Chief\nExecutive Officer or Managing Director or Whole Time Director or Manager\n(including Chief Executive Officer and Manager, in case they are not part of the Board\nof Directors) and shall specifically include the functional heads, by whatever name\ncalled and the 133[persons identified and designated as key managerial personnel, other\nthan the board of directors, by the listed entity].]",
+ "footnotes": [
+  {
+   "number": "121",
+   "page": 25,
+   "placed_by": "marker",
+   "text": "121 Inserted by the SEBI (Listing Obligations and Disclosure Requirements) (Amendment) Regulations, 2018,\nw.e.f. 1.10.2018."
+  },
+  {
+   "number": "122",
+   "page": 25,
+   "placed_by": "marker",
+   "text": "122 Substituted by the SEBI (Listing Obligations and Disclosure Requirements) (Third Amendment) Regulations,\n2021 read with the corrigendum, w.e.f. 1.1.2022 for the word “two”."
+  },
+  {
+   "number": "123",
+   "page": 26,
+   "placed_by": "marker",
+   "text": "123 Substituted by the SEBI (Listing Obligations and Disclosure Requirements) (Third Amendment) Regulations,\n2021 read with the corrigendum, w.e.f. 1.1.2022 for the following:\n“has or had pecuniary relationship or transaction with the listed entity, its holding, subsidiary\nor associate company, or their promoters, or directors, amounting to two per cent. or more of\nits gross turnover or total income or fifty lakh rupees or such higher amount as may be\nprescribed from time to time, whichever is lower, during the two immediately preceding\nfinancial years or during the current financial year”."
+  },
+  {
+   "number": "124",
+   "page": 26,
+   "placed_by": "marker",
+   "text": "124 Inserted by the SEBI (Listing Obligations and Disclosure Requirements) (Third Amendment) Regulations,\n2021 read with the corrigendum, w.e.f. 1.1.2022."
+  },
+  {
+   "number": "125",
+   "page": 26,
+   "placed_by": "marker",
+   "text": "125 Inserted by the SEBI (Listing Obligations and Disclosure Requirements) (Third Amendment) Regulations,\n2021 read with the corrigendum, w.e.f. 1.1.2022."
+  },
+  {
+   "number": "126",
+   "page": 26,
+   "placed_by": "marker",
+   "text": "126 Inserted by the SEBI (Listing Obligations and Disclosure Requirements) (Third Amendment) Regulations,\n2021 read with the corrigendum, w.e.f. 1.1.2022."
+  },
+  {
+   "number": "127",
+   "page": 27,
+   "placed_by": "marker",
+   "text": "127 Inserted by the SEBI (Listing Obligations and Disclosure Requirements) (Amendment) Regulations, 2018,\nw.e.f. 1.10.2018."
+  },
+  {
+   "number": "128",
+   "page": 27,
+   "placed_by": "marker",
+   "text": "128 Inserted by the SEBI (Listing Obligations and Disclosure Requirements) (Fifth Amendment) Regulations,\n2021 w.e.f. 7.9.2021."
+  },
+  {
+   "number": "129",
+   "page": 27,
+   "placed_by": "marker",
+   "text": "129 Substituted for the word “income” by the Securities and Exchange Board of India (Listing Obligations and\nDisclosure Requirements) (Third Amendment) Regulations, 2024 w.e.f. 13.12.2024"
+  },
+  {
+   "number": "130",
+   "page": 27,
+   "placed_by": "marker",
+   "text": "130 Substituted ibid for the word “twenty”, w.e.f. 1.4.2019."
+  },
+  {
+   "number": "131",
+   "page": 27,
+   "placed_by": "marker",
+   "text": "131 Substituted for the word “income” by the Securities and Exchange Board of India (Listing Obligations and\nDisclosure Requirements) (Third Amendment) Regulations, 2024 w.e.f. 13.12.2024"
+  },
+  {
+   "number": "132",
+   "page": 27,
+   "placed_by": "marker",
+   "text": "132 Substituted by the SEBI (Listing Obligations and Disclosure Requirements) (Amendment) Regulations, 2023\nw.e.f. 17.1.2023. Prior to the substitution, the clause read as follows:\n““senior management” shall mean officers/personnel of the listed entity who are members of its core\nmanagement team excluding board of directors and normally this shall comprise all members of\nmanagement one level below the 132[“chief executive officer/managing director/whole time\ndirector/manager (including chief executive officer/manager, in case they are not part of the board) and\nshall specifically include company secretary and chief financial officer.]”"
+  },
+  {
+   "number": "133",
+   "page": 28,
+   "placed_by": "marker",
+   "text": "133 Substituted for the words “Company Secretary and the Chief Financial Officer” by the Securities and\nExchange Board of India (Listing Obligations and Disclosure Requirements) (Third Amendment) Regulations,\n2024 w.e.f. 13.12.2024"
+  }
+ ],
+ "page_start": 25,
+ "page_end": 28,
+ "sha256": "0e606cef07bfa999f74eb51e5b81ec4f0172edfcf3b656ce89a393e4282956ea",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

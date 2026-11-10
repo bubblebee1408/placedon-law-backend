@@ -1,0 +1,81 @@
+{
+ "section_id": "R7",
+ "ref": "RULE:SEBI_LODR_2015:R7",
+ "kind": "regulation",
+ "number": "7",
+ "heading": "Registrar to an Issue and Share Transfer Agent",
+ "heading_raw": "60[Registrar to an Issue and Share Transfer Agent].",
+ "chapter": {
+  "number": "III",
+  "title": "COMMON OBLIGATIONS OF LISTED ENTITIES"
+ },
+ "omitted": false,
+ "content": "7. (1) The listed entity shall appoint a 61[registrar to an issue and share transfer agent] or\nmanage the share transfer facility in-house:\nProvided that, in the case of in-house share transfer facility, as and when the total number of\nholders of securities of the listed entity exceeds one lakh, the listed entity shall either register\nwith the Board as a 62[Registrar to an issue and share transfer agent] or appoint Registrar to\nan issue and share transfer agent registered with the Board.\n(2) The listed entity shall ensure that all activities in relation to 63[***]share transfer facility\nare maintained either in house or by Registrar to an issue and share transfer agent registered\nwith the Board.\n(3) 64[***]\n(4) In case of any change or appointment of a new 65[registrar to an issue and share transfer\nagent], the listed entity shall enter into a tripartite agreement between the existing 66[registrar\nto an issue and share transfer agent], the new 67[registrar to an issue and share transfer agent]\nand the listed entity, in the manner as specified by the Board from time to time:\nProvided that in case the existing share transfer facility is managed in-house, the agreement\nreferred above shall be entered into between the listed entity and the new 68[registrar to an\nissue and share transfer agent].\n(5) The listed entity shall intimate such appointment, referred to in sub-regulation (4), to the\nstock exchange(s) within seven days of entering into the agreement.\n(6) The agreement referred to in sub-regulation (4) shall be placed in the subsequent meeting\nof the board of directors:\nProvided that the requirements of this regulation shall not be applicable to the units issued by\nmutual funds that are listed on recognised stock exchange(s).",
+ "footnotes": [
+  {
+   "number": "60",
+   "page": 17,
+   "placed_by": "marker",
+   "text": "60 Substituted for “Share Transfer Agent” by the SEBI (Listing Obligations and Disclosure Requirements) (Sixth\nAmendment) Regulations, 2025 w.e.f. 16.12.2025."
+  },
+  {
+   "number": "61",
+   "page": 17,
+   "placed_by": "marker",
+   "text": "61 ibid."
+  },
+  {
+   "number": "62",
+   "page": 17,
+   "placed_by": "marker",
+   "text": "62 Substituted for “Category II share transfer agent” by the SEBI (Listing Obligations and Disclosure\nRequirements) (Sixth Amendment) Regulations, 2025 w.e.f. 16.12.2025."
+  },
+  {
+   "number": "63",
+   "page": 17,
+   "placed_by": "marker",
+   "text": "63 The words “both physical and electronic” omitted by SEBI (Listing Obligations and Disclosure Requirements)\n(Fourth Amendment) Regulations, 2018, w.e.f. 08.06.2018."
+  },
+  {
+   "number": "64",
+   "page": 17,
+   "placed_by": "marker",
+   "text": "64 Omitted by the Securities and Exchange Board of India (Listing Obligations and Disclosure Requirements)\n(Third Amendment) Regulations, 2024 w.e.f. 13.12.2024. Prior to the omission, the sub-regulation read as\nunder-\n“(3) The listed entity shall submit a compliance certificate to the exchange, duly signed by both the\ncompliance officer of the listed entity and the authorised representative of the share transfer agent,\nwherever applicable, within [thirty days from the] end of [***] the financial year, certifying\ncompliance with the requirements of sub- regulation (2).”"
+  },
+  {
+   "number": "65",
+   "page": 18,
+   "placed_by": "marker",
+   "text": "65 Substituted for “share transfer agent” by the SEBI (Listing Obligations and Disclosure Requirements) (Sixth\nAmendment) Regulations, 2025 w.e.f. 16.12.2025."
+  },
+  {
+   "number": "66",
+   "page": 18,
+   "placed_by": "marker",
+   "text": "66 ibid."
+  },
+  {
+   "number": "67",
+   "page": 18,
+   "placed_by": "marker",
+   "text": "67 ibid."
+  },
+  {
+   "number": "68",
+   "page": 18,
+   "placed_by": "marker",
+   "text": "68 ibid."
+  }
+ ],
+ "page_start": 17,
+ "page_end": 18,
+ "sha256": "f922045816f01a7edab7b174a57ecbcaf6ddf2d95169849838152d1fb5b13e3a",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

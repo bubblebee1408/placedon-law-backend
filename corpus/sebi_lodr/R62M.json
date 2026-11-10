@@ -1,0 +1,39 @@
+{
+ "section_id": "R62M",
+ "ref": "RULE:SEBI_LODR_2015:R62M",
+ "kind": "regulation",
+ "number": "62M",
+ "heading": "Secretarial Audit and Secretarial Compliance Report",
+ "heading_raw": "Secretarial Audit and Secretarial Compliance Report.",
+ "chapter": {
+  "number": "VA",
+  "title": "CORPORATE GOVERNANCE NORMS FOR A LISTED ENTITY WHICH HAS LISTED ITS NON-CONVERTIBLE DEBT SECURITIES"
+ },
+ "omitted": false,
+ "content": "62M. (1) Every HVDLE and its material unlisted subsidiaries incorporated in India\nshall undertake secretarial audit 609[as per regulation 24A].\n(2) 610[***]",
+ "footnotes": [
+  {
+   "number": "609",
+   "page": 125,
+   "placed_by": "marker",
+   "text": "609 Substituted for the words and symbols “and shall annex a secretarial audit report given by a company secretary\nin practice, in such form as specified by the Board, with the annual report of the listed entity” vide the Securities\nand Exchange Board of India (Listing Obligations and Disclosure Requirements) (Amendment) Regulations,\n2026 w.e.f. 22.1.2026."
+  },
+  {
+   "number": "610",
+   "page": 125,
+   "placed_by": "marker",
+   "text": "610 Omitted vide the Securities and Exchange Board of India (Listing Obligations and Disclosure Requirements)\n(Amendment) Regulations, 2026 w.e.f. 22.1.2026. Prior to its omission, sub-regulation (2) read as under:\n“(2) “Every HVDLE shall submit a secretarial compliance report in such form as specified by the Board, to\nstock exchanges, within sixty days from end of each financial year.”"
+  }
+ ],
+ "page_start": 125,
+ "page_end": 125,
+ "sha256": "754bfb32eb6f31bede3c8585e49921031c8b757afe6e565e215723b3f7772685",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

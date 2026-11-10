@@ -1,0 +1,26 @@
+{
+ "section_id": "R86",
+ "ref": "RULE:SEBI_LODR_2015:R86",
+ "kind": "regulation",
+ "number": "86",
+ "heading": "Terms of Securitized Debt Instruments",
+ "heading_raw": "Terms of Securitized Debt Instruments.",
+ "chapter": {
+  "number": "VIII",
+  "title": "OBLIGATIONS OF LISTED ENTITY WHICH HAS LISTED ITS SECURITISED DEBT INSTRUMENTS"
+ },
+ "omitted": false,
+ "content": "86. (1) The listed entity shall ensure that no material modification shall be made to the\nstructure of the securitized debt instruments in terms of coupon, conversion,\nredemption, or otherwise without prior approval of the recognised stock exchange(s)\nwhere the securitized debt instruments are listed and the listed entity shall make an\napplication to the recognised stock exchange(s) only after the approval by Trustees.\n(2) The listed entity shall ensure timely interest/ redemption payment.\n(3) The listed entity shall ensure that where credit enhancement has been provided for, it shall\nmake credit enhancement available for listed securitized debt instruments at all times.\n(4) The listed entity shall not forfeit unclaimed interest and principal and such unclaimed\ninterest and principal shall be, after a period of seven years, transferred to the Investor\nProtection and Education Fund established under the Securities and Exchange Board of\nIndia (Investor Protection and Education Fund) Regulations, 2009.\n(5) Unless the terms of issue provide otherwise, the listed entity shall not select any of its listed\nsecuritized debt instruments for redemption otherwise than on pro rata basis or by lot and\nshall promptly submit to the recognised stock exchange(s) the details thereof.\n(6) The listed entity shall remain listed till the maturity or redemption of securitised debt\ninstruments or till the same are delisted as per the procedure laid down by the Board\nProvided that the provisions of this sub-regulation shall not restrict the right of the\nrecognised stock exchange(s) to delist, suspend or remove the securities at any time and\nfor any reason which the recognised stock exchange(s) considers proper in accordance\nwith the applicable legal provisions.",
+ "footnotes": [],
+ "page_start": 143,
+ "page_end": 144,
+ "sha256": "837e4339fcb6c7c526295a6569cf8c8042f18f7c3c8849b9521a33482cbbc1a5",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

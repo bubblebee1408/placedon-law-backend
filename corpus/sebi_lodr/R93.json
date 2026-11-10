@@ -1,0 +1,26 @@
+{
+ "section_id": "R93",
+ "ref": "RULE:SEBI_LODR_2015:R93",
+ "kind": "regulation",
+ "number": "93",
+ "heading": "Transferability",
+ "heading_raw": "Transferability.",
+ "chapter": {
+  "number": "X",
+  "title": "DUTIES AND OBLIGATIONS OF THE RECOGNISED STOCK EXCHANGE(S)"
+ },
+ "omitted": false,
+ "content": "93. The recognised stock exchange(s) shall coordinate with Depositories to ensure\ncompliance with the applicable laws or directions of the Board or any competent court\nwith regard to freezing / unfreezing, lock-in/ release of lock-in with respect to securities\nissued or managed by the listed entity.",
+ "footnotes": [],
+ "page_start": 151,
+ "page_end": 151,
+ "sha256": "796f74e10369f80f055fbc1b7d31aa96447a4f8897a7d6e3ad1b45daf2f9e2af",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

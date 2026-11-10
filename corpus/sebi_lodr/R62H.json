@@ -1,0 +1,33 @@
+{
+ "section_id": "R62H",
+ "ref": "RULE:SEBI_LODR_2015:R62H",
+ "kind": "regulation",
+ "number": "62H",
+ "heading": "Stakeholders Relationship Committee",
+ "heading_raw": "Stakeholders Relationship Committee.",
+ "chapter": {
+  "number": "VA",
+  "title": "CORPORATE GOVERNANCE NORMS FOR A LISTED ENTITY WHICH HAS LISTED ITS NON-CONVERTIBLE DEBT SECURITIES"
+ },
+ "omitted": false,
+ "content": "62H. (1) The board of directors shall ensure that the functions of the stakeholders\nrelationship committee as specified in Part D of the Schedule II are discharged by the\nboard of directors or a Stakeholders Relationship Committee is constituted to\ndischarge such functions.\n(2) The chairperson of stakeholders relationship committee shall be a non-executive\ndirector.\n(3) At least three directors, with at least one being an independent director, shall be\nmembers of the stakeholders relationship committee.\n(4) The chairperson of stakeholders relationship committee shall be present at the\nannual general meetings to answer queries of the debenture holders.\n(5) The stakeholders relationship committee shall meet at least once in a 593[financial]\nyear.",
+ "footnotes": [
+  {
+   "number": "593",
+   "page": 121,
+   "placed_by": "marker",
+   "text": "593 ibid"
+  }
+ ],
+ "page_start": 120,
+ "page_end": 121,
+ "sha256": "adf048bc1ea34a0d56f7609833f135ba4d9c3d666c32e0ab9395522db7875709",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

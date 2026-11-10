@@ -1,0 +1,26 @@
+{
+ "section_id": "R74",
+ "ref": "RULE:SEBI_LODR_2015:R74",
+ "kind": "regulation",
+ "number": "74",
+ "heading": "Equitable Treatment to IDR Holders",
+ "heading_raw": "Equitable Treatment to IDR Holders.",
+ "chapter": {
+  "number": "VII",
+  "title": "OBLIGATIONS OF LISTED ENTITY WHICH HAS LISTED ITS INDIAN DEPOSITORY RECEIPTS"
+ },
+ "omitted": false,
+ "content": "74. (1)If the listed entity's equity shares or other securities representing equity shares are\nalso listed on the stock exchange(s) in countries other than its home country, it shall\nensure that IDR Holders are treated in a manner equitable with security holders in home\ncountry.\n(2) The listed entity shall ensure that for all corporate actions, except those which are not\npermitted by Indian laws, it shall treat IDR holders in a manner equitable with security\nholders in the home country.\n(3) In case of take-over or delisting or buy-back of its equity shares, the listed entity shall,\nwhile following the laws applicable in its home country, give equitable treatment to IDR\nholders vis-à-vis security holder in home country.\n(4) The listed entity shall ensure protection of interests of IDR holders particularly with\nrespect to all corporate benefits permissible under Indian laws and the laws of its home\ncountry and shall address all investor grievances adequately.",
+ "footnotes": [],
+ "page_start": 140,
+ "page_end": 140,
+ "sha256": "612f757d88c8fcade3d2320ff15a655362ee221f40c001be670cf9d5f26f9f88",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

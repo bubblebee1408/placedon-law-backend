@@ -1,0 +1,26 @@
+{
+ "section_id": "R72",
+ "ref": "RULE:SEBI_LODR_2015:R72",
+ "kind": "regulation",
+ "number": "72",
+ "heading": "Corporate Governance",
+ "heading_raw": "Corporate Governance.",
+ "chapter": {
+  "number": "VII",
+  "title": "OBLIGATIONS OF LISTED ENTITY WHICH HAS LISTED ITS INDIAN DEPOSITORY RECEIPTS"
+ },
+ "omitted": false,
+ "content": "72. (1) The listed entity shall comply with the corporate governance provisions as\napplicable in its home country and other jurisdictions in which its equity shares are\nlisted.\n(2) The listed entity shall submit to stock exchange a comparative analysis of the corporate\ngovernance provisions that are applicable in its home country and in the other jurisdictions\nin which its equity shares are listed along with the compliance of the same vis-à-vis the\ncorporate governance requirements applicable under regulation 17 to regulation 27, to other\nlisted entities.",
+ "footnotes": [],
+ "page_start": 139,
+ "page_end": 140,
+ "sha256": "2f9aec017a7494bc1f95ca06e53d5e57208b7e7b55536b4639a3d9faf5db5e6a",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

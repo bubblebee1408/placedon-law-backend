@@ -1,0 +1,26 @@
+{
+ "section_id": "R62B",
+ "ref": "RULE:SEBI_LODR_2015:R62B",
+ "kind": "regulation",
+ "number": "62B",
+ "heading": "Definitions",
+ "heading_raw": "Definitions",
+ "chapter": {
+  "number": "VA",
+  "title": "CORPORATE GOVERNANCE NORMS FOR A LISTED ENTITY WHICH HAS LISTED ITS NON-CONVERTIBLE DEBT SECURITIES"
+ },
+ "omitted": false,
+ "content": "62B. (1) For the purpose of this chapter, unless the context otherwise requires-\n(a) “control” shall have the same meaning as assigned to it under the\nSecurities and Exchange Board of India (Substantial Acquisition of Shares\nand Takeovers) Regulations, 2011; and\n(b) “independent director” shall have the same meaning as assigned to it\nunder clause (b) of sub-regulation (1) of regulation 16 of these regulations:\nProvided that in case of a listed entity which is a body corporate, mandated\nto constitute its board of directors in the manner specified under the law\nunder which it is established or is an entity set up under the public private\npartnership model/structure, the non- executive directors, other than a\nnominee director of such entity on its board of directors, shall be treated\nas independent directors.\n(c) “public private partnership” shall mean a public-private partnership\nbetween a public concessioning authority and a private special purpose\nvehicle concessionaire selected on the basis of open competitive bidding\nor on the basis of an Memorandum of Understanding with the relevant\nauthorities.\n(d) “senior management” shall have the same meaning as assigned to it\nunder clause (d) of sub-regulation (1) of regulation 16 of these regulations.",
+ "footnotes": [],
+ "page_start": 112,
+ "page_end": 112,
+ "sha256": "a41c78bcdf252d6e2eb9eb74e4f3321c8704d6e068bebf45f8031f63023bb1e7",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

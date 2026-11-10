@@ -1,0 +1,51 @@
+{
+ "section_id": "R102",
+ "ref": "RULE:SEBI_LODR_2015:R102",
+ "kind": "regulation",
+ "number": "102",
+ "heading": "Power to relax strict enforcement of the regulations",
+ "heading_raw": "Power to relax strict enforcement of the regulations.",
+ "chapter": {
+  "number": "XII",
+  "title": "MISCELLANEOUS"
+ },
+ "omitted": false,
+ "content": "102. [(1)]650 The Board may in the interest of investors and securities market and for the\ndevelopment of the securities market, relax the strict enforcement of any requirement of\nthese regulations, if the Board is satisfied that:\n(a) any provision of Act(s), Rule(s), regulation(s) under which the listed entity is\nestablished or is governed by, is required to be given precedence to; or\n(b) the requirement may cause undue hardship to investors; or\n(c) the disclosure requirement is not relevant for a particular industry or class of listed\nentities; or\n(d) the requirement is technical in nature; or\n(e) the non-compliance is caused due to factors affecting a class of entities but being\nbeyond the control of the entities.\n651[(1A) The Board may after due consideration of the interest of the investors and the\nsecurities market and for the development of the securities market, relax the strict\nenforcement of any of the requirements of these regulations, if an application is made\nby the Central Government in relation to its strategic disinvestment in a listed entity.]\n652[(2) For seeking relaxation under sub-regulation (1), an application, giving details and\nthe grounds on which such relaxation has been sought, shall be filed with the Board.\n653[(3)The application referred to under sub-regulation (2) shall be accompanied by a non-\nrefundable fee of rupees one lakh payable by way of direct credit into the bank account\nthrough NEFT/ RTGS/ IMPS or online payment using the SEBI Payment Gateway or any\nother mode as may be specified by the Board from time to time.]",
+ "footnotes": [
+  {
+   "number": "650",
+   "page": 156,
+   "placed_by": "marker",
+   "text": "650 Inserted by SEBI (Listing Obligations and Disclosure Requirements) (Sixth Amendment) Regulations, 2018,\nw.e.f. 16.11.2018"
+  },
+  {
+   "number": "651",
+   "page": 156,
+   "placed_by": "marker",
+   "text": "651 Inserted by SEBI (Listing Obligations and Disclosure Requirements) (Seventh Amendment) Regulations,\n2022, w.e.f. 5.12.2022"
+  },
+  {
+   "number": "652",
+   "page": 156,
+   "placed_by": "marker",
+   "text": "652 Inserted by SEBI (Listing Obligations and Disclosure Requirements) (Sixth Amendment) Regulations, 2018,\nw.e.f. 16.11.2018"
+  },
+  {
+   "number": "653",
+   "page": 156,
+   "placed_by": "marker",
+   "text": "653 Substituted by the Securities and Exchange Board of India (Payment of Fees and Mode of Payment)\n(Amendment) Regulations, 2023 w.e.f 01.04.2023. Prior to its substitution, sub-regulation (3) read as follows:\n*[(3) The application referred to under sub-regulation (2) shall be accompanied by a non-refundable fee of rupees\none lakh payable by way of direct credit in the bank account through NEFT/ RTGS/ IMPS or any other mode\nallowed by Reserve Bank of India or by way of a demand draft in favour of the Board payable in Mumbai.]\n*[ Inserted by the SEBI (Listing Obligations and Disclosure Requirements) (Sixth Amendment) Regulations,\n2018, w.e.f. 16.11.2018]"
+  }
+ ],
+ "page_start": 156,
+ "page_end": 157,
+ "sha256": "1e1157883d2d1cd3d9b912fcb2f923905017da2b0f005ac25103b86feda860bd",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

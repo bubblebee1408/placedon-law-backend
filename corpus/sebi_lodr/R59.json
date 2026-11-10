@@ -1,0 +1,57 @@
+{
+ "section_id": "R59",
+ "ref": "RULE:SEBI_LODR_2015:R59",
+ "kind": "regulation",
+ "number": "59",
+ "heading": "Structure of non convertible debt securities and non convertible redeemable preference shares",
+ "heading_raw": "Structure of non convertible debt securities and non convertible redeemable preference shares.",
+ "chapter": {
+  "number": "V",
+  "title": "OBLIGATIONS OF LISTED ENTITY WHICH HAS LISTED ITS NON- CONVERTIBLE 459[***] SECURITIES 460[***]"
+ },
+ "omitted": false,
+ "content": "59. (1) The listed entity shall not make material modification without prior approval of the\nstock exchange(s) where the non convertible debt securities or non-convertible\nredeemable preference shares, as applicable, are listed, to :\n(a) the structure of the 541[non-convertible debt securities] debenture in terms of\ncoupon, 542[***] redemption, or otherwise.\n(b) the structure of the non-convertible redeemable preference shares in terms of\ndividend 543[***], redemption, or otherwise.\n(2) The approval of the stock exchange referred to in sub-regulation (1) shall be made only\nafter:\n(a) approval of the board of directors and the debenture trustee 544[***] and\n(b) 545[obtaining consent in writing of the holders of not less than three-fourths, by\nvalue of holders of that class of securities:\nProvided that the listed entity shall provide the facility of remote e-voting to\nfacilitate such consent.]",
+ "footnotes": [
+  {
+   "number": "541",
+   "page": 106,
+   "placed_by": "marker",
+   "text": "541 Substituted for “debenture” by the SEBI (Listing Obligations and Disclosure Requirements) (Fifth\nAmendment) Regulations, 2021 w.e.f. 7.9.2021."
+  },
+  {
+   "number": "542",
+   "page": 106,
+   "placed_by": "marker",
+   "text": "542 The word and symbol “conversion,” omitted by the SEBI (Listing Obligations and Disclosure Requirements)\n(Fifth Amendment) Regulations, 2021 w.e.f. 7.9.2021."
+  },
+  {
+   "number": "543",
+   "page": 106,
+   "placed_by": "marker",
+   "text": "543 The words and symbol “of non-convertible preference shares payable, conversion” omitted by the SEBI\n(Listing Obligations and Disclosure Requirements) (Fifth Amendment) Regulations, 2021 w.e.f. 7.9.2021."
+  },
+  {
+   "number": "544",
+   "page": 106,
+   "placed_by": "marker",
+   "text": "544 The words “in case of non-convertible debt securities” omitted by the SEBI (Listing Obligations and\nDisclosure Requirements) (Fifth Amendment) Regulations, 2021 w.e.f. 7.9.2021."
+  },
+  {
+   "number": "545",
+   "page": 106,
+   "placed_by": "marker",
+   "text": "545 Substituted by the SEBI (Listing Obligations and Disclosure Requirements) (Fifth Amendment) Regulations,\n2021 w.e.f. 7.9.2021. Before substitution, clause (b) read as follows:\n“(b) after complying with the provisions of Companies Act, 2013 including approval of the consent of\nrequisite majority of holders of that class of securities.”"
+  }
+ ],
+ "page_start": 105,
+ "page_end": 106,
+ "sha256": "fcaf30641c9b29467517a89f31881d24faeb32bbfb7d450dce22d25642c98381",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

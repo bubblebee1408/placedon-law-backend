@@ -1,0 +1,26 @@
+{
+ "section_id": "R73",
+ "ref": "RULE:SEBI_LODR_2015:R73",
+ "kind": "regulation",
+ "number": "73",
+ "heading": "Documents and Information to IDR Holder",
+ "heading_raw": "Documents and Information to IDR Holder.",
+ "chapter": {
+  "number": "VII",
+  "title": "OBLIGATIONS OF LISTED ENTITY WHICH HAS LISTED ITS INDIAN DEPOSITORY RECEIPTS"
+ },
+ "omitted": false,
+ "content": "73. The listed entity shall disclose/send the following documents to IDR Holders, at the\nsame time and to the extent that it discloses to security holders in its home country or\nin other jurisdictions where its securities are listed:\n(a) Soft copies of the annual report to all the IDR holders who have registered their\nemail address(es) for the purpose\n(b) Hard copy of the annual report to those IDR holders who request for the same either\nthrough domestic depository or Compliance Officer\n(c) the pre and post arrangement capital structure and share holding pattern in case of\nany corporate restructuring like mergers / amalgamations and other schemes",
+ "footnotes": [],
+ "page_start": 140,
+ "page_end": 140,
+ "sha256": "0132ab9acc9d0e7c1d1578645922b9848665f835b95577f83cda7c2d649e505c",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

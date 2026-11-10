@@ -1,0 +1,51 @@
+{
+ "section_id": "R53",
+ "ref": "RULE:SEBI_LODR_2015:R53",
+ "kind": "regulation",
+ "number": "53",
+ "heading": "Annual Report",
+ "heading_raw": "Annual Report.",
+ "chapter": {
+  "number": "V",
+  "title": "OBLIGATIONS OF LISTED ENTITY WHICH HAS LISTED ITS NON- CONVERTIBLE 459[***] SECURITIES 460[***]"
+ },
+ "omitted": false,
+ "content": "53. 512[(1)]The annual report of the listed entity shall contain disclosures as specified in\nCompanies Act, 2013 513[or the statute under which such listed entity is constituted,]\nalong with the following:\n(a) audited financial statements i.e. balance sheets, profit and loss accounts etc [, and\nStatement on Impact of Audit Qualifications as stipulated in regulation 52(3)(a), if\napplicable;]514\n(b) cash flow statement presented only under the indirect method as prescribed in\nAccounting Standard-3/ Indian Accounting Standard 7, mandated under Section\n133 of the Companies Act, 2013 read with relevant rules framed thereunder or by\nthe Institute of Chartered Accountants of India, whichever is applicable;\n(c) auditors report;\n(d) directors report;\n(e) name of the debenture trustees with full contact details ;\n(f) related party disclosures as specified in Para A of Schedule V.\n515[(2) The listed entity shall submit to the stock exchange and the debenture trustee and\npublish on its website-\n(a) a copy of the annual report, on or before the date of dispatch of the same to its\nshareholders or the date of submission to the Central Government or the State\nGovernment, as the case may be; and\n(b) in the event of any changes to the annual report, the revised copy along with the\ndetails and explanation for the changes, within 48 hours after the annual general\nmeeting or on or before the date of dispatch of the same to its shareholders or the date\nof submission to the Central Government or the State Government, as the case may\nbe.]",
+ "footnotes": [
+  {
+   "number": "512",
+   "page": 101,
+   "placed_by": "marker",
+   "text": "512 Numbered as sub-regulation (1) by the SEBI (Listing Obligations and Disclosure Requirements) (Fifth\nAmendment) Regulations, 2021 w.e.f. 7.9.2021."
+  },
+  {
+   "number": "513",
+   "page": 101,
+   "placed_by": "marker",
+   "text": "513 Inserted by the Securities and Exchange Board of India (Listing Obligations and Disclosure Requirements)\n(Fifth Amendment) Regulations, 2025 w.e.f. 19.11.2025."
+  },
+  {
+   "number": "514",
+   "page": 101,
+   "placed_by": "marker",
+   "text": "514 Substituted for the symbol ‘;’ by SEBI (Listing Obligations and Disclosure Requirements) (Amendment)\nRegulations, 2016, w.e.f. 01.04.2016"
+  },
+  {
+   "number": "515",
+   "page": 101,
+   "placed_by": "marker",
+   "text": "515 Substituted by the Securities and Exchange Board of India (Listing Obligations and Disclosure Requirements)\n(Fifth Amendment) Regulations, 2025 w.e.f. 19.11.2025. Prior to the substitution, the sub-regulation read as\nunder-\n“(2) The listed entity shall submit to the stock exchange and the debenture trustee and publish on its\nwebsite-\n(a) a copy of the annual report sent to the shareholders along with the notice of the annual general\nmeeting, not later than the date of commencement of dispatch to its shareholders; and\n(b) in the event of any changes to the annual report, the revised copy along with the details and\nexplanation for the changes, not later than 48 hours after the annual general meeting.”"
+  }
+ ],
+ "page_start": 101,
+ "page_end": 102,
+ "sha256": "b899e4ba4cfaa18deecb99df9ea371a654ea2d80eebf9bd3d1863f1add2f21d0",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

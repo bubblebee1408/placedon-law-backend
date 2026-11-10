@@ -1,0 +1,26 @@
+{
+ "section_id": "R89",
+ "ref": "RULE:SEBI_LODR_2015:R89",
+ "kind": "regulation",
+ "number": "89",
+ "heading": "Definitions",
+ "heading_raw": "Definitions.",
+ "chapter": {
+  "number": "IX",
+  "title": "OBLIGATIONS OF LISTED ENTITY WHICH HAS LISTED ITS MUTUAL FUND UNITS"
+ },
+ "omitted": false,
+ "content": "89. The expressions \"Asset Management Company\", \"Net Asset Value\", \"Scheme\" , \"Unit\"\nand \"Unit Holder\" shall have the same meaning as assigned to them under Securities\nand Exchange Board of India (Mutual Funds) Regulations, 1996;",
+ "footnotes": [],
+ "page_start": 147,
+ "page_end": 147,
+ "sha256": "179ff861781c3196a8e00ccd398862e59710418f94d818899361f8a6d801ce6a",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

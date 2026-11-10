@@ -1,0 +1,26 @@
+{
+ "section_id": "R64F",
+ "ref": "RULE:SEBI_LODR_2015:R64F",
+ "kind": "regulation",
+ "number": "64F",
+ "heading": "Failure of delisting proposal",
+ "heading_raw": "Failure of delisting proposal.",
+ "chapter": {
+  "number": "VIA",
+  "title": "FRAMEWORK FOR VOLUNTARY DELISTING OF NON-CONVERTIBLE DEBT SECURITIES OR NON-CONVERTBLE REDEEMABLE PREFERENCE SHARES AND OBLIGATIONS OF THE LISTED ENTITY ON SUCH DELISTING"
+ },
+ "omitted": false,
+ "content": "64F. Failure of delisting proposal.\n(1) The delisting proposal shall be deemed to have failed under any of the following\ncircumstances:\n(a) non-receipt of in-principle approval from any of the stock exchanges; or\n(b) non-receipt of requisite approval from the holders of non-convertible debt\nsecurities or non-convertible redeemable preference shares; or\n(c) non-receipt of No-Objection Letter from the debenture trustee in case of\nproposal for delisting of non-convertible debt securities.\n(2) In case of failure of the delisting proposal, the listed entity shall intimate the same\nto the stock exchanges within one working day from the date of event of failure as\nspecified in sub-regulation (1).",
+ "footnotes": [],
+ "page_start": 136,
+ "page_end": 136,
+ "sha256": "cb22e0341e474edf06959510b33e9689c0fd7129deedce85b2a029cbf6ae69ec",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

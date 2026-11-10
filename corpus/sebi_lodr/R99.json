@@ -1,0 +1,26 @@
+{
+ "section_id": "R99",
+ "ref": "RULE:SEBI_LODR_2015:R99",
+ "kind": "regulation",
+ "number": "99",
+ "heading": "Failure to pay fine",
+ "heading_raw": "Failure to pay fine.",
+ "chapter": {
+  "number": "XI",
+  "title": "PROCEDURE FOR ACTION IN CASE OF DEFAULT"
+ },
+ "omitted": false,
+ "content": "99. If listed entity fails to pay any fine imposed on it within such period as specified from\ntime to time, by the recognised stock exchange(s), after a notice in writing has been\nserved on it, the stock exchange may initiate action.",
+ "footnotes": [],
+ "page_start": 154,
+ "page_end": 155,
+ "sha256": "81e6c129623d17913b78ae7477b20e7c6e91318c1cef5468676a636ad0e8cf65",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}
