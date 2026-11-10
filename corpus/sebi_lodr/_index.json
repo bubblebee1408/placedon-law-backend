@@ -1619,6 +1619,26 @@
    "confidence": "high",
    "method": "bold number token in sequence (pdfplumber, 12pt body)",
    "page_start": 212
+  },
+  "SCHEDULE XI": {
+   "section_number": "SCHEDULE XI",
+   "title": "Fee in respect of draft scheme of arrangement",
+   "section_id": "SCHEDULE_XI",
+   "kind": "schedule",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 223
+  },
+  "SCHEDULE XII": {
+   "section_number": "SCHEDULE XII",
+   "title": "RELATED PARTY TRANSACTIONS",
+   "section_id": "SCHEDULE_XII",
+   "kind": "schedule",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 224
   }
  }
 }

@@ -1,0 +1,36 @@
+{
+ "section_id": "SCHEDULE_XI",
+ "ref": null,
+ "kind": "schedule",
+ "number": "XI",
+ "heading": "Fee in respect of draft scheme of arrangement",
+ "heading_raw": "790[Schedule XI – Fee in respect of draft scheme of arrangement",
+ "chapter": null,
+ "omitted": false,
+ "content": "[see regulations 37, 59A, 94 and 94A]\n1. An entity with listed specified securities, or listed specified securities and\nlisted non-convertible debt securities or non-convertible redeemable\npreference shares, shall, along with the draft scheme of arrangement, remit a\nfee at the rate of 0.1% of the paid-up share capital of the listed/ transferee/\nresulting company, whichever is higher, post the sanction of the scheme by\nthe National Company Law Tribunal:\nProvided that the total amount of fees payable shall not exceed five lakh rupees.\n2. An entity with only listed non-convertible debt securities or non-convertible\nredeemable preference shares, shall, along with the draft scheme of\narrangement, remit a fee at the rate of 0.1% of the amount of outstanding debt\nof the listed/ transferee/ resulting company, whichever is higher, post the\nsanction of the scheme by the National Company Law Tribunal:\nProvided that the total amount of fees payable shall not exceed five lakh\nrupees.]\n791[3. The fees shall be paid by way of direct credit into the bank account of the\nBoard through NEFT/ RTGS/ IMPS or online payment using the SEBI\nPayment Gateway or any other mode as may be specified by the Board from\ntime to time.]",
+ "footnotes": [
+  {
+   "number": "790",
+   "page": 223,
+   "placed_by": "marker",
+   "text": "790 Substituted by the Securities and Exchange Board of India (Listing Obligations and Disclosure Requirements)\n(Sixth Amendment) (Regulations), 2022. Prior to substitution, it read as:\n“ [Schedule XI – Fee in respect of draft scheme of arrangement\n[see regulations 37 and 94]\n1. The listed entity shall, along with the draft scheme of arrangement, remit fee at the rate of 0.1% of the paid-\nup share capital of the listed/transferee/resulting company, whichever is higher, post sanction of the scheme,\nsubject to a cap of [five lakh rupees].\n2. The fee specified in clause 1 shall be paid by way of direct credit to the bank account of the Board through\nNEFT/RTGS/IMPS or any other mode allowed by RBI or by means of a demand draft in favour of\n“Securities and Exchange Board of India” payable at Mumbai.]"
+  },
+  {
+   "number": "791",
+   "page": 223,
+   "placed_by": "marker",
+   "text": "791 Substituted by the Securities and Exchange Board of India (Payment of Fees and Mode of Payment)\n(Amendment) Regulations, 2023 w.e.f 01.04.2023. Prior to its substitution, clause (3) read as follows:\n*[“(3)The fees shall be paid by way of direct credit to the bank account of the Board through NEFT/ RTGS/\nIMPS or any other mode allowed by RBI or by means of a demand draft in favour of “Securities and Exchange\nBoard of India” payable at Mumbai.”]"
+  }
+ ],
+ "page_start": 223,
+ "page_end": 223,
+ "sha256": "11c90007e4a85a103d1a053d8decd7a3b7ef4706a9881bb0877cb924868ab7d6",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}
