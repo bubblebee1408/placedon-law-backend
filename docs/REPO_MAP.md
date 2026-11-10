@@ -197,6 +197,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `checker/s188.py` | R0 legal core | s.188 — related-party transactions: is a contract caught, and what does it need? |
 | `checker/s188_threshold.py` | R0 legal core | The s.188 members'-approval threshold — reviewable, refusing until attested. |
 | `checker/s96_slice.py` |  | s.96 end to end: source, amendment, commencement, dated text, evidence card. |
+| `checker/sarvam_doc.py` |  | Sarvam Document AI Parse: a PDF in, stitched Markdown out. OFF by default, public documents only. |
 | `checker/sarvam_model.py` |  | Sarvam Document AI (Digitise): an OCR CANDIDATE for page images, behind a privacy guard. |
 | `checker/sarvam_selftest.py` |  | Self-test for checker/sarvam_model.py -- run through `python3 checker/sarvam_model.py`. |
 | `checker/scope.py` |  | What body of law this engine claims to cover, and what it actually holds. |
