@@ -197,6 +197,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `checker/s188.py` | R0 legal core | s.188 — related-party transactions: is a contract caught, and what does it need? |
 | `checker/s188_threshold.py` | R0 legal core | The s.188 members'-approval threshold — reviewable, refusing until attested. |
 | `checker/s96_slice.py` |  | s.96 end to end: source, amendment, commencement, dated text, evidence card. |
+| `checker/sarvam_doc.py` |  | Sarvam Document AI Parse: a PDF in, stitched Markdown out. OFF by default, public documents only. |
 | `checker/sarvam_model.py` |  | Sarvam Document AI (Digitise): an OCR CANDIDATE for page images, behind a privacy guard. |
 | `checker/sarvam_selftest.py` |  | Self-test for checker/sarvam_model.py -- run through `python3 checker/sarvam_model.py`. |
 | `checker/scope.py` |  | What body of law this engine claims to cover, and what it actually holds. |
@@ -383,6 +384,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/demo.py` |  | One command: walk the whole product on synthetic data, and say pass or fail. |
 | `scripts/demo_e2e.py` |  | The whole product, end to end, against the real gateway. PASS / BLOCKED / FAIL. |
 | `scripts/demo_inhouse.py` |  | The in-house lawyer's day, end to end, on synthetic data. |
+| `scripts/deploy_workflow_check.py` |  | Hold .github/workflows/deploy.yml to the properties that make it safe to leave in the repo. |
 | `scripts/eval_document_retrieval.py` |  | Evaluate document excerpt retrieval (gateway.document_evidence.collect) on CUAD + a synthetic suite. |
 | `scripts/failure_report.py` |  | Weekly counts of why runs did not answer. |
 | `scripts/find_commencement.py` |  | Find which notification commenced a given section of an amending Act. |
@@ -451,4 +453,4 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/watch_gazette.py` |  | Run the Gazette watcher once: what did the Gazette publish since we last looked? |
 | `scripts/watch_ofac.py` |  | Poll OFAC's SDN list and report what CHANGED since the last trustworthy poll. |
 
-411 modules listed.
+413 modules listed.
