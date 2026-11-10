@@ -45,7 +45,9 @@ the job queue and storage. A model is never on the decision path.
 `checker/scope.py` is the authority. Run `python3 checker/scope.py` for the live table.
 
 - **Held** (decided on any date): Companies Act, 2013 (`corpus/companies_act/`).
-- **Current text only**: SEBI LODR Regulations (today's text, no earlier dates).
+- **Current text only**: SEBI LODR Regulations (today's text, no earlier dates). Sectioned
+  into `corpus/sebi_lodr/` and looked up by regulation number, but pending legal review and
+  not served in answers.
 - **Declared** (in scope, not acquired, so an answer names the gap): LLP Act, SEBI
   ICDR/SAST/PIT/Buyback, FEMA and the FDI rules, IBC, Competition Act, Indian Contract Act,
   Arbitration Act, stamp duty, DPDP Act.
