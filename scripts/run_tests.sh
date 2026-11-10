@@ -308,6 +308,9 @@ extra+=("scripts/harness_selftest.py --test")
 extra+=("scripts/gate_lock.py --test")
 # B1: Claude on Bedrock, the CLIENT-data provider. Keyless/no-network — a fake Converse client.
 extra+=("checker/bedrock_model.py --test")
+# Sarvam Document AI Parse reader: OFF by default, public documents only, not on any
+# ingest path. Keyless/no-network -- a fake transport and a generated 25-page PDF.
+extra+=("checker/sarvam_doc.py --test")
 # Porter2 stemmer for document excerpt ranking (RETRIEVAL_LOOP L4).
 extra+=("gateway/english_stem.py --test")
 # F3 + F2: jurisdiction resolver and the multi-body research supervisor.
