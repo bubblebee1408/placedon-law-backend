@@ -210,6 +210,10 @@ def _test() -> None:
     sched = section_by_number("Schedule II", instrument_id=SEBI_LODR_2015)
     check(sched is not None and sched["kind"] == "schedule" and sched["ref"] is None,
           "a Schedule is looked up by name and carries no legal_ref (it has no form there)")
+    sched12 = section_by_number("Schedule XII", instrument_id=SEBI_LODR_2015)
+    check(sched12 is not None and sched12["title"] == "RELATED PARTY TRANSACTIONS"
+          and "material" in sched12["content"],
+          "LODR Schedule XII (the reg 23 materiality thresholds) is its own record")
     check(section_by_number("104", instrument_id=SEBI_LODR_2015) is None,
           "LODR has no regulation 104 -- None is an answer about the law")
     try:

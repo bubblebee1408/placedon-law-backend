@@ -67,11 +67,22 @@ STATUS_NOTE = ("PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolida
 BODY_PT, FOOTNOTE_PT, PAGENO_PT = 12.0, 10.0, 11.0
 FN_SKIP = 2
 LAST_REGULATION = 103                   # the Regulations' own last: "103. Repeal and Savings"
-SCHEDULES = ("I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X")
+# XI and XII print their headings in mixed case ("790[Schedule XI – Fee ..."), which the
+# first version of this parser missed: both were swallowed into Schedule X. The self-test
+# now derives this list from the PDF's own text (_source_schedules) and requires equality.
+SCHEDULES = ("I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII")
+# After Schedule XII the PDF prints the signature block ("U.K. SINHA" / "CHAIRMAN" / ...)
+# and a "Note:" listing every amending notification. Neither is a provision: both go to
+# the manifest's `postscript`, like the preamble, and are never a record or an index key.
+SIGNATURE = "CHAIRMAN"
 
 _REG = re.compile(r"^(?:\d{1,3}\[)?\s*((\d{1,3})([A-Z]{0,2}))\s*\.(?:\s|$)")
 _CHAPTER = re.compile(r"^(?:\d{1,3}\[)?\s*CHAPTER\s+([IVX]+(?:\s?-?\s?A)?)\b(.*)$")
-_SCHEDULE = re.compile(r"^(?:\d{1,3}\[)?\s*SCHEDULE\s+([IVX]+)\b")
+_SCHEDULE = re.compile(r"^(?:\d{1,3}\[)?\s*(?:SCHEDULE|Schedule)\s+([IVX]+)\b")
+# A schedule HEADING line in plain page text: the roman numeral is followed by end of
+# line, a dash/colon, or "[", never by ", based on" or " shall" (in-text references).
+_SCHEDULE_HEADING = re.compile(
+    r"^(?:\d{1,3}\[)?\s*(?:SCHEDULE|Schedule)\s+([IVX]+)(?=\s*$|\s*[–:-]|\s+\[)")
 _FN_START = re.compile(r"^(\d{1,3})\s")
 _AMENDED = re.compile(r"\[Amended up to ([A-Z][a-z]+ \d{1,2}, \d{4})\]")
 
@@ -157,6 +168,7 @@ def parse(pdf: Path = PDF) -> dict:
     footnotes: list[dict] = []
     rejected: list[dict] = []
     pagenos: list[str] = []
+    postscript: list[dict] = []
     cur: dict | None = None
     chapter: dict | None = None
     in_chapter_title = False
@@ -195,6 +207,14 @@ def parse(pdf: Path = PDF) -> dict:
                 continue
 
             # body
+            if postscript:
+                postscript.append({"text": t, "page": pno}); continue
+            if in_schedules and ln["all_bold"] and t.strip() == SIGNATURE:
+                # The signature's name line sits bold at the tail of the last schedule.
+                while cur["lines"] and cur["lines"][-1]["all_bold"]:
+                    postscript.insert(0, cur["lines"].pop())
+                cur["page_end"] = cur["lines"][-1]["page"]
+                postscript.append({"text": t, "page": pno}); continue
             if in_chapter_title:
                 if ln["all_bold"] and t.upper() == t and not _REG.match(t):
                     chapter["title_lines"].append(t); continue
@@ -249,6 +269,7 @@ def parse(pdf: Path = PDF) -> dict:
     _place_footnotes(records, footnotes, chapters)
     return {"consolidated_up_to": consolidated, "marker": m.group(0),
             "preamble": [l["text"] for l in preamble],
+            "postscript": [l["text"] for l in postscript],
             "chapters": chapters, "records": records, "footnotes": footnotes,
             "rejected": rejected, "pagenos": pagenos, "pages": len(pages),
             "footnote_numbers_absent": skipped}
@@ -304,7 +325,7 @@ def _is_omitted(rec: dict, content: str) -> bool:
     if rec["kind"] == "regulation":
         body = _REG.sub("", content, count=1)
     else:
-        body = re.sub(r"^.*?SCHEDULE\s+[IVX]+", "", rec["heading_raw"]) + content
+        body = re.sub(r"^.*?SCHEDULE\s+[IVX]+", "", rec["heading_raw"], flags=re.I) + content
     return bool(_OMITTED.match(body.strip())) or body.strip() == ""
 
 
@@ -323,7 +344,8 @@ def build(parsed: dict) -> dict[str, bytes]:
         content = "\n".join(l["text"] for l in rec["lines"])
         heading = _clean_heading(rec["heading_raw"])
         if rec["kind"] == "schedule":
-            heading = re.sub(r"^SCHEDULE\s+[IVX]+\s*[-:–]?\s*", "", heading).strip() or heading
+            heading = (re.sub(r"^SCHEDULE\s+[IVX]+\s*[-:–]?\s*", "", heading, flags=re.I).strip()
+                       or heading)
         om = _is_omitted(rec, content)
         if om:
             omitted.append(_index_key(rec))
@@ -379,6 +401,7 @@ def build(parsed: dict) -> dict[str, bytes]:
                       "footnotes": c.get("footnotes", [])}
                      for c in parsed["chapters"]],
         "preamble": "\n".join(parsed["preamble"]),
+        "postscript": "\n".join(parsed["postscript"]),
         "rejected_number_candidates": parsed["rejected"],
         "flat_text_not_used": {
             "path": "corpus/rules/sebi_lodr_2015.txt",
@@ -410,6 +433,23 @@ ANCHORS = {"17": "Board of Directors", "23": "Related party transactions",
            "64A": "Applicability",
            "26A": "Vacancies in respect of certain Key Managerial Personnel",
            "59A": "Draft Scheme of Arrangement and Scheme of Arrangement"}
+# Read off the PDF (pp. 212, 223, 224), and re-checked against its text by _test.
+SCHEDULE_ANCHORS = {"SCHEDULE X": "LIST OF SEBI CIRCULARS WHICH STAND RESCINDED",
+                    "SCHEDULE XI": "Fee in respect of draft scheme of arrangement",
+                    "SCHEDULE XII": "RELATED PARTY TRANSACTIONS"}
+# Text that occurs only in the trailing signature block and amendment-history note.
+POSTSCRIPT_MARKERS = ("U.K. SINHA", "were amended on", "SEBI/LAD-NRO/GN/2015-16/013")
+
+
+def _source_schedules(pages: list[str]) -> list[str]:
+    """Schedule numerals in the order the PDF's own heading lines name them."""
+    seen: list[str] = []
+    for page in pages:
+        for line in page.splitlines():
+            m = _SCHEDULE_HEADING.match(line)
+            if m and m.group(1) not in seen:
+                seen.append(m.group(1))
+    return seen
 
 
 def validate(out: Path = OUT, check=None) -> tuple[int, int]:
@@ -441,7 +481,25 @@ def validate(out: Path = OUT, check=None) -> tuple[int, int]:
       f"lettered regulations run A, B, C... with no gap ({', '.join(lettered)})")
     scheds = [k for k, e in entries.items() if e["kind"] == "schedule"]
     c(scheds == [f"SCHEDULE {s}" for s in SCHEDULES],
-      f"Schedules I-X each once, in order ({len(scheds)})")
+      f"Schedules I-{SCHEDULES[-1]} each once, in order ({len(scheds)})")
+    for key, want in SCHEDULE_ANCHORS.items():
+        got = entries.get(key, {}).get("title")
+        c(got == want, f"{key} heading is {want!r} (got {got!r})")
+    sched_recs = {k: json.loads((out / f"{entries[k]['section_id']}.json").read_text())
+                  for k in scheds}
+    x, xi = sched_recs.get("SCHEDULE X"), sched_recs.get("SCHEDULE XI")
+    c(x is not None and xi is not None and x["page_end"] <= xi["page_start"]
+      and not any(_SCHEDULE_HEADING.match(l) for l in x["content"].splitlines()),
+      "Schedule X ends before Schedule XI begins and holds no later schedule heading")
+    foreign = [(k, l) for k, r in sched_recs.items() for l in r["content"].splitlines()
+               if (m := _SCHEDULE_HEADING.match(l)) and f"SCHEDULE {m.group(1)}" != k]
+    c(foreign == [], f"no schedule swallows another schedule's heading ({foreign[:2]})")
+    all_recs = [json.loads((out / f"{e['section_id']}.json").read_text()) for e in entries.values()]
+    c(all(mk in man["postscript"] for mk in POSTSCRIPT_MARKERS)
+      and not any(mk in r["content"] or mk in r["heading_raw"]
+                  for r in all_recs for mk in POSTSCRIPT_MARKERS),
+      "signature block and amendment-history note are in the manifest postscript, "
+      "inside no record")
     for num, want in ANCHORS.items():
         got = entries.get(num, {}).get("title")
         c(got == want, f"reg {num} heading is {want!r} (got {got!r})")
@@ -484,12 +542,12 @@ def _text_loss(parsed: dict, files: dict[str, bytes], check) -> None:
     man = json.loads(files["_manifest.json"])
     held = (sum(nonspace(r["content"]) + nonspace(r["heading_raw"])
                 + sum(nonspace(f["text"]) for f in r["footnotes"]) for r in recs)
-            + nonspace(man["preamble"])
+            + nonspace(man["preamble"]) + nonspace(man["postscript"])
             + sum(nonspace(c["header"]) + nonspace(c["title"])
                   + sum(nonspace(f["text"]) for f in c["footnotes"]) for c in man["chapters"]))
     ratio = held / source
     check(abs(1 - ratio) <= 0.002,
-          f"no text lost: records+footnotes+preamble+chapters hold {held:,} of {source:,} "
+          f"no text lost: records+footnotes+preamble+chapters+postscript hold {held:,} of {source:,} "
           f"non-space source characters ({ratio:.5f}, tolerance 0.2%)")
 
 
@@ -518,6 +576,15 @@ def _test() -> None:
               f"({len(files)} files) -- the script is deterministic and the output is not "
               f"hand-edited")
         _text_loss(parsed, files, check)
+        pages = _independent_text(PDF)
+        named = _source_schedules(pages)
+        check(tuple(named) == SCHEDULES,
+              f"the schedule set is exactly the one the PDF's own headings name ({named})")
+        heads = [l for p in pages for l in p.splitlines() if _SCHEDULE_HEADING.match(l)]
+        for key, want in SCHEDULE_ANCHORS.items():
+            roman = key.split()[1]
+            check(any(_SCHEDULE_HEADING.match(l).group(1) == roman and want in l for l in heads),
+                  f"{key} anchor heading {want!r} is printed on its heading line in the PDF")
         flat = FLAT_TXT.read_text(encoding="utf-8").splitlines() if FLAT_TXT.is_file() else []
         check(len(flat) == 129 and parsed["pages"] == 230,
               f"the flat text file is the truncated one this script refuses to use "

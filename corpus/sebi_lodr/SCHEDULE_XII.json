@@ -1,0 +1,30 @@
+{
+ "section_id": "SCHEDULE_XII",
+ "ref": null,
+ "kind": "schedule",
+ "number": "XII",
+ "heading": "RELATED PARTY TRANSACTIONS",
+ "heading_raw": "792[Schedule XII: RELATED PARTY TRANSACTIONS",
+ "chapter": null,
+ "omitted": false,
+ "content": "[See Regulation 23(1)]\nA transaction with a related party shall be considered material, if the transaction(s) to be\nentered into individually or taken together with previous transactions during a financial year\nexceeds the following:\nConsolidated Turnover of Listed Entity Threshold\nThreshold\n(I) Up to ₹20,000 Crore 10% of the annual consolidated turnover of\nthe listed entity\n(II) More than ₹20,000 Crore to upto ₹2,000 Crore + 5% of the annual\n₹40,000 Crore consolidated turnover of the listed entity\nabove ₹20,000 Crore\n(III) More than ₹40,000 Crore ₹3,000 Crore + 2.5% of the annual\nconsolidated turnover of the listed entity\nabove ₹40,000 Crore or ₹5000 Crores,\nwhichever is lower.\nExplanation: For the purpose of computing the thresholds stated above, the annual\nconsolidated turnover of the listed entity shall be determined based on the last audited\nfinancial statements of the listed entity.\nIllustration 1. For listed entities in (II)\nIf the annual consolidated turnover of a ₹2,000 Crore + 5% of the remaining ₹10,000\nlisted entity is ₹30,000 Crore Crore = ₹2,500 Crore.\nIllustration 2. For listed entities in (III)\nIf the annual consolidated turnover of a ₹3,000 Crore + 2.5% of the remaining\nlisted entity is ₹50,000 Crore ₹10,000 Crore = ₹3,250 Crore.\nIllustration 3. For listed entities in (III)\nIf the annual consolidated turnover of a ₹3,000 Crore + 2.5% of the remaining\nlisted entity is ₹1,50,000 Crore ₹1,10,000 Crore = ₹5,750 Crore.\nHowever, threshold for material related\nparty transaction would be ₹5,000 Crore as\nit is lower than ₹5,750 Crore.\n]",
+ "footnotes": [
+  {
+   "number": "792",
+   "page": 224,
+   "placed_by": "marker",
+   "text": "792 Inserted by the Securities and Exchange Board of India (Listing Obligations and Disclosure Requirements)\n(Fifth Amendment) Regulations, 2025 w.e.f. 19.12.2025."
+  }
+ ],
+ "page_start": 224,
+ "page_end": 224,
+ "sha256": "59c60759499652090b9b50e863609fd32fc7f349d7ea531a277692a6612d27c4",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}
