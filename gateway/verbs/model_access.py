@@ -72,9 +72,17 @@ TASK_PROVIDERS: dict[str, tuple[str, ...]] = {
 AZURE_OPT_IN_TASKS = frozenset({"ask", "document_summary"})
 
 
+# The narration tasks (purpose=NARRATION at every call site). With PLACEDON_ANSWER_MODEL=gemini
+# they are served by Gemini on Vertex asia-south1 ONLY -- no other provider behind it.
+GEMINI_ANSWER_TASKS = frozenset({"ask", "critic", "draft_prose"})
+
+
 def task_providers(task: str) -> tuple[str, ...]:
     """TASK_PROVIDERS[task], with Azure placed after Bedrock when its region is accepted."""
-    from checker import azure_model
+    from checker import azure_model, router
+    from gateway.models import gemini_answers
+    if task in GEMINI_ANSWER_TASKS and gemini_answers():
+        return (router.GEMINI,)
     declared = TASK_PROVIDERS.get(task, ())
     if task not in AZURE_OPT_IN_TASKS or "azure" in declared or not azure_model.region_accepted():
         return declared
@@ -135,6 +143,9 @@ def _served_or_refusal(origins, *, name: str, purpose: str, ctx: Context,
         return None, _refuse("NO_BUDGET", "The spending guard is unavailable. No model call was made; retry after the budget store is restored.")
     try:
         from checker import router as _r
+        from gateway.models import gemini_answers, require_gemini_config
+        if name in GEMINI_ANSWER_TASKS and gemini_answers():
+            require_gemini_config()     # GEMINI_NOT_CONFIGURED, not a vague NO_MODEL
         provider_scope = tuple(provider for provider in available_providers()
                                if provider in declared)
         if name in AZURE_OPT_IN_TASKS and _r.BEDROCK in provider_scope:
