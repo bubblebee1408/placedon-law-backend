@@ -1,0 +1,51 @@
+{
+ "section_id": "R50",
+ "ref": "RULE:SEBI_LODR_2015:R50",
+ "kind": "regulation",
+ "number": "50",
+ "heading": "Intimation to stock exchange(s)",
+ "heading_raw": "Intimation to stock exchange(s).",
+ "chapter": {
+  "number": "V",
+  "title": "OBLIGATIONS OF LISTED ENTITY WHICH HAS LISTED ITS NON- CONVERTIBLE 459[***] SECURITIES 460[***]"
+ },
+ "omitted": false,
+ "content": "50. 465[(1) The listed entity shall give prior intimation to the stock exchange of at least two\nworking days in advance, excluding the date of the intimation and the date of the\nmeeting of the board of directors, about the Board meeting in which any of the\nfollowing proposals is to be considered:\n(a) an alteration in the form or nature of non-convertible securities that are listed\non the stock exchange or in the rights or privileges of the holders thereof;\n(b) an alteration in the date of the interest/ dividend/ redemption payment of\nnon-convertible securities;\n(c) financial results viz. quarterly or annual, as the case may be;\n(d) fund raising by way of issuance of non-convertible securities; or\n(e) any matter affecting the rights or interests of holders of non-convertible\nsecurities.]\n466[(2) The listed entity shall also intimate the stock exchange not later than the date of\ncommencement of dispatch of notices, in case of:\n(a) any annual general meeting or extraordinary general meeting that is proposed\nto be held for obtaining shareholder approval for the proposals at clauses (c) and\n(d) under sub-regulation (1) of this regulation;\n(b) any meeting of the holders of non-convertible securities in relation to the\nproposal at clause (e) of sub-regulation (1) of this regulation.]\n467[(3)***]\n468[(4) The disclosures to the stock exchanges shall be made by a listed entity in XBRL\nformat in accordance with the guidelines specified by the stock exchanges from time to\ntime.]",
+ "footnotes": [
+  {
+   "number": "465",
+   "page": 94,
+   "placed_by": "marker",
+   "text": "465 Substituted by the SEBI (Listing Obligations and Disclosure Requirements) (Fifth Amendment) Regulations,\n2021 w.e.f. 7.9.2021. Before substitution, sub-regulation (1) read as follows:\n“(1) The listed entity shall give prior intimation to the stock exchange(s) at least eleven working days\nbefore the date on and from which the interest on debentures and bonds, and redemption amount of\nredeemable shares or of debentures and bonds shall be payable.”"
+  },
+  {
+   "number": "466",
+   "page": 94,
+   "placed_by": "marker",
+   "text": "466 Substituted by the SEBI (Listing Obligations and Disclosure Requirements) (Fifth Amendment) Regulations,\n2021 w.e.f. 7.9.2021. Before substitution, sub-regulation (2) read as follows:\n“(2) The listed entity shall intimate the stock exchange(s), its intention to raise funds through new non-\nconvertible debt securities or non-convertible redeemable preference shares it proposes to list either\nthrough a public issue or on private placement basis, prior to issuance of such securities:\nProvided that the above intimation may be given prior to the meeting of board of directors wherein the\nproposal to raise funds through new non convertible debt securities or non-convertible redeemable\npreference shares shall be considered.”"
+  },
+  {
+   "number": "467",
+   "page": 94,
+   "placed_by": "marker",
+   "text": "467 Omitted by the SEBI (Listing Obligations and Disclosure Requirements) (Fifth Amendment) Regulations,\n2021 w.e.f. 7.9.2021. Before omission, sub-regulation (3) read as follows:\n“(3) The listed entity shall intimate to the stock exchange(s), at least two working days in advance,\nexcluding the date of the intimation and date of the meeting, regarding the meeting of its board of directors,\nat which the recommendation or declaration of issue of non convertible debt securities or any other matter\naffecting the rights or interests of holders of non convertible debt securities or non convertible redeemable\npreference shares is proposed to be considered.”"
+  },
+  {
+   "number": "468",
+   "page": 94,
+   "placed_by": "marker",
+   "text": "468 Inserted by the Securities and Exchange Board of India (Listing Obligations and Disclosure Requirements)\n(Third Amendment) Regulations, 2024 w.e.f. 13.12.2024."
+  }
+ ],
+ "page_start": 94,
+ "page_end": 95,
+ "sha256": "35088b8499b00c0f8eac28bc3b11a50f8e528cd853eac4837cf29c7fd5076372",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

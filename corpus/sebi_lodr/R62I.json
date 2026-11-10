@@ -1,0 +1,33 @@
+{
+ "section_id": "R62I",
+ "ref": "RULE:SEBI_LODR_2015:R62I",
+ "kind": "regulation",
+ "number": "62I",
+ "heading": "Risk Management Committee",
+ "heading_raw": "Risk Management Committee.",
+ "chapter": {
+  "number": "VA",
+  "title": "CORPORATE GOVERNANCE NORMS FOR A LISTED ENTITY WHICH HAS LISTED ITS NON-CONVERTIBLE DEBT SECURITIES"
+ },
+ "omitted": false,
+ "content": "62I. (1) The board of directors shall ensure that the functions of the Risk Management\nCommittee as specified in Part D of the Schedule II are discharged by audit committee\nor by the board of directors or a risk management committee constituted by the board\nof directors as per this regulation.\n(2) The risk management committee shall have minimum three members with majority\nof them being members of the board of directors, including at least one independent\ndirector.\n(3) The chairperson of the risk management committee shall be a member of the board\nof directors and senior executives of the HVDLE may be members of the\ncommittee.\n(4) The risk management committee shall meet at least twice in a 594[financial] year\nand not more than two hundred and ten days shall elapse between any two\nconsecutive meetings.\n(5) The quorum for a meeting of the risk management committee shall be either two\nmembers or one third of the members of the committee, whichever is higher,\nincluding at least one member of the board of directors in attendance.\n(6) The board of directors shall define the role and responsibility of the risk\nmanagement committee and may delegate monitoring and reviewing of the risk\nmanagement plan to the committee and such other functions as it may deem fit\nincluding cyber security:\nProvided that the role and responsibilities of the risk management committee shall\nmandatorily include the performance of functions specified in Part D of Schedule\nII.\n(7) The risk management committee shall have powers to seek information from any\nemployee, obtain outside legal or other professional advice and secure attendance\nof outsiders with relevant expertise, if it considers necessary.",
+ "footnotes": [
+  {
+   "number": "594",
+   "page": 121,
+   "placed_by": "marker",
+   "text": "594 ibid"
+  }
+ ],
+ "page_start": 121,
+ "page_end": 121,
+ "sha256": "c26f3d363867850ef3698dfa57bdc9ca7071cb5ef850fb7cc5e8373b098e85d5",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

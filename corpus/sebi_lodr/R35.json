@@ -1,0 +1,26 @@
+{
+ "section_id": "R35",
+ "ref": "RULE:SEBI_LODR_2015:R35",
+ "kind": "regulation",
+ "number": "35",
+ "heading": "Annual Information Memorandum",
+ "heading_raw": "Annual Information Memorandum.",
+ "chapter": {
+  "number": "IV",
+  "title": "OBLIGATIONS OF 76[A] LISTED ENTITY WHICH HAS LISTED ITS SPECIFIED SECURITIES 77[AND NON-CONVERTIBLE DEBT SECURITIES]"
+ },
+ "omitted": false,
+ "content": "35. The listed entity shall submit to the stock exchange(s) an Annual Information\nMemorandum in the manner specified by the Board from time to time.",
+ "footnotes": [],
+ "page_start": 76,
+ "page_end": 76,
+ "sha256": "c296f47b94cd9cd6b6abcce6992e78f1b8c876918d9e5eef098ad49e17cf521c",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

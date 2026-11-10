@@ -1,0 +1,26 @@
+{
+ "section_id": "R87B",
+ "ref": "RULE:SEBI_LODR_2015:R87B",
+ "kind": "regulation",
+ "number": "87B",
+ "heading": "Intimations and Disclosure of events or information to Stock Exchanges",
+ "heading_raw": "Intimations and Disclosure of events or information to Stock Exchanges.",
+ "chapter": {
+  "number": "VIIIA",
+  "title": "OBLIGATIONS OF LISTED ENTITY WHICH HAS LISTED ITS SECURITY RECEIPTS"
+ },
+ "omitted": false,
+ "content": "87B. (1) The listed entity shall first disclose to stock exchange(s) of all events or information,\nas specified in Part E of Schedule III, as soon as reasonably possible but not later than\ntwenty four hours from occurrence of the event or information:\nProvided that in case the disclosure is made after twenty four hours of occurrence of the event\nor information, the listed entity shall, along with such disclosures provide explanation for the\ndelay.\n(2) The listed entity with respect to disclosures referred to in this regulation, shall provide\nupdates related to such disclosures on a regular basis, till such time the event is\nresolved/closed, with relevant explanations.\n(3) The listed entity shall provide specific and adequate reply to all queries raised by stock\nexchange(s) with respect to any events or information.\nProvided that the stock exchange(s) shall disseminate information and clarification as soon as\nreasonably practicable.\n(4) The listed entity, suo moto, may confirm or deny any reported event or information to\nstock exchange(s).\n(5) The listed entity shall disclose on its website or on the website of the sponsor all such\nevents or information which has been disclosed to stock exchange(s) under this regulation,\nand such disclosures shall be hosted on the website of the listed entity for a minimum period\nof five years and thereafter as per the archival policy of the listed entity, as disclosed on its\nwebsite.",
+ "footnotes": [],
+ "page_start": 145,
+ "page_end": 145,
+ "sha256": "f0a648193193472eba22c4480368727c263f185db126892dbbd6cfd6824add73",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

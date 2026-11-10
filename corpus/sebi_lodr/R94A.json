@@ -1,0 +1,33 @@
+{
+ "section_id": "R94A",
+ "ref": "RULE:SEBI_LODR_2015:R94A",
+ "kind": "regulation",
+ "number": "94A",
+ "heading": "Draft Scheme of Arrangement & Scheme of Arrangement in case of entities that have listed their non-convertible debt securities or non-convertible redeemable preference shares",
+ "heading_raw": "646[Draft Scheme of Arrangement & Scheme of Arrangement in case of entities that have listed their non-convertible debt securities or non-convertible redeemable preference shares.",
+ "chapter": {
+  "number": "X",
+  "title": "DUTIES AND OBLIGATIONS OF THE RECOGNISED STOCK EXCHANGE(S)"
+ },
+ "omitted": false,
+ "content": "94A. (1) Upon receipt of the draft schemes of arrangement and the documents under sub-\nregulation (1) of regulation 59A, the designated stock exchange shall forward the\nsame to the Board, in such manner as may be specified by the Board.\n(2) The stock exchange(s) shall submit to the Board its No-Objection Letter on the draft\nscheme of arrangement, after ascertaining whether the draft scheme of arrangement\nis in compliance with securities laws, within the timelines as may be specified by\nthe Board from time to time.\n(3) The stock exchange(s), shall issue No-objection letter to the listed entity in the\nmanner and within the timelines, as may be specified by the Board from time to\ntime:\nProvided that the validity of the No-objection letter of stock exchanges shall be six\nmonths from the date of issuance.\n(4) The stock exchange(s) shall bring the objections to the notice of National Company\nLaw Tribunal at the time of approval of the scheme of arrangement by the National\nCompany Law Tribunal.\n(5) Upon sanction of the Scheme by the National Company Law Tribunal, the stock\nexchange shall forward its recommendations to the Board on the documents\nsubmitted by the listed entity in terms of sub-regulation (4) of regulation 59A.]",
+ "footnotes": [
+  {
+   "number": "646",
+   "page": 152,
+   "placed_by": "marker",
+   "text": "646 Inserted by the Securities and Exchange Board of India (Listing Obligations and Disclosure Requirements)\n(Sixth Amendment) Regulations, 2022 w.e.f. 14.11.2022."
+  }
+ ],
+ "page_start": 152,
+ "page_end": 152,
+ "sha256": "b54353be6fcb21faff6a379106d4f3b94a2b085ce9049492e3ccf4ec91ff0596",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

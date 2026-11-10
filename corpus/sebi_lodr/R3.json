@@ -1,0 +1,93 @@
+{
+ "section_id": "R3",
+ "ref": "RULE:SEBI_LODR_2015:R3",
+ "kind": "regulation",
+ "number": "3",
+ "heading": "Applicability of the regulations",
+ "heading_raw": "Applicability of the regulations.",
+ "chapter": {
+  "number": "I",
+  "title": "PRELIMINARY"
+ },
+ "omitted": false,
+ "content": "3. 40[(1)] Unless otherwise provided, these regulations shall apply to 41[a] listed entity\n42[which] has listed any of the following designated securities on recognised stock\nexchange(s):\n(a) specified securities listed on main board or SME Exchange or 43[Innovators Growth\nPlatform];\n(b) 44[non-convertible securities;]\n(c) Indian depository receipts;\n(d) securitised debt instruments;\n45[(da) security receipts;]\n(e) units issued by mutual funds;\n(f) any other securities as may be specified by the Board.\n46[(2) The applicability of the provisions of these regulations to a listed entity on the basis of\nmarket capitalisation shall be determined as follows:\n(a) Every recognized stock exchange shall, at the end of the calendar year i.e., 31st December,\nprepare a list of entities that have listed their specified securities ranking such entities on the\nbasis of their average market capitalisation from 1st July to 31st December of that calendar\nyear.47\n(b) The relevant provisions shall then become applicable to a listed entity that is required to\ncomply with such requirements for the first time (or, if applicable, required to comply after\nany interim period) after a period of three months from December 31 (i.e. April 1) or from the\nbeginning of the immediate next financial year, whichever is later:\nProvided that the listed entity, which is required to comply for the first time or after a period\nof cessation, shall put in place systems and processes for compliance with clause (f) of sub-\nregulation (2) of regulation 34 within a period of three months from December 31 (i.e. on or\nbefore April 1) or from the beginning of the immediate next financial year, whichever is later,\nand further disclose the Business Responsibility and Sustainability Report and/or\n48[assessment or assurance of the specified parameters] as per the Business Responsibility and\nSustainability Report Core in the Annual Report prepared for the financial year in which\nsystems and processes were required to be put in place in accordance with this proviso.\n(c) The listed entity shall continue to comply with relevant provisions that were applicable to\nit based on the market capitalisation of previous year and continue(s) to remain applicable on\nthe basis of its rank in the list prepared by recognized stock exchanges as per clause (a) of this\nsub-regulation.]\n49[(2A) The provisions of these regulations, which become applicable to a listed entity on the\nbasis of criteria of market capitalisation, shall continue to apply to such an entity unless its\nranking changes in the list prepared in accordance with sub-regulation (2) of this regulation\nand such change results in the listed entity remaining outside the applicable threshold for a\nperiod of three consecutive years.\n(2B) For such listed entities which remain outside the applicable threshold for a period of\nthree consecutive years in terms of sub-regulation (2A) of this regulation, the provisions that\napply on the basis of criteria of market capitalisation shall cease to apply at the end of the\nfinancial year following the 31st December of the third consecutive year:\nProvided that for those listed entities that follow January to December as its financial year,\nthe provisions shall cease to apply at the end of three months from 31st December of the third\nconsecutive year (i.e. on 31st March).]\n50[(3) The provisions of these regulations which become applicable to listed entities on the\nbasis of the criterion of the value of outstanding listed debt securities shall continue to apply\nto such entities even if they fall below such thresholds as mentioned in sub-regulation (1A) of\nregulation 15.]",
+ "footnotes": [
+  {
+   "number": "40",
+   "page": 8,
+   "placed_by": "marker",
+   "text": "40 Numbered as sub-regulation (1) by the SEBI (Listing Obligations and Disclosure Requirements) (Second\nAmendment) Regulations, 2021 w.e.f. 5.5.2021."
+  },
+  {
+   "number": "41",
+   "page": 8,
+   "placed_by": "marker",
+   "text": "41 Substituted for “the” by the SEBI (Listing Obligations and Disclosure Requirements) (Second Amendment)\nRegulations, 2021 w.e.f. 5.5.2021."
+  },
+  {
+   "number": "42",
+   "page": 8,
+   "placed_by": "marker",
+   "text": "42 Substituted for “who” by the SEBI (Listing Obligations and Disclosure Requirements) (Second Amendment)\nRegulations, 2021 w.e.f. 5.5.2021."
+  },
+  {
+   "number": "43",
+   "page": 8,
+   "placed_by": "marker",
+   "text": "43 Substituted for “Institutional Trading Platform” by the SEBI (Listing Obligations and Disclosure\nRequirements) (Second Amendment) Regulations, 2021 w.e.f. 5.5.2021."
+  },
+  {
+   "number": "44",
+   "page": 8,
+   "placed_by": "marker",
+   "text": "44 Substituted by the SEBI (Listing Obligations and Disclosure Requirements) (Fifth Amendment) Regulations,\n2021 w.e.f. 7.9.2021. Before substitution, clause (b) read as follows:\n“(b) non-convertible debt securities, non-convertible redeemable preference shares, perpetual debt\ninstrument, perpetual non-cumulative preference shares;”."
+  },
+  {
+   "number": "45",
+   "page": 9,
+   "placed_by": "marker",
+   "text": "45 Inserted by the SEBI (Listing Obligations and Disclosure Requirements) (Fifth Amendment) Regulations,\n2018, w.e.f. 06.09.2018."
+  },
+  {
+   "number": "46",
+   "page": 9,
+   "placed_by": "marker",
+   "text": "46 Substituted by the Securities and Exchange Board of India (Listing Obligations and Disclosure Requirements)\n(Amendment) Regulations, 2024 w.e.f. 31.12.2024. Prior to its substitution, sub-regulation (2) read as follows-\n“(2) The provisions of these regulations which become applicable to listed entities on the basis of\nmarket capitalisation criteria shall continue to apply to such entities even if they fall below such\nthresholds.”"
+  },
+  {
+   "number": "47",
+   "page": 9,
+   "placed_by": "page",
+   "text": "47 The first list in accordance with this clause shall be prepared by the recognized stock exchange(s) as on\nDecember 31, 2024."
+  },
+  {
+   "number": "48",
+   "page": 9,
+   "placed_by": "marker",
+   "text": "48 Substituted for the word “assurance” by the Securities and Exchange Board of India (Listing Obligations and\nDisclosure Requirements) (Amendment) Regulations, 2025 w.e.f 28.03.2025."
+  },
+  {
+   "number": "49",
+   "page": 9,
+   "placed_by": "marker",
+   "text": "49 Inserted by the Securities and Exchange Board of India (Listing Obligations and Disclosure Requirements)\n(Amendment) Regulations, 2024 w.e.f. 31.12.2024."
+  },
+  {
+   "number": "50",
+   "page": 10,
+   "placed_by": "marker",
+   "text": "50 Inserted by the SEBI (Listing Obligations and Disclosure Requirements) (Fifth Amendment) Regulations,\n2021 w.e.f. 7.9.2021."
+  }
+ ],
+ "page_start": 8,
+ "page_end": 11,
+ "sha256": "9689e378dd9d3d0e7783ab7f5cd7c9bd5df65f6b83a624fede4352de80259533",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

@@ -1,0 +1,81 @@
+{
+ "section_id": "R62",
+ "ref": "RULE:SEBI_LODR_2015:R62",
+ "kind": "regulation",
+ "number": "62",
+ "heading": "Website",
+ "heading_raw": "Website.",
+ "chapter": {
+  "number": "V",
+  "title": "OBLIGATIONS OF LISTED ENTITY WHICH HAS LISTED ITS NON- CONVERTIBLE 459[***] SECURITIES 460[***]"
+ },
+ "omitted": false,
+ "content": "62. (1) The listed entity shall maintain a functional website containing the following\ninformation about the listed entity:-\n(a) details of its business;\n557[(aa) composition of the Board;]\n(b) 558[financial information including:\n(i) notice of meeting of the board of directors where financial results shall\nbe discussed;\n(ii) financial results, on the conclusion of the meeting of the board of\ndirectors where the financial results were approved;\n(iii)complete copy of the annual report including balance sheet, profit and\nloss account, directors report, corporate governance report etc;]\n(c) contact information of the designated officials of the listed entity who are\nresponsible for assisting and handling investor grievances;\n(d) email address for grievance redressal and other relevant details;\n(e) name of the debenture trustees with full contact details;\n(f) the information, report, notices, call letters, circulars, proceedings, etc concerning\nnon-convertible redeemable preference shares or non convertible debt securities;\n(g) all information and reports including compliance reports filed by the listed\nentity;\n(h) information with respect to the following 559[***]:\n(i) default by issuer to pay interest 560[***] or redemption amount;\n(ii) failure to create a charge on the assets;\n(iii) 561[***]\n562[(i) all credit ratings obtained by the entity for all its listed non-convertible\nsecurities, updated immediately upon any revision in the ratings;\n(j) statements of deviation(s) or variation(s) as specified in sub-regulation (7) and\nsub-regulation (7A) of regulation 52 of these regulations;\n(k) annual return as provided under section 92 of the Companies Act, 2013 and the\nrules made thereunder.]\n563[(1A) The listed entities to whom regulations 15 to regulation 27 are applicable shall also\nmake the following additional disclosures on their website:\n(a) composition of the various committees of the board of directors;\n(b) terms and conditions of appointment of independent directors;\n(c) code of conduct of the board of directors and senior management personnel;\n(d) details of establishment of vigil mechanism/ whistle blower policy;\n(e) criteria of making payments to non-executive directors, if the same has not been\ndisclosed in the annual report;\n(f) secretarial compliance report as per sub-regulation (2) of regulation 24A of these\nregulations;\n(g) policy on dealing with related party transactions;\n(h) policy for determining ‘material’ subsidiaries;\n(i) details of familiarization programmes imparted to independent directors including\nthe following details:-\n(i) number of programmes attended by the independent directors (during the year\nand on a cumulative basis till date),\n(ii) number of hours spent by the independent directors in such programmes\n(during the year and on cumulative basis till date), and\n(iii) other relevant details.]\n(2) The listed entity may also issue a press release with respect to the events specified in\n564[sub-regulations (1) and (1A)].\n(3) The listed entity shall ensure that the contents of the website are correct and updated at\nany given point of time.\n565[(4) The listed entity shall update any change in the content of its website within two\nworking days from the date of such change in content.]",
+ "footnotes": [
+  {
+   "number": "557",
+   "page": 109,
+   "placed_by": "marker",
+   "text": "557 Inserted by the SEBI (Listing Obligations and Disclosure Requirements) (Fifth Amendment) Regulations,\n2021 w.e.f. 7.9.2021."
+  },
+  {
+   "number": "558",
+   "page": 109,
+   "placed_by": "marker",
+   "text": "558 Substituted by the SEBI (Listing Obligations and Disclosure Requirements) (Fifth Amendment) Regulations,\n2021 w.e.f. 7.9.2021. Before substitution, clause (b) read as follows:\n“(b) financial information including complete copy of the annual report including balance sheet, profit\nand loss account, directors report etc;”"
+  },
+  {
+   "number": "559",
+   "page": 109,
+   "placed_by": "marker",
+   "text": "559 The word “events” omitted by the SEBI (Listing Obligations and Disclosure Requirements) (Fifth\nAmendment) Regulations, 2021 w.e.f. 7.9.2021."
+  },
+  {
+   "number": "560",
+   "page": 109,
+   "placed_by": "marker",
+   "text": "560 The word “on” omitted by the SEBI (Listing Obligations and Disclosure Requirements) (Fifth Amendment)\nRegulations, 2021 w.e.f. 7.9.2021."
+  },
+  {
+   "number": "561",
+   "page": 109,
+   "placed_by": "marker",
+   "text": "561 Omitted by the SEBI (Listing Obligations and Disclosure Requirements) (Fifth Amendment) Regulations,\n2021 w.e.f. 7.9.2021. Before omission, sub-clause (iii) read as follows:\n“(iii) revision of rating assigned to the non convertible debt securities:”"
+  },
+  {
+   "number": "562",
+   "page": 109,
+   "placed_by": "marker",
+   "text": "562 Inserted by the SEBI (Listing Obligations and Disclosure Requirements) (Fifth Amendment) Regulations,\n2021 w.e.f. 7.9.2021."
+  },
+  {
+   "number": "563",
+   "page": 110,
+   "placed_by": "marker",
+   "text": "563 Inserted by the SEBI (Listing Obligations and Disclosure Requirements) (Fifth Amendment) Regulations,\n2021 w.e.f. 7.9.2021."
+  },
+  {
+   "number": "564",
+   "page": 110,
+   "placed_by": "marker",
+   "text": "564 Substituted for the word and symbol “sub-regulation (1)” by the SEBI (Listing Obligations and Disclosure\nRequirements) (Fifth Amendment) Regulations, 2021 w.e.f. 7.9.2021."
+  },
+  {
+   "number": "565",
+   "page": 110,
+   "placed_by": "marker",
+   "text": "565 Inserted by the SEBI (Listing Obligations and Disclosure Requirements) (Fifth Amendment) Regulations,\n2021 w.e.f. 7.9.2021."
+  }
+ ],
+ "page_start": 109,
+ "page_end": 110,
+ "sha256": "fd70824f51f41a83f580351776578136a2f2a5b384de9fe03348b25757d62a5f",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

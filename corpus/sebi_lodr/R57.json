@@ -1,0 +1,33 @@
+{
+ "section_id": "R57",
+ "ref": "RULE:SEBI_LODR_2015:R57",
+ "kind": "regulation",
+ "number": "57",
+ "heading": "Intimation to stock exchanges",
+ "heading_raw": "532[Intimation to stock exchanges",
+ "chapter": {
+  "number": "V",
+  "title": "OBLIGATIONS OF LISTED ENTITY WHICH HAS LISTED ITS NON- CONVERTIBLE 459[***] SECURITIES 460[***]"
+ },
+ "omitted": false,
+ "content": "57. The listed entity shall submit a certificate to the stock exchange regarding status of payment\nof interest or dividend or repayment or redemption of principal of non-convertible securities,\nwithin one working day of it becoming due, in the manner and format as specified by the\nBoard from time to time.]",
+ "footnotes": [
+  {
+   "number": "532",
+   "page": 104,
+   "placed_by": "marker",
+   "text": "532 Substituted by the Securities and Exchange Board of India (Listing Obligations and Disclosure Requirements)\n(Second Amendment) Regulations, 2023 w.e.f. 15.06. 2023. Prior to its substitution, Regulation 57 read as under:\n“Intimations/ other submissions to stock exchange(s).\n57. (1) The listed entity shall submit a certificate to the stock exchange within one working day of the interest\nor dividend or principal becoming due regarding status of payment in case of non-convertible securities.\n(2) [omitted]\n(3) The listed entity shall forward to the stock exchange any other information in the manner and format as\nspecified by the Board from time to time.\n(4) The listed entity shall within five working days prior to the beginning of the quarter provide details for\nall the non-convertible securities for which interest/dividend/principal obligations shall be payable during\nthe quarter.\n(5) The listed entity shall within seven working days from the end of the quarter provide:\n(a) a certificate confirming the payment of interest/dividend/principal obligations for non-convertible\nsecurities which were due in that quarter; and\n(b) the details of all unpaid interest/dividend/principal obligations in relation to non-convertible\nsecurities at the end of the quarter.”"
+  }
+ ],
+ "page_start": 104,
+ "page_end": 104,
+ "sha256": "43978e76e1894e561b2c13f19475a744a386cf347a321b718d6babef7fe937ba",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

@@ -1,0 +1,33 @@
+{
+ "section_id": "R62A",
+ "ref": "RULE:SEBI_LODR_2015:R62A",
+ "kind": "regulation",
+ "number": "62A",
+ "heading": "Listing of subsequent issuances of non-convertible debt securities",
+ "heading_raw": "566[Listing of subsequent issuances of non-convertible debt securities",
+ "chapter": {
+  "number": "V",
+  "title": "OBLIGATIONS OF LISTED ENTITY WHICH HAS LISTED ITS NON- CONVERTIBLE 459[***] SECURITIES 460[***]"
+ },
+ "omitted": false,
+ "content": "62A. (1) A listed entity, whose non-convertible debt securities are listed shall list all non-\nconvertible debt securities, proposed to be issued on or after January 1, 2024, on\nthe stock exchange(s).\n(2) A listed entity, whose subsequent issues of unlisted non-convertible debt securities\nmade on or before December 31, 2023 are outstanding on the said date, may list\nsuch securities, on the stock exchange(s).\n(3) A listed entity that proposes to list the non-convertible debt securities on the stock\nexchange(s) on or after January 1, 2024, shall list all outstanding unlisted non-\nconvertible debt securities previously issued on or after January 1, 2024, on the\nstock exchange(s) within three months from the date of the listing of the non-\nconvertible debt securities proposed to be listed.\n(4) Notwithstanding anything contained in this regulation, no listed entity shall be\nrequired to list the following securities:\n(i) Bonds issued under section 54EC of the Income Tax Act, 1961 (43 of 1961);\n(ii) Non-convertible debt securities issued pursuant to an agreement entered into\nbetween the listed entity of such securities and multilateral institutions;\n(iii) Non-convertible debt securities issued pursuant to an order of any court or\nTribunal or regulatory requirement as stipulated by a financial sector\nregulator namely, the Board, Reserve Bank of India, Insurance Regulatory\nand Development Authority of India or the Pension Fund and Regulatory\nDevelopment Authority.\n(5) The securities issued by the listed entity under clauses (ii) and (iii) of sub-regulation\n(4) shall be locked in and held till maturity by the investors and shall be\nunencumbered.\n(6) A listed entity proposing to issue securities under sub-regulation (4) shall disclose\nto the stock exchanges on which its non-convertible debt securities are listed, all\nthe key terms of such securities, including embedded options, security offered,\ninterest rates, charges, commissions, premium (by any name called), period of\nmaturity and such other details as may be required to be disclosed by the Board\nfrom time to time.]",
+ "footnotes": [
+  {
+   "number": "566",
+   "page": 110,
+   "placed_by": "marker",
+   "text": "566 Inserted by the Securities and Exchange Board of India (Listing Obligations and Disclosure Requirements)\n(Fourth Amendment) Regulations, 2023 w.e.f. 20.09.2023."
+  }
+ ],
+ "page_start": 110,
+ "page_end": 112,
+ "sha256": "26df57f8f56d8a06f514d6df109aece6d252b41cad96f273980c97d77a9b1df8",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

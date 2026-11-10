@@ -1,0 +1,26 @@
+{
+ "section_id": "R84",
+ "ref": "RULE:SEBI_LODR_2015:R84",
+ "kind": "regulation",
+ "number": "84",
+ "heading": "Credit Rating",
+ "heading_raw": "Credit Rating.",
+ "chapter": {
+  "number": "VIII",
+  "title": "OBLIGATIONS OF LISTED ENTITY WHICH HAS LISTED ITS SECURITISED DEBT INSTRUMENTS"
+ },
+ "omitted": false,
+ "content": "84. (1) Every rating obtained by the listed entity with respect to securitised debt\ninstruments shall be periodically reviewed, preferably once a year, by a credit rating\nagency registered by the Board.\n(2) Any revision in rating(s) shall be disseminated by the stock exchange(s).",
+ "footnotes": [],
+ "page_start": 143,
+ "page_end": 143,
+ "sha256": "a334232937ba090300316832ea0c25b5cabdae3168b2e67564dd79656559357f",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

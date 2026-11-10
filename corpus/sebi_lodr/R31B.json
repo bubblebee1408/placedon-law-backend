@@ -1,0 +1,33 @@
+{
+ "section_id": "R31B",
+ "ref": "RULE:SEBI_LODR_2015:R31B",
+ "kind": "regulation",
+ "number": "31B",
+ "heading": "Special rights to shareholders",
+ "heading_raw": "348[Special rights to shareholders:",
+ "chapter": {
+  "number": "IV",
+  "title": "OBLIGATIONS OF 76[A] LISTED ENTITY WHICH HAS LISTED ITS SPECIFIED SECURITIES 77[AND NON-CONVERTIBLE DEBT SECURITIES]"
+ },
+ "omitted": false,
+ "content": "31B. (1) Any special right granted to the shareholders of a listed entity shall be subject\nto the approval by the shareholders in a general meeting by way of a special resolution\nonce in every five years starting from the date of grant of such special right:\nProvided that the special rights available to the shareholders of a listed entity as on the\ndate of coming into force of this regulation shall be subject to the approval by\nshareholders by way of a special resolution within a period of five years from the date\nof coming into force of this regulation:\nProvided further that the requirement specified in this regulation shall not be applicable\nto the special rights made available by a listed entity to a financial institution registered\nwith or regulated by the Reserve Bank of India under a lending arrangement in the\nnormal course of business or to a debenture trustee registered with the Board under a\nsubscription agreement for the debentures issued by the listed entity, if such financial\ninstitution or the debenture trustee becomes a shareholder of the listed entity as a\nconsequence of such lending arrangement or subscription agreement for the\ndebentures.]",
+ "footnotes": [
+  {
+   "number": "348",
+   "page": 68,
+   "placed_by": "marker",
+   "text": "348 Inserted by the Securities and Exchange Board of India (Listing Obligations and Disclosure Requirements)\n(Second Amendment) Regulations, 2023 w.e.f. 15.7.2023."
+  }
+ ],
+ "page_start": 68,
+ "page_end": 69,
+ "sha256": "0a94336bd1fa1eeb3e14b6954ea95e5050f81b4d50ac067075e8ad1d56c5cc50",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

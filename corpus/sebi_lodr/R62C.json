@@ -1,0 +1,75 @@
+{
+ "section_id": "R62C",
+ "ref": "RULE:SEBI_LODR_2015:R62C",
+ "kind": "regulation",
+ "number": "62C",
+ "heading": "Applicability",
+ "heading_raw": "Applicability.",
+ "chapter": {
+  "number": "VA",
+  "title": "CORPORATE GOVERNANCE NORMS FOR A LISTED ENTITY WHICH HAS LISTED ITS NON-CONVERTIBLE DEBT SECURITIES"
+ },
+ "omitted": false,
+ "content": "62C. (1) The provisions of this chapter shall apply to a listed entity which only has\nnon-convertible debt securities listed, with an outstanding value of Rupees\n568[Five] Thousand Crore and above and does not have any listed specified\nsecurities.\nExplanation (1): — The ‘high value debt listed entities’ shall be determined\non 569[the] basis of value of principal outstanding of listed debt securities as on\n570[***]the date of notification of this amendment.\nExplanation (2): — The entities falling in sub-regulation (1) of the regulation\n62C shall be referred to a ‘high value debt listed entity’ (HVDLE) for the\npurpose of this chapter:\nProvided that in case the value of the outstanding listed non-convertible debt\nsecurities becomes equal to or greater than the specified threshold of Rupees\n571[Five] Thousand Crore during the financial year, it shall ensure compliance\nwith these provisions within six months from the date of such trigger and the\ndisclosures of such compliance may be made in 572[the Corporate Governance\nCompliance Report on and from the] third quarter, following the date of the\ntrigger.\n(2) Notwithstanding anything contained in sub-regulation (3) of regulation 3, once the\nprovisions of this Chapter become applicable to a ‘high value debt listed entity’,\nthe said regulations shall continue 573[to] apply till the value of the outstanding\nlisted debt securities as on March 31 in a year, reduces and remains below the\nspecified threshold for a period of three consecutive financial years.\nExplanation: —The provisions of this sub-regulation shall become applicable with\neffect from April 01, 2025574[:]\n575[Provided that the provisions of this sub-regulation shall not be applicable to\nentities which cease to be classified as HVDLEs in terms of revised threshold as\nper Regulation 62C(1).]\n(3) Notwithstanding anything contained in this regulation, in case of an Infrastructure\nInvestment Trust registered under the provisions of the Securities and Exchange\nBoard of India (Infrastructure Investment Trusts) Regulations, 2014, the\ngovernance norms specified under the Securities and Exchange Board of India\n(Infrastructure Investment Trusts) Regulations, 2014 shall be applicable.\n(4) Notwithstanding anything contained in this regulation, in case of a Real Estate\nInvestment Trust registered under the provisions of Securities and Exchange Board\nof India (Real Estate Investment Trust) Regulations, 2014, the governance norms\nspecified under the Securities and Exchange Board of India (Real Estate\nInvestment Trust) Regulations, 2014 shall be applicable.\n(5) The provisions as specified in regulation 62D shall not be applicable during the\nperiod in which a HVDLE is undergoing corporate insolvency resolution process\nunder the Insolvency Code:\nProvided that the roles and responsibilities of the board of directors as specified\nunder regulation 62D shall be fulfilled by the interim resolution professional or\nresolution professional in accordance with sections 17 or 23 of the Insolvency\nCode, as the case may be.\n(6) The provisions as specified in regulations 62F, 62G, 62H and 62I shall not be\napplicable during the period in which a HVDLE is undergoing corporate\ninsolvency resolution process under the Insolvency Code:\nProvided that the roles and responsibilities of the committees specified in the\nrespective regulations shall be fulfilled by the interim resolution professional or\nresolution professional in accordance with section 17 or section 23 of the\nInsolvency Code, as the case may be.\n(7) Notwithstanding the provisions of this chapter, the provisions of Companies Act,\n2013 shall continue to apply, wherever applicable.",
+ "footnotes": [
+  {
+   "number": "568",
+   "page": 112,
+   "placed_by": "marker",
+   "text": "568 Substituted for the word “One” vide the Securities and Exchange Board of India (Listing Obligations and\nDisclosure Requirements) (Amendment) Regulations, 2026 w.e.f. 22.1.2026."
+  },
+  {
+   "number": "569",
+   "page": 112,
+   "placed_by": "marker",
+   "text": "569 Inserted vide the Securities and Exchange Board of India (Listing Obligations and Disclosure Requirements)\n(Amendment) Regulations, 2026 w.e.f. 22.1.2026."
+  },
+  {
+   "number": "570",
+   "page": 112,
+   "placed_by": "marker",
+   "text": "570 The words, numbers and symbols “March 31, 2025, irrespective of” omitted vide the Securities and Exchange\nBoard of India (Listing Obligations and Disclosure Requirements) (Amendment) Regulations, 2026 w.e.f.\n22.1.2026."
+  },
+  {
+   "number": "571",
+   "page": 113,
+   "placed_by": "marker",
+   "text": "571 Substituted for the word “One” vide the Securities and Exchange Board of India (Listing Obligations and\nDisclosure Requirements) (Amendment) Regulations, 2026 w.e.f. 22.1.2026."
+  },
+  {
+   "number": "572",
+   "page": 113,
+   "placed_by": "marker",
+   "text": "572 Substituted for the words “corporate governance compliance report on and from” vide the Securities and\nExchange Board of India (Listing Obligations and Disclosure Requirements) (Amendment) Regulations, 2026\nw.e.f. 22.1.2026."
+  },
+  {
+   "number": "573",
+   "page": 113,
+   "placed_by": "marker",
+   "text": "573 Inserted vide the Securities and Exchange Board of India (Listing Obligations and Disclosure Requirements)\n(Amendment) Regulations, 2026 w.e.f. 22.1.2026."
+  },
+  {
+   "number": "574",
+   "page": 113,
+   "placed_by": "page",
+   "text": "574 Substituted for the symbol “.” vide the Securities and Exchange Board of India (Listing Obligations and\nDisclosure Requirements) (Amendment) Regulations, 2026 w.e.f. 22.1.2026."
+  },
+  {
+   "number": "575",
+   "page": 113,
+   "placed_by": "marker",
+   "text": "575 Inserted vide the Securities and Exchange Board of India (Listing Obligations and Disclosure Requirements)\n(Amendment) Regulations, 2026 w.e.f. 22.1.2026."
+  }
+ ],
+ "page_start": 112,
+ "page_end": 114,
+ "sha256": "736f0a72c35879d84907fe0d60f2aebbca6481fcf5052841b5f2a8878864a36c",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

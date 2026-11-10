@@ -1,0 +1,33 @@
+{
+ "section_id": "R10",
+ "ref": "RULE:SEBI_LODR_2015:R10",
+ "kind": "regulation",
+ "number": "10",
+ "heading": "Filing of information",
+ "heading_raw": "Filing of information.",
+ "chapter": {
+  "number": "III",
+  "title": "COMMON OBLIGATIONS OF LISTED ENTITIES"
+ },
+ "omitted": false,
+ "content": "10. (1) The listed entity shall file the reports, statements, documents, filings and any other\ninformation with the recognised stock exchange(s) on the electronic platform as\nspecified by the Board or the recognised stock exchange(s).\n69[(1A) The Board may enable integrated filing of periodic reports, statements,\ndocuments and any other information required to be filed by a listed entity under the\nAct or the regulations made thereunder in the format and within the timelines as may\nbe specified.]\n(2) The listed entity shall put in place infrastructure as required for compliance with\nsub-regulation (1).",
+ "footnotes": [
+  {
+   "number": "69",
+   "page": 19,
+   "placed_by": "marker",
+   "text": "69 Inserted by the Securities and Exchange Board of India (Listing Obligations and Disclosure Requirements)\n(Third Amendment) Regulations, 2024 w.e.f. 13.12.2024."
+  }
+ ],
+ "page_start": 18,
+ "page_end": 19,
+ "sha256": "5a81b3c8982871f250cdc6e485825ec5d42cd5d8c36e9596b439d8581a089171",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

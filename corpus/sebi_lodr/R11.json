@@ -1,0 +1,26 @@
+{
+ "section_id": "R11",
+ "ref": "RULE:SEBI_LODR_2015:R11",
+ "kind": "regulation",
+ "number": "11",
+ "heading": "Scheme of Arrangement",
+ "heading_raw": "Scheme of Arrangement.",
+ "chapter": {
+  "number": "III",
+  "title": "COMMON OBLIGATIONS OF LISTED ENTITIES"
+ },
+ "omitted": false,
+ "content": "11. The listed entity shall ensure that any scheme of arrangement /amalgamation /merger\n/reconstruction /reduction of capital etc. to be presented to any Court or Tribunal does\nnot in any way violate, override or limit the provisions of securities laws or\nrequirements of the stock exchange(s):\nProvided that this regulation shall not be applicable for the units issued by Mutual Fund which\nare listed on a recognised stock exchange(s).",
+ "footnotes": [],
+ "page_start": 19,
+ "page_end": 19,
+ "sha256": "ca71a3af0c7ec5ebcea15849b9b9222ed403a66301cfab6bb7d8eeb179b5cfa2",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

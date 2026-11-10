@@ -1,0 +1,57 @@
+{
+ "section_id": "R51",
+ "ref": "RULE:SEBI_LODR_2015:R51",
+ "kind": "regulation",
+ "number": "51",
+ "heading": "Disclosure of information having bearing on performance/operation of listed entity and/or price sensitive information",
+ "heading_raw": "Disclosure of information having bearing on performance/operation of listed entity and/or price sensitive information.",
+ "chapter": {
+  "number": "V",
+  "title": "OBLIGATIONS OF LISTED ENTITY WHICH HAS LISTED ITS NON- CONVERTIBLE 459[***] SECURITIES 460[***]"
+ },
+ "omitted": false,
+ "content": "51. (1) The listed entity shall promptly inform the stock exchange(s) of all information\nhaving bearing on the performance/operation of the listed entity, price sensitive\ninformation or any action that shall affect payment of interest or dividend 469[or\nredemption of non-convertible securities].\n470[Explanation - The expression ‘promptly inform’, shall imply that the stock exchange shall\nbe informed as soon as reasonably possible but not later than twenty-four hours from the date\nof occurrence of the event or receipt of information. In case the disclosure is made after\ntwenty-four hours of the date of occurrence of the event or receipt of information, the listed\nentity shall, along with such disclosures provide an explanation for the delay]\n471[(2) Without prejudice to the generality of sub-regulation(1), the listed entity who has\n472[listed non-convertible securities] shall make disclosures as specified in Part B of Schedule\nIII.]\n473[(3) The listed entity shall disclose on its website, all such events or information which have\nbeen disclosed to the stock exchange(s) under this regulation and such disclosures shall be\nhosted on the website of the listed entity for a minimum period of five years and thereafter as\nper the archival policy of the listed entity, as disclosed on its website.]",
+ "footnotes": [
+  {
+   "number": "469",
+   "page": 95,
+   "placed_by": "marker",
+   "text": "469 Substituted for “of non-convertible preference shares or redemption of non convertible debt securities or\nredeemable preference shares” by the SEBI (Listing Obligations and Disclosure Requirements) (Fifth\nAmendment) Regulations, 2021 w.e.f. 7.9.2021."
+  },
+  {
+   "number": "470",
+   "page": 95,
+   "placed_by": "marker",
+   "text": "470 Substituted by the SEBI (Listing Obligations and Disclosure Requirements) (Fifth Amendment) Regulations,\n2021 w.e.f. 7.9.2021. Before substitution, the Explanation read as follows:\n“Explanation.- The expression ‘promptly inform’, shall imply that the stock exchange must be informed\nas soon as practically possible and without any delay and that the information shall be given first to the\nstock exchange(s) before providing the same to any third party.”"
+  },
+  {
+   "number": "471",
+   "page": 95,
+   "placed_by": "marker",
+   "text": "471 Substituted by the SEBI (Listing Obligations and Disclosure Requirements) (Fifth Amendment) Regulations,\n2021 w.e.f. 7.9.2021. Before substitution, sub-regulation (2) read as follows:\n“Without prejudice to the generality of sub-regulation(1), the listed entity who has issued or is issuing\nnon-convertible debt securities and/or non-convertible redeemable preference shares shall make\ndisclosures as specified in Part B of Schedule III.”"
+  },
+  {
+   "number": "472",
+   "page": 95,
+   "placed_by": "marker",
+   "text": "472 Substituted for “issued or is issuing non-convertible debt securities and/or non-convertible redeemable\npreference shares” by the SEBI (Listing Obligations and Disclosure Requirements) (Fifth Amendment)\nRegulations, 2021 w.e.f. 7.9.2021."
+  },
+  {
+   "number": "473",
+   "page": 95,
+   "placed_by": "marker",
+   "text": "473 Inserted by the SEBI (Listing Obligations and Disclosure Requirements) (Fifth Amendment) Regulations,\n2021 w.e.f. 7.9.2021."
+  }
+ ],
+ "page_start": 95,
+ "page_end": 95,
+ "sha256": "070913730eed4233227035b5a706f644a862beffad2176ee196c7aa062255c3b",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

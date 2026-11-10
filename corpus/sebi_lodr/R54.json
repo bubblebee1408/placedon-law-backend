@@ -1,0 +1,75 @@
+{
+ "section_id": "R54",
+ "ref": "RULE:SEBI_LODR_2015:R54",
+ "kind": "regulation",
+ "number": "54",
+ "heading": "Security Cover",
+ "heading_raw": "516[Security Cover].",
+ "chapter": {
+  "number": "V",
+  "title": "OBLIGATIONS OF LISTED ENTITY WHICH HAS LISTED ITS NON- CONVERTIBLE 459[***] SECURITIES 460[***]"
+ },
+ "omitted": false,
+ "content": "54. 517[(1) In respect of its 518[secured] listed non-convertible debt securities, the listed entity\nshall maintain hundred per cent. 519[security cover or higher security cover] as per the\nterms of offer document/Information Memorandum and/or Debenture Trust Deed,\nsufficient to discharge the principal amount 520[and the interest thereon] at all times for\nthe non-convertible debt securities issued.]\n(2) The listed entity shall disclose to the stock exchange in quarterly, half-yearly, year-\nto-date and annual financial statements, as applicable, the extent and nature of security\ncreated and maintained with respect to its secured listed non-convertible debt securities.\n521[***]\n522[(3) The listed entity shall disclose the 523[security cover] available in case of non-\nconvertible debt securities along with its financial results in the format as specified by\nthe Board.]",
+ "footnotes": [
+  {
+   "number": "516",
+   "page": 102,
+   "placed_by": "marker",
+   "text": "516 Substituted for the words “Asset Cover” by the Securities and Exchange Board of India (Listing Obligations\nand Disclosure Requirements) (Third Amendment) Regulations, 2022 w.e.f. 11.4.2022."
+  },
+  {
+   "number": "517",
+   "page": 102,
+   "placed_by": "marker",
+   "text": "517 Substituted by the SEBI (Listing Obligations and Disclosure Requirements) (Third Amendment) Regulations,\n2020, w.e.f. October 08, 2020. Prior to the substitution, sub-regulation (1) read as follows:\n“(1) In respect of its listed non-convertible debt securities, the listed entity shall maintain hundred percent. asset\ncover sufficient to discharge the principal amount at all times for the non-convertible debt securities issued.”"
+  },
+  {
+   "number": "518",
+   "page": 102,
+   "placed_by": "marker",
+   "text": "518 Inserted by the Securities and Exchange Board of India (Listing Obligations and Disclosure Requirements)\n(Third Amendment) Regulations, 2022 w.e.f. 11.4.2022."
+  },
+  {
+   "number": "519",
+   "page": 102,
+   "placed_by": "marker",
+   "text": "519 Substituted for the words “asset cover or higher asset cover” by the Securities and Exchange Board of India\n(Listing Obligations and Disclosure Requirements) (Third Amendment) Regulations, 2022 w.e.f. 11.4.2022."
+  },
+  {
+   "number": "520",
+   "page": 102,
+   "placed_by": "marker",
+   "text": "520 Inserted by the Securities and Exchange Board of India (Listing Obligations and Disclosure Requirements)\n(Third Amendment) Regulations, 2022 w.e.f. 11.4.2022."
+  },
+  {
+   "number": "521",
+   "page": 102,
+   "placed_by": "marker",
+   "text": "521 Omitted by the SEBI (Listing Obligations and Disclosure Requirements) (Third Amendment) Regulations,\n2020, w.e.f. October 08, 2020. Prior to the omission, sub-regulation (3) read as follows:\n“(3) The requirement specified in sub-regulation (1), shall not be applicable in case of unsecured debt securities\nissued by regulated financial sector entities eligible for meeting capital requirements as specified by respective\nregulators.”"
+  },
+  {
+   "number": "522",
+   "page": 102,
+   "placed_by": "marker",
+   "text": "522 Inserted by the SEBI (Listing Obligations and Disclosure Requirements) (Fifth Amendment) Regulations,\n2021 w.e.f. 7.9.2021."
+  },
+  {
+   "number": "523",
+   "page": 102,
+   "placed_by": "marker",
+   "text": "523 Substituted for the words “asset cover” by the Securities and Exchange Board of India (Listing Obligations\nand Disclosure Requirements) (Third Amendment) Regulations, 2022 w.e.f. 11.4.2022."
+  }
+ ],
+ "page_start": 102,
+ "page_end": 103,
+ "sha256": "89754cc00dd21faab7456a55ea2c76d19ecdba2af85d29cfe4dfc9e267724fd4",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

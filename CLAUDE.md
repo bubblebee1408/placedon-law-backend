@@ -132,6 +132,7 @@ Files changed · Tests added or updated · Commands run · Results · Known limi
 | `checker/corroborate.py` | Prior wording vs the amending Act — the non-circular check |
 | `checker/ss/` | Secretarial Standards defect scanner + evidenced RULES.md |
 | `corpus/companies_act/` | **527** ingested sections, hash-stamped — and **529 files**, because `_index.json` and `_manifest.json` live in the same directory. The old entry said 529 *sections* and printed its own method, `ls corpus/companies_act/*.json \| wc -l`, which counts the index and the manifest as sections; it then cited README.md as corroboration, and README.md repeated the same miscount from the same method. `_manifest.json`'s own `count` field says **527**, and has all along. Corrected 27-09-2026. |
+| `corpus/sebi_lodr/` | SEBI LODR 2015 (consolidated to 14-07-2026) sectioned by `scripts/section_sebi_lodr.py`: 151 regulations + 10 Schedules, `_index.json`, `_manifest.json`, `SHA256SUMS`. Lookup-able via `section_by_number(n, instrument_id=SEBI_LODR_2015)`; **every record HUMAN_REVIEW_PENDING, not served** (`legal_retrieval` resolves the Act only). Parsed from the PDF: `corpus/rules/sebi_lodr_2015.txt` is truncated at page 129 of 230 |
 | `corpus/testdocs/` | Real + ICSI-specimen documents for scanner validation |
 | `corpus/reference/` | SS-1 and SS-2 full text |
 | `scripts/` | Ingestion and verification harnesses |

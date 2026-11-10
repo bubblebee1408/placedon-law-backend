@@ -1,0 +1,51 @@
+{
+ "section_id": "R13",
+ "ref": "RULE:SEBI_LODR_2015:R13",
+ "kind": "regulation",
+ "number": "13",
+ "heading": "Grievance Redressal Mechanism",
+ "heading_raw": "Grievance Redressal Mechanism.",
+ "chapter": {
+  "number": "III",
+  "title": "COMMON OBLIGATIONS OF LISTED ENTITIES"
+ },
+ "omitted": false,
+ "content": "13. (1) 72[The listed entity shall redress investor grievances promptly but not later than\ntwenty-one calendar days from the date of receipt of the grievance and in such manner\nas may be specified by the Board.]\n(2) The listed entity shall ensure that it is registered on the SCORES platform or such other\nelectronic platform or system of the Board as shall be mandated from time to time, in order\nto handle investor complaints electronically in the manner specified by the Board.\n73[Provided that in case of securitised debt instrument, SCORES registration may be taken at\nTrustee level for all special purpose distinct entities, they are trustee of.]\n(3) 74[The listed entity shall file with the recognised stock exchange(s) on a quarterly basis a\nstatement detailing the redressal of investor grievances in such form and within the\ntimelines as may be specified by the Board.]\n(4) The statement as specified in sub-regulation (3) shall be placed, on quarterly basis, before\nthe board of directors of the listed entity.\n75[(5) The Board may also recognize a body corporate for handling and monitoring the process\nof grievance redressal within such time and in such manner as may be specified.]",
+ "footnotes": [
+  {
+   "number": "72",
+   "page": 19,
+   "placed_by": "marker",
+   "text": "72 Substituted by the Securities and Exchange Board of India (Facilitation of Grievance Redressal Mechanism)\n(Amendment) Regulations, 2023 w.e.f. 18-08-2023. Prior to substitution, it read as follows:\n“The listed entity shall ensure that adequate steps are taken for expeditious redressal of investor complaints.”"
+  },
+  {
+   "number": "73",
+   "page": 20,
+   "placed_by": "marker",
+   "text": "73 Inserted by the Securities and Exchange Board of India (Listing Obligations and Disclosure Requirements)\n(Second Amendment) Regulations, 2025 w.e.f 01.05.2025."
+  },
+  {
+   "number": "74",
+   "page": 20,
+   "placed_by": "marker",
+   "text": "74 Substituted by the Securities and Exchange Board of India (Listing Obligations and Disclosure Requirements)\n(Third Amendment) Regulations, 2024 w.e.f. 31.12.2024. Prior to the substitution, the sub-regulation read as\nunder-\n“(3) The listed entity shall file with the recognised stock exchange(s) on a quarterly basis, within twenty\none days from the end of each quarter, a statement giving the number of investor complaints pending at\nthe beginning of the quarter, those received during the quarter, disposed of during the quarter and those\nremaining unresolved at the end of the quarter."
+  },
+  {
+   "number": "75",
+   "page": 20,
+   "placed_by": "marker",
+   "text": "75 Inserted by the Securities and Exchange Board of India (Facilitation of Grievance Redressal Mechanism)\n(Amendment) Regulations, 2023 w.e.f. 18-08-2023."
+  }
+ ],
+ "page_start": 19,
+ "page_end": 20,
+ "sha256": "8160927b8cbb0ef24cde31062cc39e13937ed21529cb09ee6d7a28f12705efea",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

@@ -1,0 +1,1624 @@
+{
+ "source": "SEBI consolidated PDF, bold-number structure parse",
+ "built_offline": true,
+ "script": "scripts/section_sebi_lodr.py",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use.",
+ "entries": {
+  "1": {
+   "section_number": "1",
+   "title": "Short title and commencement",
+   "section_id": "R1",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 1
+  },
+  "2": {
+   "section_number": "2",
+   "title": "Definitions",
+   "section_id": "R2",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 1
+  },
+  "3": {
+   "section_number": "3",
+   "title": "Applicability of the regulations",
+   "section_id": "R3",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 8
+  },
+  "4": {
+   "section_number": "4",
+   "title": "Principles governing disclosures and obligations",
+   "section_id": "R4",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 11
+  },
+  "5": {
+   "section_number": "5",
+   "title": "General obligation of compliance",
+   "section_id": "R5",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 16
+  },
+  "6": {
+   "section_number": "6",
+   "title": "Compliance Officer and his /her Obligations",
+   "section_id": "R6",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 16
+  },
+  "7": {
+   "section_number": "7",
+   "title": "Registrar to an Issue and Share Transfer Agent",
+   "section_id": "R7",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 17
+  },
+  "8": {
+   "section_number": "8",
+   "title": "Co-operation with intermediaries registered with the Board",
+   "section_id": "R8",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 18
+  },
+  "9": {
+   "section_number": "9",
+   "title": "Preservation of documents",
+   "section_id": "R9",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 18
+  },
+  "10": {
+   "section_number": "10",
+   "title": "Filing of information",
+   "section_id": "R10",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 18
+  },
+  "11": {
+   "section_number": "11",
+   "title": "Scheme of Arrangement",
+   "section_id": "R11",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 19
+  },
+  "12": {
+   "section_number": "12",
+   "title": "Payment of dividend or interest or redemption or repayment",
+   "section_id": "R12",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 19
+  },
+  "13": {
+   "section_number": "13",
+   "title": "Grievance Redressal Mechanism",
+   "section_id": "R13",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 19
+  },
+  "14": {
+   "section_number": "14",
+   "title": "Fees and other charges to be paid to the recognized stock exchange(s)",
+   "section_id": "R14",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 20
+  },
+  "15": {
+   "section_number": "15",
+   "title": "Applicability",
+   "section_id": "R15",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 21
+  },
+  "16": {
+   "section_number": "16",
+   "title": "Definitions",
+   "section_id": "R16",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 25
+  },
+  "17": {
+   "section_number": "17",
+   "title": "Board of Directors",
+   "section_id": "R17",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 28
+  },
+  "17A": {
+   "section_number": "17A",
+   "title": "Maximum number of directorships",
+   "section_id": "R17A",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 34
+  },
+  "18": {
+   "section_number": "18",
+   "title": "Audit Committee",
+   "section_id": "R18",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 35
+  },
+  "19": {
+   "section_number": "19",
+   "title": "Nomination and remuneration committee",
+   "section_id": "R19",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 36
+  },
+  "20": {
+   "section_number": "20",
+   "title": "Stakeholders Relationship Committee",
+   "section_id": "R20",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 37
+  },
+  "21": {
+   "section_number": "21",
+   "title": "Risk Management Committee",
+   "section_id": "R21",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 38
+  },
+  "22": {
+   "section_number": "22",
+   "title": "Vigil mechanism",
+   "section_id": "R22",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 39
+  },
+  "23": {
+   "section_number": "23",
+   "title": "Related party transactions",
+   "section_id": "R23",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 39
+  },
+  "24": {
+   "section_number": "24",
+   "title": "Corporate governance requirements with respect to subsidiary of listed entity",
+   "section_id": "R24",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 45
+  },
+  "24A": {
+   "section_number": "24A",
+   "title": "Secretarial Audit and Secretarial Compliance Report",
+   "section_id": "R24A",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 46
+  },
+  "25": {
+   "section_number": "25",
+   "title": "Obligations with respect to independent directors",
+   "section_id": "R25",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 49
+  },
+  "26": {
+   "section_number": "26",
+   "title": "Obligations with respect to employees including senior management, key managerial personnel, directors and promoters",
+   "section_id": "R26",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 51
+  },
+  "26A": {
+   "section_number": "26A",
+   "title": "Vacancies in respect of certain Key Managerial Personnel",
+   "section_id": "R26A",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 53
+  },
+  "27": {
+   "section_number": "27",
+   "title": "Other corporate governance requirements",
+   "section_id": "R27",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 54
+  },
+  "28": {
+   "section_number": "28",
+   "title": "In-principle approval of recognized stock exchange(s)",
+   "section_id": "R28",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 54
+  },
+  "29": {
+   "section_number": "29",
+   "title": "Prior Intimations",
+   "section_id": "R29",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 55
+  },
+  "30": {
+   "section_number": "30",
+   "title": "Disclosure of events or information",
+   "section_id": "R30",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 56
+  },
+  "30A": {
+   "section_number": "30A",
+   "title": "Disclosure requirements for certain types of agreements binding listed entities",
+   "section_id": "R30A",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 61
+  },
+  "31": {
+   "section_number": "31",
+   "title": "Holding of specified securities and shareholding pattern",
+   "section_id": "R31",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 62
+  },
+  "31A": {
+   "section_number": "31A",
+   "title": "Conditions for re-classification of any person as promoter / public",
+   "section_id": "R31A",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 62
+  },
+  "31B": {
+   "section_number": "31B",
+   "title": "Special rights to shareholders",
+   "section_id": "R31B",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 68
+  },
+  "32": {
+   "section_number": "32",
+   "title": "Statement of deviation(s) or variation(s)",
+   "section_id": "R32",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 69
+  },
+  "33": {
+   "section_number": "33",
+   "title": "Financial results",
+   "section_id": "R33",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 70
+  },
+  "34": {
+   "section_number": "34",
+   "title": "Annual Report",
+   "section_id": "R34",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 74
+  },
+  "35": {
+   "section_number": "35",
+   "title": "Annual Information Memorandum",
+   "section_id": "R35",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 76
+  },
+  "36": {
+   "section_number": "36",
+   "title": "Documents & Information to shareholders",
+   "section_id": "R36",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 76
+  },
+  "37": {
+   "section_number": "37",
+   "title": "Draft Scheme of Arrangement & Scheme of Arrangement",
+   "section_id": "R37",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 78
+  },
+  "37A": {
+   "section_number": "37A",
+   "title": "Sale, lease or disposal of an undertaking outside Scheme of Arrangement",
+   "section_id": "R37A",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 79
+  },
+  "38": {
+   "section_number": "38",
+   "title": "Minimum Public Shareholding",
+   "section_id": "R38",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 80
+  },
+  "39": {
+   "section_number": "39",
+   "title": "Issuance of Certificates or Receipts/Letters/Advices for securities and dealing with unclaimed securities",
+   "section_id": "R39",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 80
+  },
+  "40": {
+   "section_number": "40",
+   "title": "Transfer or transmission or transposition of securities",
+   "section_id": "R40",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 81
+  },
+  "41": {
+   "section_number": "41",
+   "title": "Other provisions relating to securities",
+   "section_id": "R41",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 83
+  },
+  "42": {
+   "section_number": "42",
+   "title": "Record Date or Date of closure of transfer books",
+   "section_id": "R42",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 84
+  },
+  "43": {
+   "section_number": "43",
+   "title": "Dividends",
+   "section_id": "R43",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 85
+  },
+  "44": {
+   "section_number": "44",
+   "title": "Meetings of shareholders and voting",
+   "section_id": "R44",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 86
+  },
+  "45": {
+   "section_number": "45",
+   "title": "Change in name of the listed entity",
+   "section_id": "R45",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 87
+  },
+  "46": {
+   "section_number": "46",
+   "title": "Website",
+   "section_id": "R46",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 88
+  },
+  "47": {
+   "section_number": "47",
+   "title": "Advertisements in Newspapers",
+   "section_id": "R47",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 91
+  },
+  "48": {
+   "section_number": "48",
+   "title": "Accounting Standards",
+   "section_id": "R48",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 92
+  },
+  "49": {
+   "section_number": "49",
+   "title": "Applicability",
+   "section_id": "R49",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 93
+  },
+  "50": {
+   "section_number": "50",
+   "title": "Intimation to stock exchange(s)",
+   "section_id": "R50",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 94
+  },
+  "51": {
+   "section_number": "51",
+   "title": "Disclosure of information having bearing on performance/operation of listed entity and/or price sensitive information",
+   "section_id": "R51",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 95
+  },
+  "52": {
+   "section_number": "52",
+   "title": "Financial Results",
+   "section_id": "R52",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 95
+  },
+  "53": {
+   "section_number": "53",
+   "title": "Annual Report",
+   "section_id": "R53",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 101
+  },
+  "54": {
+   "section_number": "54",
+   "title": "Security Cover",
+   "section_id": "R54",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 102
+  },
+  "55": {
+   "section_number": "55",
+   "title": "Credit Rating",
+   "section_id": "R55",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 103
+  },
+  "56": {
+   "section_number": "56",
+   "title": "Documents and Intimation to Debenture Trustees",
+   "section_id": "R56",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 103
+  },
+  "57": {
+   "section_number": "57",
+   "title": "Intimation to stock exchanges",
+   "section_id": "R57",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 104
+  },
+  "58": {
+   "section_number": "58",
+   "title": "Documents and information to holders of non - convertible *** securities ***",
+   "section_id": "R58",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 104
+  },
+  "59": {
+   "section_number": "59",
+   "title": "Structure of non convertible debt securities and non convertible redeemable preference shares",
+   "section_id": "R59",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 105
+  },
+  "59A": {
+   "section_number": "59A",
+   "title": "Draft Scheme of Arrangement and Scheme of Arrangement",
+   "section_id": "R59A",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 106
+  },
+  "60": {
+   "section_number": "60",
+   "title": "Record Date",
+   "section_id": "R60",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 107
+  },
+  "61": {
+   "section_number": "61",
+   "title": "Terms of non convertible debt securities and non convertible redeemable preference shares",
+   "section_id": "R61",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 107
+  },
+  "61A": {
+   "section_number": "61A",
+   "title": "Dealing with unclaimed non-convertible securities and benefits accrued thereon",
+   "section_id": "R61A",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 108
+  },
+  "62": {
+   "section_number": "62",
+   "title": "Website",
+   "section_id": "R62",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 109
+  },
+  "62A": {
+   "section_number": "62A",
+   "title": "Listing of subsequent issuances of non-convertible debt securities",
+   "section_id": "R62A",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 110
+  },
+  "62B": {
+   "section_number": "62B",
+   "title": "Definitions",
+   "section_id": "R62B",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 112
+  },
+  "62C": {
+   "section_number": "62C",
+   "title": "Applicability",
+   "section_id": "R62C",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 112
+  },
+  "62D": {
+   "section_number": "62D",
+   "title": "Board of Directors",
+   "section_id": "R62D",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 114
+  },
+  "62E": {
+   "section_number": "62E",
+   "title": "Maximum number of directorships",
+   "section_id": "R62E",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 118
+  },
+  "62F": {
+   "section_number": "62F",
+   "title": "Audit Committee",
+   "section_id": "R62F",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 119
+  },
+  "62G": {
+   "section_number": "62G",
+   "title": "Nomination and remuneration committee",
+   "section_id": "R62G",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 120
+  },
+  "62H": {
+   "section_number": "62H",
+   "title": "Stakeholders Relationship Committee",
+   "section_id": "R62H",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 120
+  },
+  "62I": {
+   "section_number": "62I",
+   "title": "Risk Management Committee",
+   "section_id": "R62I",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 121
+  },
+  "62J": {
+   "section_number": "62J",
+   "title": "Vigil mechanism",
+   "section_id": "R62J",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 121
+  },
+  "62K": {
+   "section_number": "62K",
+   "title": "Related party transactions",
+   "section_id": "R62K",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 122
+  },
+  "62L": {
+   "section_number": "62L",
+   "title": "Corporate governance requirements with respect to unlisted material subsidiary of HVDLE",
+   "section_id": "R62L",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 124
+  },
+  "62M": {
+   "section_number": "62M",
+   "title": "Secretarial Audit and Secretarial Compliance Report",
+   "section_id": "R62M",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 125
+  },
+  "62N": {
+   "section_number": "62N",
+   "title": "Obligations with respect to independent directors",
+   "section_id": "R62N",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 125
+  },
+  "62O": {
+   "section_number": "62O",
+   "title": "Obligations with respect to employees including senior management, key managerial personnel, directors and promoters",
+   "section_id": "R62O",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 127
+  },
+  "62P": {
+   "section_number": "62P",
+   "title": "Vacancies in respect of certain Key Managerial Personnel",
+   "section_id": "R62P",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 128
+  },
+  "62Q": {
+   "section_number": "62Q",
+   "title": "Other corporate governance requirements",
+   "section_id": "R62Q",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 129
+  },
+  "63": {
+   "section_number": "63",
+   "title": "Applicability of Chapters IV and V",
+   "section_id": "R63",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 131
+  },
+  "64": {
+   "section_number": "64",
+   "title": "Delisting",
+   "section_id": "R64",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 132
+  },
+  "64A": {
+   "section_number": "64A",
+   "title": "Applicability",
+   "section_id": "R64A",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 133
+  },
+  "64B": {
+   "section_number": "64B",
+   "title": "In-principle approval of the stock exchanges",
+   "section_id": "R64B",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 133
+  },
+  "64C": {
+   "section_number": "64C",
+   "title": "Obligations of the listed entity",
+   "section_id": "R64C",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 134
+  },
+  "64D": {
+   "section_number": "64D",
+   "title": "Notice of delisting",
+   "section_id": "R64D",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 135
+  },
+  "64E": {
+   "section_number": "64E",
+   "title": "Approval from the holders and No-Objection Letter from the Debenture",
+   "section_id": "R64E",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 136
+  },
+  "64F": {
+   "section_number": "64F",
+   "title": "Failure of delisting proposal",
+   "section_id": "R64F",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 136
+  },
+  "64G": {
+   "section_number": "64G",
+   "title": "Final application to the stock exchange",
+   "section_id": "R64G",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 136
+  },
+  "64H": {
+   "section_number": "64H",
+   "title": "Delisting from some of the stock exchanges",
+   "section_id": "R64H",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 136
+  },
+  "64I": {
+   "section_number": "64I",
+   "title": "Monitoring of compliance by the stock exchanges",
+   "section_id": "R64I",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 137
+  },
+  "65": {
+   "section_number": "65",
+   "title": "Applicability",
+   "section_id": "R65",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 138
+  },
+  "66": {
+   "section_number": "66",
+   "title": "Definitions",
+   "section_id": "R66",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 138
+  },
+  "67": {
+   "section_number": "67",
+   "title": "General Obligations of listed entity",
+   "section_id": "R67",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 138
+  },
+  "68": {
+   "section_number": "68",
+   "title": "Disclosure of material events or information",
+   "section_id": "R68",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 139
+  },
+  "69": {
+   "section_number": "69",
+   "title": "Indian Depository Receipt holding pattern & Shareholding details",
+   "section_id": "R69",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 139
+  },
+  "70": {
+   "section_number": "70",
+   "title": "Periodical Financial Results",
+   "section_id": "R70",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 139
+  },
+  "71": {
+   "section_number": "71",
+   "title": "Annual Report",
+   "section_id": "R71",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 139
+  },
+  "72": {
+   "section_number": "72",
+   "title": "Corporate Governance",
+   "section_id": "R72",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 139
+  },
+  "73": {
+   "section_number": "73",
+   "title": "Documents and Information to IDR Holder",
+   "section_id": "R73",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 140
+  },
+  "74": {
+   "section_number": "74",
+   "title": "Equitable Treatment to IDR Holders",
+   "section_id": "R74",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 140
+  },
+  "75": {
+   "section_number": "75",
+   "title": "Advertisements in Newspapers",
+   "section_id": "R75",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 140
+  },
+  "76": {
+   "section_number": "76",
+   "title": "Terms of Indian Depository Receipts",
+   "section_id": "R76",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 140
+  },
+  "77": {
+   "section_number": "77",
+   "title": "Structure of Indian Depository Receipts",
+   "section_id": "R77",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 141
+  },
+  "78": {
+   "section_number": "78",
+   "title": "Record Date",
+   "section_id": "R78",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 141
+  },
+  "79": {
+   "section_number": "79",
+   "title": "Voting",
+   "section_id": "R79",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 141
+  },
+  "80": {
+   "section_number": "80",
+   "title": "Delisting of Indian Depository Receipt",
+   "section_id": "R80",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 141
+  },
+  "81": {
+   "section_number": "81",
+   "title": "Applicability",
+   "section_id": "R81",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 142
+  },
+  "82": {
+   "section_number": "82",
+   "title": "Intimation and filings with stock exchange(s)",
+   "section_id": "R82",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 142
+  },
+  "83": {
+   "section_number": "83",
+   "title": "Disclosure of information having bearing on performance/operation of listed entity and/or price sensitive information",
+   "section_id": "R83",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 142
+  },
+  "84": {
+   "section_number": "84",
+   "title": "Credit Rating",
+   "section_id": "R84",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 143
+  },
+  "85": {
+   "section_number": "85",
+   "title": "Information to Investors",
+   "section_id": "R85",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 143
+  },
+  "86": {
+   "section_number": "86",
+   "title": "Terms of Securitized Debt Instruments",
+   "section_id": "R86",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 143
+  },
+  "87": {
+   "section_number": "87",
+   "title": "Record Date",
+   "section_id": "R87",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 144
+  },
+  "87A": {
+   "section_number": "87A",
+   "title": "Applicability",
+   "section_id": "R87A",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 145
+  },
+  "87B": {
+   "section_number": "87B",
+   "title": "Intimations and Disclosure of events or information to Stock Exchanges",
+   "section_id": "R87B",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 145
+  },
+  "87C": {
+   "section_number": "87C",
+   "title": "Valuation, Rating and NAV disclosure",
+   "section_id": "R87C",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 145
+  },
+  "87D": {
+   "section_number": "87D",
+   "title": "Terms of Security Receipts",
+   "section_id": "R87D",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 146
+  },
+  "87E": {
+   "section_number": "87E",
+   "title": "Record Date",
+   "section_id": "R87E",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 146
+  },
+  "88": {
+   "section_number": "88",
+   "title": "Applicability",
+   "section_id": "R88",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 147
+  },
+  "89": {
+   "section_number": "89",
+   "title": "Definitions",
+   "section_id": "R89",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 147
+  },
+  "90": {
+   "section_number": "90",
+   "title": "Submission of Documents",
+   "section_id": "R90",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 147
+  },
+  "91": {
+   "section_number": "91",
+   "title": "Dissemination on the website of stock exchange(s)",
+   "section_id": "R91",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 147
+  },
+  "91A": {
+   "section_number": "91A",
+   "title": "Applicability",
+   "section_id": "R91A",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 148
+  },
+  "91B": {
+   "section_number": "91B",
+   "title": "Disclosures by a For Profit Social Enterprise",
+   "section_id": "R91B",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 148
+  },
+  "91C": {
+   "section_number": "91C",
+   "title": "Disclosures by a Not for Profit Organization",
+   "section_id": "R91C",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 148
+  },
+  "91D": {
+   "section_number": "91D",
+   "title": "Intimations and disclosures by Social Enterprise of events or information to Social Stock Exchange(s) or Stock Exchange(s)",
+   "section_id": "R91D",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 148
+  },
+  "91E": {
+   "section_number": "91E",
+   "title": "Disclosures by a Social Enterprise in respect of social impact",
+   "section_id": "R91E",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 149
+  },
+  "91F": {
+   "section_number": "91F",
+   "title": "Statement of utilisation of funds",
+   "section_id": "R91F",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 150
+  },
+  "92": {
+   "section_number": "92",
+   "title": "Dissemination",
+   "section_id": "R92",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 151
+  },
+  "93": {
+   "section_number": "93",
+   "title": "Transferability",
+   "section_id": "R93",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 151
+  },
+  "94": {
+   "section_number": "94",
+   "title": "Draft Scheme of Arrangement & Scheme of Arrangement in case of entities that have listed their specified securities",
+   "section_id": "R94",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 151
+  },
+  "94A": {
+   "section_number": "94A",
+   "title": "Draft Scheme of Arrangement & Scheme of Arrangement in case of entities that have listed their non-convertible debt securities or non-convertible redeemable preference shares",
+   "section_id": "R94A",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 152
+  },
+  "95": {
+   "section_number": "95",
+   "title": "Statement on Impact of Audit Qualifications accompanying Annual Audit Report",
+   "section_id": "R95",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 152
+  },
+  "96": {
+   "section_number": "96",
+   "title": "Grievance Redressal",
+   "section_id": "R96",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 153
+  },
+  "97": {
+   "section_number": "97",
+   "title": "Monitoring of Compliance/Non Compliance & Adequacy/ Accuracy of the disclosures",
+   "section_id": "R97",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 153
+  },
+  "98": {
+   "section_number": "98",
+   "title": "Liability for contravention of the Act, rules or the regulations",
+   "section_id": "R98",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 154
+  },
+  "99": {
+   "section_number": "99",
+   "title": "Failure to pay fine",
+   "section_id": "R99",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 154
+  },
+  "99A": {
+   "section_number": "99A",
+   "title": "Exemption from enforcement of the regulations in special cases",
+   "section_id": "R99A",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 155
+  },
+  "100": {
+   "section_number": "100",
+   "title": "Amendments to other regulations",
+   "section_id": "R100",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 156
+  },
+  "101": {
+   "section_number": "101",
+   "title": "Power to remove difficulties",
+   "section_id": "R101",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 156
+  },
+  "102": {
+   "section_number": "102",
+   "title": "Power to relax strict enforcement of the regulations",
+   "section_id": "R102",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 156
+  },
+  "103": {
+   "section_number": "103",
+   "title": "Repeal and Savings",
+   "section_id": "R103",
+   "kind": "regulation",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 157
+  },
+  "SCHEDULE I": {
+   "section_number": "SCHEDULE I",
+   "title": "TERMS OF SECURITIES",
+   "section_id": "SCHEDULE_I",
+   "kind": "schedule",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 158
+  },
+  "SCHEDULE II": {
+   "section_number": "SCHEDULE II",
+   "title": "CORPORATE GOVERNANCE",
+   "section_id": "SCHEDULE_II",
+   "kind": "schedule",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 159
+  },
+  "SCHEDULE III": {
+   "section_number": "SCHEDULE III",
+   "title": "SCHEDULE III",
+   "section_id": "SCHEDULE_III",
+   "kind": "schedule",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 166
+  },
+  "SCHEDULE IV": {
+   "section_number": "SCHEDULE IV",
+   "title": "SCHEDULE IV",
+   "section_id": "SCHEDULE_IV",
+   "kind": "schedule",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 185
+  },
+  "SCHEDULE V": {
+   "section_number": "SCHEDULE V",
+   "title": "ANNUAL REPORT",
+   "section_id": "SCHEDULE_V",
+   "kind": "schedule",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 191
+  },
+  "SCHEDULE VI": {
+   "section_number": "SCHEDULE VI",
+   "title": "MANNER OF DEALING WITH UNCLAIMED SHARES",
+   "section_id": "SCHEDULE_VI",
+   "kind": "schedule",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 198
+  },
+  "SCHEDULE VII": {
+   "section_number": "SCHEDULE VII",
+   "title": "TRANSFER AND TRANSMISSION OF SECURITIES",
+   "section_id": "SCHEDULE_VII",
+   "kind": "schedule",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 200
+  },
+  "SCHEDULE VIII": {
+   "section_number": "SCHEDULE VIII",
+   "title": "***",
+   "section_id": "SCHEDULE_VIII",
+   "kind": "schedule",
+   "omitted": true,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 203
+  },
+  "SCHEDULE IX": {
+   "section_number": "SCHEDULE IX",
+   "title": "AMENDMENTS TO OTHER REGULATIONS",
+   "section_id": "SCHEDULE_IX",
+   "kind": "schedule",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 205
+  },
+  "SCHEDULE X": {
+   "section_number": "SCHEDULE X",
+   "title": "LIST OF SEBI CIRCULARS WHICH STAND RESCINDED",
+   "section_id": "SCHEDULE_X",
+   "kind": "schedule",
+   "omitted": false,
+   "confidence": "high",
+   "method": "bold number token in sequence (pdfplumber, 12pt body)",
+   "page_start": 212
+  }
+ }
+}

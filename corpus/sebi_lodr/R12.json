@@ -1,0 +1,39 @@
+{
+ "section_id": "R12",
+ "ref": "RULE:SEBI_LODR_2015:R12",
+ "kind": "regulation",
+ "number": "12",
+ "heading": "Payment of dividend or interest or redemption or repayment",
+ "heading_raw": "Payment of dividend or interest or redemption or repayment.",
+ "chapter": {
+  "number": "III",
+  "title": "COMMON OBLIGATIONS OF LISTED ENTITIES"
+ },
+ "omitted": false,
+ "content": "12. The listed entity shall use any of the electronic mode of payment facility approved by\nthe Reserve Bank of India, in the manner specified in Schedule I, for the payment of\nthe following:\n(a) dividends;\n(b) interest;\n(c) redemption or repayment amounts 70[.]\n71[***]",
+ "footnotes": [
+  {
+   "number": "70",
+   "page": 19,
+   "placed_by": "marker",
+   "text": "70 Substituted for the symbol “:” by the Securities and Exchange Board of India (Listing Obligations and\nDisclosure Requirements) (Fifth Amendment) Regulations, 2025 w.e.f. 19.11.2025."
+  },
+  {
+   "number": "71",
+   "page": 19,
+   "placed_by": "marker",
+   "text": "71 Omitted by the Securities and Exchange Board of India (Listing Obligations and Disclosure Requirements)\n(Fifth Amendment) Regulations, 2025 w.e.f. 19.11.2025. Prior to the omission, the provisos read as under-\n“Provided that where it is not possible to use electronic mode of payment, ‘payable-at-par’ warrants or\ncheques may be issued:\nProvided further that where the amount payable as dividend exceeds one thousand and five hundred\nrupees, the ‘payable-at-par’ warrants or cheques shall be sent by speed post.”"
+  }
+ ],
+ "page_start": 19,
+ "page_end": 19,
+ "sha256": "4982ed4614d027d2e55192c8df9cccf1a1fa294d3af7a2fdd85bbae4a2782c60",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

@@ -1,0 +1,45 @@
+{
+ "section_id": "R62L",
+ "ref": "RULE:SEBI_LODR_2015:R62L",
+ "kind": "regulation",
+ "number": "62L",
+ "heading": "Corporate governance requirements with respect to unlisted material subsidiary of HVDLE",
+ "heading_raw": "Corporate governance requirements with respect to unlisted material subsidiary of HVDLE",
+ "chapter": {
+  "number": "VA",
+  "title": "CORPORATE GOVERNANCE NORMS FOR A LISTED ENTITY WHICH HAS LISTED ITS NON-CONVERTIBLE DEBT SECURITIES"
+ },
+ "omitted": false,
+ "content": "62L. (1) At least one independent director, on the board of directors of the HVDLE,\nshall be a director on the board of directors of an unlisted material subsidiary, whether\nincorporated in India or not.\nExplanation: — For the purposes of this regulation, the term “material subsidiary”\nshall mean a subsidiary, whose 606[turnover]or net worth exceeds twenty per cent.\nof the consolidated 607[turnover]or net worth respectively, of the listed entity and\nits subsidiaries in the immediately preceding accounting year.\n(2) The audit committee of the HVDLE shall also review the financial statements and\nin particular, the investments made by the unlisted material subsidiary.\n(3) The minutes of the meetings of the board of directors of the unlisted material\nsubsidiary shall be placed at the meeting of the board of directors of the HVDLE.\n(4) The management of the unlisted material subsidiary shall periodically bring to the\nnotice of the board of directors of the HVDLE, a statement of all significant\ntransactions and arrangements entered into by the unlisted material subsidiary.\nExplanation: — For the purpose of this regulation, the term “significant transaction\nor arrangement” shall mean any individual transaction or arrangement that exceeds\nor is likely to exceed ten per cent. of the total revenues or total expenses or total\nassets or total liabilities, as the case may be, of the unlisted material subsidiary for\nthe immediately preceding financial year.\n(5) A HVDLE shall not dispose of shares in its unlisted material subsidiary resulting\nin reduction of its shareholding (either on its own or together with other\nsubsidiaries) to less than or equal to fifty per cent. or relinquish the control over the\nsubsidiary without passing a special resolution in its General Meeting except in\ncases where such divestment is made under a scheme of arrangement duly approved\nby a Court/Tribunal, or under a resolution plan duly approved under section 31 of\nthe Insolvency Code and such an event is disclosed to the recognized stock\nexchanges within one day of the resolution plan being approved.\n(6) Selling, disposing and leasing of assets amounting to more than twenty per cent. of\nthe assets of the unlisted material subsidiary on an aggregate basis during a financial\nyear shall require prior approval of shareholders by way of special resolution, unless\nthe sale/disposal/lease is made under a scheme of arrangement duly approved by a\nCourt/Tribunal, or under a resolution plan duly approved under section 31 of the\nInsolvency Code and such an event is disclosed to the recognized stock exchanges\nwithin one day of the resolution plan being approved.\n608[Nothing contained in this sub-regulation shall be applicable if such sale, disposal\nor lease of assets is between two wholly-owned subsidiaries of the HVDLE.]\n(7) Where a HVDLE has a listed subsidiary, which is itself a holding company, the\nprovisions of this regulation shall apply to the listed subsidiary in so far as its\nsubsidiaries are concerned.",
+ "footnotes": [
+  {
+   "number": "606",
+   "page": 124,
+   "placed_by": "marker",
+   "text": "606 Substituted for the word “income” vide the Securities and Exchange Board of India (Listing Obligations and\nDisclosure Requirements) (Amendment) Regulations, 2026 w.e.f. 22.1.2026."
+  },
+  {
+   "number": "607",
+   "page": 124,
+   "placed_by": "marker",
+   "text": "607 ibid"
+  },
+  {
+   "number": "608",
+   "page": 125,
+   "placed_by": "marker",
+   "text": "608 Inserted vide the Securities and Exchange Board of India (Listing Obligations and Disclosure Requirements)\n(Amendment) Regulations, 2026 w.e.f. 22.1.2026."
+  }
+ ],
+ "page_start": 124,
+ "page_end": 125,
+ "sha256": "332c30791a28fe193b7d75c86a814f72fd8ed4a82fbc0255d2f1b5782dda7b44",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

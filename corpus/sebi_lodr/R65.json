@@ -1,0 +1,26 @@
+{
+ "section_id": "R65",
+ "ref": "RULE:SEBI_LODR_2015:R65",
+ "kind": "regulation",
+ "number": "65",
+ "heading": "Applicability",
+ "heading_raw": "Applicability.",
+ "chapter": {
+  "number": "VII",
+  "title": "OBLIGATIONS OF LISTED ENTITY WHICH HAS LISTED ITS INDIAN DEPOSITORY RECEIPTS"
+ },
+ "omitted": false,
+ "content": "65. The provisions of this chapter shall apply to listed entity whose securities market\nregulators are signatories to the Multilateral Memorandum of Understanding of\nInternational Organization of Securities Commission issuing ‘Indian Depository\nReceipts’ as defined under Rule 13 of the Companies (Registration of Foreign\nCompanies) Rules, 2014.",
+ "footnotes": [],
+ "page_start": 138,
+ "page_end": 138,
+ "sha256": "2e59befd9b01c318798c4ad380170e3c405cb18887632e2c5fe09b6fc1278e40",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

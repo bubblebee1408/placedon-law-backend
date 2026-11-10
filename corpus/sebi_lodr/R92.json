@@ -1,0 +1,26 @@
+{
+ "section_id": "R92",
+ "ref": "RULE:SEBI_LODR_2015:R92",
+ "kind": "regulation",
+ "number": "92",
+ "heading": "Dissemination",
+ "heading_raw": "Dissemination.",
+ "chapter": {
+  "number": "X",
+  "title": "DUTIES AND OBLIGATIONS OF THE RECOGNISED STOCK EXCHANGE(S)"
+ },
+ "omitted": false,
+ "content": "92. (1) Upon receipt of relevant intimations, information, filings, reports, statements,\ndocuments or any other submissions in terms of these regulations, from the listed entity\nthe recognised stock exchange(s) shall immediately disseminate the same on its\nwebsite.\n(2) The disseminations by the recognised stock exchange(s) as mentioned in sub-regulation (1)\nshall be made in organised, user friendly and easily referable manner including by\nproviding hyperlinks for easy accessibility.",
+ "footnotes": [],
+ "page_start": 151,
+ "page_end": 151,
+ "sha256": "8e9775892209c72a87e54689f5061519175bb538e1a0b915826534b8b88767a5",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

@@ -1,0 +1,26 @@
+{
+ "section_id": "R8",
+ "ref": "RULE:SEBI_LODR_2015:R8",
+ "kind": "regulation",
+ "number": "8",
+ "heading": "Co-operation with intermediaries registered with the Board",
+ "heading_raw": "Co-operation with intermediaries registered with the Board.",
+ "chapter": {
+  "number": "III",
+  "title": "COMMON OBLIGATIONS OF LISTED ENTITIES"
+ },
+ "omitted": false,
+ "content": "8. The listed entity, wherever applicable, shall co-operate with and submit correct and\nadequate information to the intermediaries registered with the Board such as credit\nrating agencies, registrar to an issue and share transfer agents, debenture trustees etc,\nwithin timelines and procedures specified under the Act, regulations and circulars\nissued there under:\nProvided that requirements of this regulation shall not be applicable to the units issued by\nmutual funds listed on a recognised stock exchange(s) for which the provisions of the\nSecurities and Exchange Board of India (Mutual Funds) Regulations, 1996 shall be applicable.",
+ "footnotes": [],
+ "page_start": 18,
+ "page_end": 18,
+ "sha256": "f40c1d2ff0c311a3ed30419e726994aabaaf2f9970cb0db91afc5988c23a4c0e",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

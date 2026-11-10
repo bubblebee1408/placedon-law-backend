@@ -1,0 +1,26 @@
+{
+ "section_id": "R64H",
+ "ref": "RULE:SEBI_LODR_2015:R64H",
+ "kind": "regulation",
+ "number": "64H",
+ "heading": "Delisting from some of the stock exchanges",
+ "heading_raw": "Delisting from some of the stock exchanges.",
+ "chapter": {
+  "number": "VIA",
+  "title": "FRAMEWORK FOR VOLUNTARY DELISTING OF NON-CONVERTIBLE DEBT SECURITIES OR NON-CONVERTBLE REDEEMABLE PREFERENCE SHARES AND OBLIGATIONS OF THE LISTED ENTITY ON SUCH DELISTING"
+ },
+ "omitted": false,
+ "content": "64H. Delisting from some of the stock exchanges.\n(1) Where the non-convertible debt securities or non-convertible redeemable\npreference shares are listed on more than one stock exchanges, the listed entity\nmay choose to delist such securities or shares from all stock exchanges except one\nsuch stock exchange having nationwide trading terminals.\n(2) If the listed entity proposes to delist its non-convertible debt securities or non-\nconvertible redeemable preference shares as per sub-regulation (1), the provisions\nof regulations 64B to 64G of these regulations shall not be applicable and the listed\nentity shall:\n(a) obtain the prior approval of its board of directors for such delisting;\n(b) make an application to the stock exchange for delisting its non-convertible\ndebt securities or non-convertible redeemable preference shares;\n(c) disclose the fact of delisting from the stock exchanges on its website;\n(d) obtain No-Objection Letter from the Debenture Trustee in case of proposed\ndelisting of non-convertible debt securities;\n(e) disclose the fact of delisting, the reasons for such delisting and the fact of\ncontinuation of listing of non-convertible debt securities or non-convertible\nredeemable preference shares, as the case may be, on the stock exchange\nhaving nationwide trading terminals, on its website.\n(3) The application for delisting filed as per sub-regulation (1) shall be disposed of by\nthe stock exchange within a period not exceeding thirty working days from the\ndate of receipt of such application that is complete in all respects.",
+ "footnotes": [],
+ "page_start": 136,
+ "page_end": 137,
+ "sha256": "b506c94dcbe7b7552d2eec30315c4ee2c306381690b73a4018da2abfd1b14e0c",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

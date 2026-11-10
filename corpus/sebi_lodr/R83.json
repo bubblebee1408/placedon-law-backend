@@ -1,0 +1,26 @@
+{
+ "section_id": "R83",
+ "ref": "RULE:SEBI_LODR_2015:R83",
+ "kind": "regulation",
+ "number": "83",
+ "heading": "Disclosure of information having bearing on performance/operation of listed entity and/or price sensitive information",
+ "heading_raw": "Disclosure of information having bearing on performance/operation of listed entity and/or price sensitive information.",
+ "chapter": {
+  "number": "VIII",
+  "title": "OBLIGATIONS OF LISTED ENTITY WHICH HAS LISTED ITS SECURITISED DEBT INSTRUMENTS"
+ },
+ "omitted": false,
+ "content": "83. (1) The listed entity shall promptly inform the stock exchange(s) of all information\nhaving bearing on the on performance/operation of the listed entity and price sensitive\ninformation.\n(2) Without prejudice to the generality of sub-regulation(1), the listed entity shall make the\ndisclosures specified in Part D of Schedule III.\nExplanation.- The expression ‘promptly inform’, shall imply that the stock exchange must be\ninformed must as soon as practically possible and without any delay and that the information\nshall be given first to the stock exchange(s) before providing the same to any third party.",
+ "footnotes": [],
+ "page_start": 142,
+ "page_end": 143,
+ "sha256": "64b1d30d865ef385307ca24a60f13cbe64d82912b5cbf3c6a6c2b7e70be7a83f",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

@@ -427,6 +427,7 @@ Ring column: which layer of the one-way firewall a module is registered in (`che
 | `scripts/rls_integration.py` |  | Row-level security, proved against a REAL Postgres. Outside scripts/run_tests.sh; run by CI. |
 | `scripts/scan_testdocs.py` |  | Run the SS defect scanner against the REAL document corpus. |
 | `scripts/search_memory.py` |  | Agent retrieval over code and memory. The read half of `index_codebase.py`. |
+| `scripts/section_sebi_lodr.py` |  | Section SEBI's consolidated LODR Regulations, 2015 into one record per regulation and schedule. |
 | `scripts/seed_admission.py` |  | Seed admission records and the review queue from what the repo actually knows. |
 | `scripts/serve_api.py` |  | The JSON API server. Wraps checker.api.handle in the stdlib HTTP server. |
 | `scripts/serve_ask.py` |  | The local demo server for the Ask prototype: web/assistant/ plus POST /v1/ask, one origin. |

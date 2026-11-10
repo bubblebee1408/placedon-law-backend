@@ -1,0 +1,57 @@
+{
+ "section_id": "R6",
+ "ref": "RULE:SEBI_LODR_2015:R6",
+ "kind": "regulation",
+ "number": "6",
+ "heading": "Compliance Officer and his /her Obligations",
+ "heading_raw": "Compliance Officer and his 55[/her] Obligations.",
+ "chapter": {
+  "number": "III",
+  "title": "COMMON OBLIGATIONS OF LISTED ENTITIES"
+ },
+ "omitted": false,
+ "content": "6. (1) A listed entity shall appoint a qualified company secretary as the compliance officer56[:]\n57[Provided that the Compliance Officer shall be an officer, who is in whole time\nemployment of the listed entity, not more than one level below the board of directors and shall\nbe designated as a Key Managerial Personnel.]\n58[(1A) Any vacancy in the office of the Compliance Officer shall be filled by the listed entity\nat the earliest and in any case not later than three months from the date of such vacancy:\nProvided that the listed entity shall not fill such vacancy by appointing a person in interim\ncapacity, unless such appointment is made in accordance with the laws applicable in case of a\nfresh appointment to such office and the obligations under such laws are made applicable to\nsuch person.]\n59[(1B) Any vacancy in the office of the Compliance Officer of such listed entity in respect of\nwhich a resolution plan under section 31 of the Insolvency Code has been approved, shall be\nfilled within a period of three months of such approval:\nProvided that, in the interim, such listed entity shall have not less than one full-time key\nmanagerial personnel managing its day-to-day affairs.]\n(2) The compliance officer of the listed entity shall be responsible for-\n(a) ensuring conformity with the regulatory provisions applicable to the listed entity in\nletter and spirit.\n(b) co-ordination with and reporting to the Board, recognised stock exchange(s) and\ndepositories with respect to compliance with rules, regulations and other directives\nof these authorities in manner as specified from time to time.\n(c) ensuring that the correct procedures have been followed that would result in the\ncorrectness, authenticity and comprehensiveness of the information, statements and\nreports filed by the listed entity under these regulations.\n(d) monitoring email address of grievance redressal division as designated by the listed\nentity for the purpose of registering complaints by investors:\nProvided that the requirements of this regulation shall not be applicable in the case of units\nissued by mutual funds which are listed on recognised stock exchange(s) but shall be\ngoverned by the provisions of the Securities and Exchange Board of India (Mutual Funds)\nRegulations, 1996.",
+ "footnotes": [
+  {
+   "number": "55",
+   "page": 16,
+   "placed_by": "marker",
+   "text": "55 Inserted by the SEBI (Listing Obligations and Disclosure Requirements) (Second Amendment) Regulations,\n2021 w.e.f. 5.5.2021."
+  },
+  {
+   "number": "56",
+   "page": 16,
+   "placed_by": "marker",
+   "text": "56 Substituted for the symbol “.” by the Securities and Exchange Board of India (Listing Obligations and\nDisclosure Requirements) (Third Amendment) Regulations, 2024 w.e.f. 13.12.2024."
+  },
+  {
+   "number": "57",
+   "page": 16,
+   "placed_by": "marker",
+   "text": "57 Inserted by the Securities and Exchange Board of India (Listing Obligations and Disclosure Requirements)\n(Third Amendment) Regulations, 2024 w.e.f. 13.12.2024."
+  },
+  {
+   "number": "58",
+   "page": 16,
+   "placed_by": "marker",
+   "text": "58 Inserted by the Securities and Exchange Board of India (Listing Obligations and Disclosure Requirements)\n(Second Amendment) Regulations, 2023 w.e.f. 15.7.2023."
+  },
+  {
+   "number": "59",
+   "page": 16,
+   "placed_by": "marker",
+   "text": "59 Inserted by the Securities and Exchange Board of India (Listing Obligations and Disclosure Requirements)\n(Third Amendment) Regulations, 2024 w.e.f. 13.12.2024."
+  }
+ ],
+ "page_start": 16,
+ "page_end": 17,
+ "sha256": "fb95a515a137d7d35c80f9e8d7317d48f545d31ee791c0e54c4214f883e87dbf",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

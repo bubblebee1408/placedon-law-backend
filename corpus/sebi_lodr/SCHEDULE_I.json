@@ -1,0 +1,48 @@
+{
+ "section_id": "SCHEDULE_I",
+ "ref": null,
+ "kind": "schedule",
+ "number": "I",
+ "heading": "TERMS OF SECURITIES",
+ "heading_raw": "SCHEDULE I – TERMS OF SECURITIES",
+ "chapter": null,
+ "omitted": false,
+ "content": "[See Regulation 12]\nThe listed entity shall use the facility of electronic clearing services or real time gross\nsettlement or national electronic funds transfer as follows:-\n(1) the listed entity either directly 654[or through the depositories] or through their 655[Registrar\nto an Issue and Share Transfer Agent], shall use electronic clearing services (local,\nregional or national), direct credit, real time gross settlement, national electronic funds\ntransfer etc for making payment of dividend/interest on securities issued/redemption or\nrepayment amount.\n(2) the listed entity or 656[Registrar to an Issue and Share Transfer Agent] shall maintain bank\ndetails of their investors as follows -\n(a) for investors holding securities in dematerialized mode, by seeking the same from\nthe depositories.\n(b) for investors holding securities in physical mode, by updating bank details of the\ninvestors at their end.\n(3) 657[***]",
+ "footnotes": [
+  {
+   "number": "654",
+   "page": 158,
+   "placed_by": "marker",
+   "text": "654 Inserted by the SEBI (Listing Obligations and Disclosure Requirements) (Second Amendment) Regulations,\n2018, w.e.f. 30.5.2018."
+  },
+  {
+   "number": "655",
+   "page": 158,
+   "placed_by": "marker",
+   "text": "655 Substituted for “Registrar to an Issue and/or Share Transfer Agent” by the SEBI (Listing Obligations and\nDisclosure Requirements) (Sixth Amendment) Regulations, 2025 w.e.f. 16.12.2025."
+  },
+  {
+   "number": "656",
+   "page": 158,
+   "placed_by": "marker",
+   "text": "656 Substituted for “Share Transfer Agent” by the SEBI (Listing Obligations and Disclosure Requirements) (Sixth\nAmendment) Regulations, 2025 w.e.f. 16.12.2025."
+  },
+  {
+   "number": "657",
+   "page": 158,
+   "placed_by": "marker",
+   "text": "657 Omitted by the Securities and Exchange Board of India (Listing Obligations and Disclosure Requirements)\n(Fifth Amendment) Regulations, 2025 w.e.f. 19.11.2025. Prior to the omission, the clause read as under-\n“(3)In cases where either the bank details such as Magnetic Ink Character Recognition, Indian Financial\nSystem Code, etc. that are required for making electronic payment are not available or the electronic\npayment instructions have failed or have been rejected by the bank, listed entity or share transfer agent\nshall issue ‘payable-at-par’ warrants/ cheques for making payments:\nProvided that the listed entity shall mandatorily print the bank account details of the investors on such\npayment instruments and in cases where the bank details of investors are not available, the listed entity\nshall mandatorily print the address of the investor on such payment instructions.”"
+  }
+ ],
+ "page_start": 158,
+ "page_end": 158,
+ "sha256": "ed85aff92529c40225dcd370dbc6ee6f5d7e6ced929649861c62ae0781a00557",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

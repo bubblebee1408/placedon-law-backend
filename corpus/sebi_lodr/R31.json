@@ -1,0 +1,33 @@
+{
+ "section_id": "R31",
+ "ref": "RULE:SEBI_LODR_2015:R31",
+ "kind": "regulation",
+ "number": "31",
+ "heading": "Holding of specified securities and shareholding pattern",
+ "heading_raw": "Holding of specified securities and shareholding pattern.",
+ "chapter": {
+  "number": "IV",
+  "title": "OBLIGATIONS OF 76[A] LISTED ENTITY WHICH HAS LISTED ITS SPECIFIED SECURITIES 77[AND NON-CONVERTIBLE DEBT SECURITIES]"
+ },
+ "omitted": false,
+ "content": "31. (1) The listed entity shall submit to the stock exchange(s) a statement showing holding\nof securities and shareholding pattern separately for each class of securities, in the\nformat specified by the Board from time to time within the following timelines -\n(a) one day prior to listing of its securities on the stock exchange(s);\n(b) on a quarterly basis, within twenty one days from the end of each quarter; and,\n(c) within ten days of any capital restructuring of the listed entity resulting in a change\nexceeding two per cent of the total paid-up share capital:\nProvided that in case of listed entities which have listed their specified securities on SME\nExchange, the above statements shall be submitted on a half yearly basis within twenty\none days from the end of each half year.\n(2) The listed entity shall ensure that hundred percent of shareholding of promoter(s)\nand promoter group is in dematerialized form and the same is maintained on a\ncontinuous basis in the manner as specified by the Board.\n(3) The listed entity shall comply with circulars or directions issued by the Board from\ntime to time with respect to maintenance of shareholding in dematerialized form.\n327[(4) All entities falling under promoter and promoter group shall be disclosed\nseparately in the shareholding pattern appearing on the website of all stock exchanges\nhaving nationwide trading terminals where the specified securities of the entity are\nlisted, in accordance with the formats specified by the Board.]",
+ "footnotes": [
+  {
+   "number": "327",
+   "page": 62,
+   "placed_by": "marker",
+   "text": "327 Inserted by SEBI (Listing Obligations and Disclosure Requirements) (Sixth Amendment) Regulations, 2018,\nw.e.f. 16.11.2018"
+  }
+ ],
+ "page_start": 62,
+ "page_end": 62,
+ "sha256": "ae16776a0a72bc8a50b8d8e2721477af8f7222c0c674e5ee3298159e399385f2",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

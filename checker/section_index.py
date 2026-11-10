@@ -56,13 +56,13 @@ class Instrument:
 INSTRUMENTS: dict[str, Instrument] = {
     COMPANIES_ACT_2013: Instrument(
         COMPANIES_ACT_2013, "CA2013", CORPUS),
+    # Sectioned by scripts/section_sebi_lodr.py from SEBI's consolidated PDF (the flat
+    # corpus/rules/sebi_lodr_2015.txt is truncated at page 129 of 230 and was not used).
+    # Lookup-able by number, NOT served: every record is HUMAN_REVIEW_PENDING with
+    # production_usable false, and checker/legal_retrieval.py resolves the Companies Act
+    # only. A record found here is evidence held for review, never an answer.
     SEBI_LODR_2015: Instrument(
-        SEBI_LODR_2015, "SEBI_LODR", None,
-        "the LODR text is held as one flat file (corpus/rules/sebi_lodr_2015.txt, 374 KB) "
-        "and has never been sectioned, so there is no regulation-number index to look up. "
-        "It is registered as an instrument and used for currency checks, but it is not "
-        "retrievable. Sectioning it is the work that has to happen before a LODR question "
-        "can be answered from the text rather than refused."),
+        SEBI_LODR_2015, "SEBI_LODR", ROOT / "corpus/sebi_lodr"),
 }
 
 
@@ -126,7 +126,10 @@ def section_by_number(section_number: str, *,
     rec["title"] = e["title"]
     rec["index_confidence"] = e["confidence"]
     rec["instrument_id"] = inst.instrument_id
-    rec["ref"] = f"ACT:{inst.instrument_id}:S{e['section_number']}"
+    # A record that names its own ref keeps it: LODR regulations are subordinate
+    # legislation (RULE:...:R17), and a Schedule has no legal_ref form at all (None).
+    if "ref" not in rec:
+        rec["ref"] = f"ACT:{inst.instrument_id}:S{e['section_number']}"
     return rec
 
 
@@ -184,12 +187,31 @@ def _test() -> None:
     # that plainly exists.
     check(section_by_number("99999") is None,
           "a section that is not in the Act returns None -- an answer about the law")
-    try:
-        section_by_number("15", instrument_id=SEBI_LODR_2015)
-        check(False, "LODR must not return None -- its text is held but never sectioned")
-    except NotIndexed as e:
-        check("never been sectioned" in str(e) and "sebi_lodr_2015.txt" in str(e),
-              "LODR raises NotIndexed, naming the file and why it cannot be looked up")
+    # LODR is now sectioned: a regulation is found by NUMBER in its own instrument, and the
+    # record says, in machine-readable form, that nobody has reviewed it.
+    reg17 = section_by_number("17", instrument_id=SEBI_LODR_2015)
+    check(reg17 is not None and reg17["title"] == "Board of Directors"
+          and reg17["instrument_id"] == SEBI_LODR_2015,
+          "LODR reg 17 resolves by number to 'Board of Directors', and names its instrument")
+    check(reg17 is not None and reg17["production_usable"] is False
+          and reg17["admission_state"] == "HUMAN_REVIEW_PENDING",
+          "...and is HUMAN_REVIEW_PENDING, not production usable: indexed is not admitted")
+    check(reg17 is not None and _lr.parse_key(reg17["ref"]).instrument_type == _lr.RULE
+          and reg17["ref"] == "RULE:SEBI_LODR_2015:R17",
+          "a LODR regulation is a RULE ref, never an Act section of the same number")
+    check(reg17 != section_by_number("17"),
+          "LODR reg 17 and Companies Act s.17 are different records")
+    for num, head in (("23", "Related party transactions"),
+                      ("30", "Disclosure of events or information"),
+                      ("33", "Financial results"), ("34", "Annual Report"),
+                      ("17A", "Maximum number of directorships")):
+        r = section_by_number(num, instrument_id=SEBI_LODR_2015)
+        check(r is not None and r["title"] == head, f"LODR reg {num} is {head!r}")
+    sched = section_by_number("Schedule II", instrument_id=SEBI_LODR_2015)
+    check(sched is not None and sched["kind"] == "schedule" and sched["ref"] is None,
+          "a Schedule is looked up by name and carries no legal_ref (it has no form there)")
+    check(section_by_number("104", instrument_id=SEBI_LODR_2015) is None,
+          "LODR has no regulation 104 -- None is an answer about the law")
     try:
         section_by_number("1", instrument_id="NO_SUCH_ACT")
         check(False, "an unregistered instrument must be refused")

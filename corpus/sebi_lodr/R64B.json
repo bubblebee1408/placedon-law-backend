@@ -1,0 +1,26 @@
+{
+ "section_id": "R64B",
+ "ref": "RULE:SEBI_LODR_2015:R64B",
+ "kind": "regulation",
+ "number": "64B",
+ "heading": "In-principle approval of the stock exchanges",
+ "heading_raw": "In-principle approval of the stock exchanges",
+ "chapter": {
+  "number": "VIA",
+  "title": "FRAMEWORK FOR VOLUNTARY DELISTING OF NON-CONVERTIBLE DEBT SECURITIES OR NON-CONVERTBLE REDEEMABLE PREFERENCE SHARES AND OBLIGATIONS OF THE LISTED ENTITY ON SUCH DELISTING"
+ },
+ "omitted": false,
+ "content": "64B. In-principle approval of the stock exchanges\n(1) The listed entity shall make an application to the relevant stock exchange(s) for\nseeking in-principle approval for the proposed delisting of non-convertible debt\nsecurities or non-convertible redeemable preference shares in the form specified\nby such stock exchange, not later than fifteen working days from the date of\npassing of the board resolution to that effect or of receipt of any other statutory or\nregulatory approval, whichever is later.\n(2) The application seeking in-principle approval for the delisting of the non-\nconvertible debt securities or non-convertible redeemable preference shares shall\nbe disposed of by the relevant stock exchange(s) within a period not exceeding\nfifteen working days from the date of receipt of such application that is complete\nin all respects.\n(3) The stock exchange shall take into account all relevant matters including the\nfollowing while granting the in-principle approval:\n(a) necessary approvals of the board of directors in respect of the delisting\nproposal;\n(b) due resolution of all investor grievances by the listed entity;\n(c) due payment of all listing fees or fines or penalties to the stock exchange;\n(d) compliance with all provisions of these regulations;\n(e) pendency of any litigation or action against the listed entity pertaining to\nits activities in the securities market;\n(f) non-payment of any penalty imposed by the Board or the existence of any\nrestrictions or limitations imposed by the Board upon the listed entity.",
+ "footnotes": [],
+ "page_start": 133,
+ "page_end": 134,
+ "sha256": "472ff50cc52b2cf130762fdce37d533b2889f46044d529b2bd27f3241c1888a7",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

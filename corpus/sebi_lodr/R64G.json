@@ -1,0 +1,26 @@
+{
+ "section_id": "R64G",
+ "ref": "RULE:SEBI_LODR_2015:R64G",
+ "kind": "regulation",
+ "number": "64G",
+ "heading": "Final application to the stock exchange",
+ "heading_raw": "Final application to the stock exchange",
+ "chapter": {
+  "number": "VIA",
+  "title": "FRAMEWORK FOR VOLUNTARY DELISTING OF NON-CONVERTIBLE DEBT SECURITIES OR NON-CONVERTBLE REDEEMABLE PREFERENCE SHARES AND OBLIGATIONS OF THE LISTED ENTITY ON SUCH DELISTING"
+ },
+ "omitted": false,
+ "content": "64G. Final application to the stock exchange\n(1) Within five working days from the date of obtaining the requisite approval from\nthe holders of non-convertible debt securities or non-convertible redeemable\npreference shares in terms of regulation 64E of these regulations, the listed entity\nshall make the final application for delisting to the stock exchange in the form\nspecified by such stock exchange.\n(2) The final application for delisting shall be disposed of by the stock exchange within\nfifteen working days from the date of receipt of such application that is complete\nin all respects.\n(3) Upon disposal of the final application for delisting by the stock exchange, the non-\nconvertible debt securities or non-convertible redeemable preference shares of the\nlisted entity, as the case may be, shall be delisted from the stock exchange.",
+ "footnotes": [],
+ "page_start": 136,
+ "page_end": 136,
+ "sha256": "9ee04708a84625e5b9c29703bf6466d5b7450692313d2cfe55dff95caa39ea81",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

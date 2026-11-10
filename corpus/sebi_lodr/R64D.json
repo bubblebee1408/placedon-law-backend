@@ -1,0 +1,26 @@
+{
+ "section_id": "R64D",
+ "ref": "RULE:SEBI_LODR_2015:R64D",
+ "kind": "regulation",
+ "number": "64D",
+ "heading": "Notice of delisting",
+ "heading_raw": "Notice of delisting",
+ "chapter": {
+  "number": "VIA",
+  "title": "FRAMEWORK FOR VOLUNTARY DELISTING OF NON-CONVERTIBLE DEBT SECURITIES OR NON-CONVERTBLE REDEEMABLE PREFERENCE SHARES AND OBLIGATIONS OF THE LISTED ENTITY ON SUCH DELISTING"
+ },
+ "omitted": false,
+ "content": "64D. Notice of delisting\n(1)The listed entity shall send the notice of delisting to the holders of non-convertible\ndebt securities or non-convertible redeemable preference shares, not later than\nthree working days from the date of receipt of in-principle approval from the stock\nexchanges.\n(2) A copy of the notice referred to in sub-regulation (1) shall also be made available\non the website of the listed entity.\n(3) The notice of delisting shall contain all the disclosures specified in regulation\n64C of these regulations along with the in-principle approval received from the\nstock exchange(s) and such other disclosures as may be necessary for the holders\nof non-convertible debt securities or non-convertible redeemable preference\nshares to take an informed decision.\n(4) The notice of delisting shall also contain the provision of e-voting for the holders\nof the non-convertible debt securities or non-convertible redeemable preference\nshares.",
+ "footnotes": [],
+ "page_start": 135,
+ "page_end": 136,
+ "sha256": "2e17e5b8de9e9f10d52cc393d6af4d10771098631c96b40cd09c779bbef6c6a7",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

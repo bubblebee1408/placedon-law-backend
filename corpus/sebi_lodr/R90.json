@@ -1,0 +1,26 @@
+{
+ "section_id": "R90",
+ "ref": "RULE:SEBI_LODR_2015:R90",
+ "kind": "regulation",
+ "number": "90",
+ "heading": "Submission of Documents",
+ "heading_raw": "Submission of Documents.",
+ "chapter": {
+  "number": "IX",
+  "title": "OBLIGATIONS OF LISTED ENTITY WHICH HAS LISTED ITS MUTUAL FUND UNITS"
+ },
+ "omitted": false,
+ "content": "90. (1) The listed entity shall intimate to the recognised stock exchange(s) the information\nrelating to daily Net Asset Value, monthly portfolio, half yearly portfolio of those\nschemes whose units are listed on the recognised stock exchange(s) in the format as\nspecified under Securities and Exchange Board of India (Mutual Funds) Regulations,\n1996 and directions issued there under.\n(2) The listed entity shall intimate to the recognised stock exchange(s) in the manner\nspecified by the recognised stock exchange(s) of:\n(a) movement in unit capital of those schemes whose units are listed on the recognised\nstock exchange(s);\n(b) rating of the scheme whose units are listed on the recognised stock exchange(s) and\nany changes in the rating thereof (wherever applicable);\n(c) imposition of penalties and material litigations against the listed entity and Mutual\nFund;\n(d) any prohibitory orders restraining the listed entity from transferring units registered\nin the name of the unit holders.",
+ "footnotes": [],
+ "page_start": 147,
+ "page_end": 147,
+ "sha256": "5c255e141cdced67f0702b95ef5d5b834a946b83be7f00ee3023ba5096b4297b",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

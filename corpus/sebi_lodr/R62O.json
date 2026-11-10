@@ -1,0 +1,26 @@
+{
+ "section_id": "R62O",
+ "ref": "RULE:SEBI_LODR_2015:R62O",
+ "kind": "regulation",
+ "number": "62O",
+ "heading": "Obligations with respect to employees including senior management, key managerial personnel, directors and promoters",
+ "heading_raw": "Obligations with respect to employees including senior management, key managerial personnel, directors and promoters.",
+ "chapter": {
+  "number": "VA",
+  "title": "CORPORATE GOVERNANCE NORMS FOR A LISTED ENTITY WHICH HAS LISTED ITS NON-CONVERTIBLE DEBT SECURITIES"
+ },
+ "omitted": false,
+ "content": "62O. (1) A director shall not be a member in more than ten committees or act as\nchairperson of more than five committees across all listed entities in which he/she is a\ndirector which shall be determined as follows:\na) for calculating the limit of the committees on which a director may serve, all\npublic limited companies, whether listed or not, and HVDLEs, shall be\nincluded and all other companies including private limited companies, foreign\ncompanies and companies under Section 8 of the Companies Act, 2013 shall\nbe excluded;\nb) for the purpose of determination of limit, chairpersonship and membership of\nthe audit committee and the stakeholders' relationship committee alone shall\nbe considered.\n(2) Every director shall inform the HVDLE about the positions he or she occupies in\ncommittees of other listed entities/HVDLEs and notify changes as and when they take\nplace.\n(3) All members of the board of directors and senior management personnel shall\naffirm compliance with the code of conduct of board of directors and senior\nmanagement on an annual basis.\n(4) Senior management shall make disclosures to the board of directors relating to all\nmaterial, financial and commercial transactions, where they have personal interest that\nmay have a potential conflict with the interest of the HVDLE at large.\nExplanation: — For the purpose of this sub-regulation, conflict of interest relates to\ndealing in the shares of listed entity or commercial dealings with bodies, which have\nshareholding of management and their relatives etc.\n(5) No employee including key managerial personnel or director or promoter of a\nHVDLE shall enter into any agreement for himself/herself or on behalf of any other\nperson, with any shareholder or any other third party with regard to compensation or\nprofit sharing in connection with dealings in the securities of such HVDLE, unless\nprior approval for the same has been obtained from the board of directors as well as\npublic shareholders by way of an ordinary resolution:\nProvided that such agreement, if any, whether subsisting or expired, entered during the\npreceding three years from the date of coming into force of this sub-regulation, shall\nbe disclosed to the stock exchanges for public dissemination:\nProvided further that subsisting agreement, if any, as on the date of coming into force\nof this sub-regulation shall be placed for approval before the board of directors in the\nforthcoming Board meeting:\nProvided further that if the board of directors approve such agreement, the same shall\nbe placed before the public shareholders for approval by way of an ordinary resolution\nin the forthcoming general meeting:\nProvided further that all interested persons involved in the transaction covered under\nthe agreement shall abstain from voting in the general meeting.\nExplanation: — For the purposes of this sub-regulation, “interested person” shall mean\nany person holding voting rights in the HVDLE and who is in any manner, whether\ndirectly or indirectly, interested in an agreement or proposed agreement, entered into\nor to be entered into by such a person or by any employee or key managerial personnel\nor director or promoter of such listed entity with any shareholder or any other third\nparty with respect to compensation or profit sharing in connection with the securities\nof such listed entity.",
+ "footnotes": [],
+ "page_start": 127,
+ "page_end": 128,
+ "sha256": "8a764cf997d9dd9f79cdb0d104843ed657d1d296a97415a553fa3b962d038cdd",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

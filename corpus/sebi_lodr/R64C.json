@@ -1,0 +1,26 @@
+{
+ "section_id": "R64C",
+ "ref": "RULE:SEBI_LODR_2015:R64C",
+ "kind": "regulation",
+ "number": "64C",
+ "heading": "Obligations of the listed entity",
+ "heading_raw": "Obligations of the listed entity",
+ "chapter": {
+  "number": "VIA",
+  "title": "FRAMEWORK FOR VOLUNTARY DELISTING OF NON-CONVERTIBLE DEBT SECURITIES OR NON-CONVERTBLE REDEEMABLE PREFERENCE SHARES AND OBLIGATIONS OF THE LISTED ENTITY ON SUCH DELISTING"
+ },
+ "omitted": false,
+ "content": "64C. Obligations of the listed entity\n(1) The listed entity shall ensure that the process of obtaining necessary approval from\nall holders of non-convertible debt securities or non-convertible redeemable\npreference shares commences within three working days of the grant of in-\nprinciple approval by the stock exchange(s).\n(2) All the events in respect of the proposal of delisting for non-convertible debt\nsecurities or non-convertible redeemable preference shares beginning with the\nplacing of the agenda for delisting before the board of directors till the delisting is\ncompleted, shall be disclosed as material information to the stock exchanges as per\nregulation 51 of these regulations.\n(3) In addition to the information disclosed to the stock exchanges as per regulation\n51 of these regulations, the following information shall be disclosed by the listed\nentity on its website as well as to the stock exchanges, within two working days\nfrom the date of receipt of in-principle approval from the stock exchanges for\ndelisting of non-convertible debt securities or non-convertible redeemable\npreference shares:\n(a) the name(s) of the stock exchange(s) from which the non-convertible debt\nsecurities or non-convertible redeemable preference shares are sought to be\ndelisted together with the details of all such securities or shares that are sought\nto be delisted;\n(b) the cut-off date specified for determining the list of holders of non-\nconvertible debt securities or non-convertible redeemable preference shares\nto whom notice for approving the delisting proposal is mandated to be sent;\n(c) the objects and reasons for delisting of non-convertible debt securities or\nnon-convertible redeemable preference shares;\n(d) the proposed time table from the cut-off date as specified in clause (b) till the\ndate of making final application to the stock exchanges for delisting of non-\nconvertible debt securities or non-convertible redeemable preference shares;\n(e) a disclaimer specifying the following:\n“Once the said securities are delisted:\n(i) the delisted non-convertible debt securities/ non-convertible redeemable\npreference shares shall cease to be under the purview of the Act and the\nrules and regulations prescribed thereunder; and\n(ii) the holders of such non-convertible debt securities/ non-convertible\nredeemable preference shares shall not have any recourse to the investor\ngrievance mechanism for any reason including change/ removal of the\ndebenture trustee or in case of default, such as dispute resolution\nmechanism, grievance redress mechanism (SCORES), etc. under the Act\nand the rules and regulations made thereunder.”;\n(f) a statement by the board of directors of the listed entity confirming that all\nmaterial information which is required to be disclosed under the provisions\nof these regulations has been disclosed to the stock exchange;\n(g) a statement from the debenture trustee on the adequacy of security cover in\ncase of secured non-convertible debt securities;\n(h) an undertaking that the issuer has not paid or shall not pay any incentive to\nany investor, directly or indirectly, in connection with delisting under this\nChapter;\n(i) disclosure of non-convertible debt securities or non-convertible redeemable\npreference shares held by the related parties or by any person on behalf of the\nissuer or its related parties and an undertaking that such persons shall not vote\non the proposal;\n(j) an undertaking that the issuer has not entered or shall not enter into any\narrangement with any investor or with persons referred to in clause (i) above,\nby way of side letters or otherwise which leads to the discrimination amongst\nthe investors;\n(k) a statement by the board of directors of the listed entity certifying that: -\n(i) the entity is in compliance with the applicable provisions of securities\nlaws; and\n(ii) the delisting, in their opinion (with detailed explanation), is in the interest\nof the holders of the non-convertible debt securities or non-convertible\nredeemable preference shares;\n(l) name and contact details of the compliance officer of the listed entity.",
+ "footnotes": [],
+ "page_start": 134,
+ "page_end": 135,
+ "sha256": "c1a737a1633a4ae8000ec6486c755a47766d46e238b22edc1dbed116a6856655",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}

@@ -1,0 +1,75 @@
+{
+ "section_id": "R34",
+ "ref": "RULE:SEBI_LODR_2015:R34",
+ "kind": "regulation",
+ "number": "34",
+ "heading": "Annual Report",
+ "heading_raw": "Annual Report.",
+ "chapter": {
+  "number": "IV",
+  "title": "OBLIGATIONS OF 76[A] LISTED ENTITY WHICH HAS LISTED ITS SPECIFIED SECURITIES 77[AND NON-CONVERTIBLE DEBT SECURITIES]"
+ },
+ "omitted": false,
+ "content": "34. 376[(1) The listed entity shall submit to the stock exchange and publish on its website-\n(a) a copy of the annual report sent to the shareholders along with the notice of the annual\ngeneral meeting 377[on or before the] commencement of dispatch to its shareholders;\n(b) in the event of any changes to the annual report, the revised copy along with the details\nof and explanation for the changes shall be sent not later than 48 hours after the annual\ngeneral meeting.]\n(2) The annual report shall contain the following:\n(a) audited financial statements i.e. balance sheets, profit and loss accounts etc [,and\nStatement on Impact of Audit Qualifications as stipulated in regulation 33(3)(d),\nif applicable;]378\n(b) consolidated financial statements audited by its statutory auditors;\n(c) cash flow statement presented only under the indirect method as prescribed in\nAccounting Standard-3 or Indian Accounting Standard 7, as applicable, specified\nin Section 133 of the Companies Act, 2013 read with relevant rules framed\nthereunder or as specified by the Institute of Chartered Accountants of India,\nwhichever is applicable;\n(d) directors report;\n(e) management discussion and analysis report - either as a part of directors report or\naddition thereto;\n379[(f) for the top one thousand listed entities based on market capitalization, a Business\nResponsibility and Sustainability Report on the environmental, social and\ngovernance disclosures, in the format as may be specified by the Board from time to\ntime:\nProvided that the 380[assessment or assurance of the specified parameters as per] the\nBusiness Responsibility and Sustainability Report Core shall be obtained, with effect\nfrom and in the manner as may be specified by the Board from time to time:\nProvided further that the listed entities shall also make disclosures and obtain 381[the\nassessment or assurance of the specified parameters] as per the Business\nResponsibility and Sustainability Report Core for their value chain, with effect from\nand in the manner as may be specified by the Board from time to time:\nProvided further that the remaining listed entities, including the entities which have\nlisted their specified securities on the SME Exchange, may voluntarily disclose the\nBusiness Responsibility and Sustainability Report or may voluntarily obtain the\n382[assessment or assurance of the specified parameters as per] the Business\nResponsibility and Sustainability Report Core, for themselves or for their value\nchain, as the case may be.\nExplanation-1: For the purpose of this clause:\n383[***]\n(ii) Business Responsibility and Sustainability Report Core shall comprise of such\nkey performance indicators as may be specified by the Board from time to time;\n(iii) “value chain” for the listed entities shall be specified by the Board from time\nto time.]\n(3) The annual report shall contain any other disclosures specified in Companies Act, 2013\nalong with other requirements as specified in Schedule V of these regulations.",
+ "footnotes": [
+  {
+   "number": "376",
+   "page": 74,
+   "placed_by": "marker",
+   "text": "376 Substituted ibid, and applicable for Annual report filed for the year ended March 31, 2019 and thereafter.\nPrior to the substitution, sub-regulation (1) read as follows:\n“(1) The listed entity shall submit the annual report to the stock exchange within twenty one working days of it\nbeing approved and adopted in the annual general meeting as per the provisions of the Companies Act, 2013.”"
+  },
+  {
+   "number": "377",
+   "page": 74,
+   "placed_by": "marker",
+   "text": "377 Substituted for the words “not later than the day of” by the Securities and Exchange Board of India (Listing\nObligations and Disclosure Requirements) (Third Amendment) Regulations, 2024 w.e.f. 13.12.2024."
+  },
+  {
+   "number": "378",
+   "page": 75,
+   "placed_by": "marker",
+   "text": "378 Substituted for the symbol ‘;’ by SEBI (Listing Obligations and Disclosure Requirements) (Amendment)\nRegulations, 2016, w.e.f. 01.04.2016."
+  },
+  {
+   "number": "379",
+   "page": 75,
+   "placed_by": "marker",
+   "text": "379 Substitute by the Securities and Exchange Board of India (Listing Obligations and Disclosure Requirements)\n(Second Amendment) Regulations, 2023 w.e.f. 15.6.2023. Prior to its substitution, clause (f) read as under:\n“(f) for the top one thousand listed entities based on market capitalization, a business responsibility report\ndescribing the initiatives taken by the listed entity from an environmental, social and governance perspective,\nin the format as specified by the Board from time to time:\nProvided that the requirement of submitting a business responsibility report shall be discontinued after the\nfinancial year 2021–22 and thereafter, with effect from the financial year 2022–23, the top one thousand\nlisted entities based on market capitalization shall submit a business responsibility and sustainability report\nin the format as specified by the Board from time to time:\nProvided further that even during the financial year 2021–22, the top one thousand listed entities may\nvoluntarily submit a business responsibility and sustainability report in place of the mandatory business\nresponsibility report:\nProvided further that the remaining listed entities including the entities which have listed their specified\nsecurities on the SME Exchange, may voluntarily submit such reports.\nExplanation: For the purpose of this clause, market capitalization shall be calculated as on the 31st day of\nMarch of every financial year.”"
+  },
+  {
+   "number": "380",
+   "page": 75,
+   "placed_by": "marker",
+   "text": "380 Substituted for the words “assurance of” by the Securities and Exchange Board of India (Listing Obligations\nand Disclosure Requirements) (Amendment) Regulations, 2025 w.e.f 28.03.2025."
+  },
+  {
+   "number": "381",
+   "page": 75,
+   "placed_by": "marker",
+   "text": "381 Substituted for the word “assurance” by the Securities and Exchange Board of India (Listing Obligations and\nDisclosure Requirements) (Amendment) Regulations, 2025 w.e.f 28.03.2025."
+  },
+  {
+   "number": "382",
+   "page": 76,
+   "placed_by": "marker",
+   "text": "382 Substituted for the words “assurance of” by the Securities and Exchange Board of India (Listing Obligations\nand Disclosure Requirements) (Amendment) Regulations, 2025 w.e.f 28.03.2025."
+  },
+  {
+   "number": "383",
+   "page": 76,
+   "placed_by": "marker",
+   "text": "383 Omitted by the Securities and Exchange Board of India (Listing Obligations and Disclosure Requirements)\n(Amendment) Regulations, 2024 w.e.f. 31.12.2024. Prior to its omission, clause (i) read as follows:\n“(i) market capitalization shall be calculated as on the 31st day of March of every financial year;.”"
+  }
+ ],
+ "page_start": 74,
+ "page_end": 76,
+ "sha256": "63f6cb542dab128b876d8663d77b2e6658869bb117522af824d298bc288310f9",
+ "instrument_id": "SEBI_LODR_2015",
+ "source_artifact": "corpus/sources/sebi_lodr_2015_consolidated.pdf",
+ "source_artifact_sha256": "f3c187d46aeb15e10d05614400e653086df1799e575ee4e11a49b5d28d5c9b67",
+ "consolidated_up_to": "2026-07-14",
+ "consolidation_marker": "[Amended up to July 14, 2026]",
+ "admission_state": "HUMAN_REVIEW_PENDING",
+ "production_usable": false,
+ "status": "PENDING LEGAL REVIEW: sectioned by machine from SEBI's consolidation; no lawyer has checked any record. Not admitted for model use."
+}
