@@ -425,6 +425,18 @@ def _test() -> None:
     check(set(DEFECT_REGISTER) == {"1", "16", "124", "76A", "329"},
           "the register holds exactly the five sections SOURCE_DEFECTS.md confirms")
 
+    # --- LODR is INDEXED, not SERVED: the refusal is a decision, not a gap ---
+    from checker.section_index import SEBI_LODR_2015
+    check(section_by_number("30", instrument_id=SEBI_LODR_2015) is not None,
+          "LODR reg 30 exists in the section index (so what follows is a refusal by design)")
+    check(COMPANIES_ACT_2013 in CORPUS_INSTRUMENTS and SEBI_LODR_2015 not in CORPUS_INSTRUMENTS
+          and len(CORPUS_INSTRUMENTS) == 1,
+          "retrieval still resolves the Companies Act only: LODR is not admitted")
+    check(resolve("RULE:SEBI_LODR_2015:R30") == [] and resolve("ACT:SEBI_LODR_2015:S30") == [],
+          "a qualified LODR citation resolves to nothing, in either namespace")
+    check(resolve("regulation 30 of the SEBI LODR Regulations") == [],
+          "'regulation 30 of LODR' resolves to nothing -- never to Companies Act s.30")
+
     print(f"\n{ok}/{ok + fail} passed")
     if fail:
         raise SystemExit(1)
