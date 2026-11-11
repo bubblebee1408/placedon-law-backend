@@ -200,6 +200,10 @@ def _envelope_for(task: str, result: dict, *, as_of: str, run_id=None,
                                "generated and your document is unchanged. Retrying will not "
                                "help until an administrator restores access. This is not a "
                                "finding about the document or the law."))
+    if result.get("code") == "MODEL_BUSY":       # PLACEDON_ANSWER_MODEL=gemini, retried once
+        from gateway.models import BUSY_MESSAGE
+        return ev.failed(task=task, as_of=as_of, run_id=run_id, trace_url=trace,
+                         text=BUSY_MESSAGE)
     if result.get("code") == "NO_MODEL":
         return ev.failed(task=task, as_of=as_of, run_id=run_id, trace_url=trace,
                          text="The model was unavailable — this is not a finding about the "

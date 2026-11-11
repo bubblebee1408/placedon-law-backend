@@ -12,8 +12,10 @@ import os
 
 from gateway.app import create_app
 from gateway.jobs import PostgresQueue
+from gateway.models import check_answer_model_at_startup
 from gateway.store import database_url
 
+check_answer_model_at_startup()      # PLACEDON_ANSWER_MODEL=gemini without Vertex asia-south1
 _url = database_url()
 app = create_app(db_url=_url, queue=PostgresQueue(
     _url, tenant_id=os.environ["PLACEDON_GATEWAY_TENANT_ID"],

@@ -237,9 +237,13 @@ def _post(model: str, payload: dict, timeout: int = 90) -> dict:
         with urllib.request.urlopen(req, timeout=timeout, context=ctx) as r:
             return json.loads(r.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
-        raise _classify_http(model, e.code, e.read().decode("utf-8", "replace")[:300]) from None
+        err = _classify_http(model, e.code, e.read().decode("utf-8", "replace")[:300])
+        err.http_status = e.code         # read by is_transient(); the class is unchanged
+        raise err from None
     except urllib.error.URLError as e:
-        raise ModelUnavailable(f"Gemini unreachable: {e.reason}") from None
+        err = ModelUnavailable(f"Gemini unreachable: {e.reason}")
+        err.timed_out = isinstance(e.reason, TimeoutError)
+        raise err from None
 
 
 def _payload(document: str) -> dict:
@@ -415,6 +419,116 @@ def as_shadow_model(budget=None, model: str = FLASH, _transport=None, *, origin=
         proposal, _ = extract(document, origin=origin, budget=budget, model=model,
                               _transport=_transport)
         return proposal
+    return _m
+
+
+# ── Vertex AI in asia-south1: the ANSWER route behind PLACEDON_ANSWER_MODEL=gemini ──
+# Everything above is the free tier, and the free tier never sees a client's words
+# (public_only.refuse_matter). This is a different contract: a billed Cloud project pinned
+# to Mumbai, an India region like Bedrock's ap-south-1. So it is the one Gemini door that
+# admits the typed question -- and it refuses outright unless Vertex is the route and
+# asia-south1 the location. It never falls back to the AI Studio key path.
+VERTEX_ANSWER_REGION = "asia-south1"
+VERTEX_PREFIX = "vertex:"
+TRANSIENT_HTTP = frozenset({429, 500, 503})
+
+
+def vertex_india_problem() -> str | None:
+    """Why the Vertex India answer route cannot be used, or None when it can."""
+    project = os.getenv("GOOGLE_CLOUD_PROJECT", "").strip()
+    loc = os.getenv("GOOGLE_CLOUD_LOCATION", "").strip()
+    if not project:
+        return ("GOOGLE_CLOUD_PROJECT is not set, so Vertex AI is not configured. Answers "
+                "are never sent through the AI Studio API key.")
+    if not _PROJECT_ID.fullmatch(project):
+        return f"GOOGLE_CLOUD_PROJECT={project!r} is not a valid project ID"
+    if loc != VERTEX_ANSWER_REGION:
+        return (f"GOOGLE_CLOUD_LOCATION is {loc or 'unset'!r}; Gemini answers are served "
+                f"only from {VERTEX_ANSWER_REGION} (India)")
+    return None
+
+
+def is_transient(e: BaseException) -> bool:
+    """429 / 500 / 503 / a timeout: the same call may work in a few seconds."""
+    return (getattr(e, "http_status", None) in TRANSIENT_HTTP
+            or bool(getattr(e, "timed_out", False)) or isinstance(e, TimeoutError))
+
+
+def answer_vertex(prompt: str, *, origin, model: str = FLASH, budget=None,
+                  on_usage=None, timeout: int = 90, _transport=None) -> str:
+    """One answer from Gemini on Vertex AI, asia-south1, priced into the spend ledger.
+
+    `verify_prompt` still binds every delimited block to a named origin; what differs from
+    `generate` is that a MATTER origin (the typed question) is admitted, because this route
+    is the billed India endpoint and not the free tier. Reserve worst case, settle actual --
+    the shape azure_model and bedrock_model already use.
+    """
+    problem = vertex_india_problem()
+    if problem:
+        raise ModelUnavailable(f"no call was made -- {problem}")
+    from checker.public_only import verify_prompt
+    verify_prompt(prompt, origin)
+
+    payload = {"contents": [{"role": "user", "parts": [{"text": prompt}]}],
+               "generationConfig": {"temperature": 0, "maxOutputTokens": 4096}}
+    from backend.azure_pricing import price_inr
+    reservation = None
+    if budget is not None:
+        # UTF-8 bytes + framing over-counts tokens: the same bound azure_model reserves.
+        tin_bound = len(prompt.encode("utf-8")) + 256
+        tout_bound = payload["generationConfig"]["maxOutputTokens"]
+        worst, note = price_inr(model, tokens_in=tin_bound, tokens_out=tout_bound)
+        if worst is None:
+            raise ModelUnavailable(f"budget cannot price {model}: {note}")
+        reservation = budget.reserve(model=VERTEX_PREFIX + model, input_tokens=tin_bound,
+                                     max_tokens=tout_bound, amount_inr=worst)
+        if not reservation.allowed:
+            raise ModelUnavailable(f"budget refused the call: {reservation.verdict.reason}")
+
+    def settle(actual):
+        if reservation is None:
+            return
+        try:
+            result = budget.settle(reservation.id, actual, actual_calls=1)
+        except Exception as error:
+            raise ModelUnavailable("Gemini budget settlement failed; answer withheld and "
+                                   "reservation needs reconciliation") from error
+        if not result.allowed:
+            raise ModelUnavailable("Gemini budget settlement refused; answer withheld and "
+                                   "reservation needs reconciliation")
+
+    try:
+        data = (_transport or _post)(model, payload, timeout)
+    except Exception:
+        settle(None)        # Google may have billed it: charge the hold, never 0.0
+        raise
+    usage = data.get("usageMetadata", {}) if isinstance(data, dict) else {}
+    tin = usage.get("promptTokenCount")
+    # Thinking tokens bill as output on Gemini 3.x, so they count as output here.
+    tout = (None if usage.get("candidatesTokenCount") is None
+            else usage["candidatesTokenCount"] + usage.get("thoughtsTokenCount", 0))
+    if reservation is not None:
+        settle(price_inr(model, tokens_in=tin, tokens_out=tout)[0])  # None settles at hold
+    try:
+        parts = data["candidates"][0]["content"]["parts"]
+    except (KeyError, IndexError, TypeError):
+        raise ModelRefused(
+            f"no usable candidate in the response: {json.dumps(data)[:200]}") from None
+    if on_usage is not None:
+        on_usage({"deployment": model, "tokens_in": tin, "tokens_out": tout,
+                  "provider": "gemini", "region": VERTEX_ANSWER_REGION})
+    return "".join(p.get("text", "") for p in parts)
+
+
+def as_vertex_answer_model(*, origin, model: str = FLASH, budget=None, on_usage=None,
+                           timeout: int = 90, _transport=None):
+    """`answer_vertex` as the Callable[[str], str] the gateway's `serve()` wires."""
+    if origin is None:
+        raise TypeError("as_vertex_answer_model(origin=...) is required")
+
+    def _m(prompt: str) -> str:
+        return answer_vertex(prompt, origin=origin, model=model, budget=budget,
+                             on_usage=on_usage, timeout=timeout, _transport=_transport)
     return _m
 
 
@@ -677,7 +791,8 @@ def _test() -> None:
     import ast as _ast
     from pathlib import Path as _Path
     _root = _Path(__file__).resolve().parent.parent
-    _ENTRY = {"extract", "as_shadow_model", "generate", "as_text_model"}
+    _ENTRY = {"extract", "as_shadow_model", "generate", "as_text_model",
+              "answer_vertex", "as_vertex_answer_model"}
     _WAIVER = "public-origin: deliberate"
     offenders, waived, swept = [], [], 0
     for f in sorted(_root.rglob("*.py")):

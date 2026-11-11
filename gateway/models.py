@@ -126,10 +126,93 @@ def _operator_allows(provider: str) -> bool:
     return not raw or provider in {p.strip() for p in raw.split(",")}
 
 
+# ── PLACEDON_ANSWER_MODEL=gemini: answers from Gemini on Vertex AI, asia-south1 ──
+# OFF unless the value is exactly "gemini"; off, nothing below is reached and SERVEABLE is
+# what it was. On, narration tasks (model_access.GEMINI_ANSWER_TASKS) are served by Gemini
+# alone: one retry on a transient error, then MODEL_BUSY. No fallback to another provider,
+# because a quiet switch of provider is a quiet switch of data region.
+ANSWER_MODEL_ENV = "PLACEDON_ANSWER_MODEL"
+GEMINI_NOT_CONFIGURED = "GEMINI_NOT_CONFIGURED"
+MODEL_BUSY = "MODEL_BUSY"
+BUSY_MESSAGE = "Placedon is busy, please try again in a minute."
+GEMINI_RETRY_SECONDS = 3.0
+
+
+class ModelBusyError(RuntimeError):
+    """Gemini failed twice on a transient error. Deliberately NOT gemini_model.ModelBusy:
+    research_question treats that as "try the next model", which would be a fallback."""
+
+    code = MODEL_BUSY
+
+    def __init__(self, cause: str) -> None:
+        super().__init__(f"{MODEL_BUSY}: {BUSY_MESSAGE}")
+        self.cause = cause
+
+
+def gemini_answers() -> bool:
+    import os
+    return os.environ.get(ANSWER_MODEL_ENV, "").strip() == "gemini"
+
+
+def require_gemini_config() -> None:
+    """Fail closed: the switch is on and Vertex in asia-south1 is not what is configured."""
+    from checker import gemini_model
+    problem = gemini_model.vertex_india_problem()
+    if problem:
+        raise NotServed(GEMINI_NOT_CONFIGURED,
+                        f"{ANSWER_MODEL_ENV}=gemini, but {problem}. No call was made.")
+
+
+def check_answer_model_at_startup() -> None:
+    """Called by ops/asgi.py: a misconfigured switch stops the process, not the 1st answer."""
+    if gemini_answers():
+        try:
+            require_gemini_config()
+        except NotServed as e:
+            raise SystemExit(f"{e.code}: {e.detail}") from None
+
+
+def serveable() -> frozenset:
+    return SERVEABLE | {router.GEMINI} if gemini_answers() else SERVEABLE
+
+
+def busy_refusal() -> dict:
+    """The user-presentable outcome when Gemini stayed busy through its one retry."""
+    return {"status": "REFUSED", "code": MODEL_BUSY, "detail": BUSY_MESSAGE}
+
+
+def _retry_once_then_busy(call, *, sleep):
+    """One retry after GEMINI_RETRY_SECONDS on 429/500/503/timeout, then ModelBusyError.
+    Any other error (a 4xx, a refusal) propagates on the first attempt, unretried."""
+    import logging
+    from checker.gemini_model import is_transient
+    log = logging.getLogger(__name__)
+
+    def _c(prompt: str) -> str:
+        for attempt in (1, 2):
+            try:
+                return call(prompt)
+            except Exception as e:                               # noqa: BLE001
+                if not is_transient(e):
+                    raise
+                # Type and status only: the message may echo the prompt back.
+                status = getattr(e, "http_status", None) or "timeout"
+                if attempt == 2:
+                    log.error("gemini_answer_busy status=%s type=%s", status,
+                              type(e).__name__)
+                    raise ModelBusyError(f"{type(e).__name__} {status}") from e
+                log.warning("gemini_answer_retry status=%s type=%s", status,
+                            type(e).__name__)
+                sleep(GEMINI_RETRY_SECONDS)
+        raise AssertionError("unreachable")                      # pragma: no cover
+    return _c
+
+
 def available_providers(credit_exhausted=None) -> tuple[str, ...]:
     """What router.py offers, narrowed to what this gateway can actually call."""
+    allowed = serveable()
     return tuple(p for p in router.providers_available(credit_exhausted=credit_exhausted)
-                 if p in SERVEABLE and _operator_allows(p))
+                 if p in allowed and _operator_allows(p))
 
 
 def _on_device_timeout() -> int:
@@ -189,6 +272,8 @@ def serve(origins, *, name: str, purpose: str, consequence: str = router.LOW,
         route = router.route(task, available=providers)
     except router.NoRoute as e:
         raise NotServed(NO_MODEL, f"{e}") from None
+    if route.provider == router.GEMINI and gemini_answers():
+        require_gemini_config()          # before the breaker and the budget: nothing spent
 
     # A1. The breaker is consulted AFTER routing, because it is per PROVIDER and the
     # provider is not known until the route is chosen -- and BEFORE the budget, because a
@@ -203,7 +288,7 @@ def serve(origins, *, name: str, purpose: str, consequence: str = router.LOW,
         if not verdict.allowed:
             raise NotServed(NO_BUDGET, verdict.reason)
 
-    if route.provider not in SERVEABLE:
+    if route.provider not in serveable():
         # A route to a provider we have no callable for would be a correct route we then
         # refuse -- adding one silently is how a matter document ends up at a free tier.
         raise NotServed(NO_MODEL,
@@ -211,7 +296,17 @@ def serve(origins, *, name: str, purpose: str, consequence: str = router.LOW,
                         f"serves {sorted(SERVEABLE)} today (PLAN_22 D3). No call was made.")
 
     usage: list = []
-    if route.provider == router.BEDROCK:
+    if route.provider == router.GEMINI:
+        # Reached only with PLACEDON_ANSWER_MODEL=gemini (serveable() above). Vertex AI in
+        # asia-south1, checked again inside the adapter on every call.
+        from checker import gemini_model
+        region = gemini_model.VERTEX_ANSWER_REGION
+        inner = (transport if transport is not None
+                 else gemini_model.as_vertex_answer_model(
+                     origin=origins, model=route.model, budget=budget,
+                     on_usage=usage.append, timeout=timeout_seconds or 90))
+        call = _retry_once_then_busy(inner, sleep=sleep or time.sleep)
+    elif route.provider == router.BEDROCK:
         # B1: the CLIENT-data provider, ap-south-1. Its own adapter, its own India region.
         from checker import bedrock_model
         region = bedrock_model.REGION
@@ -447,6 +542,206 @@ def _test() -> None:
     except RuntimeError:
         check(True, "...while a transport error propagates unchanged, so the caller can "
                     "record FAILED rather than inventing a refusal we did not make")
+
+    # ── PLACEDON_ANSWER_MODEL=gemini: Vertex asia-south1, retry once, then busy ─
+    import os as _os
+    from unittest import mock as _mock
+    from checker import gemini_model as _gm
+    from checker.prompt_safety import wrap_untrusted as _wrap
+    from gateway.verbs import model_access as _ma
+    _ON = {ANSWER_MODEL_ENV: "gemini", "GOOGLE_CLOUD_PROJECT": "demo-proj",
+           "GOOGLE_CLOUD_LOCATION": "asia-south1"}
+    _G = (router.GEMINI,)
+
+    class _HttpErr(_gm.ModelUnavailable):
+        def __init__(self, status):
+            super().__init__(f"HTTP {status}")
+            self.http_status = status
+
+    def _fails(*statuses, then="answered"):
+        seen = []
+
+        def _t(prompt):
+            seen.append(prompt)
+            if len(seen) <= len(statuses):
+                s = statuses[len(seen) - 1]
+                raise TimeoutError("read timed out") if s == "timeout" else _HttpErr(s)
+            return then
+        return _t, seen
+
+    # default OFF: unset, or any value but "gemini", changes nothing
+    for raw in (None, "", "Gemini", "claude", "azure"):
+        env = {} if raw is None else {ANSWER_MODEL_ENV: raw}
+        with _mock.patch.dict(_os.environ, env, clear=False):
+            if raw is None:
+                _os.environ.pop(ANSWER_MODEL_ENV, None)
+            check(not gemini_answers() and serveable() == SERVEABLE
+                  and _ma.task_providers("ask") == _ma.TASK_PROVIDERS["ask"]
+                  and _ma.task_providers("draft_prose") == _ma.TASK_PROVIDERS["draft_prose"],
+                  f"{ANSWER_MODEL_ENV}={raw!r} is OFF: serveable set and task routes are "
+                  f"exactly as before")
+            try:
+                serve(origin, name="ask", purpose=NARR, available=_G,
+                      transport=lambda p: "x")
+                check(False, "off, a Gemini route is still refused")
+            except NotServed as e:
+                check(e.code == NO_MODEL, f"...and a Gemini route is still NO_MODEL ({e.code})")
+            check_answer_model_at_startup()          # off: never stops the process
+
+    # ON + wrong region / no Vertex: refused before any call, and at start-up
+    for bad in ({"GOOGLE_CLOUD_LOCATION": "us-central1"}, {"GOOGLE_CLOUD_LOCATION": ""},
+                {"GOOGLE_CLOUD_PROJECT": "", "GEMINI_API_KEY": "k-test"}):
+        calls = []
+        with _mock.patch.dict(_os.environ, _ON | bad):
+            try:
+                serve(origin, name="ask", purpose=NARR, available=_G,
+                      transport=lambda p: calls.append(p))
+                check(False, f"{bad} is refused")
+            except NotServed as e:
+                check(e.code == GEMINI_NOT_CONFIGURED and not calls,
+                      f"on with {bad}: REFUSED/{e.code} and no call made")
+            try:
+                check_answer_model_at_startup()
+                check(False, f"{bad} stops start-up")
+            except SystemExit as e:
+                check(GEMINI_NOT_CONFIGURED in str(e),
+                      f"...and the process refuses to start ({str(e)[:50]}...)")
+            _s, refusal = _ma._served_or_refusal(
+                (origin,), name="ask", purpose=NARR, ctx=_ma.Context())
+            check(_s is None and refusal["code"] == GEMINI_NOT_CONFIGURED,
+                  "...and the verb layer returns the same code, not a vague NO_MODEL")
+
+    with _mock.patch.dict(_os.environ, _ON):
+        check(_ma.task_providers("ask") == _G and _ma.task_providers("critic") == _G
+              and _ma.task_providers("document_summary") == ("bedrock",),
+              "on: narration tasks are Gemini ONLY; other tasks keep their routes")
+        s_g = serve(origin, name="ask", purpose=NARR, available=_G, transport=lambda p: "ok",
+                    sleep=lambda _s: None)
+        check(s_g.provider == router.GEMINI and s_g.model == _gm.FLASH
+              and s_g.region == "asia-south1",
+              f"on: served by {s_g.provider}/{s_g.model} in {s_g.region} (the pinned Flash)")
+
+        t, seen = _fails(503)
+        waits = []
+        s_r = serve(origin, name="ask", purpose=NARR, available=_G, transport=t,
+                    sleep=waits.append)
+        check(s_r.call("p") == "answered" and len(seen) == 2 and waits == [3.0],
+              f"a 503 then success: exactly one retry, after 3 s ({len(seen)} calls, {waits})")
+        for first in (429, 500, "timeout"):
+            t, seen = _fails(first)
+            serve(origin, name="ask", purpose=NARR, available=_G, transport=t,
+                  sleep=lambda _s: None).call("p")
+            check(len(seen) == 2, f"...{first} is transient too: retried once")
+
+        t, seen = _fails(400)
+        try:
+            serve(origin, name="ask", purpose=NARR, available=_G, transport=t,
+                  sleep=lambda _s: None).call("p")
+            check(False, "a 400 propagates")
+        except _HttpErr:
+            check(len(seen) == 1, "a 400 is NOT retried (one call) and is not MODEL_BUSY")
+
+        # two failures => MODEL_BUSY, and no other provider is ever called
+        others = []
+        t, seen = _fails(503, 503)
+        # "gateway.models", not __name__: run as a script this file is __main__, and the
+        # verb layer imports the package copy.
+        with _mock.patch("gateway.models.available_providers",
+                         return_value=(router.AZURE, router.BEDROCK, router.OLLAMA,
+                                       router.GEMINI)), \
+             _mock.patch.object(_gm, "as_vertex_answer_model", side_effect=lambda **_: t), \
+             _mock.patch("checker.azure_model.as_text_model",
+                         side_effect=lambda **_: others.append("azure")), \
+             _mock.patch("checker.bedrock_model.as_text_model",
+                         side_effect=lambda **_: others.append("bedrock")):
+            _free = type("B", (), {"can_make_call": lambda self, *a, **k: type(
+                "V", (), {"allowed": True, "reason": ""})()})()
+            with _mock.patch("gateway.verbs.model_access._ledger_for", return_value=_free), \
+                 _mock.patch("time.sleep", lambda _s: None):
+                s_b, refusal = _ma._served_or_refusal((origin,), name="ask", purpose=NARR,
+                                                      ctx=_ma.Context())
+            check(refusal is None and s_b.provider == router.GEMINI,
+                  "with every provider available, the verb layer still picks Gemini alone")
+            try:
+                s_b.call("p")
+                check(False, "two transient failures are MODEL_BUSY")
+            except RuntimeError as e:        # the package's ModelBusyError (see above)
+                check(type(e).__name__ == "ModelBusyError" and e.code == MODEL_BUSY and BUSY_MESSAGE in str(e) and len(seen) == 2,
+                      f"two failures => {e.code} '{BUSY_MESSAGE}' after 2 calls")
+            check(not others, f"...and no other provider's adapter was built ({others})")
+        check(busy_refusal() == {"status": "REFUSED", "code": MODEL_BUSY,
+                                 "detail": BUSY_MESSAGE},
+              "busy_refusal() is the user-presentable outcome")
+
+        # the ask verb turns MODEL_BUSY into that outcome, with a FAILED run recorded
+        from gateway import verbs as _verbs
+        from gateway.store import MemoryBackend
+        t, _seen = _fails(*[503] * 20)       # every call: decompose may share the stub
+        s_ask = Served(call=_retry_once_then_busy(t, sleep=lambda _s: None),
+                       provider=router.GEMINI, model=_gm.FLASH, region="asia-south1",
+                       degraded=True, requires_review=False, est_cost_inr=0.0)
+        from checker import public_only as _po
+        with _mock.patch("gateway.verbs.model_access._typed_text_origin",
+                         side_effect=lambda q, **_: (_po.clear_matter(
+                             q, name="q", provider="bedrock"), None)), \
+             _mock.patch("gateway.verbs.model_access._served_or_refusal",
+                         return_value=(s_ask, None)):
+            r = _verbs._ask({"question": "What notice is needed to call a board meeting "
+                                         "under Section 173?"},
+                            _verbs.Context(store=MemoryBackend()))
+        check(r.get("code") == MODEL_BUSY and r.get("detail") == BUSY_MESSAGE
+              and r.get("run_id"),
+              f"ask returns MODEL_BUSY with the busy message and a run id "
+              f"({r.get('status')}/{r.get('code')})")
+        from gateway.verbs.answers import _envelope_for
+        env_b = _envelope_for("RESEARCH_QUESTION", r, as_of="2026-11-10", ctx=_ma.Context())
+        check(BUSY_MESSAGE in str(env_b), "...and the envelope shows the user the busy message")
+
+        # spend: the real adapter reserves, settles the reported tokens, and the step is priced
+        class _Ledger:
+            def __init__(self):
+                self.held, self.settled = [], []
+
+            def can_make_call(self, *a, **k):
+                return type("V", (), {"allowed": True, "reason": ""})()
+
+            def reserve(self, **k):
+                self.held.append(k)
+                return type("R", (), {"allowed": True, "id": "r1"})()
+
+            def settle(self, rid, actual, **k):
+                self.settled.append((rid, actual, k))
+                return type("S", (), {"allowed": True})()
+
+        led = _Ledger()
+        import json as _json
+        prov = _json.loads(act.read_text())["content"][:300]
+        prompt = "Answer from this only.\n" + _wrap(prov, "s1") + "\nWhat does it say?"
+        reply = {"candidates": [{"content": {"parts": [{"text": "It says."}]}}],
+                 "usageMetadata": {"promptTokenCount": 1200, "candidatesTokenCount": 250,
+                                   "thoughtsTokenCount": 50}}
+        posted = []
+        with _mock.patch.object(_gm, "_post",
+                                side_effect=lambda m, p, t=90: posted.append(m) or reply):
+            s_sp = serve(origin, name="ask", purpose=NARR, available=_G, budget=led,
+                         sleep=lambda _s: None)
+            out = s_sp.call(prompt)
+        from backend.azure_pricing import GEMINI_TABLE
+        want = GEMINI_TABLE[_gm.FLASH].inr(1200, 300)
+        check(out == "It says." and posted == [_gm.FLASH],
+              "the real Vertex adapter is what serve() wires (one post, the pinned Flash)")
+        check(len(led.held) == 1 and led.held[0]["model"] == "vertex:" + _gm.FLASH
+              and led.held[0]["amount_inr"] > 0,
+              f"spend: the worst case is reserved in rupees first "
+              f"(Rs {led.held[0]['amount_inr'] if led.held else None})")
+        check(led.settled == [("r1", want, {"actual_calls": 1})],
+              f"...and settled at the REPORTED tokens, thinking counted as output "
+              f"(Rs {want})")
+        fields = s_sp.step_fields()
+        check(fields["cost_inr"] == want and "UNVERIFIED" in fields["cost_note"]
+              and fields["region"] == "asia-south1",
+              f"...and the run step carries the same rupees, marked as an estimate "
+              f"({fields['cost_inr']}, {fields['cost_note'][-60:]})")
 
     # ── no second HTTP client ───────────────────────────────────────────────
     from pathlib import Path

@@ -276,7 +276,7 @@
     "gateway/jobs.py": 51,
     "gateway/limits.py": 22,
     "gateway/logs.py": 21,
-    "gateway/models.py": 30,
+    "gateway/models.py": 66,
     "gateway/passwords.py": 21,
     "gateway/pool.py": 24,
     "gateway/roles.py": 20,

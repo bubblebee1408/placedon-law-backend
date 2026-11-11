@@ -171,8 +171,19 @@ def _ask_answer(args: dict, ctx: Context) -> dict:
         _progress.mark(_progress.WRITING)
         out = rq.answer(q, model=served.call if served else None,
                         available=((served.provider,) if served and served.provider
-                                   in _models.SERVEABLE else providers),
+                                   in _models.serveable() else providers),
                         as_of=law_date)
+        if out.status == "FAILED" and _models.MODEL_BUSY in (out.reason or ""):
+            # Gemini stayed busy through its one retry. The cascade turned ModelBusyError
+            # into FAILED with its message; ponytail: matched on the code in that message,
+            # a typed error field on Outcome if a second busy source ever appears.
+            raise _models.ModelBusyError(out.reason)
+    except _models.ModelBusyError:
+        return _models.busy_refusal() | {
+            "run_id": _persist_run(ctx, intent="research_question", status="FAILED",
+                                   steps=[{"capability": "research", "status": "FAILED"}],
+                                   propositions=[]),
+            "sources": _report}
     except _provider_not_ready() as e:                           # B1
         # PROVIDER_NOT_READY is its OWN typed state: the model provider (Bedrock) is not
         # ready yet -- the account is being verified, or model access is pending. That is

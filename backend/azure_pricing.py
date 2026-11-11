@@ -139,6 +139,44 @@ TABLE: dict[str, Priced | Unpriced] = {
 }
 
 
+@dataclass(frozen=True)
+class Estimated:
+    """A CONSERVATIVE list-price ceiling, not a verified meter rate, and named as such.
+
+    Used where no billing meter is on record (Gemini on Vertex). A budget guard may only be
+    wrong in the expensive direction, so each figure is the HIGHER of what the source shows.
+    """
+    usd_per_m_input: float
+    usd_per_m_output: float
+    source: str
+    dated: str
+    basis: str
+
+    def inr(self, tokens_in: int, tokens_out: int) -> float:
+        usd = (tokens_in * self.usd_per_m_input
+               + tokens_out * self.usd_per_m_output) / 1_000_000
+        return round(usd * USD_INR, 4)
+
+
+# ── Gemini on Vertex AI (PLACEDON_ANSWER_MODEL=gemini), ESTIMATED 2026-11-10 ──
+# Source: Google's Gemini API paid-tier price list (ai.google.dev/gemini-api/docs/pricing,
+# which redirects to the URL below), read 2026-11-10. It shows gemini-3.6-flash at
+# $0.75/$3.75 per 1M tokens through 2026-12-31, rising to $1.50/$7.50 from 2027-01-01;
+# gemini-3.1-flash-lite at $0.25/$1.50 (text). The Vertex AI price page for asia-south1
+# could not be read (it rendered empty), so these are NOT a Vertex meter rate: they are the
+# HIGHER published figure, held as a ceiling. Replace with the Vertex SKU rate once read.
+GEMINI_PRICE_SOURCE = "https://aistudio.google.com/docs/pricing"
+GEMINI_TABLE: dict[str, Estimated] = {
+    "gemini-3.6-flash": Estimated(
+        1.50, 7.50, GEMINI_PRICE_SOURCE, "2026-11-10",
+        "conservative estimate: the 2027 list rate (2x the 2026 rate); Vertex asia-south1 "
+        "rate UNVERIFIED"),
+    "gemini-3.1-flash-lite": Estimated(
+        0.25, 1.50, GEMINI_PRICE_SOURCE, "2026-11-10",
+        "conservative estimate: Gemini API list rate; Vertex asia-south1 rate UNVERIFIED"),
+}
+
+
 class CostError(ValueError):
     """A cost that cannot be true. Raised rather than recorded."""
 
@@ -150,7 +188,7 @@ def price_inr(deployment: str, *, tokens_in: int | None,
     Four ways to be unpriced, and each says which: no entry, an explicit Unpriced, no token
     counts at all, or a call that reported zero tokens (which no real call does).
     """
-    entry = TABLE.get(deployment)
+    entry = TABLE.get(deployment, GEMINI_TABLE.get(deployment))
     if entry is None:
         return UNPRICED, (f"UNPRICED: {deployment!r} is not in the price table. Add a "
                           f"Priced entry with its source and date.")
@@ -164,8 +202,10 @@ def price_inr(deployment: str, *, tokens_in: int | None,
         return UNPRICED, ("UNPRICED: the reported usage was zero tokens, which no served "
                           "call is. Treating it as free would record a number nobody "
                           "measured.")
+    basis = f"; {entry.basis}" if isinstance(entry, Estimated) else ""
     return entry.inr(tokens_in, tokens_out), (
-        f"priced from {tokens_in}+{tokens_out} tokens at {entry.source} ({entry.dated})")
+        f"priced from {tokens_in}+{tokens_out} tokens at {entry.source} ({entry.dated})"
+        f"{basis}")
 
 
 def check_recordable(provider: str, cost_inr: float | None) -> None:
