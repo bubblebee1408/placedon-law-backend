@@ -1,0 +1,45 @@
+{
+  "target_type": "INSTRUMENT",
+  "target_id": "RULE:SEBI_LODR_2015",
+  "state": "HUMAN_REVIEW_PENDING",
+  "production_usable": false,
+  "restricted_use": false,
+  "restriction_codes": [],
+  "open_review_items": [
+    "ri-lodr_2015-001"
+  ],
+  "history": [
+    {
+      "event_type": "STATE_CHANGE",
+      "actor": "system",
+      "at": "2026-09-25T00:00:00Z",
+      "before": "DISCOVERED",
+      "after": "ACQUIRED",
+      "reason": "sectioned from SEBI consolidated PDF by scripts/section_sebi_lodr.py"
+    },
+    {
+      "event_type": "STATE_CHANGE",
+      "actor": "system",
+      "at": "2026-09-25T00:00:00Z",
+      "before": "ACQUIRED",
+      "after": "TECHNICALLY_VERIFIED",
+      "reason": "151 regulations + 12 Schedules parsed with SHA256 checksums"
+    },
+    {
+      "event_type": "STATE_CHANGE",
+      "actor": "system",
+      "at": "2026-09-25T00:00:00Z",
+      "before": "TECHNICALLY_VERIFIED",
+      "after": "STRUCTURED",
+      "reason": "indexed by section_index.py with instrument_id SEBI_LODR_2015"
+    },
+    {
+      "event_type": "STATE_CHANGE",
+      "actor": "system",
+      "at": "2026-09-25T00:00:00Z",
+      "before": "STRUCTURED",
+      "after": "HUMAN_REVIEW_PENDING",
+      "reason": "nobody has read this against the SEBI gazette notification"
+    }
+  ]
+}
