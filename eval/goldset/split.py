@@ -111,9 +111,10 @@ MIN_PER_STRATUM_PER_SIDE = 3
 SPLIT_PATH = GOLDSET_PATH.parent / "split.json"
 
 HELD_LAW = "HELD_LAW"
+HELD_UNADMITTED = "HELD_UNADMITTED"
 UNHELD_BODY = "UNHELD_BODY"
 OFF_TOPIC = "OFF_TOPIC"
-BODY_CLASSES = (HELD_LAW, UNHELD_BODY, OFF_TOPIC)
+BODY_CLASSES = (HELD_LAW, HELD_UNADMITTED, UNHELD_BODY, OFF_TOPIC)
 
 # Not a stratum: a label for the rows that are on neither side.
 SYNTHETIC_UNSPLIT = "SYNTHETIC_UNSPLIT"
@@ -123,6 +124,11 @@ SYNTHETIC_UNSPLIT = "SYNTHETIC_UNSPLIT"
 # statement of what it checks. An entry that matches nothing raises: a stratifier
 # with a default bucket silently mis-stratifies the first row that does not fit.
 _OFF_TOPIC_MARKER = "Not a question about Indian corporate law at all"
+# Law we hold (corpus/ has the text) but admission control has not promoted to
+# PRODUCTION_USABLE: Rules, LODR, Secretarial Standards. The correct engine
+# behaviour today is SHOULD_REFUSE (because admission blocks serving); the entries
+# flip to SHOULD_ANSWER when the instrument is admitted.
+_HELD_UNADMITTED_MARKER = "not admitted"
 
 
 class Unclassified(ValueError):
@@ -136,18 +142,25 @@ def _declared_unheld_keys() -> tuple[str, ...]:
 
 
 def body_class_of(entry: Entry) -> str:
-    """HELD_LAW / UNHELD_BODY / OFF_TOPIC, from the entry's own fields."""
+    """HELD_LAW / HELD_UNADMITTED / UNHELD_BODY / OFF_TOPIC, from the entry's own fields."""
     if entry.expected == SHOULD_ANSWER:
         # Answering is the correct behaviour, so by construction we hold the law.
         return HELD_LAW
     if entry.expected == SHOULD_REFUSE:
         if _OFF_TOPIC_MARKER in entry.rule or _OFF_TOPIC_MARKER in entry.note:
             return OFF_TOPIC
+        # Law we hold (corpus/) but admission control blocks: Rules, LODR, SS.
+        # Checked BEFORE unheld bodies, because the rule text may name a scope.py
+        # body (e.g. SEBI_LODR) AND say "not admitted", and the more specific
+        # classification wins.
+        if _HELD_UNADMITTED_MARKER in entry.rule.lower():
+            return HELD_UNADMITTED
         if any(k in entry.rule for k in _declared_unheld_keys()):
             return UNHELD_BODY
         raise Unclassified(
             f"entry {entry.question_id!r} expects a refusal but its rule names neither a "
-            f"body checker/scope.py declares nor {_OFF_TOPIC_MARKER!r}. A stratified split "
+            f"body checker/scope.py declares nor {_OFF_TOPIC_MARKER!r} nor "
+            f"{_HELD_UNADMITTED_MARKER!r}. A stratified split "
             "cannot place it, and placing it by default would put an unknown kind of row "
             "on one side without anyone deciding to. State the rule, or add a stratum.")
     raise Unclassified(f"entry {entry.question_id!r} has expected={entry.expected!r}")
@@ -165,6 +178,9 @@ def group_of(entry: Entry) -> str:
     cls = SYNTHETIC_UNSPLIT if not entry.scorable else body_class_of(entry)
     if cls == HELD_LAW and entry.expected_refs:
         return entry.expected_refs[0]            # the provision, not the question
+    if cls == HELD_UNADMITTED:
+        # Group by the instrument: questions about the same Rules set stay together.
+        return entry.source.split("/")[-1].split(".")[0] if "/" in entry.source else entry.question_id
     if cls == UNHELD_BODY:
         for k in sorted(_declared_unheld_keys(), key=len, reverse=True):
             if k in entry.rule:
@@ -311,7 +327,8 @@ def _test() -> None:
     strata = {}
     for e in live:
         strata.setdefault(stratum_of(e), []).append(e.question_id)
-    check(set(strata) == {f"{MECHANICAL}/{HELD_LAW}", f"{MECHANICAL}/{UNHELD_BODY}",
+    check(set(strata) == {f"{MECHANICAL}/{HELD_LAW}", f"{MECHANICAL}/{HELD_UNADMITTED}",
+                          f"{MECHANICAL}/{UNHELD_BODY}",
                           f"{MECHANICAL}/{OFF_TOPIC}", SYNTHETIC_UNSPLIT},
           f"every live entry lands in a named stratum ({sorted(strata)})")
     check(len(strata.get(f"{MECHANICAL}/{OFF_TOPIC}", [])) == 14,
@@ -319,7 +336,10 @@ def _test() -> None:
           f"{len(strata.get(f'{MECHANICAL}/{OFF_TOPIC}', []))} rows")
     check(all(i.startswith("off_") for i in strata[f"{MECHANICAL}/{OFF_TOPIC}"])
           and all(i.startswith("ref_") for i in strata[f"{MECHANICAL}/{UNHELD_BODY}"])
-          and all(i.startswith("held_") for i in strata[f"{MECHANICAL}/{HELD_LAW}"]),
+          and all(i.startswith("held_") or i.startswith("sim_")
+                  for i in strata[f"{MECHANICAL}/{HELD_LAW}"])
+          and all(i.startswith("rules_") or i.startswith("trap_")
+                  for i in strata[f"{MECHANICAL}/{HELD_UNADMITTED}"]),
           "...and the classification derived from rule/expected agrees with the ids, "
           "which were never consulted")
 
