@@ -6,9 +6,14 @@
   "note": "`test` and `heldout` are the same side: Entry.split carries the string 'heldout'. SYNTHETIC rows are on NEITHER side -- score() cannot score them, so a test side containing them would overstate what it judges. test_ids_sha256 = sha256 of the sorted test ids, one per line, each newline-terminated.",
   "strata": {
     "MECHANICAL/HELD_LAW": {
-      "dev": 13,
-      "test": 6,
-      "groups": 10
+      "dev": 15,
+      "test": 9,
+      "groups": 15
+    },
+    "MECHANICAL/HELD_UNADMITTED": {
+      "dev": 9,
+      "test": 4,
+      "groups": 9
     },
     "MECHANICAL/OFF_TOPIC": {
       "dev": 9,
@@ -22,16 +27,15 @@
     }
   },
   "dev_ids": [
+    "held_s164_insolvent",
+    "held_s164_mind",
     "held_s173_count",
     "held_s173_first",
     "held_s173_gap",
     "held_s173_vc",
-    "held_s177_indep",
-    "held_s177_size",
     "held_s184_when",
     "held_s185_guarantee",
     "held_s185_loan",
-    "held_s188_what",
     "held_s203_cs",
     "held_s96_first",
     "held_s96_gap",
@@ -51,14 +55,27 @@
     "ref_llp2008_named",
     "ref_llp2008_practitioner",
     "ref_sebi_other_named",
-    "ref_sebi_other_practitioner"
+    "ref_sebi_other_practitioner",
+    "rules_bp_r15_rpt_threshold",
+    "rules_bp_r3_vc_quorum",
+    "rules_bp_r4_vc_excluded",
+    "rules_bp_r5_circulation",
+    "rules_bp_r7_vigil",
+    "rules_lodr_reg21_risk",
+    "rules_lodr_reg23_rpt",
+    "rules_lodr_reg30_material_events",
+    "rules_pas_private_placement",
+    "sim_agm_timeline",
+    "sim_board_meetings_gap",
+    "sim_s188_rpt_approval"
   ],
   "test_ids": [
     "held_s149_min",
     "held_s149_opc",
     "held_s149_stay",
-    "held_s164_insolvent",
-    "held_s164_mind",
+    "held_s177_indep",
+    "held_s177_size",
+    "held_s188_what",
     "held_s92_filing",
     "off_bank_interest",
     "off_gst",
@@ -70,9 +87,15 @@
     "ref_ibc2016_named",
     "ref_ibc2016_practitioner",
     "ref_stamp_named",
-    "ref_stamp_practitioner"
+    "ref_stamp_practitioner",
+    "rules_ss1_board_minutes",
+    "rules_ss2_gm_notice",
+    "sim_csr_threshold",
+    "sim_s185_loan_directors",
+    "trap_gsr464e_private_s185",
+    "trap_r4_vc_excluded_act_only"
   ],
-  "test_ids_sha256": "ad66b01c4058597adfa32003bbf61845feb59ac7d6922b94218b64adf8d48dfe",
+  "test_ids_sha256": "a473cd7cf5e92b63b0e5899e28ab760985a53aa51643b6d5712ba56007ccb482",
   "synthetic_unsplit_ids": [
     "syn_comp_gun_jump",
     "syn_comparative",
