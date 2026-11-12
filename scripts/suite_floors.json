@@ -284,7 +284,7 @@
     "gateway/screens.py": 125,
     "gateway/store/__main__.py": 300,
     "gateway/verbs/__main__.py": 665,
-    "gateway/worker.py": 47,
+    "gateway/worker.py": 48,
     "scripts/acquire_cuad.py": 14,
     "scripts/acquire_rules.py": 38,
     "scripts/assistant_contract.py": 37,
