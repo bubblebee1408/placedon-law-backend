@@ -283,6 +283,26 @@ def _names_own_subject(text: str) -> bool:
     return len(set(words)) >= 2
 
 
+# A follow-up that continues the last question rather than starting a new one.
+_CONTINUES = re.compile(r"^\s*(?:and|also|what about|how about)\b", re.I)
+
+
+def _research_text(text: str, store, cid: str) -> str:
+    """The words a continuing follow-up is researched on: the user's own previous question
+    plus this one. "And for a private company?" after "What is the minimum number of directors
+    for a public company?" is about directors; researched alone it was answered about share
+    capital (live, 2026-11-12). Only the USER's words are carried -- an assistant answer is
+    never evidence, so it never enters the query.
+    """
+    if not _CONTINUES.match(text):
+        return text
+    users = [m for m in (store.read_messages(cid) or []) if m.get("role") == "user"]
+    previous = users[-1].get("text") if users else None
+    if not isinstance(previous, str) or not previous.strip():
+        return text
+    return f"{previous.strip()} {text.strip()}"
+
+
 def _conversation_send(args: dict, ctx: Context) -> dict:
     """Validate, reserve one idempotent message pair, then dispatch bounded work."""
     import hashlib
@@ -423,6 +443,8 @@ def _conversation_send(args: dict, ctx: Context) -> dict:
         task = intake.NEEDS_CLARIFICATION
         classification = {"task": task, "decided_by": "rules", "reason": "ambiguous follow-up",
             "question": "Please name the provision, document or issue in this follow-up. Prior assistant answers are not treated as legal evidence."}
+    research_text = (_research_text(text, store, cid)
+                     if conv and not raw_ids and task == "RESEARCH_QUESTION" else text)
     if _past is not None and (task != "RESEARCH_QUESTION" or document_research):
         # Only a research question reads the Act as it stood on a date. Every other task
         # (reviews, drafts, document reading, clarification) reads today's law or no law, so
@@ -445,7 +467,7 @@ def _conversation_send(args: dict, ctx: Context) -> dict:
         intent = "document_summary" if document_summary else TASK_INTENT[task]
         job_args = ({"file_ids": raw_ids, "matter_id": matter,
                      "sha256_by_id": sha256_by_id, "sources": sources}
-                    if document_summary else _task_args(task, text, raw_ids, ctx, args))
+                    if document_summary else _task_args(task, research_text, raw_ids, ctx, args))
         queued = {"run_id": str(uuid.uuid4()), "intent": intent,
                   "args": job_args, "lane": INTERACTIVE}
     reply_id = str(uuid.uuid4())
@@ -477,7 +499,7 @@ def _conversation_send(args: dict, ctx: Context) -> dict:
                              for f in files]
         return response
     try:
-        return _dispatch_conversation(args, ctx, cid=cid, text=text, raw_ids=raw_ids,
+        return _dispatch_conversation(args, ctx, cid=cid, text=research_text, raw_ids=raw_ids,
             as_of=as_of, task=task, classification=classification, reply_id=reply_id,
             metadata=metadata, files=files)
     except Exception:  # The durable question must have an explicit, sanitized failed reply.
