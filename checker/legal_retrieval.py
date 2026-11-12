@@ -42,16 +42,23 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from checker.legal_ref import ACT, RULE, LegalRef, parse_key  # noqa: E402
-from checker.section_index import section_by_number  # noqa: E402
+from checker.section_index import (  # noqa: E402
+    COMPANIES_ACT_2013 as _CA,
+    SEBI_LODR_2015 as _LODR,
+    section_by_number,
+)
 
 __all__ = ["Hit", "resolve", "names_a_provision", "DEFECT_REGISTER", "WITHHELD_DEFECTS",
-           "COMPANIES_ACT_2013"]
+           "COMPANIES_ACT_2013", "SEBI_LODR_2015"]
 
-COMPANIES_ACT_2013 = "COMPANIES_ACT_2013"
+COMPANIES_ACT_2013 = _CA
+SEBI_LODR_2015 = _LODR
 
-# The only instrument we hold text for. Anything else -- any Rules, any other Act -- resolves to
-# nothing, however well-formed the citation.
-CORPUS_INSTRUMENTS = frozenset({COMPANIES_ACT_2013})
+# Instruments we hold sectioned text for. Admission control decides what is SERVED; this
+# decides what is RESOLVABLE. Adding an instrument here lets citations resolve to Hits
+# that admission may then block — the honest answer ("held but not admitted") rather than
+# the misleading one ("no such law").
+CORPUS_INSTRUMENTS = frozenset({COMPANIES_ACT_2013, SEBI_LODR_2015})
 
 # docs/evidence/SOURCE_DEFECTS.md, both entries. Keyed by section number because that is what a citation
 # carries; the corpus record id is an India Code internal that no user ever types.
@@ -102,11 +109,12 @@ class Hit:
 # Longest alternatives first: `sections` must win over `s` at the same position.
 _ACT_WORDS = r"§§|§|sections|section|secs|sec|ss|s"
 _RULE_WORDS = r"rules|rule|rr|r"
+_REG_WORDS = r"regulations|regulation|regs|reg"
 
 # A prefix only counts when a number actually follows, so prose ("...as such") cannot trip it.
-# The lookbehind stops the `s` alternative firing inside a word or on a possessive ("what's 173").
+# The lookbehind stops the `s` alternative firing inside a word or on a possessive ("what’s 173").
 _PREFIX = re.compile(
-    rf"(?<![\w'’])(?:(?P<act>{_ACT_WORDS})|(?P<rule>{_RULE_WORDS}))\s*\.?\s*(?=[0-9])",
+    rf"(?<![\w’’])(?:(?P<act>{_ACT_WORDS})|(?P<reg>{_REG_WORDS})|(?P<rule>{_RULE_WORDS}))\s*\.?\s*(?=[0-9])",
     re.IGNORECASE,
 )
 
@@ -138,7 +146,7 @@ _SEP = re.compile(
 # A citation prefix followed by digits. Deliberately looser than _ITEM: this asks "did the user
 # cite something", not "can we resolve it".
 _CITATION_SHAPE = re.compile(
-    r"(?:\bu/s\b|\bs{1,2}\b|\bsec(?:tion|s)?\b|\brules?\b|\br\b|§+)\s*\.?\s*[0-9]",
+    r"(?:\bu/s\b|\bs{1,2}\b|\bsec(?:tion|s)?\b|\breg(?:ulation|s)?\b|\brules?\b|\br\b|§+)\s*\.?\s*[0-9]",
     re.IGNORECASE)
 
 _QUALIFIED_KEY = re.compile(r"\b(?:ACT|RULE):[A-Z0-9_]+:[SR][0-9]{1,3}[A-Z]{0,3}\b")
@@ -232,9 +240,15 @@ def _scan(query: str) -> list[_Cite]:
     text = _QUALIFIED_KEY.sub(lambda m: " " * len(m.group(0)), text)
 
     for m in _PREFIX.finditer(text):
-        # An unqualified "s.173" can only mean the one Act whose text we hold. Naming the
-        # instrument here rather than leaving it blank keeps the assumption visible in the Hit.
-        cites += _scan_run(text, m.end(), RULE if m.group("rule") else ACT, COMPANIES_ACT_2013)
+        if m.group("reg"):
+            # "regulation 30" — the only regulation instrument in scope is SEBI LODR.
+            cites += _scan_run(text, m.end(), RULE, SEBI_LODR_2015)
+        elif m.group("rule"):
+            # "rule 4" — Companies Act subordinate rules (not yet indexed beyond Board Powers).
+            cites += _scan_run(text, m.end(), RULE, COMPANIES_ACT_2013)
+        else:
+            # "s.173" — the Act.
+            cites += _scan_run(text, m.end(), ACT, COMPANIES_ACT_2013)
 
     seen: set[tuple[str, str, str, str]] = set()
     unique: list[_Cite] = []
@@ -250,30 +264,32 @@ def _scan(query: str) -> list[_Cite]:
 
 
 def _to_hit(cite: _Cite) -> Hit | None:
-    # A Rules citation has no corpus to resolve against. Returning the Act section of the same
-    # number is the precise mistake legal_ref.py exists to make impossible.
-    if cite.namespace != ACT:
-        return None
-    # A correctly-formed citation to an Act we never ingested is still unanswerable. Section
-    # numbers collide across Acts exactly as they do across an Act and its Rules.
     if cite.instrument not in CORPUS_INSTRUMENTS:
         return None
+    # Namespace must match the instrument's nature. LODR is subordinate legislation (RULE),
+    # not an Act; Companies Act rules are not indexed. Cross-namespace resolution would
+    # silently return a regulation when an Act section was asked for, or vice versa.
+    if cite.namespace == RULE and cite.instrument == COMPANIES_ACT_2013:
+        return None
+    if cite.namespace == ACT and cite.instrument == SEBI_LODR_2015:
+        return None
 
-    record = section_by_number(cite.number)
+    record = section_by_number(cite.number, instrument_id=cite.instrument)
     if record is None:
         return None
 
-    defects = DEFECT_REGISTER.get(cite.number, ())
+    defects = DEFECT_REGISTER.get(cite.number, ()) if cite.instrument == COMPANIES_ACT_2013 else ()
     confidence = record.get("index_confidence")
     if confidence not in ("high", "medium"):
         confidence = "low"
     if any(d in WITHHELD_DEFECTS for d in defects):
         confidence = "low"
 
-    ref = LegalRef(ACT, COMPANIES_ACT_2013, cite.number, record["title"], record["section_id"])
+    ref = LegalRef(cite.namespace, cite.instrument, cite.number,
+                   record["title"], record.get("section_id"))
     return Hit(
         ref=ref,
-        section_id=record["section_id"],
+        section_id=record.get("section_id"),
         title=record["title"],
         route=cite.route,
         confidence=confidence,
@@ -425,17 +441,43 @@ def _test() -> None:
     check(set(DEFECT_REGISTER) == {"1", "16", "124", "76A", "329"},
           "the register holds exactly the five sections SOURCE_DEFECTS.md confirms")
 
-    # --- LODR is INDEXED, not SERVED: the refusal is a decision, not a gap ---
+    # --- LODR: RESOLVABLE, not SERVED. Admission blocks it; retrieval no longer hides it. ---
     from checker.section_index import SEBI_LODR_2015
     check(section_by_number("30", instrument_id=SEBI_LODR_2015) is not None,
-          "LODR reg 30 exists in the section index (so what follows is a refusal by design)")
-    check(COMPANIES_ACT_2013 in CORPUS_INSTRUMENTS and SEBI_LODR_2015 not in CORPUS_INSTRUMENTS
-          and len(CORPUS_INSTRUMENTS) == 1,
-          "retrieval still resolves the Companies Act only: LODR is not admitted")
-    check(resolve("RULE:SEBI_LODR_2015:R30") == [] and resolve("ACT:SEBI_LODR_2015:S30") == [],
-          "a qualified LODR citation resolves to nothing, in either namespace")
-    check(resolve("regulation 30 of the SEBI LODR Regulations") == [],
-          "'regulation 30 of LODR' resolves to nothing -- never to Companies Act s.30")
+          "LODR reg 30 exists in the section index")
+    check(COMPANIES_ACT_2013 in CORPUS_INSTRUMENTS and SEBI_LODR_2015 in CORPUS_INSTRUMENTS,
+          "both the Act and LODR are resolvable instruments")
+
+    lodr30 = resolve("RULE:SEBI_LODR_2015:R30")
+    check(len(lodr30) == 1 and lodr30[0].ref.instrument_id == SEBI_LODR_2015
+          and lodr30[0].ref.number == "30",
+          "a qualified LODR key resolves to LODR reg 30")
+    check(lodr30[0].ref.key() == "RULE:SEBI_LODR_2015:R30",
+          "the hit carries the LODR qualified key, not an Act key")
+    # ACT namespace for a RULE instrument still resolves nothing — namespace matters.
+    check(resolve("ACT:SEBI_LODR_2015:S30") == [],
+          "ACT namespace for a RULE instrument resolves to nothing")
+
+    reg30 = resolve("regulation 30 of the SEBI LODR Regulations")
+    check(len(reg30) == 1 and reg30[0].ref.instrument_id == SEBI_LODR_2015,
+          "'regulation 30 of LODR' resolves to LODR, never to Companies Act s.30")
+    check(resolve("reg 30")[0].ref.instrument_id == SEBI_LODR_2015,
+          "'reg 30' resolves to LODR")
+    check(resolve("regulation 23")[0].title == "Related party transactions",
+          "'regulation 23' finds LODR reg 23 (related party transactions)")
+
+    # LODR and Act don't collide: "s.30" is the Act, "regulation 30" is LODR.
+    act30 = resolve("s.30")
+    check(len(act30) == 1 and act30[0].ref.instrument_id == COMPANIES_ACT_2013,
+          "'s.30' is still the Act, not LODR")
+    check(act30[0].ref.number == "30" and reg30[0].ref.number == "30"
+          and act30[0].section_id != reg30[0].section_id,
+          "Act s.30 and LODR reg 30 are different records despite sharing a number")
+
+    # Rules citations still abstain — Companies Act rules are not indexed.
+    check(resolve("rule 4") == [], "'rule 4' still abstains -- no Companies Act Rules corpus")
+    check(resolve("RULE:COMPANIES_MEETINGS_BOARD_POWERS_2014:R56") == [],
+          "a Board Powers key still resolves to nothing -- not in CORPUS_INSTRUMENTS")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:

@@ -218,8 +218,19 @@ def hybrid_search(query: str, top_k: int) -> list[dict]:
 
 def _rows(hits: list[Hit]) -> list[dict]:
     return [{"section_number": h.ref.number, "section_id": h.section_id,
-             "title": h.title, "defects": h.defects}
+             "title": h.title, "defects": h.defects,
+             "ref_key": h.ref.key(), "instrument_id": h.ref.instrument_id}
             for h in hits if h.section_id]
+
+
+def _instrument_admission_key(instrument_id: str) -> str:
+    """The admission store key for an instrument's blanket record."""
+    from checker.legal_retrieval import COMPANIES_ACT_2013, SEBI_LODR_2015
+    _INST_KEYS = {
+        COMPANIES_ACT_2013: "ACT:COMPANIES_ACT_2013",
+        SEBI_LODR_2015: "RULE:SEBI_LODR_2015",
+    }
+    return _INST_KEYS.get(instrument_id, f"ACT:{instrument_id}")
 
 
 def _admission_filter(rows: list[dict], mode: str) -> tuple[list[dict], list[str]]:
@@ -230,11 +241,15 @@ def _admission_filter(rows: list[dict], mode: str) -> tuple[list[dict], list[str
     invite a default-allow, and default-allow is how unreviewed law reaches users.
     """
     allowed, blocked = [], []
-    inst = adm.load("INSTRUMENT", "ACT:COMPANIES_ACT_2013")
+    _inst_cache: dict[str, adm.AdmissionRecord | None] = {}
     for r in rows:
-        key = f"ACT:COMPANIES_ACT_2013:S{r['section_number']}"
-        rec = adm.load("PROVISION", key) or inst
-        if rec is None:                       # nothing seeded yet -- fail closed for the model
+        inst_id = r.get("instrument_id", "COMPANIES_ACT_2013")
+        if inst_id not in _inst_cache:
+            _inst_cache[inst_id] = adm.load("INSTRUMENT", _instrument_admission_key(inst_id))
+        inst_rec = _inst_cache[inst_id]
+        key = r.get("ref_key", f"ACT:COMPANIES_ACT_2013:S{r['section_number']}")
+        rec = adm.load("PROVISION", key) or inst_rec
+        if rec is None:
             (allowed if mode == adm.MODE_REVIEW else blocked).append(
                 r if mode == adm.MODE_REVIEW else f"{key}: no admission record")
             continue
@@ -496,6 +511,32 @@ def _test() -> None:
         check("188" in nums,
               f"the lexical hit for 'related party transactions' (s.188) survives fusion even "
               f"though dense (stubbed) ranks something unrelated ({nums})")
+
+    # ── LODR: resolvable but blocked by admission ──────────────────────────────
+    # "regulation 30" now resolves to LODR reg 30. Admission is HUMAN_REVIEW_PENDING,
+    # so the model gets no evidence — but the refusal says HELD_NOT_ADMITTED, not
+    # CITATION_UNRESOLVED. That distinction is the point of this widening.
+    lodr_pack, lodr_route = retrieve("regulation 30", mode=MODE_MODEL)
+    check(lodr_route == ROUTE_ABSTAIN, "LODR reg 30 abstains for the model (not admitted)")
+    check(lodr_pack.abstain_reason == HELD_NOT_ADMITTED,
+          f"the reason is HELD_NOT_ADMITTED, not CITATION_UNRESOLVED "
+          f"(got {lodr_pack.abstain_reason!r})")
+    check(not lodr_pack.to_dict()["provisions"],
+          "no LODR provisions reach the model evidence pack")
+    check(any("SEBI_LODR" in m for m in lodr_pack.missing),
+          f"the withheld LODR reg is REPORTED ({lodr_pack.missing})")
+
+    # A reviewer can see LODR provisions — or review is impossible.
+    lodr_rev, lodr_rroute = retrieve("regulation 30", mode=MODE_REVIEW)
+    check(lodr_rroute == ROUTE_EXACT, "MODE_REVIEW resolves LODR reg 30 normally")
+    check(lodr_rev.to_dict()["provisions"],
+          "MODE_REVIEW shows LODR to a human reviewer")
+
+    # "regulation 23" does not collide with Act s.23.
+    r23_pack, r23_route = retrieve("regulation 23", mode=MODE_MODEL)
+    check(r23_route == ROUTE_ABSTAIN, "LODR reg 23 also blocked by admission")
+    act23_pack, act23_route = retrieve("s.23", mode=MODE_MODEL)
+    check(act23_route == ROUTE_EXACT, "Act s.23 still resolves normally")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:
