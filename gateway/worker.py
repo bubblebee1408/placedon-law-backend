@@ -363,6 +363,14 @@ def serve(*, queue, store, handlers, worker: str = "w1", should_stop=None, wait=
         idle(idle_seconds)
 
 
+# The LISTEN connection sits idle between jobs. On Azure (App Service in Hyderabad, Postgres in
+# UAE North) an idle TCP flow is dropped silently after a few minutes; the next `SELECT 1` then
+# hangs until the kernel gives up (about 15 min on 2026-11-12, every Ask queued meanwhile).
+# Keepalives every 60 s keep the flow alive, and a dead one is noticed in about 90 s.
+LISTEN_KEEPALIVE = {"keepalives": 1, "keepalives_idle": 60,
+                    "keepalives_interval": 10, "keepalives_count": 3}
+
+
 def listen_waiter(url: str, channel: str | None = None):
     """A `wait(timeout)` backed by Postgres LISTEN/NOTIFY.
 
@@ -374,7 +382,7 @@ def listen_waiter(url: str, channel: str | None = None):
     import psycopg
     from gateway.jobs import NOTIFY_CHANNEL
     channel = channel or NOTIFY_CHANNEL          # one string, named in gateway/jobs.py
-    conn = psycopg.connect(url, autocommit=True)
+    conn = psycopg.connect(url, autocommit=True, **LISTEN_KEEPALIVE)
     conn.execute(f"LISTEN {channel}")
 
     def wait(timeout: float) -> None:
@@ -506,6 +514,32 @@ def _test() -> None:
             print(f"  [FAIL] {label}")
 
     import uuid
+
+    # The LISTEN connection asks for keepalives, so an idle flow dropped by the network is
+    # noticed in about 90 s instead of hanging the worker for 15 minutes.
+    import sys as _sys
+    import types as _types
+    _seen: dict = {}
+
+    class _Conn:
+        def execute(self, *_a):
+            return None
+
+        def close(self):
+            return None
+
+    _fake = _types.SimpleNamespace(connect=lambda url, **kw: (_seen.update(kw), _Conn())[1])
+    _real = _sys.modules.get("psycopg")
+    _sys.modules["psycopg"] = _fake
+    try:
+        listen_waiter("postgresql://x/y")
+    finally:
+        if _real is not None:
+            _sys.modules["psycopg"] = _real
+        else:
+            del _sys.modules["psycopg"]
+    check(_seen.get("keepalives") == 1 and _seen.get("keepalives_idle", 999) < 240,
+          f"the LISTEN connection sends TCP keepalives well inside Azure's idle drop ({_seen})")
 
     from agents import state as st
     from gateway.store import MemoryBackend
