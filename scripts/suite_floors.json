@@ -135,7 +135,7 @@
     "checker/jurisdiction.py": 12,
     "checker/lattice.py": 15,
     "checker/law_versions.py": 28,
-    "checker/lawyer_summary.py": 100,
+    "checker/lawyer_summary.py": 106,
     "checker/legal_ref.py": 12,
     "checker/legal_retrieval.py": 66,
     "checker/lexical_rank.py": 11,
