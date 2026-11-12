@@ -196,6 +196,24 @@ class ConversationReliability(unittest.TestCase):
         self.assertNotEqual((result.get("envelope") or {}).get("status"), "NEEDS_CLARIFICATION")
         self.assertEqual(len(self.queue.jobs), 2, "queued as research, like a first question")
 
+    def test_continuing_followup_is_researched_with_the_users_previous_question(self):
+        # Live 2026-11-12: "And for a private company?" after a directors question was
+        # researched alone and answered about share capital.
+        first = self.send(text="What is the minimum number of directors for a public company?")
+        result = self.send(text="And for a private company?", conversation_id=first["conversation_id"])
+        job = self.queue.get(result["run_id"])
+        self.assertEqual(job.args["question"], "What is the minimum number of directors for a public "
+                                           "company? And for a private company?")
+        stored = [m["text"] for m in self.store.read_messages(first["conversation_id"]) if m["role"] == "user"]
+        self.assertEqual(stored[-1], "And for a private company?", "the user's own words are stored unchanged")
+
+    def test_new_question_in_a_thread_is_not_merged_with_the_last(self):
+        first = self.send()
+        result = self.send(text="What is the notice period for a board meeting?",
+                           conversation_id=first["conversation_id"])
+        self.assertEqual(self.queue.get(result["run_id"]).args["question"],
+                         "What is the notice period for a board meeting?")
+
     def test_named_subject_rule_is_narrow(self):
         self.assertTrue(verbs._names_own_subject("And what happens if that quorum is not present at the meeting?"))
         self.assertTrue(verbs._names_own_subject("Also, what is the notice period for a board meeting?"))
