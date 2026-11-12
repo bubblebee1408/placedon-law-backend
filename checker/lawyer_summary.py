@@ -178,6 +178,10 @@ TERMS_NOT_IN_SPAN = "TERMS_NOT_IN_SPAN"
 LAW_FROM_DOCUMENT = "LAW_FROM_DOCUMENT"
 SPAN_OVERBROAD = "SPAN_OVERBROAD"
 UNDETERMINED_AS_ESTABLISHED = "UNDETERMINED_AS_ESTABLISHED"
+# The span says "No listed company shall appoint an individual for more than one term" and
+# the sentence says an individual "can be appointed for more than one term". Every word is
+# in the span, so coverage passes; the meaning is reversed. Seen live on 2026-11-12 (s.139).
+POLARITY_FLIPPED = "POLARITY_FLIPPED"
 # The four content failures are `reasoning`'s own names, not new ones. They are the same
 # failures it already refuses narration for -- an invented date, an invented figure, a
 # citation to something outside the verified material, a legal conclusion nobody reached --
@@ -187,7 +191,7 @@ UNDETERMINED_AS_ESTABLISHED = "UNDETERMINED_AS_ESTABLISHED"
 VERDICTS = (TRACED, ENTAILED, TIER_CANNOT_VERIFY,
             NO_CITATION, CITATION_NOT_IN_EVIDENCE, SPAN_OUT_OF_RANGE,
             SPAN_MISQUOTED, SPAN_VACUOUS, SPAN_OVERBROAD, TERMS_NOT_IN_SPAN,
-            UNDETERMINED_AS_ESTABLISHED,
+            UNDETERMINED_AS_ESTABLISHED, POLARITY_FLIPPED,
             LAW_FROM_DOCUMENT,
             DATE_INVENTED, FIGURE_INVENTED, CITATION_OUTSIDE_PACK, CONCLUSION_ASSERTED)
 
@@ -249,6 +253,33 @@ _MAX_SOURCE_FRACTION = 0.6
 _UNDETERMINED_VOICE = re.compile(
     r"\b(?:not|no|nor|cannot|could not|did not|does not|was not|were not|undetermined|"
     r"unable|nothing|neither|without|unresolved|unknown|unchecked)\b", re.I)
+
+# POLARITY. A negation in the span's matching passage must survive into the sentence, and a
+# sentence may not add one. Bounds ("not less than seven days", "not more than fifteen
+# months") are quantities, not negations, so they are removed before either side is read.
+# Fails safe: a paraphrase that turns "shall not" into "is prohibited from" is refused, and a
+# refused true sentence is shown in quarantine rather than lost.
+_NEGATION = re.compile(
+    r"\b(?:not|no|never|neither|nor|none|nothing|nobody|cannot|can't|won't|shan't|mustn't|"
+    r"prohibited|forbidden|barred|ineligible)\b|n't\b", re.I)
+_BOUND = re.compile(
+    r"\b(?:not|no) (?:less|more|fewer|later|earlier|exceeding|below|above|greater)"
+    r"(?: than)?\b|\bnot exceeding\b", re.I)
+# Statutory text runs one sub-section into the next and hangs provisos off it; each is its
+# own polarity, so the span is read piece by piece and the closest piece decides.
+_PASSAGE_SPLIT = re.compile(r"(?<=[.;:])\s+(?=\(\d+\)|[A-Z])|\bProvided (?:further )?that\b")
+
+
+def _negated(text: str) -> bool:
+    return bool(_NEGATION.search(_BOUND.sub(" ", text)))
+
+
+def _closest_passage(sentence: str, span_text: str) -> str:
+    """The piece of the span that shares the most distinctive words with the sentence."""
+    want = distinctive_terms(sentence)
+    pieces = [p for p in _PASSAGE_SPLIT.split(span_text) if p and p.strip()] or [span_text]
+    return max(pieces, key=lambda p: len(want & distinctive_terms(p)))
+
 
 # A sentence that says what the law requires, rather than what this document says.
 _LAW_ASSERTION = re.compile(
@@ -686,6 +717,15 @@ def verify_sentence(text: str, citations, sources, *, shares_citation: bool = Fa
                       f"(coverage {coverage:.2f}; absent: "
                       f"{', '.join(sorted(want - shared)[:6])})",
                       anchors=tuple(anchors))
+
+    passage = _closest_passage(claimed, span_text)
+    if _negated(passage) != _negated(claimed):
+        return no(POLARITY_FLIPPED,
+                  "the cited passage says this "
+                  + ("is NOT so" if _negated(passage) else "IS so")
+                  + " and the sentence says the opposite: every word can be in the span "
+                  f"while the meaning is reversed (passage: {passage.strip()[:120]!r})",
+                  anchors=tuple(anchors))
 
     return Sentence(text, TRACED, cits, (), tuple(anchors), shares_citation)
 
@@ -1330,6 +1370,54 @@ def _checks(check) -> None:
     check(all(s["verdict"] in VERDICTS for s in d["sentences"]),
           "every verdict in the record is a declared one")
 
+    # ── POLARITY: the s.139 answer seen live on 2026-11-12 ───────────────────
+    from checker.tier_rules import HELD as _PH
+    _s139 = Source("Companies Act 2013, s.139", STATUTE,
+                   "139. Appointment of auditors.\n"
+                   "(1) Every company shall, at the first annual general meeting, appoint an "
+                   "individual or a firm as an auditor who shall hold office till the "
+                   "conclusion of its sixth annual general meeting. "
+                   "(2) No listed company or a company belonging to such class or classes of "
+                   "companies as may be prescribed, shall appoint or re-appoint an individual "
+                   "as auditor for more than one term of five consecutive years; and an audit "
+                   "firm as auditor for more than two terms of five consecutive years. "
+                   "(3) Subject to the provisions of this Act, members of a company may "
+                   "resolve to provide that the auditing partner shall be rotated at such "
+                   "intervals as may be resolved by members. "
+                   "(4) The Central Government may, by rules, prescribe the manner in which "
+                   "the companies shall rotate their auditors in pursuance of sub-section (2). "
+                   "(5) Notwithstanding anything contained in sub-section (1), in the case of "
+                   "a Government company, the auditor shall be appointed by the "
+                   "Comptroller and Auditor-General of India within a period of one hundred "
+                   "and eighty days from the commencement of the financial year.\n", _PH)
+    _q2 = ("(2) No listed company or a company belonging to such class or classes of "
+           "companies as may be prescribed, shall appoint or re-appoint an individual as "
+           "auditor for more than one term of five consecutive years")
+    _a2 = _s139.text.index(_q2)
+    _c2 = [Citation(0, _a2, _a2 + len(_q2), _q2)]
+    _flip = verify_sentence("An individual can be appointed as auditor for more than one "
+                            "term of five consecutive years in a listed company.", _c2, (_s139,))
+    check(_flip.verdict == POLARITY_FLIPPED,
+          f"a sentence that drops the span's 'No' is refused though every word is in the "
+          f"span ({_flip.verdict})")
+    _kept = verify_sentence("A listed company shall not appoint or re-appoint an individual "
+                            "as auditor for more than one term of five consecutive years.",
+                            _c2, (_s139,))
+    check(_kept.verdict == TRACED,
+          f"...while the same rule stated WITH its negation traces ({_kept.verdict})")
+    _q1 = ("(1) Every company shall, at the first annual general meeting, appoint an "
+           "individual or a firm as an auditor")
+    _a1 = _s139.text.index(_q1)
+    _added = verify_sentence("A company shall not appoint an individual or a firm as an "
+                             "auditor at the first annual general meeting.",
+                             [Citation(0, _a1, _a1 + len(_q1), _q1)], (_s139,))
+    check(_added.verdict == POLARITY_FLIPPED,
+          f"a sentence that ADDS a negation the span does not carry is refused too "
+          f"({_added.verdict})")
+    check(not _negated("Not more than fifteen months shall elapse")
+          and not _negated("not less than seven days notice in writing"),
+          "a bound ('not more than', 'not less than') is a quantity, not a negation")
+
 
 # ── the kill tests ────────────────────────────────────────────────────────────
 # Three vacuous tests were found in this repository in one night: this module's
@@ -1360,6 +1448,8 @@ def _mutants() -> tuple[tuple[str, dict], ...]:
          {"_UNDETERMINED_VOICE": re.compile(r"")}),
         ("the shared-citation marker is blank", {"_SHARED_NOTE": ""}),
         ("a null offset reads as zero", {"_as_offset": lambda v: 0}),
+        ("the negation detector never fires", {"_NEGATION": _NEVER}),
+        ("bounds are read as negations", {"_BOUND": _NEVER}),
     )
 
 
