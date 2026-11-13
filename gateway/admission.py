@@ -18,8 +18,13 @@ class Busy(RuntimeError):
 
 
 class BoundedExecutor:
+    # Readers serve the control verbs (conversation.get, sources.list, matters.list, ...). One
+    # conversation screen issues four or five of them at once, so 2 per tenant refused its own
+    # page live (2026-11-12: "That thread did not arrive. Placedon is busy right now"). 5 covers
+    # one screen; 6 in all stays inside the API's 10-connection pool (gateway/pool.py).
+    # ponytail: per-process limits; revisit with the pool size when a second replica is added.
     def __init__(self, *, workers: int = 8, per_tenant: int = 4,
-                 readers: int = 4, readers_per_tenant: int = 2):
+                 readers: int = 6, readers_per_tenant: int = 5):
         if min(workers, per_tenant, readers, readers_per_tenant) < 1:
             raise ValueError("admission limits must be positive")
         self._limits = {False: (workers, per_tenant), True: (readers, readers_per_tenant)}
@@ -139,6 +144,18 @@ def _test() -> int:
             done.set(); executor.close()
         return retained
     check(asyncio.run(cancellation()), "cancelled HTTP waiter retains slot until work actually stops")
+
+    # One conversation screen's concurrent reads are admitted by the defaults, inside the pool.
+    from gateway.pool import API_MAX_SIZE
+    screen, hold = BoundedExecutor(), threading.Event()
+    try:
+        held = [screen.submit("firm", hold.wait, control=True) for _ in range(5)]
+        check(len(held) == 5, "five concurrent control reads from one firm are admitted (one screen)")
+        check(screen._limits[True][0] <= API_MAX_SIZE, "reader capacity stays inside the API connection pool")
+    except Busy:
+        check(False, "five concurrent control reads from one firm are admitted (one screen)")
+    finally:
+        hold.set(); screen.close()
     print(f"\n{ok}/{ok+fail} passed")
     return int(bool(fail))
 
