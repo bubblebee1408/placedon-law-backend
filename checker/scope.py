@@ -183,6 +183,52 @@ BODIES: tuple[Body, ...] = (
 
 _BY_KEY = {b.key: b for b in BODIES}
 
+# ── practice area → bodies ───────────────────────────────────────────────────
+#
+# The frontend sends a practice area id (src/lib/practice-areas.ts); the backend
+# maps it to the bodies of law it may need. A query in a practice area that
+# touches only DECLARED bodies is refused naming every one of them, so the user
+# knows exactly what we do not hold.
+#
+# None (or absent) means "all areas" — no filtering.
+PRACTICE_AREA_BODIES: dict[str, tuple[str, ...]] = {
+    "corporate":        ("CA2013", "LLP2008"),
+    "due_diligence":    ("CA2013", "SEBI_LODR", "FEMA1999", "CONTRACT1872"),
+    "transactions":     ("CA2013", "SEBI_LODR", "SEBI_OTHER", "FEMA1999",
+                         "COMP2002", "CONTRACT1872", "STAMP"),
+    "capital_markets":  ("SEBI_LODR", "SEBI_OTHER", "CA2013"),
+    "banking_finance":  ("FEMA1999", "CA2013"),
+    "disputes":         ("CONTRACT1872", "ARBITRATION1996", "CA2013"),
+    "litigation":       ("CONTRACT1872", "CA2013"),
+    "arbitration":      ("ARBITRATION1996", "CONTRACT1872"),
+    "in_house":         ("CA2013", "SEBI_LODR", "FEMA1999", "CONTRACT1872",
+                         "COMP2002", "IBC2016", "DPDP2023"),
+    "advisory":         ("CA2013", "SEBI_LODR", "FEMA1999", "CONTRACT1872",
+                         "ARBITRATION1996", "COMP2002", "IBC2016"),
+    "real_estate":      ("STAMP", "CONTRACT1872", "CA2013"),
+}
+
+
+def bodies_for_practice_area(area: str | None) -> tuple[Body, ...]:
+    """The bodies a practice area touches, or all non-excluded bodies when None."""
+    if area is None:
+        return tuple(b for b in BODIES if b.status != OUT_OF_SCOPE)
+    keys = PRACTICE_AREA_BODIES.get(area)
+    if keys is None:
+        return tuple(b for b in BODIES if b.status != OUT_OF_SCOPE)
+    return tuple(_BY_KEY[k] for k in keys if k in _BY_KEY)
+
+
+def scope_for_practice_area(area: str | None) -> dict[str, list[Body]]:
+    """Bodies grouped by what can be done: answerable, current_only, declared."""
+    bodies = bodies_for_practice_area(area)
+    return {
+        "answerable": [b for b in bodies if b.answerable],
+        "current_only": [b for b in bodies if b.status == CURRENT_ONLY],
+        "declared": [b for b in bodies if b.status == DECLARED],
+    }
+
+
 # Which body each obligation in the register belongs to. An obligation with no
 # entry here fails the completeness test below -- adding one without declaring
 # its body is exactly how scope drifts.
@@ -195,6 +241,9 @@ OBLIGATION_BODY = {
     "CA13-S188-RPT": "CA2013", "CA13-S177-AUDIT-CTTE": "CA2013",
     "CA13-S203-KMP": "CA2013", "CA13-S180-BORROWING-LIMIT": "CA2013",
     "CA13-S184-DIRECTOR-INTEREST": "CA2013",
+    "CA13-S164-2A-DISQ": "CA2013", "CA13-S139-AUDITOR": "CA2013",
+    "CA13-S117-SPECIAL-RES": "CA2013", "CA13-S136-CIRCULATE-FS": "CA2013",
+    "CA13-S77-CHARGE-REG": "CA2013", "CA13-S12-REG-OFFICE": "CA2013",
 }
 
 
@@ -333,6 +382,25 @@ def _test() -> None:
           "...and its refusal says exactly why, rather than sounding like 'not held'")
     check(body("CA2013").point_in_time,
           "a body built from discrete amending notifications CAN answer a dated question")
+
+    # ── practice area mapping ───────────────────────────────────────────────
+    for area, keys in PRACTICE_AREA_BODIES.items():
+        for k in keys:
+            check(k in _BY_KEY,
+                  f"practice area {area!r} maps to declared body {k!r}")
+        got = bodies_for_practice_area(area)
+        check(len(got) == len(keys),
+              f"bodies_for_practice_area({area!r}) returns {len(keys)} bodies")
+    all_bodies = bodies_for_practice_area(None)
+    check(all(b.status != OUT_OF_SCOPE for b in all_bodies),
+          "None practice area returns all non-excluded bodies")
+    check(len(all_bodies) == len([b for b in BODIES if b.status != OUT_OF_SCOPE]),
+          "...and the count matches")
+    grouped = scope_for_practice_area("corporate")
+    check(any(b.key == "CA2013" for b in grouped["answerable"]),
+          "corporate area has CA2013 as answerable")
+    check(any(b.key == "LLP2008" for b in grouped["declared"]),
+          "corporate area has LLP2008 as declared")
 
 
     check(len(declared_unheld()) >= 7,

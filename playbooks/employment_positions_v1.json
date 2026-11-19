@@ -1,0 +1,107 @@
+{
+  "id": "employment_positions_v1",
+  "version": "1",
+  "status": "DRAFT",
+  "approved_by": null,
+  "note": "DRAFT positional playbook for employment agreements governed by Indian law. Covers notice period, non-compete, non-solicit, IP assignment, severance, probation, and governing law. Indian Contract Act s.27 makes post-term non-competes unenforceable — the starting position is always no non-compete. No in-house lawyer has approved these positions.",
+  "applies_to": "Employment agreements for Indian companies",
+  "not_legal_advice": "Every finding is a POTENTIAL_ISSUE against a company standard, not a statement of law.",
+  "rules": [
+    {
+      "id": "EMP-POS-01",
+      "clause": "notice_period_employee",
+      "starting": {"text": "30 days notice from employee", "value": "30 days"},
+      "fallbacks": [
+        {"text": "60 days notice", "value": "60 days"},
+        {"text": "90 days notice", "value": "90 days"}
+      ],
+      "dealbreaker": null,
+      "priority": "MANDATORY",
+      "comparator": "equals",
+      "why": "Notice period from employee side. 30 days is standard; 60-90 days for senior roles. No dealbreaker since longer notice protects the company. Uses equals because years() parser does not handle day values."
+    },
+    {
+      "id": "EMP-POS-02",
+      "clause": "notice_period_employer",
+      "starting": {"text": "30 days notice from employer", "value": "30 days"},
+      "fallbacks": [
+        {"text": "60 days notice from employer", "value": "60 days"}
+      ],
+      "dealbreaker": null,
+      "priority": "MANDATORY",
+      "comparator": "equals",
+      "why": "Notice period from employer side. Should match or exceed employee notice for fairness. 30 days standard; 60 days for senior roles."
+    },
+    {
+      "id": "EMP-POS-03",
+      "clause": "non_compete_post_term",
+      "starting": {"text": "No post-term non-compete (Indian Contract Act s.27)", "value": "0 years"},
+      "fallbacks": [],
+      "dealbreaker": {"text": "any post-term non-compete", "value": "0 years"},
+      "priority": "MANDATORY",
+      "comparator": "max_years",
+      "why": "Post-term non-competes are unenforceable under Indian Contract Act s.27 (Niranjan Shankar Golikari, Superintendence Company of India). The starting position is NO non-compete. Any non-zero duration crosses the dealbreaker. During-term non-competes are acceptable and handled by the flat playbook."
+    },
+    {
+      "id": "EMP-POS-04",
+      "clause": "non_solicit_period",
+      "starting": {"text": "6 months post-termination", "value": "6 months"},
+      "fallbacks": [
+        {"text": "1 year post-termination", "value": "1 year"}
+      ],
+      "dealbreaker": {"text": "above 2 years", "value": "2 years"},
+      "priority": "RECOMMENDED",
+      "comparator": "max_years",
+      "why": "Non-solicitation (of clients/employees) is more enforceable than non-compete under Indian law, but still read narrowly. 6 months is reasonable; 1 year is market. Above 2 years is excessive."
+    },
+    {
+      "id": "EMP-POS-05",
+      "clause": "probation_period",
+      "starting": {"text": "3 months probation", "value": "3 months"},
+      "fallbacks": [
+        {"text": "6 months probation", "value": "6 months"}
+      ],
+      "dealbreaker": {"text": "above 1 year", "value": "1 year"},
+      "priority": "RECOMMENDED",
+      "comparator": "max_years",
+      "why": "Probation period. 3 months is standard; 6 months for senior/specialist roles. Above 1 year is unusual and may be challenged as unfair."
+    },
+    {
+      "id": "EMP-POS-06",
+      "clause": "ip_assignment_scope",
+      "starting": {"text": "IP created in course of employment only", "value": "employment"},
+      "fallbacks": [
+        {"text": "IP created using company resources", "value": ["employment", "company resources"]}
+      ],
+      "dealbreaker": null,
+      "priority": "MANDATORY",
+      "comparator": "in_list",
+      "why": "IP assignment should be limited to work created during and in the course of employment. Blanket assignment of all IP (including personal projects) is overreaching and may not hold up."
+    },
+    {
+      "id": "EMP-POS-07",
+      "clause": "governing_law",
+      "starting": {"text": "Indian law", "value": "India"},
+      "fallbacks": [
+        {"text": "Indian law (alternate phrasing)", "value": ["India", "laws of India", "the laws of India", "Republic of India"]}
+      ],
+      "dealbreaker": null,
+      "priority": "MANDATORY",
+      "comparator": "in_list",
+      "why": "Employment in India must be governed by Indian law. Indian labour legislation is mandatory and cannot be contracted out of."
+    },
+    {
+      "id": "EMP-POS-08",
+      "clause": "severance_months",
+      "starting": {"text": "No severance beyond statutory", "value": "0"},
+      "fallbacks": [
+        {"text": "3 months severance for CXO", "value": "3"},
+        {"text": "6 months severance for CXO", "value": "6"}
+      ],
+      "dealbreaker": {"text": "above 12 months severance", "value": "12"},
+      "priority": "NICE_TO_HAVE",
+      "comparator": "max_amount",
+      "why": "Severance beyond statutory requirements. No extra severance is the starting position for most employees. 3-6 months is standard for CXO-level. Above 12 months is a golden parachute that needs board approval."
+    }
+  ]
+}

@@ -1,0 +1,112 @@
+{
+  "id": "service_agreement_positions_v1",
+  "version": "1",
+  "status": "DRAFT",
+  "approved_by": null,
+  "note": "DRAFT positional playbook for professional/IT services agreements governed by Indian law. Covers payment terms, liability cap, IP ownership, termination, warranty, governing law, data protection, and SLA uptime. No in-house lawyer has approved these positions.",
+  "applies_to": "Professional services, IT services, and consulting agreements for Indian companies",
+  "not_legal_advice": "Every finding is a POTENTIAL_ISSUE against a company standard, not a statement of law.",
+  "rules": [
+    {
+      "id": "SVC-POS-01",
+      "clause": "payment_terms_days",
+      "starting": {"text": "30 days from invoice", "value": "30"},
+      "fallbacks": [
+        {"text": "45 days from invoice", "value": "45"},
+        {"text": "60 days from invoice", "value": "60"}
+      ],
+      "dealbreaker": {"text": "above 90 days", "value": "90"},
+      "priority": "MANDATORY",
+      "comparator": "max_amount",
+      "why": "Payment terms. 30 days is standard for professional services; 45-60 for enterprise. Above 90 days is cash-flow hostile."
+    },
+    {
+      "id": "SVC-POS-02",
+      "clause": "liability_cap_multiplier",
+      "starting": {"text": "Liability capped at 12 months fees", "value": "12"},
+      "fallbacks": [
+        {"text": "6 months fees", "value": "6"},
+        {"text": "3 months fees", "value": "3"}
+      ],
+      "dealbreaker": {"text": "below 1 month or uncapped", "value": "1"},
+      "priority": "MANDATORY",
+      "comparator": "min_amount",
+      "why": "Liability cap as multiple of monthly fees. 12x (annual contract value) is standard. Below 1 month renders the contract commercially non-viable as a risk allocation mechanism."
+    },
+    {
+      "id": "SVC-POS-03",
+      "clause": "ip_ownership",
+      "starting": {"text": "Client owns deliverables, vendor retains pre-existing IP", "value": "client"},
+      "fallbacks": [
+        {"text": "Joint ownership with unrestricted license to client", "value": ["client", "joint"]}
+      ],
+      "dealbreaker": null,
+      "priority": "MANDATORY",
+      "comparator": "in_list",
+      "why": "IP ownership of deliverables. Client ownership with vendor retaining pre-existing IP/tools is standard. Vendor-owns-all is unusual for custom work."
+    },
+    {
+      "id": "SVC-POS-04",
+      "clause": "termination_notice_days",
+      "starting": {"text": "30 days written notice", "value": "30"},
+      "fallbacks": [
+        {"text": "60 days notice", "value": "60"},
+        {"text": "90 days notice", "value": "90"}
+      ],
+      "dealbreaker": null,
+      "priority": "RECOMMENDED",
+      "comparator": "max_amount",
+      "why": "Termination for convenience notice period. 30 days is standard. Longer periods protect the vendor's resource allocation."
+    },
+    {
+      "id": "SVC-POS-05",
+      "clause": "warranty_period_days",
+      "starting": {"text": "90 days post-delivery warranty", "value": "90"},
+      "fallbacks": [
+        {"text": "60 days warranty", "value": "60"},
+        {"text": "30 days warranty", "value": "30"}
+      ],
+      "dealbreaker": {"text": "no warranty", "value": "0"},
+      "priority": "RECOMMENDED",
+      "comparator": "min_amount",
+      "why": "Post-delivery warranty period for defect correction. 90 days is market standard for IT services. No warranty at all is a dealbreaker."
+    },
+    {
+      "id": "SVC-POS-06",
+      "clause": "governing_law",
+      "starting": {"text": "Indian law", "value": "India"},
+      "fallbacks": [
+        {"text": "Indian law (alternate phrasing)", "value": ["India", "laws of India", "the laws of India", "Republic of India"]}
+      ],
+      "dealbreaker": null,
+      "priority": "MANDATORY",
+      "comparator": "in_list",
+      "why": "Services rendered in India should be governed by Indian law. Avoids jurisdictional complexity for dispute resolution."
+    },
+    {
+      "id": "SVC-POS-07",
+      "clause": "data_protection",
+      "starting": {"text": "SPDI Rules compliance + data processing agreement", "value": "spdi"},
+      "fallbacks": [
+        {"text": "Reasonable security practices per IT Act s.43A", "value": ["spdi", "it_act_43a"]}
+      ],
+      "dealbreaker": null,
+      "priority": "MANDATORY",
+      "comparator": "in_list",
+      "why": "Data protection obligations. SPDI Rules 2011 (under IT Act s.43A) are the current standard for handling sensitive personal data in India. When DPDP Act 2023 rules are notified, this will need updating."
+    },
+    {
+      "id": "SVC-POS-08",
+      "clause": "sla_uptime_percent",
+      "starting": {"text": "99.9% uptime SLA", "value": "99.9"},
+      "fallbacks": [
+        {"text": "99.5% uptime", "value": "99.5"},
+        {"text": "99.0% uptime", "value": "99.0"}
+      ],
+      "dealbreaker": {"text": "below 95%", "value": "95"},
+      "priority": "NICE_TO_HAVE",
+      "comparator": "min_amount",
+      "why": "SLA uptime commitment for hosted/SaaS services. 99.9% is industry standard (8.76 hrs downtime/year). Below 95% (18.25 days/year) is commercially unacceptable."
+    }
+  ]
+}

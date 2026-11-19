@@ -1,0 +1,86 @@
+{
+  "id": "nda_positions_v1",
+  "version": "1",
+  "status": "DRAFT",
+  "approved_by": null,
+  "note": "DRAFT positional playbook layering on nda_v1.json. Each rule carries Starting / Fallback / Dealbreaker positions for clauses with negotiable numeric or enumerated values. presence/absence rules stay in nda_v1.json -- they have no position ladder. No in-house lawyer has approved these positions.",
+  "applies_to": "Mutual non-disclosure agreements governed by Indian law",
+  "not_legal_advice": "Every finding is a POTENTIAL_ISSUE against a company standard, not a statement of law.",
+  "rules": [
+    {
+      "id": "NDA-POS-01",
+      "clause": "term",
+      "starting": {"text": "2 years from signature", "value": "2 years"},
+      "fallbacks": [
+        {"text": "3 years if counterparty insists", "value": "3 years"}
+      ],
+      "dealbreaker": {"text": "above 5 years", "value": "5 years"},
+      "priority": "MANDATORY",
+      "comparator": "max_years",
+      "why": "Shorter confidentiality is easier to administer. 2 years is the starting ask; 3 years is market standard; above 5 years is unusual for a mutual NDA and flags NEEDS_LAWYER."
+    },
+    {
+      "id": "NDA-POS-02",
+      "clause": "survival_period",
+      "starting": {"text": "3 years from termination", "value": "3 years"},
+      "fallbacks": [
+        {"text": "2 years if counterparty pushes", "value": "2 years"}
+      ],
+      "dealbreaker": {"text": "below 1 year", "value": "1 year"},
+      "priority": "MANDATORY",
+      "comparator": "min_years",
+      "why": "The survival period protects after the NDA ends. Firm wants at least 3 years; 2 is acceptable; below 1 year the protection is effectively meaningless."
+    },
+    {
+      "id": "NDA-POS-03",
+      "clause": "governing_law",
+      "starting": {"text": "Indian law", "value": "India"},
+      "fallbacks": [
+        {"text": "Indian law (alternate phrasing)", "value": ["India", "laws of India", "the laws of India", "Republic of India"]}
+      ],
+      "dealbreaker": null,
+      "priority": "MANDATORY",
+      "comparator": "in_list",
+      "why": "Foreign governing law makes enforcement slower and more expensive. No dealbreaker set because foreign law isn't automatically rejected -- it goes to NEEDS_LAWYER via falling through all positions."
+    },
+    {
+      "id": "NDA-POS-04",
+      "clause": "arbitration_seat",
+      "starting": {"text": "Mumbai", "value": ["Mumbai"]},
+      "fallbacks": [
+        {"text": "Delhi or Bangalore", "value": ["Delhi", "New Delhi", "Bangalore", "Bengaluru"]},
+        {"text": "Any Indian metro", "value": ["Mumbai", "Delhi", "New Delhi", "Bangalore", "Bengaluru", "Chennai", "Kolkata", "Hyderabad"]}
+      ],
+      "dealbreaker": null,
+      "priority": "RECOMMENDED",
+      "comparator": "in_list",
+      "why": "Arbitration seat determines procedural law and court supervision. Mumbai is preferred; any Indian metro is acceptable; foreign seat falls through to NOT_ACCEPTABLE."
+    },
+    {
+      "id": "NDA-POS-05",
+      "clause": "liability_cap",
+      "starting": {"text": "Capped at 50 lakhs", "value": "50 lakhs"},
+      "fallbacks": [
+        {"text": "Capped at 1 crore", "value": "1 crore"},
+        {"text": "Capped at 2 crore", "value": "2 crore"}
+      ],
+      "dealbreaker": {"text": "above 5 crore", "value": "5 crore"},
+      "priority": "MANDATORY",
+      "comparator": "max_amount",
+      "why": "Liability on a mutual NDA should be proportionate. 50L is the starting ask; 1-2Cr is market; above 5Cr on a mutual NDA is disproportionate."
+    },
+    {
+      "id": "NDA-POS-06",
+      "clause": "notice_period",
+      "starting": {"text": "30 days written notice", "value": "30 days"},
+      "fallbacks": [
+        {"text": "15 days if counterparty insists", "value": "15 days"}
+      ],
+      "dealbreaker": null,
+      "priority": "NICE_TO_HAVE",
+      "comparator": "equals",
+      "applicability": "Only if the NDA has a termination-for-convenience clause",
+      "why": "Notice period for termination. Uses equals comparator because the years/amount parsers do not handle day values. A min_days comparator can be added when needed."
+    }
+  ]
+}

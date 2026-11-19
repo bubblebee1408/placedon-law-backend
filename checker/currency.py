@@ -130,6 +130,18 @@ DEPENDENCIES: tuple[Dependency, ...] = (
     Dependency("CA13-S184-DIRECTOR-INTEREST",
                "Companies Act 2013 s.184, held verbatim in corpus; the >2% shareholding and "
                "partner/owner/member limbs are stated in s.184(2) itself, not prescribed by rule"),
+    Dependency("CA13-S164-2A-DISQ",
+               "Companies Act 2013 s.164(2)(a), held verbatim in corpus"),
+    Dependency("CA13-S139-AUDITOR",
+               "Companies Act 2013 s.139(6), held verbatim in corpus"),
+    Dependency("CA13-S117-SPECIAL-RES",
+               "Companies Act 2013 s.117(1), held verbatim in corpus"),
+    Dependency("CA13-S136-CIRCULATE-FS",
+               "Companies Act 2013 s.136(1), held verbatim in corpus"),
+    Dependency("CA13-S77-CHARGE-REG",
+               "Companies Act 2013 s.77(1), held verbatim in corpus"),
+    Dependency("CA13-S12-REG-OFFICE",
+               "Companies Act 2013 s.12(3)(a), held verbatim in corpus"),
 )
 
 

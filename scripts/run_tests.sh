@@ -510,6 +510,10 @@ extra+=("scripts/login_email_integration.py --test")
 # never pass a cap, refunds on settle) is `scripts/spend_ledger_integration.py --run`.
 extra+=("scripts/spend_ledger_integration.py --test")
 
+# The deterministic workflow harness: orchestrator state machine, evidence ledger,
+# policy engine, and golden-case evaluation for contract review workflows.
+extra+=("checker/harness/engine.py" "checker/harness/runner.py")
+
 # A module that prints "9/10 passed" has failed, whatever its exit code says.
 # Eight modules once defined _test() without `raise SystemExit(1)`, so their
 # failures never reached the exit code and the sweep printed "all suites green"

@@ -1,0 +1,136 @@
+{
+  "id": "sha_positions_v1",
+  "version": "1",
+  "status": "DRAFT",
+  "approved_by": null,
+  "note": "DRAFT positional playbook for Shareholders' Agreements governed by Indian law. Covers tag-along/drag-along thresholds, lock-in, board composition, reserved matters, non-compete, liquidated damages, and exit. No in-house lawyer has approved these positions.",
+  "applies_to": "Shareholders' agreements for Indian private limited companies",
+  "not_legal_advice": "Every finding is a POTENTIAL_ISSUE against a company standard, not a statement of law.",
+  "rules": [
+    {
+      "id": "SHA-POS-01",
+      "clause": "lock_in_period",
+      "starting": {"text": "1 year from closing", "value": "1 year"},
+      "fallbacks": [
+        {"text": "2 years if promoter insists", "value": "2 years"}
+      ],
+      "dealbreaker": {"text": "above 3 years", "value": "3 years"},
+      "priority": "MANDATORY",
+      "comparator": "max_years",
+      "why": "Lock-in restricts exit. 1 year is standard for financial investors; 2 years is acceptable for strategic; above 3 years is unusual for a minority stake and flags NEEDS_LAWYER."
+    },
+    {
+      "id": "SHA-POS-02",
+      "clause": "tag_along_threshold",
+      "starting": {"text": "Any transfer triggers tag-along", "value": "0"},
+      "fallbacks": [
+        {"text": "Transfers above 10% trigger tag-along", "value": "10"},
+        {"text": "Transfers above 25% trigger tag-along", "value": "25"}
+      ],
+      "dealbreaker": {"text": "above 50% threshold (effectively no tag)", "value": "50"},
+      "priority": "MANDATORY",
+      "comparator": "max_amount",
+      "why": "Tag-along protects minority shareholders from being stranded. A threshold above 50% renders it useless since most exits are structured below that. Uses max_amount since the value is a percentage number."
+    },
+    {
+      "id": "SHA-POS-03",
+      "clause": "drag_along_threshold",
+      "starting": {"text": "75% of total shareholding required to drag", "value": "75"},
+      "fallbacks": [
+        {"text": "66% if counterparty insists", "value": "66"}
+      ],
+      "dealbreaker": {"text": "below 51% (simple majority can force exit)", "value": "51"},
+      "priority": "MANDATORY",
+      "comparator": "min_amount",
+      "why": "Drag-along forces minority to sell. Higher threshold = better minority protection. Below 51% means a bare majority can force everyone out."
+    },
+    {
+      "id": "SHA-POS-04",
+      "clause": "non_compete_period",
+      "starting": {"text": "No non-compete (Indian Contract Act s.27)", "value": "0 years"},
+      "fallbacks": [
+        {"text": "1 year post-exit if narrowly scoped", "value": "1 year"},
+        {"text": "2 years post-exit with carve-outs", "value": "2 years"}
+      ],
+      "dealbreaker": {"text": "above 3 years", "value": "3 years"},
+      "priority": "MANDATORY",
+      "comparator": "max_years",
+      "why": "Post-term non-competes in SHAs are contentious under Indian Contract Act s.27. The starting position is no non-compete. If unavoidable, it must be narrow in scope and duration. Above 3 years is almost certainly unenforceable and flags NEEDS_LAWYER."
+    },
+    {
+      "id": "SHA-POS-05",
+      "clause": "board_seats_investor",
+      "starting": {"text": "1 board seat for investor", "value": ["1"]},
+      "fallbacks": [
+        {"text": "1 board seat + 1 observer", "value": ["1", "2"]},
+        {"text": "2 board seats", "value": ["2"]}
+      ],
+      "dealbreaker": null,
+      "priority": "RECOMMENDED",
+      "comparator": "in_list",
+      "why": "Board composition for a minority investor. 1 seat is standard for a 10-25% stake. More than 2 seats for a minority investor shifts control disproportionately."
+    },
+    {
+      "id": "SHA-POS-06",
+      "clause": "liquidated_damages",
+      "starting": {"text": "No liquidated damages clause", "value": "0"},
+      "fallbacks": [
+        {"text": "Capped at investment amount", "value": "1 crore"},
+        {"text": "Capped at 2x investment", "value": "2 crore"}
+      ],
+      "dealbreaker": {"text": "above 5 crore or uncapped", "value": "5 crore"},
+      "priority": "MANDATORY",
+      "comparator": "max_amount",
+      "why": "Liquidated damages in SHAs are rarely enforced by Indian courts if they amount to a penalty (Indian Contract Act s.74). The starting position is no LD clause. If present, it must be proportionate to actual loss."
+    },
+    {
+      "id": "SHA-POS-07",
+      "clause": "governing_law",
+      "starting": {"text": "Indian law", "value": "India"},
+      "fallbacks": [
+        {"text": "Indian law (alternate phrasing)", "value": ["India", "laws of India", "the laws of India", "Republic of India"]}
+      ],
+      "dealbreaker": null,
+      "priority": "MANDATORY",
+      "comparator": "in_list",
+      "why": "SHA for an Indian company should be governed by Indian law. Foreign governing law makes enforcement of reserved matters and board rights difficult."
+    },
+    {
+      "id": "SHA-POS-08",
+      "clause": "arbitration_seat",
+      "starting": {"text": "Mumbai", "value": ["Mumbai"]},
+      "fallbacks": [
+        {"text": "Delhi or Bangalore", "value": ["Delhi", "New Delhi", "Bangalore", "Bengaluru"]},
+        {"text": "Singapore (for foreign investor)", "value": ["Singapore", "Mumbai", "Delhi", "New Delhi", "Bangalore", "Bengaluru"]}
+      ],
+      "dealbreaker": null,
+      "priority": "RECOMMENDED",
+      "comparator": "in_list",
+      "why": "Arbitration seat determines procedural law. Indian seat preferred; Singapore acceptable for cross-border deals as Indian courts enforce Singapore awards under the NY Convention."
+    },
+    {
+      "id": "SHA-POS-09",
+      "clause": "exit_timeline",
+      "starting": {"text": "Exit within 5 years", "value": "5 years"},
+      "fallbacks": [
+        {"text": "Exit within 7 years", "value": "7 years"}
+      ],
+      "dealbreaker": {"text": "above 10 years", "value": "10 years"},
+      "priority": "RECOMMENDED",
+      "comparator": "max_years",
+      "why": "Exit timeline sets expectation for liquidity event. 5 years is standard PE; 7 years for growth equity. Above 10 years locks capital with no realistic exit path."
+    },
+    {
+      "id": "SHA-POS-10",
+      "clause": "information_rights_frequency",
+      "starting": {"text": "Monthly MIS + quarterly board pack", "value": "monthly"},
+      "fallbacks": [
+        {"text": "Quarterly financials", "value": "quarterly"}
+      ],
+      "dealbreaker": null,
+      "priority": "NICE_TO_HAVE",
+      "comparator": "equals",
+      "why": "Information rights frequency. Monthly is investor-friendly; quarterly is company-friendly. No dealbreaker since any reasonable frequency is acceptable."
+    }
+  ]
+}

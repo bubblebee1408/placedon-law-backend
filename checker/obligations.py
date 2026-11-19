@@ -108,6 +108,14 @@ class Evidence:
     borrowings_s180: "tuple | None" = None         # tuple[s180.BorrowingFacts]
     director_contracts_s184: "tuple | None" = None  # tuple[(director, counterparty)]
 
+    # ── expansion batch 2 ──
+    annual_return_filed_fys: tuple[str, ...] | None = None   # s.164(2)(a)
+    first_auditor_appointed_on: date | None = None           # s.139(6)
+    special_resolutions_s117: "tuple | None" = None          # s.117(1): (passed, filed|None)
+    financials_sent_on: date | None = None                   # s.136(1)
+    charges_s77: "tuple | None" = None                       # s.77(1): (created, registered|None)
+    registered_office_from: date | None = None               # s.12(3)
+
 
 # A decider answers "was it complied with", given the profile and the evidence.
 # It returns None when the evidence does not settle it — which is the common
@@ -724,6 +732,153 @@ def _decide_s184(p: CompanyProfile, ev: "Evidence") -> tuple[bool | None, str]:
     return True, "no supplied contract engages a director's interest under s.184(2)"
 
 
+# ── expansion batch 2 deciders ────────────────────────────────────────────
+
+def _decide_s164_disq(p: CompanyProfile, ev: Evidence) -> tuple[bool | str | None, str]:
+    """s.164(2)(a): directors of a company that hasn't filed annual returns for
+    any continuous period of three financial years are disqualified."""
+    if ev.annual_return_filed_fys is None:
+        return None, ("no information on which financial years have annual returns filed; "
+                      "s.164(2)(a) disqualifies directors after three continuous years of "
+                      "non-filing by the company")
+    fy = p.latest_financial_year
+    if not fy:
+        return None, "the latest financial year is needed to identify the relevant 3-year window"
+    end = _fy_end(fy)
+    if end is None:
+        return None, f"cannot parse financial year {fy!r}"
+    filed = set(ev.annual_return_filed_fys)
+    fys: list[str] = []
+    yr = end.year
+    for i in range(5):
+        label = f"{yr - 1 - i}-{(yr - i) % 100:02d}"
+        fys.append(label)
+    fys.reverse()
+    streak = 0
+    max_streak = 0
+    streak_start = 0
+    best_start = 0
+    for idx, f in enumerate(fys):
+        if f not in filed:
+            if streak == 0:
+                streak_start = idx
+            streak += 1
+            if streak > max_streak:
+                max_streak = streak
+                best_start = streak_start
+        else:
+            streak = 0
+    if max_streak >= 3:
+        gap_fys = fys[best_start:best_start + max_streak]
+        return False, (f"annual returns not filed for {max_streak} continuous financial "
+                       f"years ({', '.join(gap_fys[:4])}); s.164(2)(a) disqualifies every "
+                       f"person from being appointed as a director of any company")
+    return True, (f"no continuous period of three financial years without annual returns "
+                  f"in the last five years ({', '.join(fys)})")
+
+
+def _decide_s139_auditor(p: CompanyProfile, ev: Evidence) -> tuple[bool | str | None, str]:
+    """s.139(6): the first auditor shall be appointed by the Board within thirty
+    days from the date of registration of the company."""
+    if ev.first_auditor_appointed_on is None:
+        return None, ("no first-auditor appointment date supplied; s.139(6) requires "
+                      "the Board to appoint within thirty days of incorporation")
+    if p.incorporation_date is None:
+        return None, "incorporation date is needed to compute the s.139(6) deadline"
+    due = p.incorporation_date + timedelta(days=30)
+    if ev.first_auditor_appointed_on <= due:
+        return True, (f"first auditor appointed {ev.first_auditor_appointed_on}, within "
+                      f"thirty days of incorporation on {p.incorporation_date} (due {due})")
+    late = (ev.first_auditor_appointed_on - due).days
+    return False, (f"first auditor appointed {ev.first_auditor_appointed_on}, {late} day"
+                   f"{'s' if late != 1 else ''} after the thirty-day limit of {due} "
+                   f"from incorporation on {p.incorporation_date}")
+
+
+def _decide_s117_special_res(p: CompanyProfile, ev: Evidence) -> tuple[bool | str | None, str]:
+    """s.117(1): a copy of every special resolution shall be filed with the
+    Registrar within thirty days of the passing thereof."""
+    if ev.special_resolutions_s117 is None:
+        return None, ("no special resolutions supplied; s.117(1) requires filing within "
+                      "thirty days of passing")
+    if not ev.special_resolutions_s117:
+        return True, "no special resolutions were passed (told)"
+    late: list[str] = []
+    for passed_on, filed_on in ev.special_resolutions_s117:
+        due = passed_on + timedelta(days=30)
+        if filed_on is None:
+            late.append(f"passed {passed_on}: not filed (due {due})")
+        elif filed_on > due:
+            days = (filed_on - due).days
+            late.append(f"passed {passed_on}: filed {filed_on}, {days} day"
+                        f"{'s' if days != 1 else ''} late")
+    if late:
+        return False, (f"{len(late)} of {len(ev.special_resolutions_s117)} special "
+                       f"resolution(s) not filed within thirty days; {late[0]}")
+    return True, (f"all {len(ev.special_resolutions_s117)} special resolution(s) filed "
+                  f"within thirty days")
+
+
+def _decide_s136_circulate(p: CompanyProfile, ev: Evidence) -> tuple[bool | str | None, str]:
+    """s.136(1): financial statements shall be sent to every member not less than
+    twenty-one days before the date of the annual general meeting."""
+    if ev.financials_sent_on is None:
+        return None, ("no date supplied for when financial statements were sent to members; "
+                      "s.136(1) requires not less than twenty-one days before the AGM")
+    if ev.agm_dates is None or not ev.agm_dates:
+        return None, ("the AGM date is needed to compute the s.136(1) deadline; "
+                      "statements must be sent not less than twenty-one days before it")
+    agm = sorted(ev.agm_dates)[-1]
+    gap = (agm - ev.financials_sent_on).days
+    if gap >= 21:
+        return True, (f"financial statements sent {ev.financials_sent_on}, {gap} days before "
+                      f"the AGM on {agm} (minimum twenty-one)")
+    return False, (f"financial statements sent {ev.financials_sent_on}, only {gap} day"
+                   f"{'s' if gap != 1 else ''} before the AGM on {agm}; s.136(1) requires "
+                   f"not less than twenty-one")
+
+
+def _decide_s77_charge(p: CompanyProfile, ev: Evidence) -> tuple[bool | str | None, str]:
+    """s.77(1): every company creating a charge shall register the particulars
+    with the Registrar within thirty days."""
+    if ev.charges_s77 is None:
+        return None, ("no charges supplied; s.77(1) requires registration within thirty "
+                      "days of creation")
+    if not ev.charges_s77:
+        return True, "no charges were created (told)"
+    late: list[str] = []
+    for created_on, registered_on in ev.charges_s77:
+        due = created_on + timedelta(days=30)
+        if registered_on is None:
+            late.append(f"created {created_on}: not registered (due {due})")
+        elif registered_on > due:
+            days = (registered_on - due).days
+            late.append(f"created {created_on}: registered {registered_on}, {days} day"
+                        f"{'s' if days != 1 else ''} late")
+    if late:
+        return False, (f"{len(late)} of {len(ev.charges_s77)} charge(s) not registered "
+                       f"within thirty days; {late[0]}")
+    return True, f"all {len(ev.charges_s77)} charge(s) registered within thirty days"
+
+
+def _decide_s12_reg_office(p: CompanyProfile, ev: Evidence) -> tuple[bool | str | None, str]:
+    """s.12(3)(a): on and from the thirtieth day after its incorporation, a
+    company shall have a registered office."""
+    if ev.registered_office_from is None:
+        return None, ("no date supplied for when the registered office was established; "
+                      "s.12(3) requires one from the thirtieth day after incorporation")
+    if p.incorporation_date is None:
+        return None, "incorporation date is needed to compute the s.12(3) deadline"
+    due = p.incorporation_date + timedelta(days=30)
+    if ev.registered_office_from <= due:
+        return True, (f"registered office established {ev.registered_office_from}, within "
+                      f"thirty days of incorporation on {p.incorporation_date} (due {due})")
+    late = (ev.registered_office_from - due).days
+    return False, (f"registered office established {ev.registered_office_from}, {late} day"
+                   f"{'s' if late != 1 else ''} after the thirty-day deadline of {due} "
+                   f"from incorporation on {p.incorporation_date}")
+
+
 REGISTER: tuple[Obligation, ...] = (
     Obligation(
         "CA13-S96-AGM",
@@ -912,6 +1067,61 @@ REGISTER: tuple[Obligation, ...] = (
             "whether the disclosure was in fact made at the Board meeting (s.184(2))",
             "whether the interested director in fact abstained from participating",
             "s.184(1): the annual general disclosure of interest in Form MBP-1")),
+
+    # ── expansion batch 2 ─────────────────────────────────────────────────
+    Obligation(
+        "CA13-S164-2A-DISQ",
+        "Avoid director disqualification by filing annual returns every year",
+        "Companies Act 2013, s.164(2)(a)",
+        _every_company,
+        evidence_needed=("the financial years for which annual returns have been filed",),
+        note="the company-level check: has THIS company's non-filing put its directors "
+             "at risk of disqualification under s.164(2)(a)?",
+        decided_by=_decide_s164_disq,
+        limbs_not_decided=(
+            "filing of financial statements (s.164(2)(a) triggers on annual returns OR "
+            "financial statements; only annual returns are checked here)",)),
+    Obligation(
+        "CA13-S139-AUDITOR",
+        "Appoint the first auditor within thirty days of incorporation",
+        "Companies Act 2013, s.139(6)",
+        _every_company,
+        evidence_needed=("date the first auditor was appointed by the Board",),
+        decided_by=_decide_s139_auditor,
+        limbs_not_decided=(
+            "s.139(1): appointment of auditor at the AGM for a five-year term",
+            "s.139(2): rotation of auditor for prescribed classes of companies")),
+    Obligation(
+        "CA13-S117-SPECIAL-RES",
+        "File every special resolution with the Registrar within thirty days",
+        "Companies Act 2013, s.117(1)",
+        _every_company,
+        evidence_needed=("date each special resolution was passed",
+                         "date each was filed with the Registrar"),
+        decided_by=_decide_s117_special_res),
+    Obligation(
+        "CA13-S136-CIRCULATE-FS",
+        "Send financial statements to members at least twenty-one days before the AGM",
+        "Companies Act 2013, s.136(1)",
+        _every_company,
+        evidence_needed=("date the financial statements were sent to members",
+                         "date of the annual general meeting"),
+        decided_by=_decide_s136_circulate),
+    Obligation(
+        "CA13-S77-CHARGE-REG",
+        "Register every charge with the Registrar within thirty days of creation",
+        "Companies Act 2013, s.77(1)",
+        _every_company,
+        evidence_needed=("date each charge was created",
+                         "date each was registered with the Registrar"),
+        decided_by=_decide_s77_charge),
+    Obligation(
+        "CA13-S12-REG-OFFICE",
+        "Have a registered office from the thirtieth day after incorporation",
+        "Companies Act 2013, s.12(3)(a)",
+        _every_company,
+        evidence_needed=("date the registered office was established",),
+        decided_by=_decide_s12_reg_office),
 )
 
 
@@ -1664,6 +1874,115 @@ def _test() -> None:
     check(_decide_board(_p10, _ev173b)[0] == IN_PROGRESS,
           "...while gaps inside 120 days in an unfinished year stay IN_PROGRESS: the "
           "COUNT for the year is genuinely not decided yet")
+
+    # ── expansion batch 2: s.164(2)(a), s.139, s.117, s.136, s.77, s.12 ──────
+
+    # s.164(2)(a): director disqualification from non-filing
+    def disq(**ev):
+        return [r for r in build(CompanyProfile(**PUB), evidence=Evidence(**ev))
+                if r.obligation_id == "CA13-S164-2A-DISQ"][0]
+
+    three_gap = disq(annual_return_filed_fys=("2020-21", "2024-25"))
+    check(three_gap.state == APPLIES_NOT_SATISFIED,
+          f"three continuous FYs without filing triggers s.164(2)(a) ({three_gap.state})")
+    check("disqualif" in three_gap.basis.lower(),
+          "...and the basis names the disqualification consequence")
+
+    no_gap = disq(annual_return_filed_fys=("2020-21", "2021-22", "2022-23",
+                                            "2023-24", "2024-25"))
+    check(no_gap.state == APPLIES_UNDETERMINED,
+          f"all FYs filed is UNDETERMINED (financial statements limb undecided) "
+          f"({no_gap.state})")
+
+    disq_silent = disq()
+    check(disq_silent.state == APPLIES_UNDETERMINED,
+          f"no filing history supplied is UNDETERMINED ({disq_silent.state})")
+
+    # s.139(6): first auditor within 30 days of incorporation (2019-06-01)
+    def aud(**ev):
+        p = CompanyProfile(company_class="private", **common)
+        return [r for r in build(p, evidence=Evidence(**ev))
+                if r.obligation_id == "CA13-S139-AUDITOR"][0]
+
+    aud_ok = aud(first_auditor_appointed_on=date(2019, 6, 25))
+    check(aud_ok.state == APPLIES_UNDETERMINED,
+          f"first auditor on time is UNDETERMINED (AGM/rotation limbs) ({aud_ok.state})")
+    aud_late = aud(first_auditor_appointed_on=date(2019, 8, 1))
+    check(aud_late.state == APPLIES_NOT_SATISFIED,
+          f"first auditor 61 days after incorporation fails ({aud_late.state})")
+    check(aud().state == APPLIES_UNDETERMINED,
+          "no auditor date supplied is UNDETERMINED")
+
+    # s.117(1): special resolution filing
+    def sres(**ev):
+        return [r for r in build(CompanyProfile(**PUB), evidence=Evidence(**ev))
+                if r.obligation_id == "CA13-S117-SPECIAL-RES"][0]
+
+    filed_ok = sres(special_resolutions_s117=((date(2025, 6, 1), date(2025, 6, 20)),))
+    check(filed_ok.state == APPLIES_SATISFIED,
+          f"special resolution filed within 30 days passes ({filed_ok.state})")
+    filed_late = sres(special_resolutions_s117=((date(2025, 6, 1), date(2025, 7, 15)),))
+    check(filed_late.state == APPLIES_NOT_SATISFIED,
+          f"special resolution filed after 30 days fails ({filed_late.state})")
+    none_passed = sres(special_resolutions_s117=())
+    check(none_passed.state == APPLIES_SATISFIED,
+          f"no special resolutions passed (told) is compliant ({none_passed.state})")
+    not_filed = sres(special_resolutions_s117=((date(2025, 6, 1), None),))
+    check(not_filed.state == APPLIES_NOT_SATISFIED,
+          f"special resolution passed but never filed is a defect ({not_filed.state})")
+
+    # s.136(1): financials circulation (21-day rule before AGM)
+    def circ(**ev):
+        return [r for r in build(CompanyProfile(**PUB), evidence=Evidence(**ev))
+                if r.obligation_id == "CA13-S136-CIRCULATE-FS"][0]
+
+    check(circ(financials_sent_on=date(2025, 8, 20),
+               agm_dates=(date(2025, 9, 15),)).state == APPLIES_SATISFIED,
+          "financials sent 26 days before AGM passes the 21-day rule")
+    check(circ(financials_sent_on=date(2025, 9, 1),
+               agm_dates=(date(2025, 9, 15),)).state == APPLIES_NOT_SATISFIED,
+          "financials sent 14 days before AGM fails")
+    check(circ(financials_sent_on=date(2025, 8, 25),
+               agm_dates=(date(2025, 9, 15),)).state == APPLIES_SATISFIED,
+          "exactly 21 days is the minimum and passes")
+    check(circ(financials_sent_on=date(2025, 8, 20)).state == APPLIES_UNDETERMINED,
+          "no AGM date means circulation cannot be assessed")
+
+    # s.77(1): charge registration (30-day rule)
+    def chrg(**ev):
+        return [r for r in build(CompanyProfile(**PUB), evidence=Evidence(**ev))
+                if r.obligation_id == "CA13-S77-CHARGE-REG"][0]
+
+    check(chrg(charges_s77=((date(2025, 3, 1), date(2025, 3, 25)),)).state
+          == APPLIES_SATISFIED, "charge registered within 30 days passes")
+    check(chrg(charges_s77=((date(2025, 3, 1), date(2025, 4, 15)),)).state
+          == APPLIES_NOT_SATISFIED, "charge registered after 30 days fails")
+    check(chrg(charges_s77=()).state == APPLIES_SATISFIED,
+          "no charges created (told) is compliant")
+    check(chrg(charges_s77=((date(2025, 3, 1), None),)).state
+          == APPLIES_NOT_SATISFIED, "charge created but never registered is a defect")
+
+    # s.12(3): registered office (30 days from incorporation 2019-06-01)
+    def regoff(**ev):
+        p = CompanyProfile(company_class="private", **common)
+        return [r for r in build(p, evidence=Evidence(**ev))
+                if r.obligation_id == "CA13-S12-REG-OFFICE"][0]
+
+    check(regoff(registered_office_from=date(2019, 6, 15)).state == APPLIES_SATISFIED,
+          "registered office within 30 days passes")
+    check(regoff(registered_office_from=date(2019, 8, 1)).state == APPLIES_NOT_SATISFIED,
+          "registered office 61 days after incorporation fails")
+    check(regoff().state == APPLIES_UNDETERMINED,
+          "no registered office date supplied is UNDETERMINED")
+
+    # Expansion batch 2 invariants: all 6 present, all produce valid rows from bare
+    new_ids = {"CA13-S164-2A-DISQ", "CA13-S139-AUDITOR", "CA13-S117-SPECIAL-RES",
+               "CA13-S136-CIRCULATE-FS", "CA13-S77-CHARGE-REG", "CA13-S12-REG-OFFICE"}
+    check(new_ids.issubset({o.obligation_id for o in REGISTER}),
+          "all 6 expansion obligations are in the REGISTER")
+    for oid in sorted(new_ids):
+        r = [x for x in build(bare) if x.obligation_id == oid][0]
+        check(r.state in ROW_STATES, f"{oid} produces a valid state from a bare profile")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:
