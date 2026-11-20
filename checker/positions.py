@@ -80,6 +80,9 @@ class PositionResult:
     position_index: int | None = None
     detail: str = ""
     priority: str = MANDATORY
+    # ponytail: continuous confidence per Fuzzy Triage (arXiv 2603.07390)
+    # 1.0 = exact comparator match, <1.0 = fuzzy, 0.0 = unknown
+    confidence: float = 1.0
 
 
 @dataclass(frozen=True)
@@ -89,33 +92,48 @@ class PositionPlaybook:
     rules: tuple[PositionRule, ...]
 
 
-def _compare(comparator: str, clause_value: object, position_value: object) -> bool | None:
-    """Does the clause value satisfy the position? None = can't decide."""
+def _compare(comparator: str, clause_value: object, position_value: object) -> tuple[bool, float] | None:
+    """Does the clause value satisfy the position? Returns (match, confidence) or None.
+
+    Confidence is 1.0 for exact comparator matches, graded for numeric proximity.
+    Per Fuzzy Triage (arXiv 2603.07390): continuous scores with thresholds are more
+    principled than hard categorical assignment.
+    """
     if comparator == "equals":
-        return str(clause_value).strip().lower() == str(position_value).strip().lower()
+        match = str(clause_value).strip().lower() == str(position_value).strip().lower()
+        return (match, 1.0)
     if comparator == "in_list":
         allowed = position_value if isinstance(position_value, (list, tuple)) else [position_value]
-        return str(clause_value).strip().lower() in [str(v).strip().lower() for v in allowed]
+        match = str(clause_value).strip().lower() in [str(v).strip().lower() for v in allowed]
+        return (match, 1.0)
     if comparator == "max_years":
         got, limit = years(clause_value), years(position_value)
         if got is None or limit is None:
             return None
-        return got <= limit
+        match = got <= limit
+        conf = 1.0 if match else max(0.0, 1.0 - (got - limit) / max(limit, 1))
+        return (match, conf)
     if comparator == "min_years":
         got, limit = years(clause_value), years(position_value)
         if got is None or limit is None:
             return None
-        return got >= limit
+        match = got >= limit
+        conf = 1.0 if match else max(0.0, 1.0 - (limit - got) / max(limit, 1))
+        return (match, conf)
     if comparator == "max_amount":
         got, limit = amount(clause_value), amount(position_value)
         if got is None or limit is None:
             return None
-        return got <= limit
+        match = got <= limit
+        conf = 1.0 if match else max(0.0, 1.0 - (got - limit) / max(limit, 1))
+        return (match, conf)
     if comparator == "min_amount":
         got, limit = amount(clause_value), amount(position_value)
         if got is None or limit is None:
             return None
-        return got >= limit
+        match = got >= limit
+        conf = 1.0 if match else max(0.0, 1.0 - (limit - got) / max(limit, 1))
+        return (match, conf)
     return None
 
 
@@ -123,45 +141,51 @@ def resolve_position(rule: PositionRule, clause_value: object | None) -> Positio
     """Resolve where a clause value lands on the position ladder."""
     if clause_value is None:
         return PositionResult(rule.id, rule.clause, NEEDS_LAWYER,
-                              detail="no clause value extracted", priority=rule.priority)
+                              detail="no clause value extracted", priority=rule.priority,
+                              confidence=0.0)
 
     # check starting position
-    match = _compare(rule.comparator, clause_value, rule.starting.value)
-    if match is None:
+    result = _compare(rule.comparator, clause_value, rule.starting.value)
+    if result is None:
         return PositionResult(rule.id, rule.clause, NEEDS_LAWYER,
-                              detail="value could not be compared", priority=rule.priority)
+                              detail="value could not be compared", priority=rule.priority,
+                              confidence=0.0)
+    match, conf = result
     if match:
         return PositionResult(rule.id, rule.clause, STARTING, position_index=0,
                               detail=f"meets starting position: {rule.starting.text}",
-                              priority=rule.priority)
+                              priority=rule.priority, confidence=conf)
 
     # check fallbacks in order
     for i, fb in enumerate(rule.fallbacks):
-        match = _compare(rule.comparator, clause_value, fb.value)
-        if match is None:
+        result = _compare(rule.comparator, clause_value, fb.value)
+        if result is None:
             return PositionResult(rule.id, rule.clause, NEEDS_LAWYER,
                                   detail=f"fallback {i+1} could not be compared",
-                                  priority=rule.priority)
+                                  priority=rule.priority, confidence=0.0)
+        match, conf = result
         if match:
             return PositionResult(rule.id, rule.clause, FALLBACK, position_index=i + 1,
                                   detail=f"meets fallback {i+1}: {fb.text}",
-                                  priority=rule.priority)
+                                  priority=rule.priority, confidence=conf)
 
     # check dealbreaker
     if rule.dealbreaker is not None:
-        match = _compare(rule.comparator, clause_value, rule.dealbreaker.value)
-        if match is None:
+        result = _compare(rule.comparator, clause_value, rule.dealbreaker.value)
+        if result is None:
             return PositionResult(rule.id, rule.clause, NEEDS_LAWYER,
                                   detail="dealbreaker could not be compared",
-                                  priority=rule.priority)
+                                  priority=rule.priority, confidence=0.0)
+        match, conf = result
         if not match:
             return PositionResult(rule.id, rule.clause, NOT_ACCEPTABLE,
                                   detail=f"crosses dealbreaker: {rule.dealbreaker.text}",
-                                  priority=rule.priority)
+                                  priority=rule.priority, confidence=conf)
 
     # past all fallbacks but not past dealbreaker (or no dealbreaker set)
     return PositionResult(rule.id, rule.clause, NOT_ACCEPTABLE,
-                          detail="below all fallback positions", priority=rule.priority)
+                          detail="below all fallback positions", priority=rule.priority,
+                          confidence=1.0)
 
 
 def resolve_all(playbook: PositionPlaybook, extracted: dict[str, object]) -> tuple[PositionResult, ...]:
@@ -295,6 +319,16 @@ def _self_test() -> None:
     # priority preserved
     check("priority preserved on result", results[0].priority == MANDATORY)
     check("priority RECOMMENDED on gov_law", results[1].priority == RECOMMENDED)
+
+    # confidence scores (Fuzzy Triage, arXiv 2603.07390)
+    r = resolve_position(survival, "five years")
+    check("confidence: exact starting match = 1.0", r.confidence == 1.0)
+    r = resolve_position(survival, None)
+    check("confidence: no value = 0.0", r.confidence == 0.0)
+    r = resolve_position(survival, "forever and ever")
+    check("confidence: unreadable = 0.0", r.confidence == 0.0)
+    r = resolve_position(cap, "Rs 10,00,00,000")
+    check("confidence: NOT_ACCEPTABLE has numeric confidence", 0.0 <= r.confidence <= 1.0)
 
     # vocabulary: no forbidden legal verdict words
     all_results = [

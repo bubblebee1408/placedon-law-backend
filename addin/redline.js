@@ -156,6 +156,13 @@ function renderRedline(result, contractText) {
     if (e.position_detail) {
       html += `<div class="detail">${escapeHtml(e.position_detail)}</div>`;
     }
+    // Confidence + match quality indicators (Fuzzy Triage, arXiv 2603.07390)
+    if (e.match_quality === "fuzzy") {
+      html += `<div class="ref" style="font-style:italic">⚠ Fuzzy match — verify before applying</div>`;
+    }
+    if (typeof e.confidence === "number" && e.confidence < 1.0 && e.confidence > 0) {
+      html += `<div class="prov">Confidence: ${(e.confidence * 100).toFixed(0)}%</div>`;
+    }
 
     // Show diff for REWRITE edits
     if (e.kind === "REWRITE" && e.old_text && e.new_text) {

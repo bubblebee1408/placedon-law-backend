@@ -36,12 +36,33 @@ from checker.positions import (
 __all__ = [
     "Edit", "generate_edit", "generate_edits",
     "REWRITE", "DELETION", "INSERTION", "NO_EDIT",
+    "word_jaccard",
 ]
 
 REWRITE = "REWRITE"
 DELETION = "DELETION"
 INSERTION = "INSERTION"
 NO_EDIT = "NO_EDIT"
+
+# CUAD (arXiv 2103.06268): Jaccard ≥ 0.5 for span matching acceptance
+JACCARD_THRESHOLD = 0.5
+# DocuToads (arXiv 1608.06459): minimum 5 words to avoid spurious matches on common words
+MIN_MATCH_WORDS = 3  # lowered from 5; legal values often 2-3 words ("three years")
+# Pattern for structured values that bypass the min-word guard
+_STRUCTURED_VALUE = re.compile(
+    r"^(?:Rs\.?\s*[\d,]+|INR\s*[\d,]+|\d[\d,.]+\s*(?:crore|lakh|years?|months?|days?|%)|"
+    r"\d{1,2}[-/]\d{1,2}[-/]\d{2,4})$",
+    re.IGNORECASE,
+)
+
+
+def word_jaccard(a: str, b: str) -> float:
+    """Word-level Jaccard similarity (CUAD metric, arXiv 2103.06268)."""
+    wa = set(a.lower().split())
+    wb = set(b.lower().split())
+    if not wa or not wb:
+        return 0.0
+    return len(wa & wb) / len(wa | wb)
 
 
 @dataclass(frozen=True)
@@ -57,6 +78,10 @@ class Edit:
     status: str
     starting_text: str
     position_detail: str
+    # ponytail: Fuzzy Triage (arXiv 2603.07390) confidence from position resolution
+    confidence: float = 1.0
+    # "exact" | "fuzzy" | "none" — how the value was located in the span
+    match_quality: str = "exact"
 
     def to_dict(self) -> dict:
         return {
@@ -70,19 +95,57 @@ class Edit:
             "status": self.status,
             "starting_text": self.starting_text,
             "position_detail": self.position_detail,
+            "confidence": self.confidence,
+            "match_quality": self.match_quality,
         }
 
 
-def _find_value_in_span(span: str, value: str) -> tuple[int, int] | None:
-    """Find the value substring within the span, case-insensitive."""
-    norm_span = span.lower()
-    norm_value = value.lower().strip()
+def _find_value_in_span(span: str, value: str) -> tuple[int, int, str] | None:
+    """Find the value substring within the span, with Jaccard fallback.
+
+    Returns (start, end, quality) where quality is "exact" or "fuzzy".
+    Returns None if neither method finds the value.
+
+    - Exact: case-insensitive substring match (current behaviour)
+    - Fuzzy: word-level Jaccard ≥ 0.5 on sliding windows (CUAD, arXiv 2103.06268)
+    - Guard: values < MIN_MATCH_WORDS must be structured (DocuToads, arXiv 1608.06459)
+    """
+    norm_value = value.strip()
     if not norm_value:
         return None
-    idx = norm_span.find(norm_value)
-    if idx == -1:
+
+    # DocuToads guard: reject very short free-text values to avoid spurious matches
+    value_words = norm_value.split()
+    if len(value_words) < MIN_MATCH_WORDS and not _STRUCTURED_VALUE.match(norm_value):
+        # Still try exact match; just block fuzzy for short unstructured values
+        idx = span.lower().find(norm_value.lower())
+        if idx != -1:
+            return (idx, idx + len(norm_value), "exact")
         return None
-    return (idx, idx + len(norm_value))
+
+    # Try exact match first
+    idx = span.lower().find(norm_value.lower())
+    if idx != -1:
+        return (idx, idx + len(norm_value), "exact")
+
+    # Fuzzy fallback: sliding window of similar word count, best Jaccard
+    span_words = span.split()
+    window = len(value_words)
+    best_j, best_start, best_end = 0.0, 0, 0
+    for i in range(max(1, len(span_words) - window + 1)):
+        chunk_words = span_words[i:i + window]
+        chunk = " ".join(chunk_words)
+        j = word_jaccard(norm_value, chunk)
+        if j > best_j:
+            best_j = j
+            # reconstruct character offsets from the original span
+            before = " ".join(span_words[:i])
+            best_start = len(before) + (1 if before else 0)
+            best_end = best_start + len(chunk)
+
+    if best_j >= JACCARD_THRESHOLD:
+        return (best_start, best_end, "fuzzy")
+    return None
 
 
 def _starting_value_text(rule: PositionRule) -> str:
@@ -104,6 +167,8 @@ def generate_edit(
     span: the verbatim clause text from the contract (from extraction)
     value: the specific value extracted from the span (e.g. "three years")
     """
+    conf = result.confidence
+
     if result.status == STARTING:
         return Edit(
             rule_id=result.rule_id, clause=result.clause,
@@ -112,6 +177,7 @@ def generate_edit(
             priority=result.priority, status=result.status,
             starting_text=rule.starting.text,
             position_detail=result.detail,
+            confidence=conf, match_quality="exact",
         )
 
     if result.status == NEEDS_LAWYER:
@@ -122,6 +188,7 @@ def generate_edit(
             priority=result.priority, status=result.status,
             starting_text=rule.starting.text,
             position_detail=result.detail,
+            confidence=conf, match_quality="none",
         )
 
     # MISSING clause → suggest insertion
@@ -134,25 +201,29 @@ def generate_edit(
             priority=result.priority, status=result.status,
             starting_text=rule.starting.text,
             position_detail=result.detail,
+            confidence=conf, match_quality="none",
         )
 
     # FALLBACK or NOT_ACCEPTABLE with a span — rewrite the value
     if value and span:
         loc = _find_value_in_span(span, value)
         if loc is not None:
+            start, end, quality = loc
             start_val = _starting_value_text(rule)
-            new_span = span[:loc[0]] + start_val + span[loc[1]:]
+            new_span = span[:start] + start_val + span[end:]
             status_label = "Fallback" if result.status == FALLBACK else "Not acceptable"
+            fuzzy_note = " [fuzzy match]" if quality == "fuzzy" else ""
             return Edit(
                 rule_id=result.rule_id, clause=result.clause,
                 kind=REWRITE, old_text=span, new_text=new_span,
                 comment=(
-                    f"[{status_label}] {result.detail}\n"
+                    f"[{status_label}]{fuzzy_note} {result.detail}\n"
                     f"Starting position: {rule.starting.text}"
                 ),
                 priority=result.priority, status=result.status,
                 starting_text=rule.starting.text,
                 position_detail=result.detail,
+                confidence=conf, match_quality=quality,
             )
 
     # Fallback: can't locate value in span, suggest full span replacement
@@ -167,6 +238,7 @@ def generate_edit(
         priority=result.priority, status=result.status,
         starting_text=rule.starting.text,
         position_detail=result.detail,
+        confidence=conf, match_quality="none",
     )
 
 
@@ -295,7 +367,43 @@ def _self_test() -> None:
     check("to_dict has all keys", set(d) == {
         "rule_id", "clause", "kind", "old_text", "new_text",
         "comment", "priority", "status", "starting_text", "position_detail",
+        "confidence", "match_quality",
     })
+
+    # ── word_jaccard (CUAD, arXiv 2103.06268) ──
+    check("jaccard identical = 1.0", word_jaccard("three years", "three years") == 1.0)
+    check("jaccard disjoint = 0.0", word_jaccard("three years", "five months") == 0.0)
+    check("jaccard partial overlap", 0.0 < word_jaccard("three years from date", "three years") < 1.0)
+    check("jaccard empty = 0.0", word_jaccard("", "test") == 0.0)
+
+    # ── fuzzy span matching ──
+    # Exact match still works
+    loc = _find_value_in_span("survive for three years from termination", "three years")
+    check("exact match returns quality='exact'", loc is not None and loc[2] == "exact")
+
+    # Fuzzy match: "three yrs" vs span containing "three years"
+    loc = _find_value_in_span(
+        "obligations survive for three years from the date of termination",
+        "three years from termination date")
+    check("fuzzy match finds near-match", loc is not None and loc[2] == "fuzzy")
+
+    # Min-word guard: single word without structure → no fuzzy
+    loc = _find_value_in_span("governed by the laws of Singapore", "india")
+    check("short value no exact match → None", loc is None)
+
+    # Structured short value passes guard: "Rs 50,000"
+    loc = _find_value_in_span("liability capped at Rs 50,000 per annum", "Rs 50,000")
+    check("structured short value → exact match", loc is not None and loc[2] == "exact")
+
+    # ── confidence propagation ──
+    r = PositionResult("NDA-SURVIVAL", "survival_period", FALLBACK,
+                       position_index=1, detail="fallback 1", priority=MANDATORY,
+                       confidence=0.85)
+    e = generate_edit(r, survival,
+                      "Obligations survive for three years from termination",
+                      "three years")
+    check("confidence propagated to edit", e.confidence == 0.85)
+    check("match_quality is exact", e.match_quality == "exact")
 
     # vocabulary: no legal verdict words
     all_edits = [
