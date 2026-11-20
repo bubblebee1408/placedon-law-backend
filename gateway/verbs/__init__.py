@@ -72,6 +72,7 @@ from gateway.verbs.ask_layers import _cache_lookup, cache_stats
 from gateway.verbs.research import _sources_report
 from gateway.verbs.runs import (INTERNAL_INTENTS, QUEUED_INTENTS, STORE_WRITING_INTENTS,
     _runs_submit, queue_handlers)
+from gateway.verbs.redline import _redline
 from gateway.verbs.review import _review_contract
 from gateway.verbs.company import PROFILE_SOURCE, _calendar_upcoming
 from gateway.verbs.conversation import (CONVERSATION_UNAVAILABLE, DRAFT_SOURCE_TASK,
@@ -107,7 +108,7 @@ __all__ = ["ARRAY", "ASK_AS_OF_ENV", "AS_OF_OFF", "AS_OF_TASK_ONLY", "AZURE_OPT_
     "_conversation_get", "_conversation_send", "_document_summary_job", "_draft_create",
     "_draft_export", "_draft_history", "_draft_prose", "_draft_revise", "_draft_versions",
     "_envelope_for", "_ledger", "_names_own_subject", "_partial_note", "_provision_citations",
-    "_reconcile_message", "_review_contract", "_review_grid_cell", "_review_table_create",
+    "_reconcile_message", "_redline", "_review_contract", "_review_grid_cell", "_review_table_create",
     "_review_table_list", "_review_table_status", "_runs_submit", "_served_or_refusal",
     "_sources_report", "_summary_call_failure", "_summary_unavailable", "_task_args",
     "_turn_metadata", "_vault_compile", "_vault_delete", "_vault_find", "_vault_ingest_job",

@@ -150,6 +150,7 @@ REQUIRED: dict[str, str] = {
     "documents.upload": LAWYER,
     "draft.create": LAWYER,
     "draft.revise": LAWYER,
+    "redline": LAWYER,
     "review_contract": LAWYER,
     "review_table.cancel": LAWYER,
     "matters.create": LAWYER,

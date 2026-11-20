@@ -19,6 +19,7 @@ from gateway.verbs.people import (_auth_login, _auth_logout, _auth_me, _invites_
     _invites_cancel, _invites_create, _invites_list, _people_list)
 from gateway.verbs.research import (_forecast_summary, _research_cases, _research_multi,
     _research_web, _sources_list, _sources_search)
+from gateway.verbs.redline import _redline
 from gateway.verbs.review import _review_contract, _review_document
 from gateway.verbs.review_table import (_review_table_cancel, _review_table_create,
     _review_table_export, _review_table_list, _review_table_status)
@@ -98,6 +99,19 @@ VERBS: tuple[Verb, ...] = (
                 describes="ignored on API requests: only an in-process test may mark a "
                           "document as a synthetic fixture (PLAN_22 D3)")),
          "POST", read_only=True, run=_review_contract),
+
+    Verb("redline",
+         "Positional playbook review with edit generation. Returns concrete text edits "
+         "the Word add-in can apply as tracked changes.",
+         (Field("text", STRING, True, describes="the contract text"),
+          Field("name", STRING, False, describes="a label for the document"),
+          Field("playbook", STRING, False,
+                describes="repo-relative positions playbook path (default nda_positions_v1.json)"),
+          Field("scope", STRING, False,
+                describes="'full' or 'selection' — whether the full document or a selection was sent"),
+          Field("test_data", STRING, False,
+                describes="ignored on API requests")),
+         "POST", read_only=True, run=_redline),
 
     Verb("runs.get", "One run's status and result, without its steps.",
          (Field("run_id", STRING, True, in_path=True, describes="the run identifier"),),
