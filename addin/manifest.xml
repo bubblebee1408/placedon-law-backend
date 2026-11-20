@@ -17,8 +17,8 @@
   <Version>0.1.0.0</Version>
   <ProviderName>Placedon</ProviderName>
   <DefaultLocale>en-IN</DefaultLocale>
-  <DisplayName DefaultValue="Placedon — currency check" />
-  <Description DefaultValue="Checks whether the law this document relies on has moved since the document was made." />
+  <DisplayName DefaultValue="Placedon — legal review" />
+  <Description DefaultValue="Currency check, contract review against playbooks, and register strip — all inside Word." />
   <SupportUrl DefaultValue="https://placedon.com/support" />
   <AppDomains>
     <AppDomain>https://localhost:3000</AppDomain>
@@ -31,7 +31,7 @@
       <!-- 1.3 for document properties (the document's own date, which this
            whole feature turns on). 1.5 for Range.insertComment. 1.5 reaches
            Word Windows 2302+, Mac 16.70+ and the web. -->
-      <Set Name="WordApi" MinVersion="1.3" />
+      <Set Name="WordApi" MinVersion="1.5" />
     </Sets>
   </Requirements>
   <DefaultSettings>

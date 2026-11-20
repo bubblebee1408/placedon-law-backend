@@ -26,6 +26,7 @@ Office.onReady((info) => {
   officeReady = true;
   document.getElementById("run").disabled = false;
   document.getElementById("runstrip").disabled = false;
+  document.getElementById("runreview").disabled = false;
   meta.textContent = "Ready.";
 });
 
@@ -175,6 +176,129 @@ const truncate = (s, n) => { s = s || ""; return s.length > n ? s.slice(0, n) + 
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+/* ── contract review ───────────────────────────────────────────────────────
+ *
+ * Sends the document text to the gateway's review-contract verb, which runs
+ * the playbook (positions.py) and returns findings. Each finding becomes a
+ * Word comment on the first occurrence of the clause text in the document.
+ *
+ * Same rule: NEVER modifies document body text. Comments only.
+ */
+const REVIEW_API = "https://localhost:3000/v2/review-contract";
+
+document.getElementById("runreview").addEventListener("click", runReview);
+
+async function runReview() {
+  const btn = document.getElementById("runreview");
+  const meta = document.getElementById("reviewmeta");
+  const out = document.getElementById("reviewout");
+  btn.disabled = true; out.innerHTML = ""; meta.textContent = "Reading the document…";
+
+  try {
+    const doc = await readDocument();
+    meta.textContent = `${doc.text.length.toLocaleString()} characters · reviewing…`;
+
+    const res = await fetch(REVIEW_API, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${getApiKey()}`
+      },
+      body: JSON.stringify({ text: doc.text })
+    });
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`backend ${res.status}: ${body.slice(0, 200)}`);
+    }
+    const result = await res.json();
+    renderReview(result);
+    meta.textContent = meta.textContent.replace(" · reviewing…", "");
+
+    if ((result.findings || []).length) {
+      await annotateFindings(result.findings, doc.text);
+      meta.textContent += " · comments added to document";
+    }
+  } catch (e) {
+    out.innerHTML = `<div class="err"><b>Could not review.</b> ${escapeHtml(String(e.message || e))}
+      <br><br>Nothing was changed in your document.</div>`;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function getApiKey() {
+  const el = document.getElementById("apikey");
+  return el ? el.value.trim() : "";
+}
+
+const REVIEW_STATUS_LABEL = {
+  MATCHES: "✓ Matches",
+  DEVIATES: "⚠ Deviates",
+  MISSING: "⊘ Missing",
+  NEEDS_LAWYER: "? Needs lawyer",
+  STARTING: "✓ Starting position",
+  FALLBACK: "◐ Fallback position",
+  NOT_ACCEPTABLE: "✗ Not acceptable",
+};
+
+function renderReview(r) {
+  const out = document.getElementById("reviewout");
+  const findings = r.findings || [];
+  if (!findings.length) {
+    out.innerHTML = `<div class="empty">No findings. The playbook matched or did not apply.</div>`;
+    return;
+  }
+  const html = findings.map(f => {
+    const label = REVIEW_STATUS_LABEL[f.status] || f.status;
+    const cls = f.status === "MATCHES" || f.status === "STARTING" ? "ok"
+              : f.status === "NEEDS_LAWYER" ? "cannot"
+              : "superseded";
+    return `<div class="row ${cls}">
+      <div class="duty">${escapeHtml(f.clause || f.rule_id)}</div>
+      <div class="prov">${escapeHtml(label)}</div>
+      ${f.detail ? `<div class="detail">${escapeHtml(f.detail)}</div>` : ""}
+      ${f.standard_text ? `<div class="ref">${escapeHtml(f.standard_text)}</div>` : ""}
+      ${f.priority ? `<div class="meta">Priority: ${escapeHtml(f.priority)}</div>` : ""}
+    </div>`;
+  }).join("");
+
+  const counts = {};
+  for (const f of findings) counts[f.status] = (counts[f.status] || 0) + 1;
+  const summary = Object.entries(counts).map(([k, v]) =>
+    `${v} ${(REVIEW_STATUS_LABEL[k] || k).replace(/^[^ ]+ /, "")}`).join(" · ");
+
+  out.innerHTML = `<div class="meta" style="margin-bottom:10px">${findings.length} finding(s): ${summary}</div>`
+    + `<div class="meta" style="margin-bottom:10px;color:var(--caution)">Playbook status: ${escapeHtml(r.playbook_status || "DRAFT")}</div>`
+    + html;
+}
+
+async function annotateFindings(findings, fullText) {
+  const actionable = findings.filter(f =>
+    f.status !== "MATCHES" && f.status !== "STARTING");
+  if (!actionable.length) return;
+
+  await Word.run(async (context) => {
+    for (const f of actionable) {
+      const clause = f.clause || f.rule_id || "";
+      if (!clause) continue;
+
+      const label = REVIEW_STATUS_LABEL[f.status] || f.status;
+      const comment = `[Placedon] ${label}: ${clause}` +
+        (f.detail ? `\n${f.detail}` : "") +
+        (f.standard_text ? `\nStandard: ${f.standard_text}` : "");
+
+      const results = context.document.body.search(clause, { matchCase: false, matchWholeWord: false });
+      results.load("items");
+      await context.sync();
+
+      if (results.items.length > 0) {
+        results.items[0].insertComment(comment);
+      }
+    }
+    await context.sync();
+  });
 }
 
 /* ── the register strip ────────────────────────────────────────────────────

@@ -325,9 +325,14 @@ def _conversation_send(args: dict, ctx: Context) -> dict:
     raw_ids = list(dict.fromkeys(raw_ids))
     if not text.strip() and not raw_ids:
         return _refuse("BAD_REQUEST", "text or at least one file_id is required")
-    for name in ("conversation_id", "request_id", "matter_id", "as_of", "task_override"):
+    for name in ("conversation_id", "request_id", "matter_id", "as_of", "task_override", "practice_area"):
         if args.get(name) is not None and not isinstance(args[name], str):
             return _refuse("BAD_REQUEST", f"{name} must be a string")
+    practice_area = (args.get("practice_area") or "").strip() or None
+    if practice_area is not None:
+        from checker.scope import PRACTICE_AREA_BODIES
+        if practice_area not in PRACTICE_AREA_BODIES:
+            return _refuse("BAD_REQUEST", f"{practice_area!r} is not a recognised practice area")
     request_id = (args.get("request_id") or "").strip() or str(uuid.uuid4())
     if not re.fullmatch(r"[A-Za-z0-9_-]{8,128}", request_id):
         return _refuse("BAD_REQUEST", "request_id must be 8–128 letters, digits, hyphens or underscores")
@@ -605,6 +610,15 @@ def _dispatch_conversation(args, ctx, *, cid, text, raw_ids, as_of, task, classi
                         files=files, ctx=ctx, question=text)
 
     metadata = _turn_metadata(metadata, result)
+    if task == "RESEARCH_QUESTION" and env.get("text_blocks"):
+        try:
+            from checker.cite_verify import verify_citations, verification_summary
+            lines = [b["text"] for b in env["text_blocks"] if b.get("text")]
+            vr = verify_citations(lines)
+            if vr:
+                metadata = dict(metadata, cite_check=verification_summary(vr))
+        except Exception:  # noqa: BLE001
+            pass
     store.update_message(reply_id, task=task, run_id=result.get("run_id"), envelope=env, metadata=metadata)
     out = {"conversation_id": cid, "message_id": reply_id,
            "classification": classification, "run_id": result.get("run_id"),
@@ -769,6 +783,15 @@ def _reconcile_message(message: dict, ctx: Context) -> dict:
     env = _envelope_for(message["task"], result, as_of=metadata.get("as_of") or _today(ctx),
                         run_id=message["run_id"], files=metadata.get("files") or [],
                         ctx=ctx, question=question)
+    if message.get("task") == "RESEARCH_QUESTION" and env.get("text_blocks"):
+        try:
+            from checker.cite_verify import verify_citations, verification_summary
+            lines = [b["text"] for b in env["text_blocks"] if b.get("text")]
+            vr = verify_citations(lines)
+            if vr:
+                metadata = dict(metadata, cite_check=verification_summary(vr))
+        except Exception:  # noqa: BLE001
+            pass
     ctx.store.update_message(message["message_id"], task=message["task"],
                              run_id=message["run_id"], envelope=env, metadata=metadata)
     return dict(message, envelope=env, metadata=metadata)

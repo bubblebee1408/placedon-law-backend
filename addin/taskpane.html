@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Placedon — currency check</title>
+<title>Placedon — legal review</title>
 <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
 <style>
   :root{--ink:#0A0A0A;--parch:#F5F3EF;--slate:#475569;--caution:#8B4513;--rule:#D8D4CC}
@@ -55,13 +55,33 @@
 </head>
 <body>
 <header>
-  <h1>Currency check</h1>
-  <div class="sub">Is the law this document relies on still the law?</div>
+  <h1>Placedon</h1>
+  <div class="sub">Legal review — currency, contract, register</div>
+  <details style="margin-top:8px">
+    <summary style="font-size:11px;color:var(--slate);cursor:pointer">API key</summary>
+    <input id="apikey" type="password" placeholder="Bearer token"
+      style="width:100%;font:11px ui-monospace,Menlo,monospace;margin-top:4px;padding:4px 6px;
+             border:1px solid var(--rule);background:#fff">
+  </details>
 </header>
 <main>
+  <section>
+    <h2>Currency check</h2>
+    <div class="sub" style="margin-bottom:10px">Is the law this document relies on still the law?</div>
+  </section>
   <button id="run" disabled>Check this document</button>
   <div class="meta" id="meta">Loading Office…</div>
   <div id="out"></div>
+
+  <hr>
+  <section>
+    <h2>Contract review</h2>
+    <div class="sub" style="margin-bottom:10px">Review this contract against
+      a playbook. Findings appear as comments in the document.</div>
+    <button id="runreview" disabled>Review this contract</button>
+    <div class="meta" id="reviewmeta"></div>
+    <div id="reviewout"></div>
+  </section>
 
   <hr>
   <section>
