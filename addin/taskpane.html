@@ -51,6 +51,14 @@
   .cov .v{font-weight:600;font-size:13px;margin-top:2px}
   .cov .b{font-size:12px;margin-top:6px;line-height:1.45}
   .gap{font-size:12px;margin-top:5px;padding-left:2px}
+  .diff{font-size:12px;margin-top:6px;padding:6px 8px;background:var(--parch);border:1px solid var(--rule)}
+  .diff del{background:#f8d7da;text-decoration:line-through}
+  .diff ins{background:#d4edda;text-decoration:none}
+  .controls{margin-top:6px;display:flex;gap:4px;flex-wrap:wrap}
+  .ctrl{font-size:11px;padding:3px 8px;background:var(--ink);color:#fff;border:1px solid var(--ink);
+        border-radius:2px;cursor:pointer}
+  .ctrl.dim{background:#fff;color:var(--slate);border-color:var(--rule)}
+  .row.applied{opacity:.55}
 </style>
 </head>
 <body>
@@ -85,6 +93,17 @@
 
   <hr>
   <section>
+    <h2>Redline review</h2>
+    <div class="sub" style="margin-bottom:10px">Review against a positions playbook.
+      Select text for a focused review, or leave unselected for the full document.
+      Edits land as tracked changes.</div>
+    <button id="runredline" disabled>Redline this contract</button>
+    <div class="meta" id="redlinemeta"></div>
+    <div id="redlineout"></div>
+  </section>
+
+  <hr>
+  <section>
     <h2>Register strip</h2>
     <div class="sub" style="margin-bottom:10px">Who is this document about, and what
       does the register say? No register is wired — paste one to reconcile against it.</div>
@@ -98,5 +117,6 @@
   </section>
 </main>
 <script src="taskpane.js"></script>
+<script src="redline.js"></script>
 </body>
 </html>

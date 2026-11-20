@@ -27,6 +27,7 @@ Office.onReady((info) => {
   document.getElementById("run").disabled = false;
   document.getElementById("runstrip").disabled = false;
   document.getElementById("runreview").disabled = false;
+  document.getElementById("runredline").disabled = false;
   meta.textContent = "Ready.";
 });
 
@@ -330,6 +331,7 @@ const ROLE_TERMS = {
 };
 
 document.getElementById("runstrip").addEventListener("click", runStrip);
+document.getElementById("runredline").addEventListener("click", () => runRedline());
 
 async function runStrip() {
   const btn = document.getElementById("runstrip");
