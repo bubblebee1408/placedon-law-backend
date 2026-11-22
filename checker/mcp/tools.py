@@ -472,17 +472,10 @@ def _test() -> None:
           f"(only in one: {names ^ set(KNOWN_TOOLS) or 'none'})")
     check(len(_HAND_WRITTEN) == 13,
           f"thirteen hand-written tools ({len(_HAND_WRITTEN)})")
-    check(len(TOOLS) == 33,
-          f"thirty-three in all: twenty generated from gateway/verbs.py, the last being "
-          f"forecast.summary (Lane B) -- read-only predictive signal over open judgment "
-          f"metadata, no model; research.multi on 07-10-2026 (F2) -- read-only, answers a "
-          f"compound question "
-          f"body-by-body and spends on no client data; sources.list and sources.search on "
-          f"30-09-2026 (PLAN_24 S1) -- read-only, and "
-          f"neither fetches, stores nor spends; events.assess on 30-09-2026 -- "
-          f"events.assess on 30-09-2026 -- read-only and model-free, which is why it may "
-          f"be here at all; "
-          f"review_document on 30-09-2026 (PLAN_23 O1); runs.approve and runs.reject write "
+    check(len(TOOLS) == 34,
+          f"thirty-four in all: twenty-one generated from gateway/verbs.py (redline added "
+          f"2026-11-22, read-only positional playbook review); "
+          f"runs.approve and runs.reject write "
           f"and are therefore not among them "
           f"(got {len(TOOLS)})")
     check(all(t.description.strip() and t.schema.get("type") == "object" for t in TOOLS),

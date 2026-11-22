@@ -178,7 +178,7 @@ window.PLACEDON_ASK_FIXTURES = {
   "state": "answered",
   "turn_id": "t_20ccadb72b4b",
   "uses_model": false,
-  "what_it_is_not": "This is not a certificate of compliance and not legal advice. It covers 15 obligations, not the whole Companies Act, against a corpus that holds the Act but almost none of the subordinate rules — so some rows refuse rather than answer, and name the instrument they are waiting on. It generates no resolution, notice, or other operative document. No lawyer has reviewed it. It can say the analysis did not contradict itself; it cannot say nothing is wrong."
+  "what_it_is_not": "This is not a certificate of compliance and not legal advice. It covers 21 obligations, not the whole Companies Act, against a corpus that holds the Act but almost none of the subordinate rules — so some rows refuse rather than answer, and name the instrument they are waiting on. It generates no resolution, notice, or other operative document. No lawyer has reviewed it. It can say the analysis did not contradict itself; it cannot say nothing is wrong."
  },
  "document_context_2024": {
   "as_of": "2026-09-15",
@@ -259,6 +259,48 @@ window.PLACEDON_ASK_FIXTURES = {
     "obligation_id": "CA13-S184-DIRECTOR-INTEREST",
     "provision": "Companies Act 2013, s.184",
     "state": "APPLIES_UNDETERMINED"
+   },
+   {
+    "basis": "applies to every company registered under the Act; no information on which financial years have annual returns filed; s.164(2)(a) disqualifies directors after three continuous years of non-filing by the company",
+    "duty": "Avoid director disqualification by filing annual returns every year",
+    "obligation_id": "CA13-S164-2A-DISQ",
+    "provision": "Companies Act 2013, s.164(2)(a)",
+    "state": "APPLIES_UNDETERMINED"
+   },
+   {
+    "basis": "applies to every company registered under the Act; no first-auditor appointment date supplied; s.139(6) requires the Board to appoint within thirty days of incorporation",
+    "duty": "Appoint the first auditor within thirty days of incorporation",
+    "obligation_id": "CA13-S139-AUDITOR",
+    "provision": "Companies Act 2013, s.139(6)",
+    "state": "APPLIES_UNDETERMINED"
+   },
+   {
+    "basis": "applies to every company registered under the Act; no special resolutions supplied; s.117(1) requires filing within thirty days of passing",
+    "duty": "File every special resolution with the Registrar within thirty days",
+    "obligation_id": "CA13-S117-SPECIAL-RES",
+    "provision": "Companies Act 2013, s.117(1)",
+    "state": "APPLIES_UNDETERMINED"
+   },
+   {
+    "basis": "applies to every company registered under the Act; no date supplied for when financial statements were sent to members; s.136(1) requires not less than twenty-one days before the AGM",
+    "duty": "Send financial statements to members at least twenty-one days before the AGM",
+    "obligation_id": "CA13-S136-CIRCULATE-FS",
+    "provision": "Companies Act 2013, s.136(1)",
+    "state": "APPLIES_UNDETERMINED"
+   },
+   {
+    "basis": "applies to every company registered under the Act; no charges supplied; s.77(1) requires registration within thirty days of creation",
+    "duty": "Register every charge with the Registrar within thirty days of creation",
+    "obligation_id": "CA13-S77-CHARGE-REG",
+    "provision": "Companies Act 2013, s.77(1)",
+    "state": "APPLIES_UNDETERMINED"
+   },
+   {
+    "basis": "applies to every company registered under the Act; no date supplied for when the registered office was established; s.12(3) requires one from the thirtieth day after incorporation",
+    "duty": "Have a registered office from the thirtieth day after incorporation",
+    "obligation_id": "CA13-S12-REG-OFFICE",
+    "provision": "Companies Act 2013, s.12(3)(a)",
+    "state": "APPLIES_UNDETERMINED"
    }
   ],
   "context": {
@@ -277,11 +319,16 @@ window.PLACEDON_ASK_FIXTURES = {
      "instrument": "Act 1 of 2018",
      "sections": [
       "2",
+      "12",
+      "77",
       "92",
       "96",
+      "117",
       "135",
+      "136",
       "137",
       "149",
+      "164",
       "173",
       "177",
       "180",
@@ -294,6 +341,8 @@ window.PLACEDON_ASK_FIXTURES = {
      "instrument": "Act 21 of 2015",
      "sections": [
       "2",
+      "12",
+      "117",
       "177",
       "188"
      ]
@@ -302,9 +351,12 @@ window.PLACEDON_ASK_FIXTURES = {
      "instrument": "Act 22 of 2019",
      "sections": [
       "2",
+      "12",
+      "77",
       "92",
       "135",
       "137",
+      "164",
       "203"
      ]
     },
@@ -313,6 +365,7 @@ window.PLACEDON_ASK_FIXTURES = {
      "sections": [
       "2",
       "92",
+      "117",
       "135",
       "137",
       "149",
@@ -323,7 +376,9 @@ window.PLACEDON_ASK_FIXTURES = {
     {
      "instrument": "Act 31 of 2016",
      "sections": [
-      "2"
+      "2",
+      "77",
+      "117"
      ]
     },
     {
@@ -348,6 +403,12 @@ window.PLACEDON_ASK_FIXTURES = {
      "instrument": "S.O. 1894 (E)",
      "sections": [
       "2"
+     ]
+    },
+    {
+     "instrument": "S.O. 2264(E)",
+     "sections": [
+      "139"
      ]
     },
     {
@@ -423,13 +484,19 @@ window.PLACEDON_ASK_FIXTURES = {
     "Keep loans/investments within the s.186(2) limit, or authorise the excess",
     "Keep borrowings within the s.180(1)(c) limit, or authorise the excess",
     "Ensure an interested director discloses and abstains",
+    "Avoid director disqualification by filing annual returns every year",
+    "Appoint the first auditor within thirty days of incorporation",
+    "File every special resolution with the Registrar within thirty days",
+    "Send financial statements to members at least twenty-one days before the AGM",
+    "Register every charge with the Registrar within thirty days of creation",
+    "Have a registered office from the thirtieth day after incorporation",
     "Establish whether the company is a small company"
    ],
-   "checked_count": 12,
+   "checked_count": 18,
    "corpus": "Companies Act 2013",
    "dismissable": false,
    "establishes_compliance": false,
-   "sentence": "Checked 12 of 15 against Companies Act 2013, as at 2026-09-15.\nNOT checked (3) — these were not examined at all, and silence about them is not a finding:\n  · Obtain the required approvals for related-party transactions — its governing instrument is not held or not yet reviewed; needs: Rule 15, Companies (Meetings of Board and its Powers) Rules, 2014 — the members'-approval thresholds [STAGED]; (CANNOT_VERIFY)\n  · Constitute an Audit Committee, if required — its governing instrument is not held or not yet reviewed; needs: Rule 6, Companies (Meetings of Board and its Powers) Rules, 2014 [HELD_UNREVIEWED]; (CANNOT_VERIFY)\n  · Appoint whole-time key managerial personnel, if in the prescribed class — its governing instrument is not held or not yet reviewed; needs: G.S.R. 249(E), Companies (Appointment and Remuneration of Managerial Personnel) Rules, 2014 — Rule 8, the prescribed KMP class [CHAIN_TRACED]; (CANNOT_VERIFY)",
+   "sentence": "Checked 18 of 21 against Companies Act 2013, as at 2026-09-15.\nNOT checked (3) — these were not examined at all, and silence about them is not a finding:\n  · Obtain the required approvals for related-party transactions — its governing instrument is not held or not yet reviewed; needs: Rule 15, Companies (Meetings of Board and its Powers) Rules, 2014 — the members'-approval thresholds [STAGED]; (CANNOT_VERIFY)\n  · Constitute an Audit Committee, if required — its governing instrument is not held or not yet reviewed; needs: Rule 6, Companies (Meetings of Board and its Powers) Rules, 2014 [HELD_UNREVIEWED]; (CANNOT_VERIFY)\n  · Appoint whole-time key managerial personnel, if in the prescribed class — its governing instrument is not held or not yet reviewed; needs: G.S.R. 249(E), Companies (Appointment and Remuneration of Managerial Personnel) Rules, 2014 — Rule 8, the prescribed KMP class [CHAIN_TRACED]; (CANNOT_VERIFY)",
    "unchecked": [
     {
      "acquire": "Rule 15, Companies (Meetings of Board and its Powers) Rules, 2014 — the members'-approval thresholds [STAGED]",

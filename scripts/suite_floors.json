@@ -287,7 +287,7 @@
     "gateway/schema.py": 117,
     "gateway/screens.py": 125,
     "gateway/store/__main__.py": 300,
-    "gateway/verbs/__main__.py": 665,
+    "gateway/verbs/__main__.py": 666,
     "gateway/verbs/redline.py": 19,
     "gateway/worker.py": 48,
     "scripts/acquire_cuad.py": 14,

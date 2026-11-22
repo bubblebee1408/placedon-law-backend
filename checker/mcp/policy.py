@@ -141,6 +141,10 @@ KNOWN_TOOLS: frozenset[str] = frozenset({
     "themis.draft.versions",
     "themis.draft.diff",
     "themis.draft.export",
+    # Redline. Read-only: it analyses the uploaded text against a playbook and returns
+    # suggested edits. It stores nothing and decides nothing — the Word add-in applies
+    # changes only when the user accepts them.
+    "themis.redline",
 })
 # NOT here, and the absence is the decision: `themis.runs.approve` and `themis.runs.reject`
 # do not exist. They write a human decision, and mcp_tools() refuses to generate a tool for
