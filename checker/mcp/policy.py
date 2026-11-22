@@ -141,6 +141,8 @@ KNOWN_TOOLS: frozenset[str] = frozenset({
     "themis.draft.versions",
     "themis.draft.diff",
     "themis.draft.export",
+    # Redline. Read-only: positional playbook review; stores nothing, decides nothing.
+    "themis.redline",
 })
 # NOT here, and the absence is the decision: `themis.runs.approve` and `themis.runs.reject`
 # do not exist. They write a human decision, and mcp_tools() refuses to generate a tool for

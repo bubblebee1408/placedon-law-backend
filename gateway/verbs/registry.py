@@ -10,7 +10,8 @@ from gateway.verbs.conversation import (_conversation_get, _conversation_list,
     _conversation_send, _intake_classify)
 from gateway.verbs.core import (ARRAY, BOOLEAN, Context, Field, OBJECT, STRING, Verb,
     cli_command, cli_flag, mcp_name, rest_path)
-from gateway.verbs.documents import _document_check, _document_verify, _documents_upload
+from gateway.verbs.documents import (_document_audit, _document_check, _document_verify,
+    _documents_upload)
 from gateway.verbs.drafts import (_draft_create, _draft_diff, _draft_export, _draft_list,
     _draft_revise, _draft_status_verb, _draft_versions)
 from gateway.verbs.matters import (_access_reassign, _matters_access_report, _matters_create,
@@ -397,6 +398,20 @@ VERBS: tuple[Verb, ...] = (
           Field("revoked_on", STRING, False,
                 describes="the date this document was revoked (ISO), if it was")),
          "POST", read_only=False, mcp=False, run=_document_check),
+
+    Verb("document.audit",
+         "Run the full compliance audit pipeline on a document: classify, extract evidence, "
+         "check secretarial standards, evaluate obligations, and produce a verdict. "
+         "Deterministic — no model, no network call.",
+         (Field("text", STRING, False,
+                describes="inline document text to audit (or use document_id)"),
+          Field("document_id", STRING, False,
+                describes="sha256 of an uploaded document to audit (or use text)"),
+          Field("company", OBJECT, True,
+                describes="company profile: at least company_class and incorporation_date"),
+          Field("as_of", STRING, False,
+                describes="evaluation date (ISO YYYY-MM-DD); today when omitted")),
+         "POST", read_only=True, mcp=False, run=_document_audit),
 
     Verb("vault.summarize",
          "What is RECORDED about a document: its class, its clauses, and the sentence "
