@@ -1670,11 +1670,22 @@ def _test() -> None:
     else:
         check(False, f"a draft could be created to download ({_d.status_code})")
 
-    _up = client.post("/v2/documents/upload", json={"text": "Governed by the laws of India.",
-                                             "name": "a.txt"})
-    _g = client.post("/v2/review-table/create", json={
-        "name": "g", "document_ids": [_up.json().get("document_id")],
-        "columns": [{"name": "governing law", "kind": "text", "question": "Which law?"}]})
+    import tempfile as _gt_tmp
+    from pathlib import Path as _gt_path
+    from backend.budget import BudgetTracker as _gt_budget, FileStore as _gt_file_store
+    from gateway import verbs as _gt_verbs
+    with _gt_tmp.TemporaryDirectory() as _gt_dir:
+        _gt_ledger = _gt_verbs.model_access._ledger
+        _gt_verbs.model_access._ledger = lambda: _gt_budget(_gt_file_store(
+            _gt_path(_gt_dir) / "budget.json"))
+        try:
+            _up = client.post("/v2/documents/upload", json={"text": "Governed by the laws of India.",
+                                                     "name": "a.txt"})
+            _g = client.post("/v2/review-table/create", json={
+                "name": "g", "document_ids": [_up.json().get("document_id")],
+                "columns": [{"name": "governing law", "kind": "text", "question": "Which law?"}]})
+        finally:
+            _gt_verbs.model_access._ledger = _gt_ledger
     if _g.status_code == 200 and _g.json().get("grid_id"):
         _csv = client.get(f"/v2/review_tables/{_g.json()['grid_id']}/export.csv")
         check(_csv.status_code == 200 and _csv.content,

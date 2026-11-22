@@ -1,4 +1,4 @@
-"""documents.upload, document summaries, document.verify and document.check."""
+"""documents.upload, document summaries, document.verify, document.check and document.audit."""
 from __future__ import annotations
 
 from gateway import access
@@ -426,3 +426,122 @@ def _documents_upload(args: dict, ctx: Context) -> dict:
             "stored": "memory",
             "note": ("Held in a temporary process cache that may expire or evict it and "
                      "does not survive a restart. Use the vault for durable documents.")}
+
+
+def _document_audit(args: dict, ctx: Context) -> dict:
+    """Run the full verification audit pipeline on a document. Read-only.
+
+    Accepts either inline `text` or a `document_id` referencing an uploaded document.
+    Requires a `company` object with at least `company_class` and `incorporation_date`.
+    """
+    from datetime import date as _date
+    from checker.company_profile import CompanyProfile
+    from checker import document_audit as da
+
+    text = (args.get("text") or "").strip()
+    did = (args.get("document_id") or "").strip()
+
+    if not text and not did:
+        return _refuse("BAD_REQUEST",
+                       "text or document_id is required — either inline text or a "
+                       "reference to an uploaded document")
+
+    if did and not text:
+        doc = ctx.documents.get(did)
+        if doc and doc.get("tenant", ctx.tenant) == ctx.tenant:
+            text = (doc.get("text") or "").strip()
+        if not text and ctx.store is not None:
+            row = ctx.store.read_vault_document(did)
+            if row is not None and access.document_allowed(ctx, row):
+                chunks = ctx.store.read_vault_chunks()
+                text = "\n".join(str(c.get("text") or "") for c in chunks
+                                 if c.get("document_id") == did)
+        if not text:
+            return _refuse("NOT_FOUND",
+                           f"no readable text for document {did!r}")
+
+    as_of_raw = (args.get("as_of") or "").strip()
+    try:
+        as_of = _date.fromisoformat(as_of_raw) if as_of_raw else _date.today()
+    except ValueError:
+        return _refuse("BAD_REQUEST", f"as_of must be YYYY-MM-DD, got {as_of_raw!r}")
+
+    raw_company = args.get("company")
+    if raw_company is None or not isinstance(raw_company, dict):
+        return _refuse("BAD_REQUEST",
+                       "company is required — an object with at least company_class "
+                       "and incorporation_date")
+
+    cp_fields = CompanyProfile.__dataclass_fields__
+    supplied = {k: v for k, v in raw_company.items()
+                if k in cp_fields and k != "as_of"}
+    unknown = sorted(set(raw_company) - set(supplied) - {"as_of"})
+    if unknown:
+        return _refuse("BAD_REQUEST",
+                       f"{unknown} are not CompanyProfile fields")
+
+    needed = [k for k in ("company_class", "incorporation_date") if not supplied.get(k)]
+    if needed:
+        return _refuse("BAD_REQUEST",
+                       f"company needs {', '.join(needed)} — an audit cannot determine "
+                       f"which obligations apply without them")
+
+    try:
+        supplied["incorporation_date"] = _date.fromisoformat(
+            str(supplied["incorporation_date"])[:10])
+    except ValueError:
+        return _refuse("BAD_REQUEST", "incorporation_date must be YYYY-MM-DD")
+
+    if supplied.get("director_count") is not None:
+        try:
+            supplied["director_count"] = int(supplied["director_count"])
+        except (TypeError, ValueError):
+            return _refuse("BAD_REQUEST", "director_count must be an integer")
+
+    if supplied.get("is_listed") is not None:
+        supplied["is_listed"] = bool(supplied["is_listed"])
+
+    profile = CompanyProfile(as_of=as_of, **supplied)
+    report = da.audit(text, profile, as_of=as_of)
+
+    return {
+        "document_id": did or None,
+        "doc_class": report.doc_class,
+        "doc_class_reason": report.doc_class_reason,
+        "ss_doc_type": report.ss_doc_type,
+        "verdict": report.verdict,
+        "verdict_basis": report.verdict_basis,
+        "as_of": report.as_of.isoformat(),
+        "document_text_length": report.document_text_length,
+        "extraction": {
+            "board_meeting_dates": [d.isoformat() for d in
+                                    (report.extraction.board_meeting_dates_found or [])],
+            "agm_dates": [d.isoformat() for d in
+                          (report.extraction.agm_dates_found or [])],
+            "financial_year": report.extraction.financial_year_found,
+            "quorum_recorded": report.extraction.quorum_recorded,
+        },
+        "ss_findings": [
+            {"rule": f.rule, "status": f.status, "detail": f.detail,
+             "section": f.section, "standard": f.standard}
+            for f in report.ss_findings
+        ],
+        "ss_penalty_exposure": report.ss_penalty_exposure,
+        "obligations": [
+            {"obligation_id": r.obligation_id, "duty": r.duty,
+             "provision": r.provision, "state": r.state,
+             "basis": r.basis, "missing_facts": list(r.missing_facts),
+             "needs_attention": r.needs_attention}
+            for r in report.obligation_rows
+        ],
+        "summary": {
+            "satisfied": report.obligations_satisfied,
+            "not_satisfied": report.obligations_not_satisfied,
+            "undetermined": report.obligations_undetermined,
+            "not_applicable": report.obligations_not_applicable,
+        },
+        "note": ("A read-only compliance audit. The verdict is deterministic — no model, "
+                 "no network call. VERIFIED means every applicable obligation was satisfied "
+                 "and no SS defect was found. POTENTIAL_ISSUE means a deficiency was detected. "
+                 "The audit is NEVER legal advice."),
+    }

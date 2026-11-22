@@ -120,6 +120,7 @@ REQUIRED: dict[str, str] = {
     # that `runs.approve` is -- it reports what the signature says, and a person still has
     # to act on it.
     "document.verify": VIEWER,
+    "document.audit": VIEWER,
     "vault.compile": VIEWER,
     "vault.find": VIEWER,
     "vault.research": VIEWER,
