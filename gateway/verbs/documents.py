@@ -522,8 +522,9 @@ def _document_audit(args: dict, ctx: Context) -> dict:
             "quorum_recorded": report.extraction.quorum_recorded,
         },
         "ss_findings": [
-            {"rule": f.rule, "status": f.status, "detail": f.detail,
-             "section": f.section, "standard": f.standard}
+            {"check_id": f.check_id, "status": f.status, "ss_cite": f.ss_cite,
+             "defect": f.defect, "evidence": f.evidence, "precedent": f.precedent,
+             "advisory_only": f.advisory_only}
             for f in report.ss_findings
         ],
         "ss_penalty_exposure": report.ss_penalty_exposure,
