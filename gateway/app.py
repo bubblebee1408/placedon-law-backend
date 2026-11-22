@@ -1704,6 +1704,41 @@ def _test() -> None:
           "a download WITHOUT a key is refused: a file route that skipped auth would be "
           "the one way to read another tenant's draft")
 
+    # ── document.audit HTTP integration ─────────────────────────────────────
+    _da = client.post("/v2/document/audit", json={
+        "text": ("Minutes of the meeting of the Board of Directors held on 15th January, 2024.\n"
+                 "PRESENT\n1. Mr. A (Chairman)\n2. Mr. B\n3. Ms. C\n4. Mr. D\n\n"
+                 "IN ATTENDANCE\nX Secretary\n"
+                 "The quorum was present.\n"
+                 "Minutes of the previous Board meeting held on 10th October, 2023 were noted.\n"
+                 "Section 173 of the Companies Act, 2013.\n"),
+        "company": {"company_class": "private", "incorporation_date": "2020-01-01"},
+        "as_of": "2024-02-01"})
+    check(_da.status_code == 200, f"document.audit returns 200 ({_da.status_code})")
+    _daj = _da.json()
+    check(_daj.get("doc_class") == "board_minutes",
+          f"...classifies board minutes ({_daj.get('doc_class')})")
+    check(_daj.get("verdict") in ("VERIFIED", "PARTIALLY_VERIFIED", "UNVERIFIED",
+                                   "POTENTIAL_ISSUE"),
+          f"...returns a verdict ({_daj.get('verdict')})")
+    check(isinstance(_daj.get("ss_findings"), list),
+          "...ss_findings is a list")
+    check(isinstance(_daj.get("obligations"), list) and len(_daj["obligations"]) > 0,
+          f"...obligations are populated ({len(_daj.get('obligations', []))})")
+    check(_daj.get("as_of") == "2024-02-01",
+          f"...as_of is preserved ({_daj.get('as_of')})")
+    # refusal on missing required fields — the gateway catches required inputs before
+    # the handler runs, so the shape is {"error": "bad_request"} not {"status": "REFUSED"}.
+    _da_bad = client.post("/v2/document/audit", json={"text": "hello"})
+    check(_da_bad.status_code == 400 and "company" in _da_bad.json().get("detail", ""),
+          f"document.audit without company is 400 ({_da_bad.status_code})")
+    # text is not required at the gateway level (either text or document_id), so the handler
+    # itself refuses when neither is present.
+    _da_bad2 = client.post("/v2/document/audit", json={
+        "company": {"company_class": "private", "incorporation_date": "2020-01-01"}})
+    check(_da_bad2.status_code == 400 and _da_bad2.json().get("status") == "REFUSED",
+          f"document.audit without text or document_id is REFUSED ({_da_bad2.status_code})")
+
     # ── 8a: the role is checked on every verb, before the handler ───────────
     viewer = TestClient(app, headers={"Authorization": f"Bearer {VIEWER_KEY}"})
     lawyer = TestClient(app, headers={"Authorization": f"Bearer {LAWYER_KEY}"})
