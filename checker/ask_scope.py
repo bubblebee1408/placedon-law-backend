@@ -159,6 +159,8 @@ def _shared(signal: str) -> bool:
 # question says nothing about WHICH body it is about (A-012 NEW-2; founder rule 1,
 # 2026-09-30). scope.py may still record it as a regulator; it is never a signal.
 LEGISLATURE = re.compile(r"(?i)\b(parliament|legislature)\b")
+# A-014 F4: generic executive-government terms are not regulators.
+GENERIC_GOV = re.compile(r"(?i)\b(state\s+governments?|central\s+government|government)\b")
 
 
 def _signals(b) -> tuple[list[str], list[str]]:
@@ -173,7 +175,8 @@ def _signals(b) -> tuple[list[str], list[str]]:
     titles += list(b.short_titles)            # A-013: common short titles ("Contract Act")
     regulators = [r.strip() for r in re.split(r"[,/]", b.regulator)
                   if len(r.strip()) >= 3 and any(ch.isalpha() for ch in r)
-                  and not LEGISLATURE.search(r)]
+                  and not LEGISLATURE.search(r)
+                  and not GENERIC_GOV.search(r)]
     keep = lambda xs: list(dict.fromkeys(x for x in xs if not _shared(x)))
     return keep(titles), keep(regulators)
 
@@ -297,6 +300,18 @@ def _test() -> None:
     check(not any(re.search(r"(?i)\b(parliament|legislature)\b", sig)
                   for b in _unheld() for sig in _signals(b)[0] + _signals(b)[1]),
           "no body carries the legislature as a title or regulator signal")
+
+    # ── generic government terms are not scope signals (A-014 F4) ──────────
+    # "State governments" is STAMP's declared regulator, but executive government is not
+    # a specific regulator — naming it says nothing about which body a question is about.
+    check(not any(GENERIC_GOV.search(sig)
+                  for b in _unheld() for sig in _signals(b)[0] + _signals(b)[1]),
+          "no body carries a generic government term as a signal")
+    for q in ("Can the State government issue a notice under s.188?",
+              "Does the central government regulate board composition?"):
+        r = read(q)
+        check(r.body is None,
+              f"generic gov term alone does not refuse: {q[:50]!r}")
 
     # ── an all-caps word is not an abbreviation unless listed (A-012 NEW-3) ──
     # Founder rule 2 (2026-09-30): only an abbreviation listed in checker/abbrev.json or in

@@ -240,6 +240,9 @@ def _calendar_upcoming(args: dict, ctx: Context) -> dict:
         as_of = _date.fromisoformat(as_of_raw[:10])
     except ValueError:
         return _refuse("BAD_REQUEST", f"as_of must be YYYY-MM-DD, got {as_of_raw!r}")
+    # A-014 F6: a future as_of requests law that has not happened yet.
+    if as_of > _date.fromisoformat(_today(ctx)):
+        return _refuse("BAD_REQUEST", "as_of must not be in the future")
     horizon = args.get("horizon_days")
     try:
         horizon = int(horizon) if horizon else cal.HORIZON_DAYS
