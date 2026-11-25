@@ -132,6 +132,27 @@ def extract_pages(path: str | Path) -> list[str]:
     return out
 
 
+def page_boundaries(pages: list[str], sep: str = "\n") -> list[int]:
+    """Cumulative character offsets where each page starts in `sep.join(pages)`.
+
+    `boundaries[i]` is the character offset of the first character of page `i`.
+    Given a character offset `pos` in the joined text, `bisect_right(boundaries, pos) - 1`
+    is the 0-based page index.
+    """
+    out: list[int] = []
+    offset = 0
+    for p in pages:
+        out.append(offset)
+        offset += len(p) + len(sep)
+    return out
+
+
+def offset_to_page(boundaries: list[int], pos: int) -> int:
+    """0-based page index for character offset `pos` in the joined text."""
+    from bisect import bisect_right
+    return max(0, bisect_right(boundaries, pos) - 1)
+
+
 def page_count(path: str | Path) -> int:
     """How many pages the document declares, without extracting any text."""
     with _reader(path) as doc:
@@ -147,6 +168,17 @@ def _test() -> None:
             ok += 1; print(f"  [ok]   {label}")
         else:
             fail += 1; print(f"  [FAIL] {label}")
+
+    # ---- page_boundaries / offset_to_page (D-002) --------------------------------
+    _pages = ["hello", "world", "!"]
+    _bounds = page_boundaries(_pages)
+    check(_bounds == [0, 6, 12], f"page_boundaries([5,5,1]) → [0,6,12] — got {_bounds}")
+    check(offset_to_page(_bounds, 0) == 0, "offset 0 → page 0")
+    check(offset_to_page(_bounds, 4) == 0, "offset 4 → page 0")
+    check(offset_to_page(_bounds, 6) == 1, "offset 6 → page 1")
+    check(offset_to_page(_bounds, 12) == 2, "offset 12 → page 2")
+    check(offset_to_page(_bounds, 100) == 2, "offset past end → last page")
+    check(page_boundaries([]) == [], "empty pages → empty boundaries")
 
     root = Path(__file__).resolve().parent.parent
 

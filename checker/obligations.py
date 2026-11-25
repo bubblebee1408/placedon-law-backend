@@ -1135,16 +1135,14 @@ def build(profile: CompanyProfile,
     duty attaches and nothing about whether it was met.
     """
     ev = evidence or Evidence()
-    # The RUNNING-PERIOD input, derived here so every caller gets it. `read_on` is what
-    # tells a periodic decider that its period has not closed, and only a caller who knew
-    # to set it ever got IN_PROGRESS -- `checker/matrix_view.parse_evidence` does not set
-    # it, so the whole web matrix could never show a period as running. It is the same
-    # date `profile.as_of` already carries, so asking the caller for it twice was the bug.
-    #
-    # An explicitly supplied read_on WINS: a caller answering as at one date about
-    # evidence read on an earlier one is telling us something we must not overwrite.
     if ev.read_on is None and profile.as_of is not None:
         ev = replace(ev, read_on=profile.as_of)
+    # A-014 second-check(b): a financial year that has not ended cannot be assessed.
+    _ceiling = ev.read_on or date.today()
+    if ev.financial_year_end is not None and ev.financial_year_end > _ceiling:
+        raise ValueError(
+            f"financial_year_end {ev.financial_year_end} is after the read date "
+            f"{_ceiling}: a year that has not closed cannot be assessed")
     rows: list[Row] = []
     for ob in register:
         verdict, basis = ob.applies_when(profile)
@@ -1983,6 +1981,22 @@ def _test() -> None:
     for oid in sorted(new_ids):
         r = [x for x in build(bare) if x.obligation_id == oid][0]
         check(r.state in ROW_STATES, f"{oid} produces a valid state from a bare profile")
+
+    # ── A-014 second-check(b): a future financial year is refused ─────────
+    future_fy = Evidence(financial_year_end=date(2027, 3, 31))
+    try:
+        build(CompanyProfile(**LIMITS_OK),
+              evidence=replace(future_fy, read_on=date(2026, 10, 1)))
+        check(False, "A-014(b): a future financial_year_end is refused")
+    except ValueError as e:
+        check("not closed" in str(e).lower() or "after the read date" in str(e).lower(),
+              f"A-014(b): a future FY raises ValueError naming the problem ({e})")
+    past_fy = Evidence(financial_year_end=date(2026, 3, 31), read_on=date(2026, 10, 1))
+    try:
+        build(CompanyProfile(**LIMITS_OK), evidence=past_fy)
+        check(True, "A-014(b): a past FY is accepted")
+    except ValueError:
+        check(False, "A-014(b): a past FY should NOT raise")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:

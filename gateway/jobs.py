@@ -381,7 +381,8 @@ class PostgresQueue:
 
     kind: str = "postgres"
 
-    def __init__(self, url: str, *, tenant_id: str, actor_id: str | None = None, max_pending: int = MAX_PENDING_JOBS) -> None:
+    def __init__(self, url: str, *, tenant_id: str, actor_id: str | None = None,
+                 pool=None, max_pending: int = MAX_PENDING_JOBS) -> None:
         if not tenant_id:
             raise QueueError(
                 "PostgresQueue needs a tenant_id: the policies compare against "
@@ -389,19 +390,17 @@ class PostgresQueue:
         self._url = url
         self.tenant_id = tenant_id
         self.actor_id = actor_id or tenant_id
+        self._pool = pool
         if max_pending < 1:
             raise ValueError("max_pending must be positive")
         self.max_pending = max_pending
 
     def _conn(self, *, autocommit: bool = True):
+        if autocommit and self._pool is not None:
+            return self._pool.connection(tenant_id=self.tenant_id, scope="queue")
         import psycopg
         from gateway.pool import set_identity
         conn = psycopg.connect(self._url, autocommit=autocommit)
-        # 028's `queue` scope: the queue claims, fails and dead-letters jobs, and reconciles
-        # a dead job's own run. The policies admit this scope on `runs` and nothing else
-        # matter-bound, so it reaches no conversation, document, draft or grid. Whether the
-        # job's ACTOR may still use the matter is checked by the worker
-        # (gateway/access.job_allowed), not here.
         set_identity(conn, self.tenant_id, "", "queue")
         return conn
 
@@ -957,6 +956,50 @@ def _test() -> None:
     except QueueError:
         check(True, "a queue with no tenant is REFUSED rather than defaulted: a default "
                     "tenant is a tenant whose jobs everyone can claim")
+
+    # ── A-015: autocommit paths route through the pool when given one ─────
+    class _PoolProbe:
+        """Minimal pool stand-in that records whether connection() was called."""
+        def __init__(self):
+            self.calls = 0
+        from contextlib import contextmanager
+        @contextmanager
+        def connection(self, *, tenant_id, scope="", actor_id=""):
+            self.calls += 1
+
+            class _C:
+                closed = False
+                def execute(self, sql, params=()):
+                    self._last = sql
+                    return self
+                def fetchone(self):
+                    return (0,)
+                def fetchall(self):
+                    return []
+                @property
+                def rowcount(self):
+                    return 0
+                def close(self):
+                    self.closed = True
+            yield _C()
+
+    probe = _PoolProbe()
+    pq = PostgresQueue("postgresql://x/y", tenant_id="t", pool=probe)
+    # depth() is a pure SELECT under autocommit — it should go through the pool.
+    try:
+        pq.depth()
+    except Exception:
+        pass
+    check(probe.calls == 1,
+          f"A-015: autocommit read (depth) routes through the pool ({probe.calls} calls)")
+    # claim() uses autocommit=False — it must NOT touch the pool.
+    before = probe.calls
+    try:
+        pq.claim(worker="w")
+    except Exception:
+        pass
+    check(probe.calls == before,
+          "A-015: claim() (autocommit=False) does NOT route through the pool")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:
