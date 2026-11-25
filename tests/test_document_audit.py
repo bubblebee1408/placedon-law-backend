@@ -102,6 +102,27 @@ class TestRealSpecimens:
         assert r.extraction.financial_year_found == "2025-26"
 
 
+class TestPageBoundaries:
+    """D-002 phase 2: page_boundaries threads through to SS findings."""
+
+    def test_pages_produce_page_numbers_in_findings(self):
+        from checker.pdf_pages import page_boundaries
+        page1 = "Minutes of the meeting of the Board of Directors held on 15th January, 2024."
+        page2 = (
+            "\nPRESENT\n1. Mr. A (Chairman)\n2. Mr. B\n3. Ms. C\n\n"
+            "IN ATTENDANCE\nSecretary\n"
+            "The quorum was present.\n"
+            "Place: Bengaluru\n"
+        )
+        pages = [page1, page2]
+        text = "\n".join(pages)
+        bounds = tuple(page_boundaries(pages))
+        r = audit(text, _PRIVATE, as_of=date(2024, 2, 1), page_boundaries=bounds)
+        paged = [f for f in r.ss_findings if f.page is not None]
+        assert len(paged) > 0, "at least one finding should have a page number"
+        assert any(f.page == 1 for f in paged), "page2 content should anchor to page index 1"
+
+
 class TestVerdictLogic:
     """Unit tests for verdict derivation."""
 

@@ -35,6 +35,8 @@ Run: PYTHONPATH=. python3 checker/ask.py
 from __future__ import annotations
 
 import hashlib
+import json
+import os
 import sys
 from datetime import date
 from pathlib import Path
@@ -106,13 +108,36 @@ def _turn_id(question: str, as_of: str, kind: str, document_date: str | None) ->
         f"{question}|{as_of}|{kind}|{document_date}".encode()).hexdigest()[:12]
 
 
+def _corpus_version() -> str:
+    try:
+        m = json.loads((ROOT / "corpus" / "companies_act" / "_manifest.json").read_text())
+        return m.get("enumerated_at", "unknown")
+    except Exception:
+        return "unknown"
+
+
+def _checker_commit() -> str:
+    v = os.environ.get("CHECKER_COMMIT")
+    if v:
+        return v
+    try:
+        import subprocess
+        return subprocess.check_output(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=str(ROOT), stderr=subprocess.DEVNULL, text=True).strip()
+    except Exception:
+        return "unknown"
+
+
 def _envelope(question: str, *, as_of: str, generated_at: str, kind: str,
               document_date: str | None, parent: str | None) -> dict:
     env = {"schema": SCHEMA, "turn_id": _turn_id(question, as_of, kind, document_date),
            "question": question, "generated_at": generated_at, "as_of": as_of,
            "context": {"kind": kind, "document_date": document_date}, "uses_model": False,
            "scope": {"held": [b.name for b in scope.in_corpus()],
-                     "sentence": scope.coverage()}}
+                     "sentence": scope.coverage()},
+           "provenance": {"corpus_version": _corpus_version(),
+                          "checker_commit": _checker_commit()}}
     if parent is not None:
         env["parent_turn_id"] = parent
     return env
@@ -193,7 +218,14 @@ def _general_turn(question: str, *, as_of: date, generated_at: str, facts: dict 
     # What was read. Named provisions are read exactly; otherwise the question's words are
     # matched lexically, and what that finds can only ever feed a partial turn (D1, D16).
     pack, route = _pack(" and ".join(provisions) if provisions else question)
-    gaps += [{"kind": "pack_missing", "detail": m} for m in pack["missing"]]
+    for m in pack["missing"]:
+        item: dict = {"kind": "pack_missing", "detail": m}
+        # A-006 §9.4: extract the leading key (e.g. "ACT:COMPANIES_ACT_2013:S173") as ref.
+        if " " in m:
+            candidate = m.split(" ", 1)[0]
+            if ":" in candidate and any(c.isdigit() for c in candidate):
+                item["ref"] = candidate
+        gaps.append(item)
     gaps += [{"kind": "unusable", "ref": p["ref"], "reason": p["unusable_reason"],
               "defects": p["defects"]}
              for p in pack["provisions"] if not p["usable_for_answering"]]

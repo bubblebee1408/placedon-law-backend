@@ -15,6 +15,10 @@
  "held": [
   "Companies Act, 2013"
  ],
+ "provenance": {
+  "checker_commit": "896f74e",
+  "corpus_version": "2026-08-18T22:15:46+00:00"
+ },
  "question": "What must we report to RBI for this share allotment to a foreign investor?",
  "reason": "Foreign Exchange Management Act, 1999 and the FDI rules (RBI / DPIIT) is within scope — it covers foreign investment, sectoral caps, reporting (FC-GPR, FC-TRS), downstream investment — but no instrument has been acquired, so nothing here can be decided. Nothing acquired. Sectoral caps change by press note, which is a different acquisition problem from a Gazette rule. This is a statement about what we hold, not a finding that no obligation applies.",
  "schema": "placedon.ask/0",
