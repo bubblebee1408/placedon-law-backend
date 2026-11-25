@@ -30,7 +30,7 @@ APPLICABILITY: dict[str, frozenset[str]] = {
     "T1.1": frozenset({"minutes"}), "T1.2": frozenset({"minutes"}),
     "T1.3": frozenset({"minutes"}), "T1.4a": frozenset({"minutes"}),
     "T1.4b": frozenset({"minutes"}), "T1.5": frozenset({"minutes"}),
-    "T1.6a": frozenset({"minutes", "notice", "outcome"}),
+    "T1.6a": frozenset({"minutes", "notice"}),
     "T1.6b": frozenset({"minutes", "outcome"}),
     "T1.6c": frozenset({"minutes", "outcome"}),
     "T1.7": frozenset({"minutes"}), "T1.8": frozenset({"minutes"}),
@@ -39,7 +39,7 @@ APPLICABILITY: dict[str, frozenset[str]] = {
 
 _NOTICE_HINT = re.compile(r"notice\s+is\s+hereby\s+given|NOTICE\s+OF\s+THE|explanatory\s+statement|proxy\s+form|e-?voting", re.I)
 _MINUTES_HINT = re.compile(r"minutes\s+of\s+the|the\s+meeting\s+(?:commenced|concluded)|chairman.{0,30}signed", re.I)
-_OUTCOME_HINT = re.compile(r"outcome\s+of\s+(?:the\s+)?board|regulation\s+30", re.I)
+_OUTCOME_HINT = re.compile(r"outcome\s+of\s+(?:the\s+)?board|regulation\s+30\b(?![A-Z])", re.I)
 
 
 def classify(text: str) -> DocType:
@@ -71,6 +71,7 @@ class Finding:
     evidence: str                    # verbatim from the document, or the reason it is absent
     precedent: str                   # a real order that penalised this
     advisory_only: bool = False      # True => zero penalty precedent; never present as a violation
+    page: int | None = None          # 0-based page index where evidence was found (D-002)
 
 
 @dataclass(frozen=True)
@@ -85,6 +86,9 @@ class Minutes:
     every_page_initialled: bool | None = None
     blank_pages_scored_out: bool | None = None
     doc_type: DocType | None = None      # None => infer with classify()
+    # D-002: page boundaries from pdf_pages.page_boundaries(). When set, findings carry
+    # the page index of their evidence match.
+    _page_boundaries: tuple[int, ...] | None = None
 
 
 # --- textual detectors -------------------------------------------------------
@@ -103,6 +107,7 @@ _ORDINAL_WORDS = (r"first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|t
 _SERIAL = re.compile(
     r"\b(?:meeting\s+(?:no|number|serial)|serial\s+(?:no|number)|minutes?\s+no)\b\.?\s*[:\-]?\s*\d+"
     r"|\b\d{1,3}(?:st|nd|rd|th)\s+(?:annual\s+general|extra-?ordinary\s+general|general|board)\s+meeting\b"
+    r"|\b\d{1,3}(?:st|nd|rd|th)\s+meeting\s+of\s+the\s+board\b"
     r"|\b(?:" + _ORDINAL_WORDS + r")[\s\-]*(?:" + _ORDINAL_WORDS + r")?\s*\(?\"?\d{0,3}(?:st|nd|rd|th)?\"?\)?\s*"
     r"(?:annual\s+general|extra-?ordinary\s+general|general|board)\s+meeting\b",
     re.I,
@@ -139,15 +144,30 @@ def _has(pattern: re.Pattern, text: str) -> str | None:
     return m.group(0).strip() if m else None
 
 
+def _has_at(pattern: re.Pattern, text: str) -> tuple[str | None, int]:
+    """Like _has but also returns the match start offset (-1 when no match)."""
+    m = pattern.search(text)
+    return (m.group(0).strip(), m.start()) if m else (None, -1)
+
+
+def _page_of(m: Minutes, pos: int) -> int | None:
+    """0-based page index for character offset `pos`, or None if pages unknown."""
+    if m._page_boundaries is None or pos < 0:
+        return None
+    from checker.pdf_pages import offset_to_page
+    return offset_to_page(list(m._page_boundaries), pos)
+
+
 def check_serial_number(m: Minutes) -> Finding:
     """T1.6a — serial number of the meeting stated at the beginning."""
-    hit = _has(_SERIAL, m.text)
+    hit, pos = _has_at(_SERIAL, m.text)
     return Finding(
         "T1.6a", "PASS" if hit else "DEFECT",
         "SS-1 7.1.x / SS-2 17.2.2.1",
         "Serial number of the meeting not stated in the minutes",
         hit or "no meeting serial number found",
         "Sunima Trading P Ltd, ROC UP-I, 13.07.2026 — Rs 45,000; Merino Shelters, 15.05.2026",
+        page=_page_of(m, pos),
     )
 
 
@@ -155,43 +175,51 @@ def check_commencement_and_conclusion(m: Minutes) -> list[Finding]:
     """T1.6b — time of commencement AND conclusion. Conclusion is the commonly missed half."""
     out = []
     for label, verb, cid in (("commencement", _COMMENCED, "T1.6b"), ("conclusion", _CONCLUDED, "T1.6c")):
-        # a time must appear in the same sentence as the commence/conclude verb
         found = None
+        found_pos = -1
+        offset = 0
         for sent in re.split(r"(?<=[.;])\s+", m.text):
             if verb.search(sent) and _TIME.search(sent) and not _NOT_THE_MEETING.search(sent):
                 found = sent.strip()[:120]
+                found_pos = offset
                 break
+            offset += len(sent) + 1  # +1 for the split whitespace
         out.append(Finding(
             cid, "PASS" if found else "DEFECT",
             "SS-2 17.2.2.1(o) / SS-1 equivalent",
             f"Time of {label} of the meeting not recorded",
             found or f"no time recorded against {label}",
             "Rashi Steel and Power, ROC Chhattisgarh, 24.03.2026 & 07.04.2026; Triveni Nidhi, 04.09.2024",
+            page=_page_of(m, found_pos),
         ))
     return out
 
 
 def check_place_of_signing(m: Minutes) -> Finding:
     """T1.7 — place at which the minutes were signed."""
-    hit = _has(_PLACE_SIGNED, m.text)
+    hit, pos = _has_at(_PLACE_SIGNED, m.text)
     return Finding(
         "T1.7", "PASS" if hit else "DEFECT",
         "SS-1 7.6",
         "Place at which the minutes were signed not recorded",
         hit or "no place of signing found",
         "Wind World (India) Ltd, ROC Goa/Daman & Diu, 2024; Sany Heavy Industry, 17.05.2024",
+        page=_page_of(m, pos),
     )
 
 
 def check_entry_recorded(m: Minutes) -> Finding:
     """T1.4a — date of entry in the minutes book recorded."""
-    hit = _has(_ENTRY_DATE, m.text) or (m.entry_date and str(m.entry_date))
+    hit, pos = _has_at(_ENTRY_DATE, m.text)
+    if not hit and m.entry_date:
+        hit = str(m.entry_date)
     return Finding(
         "T1.4a", "PASS" if hit else "DEFECT",
         "SS-1 7.5.2 / SS-2 17.4.2 r/w R.25(1)(b)",
         "Date of entry of the minutes in the Minutes Book not recorded",
         str(hit) if hit else "no date of entry found",
         "Harsh Gathani Enterprise, ROC Ahmedabad, 24.06.2025; Sen Hon Lee, 13.10.2025",
+        page=_page_of(m, pos),
     )
 
 
@@ -217,32 +245,34 @@ def check_entry_within_30_days(m: Minutes) -> Finding:
 
 def check_signatory(m: Minutes) -> Finding:
     """T1.5 — never a third director 'on behalf of' the Chairman."""
-    bad = _has(_ON_BEHALF, m.text)
+    bad, pos = _has_at(_ON_BEHALF, m.text)
     return Finding(
         "T1.5", "DEFECT" if bad else "PASS",
         "SS-1 7.6",
         "Minutes signed by another director on behalf of the Chairman",
         bad or "no 'on behalf of' signature found",
         "Landomus Realty Ventures, ROC Bangalore, 31.03.2026; Dystar India, 09.09.2025",
+        page=_page_of(m, pos),
     )
 
 
 def check_quorum_recorded(m: Minutes) -> Finding:
     """Mandatory content. ComplyRelax auto-inserts this one, so it should usually pass."""
-    hit = _has(_QUORUM, m.text)
+    hit, pos = _has_at(_QUORUM, m.text)
     return Finding(
         "C.quorum", "PASS" if hit else "DEFECT",
         "SS-1 7.2.2.1(e)",
         "Presence of quorum not recorded",
         hit or "no reference to quorum",
         "Mandatory enumerated content; SS-1 7.2.2.1",
+        page=_page_of(m, pos),
     )
 
 
 def check_tense(m: Minutes) -> Finding:
     """SS-1 7.3.2 — third person and past tense; resolutions in present tense."""
     stripped = _ROMAN_MARKER.sub(" ", m.text)
-    bad = _has(_FIRST_PERSON, stripped)
+    bad, pos = _has_at(_FIRST_PERSON, stripped)
     return Finding(
         "T1.8", "DEFECT" if bad else "PASS",
         "SS-1 7.3.2 / SS-2 17.3.2",
@@ -250,6 +280,7 @@ def check_tense(m: Minutes) -> Finding:
         f"first-person usage: {bad!r}" if bad else "no first-person usage found",
         "No penalty order found for tense alone — advisory",
         advisory_only=True,
+        page=_page_of(m, pos),
     )
 
 
@@ -376,6 +407,29 @@ def _test() -> None:
     ok(exposure(bad, officers=3) == 25_000 + 15_000, "exposure: Rs 40,000 for 3 officers")
     ok(exposure(bad, officers=3, small_company=True) == 20_000, "exposure: s.446B halves it")
     ok(exposure(clean, officers=3) == 0, "exposure: clean minutes carry no penalty")
+
+    # ── D-002: page-anchored findings ───────────────────────────────────────
+    page0 = "Minutes of the 14th Meeting of the Board of Directors. Meeting No: 14."
+    page1 = ("Held on Monday, 12 May 2026. The Meeting commenced at 11:00 a.m. "
+             "Mr A Sharma took the Chair. The requisite quorum being present.")
+    page2 = ("RESOLVED THAT the accounts be approved. The Meeting concluded at 12:30 p.m. "
+             "The minutes were entered in the Minutes Book on 20 May 2026.\n"
+             "Place: Bengaluru. Signed by the Chairman.")
+    from checker.pdf_pages import page_boundaries
+    _pages = [page0, page1, page2]
+    _bounds = tuple(page_boundaries(_pages))
+    paged = scan(Minutes(
+        text="\n".join(_pages), kind="board",
+        meeting_date=date(2026, 5, 12), entry_date=date(2026, 5, 20),
+        _page_boundaries=_bounds))
+    pb = {f.check_id: f for f in paged}
+    ok(pb["T1.6a"].page == 0, "D-002: serial number found on page 0")
+    ok(pb["T1.6b"].page == 1, "D-002: commencement time found on page 1")
+    ok(pb["T1.6c"].page == 2, "D-002: conclusion time found on page 2")
+    ok(pb["C.quorum"].page == 1, "D-002: quorum found on page 1")
+    ok(pb["T1.7"].page == 2, "D-002: place of signing found on page 2")
+    # Without boundaries, page is None
+    ok(all(f.page is None for f in clean), "D-002: no boundaries → all pages None")
 
     # The four non-rules must not exist as checks at all.
     ids = {f.check_id for f in clean}
