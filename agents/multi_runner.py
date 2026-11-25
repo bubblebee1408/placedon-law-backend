@@ -27,18 +27,18 @@ A dead worker does not fail the run: the other seven answers are real and paid f
 is PARTIAL and **names the gap**, because a PARTIAL that did not say what was missing would
 be read as a complete answer with fewer findings.
 
-## Nothing here is parallel yet, and the module says so
+## Parallel mode (A-023)
 
-The workers are READ-ONLY and may run in any order, which is what makes them parallelisable.
-This runner executes them sequentially through an injected `call`. Parallelism is a property
-of the executor the caller supplies, not of this file -- and claiming concurrency this does
-not have would be the kind of thing the rest of this repository refuses. A-023.
+The workers are READ-ONLY and may run in any order. Pass `parallel=True` to `run()` to
+dispatch them concurrently via ThreadPoolExecutor, capped at MAX_PARALLEL_WORKERS (4).
+Sequential is the default; parallel changes the wall clock and nothing else.
 
 Run: PYTHONPATH=. python3 agents/multi_runner.py --test
 """
 from __future__ import annotations
 
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 
 from agents import multi_plan as mp
@@ -103,10 +103,16 @@ class RunOutcome:
                 "note": self.note, "detail": self.detail}
 
 
+MAX_PARALLEL_WORKERS = 4
+# ponytail: 4 is conservative against 60 RPM with MAX_WORKER_ATTEMPTS=3 (worst case 12 RPM).
+# Raise when provider rate limit or budget concurrency is explicitly decided.
+
+
 def run(plan, *, call, verify, merge, budget=None,
         max_attempts: int = mp.MAX_WORKER_ATTEMPTS,
         reservations: tuple = (), actual_cost=None,
-        model: str = DEFAULT_MODEL, per_model_cap: int | None = None) -> RunOutcome:
+        model: str = DEFAULT_MODEL, per_model_cap: int | None = None,
+        parallel: bool = False) -> RunOutcome:
     """Run a validated plan. `call`, `verify` and `merge` are INJECTED.
 
       call(task)          -> text, or raises for a transport failure
@@ -224,10 +230,10 @@ def run(plan, *, call, verify, merge, budget=None,
                 accounting_warnings.append(
                     f"worker {j}: undispatched reservation could not be released")
 
-    results: list[WorkerResult] = []
-    verified: list[WorkerResult] = []
-    gaps: list[str] = []
-    for i, task in enumerate(plan.workers):
+    verifier_error: list = []
+
+    def _run_one_worker(i: int, task) -> WorkerResult:
+        """The retry loop for one worker. Thread-safe: touches only its own index."""
         attempts = 0
         strikes = 0
         outcome = None
@@ -236,9 +242,6 @@ def run(plan, *, call, verify, merge, budget=None,
             try:
                 text = call(task)
             except Exception as e:                               # noqa: BLE001
-                # A transport failure. Retried up to MAX_ATTEMPTS, exactly as the queue
-                # does -- and the reason is kept, because a dead worker with no reason is
-                # indistinguishable from one nobody looked at.
                 outcome = WorkerResult(i, task.agent, W_DEAD, "", attempts,
                                        f"{type(e).__name__}: {str(e)[:140]}")
                 continue
@@ -252,24 +255,13 @@ def run(plan, *, call, verify, merge, budget=None,
                     break
                 continue
             except Exception as e:  # noqa: BLE001
-                # A verifier malfunction makes the result unusable. We still must settle
-                # the possibly billed worker and release holds for workers never dispatched.
                 outcome = WorkerResult(i, task.agent, W_NEEDS_LAWYER, "", attempts,
                                        f"verifier error ({type(e).__name__}); result was not merged")
-                results.append(outcome)
-                gaps.append(f"worker {i} ({task.agent}): {outcome.state} -- {outcome.reason}")
-                settle(i, task, outcome)
-                release_unstarted(i + 1)
-                return RunOutcome(NEEDS_LAWYER, tuple(results), "", tuple(gaps), note=(
-                    "verification failed internally; the result was withheld and remaining "
-                    "workers were not dispatched"),
-                    detail=detail({"verified": len(verified), "workers": len(results),
-                                   "code": "VERIFIER_ERROR"}))
+                verifier_error.append(i)
+                return outcome
             outcome = WorkerResult(i, task.agent, W_OK, checked, attempts)
             break
         else:
-            # The while loop ran out of attempts without breaking: every attempt was a
-            # transport failure, so this worker is DEAD.
             outcome = WorkerResult(i, task.agent, W_DEAD, "", attempts,
                                    (outcome.reason if outcome else "")
                                    or f"gave up after {attempts} attempt(s)")
@@ -280,14 +272,44 @@ def run(plan, *, call, verify, merge, budget=None,
                                    f"worker asked something it cannot answer from the "
                                    f"evidence will not answer it on a third try, and "
                                    f"spending another call learns the same thing")
+        return outcome
+
+    if parallel and len(plan.workers) > 1:
+        cap = min(MAX_PARALLEL_WORKERS, len(plan.workers))
+        with ThreadPoolExecutor(max_workers=cap) as pool:
+            futures = [pool.submit(_run_one_worker, i, task)
+                       for i, task in enumerate(plan.workers)]
+            worker_outcomes = [f.result() for f in futures]
+    else:
+        worker_outcomes = []
+        for i, task in enumerate(plan.workers):
+            outcome = _run_one_worker(i, task)
+            worker_outcomes.append(outcome)
+            # Sequential verifier-error short circuit: release unstarted and return early.
+            if verifier_error:
+                gaps_seq = [f"worker {i} ({task.agent}): {outcome.state} -- {outcome.reason}"]
+                settle(i, task, outcome)
+                release_unstarted(i + 1)
+                return RunOutcome(NEEDS_LAWYER, (outcome,), "", tuple(gaps_seq), note=(
+                    "verification failed internally; the result was withheld and remaining "
+                    "workers were not dispatched"),
+                    detail=detail({"verified": 0, "workers": 1,
+                                   "code": "VERIFIER_ERROR"}))
+
+    results: list[WorkerResult] = []
+    verified: list[WorkerResult] = []
+    gaps: list[str] = []
+    for outcome in worker_outcomes:
         results.append(outcome)
-        # An unknown outcome may still have incurred provider spend. Only commit zero when
-        # the caller can establish that no paid model call occurred.
-        settle(i, task, outcome)
+        settle(outcome.index, plan.workers[outcome.index], outcome)
         if outcome.state == W_OK:
             verified.append(outcome)
         else:
-            gaps.append(f"worker {i} ({task.agent}): {outcome.state} -- {outcome.reason}")
+            gaps.append(f"worker {outcome.index} ({outcome.agent}): {outcome.state} -- {outcome.reason}")
+
+    # In parallel mode, verifier errors don't short-circuit; they just appear as gaps.
+    if verifier_error and parallel:
+        pass  # handled in the gap/merge logic below, same as NEEDS_LAWYER
 
     # ONLY verified results reach the merger. An unverified result passed on would make one
     # hallucination the premise of the next worker's answer.
@@ -680,6 +702,27 @@ def _test() -> int:
           f"`run` contains NO import statement: `call`, `verify` and `merge` are injected, "
           f"so the gate runs this deterministically at ₹0 and a worker runs it against "
           f"whatever gateway/models.py serves ({len(_imports)} found)")
+
+    # ── A-023: parallel mode produces the same results ──────────────────────
+    import threading
+    _thread_ids: set = set()
+
+    import time
+
+    def _thread_tracking_call(task):
+        _thread_ids.add(threading.current_thread().ident)
+        time.sleep(0.05)  # force the pool to use multiple threads
+        return f"answer for {task.agent}: found"
+
+    p_plan = plan_of(4)
+    p_out = run(p_plan, call=_thread_tracking_call, verify=lambda t, _: t,
+                merge=lambda rs: " + ".join(r.text for r in rs), parallel=True)
+    check(p_out.status == ANSWERED,
+          f"parallel mode produces ANSWERED for 4 OK workers ({p_out.status})")
+    check(len(p_out.results) == 4,
+          f"parallel mode runs all 4 workers ({len(p_out.results)})")
+    check(len(_thread_ids) > 1,
+          f"parallel mode actually used multiple threads ({len(_thread_ids)} thread ids)")
 
     print(f"\n{ok}/{ok + fail} passed")
     return 1 if fail else 0

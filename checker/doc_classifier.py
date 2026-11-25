@@ -50,6 +50,7 @@ CLASSES = (
     "loan_agreement",
     "share_purchase_agreement",
     "board_minutes",
+    "board_resolution",
     "board_notice",
     "shareholder_resolution",
     "policy",
@@ -93,8 +94,19 @@ _RULES: tuple[tuple[str, int, str], ...] = (
     ("share_purchase_agreement", 2, r"\bcompletion date\b"),
 
     ("board_minutes", 4, r"\bminutes of the (meeting of the )?board\b"),
+    ("board_minutes", 4, r"\bminutes of the \d{1,3}(?:st|nd|rd|th)\s+(?:board\s+meeting|meeting of the board)\b"),
     ("board_minutes", 3, r"\bchairman (of the meeting|took the chair)\b"),
+    ("board_minutes", 3, r"\bthe meeting commenced at\b"),
+    ("board_minutes", 3, r"\bthe meeting concluded at\b"),
     ("board_minutes", 2, r"\bleave of absence\b"),
+    ("board_minutes", 2, r"\bentered on \d{1,2}(?:st|nd|rd|th)?\b"),
+
+    ("board_resolution", 5, r"\bcertified (true )?copy of the (board )?resolution\b"),
+    ("board_resolution", 5, r"\bresolution passed at the meeting of the board\b"),
+    ("board_resolution", 4, r"\bcircular resolution\b"),
+    ("board_resolution", 4, r"\bresolution by circulation\b"),
+    ("board_resolution", 3, r"\bcertified (true )?copy of the resolution\b"),
+    ("board_resolution", 2, r"\bI/?we hereby certify\b"),
 
     ("board_notice", 4, r"\bnotice of (the )?(board|meeting of the board)\b"),
     ("board_notice", 3, r"\bagenda\b"),
@@ -187,6 +199,9 @@ def _test() -> int:
                                     "completion date is 31 March.",
         "board_minutes": "MINUTES OF THE MEETING OF THE BOARD. The chairman took the "
                          "chair. Leave of absence was granted.",
+        "board_resolution": "CERTIFIED TRUE COPY OF THE BOARD RESOLUTION passed at the "
+                            "meeting of the Board of Directors. I hereby certify that "
+                            "this is a true copy.",
         "board_notice": "NOTICE OF BOARD MEETING. Notice is hereby given. The agenda is "
                         "set out below.",
         "shareholder_resolution": "SPECIAL RESOLUTION passed at the extraordinary general "

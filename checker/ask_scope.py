@@ -170,6 +170,7 @@ def _signals(b) -> tuple[list[str], list[str]]:
     titles += re.findall(r"\b[A-Z]{3,}\b", b.name)
     titles += TERMS_OF_ART.get(b.key, ())
     titles += list(b.abbreviations)           # listed in the register, never derived
+    titles += list(b.short_titles)            # A-013: common short titles ("Contract Act")
     regulators = [r.strip() for r in re.split(r"[,/]", b.regulator)
                   if len(r.strip()) >= 3 and any(ch.isalpha() for ch in r)
                   and not LEGISLATURE.search(r)]
@@ -393,6 +394,21 @@ def _test() -> None:
     check(r.refuse and r.body.key == "FEMA1999",
           "a bare section number next to a declared title is that body's section, not "
           "held law -- refused, not read against Companies Act s.6")
+
+    # ── A-013: short titles refuse as the correct body ───────────────────────
+    for q, key in (("What does section 10 of the Contract Act say?", "CONTRACT1872"),
+                   ("Is s.20 of the Arbitration Act applicable here?", "ARBITRATION1996"),
+                   ("What is the stamp duty under the Stamp Act?", "STAMP"),
+                   ("Does the Competition Act require notification?", "COMP2002"),
+                   ("Is our LLP Act filing due?", "LLP2008")):
+        r = read(q)
+        check(r.refuse and r.body.key == key,
+              f"A-013 short title: {q[:46]!r} -> {key} ({r.body.key if r.body else None})")
+    # "the Companies Act, 1956" is a repealed Act we do not hold — it names no held body
+    # and no declared body. It should not match our "Companies Act, 2013".
+    r = read("What does s.42 of the Companies Act, 1956 require?")
+    check(r.body is None or r.body.key != "CA2013",
+          "the Companies Act 1956 does not match the 2013 Act")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:

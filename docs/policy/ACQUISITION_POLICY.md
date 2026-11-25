@@ -92,7 +92,7 @@ gap in the history later reads as "nobody tried".
   or an error page leaves it `None`. Otherwise `ACQUIRED` stops meaning anything — and `ACQUIRED` is
   refused at construction unless some attempt can show the bytes.
 
-The committed report (`reports/acquisition_board_rules_2014.json`) is checked against the recorded
+The committed report (`corpus/sources/acquisition_board_rules_2014.json`) is checked against the recorded
 history on every test run, so hand-editing the JSON fails the suite. Regenerate with
 `python3 checker/acquisition_log.py --emit`.
 

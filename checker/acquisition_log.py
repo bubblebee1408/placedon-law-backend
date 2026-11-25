@@ -35,11 +35,11 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
-from checker.provenance import (ACCESSIBILITY_STATES, ACCESSIBLE, BLOCKED, NOT_FOUND, UNREACHABLE,
-                                is_retryable)
+from checker.provenance import (ACCESSIBILITY_STATES, ACCESSIBLE, BLOCKED, NOT_FOUND,
+                                SERVER_ERROR, UNREACHABLE, is_retryable)
 
 ROOT = Path(__file__).resolve().parent.parent
-REPORT = ROOT / "reports" / "acquisition_board_rules_2014.json"
+REPORT = ROOT / "corpus" / "sources" / "acquisition_board_rules_2014.json"
 SCHEMA = "acquisition_log/v1"
 
 # Where an acquisition sequence came to rest.
@@ -140,7 +140,7 @@ def append(records: tuple[AttemptRecord, ...], *, timestamp: str, instrument_id:
         raise AcquisitionLogError("instrument_id, url, host and method are all required")
     # An outcome that names a status must carry one, and vice versa: "403" with no status recorded
     # is exactly the kind of half-record that later gets re-read as an outage.
-    if outcome in (BLOCKED, NOT_FOUND, ACCESSIBLE) and http_status is None:
+    if outcome in (BLOCKED, NOT_FOUND, ACCESSIBLE, SERVER_ERROR) and http_status is None:
         raise AcquisitionLogError(f"{outcome} means the server answered; record its status")
     if outcome == UNREACHABLE and not error:
         raise AcquisitionLogError("UNREACHABLE means no answer; record the transport error")
