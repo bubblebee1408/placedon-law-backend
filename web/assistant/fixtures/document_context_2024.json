@@ -280,6 +280,10 @@
    "reference": "S-203-RULES"
   }
  ],
+ "provenance": {
+  "checker_commit": "896f74e",
+  "corpus_version": "2026-08-18T22:15:46+00:00"
+ },
  "question": "Is the law this document relies on still current?",
  "schema": "placedon.ask/0",
  "scope": {

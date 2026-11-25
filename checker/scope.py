@@ -55,6 +55,7 @@ class Body:
     # key is an identifier, and deriving "CONTRACT" from CONTRACT1872 made an ordinary
     # capitalised word refuse held law (A-012 NEW-3; founder rule 2, 2026-09-30).
     abbreviations: tuple[str, ...] = ()
+    short_titles: tuple[str, ...] = ()
 
     @property
     def answerable(self) -> bool:
@@ -142,7 +143,8 @@ BODIES: tuple[Body, ...] = (
          "Nothing acquired. F12 reviews a contract against a COMPANY PLAYBOOK, which is "
          "a commercial standard and not a legal test. Any question about whether a clause "
          "is valid, enforceable or void reaches this body and is refused by name until it "
-         "is held."),
+         "is held.",
+         short_titles=("Contract Act",)),
 
     Body("ARBITRATION1996", "Arbitration and Conciliation Act, 1996",
          "Parliament of India",
@@ -150,7 +152,8 @@ BODIES: tuple[Body, ...] = (
          DECLARED,
          "Nothing acquired. Reached by the dispute-resolution clause of almost every "
          "commercial contract, which is why declaring it matters more here than its "
-         "acquisition priority suggests."),
+         "acquisition priority suggests.",
+         short_titles=("Arbitration Act",)),
 
     Body("STAMP", "Stamp duty — Indian Stamp Act, 1899 and State amendments",
          "State governments",

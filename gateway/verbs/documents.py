@@ -438,13 +438,13 @@ def _document_audit(args: dict, ctx: Context) -> dict:
     from checker.company_profile import CompanyProfile
     from checker import document_audit as da
 
+    pages_raw = args.get("pages")
     text = (args.get("text") or "").strip()
     did = (args.get("document_id") or "").strip()
 
-    if not text and not did:
+    if not text and not did and not pages_raw:
         return _refuse("BAD_REQUEST",
-                       "text or document_id is required — either inline text or a "
-                       "reference to an uploaded document")
+                       "text, pages, or document_id is required")
 
     if did and not text:
         doc = ctx.documents.get(did)
@@ -459,6 +459,12 @@ def _document_audit(args: dict, ctx: Context) -> dict:
         if not text:
             return _refuse("NOT_FOUND",
                            f"no readable text for document {did!r}")
+
+    _page_bounds: tuple[int, ...] | None = None
+    if pages_raw and isinstance(pages_raw, list) and all(isinstance(p, str) for p in pages_raw):
+        from checker.pdf_pages import page_boundaries as _pb
+        text = "\n".join(pages_raw)
+        _page_bounds = tuple(_pb(pages_raw))
 
     as_of_raw = (args.get("as_of") or "").strip()
     try:
@@ -502,7 +508,7 @@ def _document_audit(args: dict, ctx: Context) -> dict:
         supplied["is_listed"] = bool(supplied["is_listed"])
 
     profile = CompanyProfile(as_of=as_of, **supplied)
-    report = da.audit(text, profile, as_of=as_of)
+    report = da.audit(text, profile, as_of=as_of, page_boundaries=_page_bounds)
 
     return {
         "document_id": did or None,

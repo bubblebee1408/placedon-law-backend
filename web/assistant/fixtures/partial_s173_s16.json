@@ -61,9 +61,14 @@
  "not_confirmed": [
   {
    "detail": "ACT:COMPANIES_ACT_2013:S16 exists in state SUSPENDED but is not admitted for model use",
-   "kind": "pack_missing"
+   "kind": "pack_missing",
+   "ref": "ACT:COMPANIES_ACT_2013:S16"
   }
  ],
+ "provenance": {
+  "checker_commit": "896f74e",
+  "corpus_version": "2026-08-18T22:15:46+00:00"
+ },
  "question": "What does s.173 require, and does s.16 apply here?",
  "schema": "placedon.ask/0",
  "scope": {
