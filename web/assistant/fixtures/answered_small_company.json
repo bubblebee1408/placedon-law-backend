@@ -4,6 +4,7 @@
   {
    "cite": "Companies Act 2013, s.2 (Definitions)",
    "defects": [],
+   "display_class": "deterministic_conclusion",
    "evidence_state": "CORROBORATED",
    "ref": "ACT:COMPANIES_ACT_2013:S2",
    "retrieved_on": [
@@ -20,6 +21,7 @@
   "document_date": null,
   "kind": "general"
  },
+ "display_class": "deterministic_conclusion",
  "evidence_pack": {
   "abstain_reason": "",
   "insufficient_evidence": false,
@@ -143,7 +145,7 @@
   "statement": "This pack carries the CURRENT CONSOLIDATION of the Companies Act 2013 as India Code rendered it when the corpus was ingested (2026-08-18). It is NOT a point-in-time version of the law and carries no verified commencement or amendment date. The amendment vintage of individual provisions is not uniform and not fully known: SD-002 confirms that some records carry pre-amendment wording while the same publisher's PDF carries later wording. Those provisions are marked unusable in this pack. Point-in-time reconstruction exists in this system but is UNVERIFIED against any external source, so no statement here is a statement about the law as it stood on any past date."
  },
  "provenance": {
-  "checker_commit": "896f74e",
+  "checker_commit": "62cddcb",
   "corpus_version": "2026-08-18T22:15:46+00:00"
  },
  "question": "Is this company a small company?",
@@ -163,6 +165,7 @@
      "sha256": "sha256:f7a340b68b234b4e182e2c90688c1ae4c0764468c371cf24fa7dfdeefda11ead"
     }
    ],
+   "display_class": "deterministic_conclusion",
    "duty": "Establish whether the company is a small company",
    "missing_facts": [],
    "obligation_id": "CA13-S2-85-SMALL",

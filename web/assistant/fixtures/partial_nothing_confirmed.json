@@ -5,6 +5,7 @@
   "document_date": null,
   "kind": "general"
  },
+ "display_class": "abstained",
  "evidence_pack": {
   "abstain_reason": "HELD_NOT_ADMITTED",
   "insufficient_evidence": true,
@@ -32,16 +33,18 @@
  "not_confirmed": [
   {
    "detail": "RULE:COMPANIES_MEETINGS_BOARD_POWERS_2014:R2 (Definitions) was cited and DOES exist, but is not admitted for model use: UNREVIEWED. Its text is unknown to you.",
+   "display_class": "abstained",
    "kind": "pack_missing",
    "ref": "RULE:COMPANIES_MEETINGS_BOARD_POWERS_2014:R2"
   },
   {
    "detail": "No provision was retrieved at all. This pack is empty.",
+   "display_class": "abstained",
    "kind": "pack_missing"
   }
  ],
  "provenance": {
-  "checker_commit": "896f74e",
+  "checker_commit": "62cddcb",
   "corpus_version": "2026-08-18T22:15:46+00:00"
  },
  "question": "What does rule 2(1)(t) prescribe?",
