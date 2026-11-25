@@ -26,13 +26,22 @@ it is a second lock on the same door, keyed to the same people.
 
 It becomes stronger than that only when the head digest is periodically anchored **outside**
 the database: a signed daily `head()` written to immutable storage, or countersigned
-externally. Until that exists, this module detects an edit made by someone who did not think
-to re-chain, and nothing more.
+externally.
 
-That is written here rather than discovered later because an unanchored chain is a guard
-that cannot fail in the one scenario it exists for -- the exact failure class
-`checker/rings.py` and `scripts/harness_regression.sh` were built to refuse. **Decide the
-anchor when the schema is decided, or do not ship the chain** (research/TASKS.md R-015).
+## R-015 anchor (25 Nov 2026)
+
+`anchor_head()` HMAC-signs the current head digest + chain length and appends it as one
+JSON line to an append-only file (`data/audit_anchors.jsonl` by default). The HMAC key is
+`PLACEDON_AUDIT_ANCHOR_KEY` from the environment — never in the repo.
+
+`verify_anchors()` reads that file and checks each anchor: (a) the HMAC is valid, (b) the
+chain at that length still produces the same head. A re-chained forgery now fails (b),
+because the attacker cannot reproduce the HMAC without the key.
+
+This is the cheapest anchor that works. It does not need cloud infra, and it makes the
+chain tamper-evident against anyone who does not control BOTH the database AND the anchor
+file AND the HMAC key. Upgrade to external timestamping (RFC 3161) or immutable cloud
+storage when the threat model warrants it.
 
 ## Why there is no free-text field
 
@@ -52,9 +61,12 @@ Run: python3 gateway/audit.py
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
+import os
 import re
 from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
 
 GENESIS = "0" * 64
 
@@ -185,6 +197,73 @@ def verify(records: tuple[AuditRecord, ...], *,
     return True, ""
 
 
+_DEFAULT_ANCHOR_PATH = "data/audit_anchors.jsonl"
+
+
+def _anchor_sign(payload: dict, key: bytes) -> str:
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return hmac.new(key, canonical.encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def anchor_head(records: tuple[AuditRecord, ...], *,
+                anchor_path: str | None = None) -> dict:
+    """HMAC-sign the current head and append to the anchor file. R-015."""
+    key_hex = os.environ.get("PLACEDON_AUDIT_ANCHOR_KEY", "")
+    if not key_hex:
+        raise AuditError("PLACEDON_AUDIT_ANCHOR_KEY is not set — the anchor is the whole "
+                         "point of R-015; silently skipping it would be the gap it exists to close")
+    key = bytes.fromhex(key_hex)
+    path = anchor_path or _DEFAULT_ANCHOR_PATH
+    payload = {
+        "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "head_digest": head(records),
+        "chain_length": len(records),
+    }
+    payload["signature"] = _anchor_sign(payload, key)
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    with open(path, "a") as f:
+        f.write(json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n")
+    return payload
+
+
+def verify_anchors(records: tuple[AuditRecord, ...], *,
+                   anchor_path: str | None = None) -> list[dict]:
+    """Check every anchor in the file against the current chain. R-015."""
+    key_hex = os.environ.get("PLACEDON_AUDIT_ANCHOR_KEY", "")
+    if not key_hex:
+        raise AuditError("PLACEDON_AUDIT_ANCHOR_KEY is not set — cannot verify anchors")
+    key = bytes.fromhex(key_hex)
+    path = anchor_path or _DEFAULT_ANCHOR_PATH
+    if not os.path.exists(path):
+        return []
+    results = []
+    with open(path) as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            anchor = json.loads(line)
+            sig = anchor.pop("signature", "")
+            expected_sig = _anchor_sign(anchor, key)
+            if not hmac.compare_digest(sig, expected_sig):
+                results.append({"anchor": anchor, "valid": False,
+                                "error": "HMAC signature mismatch — anchor or key tampered"})
+                continue
+            length = anchor["chain_length"]
+            if length > len(records):
+                results.append({"anchor": anchor, "valid": False,
+                                "error": f"chain has {len(records)} records, anchor expects {length} — truncated"})
+                continue
+            actual_head = head(records[:length])
+            if actual_head != anchor["head_digest"]:
+                results.append({"anchor": anchor, "valid": False,
+                                "error": f"head at length {length} is {actual_head[:16]}…, "
+                                         f"anchor says {anchor['head_digest'][:16]}… — chain was re-written"})
+            else:
+                results.append({"anchor": anchor, "valid": True, "error": None})
+    return results
+
+
 def _test() -> int:
     ok = fail = 0
 
@@ -293,6 +372,69 @@ def _test() -> int:
           "a date without a time is refused -- an audit row needs the moment")
     check(isinstance(attempt(lambda: row((), http_status=999)), AuditError),
           "a status outside 100-599 is refused")
+
+    # ── R-015: anchor ─────────────────────────────────────────────────────────
+    import tempfile as _tf
+
+    # Missing key raises
+    _saved_key = os.environ.pop("PLACEDON_AUDIT_ANCHOR_KEY", None)
+    try:
+        e = attempt(lambda: anchor_head(chain))
+        check(isinstance(e, AuditError) and "PLACEDON_AUDIT_ANCHOR_KEY" in str(e),
+              "anchor_head refuses when the HMAC key is not set")
+    finally:
+        if _saved_key is not None:
+            os.environ["PLACEDON_AUDIT_ANCHOR_KEY"] = _saved_key
+
+    # Set a test key
+    _test_key = hashlib.sha256(b"test-anchor-key-r015").hexdigest()
+    os.environ["PLACEDON_AUDIT_ANCHOR_KEY"] = _test_key
+    try:
+        with _tf.TemporaryDirectory() as _td:
+            _ap = os.path.join(_td, "anchors.jsonl")
+
+            # Anchor and verify
+            rec = anchor_head(chain, anchor_path=_ap)
+            check(rec["chain_length"] == 4, f"anchor records chain length ({rec['chain_length']})")
+            check(rec["head_digest"] == head(chain), "anchor records the correct head")
+
+            results = verify_anchors(chain, anchor_path=_ap)
+            check(len(results) == 1 and results[0]["valid"],
+                  f"anchor verifies against an untampered chain ({results[0].get('error', '')})")
+
+            # Re-chained forgery is NOW caught by the anchor
+            results2 = verify_anchors(rebuilt, anchor_path=_ap)
+            check(len(results2) == 1 and not results2[0]["valid"],
+                  "a re-chained forgery is CAUGHT by the anchor — the gap R-015 existed to close")
+            check("re-written" in (results2[0].get("error") or ""),
+                  f"...error names the re-write ({results2[0].get('error', '')[:60]})")
+
+            # Tamper with the anchor file itself
+            with open(_ap, "r") as _f:
+                _lines = _f.readlines()
+            _tampered = json.loads(_lines[0])
+            _tampered["chain_length"] = 999
+            _tampered_line = json.dumps(_tampered, sort_keys=True, separators=(",", ":"))
+            with open(_ap, "w") as _f:
+                _f.write(_tampered_line + "\n")
+            results3 = verify_anchors(chain, anchor_path=_ap)
+            check(len(results3) == 1 and not results3[0]["valid"],
+                  "tampering with the anchor file is detected via HMAC")
+
+            # Truncation detection
+            with open(_ap, "w") as _f:
+                pass  # empty anchor file
+            anchor_head(chain, anchor_path=_ap)
+            short_chain = chain[:2]
+            results4 = verify_anchors(short_chain, anchor_path=_ap)
+            check(len(results4) == 1 and not results4[0]["valid"]
+                  and "truncated" in (results4[0].get("error") or ""),
+                  "a truncated chain is caught when the anchor remembers the full length")
+    finally:
+        if _saved_key is not None:
+            os.environ["PLACEDON_AUDIT_ANCHOR_KEY"] = _saved_key
+        else:
+            os.environ.pop("PLACEDON_AUDIT_ANCHOR_KEY", None)
 
     print(f"\n{ok}/{ok + fail} passed")
     return 1 if fail else 0

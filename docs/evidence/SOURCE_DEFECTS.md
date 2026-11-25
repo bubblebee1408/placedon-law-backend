@@ -208,6 +208,17 @@ exactly why they are worth recording: a checker that silently normalises
 next such decision may not be harmless. The rule is that we never repair a
 defective government source, and a harmless instance is not an exception to it.
 
+### Independent witness (S-001, 25 Nov 2026)
+
+AdvocateKhoj's bare-act mirror (`advocatekhoj.com/library/bareacts/companies2013/174.php`)
+publishes the correct text:
+
+> The quorum for a meeting of the Board of Directors of a company **shall** be one third
+> of its total strength or two directors, whichever is higher
+
+This is a different publisher and a different digitisation pipeline from India Code. The
+defect is confirmed as an India Code transcription error, not a legislative oddity.
+
 ### Practical effect
 
 Any exact-phrase match against `shall be one-third` or `may be prescribed` will

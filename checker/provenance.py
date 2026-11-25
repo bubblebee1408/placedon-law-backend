@@ -40,6 +40,31 @@ RETRACTED = "RETRACTED"                            # was asserted, since disprov
 STATES = (UNRESOLVED, INFERRED, UNFETCHED_CORROBORATION, CORROBORATED, VERIFIED, RETRACTED)
 SERVABLE = (CORROBORATED, VERIFIED)  # what may reach a user as a legal statement
 
+# G0.5: total order over evidence strength (weakest first).
+# INFERRED > UNFETCHED_CORROBORATION: our own derivation from held text is verifiable and
+# reproducible; an inaccessible source reported to agree is hearsay we cannot check.
+EVIDENCE_ORDER = (RETRACTED, UNRESOLVED, UNFETCHED_CORROBORATION, INFERRED, CORROBORATED, VERIFIED)
+_STRENGTH = {s: i for i, s in enumerate(EVIDENCE_ORDER)}
+
+
+def evidence_strength(state: str) -> int:
+    """Index in EVIDENCE_ORDER (0 = weakest). Raises on unknown state."""
+    try:
+        return _STRENGTH[state]
+    except KeyError:
+        raise ProvenanceError(f"{state!r} is not an evidence state; one of {STATES}")
+
+
+def stronger(a: str, b: str) -> str:
+    """Return whichever evidence state is stronger."""
+    return a if evidence_strength(a) >= evidence_strength(b) else b
+
+
+def weakest(*states: str) -> str:
+    """Return the weakest evidence state among the inputs."""
+    return min(states, key=evidence_strength)
+
+
 # How the SOURCE behaved when we asked for it. A separate axis from the evidence states above:
 # those grade an artifact we hold, these grade an attempt to obtain one. Conflating the two is the
 # mistake that put a retry schedule against a WAF -- see docs/policy/ACQUISITION_POLICY.md.
@@ -47,8 +72,9 @@ ACCESSIBLE = "ACCESSIBLE"
 BLOCKED = "BLOCKED"          # 403 / WAF. Not bypassed -- see CLAUDE.md.
 UNREACHABLE = "UNREACHABLE"  # timeout / DNS failure / connection refused: the host never answered.
 NOT_FOUND = "NOT_FOUND"      # 404 from a host that DID answer.
+SERVER_ERROR = "SERVER_ERROR" # 5xx — the server faulted, not a refusal aimed at us. Retryable.
 
-ACCESSIBILITY_STATES = (ACCESSIBLE, BLOCKED, UNREACHABLE, NOT_FOUND)
+ACCESSIBILITY_STATES = (ACCESSIBLE, BLOCKED, UNREACHABLE, NOT_FOUND, SERVER_ERROR)
 
 # Where a registration record may say an instrument came from. Exact host names, not a suffix
 # match -- "ends with gov.in" would admit any host under gov.in, and "contains egazette" admits
@@ -696,9 +722,9 @@ PRINCIPAL_RULES_LEAD = {
 SOURCES = {s.source_id: s for s in (INDIACODE_PDF, INDIACODE_SECTION_VIEW,
                                     BOARD_MEETING_RULES_2014, INDIACODE_DISCOVERY)}
 
-# Only an outage is retryable. BLOCKED and NOT_FOUND both mean the server answered us, and an
-# answer does not change because it was asked for twice.
-RETRYABLE = (UNREACHABLE,)
+# Outages and server errors are retryable. BLOCKED and NOT_FOUND both mean the server answered
+# with a definitive refusal or absence, and those do not change on retry.
+RETRYABLE = (UNREACHABLE, SERVER_ERROR)
 
 
 def is_retryable(accessibility: str) -> bool:
@@ -810,7 +836,19 @@ def _test() -> None:
     check(NOT_FOUND not in (UNREACHABLE, BLOCKED), "NOT_FOUND is not an alias of the other two")
     check(not should_retry(stale), "a 404 at an exact address is not usefully retried")
     check(is_retryable(UNREACHABLE) and not is_retryable(NOT_FOUND) and not is_retryable(BLOCKED),
-          "only an outage is retryable")
+          "outages are retryable, refusals and 404s are not")
+
+    # R-013. A 5xx is the server faulting, not a refusal. Retryable, distinct from BLOCKED.
+    check(SERVER_ERROR in ACCESSIBILITY_STATES, "SERVER_ERROR is a first-class accessibility state")
+    check(SERVER_ERROR not in (BLOCKED, UNREACHABLE, NOT_FOUND),
+          "SERVER_ERROR is not an alias of any other state")
+    check(is_retryable(SERVER_ERROR), "a 5xx is retryable -- the server may recover")
+    check(not is_retryable(BLOCKED), "a 403 is NOT retryable -- it is a refusal")
+    srv_err = SourceRecord(source_id="ROBOTS_5XX", source_title="robots.txt 500",
+                           source_url="https://indiacode.gov.in/robots.txt",
+                           official=True, accessibility=SERVER_ERROR,
+                           notes="R-013: robots.txt returned 500, server faulted")
+    check(should_retry(srv_err), "a robots.txt 500 source SHOULD be retried")
     good4, _ = can_promote([stale])
     check(not good4, "a 404 source supports nothing")
     # The point of the state: it says the ADDRESS is wrong, not that the instrument is absent.
@@ -1177,6 +1215,34 @@ def _test() -> None:
           "used to exit 1 while the usage line called 1 'recorded but not usable'")
     check("nothing is written" in EXIT_WORDING and "no registration" in EXIT_WORDING,
           f"...and the shared usage wording says so ({EXIT_WORDING})")
+
+    # ── G0.5: evidence order ─────────────────────────────────────────────────
+    check(set(EVIDENCE_ORDER) == set(STATES),
+          "every STATES member appears exactly once in EVIDENCE_ORDER")
+    check(len(EVIDENCE_ORDER) == len(STATES),
+          "no duplicates in EVIDENCE_ORDER")
+    check(evidence_strength(VERIFIED) > evidence_strength(INFERRED),
+          "VERIFIED is stronger than INFERRED")
+    check(evidence_strength(RETRACTED) == 0,
+          "RETRACTED is the weakest state")
+    check(evidence_strength(VERIFIED) == len(EVIDENCE_ORDER) - 1,
+          "VERIFIED is the strongest state")
+    check(evidence_strength(INFERRED) > evidence_strength(UNFETCHED_CORROBORATION),
+          "INFERRED is stronger than UNFETCHED_CORROBORATION (our derivation is verifiable; "
+          "an inaccessible source reported to agree is hearsay)")
+    check(stronger(UNFETCHED_CORROBORATION, INFERRED) == INFERRED,
+          "stronger() picks INFERRED over UNFETCHED_CORROBORATION")
+    check(stronger(VERIFIED, CORROBORATED) == VERIFIED,
+          "stronger() picks VERIFIED over CORROBORATED")
+    check(weakest(VERIFIED, INFERRED) == INFERRED,
+          "weakest() picks INFERRED from (VERIFIED, INFERRED)")
+    check(weakest(CORROBORATED, VERIFIED, UNRESOLVED) == UNRESOLVED,
+          "weakest() picks UNRESOLVED from three states")
+    try:
+        evidence_strength("IMAGINARY")
+        check(False, "evidence_strength must reject unknown states")
+    except ProvenanceError:
+        check(True, "evidence_strength rejects unknown states")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:

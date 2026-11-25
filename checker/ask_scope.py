@@ -159,6 +159,8 @@ def _shared(signal: str) -> bool:
 # question says nothing about WHICH body it is about (A-012 NEW-2; founder rule 1,
 # 2026-09-30). scope.py may still record it as a regulator; it is never a signal.
 LEGISLATURE = re.compile(r"(?i)\b(parliament|legislature)\b")
+# A-014 F4: generic executive-government terms are not regulators.
+GENERIC_GOV = re.compile(r"(?i)\b(state\s+governments?|central\s+government|government)\b")
 
 
 def _signals(b) -> tuple[list[str], list[str]]:
@@ -170,9 +172,11 @@ def _signals(b) -> tuple[list[str], list[str]]:
     titles += re.findall(r"\b[A-Z]{3,}\b", b.name)
     titles += TERMS_OF_ART.get(b.key, ())
     titles += list(b.abbreviations)           # listed in the register, never derived
+    titles += list(b.short_titles)            # A-013: common short titles ("Contract Act")
     regulators = [r.strip() for r in re.split(r"[,/]", b.regulator)
                   if len(r.strip()) >= 3 and any(ch.isalpha() for ch in r)
-                  and not LEGISLATURE.search(r)]
+                  and not LEGISLATURE.search(r)
+                  and not GENERIC_GOV.search(r)]
     keep = lambda xs: list(dict.fromkeys(x for x in xs if not _shared(x)))
     return keep(titles), keep(regulators)
 
@@ -297,6 +301,18 @@ def _test() -> None:
                   for b in _unheld() for sig in _signals(b)[0] + _signals(b)[1]),
           "no body carries the legislature as a title or regulator signal")
 
+    # ── generic government terms are not scope signals (A-014 F4) ──────────
+    # "State governments" is STAMP's declared regulator, but executive government is not
+    # a specific regulator — naming it says nothing about which body a question is about.
+    check(not any(GENERIC_GOV.search(sig)
+                  for b in _unheld() for sig in _signals(b)[0] + _signals(b)[1]),
+          "no body carries a generic government term as a signal")
+    for q in ("Can the State government issue a notice under s.188?",
+              "Does the central government regulate board composition?"):
+        r = read(q)
+        check(r.body is None,
+              f"generic gov term alone does not refuse: {q[:50]!r}")
+
     # ── an all-caps word is not an abbreviation unless listed (A-012 NEW-3) ──
     # Founder rule 2 (2026-09-30): only an abbreviation listed in checker/abbrev.json or in
     # the scope register counts. The register KEY is an identifier, not a listing: taking
@@ -393,6 +409,21 @@ def _test() -> None:
     check(r.refuse and r.body.key == "FEMA1999",
           "a bare section number next to a declared title is that body's section, not "
           "held law -- refused, not read against Companies Act s.6")
+
+    # ── A-013: short titles refuse as the correct body ───────────────────────
+    for q, key in (("What does section 10 of the Contract Act say?", "CONTRACT1872"),
+                   ("Is s.20 of the Arbitration Act applicable here?", "ARBITRATION1996"),
+                   ("What is the stamp duty under the Stamp Act?", "STAMP"),
+                   ("Does the Competition Act require notification?", "COMP2002"),
+                   ("Is our LLP Act filing due?", "LLP2008")):
+        r = read(q)
+        check(r.refuse and r.body.key == key,
+              f"A-013 short title: {q[:46]!r} -> {key} ({r.body.key if r.body else None})")
+    # "the Companies Act, 1956" is a repealed Act we do not hold — it names no held body
+    # and no declared body. It should not match our "Companies Act, 2013".
+    r = read("What does s.42 of the Companies Act, 1956 require?")
+    check(r.body is None or r.body.key != "CA2013",
+          "the Companies Act 1956 does not match the 2013 Act")
 
     print(f"\n{ok}/{ok + fail} passed")
     if fail:
