@@ -122,7 +122,7 @@
  },
  "parent_turn_id": "t_20ccadb72b4b",
  "provenance": {
-  "checker_commit": "fixture",
+  "checker_commit": "62cddcb",
   "corpus_version": "2026-08-18T22:15:46+00:00"
  },
  "question": "And the turnover limit?",

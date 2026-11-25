@@ -44,7 +44,7 @@
   }
  ],
  "provenance": {
-  "checker_commit": "fixture",
+  "checker_commit": "62cddcb",
   "corpus_version": "2026-08-18T22:15:46+00:00"
  },
  "question": "What does rule 2(1)(t) prescribe?",

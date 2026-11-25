@@ -20,6 +20,8 @@ from gateway.verbs.people import (_auth_login, _auth_logout, _auth_me, _invites_
     _invites_cancel, _invites_create, _invites_list, _people_list)
 from gateway.verbs.research import (_forecast_summary, _research_cases, _research_multi,
     _research_web, _sources_list, _sources_search)
+from gateway.verbs.connectors import (_connectors_authorize, _connectors_callback,
+    _connectors_list_files, _connectors_import_file)
 from gateway.verbs.redline import _redline
 from gateway.verbs.review import _review_contract, _review_document
 from gateway.verbs.review_table import (_review_table_cancel, _review_table_create,
@@ -717,6 +719,42 @@ VERBS: tuple[Verb, ...] = (
          "longer be accepted.",
          (Field("invite_id", STRING, True, describes="the invite to withdraw"),),
          "POST", read_only=False, mcp=False, run=_invites_cancel),
+
+    # ── external storage connectors ──────────────────────────────────────────
+    Verb("connectors.authorize",
+         "Start OAuth flow for an external storage provider (SharePoint/OneDrive). "
+         "Returns a URL the user visits to grant read-only access.",
+         (Field("provider", STRING, True, describes="'microsoft'"),
+          Field("matter_id", STRING, True, describes="files are scoped to this matter")),
+         "POST", read_only=False, mcp=True, run=_connectors_authorize),
+
+    Verb("connectors.callback",
+         "Exchange an OAuth authorization code for tokens. Called after the user "
+         "completes the consent flow.",
+         (Field("provider", STRING, True, describes="'microsoft'"),
+          Field("code", STRING, True, describes="the authorization code from the redirect"),
+          Field("state", STRING, False, describes="the state from the authorize step"),
+          Field("code_verifier", STRING, False, describes="PKCE verifier (if state not stored)"),
+          Field("matter_id", STRING, False, describes="matter to connect (if state not stored)")),
+         "POST", read_only=False, mcp=False, run=_connectors_callback),
+
+    Verb("connectors.list_files",
+         "List files from a connected storage provider. Requires an active connection "
+         "for this matter (via connectors.authorize + callback).",
+         (Field("provider", STRING, True, describes="'microsoft'"),
+          Field("matter_id", STRING, True, describes="the matter whose connection to use"),
+          Field("folder_id", STRING, False, describes="folder ID to list children of (root if omitted)"),
+          Field("query", STRING, False, describes="search query to find files by name")),
+         "POST", read_only=True, mcp=True, run=_connectors_list_files),
+
+    Verb("connectors.import_file",
+         "Download a file from connected storage into the matter vault. The file becomes "
+         "a vault document, ready for audit.",
+         (Field("provider", STRING, True, describes="'microsoft'"),
+          Field("matter_id", STRING, True, describes="the matter to import into"),
+          Field("file_id", STRING, True, describes="the drive item ID from list_files"),
+          Field("file_name", STRING, False, describes="display name for the imported document")),
+         "POST", read_only=False, mcp=True, run=_connectors_import_file),
 )
 
 

@@ -186,6 +186,13 @@ REQUIRED: dict[str, str] = {
     "matters.access_report": ADMIN,
     "access.reassign": ADMIN,
     "vault.share": LAWYER,
+    # SharePoint/OneDrive connector. Connecting an external drive and importing files
+    # into the vault are professional acts on client data — LAWYER. Listing files from
+    # an already-connected drive is read-only — VIEWER.
+    "connectors.authorize": LAWYER,
+    "connectors.callback": LAWYER,
+    "connectors.list_files": VIEWER,
+    "connectors.import_file": LAWYER,
     # A write (it revokes a row), but not a professional act on firm or client data -- it
     # ends the CALLER'S OWN session and nobody else's. Declared in SELF_SERVICE_WRITES
     # below, the one named exception to "no write verb is open to a viewer": a viewer who
