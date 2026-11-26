@@ -146,7 +146,7 @@ window.PLACEDON_ASK_FIXTURES = {
    "statement": "This pack carries the CURRENT CONSOLIDATION of the Companies Act 2013 as India Code rendered it when the corpus was ingested (2026-08-18). It is NOT a point-in-time version of the law and carries no verified commencement or amendment date. The amendment vintage of individual provisions is not uniform and not fully known: SD-002 confirms that some records carry pre-amendment wording while the same publisher's PDF carries later wording. Those provisions are marked unusable in this pack. Point-in-time reconstruction exists in this system but is UNVERIFIED against any external source, so no statement here is a statement about the law as it stood on any past date."
   },
   "provenance": {
-   "checker_commit": "e055cc6",
+   "checker_commit": "fixture",
    "corpus_version": "2026-08-18T22:15:46+00:00"
   },
   "question": "Is this company a small company?",
@@ -491,7 +491,7 @@ window.PLACEDON_ASK_FIXTURES = {
    }
   ],
   "provenance": {
-   "checker_commit": "e055cc6",
+   "checker_commit": "fixture",
    "corpus_version": "2026-08-18T22:15:46+00:00"
   },
   "question": "Is the law this document relies on still current?",
@@ -698,7 +698,7 @@ window.PLACEDON_ASK_FIXTURES = {
   },
   "parent_turn_id": "t_20ccadb72b4b",
   "provenance": {
-   "checker_commit": "e055cc6",
+   "checker_commit": "fixture",
    "corpus_version": "2026-08-18T22:15:46+00:00"
   },
   "question": "And the turnover limit?",
@@ -732,7 +732,7 @@ window.PLACEDON_ASK_FIXTURES = {
    "Companies Act, 2013"
   ],
   "provenance": {
-   "checker_commit": "e055cc6",
+   "checker_commit": "fixture",
    "corpus_version": "2026-08-18T22:15:46+00:00"
   },
   "question": "What must we report to RBI for this share allotment to a foreign investor?",
@@ -794,7 +794,7 @@ window.PLACEDON_ASK_FIXTURES = {
    }
   ],
   "provenance": {
-   "checker_commit": "e055cc6",
+   "checker_commit": "fixture",
    "corpus_version": "2026-08-18T22:15:46+00:00"
   },
   "question": "What does rule 2(1)(t) prescribe?",
@@ -885,7 +885,7 @@ window.PLACEDON_ASK_FIXTURES = {
    }
   ],
   "provenance": {
-   "checker_commit": "e055cc6",
+   "checker_commit": "fixture",
    "corpus_version": "2026-08-18T22:15:46+00:00"
   },
   "question": "What does s.173 require, and does s.16 apply here?",
