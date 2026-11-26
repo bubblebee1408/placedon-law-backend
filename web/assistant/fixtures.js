@@ -783,6 +783,7 @@ window.PLACEDON_ASK_FIXTURES = {
   "not_confirmed": [
    {
     "detail": "RULE:COMPANIES_MEETINGS_BOARD_POWERS_2014:R2 (Definitions) was cited and DOES exist, but is not admitted for model use: UNREVIEWED. Its text is unknown to you.",
+    "display_class": "abstained",
     "kind": "pack_missing",
     "ref": "RULE:COMPANIES_MEETINGS_BOARD_POWERS_2014:R2"
    },
@@ -878,6 +879,7 @@ window.PLACEDON_ASK_FIXTURES = {
   "not_confirmed": [
    {
     "detail": "ACT:COMPANIES_ACT_2013:S16 exists in state SUSPENDED but is not admitted for model use",
+    "display_class": "abstained",
     "kind": "pack_missing",
     "ref": "ACT:COMPANIES_ACT_2013:S16"
    }
