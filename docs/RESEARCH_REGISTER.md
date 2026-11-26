@@ -90,6 +90,33 @@ Code owns the pipeline; models propose; reviewers decide (PLAN_23).
 Adapted to our architecture: LangChain orchestrates, Azure AI Foundry serves models,
 deterministic code validates every model output before anything downstream sees it.
 
+## Sliding Window QA and Long-Document Processing
+
+- **SQuAD 2.0** — Rajpurkar, Jia, Liang (2018).
+  "Know What You Don't Know: Unanswerable Questions for SQuAD."
+  ACL 2018. [arXiv 1806.03822](https://arxiv.org/abs/1806.03822).
+  Extractive QA with unanswerable questions. Sliding window + aggregation for
+  long contexts. CUAD builds on this format directly.
+
+- **SplaXBERT** — sliding window study (2024).
+  "Leveraging Mixed Precision Training and Context Splitting for QA."
+  [arXiv 2412.05499](https://arxiv.org/abs/2412.05499).
+  100-token window, 50-token stride (50% overlap) reported effective.
+
+- **Longformer** — Beltagy, Peters, Cohan (2020).
+  "Longformer: The Long-Document Transformer."
+  [arXiv 2004.05150](https://arxiv.org/abs/2004.05150).
+  Sparse attention alternative to sliding window for long documents.
+
+## Legal Reasoning Benchmarks
+
+- **LegalBench** — Guha et al. (2023).
+  "LegalBench: A Collaboratively Built Benchmark for Measuring Legal Reasoning
+  in Large Language Models."
+  NeurIPS 2023 Datasets & Benchmarks. [arXiv 2308.11462](https://arxiv.org/abs/2308.11462).
+  162 tasks across 6 reasoning types. Includes CUAD-derived clause extraction
+  tasks. Evaluates 20 LLMs.
+
 ## Model Provider Stack (user-specified, 2026-11-26)
 
 | Provider | Role | Models |

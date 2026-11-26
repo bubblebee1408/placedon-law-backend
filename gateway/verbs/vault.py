@@ -201,7 +201,23 @@ def _vault_ingest_job(args: dict, ctx: Context) -> dict:
     outcome = ingest(args, files=ctx.files, store=ctx.store,
                      extract=lambda data, name: data.decode("utf-8", "replace"),
                      pages=pages if paged else None)
-    return outcome.to_dict()
+
+    result = outcome.to_dict()
+
+    # CUAD extraction post-step: enriches with clause extraction + obligations.
+    # Never fails the ingest — errors are captured, result dict extended.
+    if outcome.state == "INGESTED":
+        try:
+            from agents.vault_cuad_post import cuad_post
+            cuad = cuad_post(outcome, store=ctx.store)
+            if cuad.extractions > 0:
+                result["cuad_extractions"] = cuad.extractions
+                result["cuad_obligations"] = cuad.obligations
+                result["cuad_categories"] = list(cuad.categories_found)
+        except Exception:  # noqa: BLE001
+            pass  # ponytail: extraction failure must never block ingest
+
+    return result
 
 
 def _vault_list(args: dict, ctx: Context) -> dict:
