@@ -4,6 +4,7 @@
   {
    "cite": "Companies Act 2013, s.173 (Meetings of Board)",
    "defects": [],
+   "display_class": "deterministic_conclusion",
    "evidence_state": "CORROBORATED",
    "ref": "ACT:COMPANIES_ACT_2013:S173",
    "retrieved_on": [
@@ -24,6 +25,7 @@
  "demand_signal": {
   "action": "tell_us_blocking"
  },
+ "display_class": "abstained",
  "evidence_pack": {
   "abstain_reason": "",
   "insufficient_evidence": false,
@@ -61,12 +63,13 @@
  "not_confirmed": [
   {
    "detail": "ACT:COMPANIES_ACT_2013:S16 exists in state SUSPENDED but is not admitted for model use",
+   "display_class": "abstained",
    "kind": "pack_missing",
    "ref": "ACT:COMPANIES_ACT_2013:S16"
   }
  ],
  "provenance": {
-  "checker_commit": "896f74e",
+  "checker_commit": "fixture",
   "corpus_version": "2026-08-18T22:15:46+00:00"
  },
  "question": "What does s.173 require, and does s.16 apply here?",

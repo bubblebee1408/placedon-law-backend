@@ -28,6 +28,7 @@ Run:  python3 scripts/assistant_contract.py --write    # rebuild web/assistant/f
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -94,6 +95,8 @@ REQUESTS: dict[str, dict] = {
 
 def build_fixtures() -> dict[str, dict]:
     """Every fixture, from the route's own answer() at a fixed as_of."""
+    # Pin checker_commit so fixtures don't change with every git commit.
+    os.environ.setdefault("CHECKER_COMMIT", "fixture")
     from checker.ask import answer
 
     out = {name: answer(req, generated_at=GENERATED_AT) for name, req in REQUESTS.items()}

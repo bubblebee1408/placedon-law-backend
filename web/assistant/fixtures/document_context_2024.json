@@ -3,6 +3,7 @@
  "confirmed": [
   {
    "basis": "s.96(1) reaches every company other than an OPC; no AGM dates were supplied",
+   "display_class": "abstained",
    "duty": "Hold an annual general meeting, and within the statutory gap",
    "obligation_id": "CA13-S96-AGM",
    "provision": "Companies Act 2013, s.96(1)",
@@ -10,6 +11,7 @@
   },
   {
    "basis": "not a one-person company, so s.173 applies in full; no board meeting dates were supplied",
+   "display_class": "abstained",
    "duty": "Hold the minimum number of board meetings, correctly spaced",
    "obligation_id": "CA13-S173-BOARD",
    "provision": "Companies Act 2013, s.173(1)",
@@ -17,6 +19,7 @@
   },
   {
    "basis": "applies to every company registered under the Act; the number of directors is not on the profile",
+   "display_class": "abstained",
    "duty": "Have enough directors, and not more than the maximum",
    "obligation_id": "CA13-S149-BOARD-SIZE",
    "provision": "Companies Act 2013, s.149(1)",
@@ -24,6 +27,7 @@
   },
   {
    "basis": "applies to every company registered under the Act; no director's days-in-India were supplied; s.149(3) needs at least one director present 182 days in the year",
+   "display_class": "abstained",
    "duty": "Have at least one director resident in India for 182 days",
    "obligation_id": "CA13-S149-3-RESIDENT",
    "provision": "Companies Act 2013, s.149(3)",
@@ -31,6 +35,7 @@
   },
   {
    "basis": "applies to every company registered under the Act; the thirty days run from the AGM, and no AGM date was given",
+   "display_class": "abstained",
    "duty": "File the financial statements with the Registrar in time",
    "obligation_id": "CA13-S137-AOC4",
    "provision": "Companies Act 2013, s.137(1)",
@@ -38,6 +43,7 @@
   },
   {
    "basis": "applies to every company registered under the Act; the sixty days run from the AGM, or from the date one should have been held; neither is established",
+   "display_class": "abstained",
    "duty": "File the annual return with the Registrar in time",
    "obligation_id": "CA13-S92-RETURN",
    "provision": "Companies Act 2013, s.92(4)",
@@ -45,6 +51,7 @@
   },
   {
    "basis": "no known figure reaches its s.135(1) threshold, but net_worth, net_profit are unknown -- any one could cross, so applicability cannot be ruled out",
+   "display_class": "abstained",
    "duty": "Constitute a CSR committee, if the company crosses a CSR threshold",
    "obligation_id": "CA13-S135-CSR",
    "provision": "Companies Act 2013, s.135(1)",
@@ -52,6 +59,7 @@
   },
   {
    "basis": "applies to every company registered under the Act; no loans supplied: give the company's loans, guarantees and securities, with the director/relative graph, to assess s.185",
+   "display_class": "abstained",
    "duty": "Ensure no loan/guarantee/security is given to a director or connected person",
    "obligation_id": "CA13-S185-LOANS-DIRECTORS",
    "provision": "Companies Act 2013, s.185",
@@ -59,6 +67,7 @@
   },
   {
    "basis": "applies to every company registered under the Act; no loans/investments supplied: give the company's loans, guarantees, securities and acquisitions to test the s.186(2) limit",
+   "display_class": "abstained",
    "duty": "Keep loans/investments within the s.186(2) limit, or authorise the excess",
    "obligation_id": "CA13-S186-LOAN-INVESTMENT",
    "provision": "Companies Act 2013, s.186",
@@ -66,6 +75,7 @@
   },
   {
    "basis": "applies to every company registered under the Act; no borrowings supplied: give the company's proposed and existing borrowings, with paid-up capital, free reserves and securities premium, to test the s.180(1)(c) limit",
+   "display_class": "abstained",
    "duty": "Keep borrowings within the s.180(1)(c) limit, or authorise the excess",
    "obligation_id": "CA13-S180-BORROWING-LIMIT",
    "provision": "Companies Act 2013, s.180(1)(c)",
@@ -73,6 +83,7 @@
   },
   {
    "basis": "applies to every company registered under the Act; no director contracts supplied: give the (director, counterparty) pairs for the company's contracts, with the entity graph, to assess s.184(2)",
+   "display_class": "abstained",
    "duty": "Ensure an interested director discloses and abstains",
    "obligation_id": "CA13-S184-DIRECTOR-INTEREST",
    "provision": "Companies Act 2013, s.184",
@@ -80,6 +91,7 @@
   },
   {
    "basis": "applies to every company registered under the Act; no information on which financial years have annual returns filed; s.164(2)(a) disqualifies directors after three continuous years of non-filing by the company",
+   "display_class": "abstained",
    "duty": "Avoid director disqualification by filing annual returns every year",
    "obligation_id": "CA13-S164-2A-DISQ",
    "provision": "Companies Act 2013, s.164(2)(a)",
@@ -87,6 +99,7 @@
   },
   {
    "basis": "applies to every company registered under the Act; no first-auditor appointment date supplied; s.139(6) requires the Board to appoint within thirty days of incorporation",
+   "display_class": "abstained",
    "duty": "Appoint the first auditor within thirty days of incorporation",
    "obligation_id": "CA13-S139-AUDITOR",
    "provision": "Companies Act 2013, s.139(6)",
@@ -94,6 +107,7 @@
   },
   {
    "basis": "applies to every company registered under the Act; no special resolutions supplied; s.117(1) requires filing within thirty days of passing",
+   "display_class": "abstained",
    "duty": "File every special resolution with the Registrar within thirty days",
    "obligation_id": "CA13-S117-SPECIAL-RES",
    "provision": "Companies Act 2013, s.117(1)",
@@ -101,6 +115,7 @@
   },
   {
    "basis": "applies to every company registered under the Act; no date supplied for when financial statements were sent to members; s.136(1) requires not less than twenty-one days before the AGM",
+   "display_class": "abstained",
    "duty": "Send financial statements to members at least twenty-one days before the AGM",
    "obligation_id": "CA13-S136-CIRCULATE-FS",
    "provision": "Companies Act 2013, s.136(1)",
@@ -108,6 +123,7 @@
   },
   {
    "basis": "applies to every company registered under the Act; no charges supplied; s.77(1) requires registration within thirty days of creation",
+   "display_class": "abstained",
    "duty": "Register every charge with the Registrar within thirty days of creation",
    "obligation_id": "CA13-S77-CHARGE-REG",
    "provision": "Companies Act 2013, s.77(1)",
@@ -115,6 +131,7 @@
   },
   {
    "basis": "applies to every company registered under the Act; no date supplied for when the registered office was established; s.12(3) requires one from the thirtieth day after incorporation",
+   "display_class": "abstained",
    "duty": "Have a registered office from the thirtieth day after incorporation",
    "obligation_id": "CA13-S12-REG-OFFICE",
    "provision": "Companies Act 2013, s.12(3)(a)",
@@ -125,6 +142,7 @@
   "document_date": "2024-06-01",
   "kind": "document"
  },
+ "display_class": "abstained",
  "generated_at": "2026-09-15T00:00:00Z",
  "law_version": {
   "basis": "CURRENT_CONSOLIDATION_AS_INGESTED",
@@ -252,6 +270,7 @@
   {
    "already_open_at_document_date": true,
    "detail": "Companies Act 2013 s.188, held verbatim in corpus; the members'-approval threshold is a delegated rule (S-188-RULES) surfaced on the obligation row: S-188-RULES: Rule 15, Companies (Meetings of Board and its Powers) Rules, 2014 — the members'-approval thresholds is STAGED",
+   "display_class": "abstained",
    "duty": "Obtain the required approvals for related-party transactions",
    "instrument": "S-188-RULES",
    "kind": "cannot_verify",
@@ -262,6 +281,7 @@
   {
    "already_open_at_document_date": true,
    "detail": "Companies Act 2013 s.177, held verbatim; the prescribed class (Rule 6) is a delegated rule (S-177-RULES) surfaced on the obligation row: S-177-RULES: Rule 6, Companies (Meetings of Board and its Powers) Rules, 2014 is HELD_UNREVIEWED",
+   "display_class": "abstained",
    "duty": "Constitute an Audit Committee, if required",
    "instrument": "S-177-RULES",
    "kind": "cannot_verify",
@@ -272,6 +292,7 @@
   {
    "already_open_at_document_date": true,
    "detail": "Companies Act 2013 s.203, held verbatim; the prescribed KMP class is a delegated rule (S-203-RULES) surfaced on the obligation row: S-203-RULES: G.S.R. 249(E), Companies (Appointment and Remuneration of Managerial Personnel) Rules, 2014 — Rule 8, the prescribed KMP class is CHAIN_TRACED",
+   "display_class": "abstained",
    "duty": "Appoint whole-time key managerial personnel, if in the prescribed class",
    "instrument": "S-203-RULES",
    "kind": "cannot_verify",
@@ -281,7 +302,7 @@
   }
  ],
  "provenance": {
-  "checker_commit": "896f74e",
+  "checker_commit": "fixture",
   "corpus_version": "2026-08-18T22:15:46+00:00"
  },
  "question": "Is the law this document relies on still current?",

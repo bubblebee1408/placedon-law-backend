@@ -57,6 +57,24 @@ from checker.provenance_slots import USER_FACT
 from checker.retrieve import ROUTE_EXACT
 
 ANSWERED, PARTIAL, OUT_OF_SCOPE = "answered", "partial", "out_of_scope"
+
+# A-006 §9.3: display classes the frontend renders.
+VERIFIED_FACT = "verified_fact"
+DETERMINISTIC = "deterministic_conclusion"
+PREDICTIVE = "predictive_signal"
+ABSTAINED = "abstained"
+
+def _display_class(evidence_state: str | None) -> str:
+    """Map an evidence_state to a frontend display class.
+    CORROBORATED → deterministic (second source agrees, no human review).
+    VERIFIED → verified_fact (human-reviewed).
+    Everything else → abstained (not servable or no evidence state).
+    """
+    if evidence_state == "VERIFIED":
+        return VERIFIED_FACT
+    if evidence_state == "CORROBORATED":
+        return DETERMINISTIC
+    return ABSTAINED
 # A question is rendered verbatim and, where it names no provision, is the retrieval
 # query. Past this it is a pasted document, not a question -- and a 50,000-character
 # query is a cost nobody asked for. The document path takes the document separately.
@@ -127,6 +145,26 @@ def _checker_commit() -> str:
             cwd=str(ROOT), stderr=subprocess.DEVNULL, text=True).strip()
     except Exception:
         return "unknown"
+
+
+def _stamp_classes(response: dict) -> dict:
+    """A-006 §9.3: add display_class to the response and each confirmed/row item."""
+    state = response.get("state")
+    if state == OUT_OF_SCOPE:
+        response["display_class"] = ABSTAINED
+    elif state == ANSWERED:
+        response["display_class"] = DETERMINISTIC
+        for row in response.get("rows", []):
+            row["display_class"] = DETERMINISTIC
+        for cit in response.get("citations", []):
+            cit["display_class"] = _display_class(cit.get("evidence_state"))
+    elif state == PARTIAL:
+        response["display_class"] = ABSTAINED
+        for item in response.get("confirmed", []):
+            item["display_class"] = _display_class(item.get("evidence_state"))
+        for item in response.get("not_confirmed", []):
+            item["display_class"] = ABSTAINED
+    return response
 
 
 def _envelope(question: str, *, as_of: str, generated_at: str, kind: str,
@@ -486,12 +524,12 @@ def answer(request: dict, *, generated_at: str) -> dict:
     reading = ask_scope.read(question, provisions)
     if reading.refuse:
         body = reading.body
-        return env | {"state": OUT_OF_SCOPE,
+        return _stamp_classes(env | {"state": OUT_OF_SCOPE,
                       "body": {"key": body.key, "name": body.name,
                                "regulator": body.regulator, "covers": body.covers,
                                "scope_status": body.status},
                       "reason": scope.refusal_for(body.key),
-                      "held": [b.name for b in scope.in_corpus()]}
+                      "held": [b.name for b in scope.in_corpus()]})
     refusal = ({"kind": "cannot_verify", "ref": reading.body.key,
                 "detail": scope.refusal_for(reading.body.key)} if reading.mixed else None)
 
@@ -501,10 +539,11 @@ def answer(request: dict, *, generated_at: str) -> dict:
         check = document_check({**facts, "document_date": document_date,
                                 "as_of": as_of.isoformat()}, generated_at=generated_at)
         turn = _document_turn(check)
-        return env | (_with_refusal(turn, refusal) if refusal else turn)
+        return _stamp_classes(env | (_with_refusal(turn, refusal) if refusal else turn))
 
-    return env | _general_turn(question, as_of=as_of, generated_at=generated_at, facts=facts,
-                               provisions=provisions, figures=figures, refusal=refusal)
+    return _stamp_classes(env | _general_turn(question, as_of=as_of, generated_at=generated_at,
+                                              facts=facts, provisions=provisions,
+                                              figures=figures, refusal=refusal))
 
 def _test() -> None:
     ok = fail = 0
