@@ -327,6 +327,7 @@ _PREFERENCE = {
 }
 
 # ── candidates: wired, not preferred. route() never reads this table. ─────────
+MISTRAL = "mistral"
 VOYAGE = "voyage"
 SARVAM = "sarvam"
 RETRIEVAL_RERANK = "RETRIEVAL_RERANK"
@@ -345,10 +346,13 @@ class Candidate:
 
 from checker import sarvam_model as _sarvam  # noqa: E402
 from checker import voyage_model as _voyage  # noqa: E402
+from checker import mistral_model as _mistral  # noqa: E402
 
 _RETRIEVAL_RULE = ("p@1 on the frozen 70-case cross_section_eval, with a Wilson 95% "
                    "interval non-overlapping and above RRF's, and no non-overlapping "
                    "loss on recall@5")
+_BAKEOFF_RULE = ("non-overlapping 95% CI against the incumbent on the same test set, "
+                 "with a person editing the preference table")
 CANDIDATES: tuple[Candidate, ...] = (
     Candidate(PAGE_IMAGE, SARVAM, _sarvam.MODEL, f"{GEMINI}/{FLASH}",
               "scripts/bakeoff_indic.py",
@@ -359,6 +363,20 @@ CANDIDATES: tuple[Candidate, ...] = (
               "scripts/bakeoff_retrieval.py", _RETRIEVAL_RULE),
     Candidate(RETRIEVAL_DENSE, VOYAGE, _voyage.LAW, "fusion.search (RRF, BM25 + MiniLM)",
               "scripts/bakeoff_retrieval.py", _RETRIEVAL_RULE),
+    # Mistral models on Azure AI Foundry. Wired 2026-11-26, not yet bake-off'd.
+    # Three roles matching the three models the user specified:
+    #   Large 4   → HIGH extraction (incumbent: Anthropic EXTRACT / Azure llama-3-3-70b)
+    #   Small 4   → LOW classification (incumbent: Anthropic CLASSIFY / Gemini Flash-Lite)
+    #   OCR 4.1   → PAGE_IMAGE transcription (incumbent: Gemini Flash)
+    Candidate(EXTRACTION, MISTRAL, _mistral.LARGE,
+              f"{ANTHROPIC}/claude-opus-5",
+              "scripts/bakeoff_models.py", _BAKEOFF_RULE),
+    Candidate(CLASSIFICATION, MISTRAL, _mistral.SMALL,
+              f"{ANTHROPIC}/claude-haiku-4-5",
+              "scripts/bakeoff_models.py", _BAKEOFF_RULE),
+    Candidate(TRANSCRIPTION, MISTRAL, _mistral.OCR,
+              f"{GEMINI}/{FLASH}",
+              "scripts/bakeoff_indic.py", _BAKEOFF_RULE),
 )
 
 
@@ -504,6 +522,9 @@ def providers_available(*, credit_exhausted=None) -> tuple[str, ...]:
         out.append(BEDROCK)
     if ollama_runner.available():
         out.append(OLLAMA)
+    from checker import mistral_model
+    if mistral_model.available():
+        out.append(MISTRAL)
     return tuple(out)
 
 
@@ -640,8 +661,9 @@ def _test() -> None:
         check(False, "a LOW task does not degrade onto a candidate either")
     except NoRoute:
         check(True, "...and a LOW task does not degrade onto a candidate either")
-    check({c.role for c in CANDIDATES} == {PAGE_IMAGE, RETRIEVAL_RERANK, RETRIEVAL_DENSE},
-          "candidates: Sarvam for PAGE_IMAGE, Voyage for rerank and for dense retrieval")
+    check({c.role for c in CANDIDATES} >= {PAGE_IMAGE, RETRIEVAL_RERANK, RETRIEVAL_DENSE,
+                                            EXTRACTION, CLASSIFICATION, TRANSCRIPTION},
+          "candidates: Sarvam for PAGE_IMAGE, Voyage for retrieval, Mistral for three roles")
     from pathlib import Path as _P
     root = _P(__file__).resolve().parent.parent
     check(all((root / c.bakeoff).is_file() for c in CANDIDATES),
@@ -650,11 +672,10 @@ def _test() -> None:
           "every candidate's adoption rule requires non-overlapping intervals")
     check(candidates(PAGE_IMAGE)[0].provider == SARVAM and not candidates("AUDIO"),
           "candidates(role) filters by role")
-    check(set(providers_available()) <= {ANTHROPIC, GEMINI, AZURE, OLLAMA},
-          "providers_available() still lists only routable providers, never candidates")
+    check(set(providers_available()) <= {ANTHROPIC, GEMINI, AZURE, OLLAMA, MISTRAL},
+          "providers_available() lists only routable providers, plus Mistral when keyed")
     check(not ({VOYAGE, SARVAM} & set(providers_available())),
-          "...and a CANDIDATE never appears there, which is the half that matters: the "
-          "set above grows every time a provider is wired, so it cannot carry the rule")
+          "...and a pure-CANDIDATE provider (Voyage, Sarvam) never appears there")
 
     # ── Azure: the row for a model this laptop cannot hold (29-09-2026) ──────
     ra = route(Task("narrate", TEXT, LOW, purpose=NARRATION), available=(AZURE,))
