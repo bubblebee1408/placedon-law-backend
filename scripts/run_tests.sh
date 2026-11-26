@@ -311,6 +311,9 @@ extra+=("checker/bedrock_model.py --test")
 # Sarvam Document AI Parse reader: OFF by default, public documents only, not on any
 # ingest path. Keyless/no-network -- a fake transport and a generated 25-page PDF.
 extra+=("checker/sarvam_doc.py --test")
+# Azure Document Intelligence v4 layout OCR (prebuilt-layout) and the Mistral-on-Azure
+# Foundry adapter. Keyless/no-network in the gate -- the live calls skip without keys.
+extra+=("checker/azure_doc_intel.py --test" "checker/mistral_model.py --test")
 # Porter2 stemmer for document excerpt ranking (RETRIEVAL_LOOP L4).
 extra+=("gateway/english_stem.py --test")
 # F3 + F2: jurisdiction resolver and the multi-body research supervisor.

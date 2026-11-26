@@ -30,7 +30,7 @@ from checker.env import load as _load_env
 _load_env()
 
 # ── deployment names on Azure AI Foundry ────────────────────────────────────
-LARGE = "mistral-large-4"
+LARGE = "mistral-large-4-latest"
 SMALL = "mistral-small-4"
 OCR = "mistral-ocr-4-1"
 
@@ -75,6 +75,7 @@ def chat_body(prompt: str, deployment: str, *,
         "messages": [{"role": "user", "content": prompt}],
         "max_tokens": budget,
         "temperature": 0,
+        "top_p": 1,
     }
 
 
@@ -92,6 +93,7 @@ def chat_body_with_image(prompt: str, image_b64: str, deployment: str = OCR, *,
         }],
         "max_tokens": budget,
         "temperature": 0,
+        "top_p": 1,
     }
 
 
@@ -160,7 +162,7 @@ def _test() -> int:
     print("mistral_model")
 
     # ── deployment names are consistent ───────────────────────────────────
-    check(LARGE == "mistral-large-4", f"LARGE deployment ({LARGE})")
+    check(LARGE == "mistral-large-4-latest", f"LARGE deployment ({LARGE})")
     check(SMALL == "mistral-small-4", f"SMALL deployment ({SMALL})")
     check(OCR == "mistral-ocr-4-1", f"OCR deployment ({OCR})")
 

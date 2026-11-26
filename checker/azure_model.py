@@ -453,16 +453,21 @@ def _test() -> None:
           "a prompt whose every delimited block is published goes through")
     check(sent[0][0] == DEFAULT_DEPLOYMENT,
           f"...to the measured default deployment ({DEFAULT_DEPLOYMENT})")
-    sent.clear()
-    narrate(cleared, origin=_o, model="gpt-5-mini", _transport=spy)
-    check(sent[0][1]["max_completion_tokens"] == NARRATION_BUDGET,
-          f"a reasoning deployment gets the SAME narration budget "
-          f"({sent[0][1]['max_completion_tokens']}), because that limit is a thinking "
-          f"budget it will spend: doubling it cost 7.5x the wall clock and two connection "
-          f"drops to avoid one truncation that was already a safe refusal")
-    check(chat_body("x", "gpt-5-mini")["max_completion_tokens"] == REASONING_BUDGET,
-          "...while chat_body's own default is unchanged, so the eval harness still asks "
-          "exactly what it asked before")
+    _held_dep = os.environ.pop("AZURE_AI_DEPLOYMENT", None)
+    try:
+        sent.clear()
+        narrate(cleared, origin=_o, model="gpt-5-mini", _transport=spy)
+        check(sent[0][1]["max_completion_tokens"] == NARRATION_BUDGET,
+              f"a reasoning deployment gets the SAME narration budget "
+              f"({sent[0][1]['max_completion_tokens']}), because that limit is a thinking "
+              f"budget it will spend: doubling it cost 7.5x the wall clock and two connection "
+              f"drops to avoid one truncation that was already a safe refusal")
+        check(chat_body("x", "gpt-5-mini")["max_completion_tokens"] == REASONING_BUDGET,
+              "...while chat_body's own default is unchanged, so the eval harness still asks "
+              "exactly what it asked before")
+    finally:
+        if _held_dep is not None:
+            os.environ["AZURE_AI_DEPLOYMENT"] = _held_dep
     sent.clear()
     narrate(cleared, origin=_o, _transport=spy)
 
