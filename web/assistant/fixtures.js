@@ -5,6 +5,7 @@ window.PLACEDON_ASK_FIXTURES = {
    {
     "cite": "Companies Act 2013, s.2 (Definitions)",
     "defects": [],
+    "display_class": "deterministic_conclusion",
     "evidence_state": "CORROBORATED",
     "ref": "ACT:COMPANIES_ACT_2013:S2",
     "retrieved_on": [
@@ -21,6 +22,7 @@ window.PLACEDON_ASK_FIXTURES = {
    "document_date": null,
    "kind": "general"
   },
+  "display_class": "deterministic_conclusion",
   "evidence_pack": {
    "abstain_reason": "",
    "insufficient_evidence": false,
@@ -143,6 +145,10 @@ window.PLACEDON_ASK_FIXTURES = {
    "record_count": 529,
    "statement": "This pack carries the CURRENT CONSOLIDATION of the Companies Act 2013 as India Code rendered it when the corpus was ingested (2026-08-18). It is NOT a point-in-time version of the law and carries no verified commencement or amendment date. The amendment vintage of individual provisions is not uniform and not fully known: SD-002 confirms that some records carry pre-amendment wording while the same publisher's PDF carries later wording. Those provisions are marked unusable in this pack. Point-in-time reconstruction exists in this system but is UNVERIFIED against any external source, so no statement here is a statement about the law as it stood on any past date."
   },
+  "provenance": {
+   "checker_commit": "e055cc6",
+   "corpus_version": "2026-08-18T22:15:46+00:00"
+  },
   "question": "Is this company a small company?",
   "rows": [
    {
@@ -160,6 +166,7 @@ window.PLACEDON_ASK_FIXTURES = {
       "sha256": "sha256:f7a340b68b234b4e182e2c90688c1ae4c0764468c371cf24fa7dfdeefda11ead"
      }
     ],
+    "display_class": "deterministic_conclusion",
     "duty": "Establish whether the company is a small company",
     "missing_facts": [],
     "obligation_id": "CA13-S2-85-SMALL",
@@ -185,6 +192,7 @@ window.PLACEDON_ASK_FIXTURES = {
   "confirmed": [
    {
     "basis": "s.96(1) reaches every company other than an OPC; no AGM dates were supplied",
+    "display_class": "abstained",
     "duty": "Hold an annual general meeting, and within the statutory gap",
     "obligation_id": "CA13-S96-AGM",
     "provision": "Companies Act 2013, s.96(1)",
@@ -192,6 +200,7 @@ window.PLACEDON_ASK_FIXTURES = {
    },
    {
     "basis": "not a one-person company, so s.173 applies in full; no board meeting dates were supplied",
+    "display_class": "abstained",
     "duty": "Hold the minimum number of board meetings, correctly spaced",
     "obligation_id": "CA13-S173-BOARD",
     "provision": "Companies Act 2013, s.173(1)",
@@ -199,6 +208,7 @@ window.PLACEDON_ASK_FIXTURES = {
    },
    {
     "basis": "applies to every company registered under the Act; the number of directors is not on the profile",
+    "display_class": "abstained",
     "duty": "Have enough directors, and not more than the maximum",
     "obligation_id": "CA13-S149-BOARD-SIZE",
     "provision": "Companies Act 2013, s.149(1)",
@@ -206,6 +216,7 @@ window.PLACEDON_ASK_FIXTURES = {
    },
    {
     "basis": "applies to every company registered under the Act; no director's days-in-India were supplied; s.149(3) needs at least one director present 182 days in the year",
+    "display_class": "abstained",
     "duty": "Have at least one director resident in India for 182 days",
     "obligation_id": "CA13-S149-3-RESIDENT",
     "provision": "Companies Act 2013, s.149(3)",
@@ -213,6 +224,7 @@ window.PLACEDON_ASK_FIXTURES = {
    },
    {
     "basis": "applies to every company registered under the Act; the thirty days run from the AGM, and no AGM date was given",
+    "display_class": "abstained",
     "duty": "File the financial statements with the Registrar in time",
     "obligation_id": "CA13-S137-AOC4",
     "provision": "Companies Act 2013, s.137(1)",
@@ -220,6 +232,7 @@ window.PLACEDON_ASK_FIXTURES = {
    },
    {
     "basis": "applies to every company registered under the Act; the sixty days run from the AGM, or from the date one should have been held; neither is established",
+    "display_class": "abstained",
     "duty": "File the annual return with the Registrar in time",
     "obligation_id": "CA13-S92-RETURN",
     "provision": "Companies Act 2013, s.92(4)",
@@ -227,6 +240,7 @@ window.PLACEDON_ASK_FIXTURES = {
    },
    {
     "basis": "no known figure reaches its s.135(1) threshold, but net_worth, net_profit are unknown -- any one could cross, so applicability cannot be ruled out",
+    "display_class": "abstained",
     "duty": "Constitute a CSR committee, if the company crosses a CSR threshold",
     "obligation_id": "CA13-S135-CSR",
     "provision": "Companies Act 2013, s.135(1)",
@@ -234,6 +248,7 @@ window.PLACEDON_ASK_FIXTURES = {
    },
    {
     "basis": "applies to every company registered under the Act; no loans supplied: give the company's loans, guarantees and securities, with the director/relative graph, to assess s.185",
+    "display_class": "abstained",
     "duty": "Ensure no loan/guarantee/security is given to a director or connected person",
     "obligation_id": "CA13-S185-LOANS-DIRECTORS",
     "provision": "Companies Act 2013, s.185",
@@ -241,6 +256,7 @@ window.PLACEDON_ASK_FIXTURES = {
    },
    {
     "basis": "applies to every company registered under the Act; no loans/investments supplied: give the company's loans, guarantees, securities and acquisitions to test the s.186(2) limit",
+    "display_class": "abstained",
     "duty": "Keep loans/investments within the s.186(2) limit, or authorise the excess",
     "obligation_id": "CA13-S186-LOAN-INVESTMENT",
     "provision": "Companies Act 2013, s.186",
@@ -248,6 +264,7 @@ window.PLACEDON_ASK_FIXTURES = {
    },
    {
     "basis": "applies to every company registered under the Act; no borrowings supplied: give the company's proposed and existing borrowings, with paid-up capital, free reserves and securities premium, to test the s.180(1)(c) limit",
+    "display_class": "abstained",
     "duty": "Keep borrowings within the s.180(1)(c) limit, or authorise the excess",
     "obligation_id": "CA13-S180-BORROWING-LIMIT",
     "provision": "Companies Act 2013, s.180(1)(c)",
@@ -255,6 +272,7 @@ window.PLACEDON_ASK_FIXTURES = {
    },
    {
     "basis": "applies to every company registered under the Act; no director contracts supplied: give the (director, counterparty) pairs for the company's contracts, with the entity graph, to assess s.184(2)",
+    "display_class": "abstained",
     "duty": "Ensure an interested director discloses and abstains",
     "obligation_id": "CA13-S184-DIRECTOR-INTEREST",
     "provision": "Companies Act 2013, s.184",
@@ -262,6 +280,7 @@ window.PLACEDON_ASK_FIXTURES = {
    },
    {
     "basis": "applies to every company registered under the Act; no information on which financial years have annual returns filed; s.164(2)(a) disqualifies directors after three continuous years of non-filing by the company",
+    "display_class": "abstained",
     "duty": "Avoid director disqualification by filing annual returns every year",
     "obligation_id": "CA13-S164-2A-DISQ",
     "provision": "Companies Act 2013, s.164(2)(a)",
@@ -269,6 +288,7 @@ window.PLACEDON_ASK_FIXTURES = {
    },
    {
     "basis": "applies to every company registered under the Act; no first-auditor appointment date supplied; s.139(6) requires the Board to appoint within thirty days of incorporation",
+    "display_class": "abstained",
     "duty": "Appoint the first auditor within thirty days of incorporation",
     "obligation_id": "CA13-S139-AUDITOR",
     "provision": "Companies Act 2013, s.139(6)",
@@ -276,6 +296,7 @@ window.PLACEDON_ASK_FIXTURES = {
    },
    {
     "basis": "applies to every company registered under the Act; no special resolutions supplied; s.117(1) requires filing within thirty days of passing",
+    "display_class": "abstained",
     "duty": "File every special resolution with the Registrar within thirty days",
     "obligation_id": "CA13-S117-SPECIAL-RES",
     "provision": "Companies Act 2013, s.117(1)",
@@ -283,6 +304,7 @@ window.PLACEDON_ASK_FIXTURES = {
    },
    {
     "basis": "applies to every company registered under the Act; no date supplied for when financial statements were sent to members; s.136(1) requires not less than twenty-one days before the AGM",
+    "display_class": "abstained",
     "duty": "Send financial statements to members at least twenty-one days before the AGM",
     "obligation_id": "CA13-S136-CIRCULATE-FS",
     "provision": "Companies Act 2013, s.136(1)",
@@ -290,6 +312,7 @@ window.PLACEDON_ASK_FIXTURES = {
    },
    {
     "basis": "applies to every company registered under the Act; no charges supplied; s.77(1) requires registration within thirty days of creation",
+    "display_class": "abstained",
     "duty": "Register every charge with the Registrar within thirty days of creation",
     "obligation_id": "CA13-S77-CHARGE-REG",
     "provision": "Companies Act 2013, s.77(1)",
@@ -297,6 +320,7 @@ window.PLACEDON_ASK_FIXTURES = {
    },
    {
     "basis": "applies to every company registered under the Act; no date supplied for when the registered office was established; s.12(3) requires one from the thirtieth day after incorporation",
+    "display_class": "abstained",
     "duty": "Have a registered office from the thirtieth day after incorporation",
     "obligation_id": "CA13-S12-REG-OFFICE",
     "provision": "Companies Act 2013, s.12(3)(a)",
@@ -307,6 +331,7 @@ window.PLACEDON_ASK_FIXTURES = {
    "document_date": "2024-06-01",
    "kind": "document"
   },
+  "display_class": "abstained",
   "generated_at": "2026-09-15T00:00:00Z",
   "law_version": {
    "basis": "CURRENT_CONSOLIDATION_AS_INGESTED",
@@ -434,6 +459,7 @@ window.PLACEDON_ASK_FIXTURES = {
    {
     "already_open_at_document_date": true,
     "detail": "Companies Act 2013 s.188, held verbatim in corpus; the members'-approval threshold is a delegated rule (S-188-RULES) surfaced on the obligation row: S-188-RULES: Rule 15, Companies (Meetings of Board and its Powers) Rules, 2014 — the members'-approval thresholds is STAGED",
+    "display_class": "abstained",
     "duty": "Obtain the required approvals for related-party transactions",
     "instrument": "S-188-RULES",
     "kind": "cannot_verify",
@@ -444,6 +470,7 @@ window.PLACEDON_ASK_FIXTURES = {
    {
     "already_open_at_document_date": true,
     "detail": "Companies Act 2013 s.177, held verbatim; the prescribed class (Rule 6) is a delegated rule (S-177-RULES) surfaced on the obligation row: S-177-RULES: Rule 6, Companies (Meetings of Board and its Powers) Rules, 2014 is HELD_UNREVIEWED",
+    "display_class": "abstained",
     "duty": "Constitute an Audit Committee, if required",
     "instrument": "S-177-RULES",
     "kind": "cannot_verify",
@@ -454,6 +481,7 @@ window.PLACEDON_ASK_FIXTURES = {
    {
     "already_open_at_document_date": true,
     "detail": "Companies Act 2013 s.203, held verbatim; the prescribed KMP class is a delegated rule (S-203-RULES) surfaced on the obligation row: S-203-RULES: G.S.R. 249(E), Companies (Appointment and Remuneration of Managerial Personnel) Rules, 2014 — Rule 8, the prescribed KMP class is CHAIN_TRACED",
+    "display_class": "abstained",
     "duty": "Appoint whole-time key managerial personnel, if in the prescribed class",
     "instrument": "S-203-RULES",
     "kind": "cannot_verify",
@@ -462,6 +490,10 @@ window.PLACEDON_ASK_FIXTURES = {
     "reference": "S-203-RULES"
    }
   ],
+  "provenance": {
+   "checker_commit": "e055cc6",
+   "corpus_version": "2026-08-18T22:15:46+00:00"
+  },
   "question": "Is the law this document relies on still current?",
   "schema": "placedon.ask/0",
   "scope": {
@@ -548,6 +580,7 @@ window.PLACEDON_ASK_FIXTURES = {
    {
     "cite": "Companies Act 2013, s.2 (Definitions)",
     "defects": [],
+    "display_class": "deterministic_conclusion",
     "evidence_state": "CORROBORATED",
     "ref": "ACT:COMPANIES_ACT_2013:S2",
     "retrieved_on": [
@@ -564,6 +597,7 @@ window.PLACEDON_ASK_FIXTURES = {
    "document_date": null,
    "kind": "general"
   },
+  "display_class": "deterministic_conclusion",
   "evidence_pack": {
    "abstain_reason": "",
    "insufficient_evidence": false,
@@ -663,6 +697,10 @@ window.PLACEDON_ASK_FIXTURES = {
    "statement": "This pack carries the CURRENT CONSOLIDATION of the Companies Act 2013 as India Code rendered it when the corpus was ingested (2026-08-18). It is NOT a point-in-time version of the law and carries no verified commencement or amendment date. The amendment vintage of individual provisions is not uniform and not fully known: SD-002 confirms that some records carry pre-amendment wording while the same publisher's PDF carries later wording. Those provisions are marked unusable in this pack. Point-in-time reconstruction exists in this system but is UNVERIFIED against any external source, so no statement here is a statement about the law as it stood on any past date."
   },
   "parent_turn_id": "t_20ccadb72b4b",
+  "provenance": {
+   "checker_commit": "e055cc6",
+   "corpus_version": "2026-08-18T22:15:46+00:00"
+  },
   "question": "And the turnover limit?",
   "schema": "placedon.ask/0",
   "scope": {
@@ -688,10 +726,15 @@ window.PLACEDON_ASK_FIXTURES = {
    "document_date": null,
    "kind": "general"
   },
+  "display_class": "abstained",
   "generated_at": "2026-09-15T00:00:00Z",
   "held": [
    "Companies Act, 2013"
   ],
+  "provenance": {
+   "checker_commit": "e055cc6",
+   "corpus_version": "2026-08-18T22:15:46+00:00"
+  },
   "question": "What must we report to RBI for this share allotment to a foreign investor?",
   "reason": "Foreign Exchange Management Act, 1999 and the FDI rules (RBI / DPIIT) is within scope — it covers foreign investment, sectoral caps, reporting (FC-GPR, FC-TRS), downstream investment — but no instrument has been acquired, so nothing here can be decided. Nothing acquired. Sectoral caps change by press note, which is a different acquisition problem from a Gazette rule. This is a statement about what we hold, not a finding that no obligation applies.",
   "schema": "placedon.ask/0",
@@ -712,6 +755,7 @@ window.PLACEDON_ASK_FIXTURES = {
    "document_date": null,
    "kind": "general"
   },
+  "display_class": "abstained",
   "evidence_pack": {
    "abstain_reason": "HELD_NOT_ADMITTED",
    "insufficient_evidence": true,
@@ -739,13 +783,20 @@ window.PLACEDON_ASK_FIXTURES = {
   "not_confirmed": [
    {
     "detail": "RULE:COMPANIES_MEETINGS_BOARD_POWERS_2014:R2 (Definitions) was cited and DOES exist, but is not admitted for model use: UNREVIEWED. Its text is unknown to you.",
-    "kind": "pack_missing"
+    "display_class": "abstained",
+    "kind": "pack_missing",
+    "ref": "RULE:COMPANIES_MEETINGS_BOARD_POWERS_2014:R2"
    },
    {
     "detail": "No provision was retrieved at all. This pack is empty.",
+    "display_class": "abstained",
     "kind": "pack_missing"
    }
   ],
+  "provenance": {
+   "checker_commit": "e055cc6",
+   "corpus_version": "2026-08-18T22:15:46+00:00"
+  },
   "question": "What does rule 2(1)(t) prescribe?",
   "refusal": {
    "detail": "We searched the Companies Act, 2013 -- the law this engine holds -- and found no provision on point for this question, so nothing was read and nothing was decided. That does not mean the Act is silent on it: it means our retrieval did not reach a provision, and a provision we did not reach is not a provision that does not exist. Naming the section, or rephrasing in the Act's own words, is the thing most likely to find it.",
@@ -769,6 +820,7 @@ window.PLACEDON_ASK_FIXTURES = {
    {
     "cite": "Companies Act 2013, s.173 (Meetings of Board)",
     "defects": [],
+    "display_class": "deterministic_conclusion",
     "evidence_state": "CORROBORATED",
     "ref": "ACT:COMPANIES_ACT_2013:S173",
     "retrieved_on": [
@@ -789,6 +841,7 @@ window.PLACEDON_ASK_FIXTURES = {
   "demand_signal": {
    "action": "tell_us_blocking"
   },
+  "display_class": "abstained",
   "evidence_pack": {
    "abstain_reason": "",
    "insufficient_evidence": false,
@@ -826,9 +879,15 @@ window.PLACEDON_ASK_FIXTURES = {
   "not_confirmed": [
    {
     "detail": "ACT:COMPANIES_ACT_2013:S16 exists in state SUSPENDED but is not admitted for model use",
-    "kind": "pack_missing"
+    "display_class": "abstained",
+    "kind": "pack_missing",
+    "ref": "ACT:COMPANIES_ACT_2013:S16"
    }
   ],
+  "provenance": {
+   "checker_commit": "e055cc6",
+   "corpus_version": "2026-08-18T22:15:46+00:00"
+  },
   "question": "What does s.173 require, and does s.16 apply here?",
   "schema": "placedon.ask/0",
   "scope": {
