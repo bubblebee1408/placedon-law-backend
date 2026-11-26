@@ -472,9 +472,9 @@ def _test() -> None:
           f"(only in one: {names ^ set(KNOWN_TOOLS) or 'none'})")
     check(len(_HAND_WRITTEN) == 13,
           f"thirteen hand-written tools ({len(_HAND_WRITTEN)})")
-    check(len(TOOLS) == 34,
-          f"thirty-four in all: twenty-one generated from gateway/verbs.py (redline added "
-          f"2026-11-22, read-only positional playbook review); "
+    check(len(TOOLS) == 35,
+          f"thirty-five in all: twenty-two generated from gateway/verbs.py (connectors.list_files "
+          f"added for SharePoint/OneDrive read-only file listing); "
           f"document.audit is mcp=False so it does NOT appear here -- "
           f"events.assess on 30-09-2026 -- read-only and model-free, which is why it may "
           f"be here at all; "

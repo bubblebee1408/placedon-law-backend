@@ -143,6 +143,9 @@ KNOWN_TOOLS: frozenset[str] = frozenset({
     "themis.draft.export",
     # Redline. Read-only: positional playbook review; stores nothing, decides nothing.
     "themis.redline",
+    # SharePoint/OneDrive connector. Read-only: lists files from a connected drive.
+    # The write verbs (authorize, callback, import_file) are absent by the same rule.
+    "themis.connectors.list_files",
 })
 # NOT here, and the absence is the decision: `themis.runs.approve` and `themis.runs.reject`
 # do not exist. They write a human decision, and mcp_tools() refuses to generate a tool for

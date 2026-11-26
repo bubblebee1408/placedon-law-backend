@@ -1570,8 +1570,12 @@ def _test() -> None:
                                  "matters.grant", "matters.revoke", "vault.share",
                                  "access.reassign",
                                  # 032: the firm's company profile.
-                                 "company_profile.set"},
-          f"twenty-five write verbs today, and each is named ({sorted(write_verbs())})")
+                                 "company_profile.set",
+                                 # SharePoint/OneDrive connector: authorize and callback
+                                 # write tokens; import_file writes a vault document.
+                                 "connectors.authorize", "connectors.callback",
+                                 "connectors.import_file"},
+          f"twenty-eight write verbs today, and each is named ({sorted(write_verbs())})")
 
     # ── auth: a key is required everywhere except liveness ──────────────────
     check(anon.get(HEALTH_PATH).status_code == 200,

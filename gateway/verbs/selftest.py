@@ -117,8 +117,11 @@ def _test() -> None:
                         "matters.grant", "matters.revoke", "matters.members",
                         "matters.access_report", "vault.share", "access.reassign"} | {
                         # 032: the firm's company profile.
-                        "company_profile.get", "company_profile.set"},
-          f"the seventy-one verbs are declared once ({sorted(names)})")
+                        "company_profile.get", "company_profile.set"} | {
+                        # SharePoint/OneDrive storage connector.
+                        "connectors.authorize", "connectors.callback",
+                        "connectors.list_files", "connectors.import_file"},
+          f"the seventy-five verbs are declared once ({sorted(names)})")
     # sources.* are READ-ONLY, so they reach MCP. That is the intended shape: an agent may
     # ask what a source permits and search what may be read, and there is no sources verb
     # that fetches, stores or spends. S3's Indian Kanoon connector will spend money, and
@@ -153,8 +156,12 @@ def _test() -> None:
                                  "matters.grant", "matters.revoke", "vault.share",
                                  "access.reassign",
                                  # 032. Saves the firm's confirmed company facts.
-                                 "company_profile.set"},
-          f"...and exactly twenty-five of them write ({sorted(write_verbs())})")
+                                 "company_profile.set",
+                                 # SharePoint/OneDrive connector: authorize and callback
+                                 # write tokens; import_file writes a vault document.
+                                 "connectors.authorize", "connectors.callback",
+                                 "connectors.import_file"},
+          f"...and exactly twenty-eight of them write ({sorted(write_verbs())})")
     check(f"{MCP_NAMESPACE}.conversation.send" not in {t.name for t in mcp},
           "conversation.send WRITES -- it creates a thread, appends messages and may "
           "enqueue work -- so mcp_tools() keeps it off MCP, by rule and not by the author "
@@ -417,7 +424,7 @@ def _test() -> None:
           "firm acts for, and no agent task needs it. read_only is about whether a call "
           "changes anything; mcp is about whether a tool may ask at all")
     check("matters.list" not in {t.name.split(".", 1)[-1] for t in mcp_tools()}
-          and len(mcp_tools()) == 22,
+          and len(mcp_tools()) == 23,
           f"...and it really is absent from the generated tool list ({len(mcp_tools())})")
     check(_V["conversation.get"].run({"conversation_id": "nope"}, _cctx)["status"]
           == "REFUSED", "an unknown conversation is REFUSED, not an empty thread")
@@ -2032,7 +2039,7 @@ def _test() -> None:
           "...while a WRITE verb is kept out of MCP by mcp_tools(), not by the author "
           "remembering to")
     check("widgets.delete" in write_verbs(hypo), "...and is named in write_verbs()")
-    check(len(VERBS) == 71 and "widgets.count" not in rest_spec(),
+    check(len(VERBS) == 75 and "widgets.count" not in rest_spec(),
           "...and the probe changed nothing in this module: the surfaces are generated "
           "from an argument, not from a global the test rebound")
 
