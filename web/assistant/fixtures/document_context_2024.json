@@ -302,7 +302,7 @@
   }
  ],
  "provenance": {
-  "checker_commit": "783eeb7",
+  "checker_commit": "fixture",
   "corpus_version": "2026-08-18T22:15:46+00:00"
  },
  "question": "Is the law this document relies on still current?",
