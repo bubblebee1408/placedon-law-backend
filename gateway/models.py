@@ -550,7 +550,11 @@ def _test() -> None:
     from checker.prompt_safety import wrap_untrusted as _wrap
     from gateway.verbs import model_access as _ma
     _ON = {ANSWER_MODEL_ENV: "gemini", "GOOGLE_CLOUD_PROJECT": "demo-proj",
-           "GOOGLE_CLOUD_LOCATION": "asia-south1"}
+           "GOOGLE_CLOUD_LOCATION": "asia-south1",
+           # checker.env.load reads .env into the process; a deployment that has accepted
+           # the Azure region legitimately widens document_summary, so this route assertion
+           # states the default explicitly instead of inheriting the operator's choice.
+           "PLACEDON_ACCEPT_REGION": ""}
     _G = (router.GEMINI,)
 
     class _HttpErr(_gm.ModelUnavailable):

@@ -286,6 +286,10 @@ def _tier_callable(sources, question, *, route0, model, available, budget, busy:
                                                     model=route.model, budget=budget)
                 elif route.provider == router.OLLAMA:
                     fn = OllamaRunner(route.model)
+                elif route.provider == router.AZURE:
+                    from checker import azure_model
+                    fn = azure_model.as_text_model(origin=holder["origins"],
+                                                   model=route.model, budget=budget)
                 else:
                     holder["no_model"] = (f"no text callable is wired for "
                                           f"{route.provider}/{route.model}")
