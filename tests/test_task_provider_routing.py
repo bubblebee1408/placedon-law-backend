@@ -47,20 +47,20 @@ class TaskProviderRouting(unittest.TestCase):
         self.assertTrue(names, "found the call sites")
         self.assertEqual(names - set(verbs.TASK_PROVIDERS), set(), "a model call with no declared provider")
 
-    def test_both_providers_configured_research_on_bedrock_summary_on_bedrock(self):
-        # Ask carries the user's typed question, so it goes to India, never Azure UAE.
-        self.assertEqual(serve_with((AZ, BR), "ask", router.NARRATION), (BR, None))
+    def test_both_providers_configured_research_on_azure_summary_on_bedrock(self):
+        # Owner decision 2026-11-27: Ask's typed question goes to Azure (region accepted by
+        # the operator); client documents in summaries stay India-only on Bedrock.
+        self.assertEqual(serve_with((AZ, BR), "ask", router.NARRATION, accept_azure=True), (AZ, None))
         self.assertEqual(serve_with((AZ, BR), "draft_prose", router.NARRATION), (AZ, None))
         self.assertEqual(serve_with((AZ, BR), "document_summary", router.EXTRACTION, router.HIGH), (BR, None))
 
-    def test_azure_alone_never_serves_ask(self):
-        provider, refusal = serve_with((AZ,), "ask", router.NARRATION)
-        self.assertIsNone(provider)
-        self.assertEqual(refusal["code"], "NO_MODEL")
+    def test_azure_alone_serves_ask_once_the_region_is_accepted(self):
+        self.assertEqual(serve_with((AZ,), "ask", router.NARRATION, accept_azure=True), (AZ, None))
 
-    def test_ask_falls_back_to_the_on_device_model_last(self):
+    def test_ask_falls_back_to_the_on_device_model_when_azure_is_absent(self):
         self.assertEqual(serve_with((OL,), "ask", router.NARRATION), (OL, None))
-        self.assertEqual(serve_with((BR, OL), "ask", router.NARRATION), (BR, None))
+        self.assertEqual(serve_with((BR, OL), "ask", router.NARRATION), (OL, None),
+                         "Bedrock is no longer an Ask route")
 
     def test_azure_tasks_never_reach_the_on_device_model(self):
         provider, refusal = serve_with((OL,), "draft_prose", router.NARRATION)
@@ -101,8 +101,8 @@ class AzureOptIn(unittest.TestCase):
         self.assertEqual(serve_with((AZ,), "document_summary", router.EXTRACTION, router.HIGH,
                                     accept_azure=True), (AZ, None))
 
-    def test_bedrock_still_comes_first_when_azure_is_accepted(self):
-        self.assertEqual(serve_with((AZ, BR, OL), "ask", router.NARRATION, accept_azure=True), (BR, None))
+    def test_azure_comes_first_for_ask_bedrock_for_summaries(self):
+        self.assertEqual(serve_with((AZ, BR, OL), "ask", router.NARRATION, accept_azure=True), (AZ, None))
         self.assertEqual(serve_with((AZ, BR), "document_summary", router.EXTRACTION, router.HIGH,
                                     accept_azure=True), (BR, None))
 
@@ -110,13 +110,15 @@ class AzureOptIn(unittest.TestCase):
         with patch("checker.azure_model.region_accepted", return_value=False):
             for task in verbs.TASK_PROVIDERS:
                 self.assertEqual(verbs.task_providers(task), verbs.TASK_PROVIDERS[task], task)
-        self.assertEqual(serve_with((AZ, OL), "ask", router.NARRATION), (OL, None))
+        # The route still names Azure; the adapter's region guard refuses it before any call
+        # (see test_client_text_never_reaches_azure), so the declared route is intact.
+        self.assertEqual(serve_with((AZ, OL), "ask", router.NARRATION), (AZ, None))
 
     def test_acceptance_widens_only_the_opt_in_tasks(self):
         with patch("checker.azure_model.region_accepted", return_value=True):
             for task in set(verbs.TASK_PROVIDERS) - verbs.AZURE_OPT_IN_TASKS:
                 self.assertEqual(verbs.task_providers(task), verbs.TASK_PROVIDERS[task], task)
-            self.assertEqual(verbs.task_providers("ask"), (BR, AZ, OL))
+            self.assertEqual(verbs.task_providers("ask"), (AZ, OL))
             self.assertEqual(verbs.task_providers("document_summary"), (BR, AZ))
 
     def test_summary_job_routes_through_the_opt_in(self):
@@ -140,7 +142,7 @@ class CallerCannotWidenProviders(unittest.TestCase):
         ctx = verbs.Context(store=MemoryBackend(), model_for=lambda _o: rq.quoting_model(srcs))
         with patch.object(rq, "answer", side_effect=spy):
             verbs._ask({"question": q, "available": ["gemini", "ollama", "bedrock", "azure"]}, ctx)
-        self.assertEqual(tuple(seen["available"]), ("bedrock", "ollama"), "gemini and azure dropped")
+        self.assertEqual(tuple(seen["available"]), ("azure", "ollama"), "gemini and bedrock dropped")
 
 
 class ProviderFailureStates(unittest.TestCase):

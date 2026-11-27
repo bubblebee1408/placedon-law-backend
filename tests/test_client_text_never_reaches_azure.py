@@ -202,7 +202,7 @@ class CallersMayOnlyNarrowProviders(_Recorder):
         with patch("gateway.verbs.model_access._served_or_refusal", side_effect=spy):
             for available in ([], ["bedrock"], ["no-such-provider"], None):
                 self.ask(available)
-        self.assertEqual(seen, [(), (), (), ("azure",)])
+        self.assertEqual(seen, [(), (), (), ("azure", "ollama")])
 
     def test_a_malformed_list_is_a_bad_request(self):
         self.assertEqual(self.ask("azure").get("code"), "BAD_REQUEST")

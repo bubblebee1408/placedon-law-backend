@@ -52,10 +52,11 @@ def _provider_not_ready():
 ON_DEVICE_TASKS = frozenset({"ask"})
 
 TASK_PROVIDERS: dict[str, tuple[str, ...]] = {
-    # Owner decision 2026-10-28: the typed question goes to India (Bedrock) or stays on
-    # this machine (on-device Ollama). Azure UAE never answered it: refuse_unconfirmed_region
-    # refused every typed question there, so Ask could not answer at all.
-    "ask": ("bedrock", "ollama"),       # research narration; the question is client text
+    # Owner decision 2026-11-27: the typed question goes to Azure (Llama 3.3 70B) once the
+    # operator accepts UAE North for client text, or stays on this machine (on-device
+    # Ollama). Bedrock is dropped with Claude: it is not wired for narration and is blocked
+    # on the free AWS plan, so it is no longer a route for Ask.
+    "ask": ("azure", "ollama"),         # research narration; the question is client text
     "critic": ("azure",),               # public corpus sentences
     "decompose": ("azure",),            # the user's question, cleared for azure
     "intake.classify": ("azure",),      # the user's typed words, cleared for azure
@@ -68,8 +69,10 @@ TASK_PROVIDERS: dict[str, tuple[str, ...]] = {
 
 # Client-text tasks that may ALSO use Azure, but only after the operator accepts its region
 # (PLACEDON_ACCEPT_REGION names azure_model.DEPLOYMENT_REGION). Unset, these routes are
-# exactly TASK_PROVIDERS. Owner decision 2026-10-28: Bedrock is blocked on the free AWS plan.
-AZURE_OPT_IN_TASKS = frozenset({"ask", "document_summary"})
+# exactly TASK_PROVIDERS. Ask now declares Azure directly and is guarded at the origin by
+# `_typed_text_origin`; summaries stay opt-in because they carry client documents and are
+# still India-only (Bedrock) unless the operator accepts Azure for them too.
+AZURE_OPT_IN_TASKS = frozenset({"document_summary"})
 
 
 # The narration tasks (purpose=NARRATION at every call site). With PLACEDON_ANSWER_MODEL=gemini

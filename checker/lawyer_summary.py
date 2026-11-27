@@ -421,8 +421,8 @@ class Summary:
                     "there is no summary -- which is not the same as a document with "
                     "nothing in it")
         return (f"nothing traced: all {len(self.sentences)} sentence(s) the model wrote "
-                f"failed to trace to admitted evidence, so there is no summary. The "
-                f"sentences are preserved below as a record of what was written")
+                f"failed to trace to admitted evidence, so there is no summary. Only "
+                f"sentences traced to admitted evidence are part of this summary")
 
     def prose(self) -> str:
         """What a lawyer reads. Traced sentences only -- and never silently so."""
@@ -434,7 +434,7 @@ class Summary:
             # else still learns that the model wrote sentences that did not trace.
             out.append(f"[{len(self.refused)} of {len(self.sentences)} sentence(s) the "
                        f"model wrote did not trace to admitted evidence and are not "
-                       f"part of this summary. They are preserved in full below.]")
+                       f"part of this summary.]")
             out.append("")
         for i, s in enumerate(self.traced, start=1):
             out.append(f"{i}. {s.text}")
@@ -1219,6 +1219,8 @@ def _checks(check) -> None:
           "the readable summary does not contain the refused sentence")
     check("1 of 2 sentence(s)" in body and "did not trace" in body,
           f"...but it says on its face that a sentence did not trace ({body[:120]!r})")
+    check("preserved" not in body and "below" not in body,
+          "...and does not promise content the served form does not show")
     rendered = mixed.render()
     check("The Company is in compliance with the Companies Act, 2013." in rendered,
           "the refused sentence is preserved VERBATIM, not deleted and not summarised")
