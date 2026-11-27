@@ -33,7 +33,7 @@
     "checker/asn1.py": 11,
     "checker/assessment.py": 49,
     "checker/attribution.py": 35,
-    "checker/azure_doc_intel.py": 7,
+    "checker/azure_doc_intel.py": 14,
     "checker/azure_model.py": 42,
     "checker/backtest.py": 23,
     "checker/bedrock_model.py": 15,

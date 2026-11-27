@@ -39,6 +39,12 @@ def _adapter_for(r: router.Route) -> Callable[[str], str]:
         from checker import azure_model
         return azure_model.as_text_model(origin="cuad_extract", model=r.model)
 
+    if r.provider == router.MISTRAL:
+        from checker import mistral_model
+        def _mistral(prompt: str) -> str:
+            return mistral_model.generate(prompt, deployment=r.model)
+        return _mistral
+
     if r.provider == router.BEDROCK:
         from checker import bedrock_model
         return bedrock_model.as_text_model(origin="cuad_extract", model=r.model)
@@ -94,7 +100,7 @@ def _test() -> int:
     # ── _adapter_for covers every known provider ─────────────────────────
     from checker.router import Route
     known_providers = (router.AZURE, router.BEDROCK, router.ANTHROPIC,
-                       router.GEMINI, router.OLLAMA)
+                       router.GEMINI, router.OLLAMA, router.MISTRAL)
     for p in known_providers:
         # Build a synthetic route — we only need provider + model for dispatch.
         fake = Route(provider=p, model="test-model", why="test",

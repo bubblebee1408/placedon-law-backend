@@ -4,7 +4,12 @@ Primary OCR path: free 500 pages/month on Azure for Students. Extracts text,
 tables, and reading order from scanned PDFs including Hindi/English bilingual
 Gazette notifications.
 
-Fallback: Mistral OCR 4.1 on the same Azure Foundry resource.
+Fallback: Mistral OCR 4.1 on the same Azure Foundry resource. It runs only when
+Azure DI raises (HTTP error, analysis failure, or timeout) and only if
+`MISTRAL_AZURE_*` is configured. Mistral's OCR deployment takes page IMAGES, so
+the PDF is rasterised first with `pypdfium2` + Pillow (dev-only, see
+requirements-dev.txt). If neither is installed the fallback refuses with a
+message naming the missing dependency rather than returning empty text.
 
 Uses the same endpoint and key as azure_model.py (placedon-law-eval, AIServices).
 The prebuilt-layout model handles any document without training.
@@ -16,6 +21,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import sys
 import time
 import urllib.error
 import urllib.request
@@ -31,6 +37,15 @@ API_VERSION = "2024-11-30"
 POLL_INTERVAL_S = 3
 MAX_WAIT_S = 120
 TIMEOUT_S = 30
+
+# Mistral OCR is a chat deployment that transcribes an image; it is not asked to
+# interpret, summarise, or format. The instruction keeps the output usable as a
+# drop-in for Azure DI's `content` field.
+OCR_PROMPT = (
+    "Transcribe every character on this page exactly as printed, preserving "
+    "reading order and line breaks. Output only the transcription, with no "
+    "commentary, markdown, or page markers."
+)
 
 
 def available() -> bool:
@@ -126,10 +141,76 @@ def extract_tables(result: dict) -> list[dict]:
     return tables
 
 
+def _render_pages(path: str | Path, *, scale: float = 2.0) -> list[bytes]:
+    """Rasterise each PDF page to PNG bytes for the Mistral OCR fallback.
+
+    PyMuPDF is not used: AGPL section 13 would extend to this served backend
+    (see checker/pdf_pages.py). pypdfium2 is BSD/Apache-2.0; Pillow is needed
+    only to encode the bitmap as PNG. Both are dev-only.
+    """
+    try:
+        import io
+
+        import pypdfium2 as pdfium
+        from PIL import Image  # noqa: F401  (required by .to_pil())
+    except Exception as e:
+        raise ModelUnavailable(
+            "Mistral OCR fallback needs pypdfium2 and Pillow to rasterise a PDF "
+            f"({e}); install requirements-dev.txt") from None
+
+    try:
+        doc = pdfium.PdfDocument(str(path))
+        pages: list[bytes] = []
+        for i in range(len(doc)):
+            bitmap = doc[i].render(scale=scale)
+            buf = io.BytesIO()
+            bitmap.to_pil().save(buf, format="PNG")
+            pages.append(buf.getvalue())
+        return pages
+    except ModelUnavailable:
+        raise
+    except Exception as e:
+        raise ModelUnavailable(
+            f"could not rasterise {path} for Mistral OCR: {e}") from None
+
+
+def _mistral_digitise(path: str | Path) -> dict:
+    """Mistral OCR 4.1 fallback: page image → transcription, page by page."""
+    from checker import mistral_model
+
+    pages = _render_pages(path)
+    texts = [mistral_model.ocr(
+        OCR_PROMPT, base64.b64encode(png).decode("ascii")) for png in pages]
+    return {
+        "text": "\n\n".join(t for t in texts if t),
+        "pages": len(pages),
+        "tables": [],
+        "provider": "mistral_ocr",
+        "model": mistral_model.OCR,
+    }
+
+
 def digitise(path: str | Path, *, max_wait: float = MAX_WAIT_S) -> dict:
-    """Full pipeline: submit PDF → poll → return {text, pages, tables}."""
-    op_url = submit_pdf(path)
-    result = poll_result(op_url, max_wait=max_wait)
+    """Full pipeline: submit PDF → poll → return {text, pages, tables}.
+
+    Azure DI is primary. On ModelUnavailable it falls back to Mistral OCR 4.1
+    when that deployment is configured; a failure of both is reported as one
+    error naming both causes, never as empty text.
+    """
+    try:
+        op_url = submit_pdf(path)
+        result = poll_result(op_url, max_wait=max_wait)
+    except ModelUnavailable as azure_error:
+        from checker import mistral_model
+        if not mistral_model.available():
+            raise
+        try:
+            return _mistral_digitise(path)
+        except ModelUnavailable as mistral_error:
+            raise ModelUnavailable(
+                f"Azure DocIntel failed ({azure_error}); Mistral OCR fallback "
+                f"also failed ({mistral_error})") from None
+
     return {
         "text": extract_text(result),
         "pages": len(result.get("pages", [])),
@@ -181,6 +262,46 @@ def _test() -> int:
     # ── empty result ────────────────────────────────────────────────────
     check(extract_text({}) == "", "empty result returns empty string")
     check(extract_tables({}) == [], "empty result returns no tables")
+
+    # ── Mistral OCR fallback (no network) ───────────────────────────────
+    from unittest.mock import patch
+    from checker import mistral_model as mm
+
+    with patch.object(sys.modules[__name__], "submit_pdf",
+                      side_effect=ModelUnavailable("azure down")), \
+         patch.object(sys.modules[__name__], "_render_pages",
+                      return_value=[b"png-1", b"png-2"]), \
+         patch.object(mm, "available", return_value=True), \
+         patch.object(mm, "ocr", return_value="Section 134 text") as ocr_mock:
+        got = digitise("ignored.pdf")
+    check(got["provider"] == "mistral_ocr", "fallback tags provider mistral_ocr")
+    check(got["model"] == mm.OCR, "fallback names the OCR deployment")
+    check(got["pages"] == 2, "fallback counts rendered pages")
+    check(got["text"] == "Section 134 text\n\nSection 134 text",
+          "fallback joins per-page transcriptions")
+    check(ocr_mock.call_count == 2, "fallback calls OCR once per page")
+
+    with patch.object(sys.modules[__name__], "submit_pdf",
+                      side_effect=ModelUnavailable("azure down")), \
+         patch.object(mm, "available", return_value=False):
+        try:
+            digitise("ignored.pdf")
+            check(False, "unconfigured fallback re-raises the Azure error")
+        except ModelUnavailable as e:
+            check("azure down" in str(e),
+                  "unconfigured fallback re-raises the Azure error")
+
+    with patch.object(sys.modules[__name__], "submit_pdf",
+                      side_effect=ModelUnavailable("azure down")), \
+         patch.object(sys.modules[__name__], "_render_pages",
+                      side_effect=ModelUnavailable("no renderer")), \
+         patch.object(mm, "available", return_value=True):
+        try:
+            digitise("ignored.pdf")
+            check(False, "both failures are reported as one error")
+        except ModelUnavailable as e:
+            check("azure down" in str(e) and "no renderer" in str(e),
+                  "both failures are reported as one error")
 
     # ── live test (only if keys are set) ────────────────────────────────
     test_pdf = Path("corpus/sources/gsr880e_2025.pdf")

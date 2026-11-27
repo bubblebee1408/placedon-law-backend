@@ -20,4 +20,10 @@ pdfplumber==0.11.10
 # that boundary, so the README's "no dependencies outside the standard library"
 # stays true of the served path.
 pypdf==6.16.1
+# Mistral OCR fallback in checker/azure_doc_intel.py rasterises a PDF to page
+# images. pypdfium2 is BSD/Apache-2.0 (PyMuPDF was rejected on AGPL, see
+# checker/pdf_pages.py); Pillow is only the PNG encoder. Dev-only, like the two
+# PDF readers above -- neither is imported by checker/api.py or backend/.
+pypdfium2==5.12.1
+Pillow==12.3.0
 jsonschema==4.26.0
